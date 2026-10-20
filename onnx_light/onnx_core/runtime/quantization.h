@@ -487,6 +487,12 @@ struct QuantizationParameters {
 /** Owns model-local immutable fixed numerical parameters, independently of storage type IDs. */
 class QuantizationParameterCatalogue {
 public:
+  struct MemoryEstimate {
+    /// Bounds retained plans, common payloads and range buffers, including capacity slack.
+    size_t retained_bytes = 0;
+    /// Bounds peak numerical construction work beyond retained storage.
+    size_t temporary_bytes = 0;
+  };
   struct Entry {
     QuantizationPlan plan;
     StructTypeProto storage_type, local_type;
@@ -495,6 +501,10 @@ public:
     std::vector<uint8_t> common;
     size_t full_size = 0;
   };
+  /** Bounds numerical storage from compact descriptors, without expanding block arrays.
+   * Excludes proto metadata and parser allocations. Numerical tensors may remain external.
+   */
+  static MemoryEstimate EstimateMemory(const ModelProto &model);
   static std::shared_ptr<const QuantizationParameterCatalogue> Build(const ModelProto &model);
   const Entry &Get(const std::string &name) const;
   /** Validates a compact value without materializing it and returns its shared parameters. */

@@ -13,11 +13,14 @@
 // (relying on include order for correctness).
 #include "onnx_core/compute/raw_buffer_allocator.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -38,6 +41,36 @@ class RuntimeContext;
 class ValueStore;
 struct KernelTuningKey;
 struct KernelTuningParameters;
+
+/// Describes peak live bytes needed by one preparation, excluding the existing store.
+struct KernelPreparationMemory {
+  size_t source_bytes = 0;
+  size_t temporary_bytes = 0;
+  size_t prepared_bytes = 0;
+};
+
+/// Describes preparation work without exposing kernel-borrowing executable callables.
+struct KernelPreparationInfo {
+  size_t index = 0;
+  std::vector<std::string> source_inputs;
+  std::string representation;
+  std::vector<std::string> output_slots;
+  std::vector<size_t> dependencies;
+  bool awaits_runtime_tuning = false;
+};
+
+/**
+ * Declares immutable work without accessing source payloads.
+ *
+ * Callables borrow their kernel and model, which outlive the session's work.
+ * Dependencies are preceding indices in the enclosing session's declaration list.
+ * Execution must publish complete outputs only after successful computation.
+ */
+struct KernelPreparation {
+  KernelPreparationInfo info;
+  std::function<KernelPreparationMemory(const RuntimeContext &)> estimate_memory;
+  std::function<void(RuntimeContext &)> execute;
+};
 
 /// Immutable opset imports owned by a model or function session.
 using OpsetImports = std::unordered_map<std::string, int64_t>;
@@ -192,13 +225,14 @@ public:
   virtual bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const;
 
   /**
-   * Prepares immutable inputs owned by the enclosing session hierarchy.
+   * Appends declarations for immutable inputs without reading their payloads.
    *
    * The default does nothing. Kernels override this hook when they can transform
    * immutable values into a session-owned execution format. Nested graph and
    * model-local function sessions share ``store`` with their root session.
    */
-  virtual void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs);
+  virtual void DeclarePreparations(const std::unordered_set<std::string> &immutable_inputs,
+                                   std::vector<KernelPreparation> &preparations);
 
 protected:
   KernelContext ctx_;

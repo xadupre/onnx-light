@@ -104,10 +104,12 @@ public:
   /// Validates a published slot once and binds it for direct immutable replay.
   BoundSlot BindForRead(const Slot &slot) const;
 
-  /// Returns the sum of live buffer sizes in this static store's allocators.
+  /// Returns the incrementally maintained live-byte total in O(1).
   /// Includes allocated but unpublished values, not retained free capacity or
   /// other runtime storage. No admission budget or eviction applies.
   size_t prepared_bytes() const noexcept;
+  /// Returns allocator live-byte query visits for accounting scaling diagnostics.
+  size_t accounting_allocator_visits() const noexcept { return accounting_allocator_visits_; }
   size_t slot_count() const noexcept { return slots_.size(); }
 
 private:
@@ -115,6 +117,8 @@ private:
   const std::optional<RuntimeValue> &ValueAt(const Slot &slot) const;
 
   std::shared_ptr<const Identity> identity_ = std::make_shared<const Identity>();
+  size_t prepared_bytes_ = 0;
+  size_t accounting_allocator_visits_ = 0;
   std::vector<std::unique_ptr<ExecutionArena>> allocators_;
   std::unordered_set<const void *> allocator_index_;
   std::unordered_map<std::string, uint32_t> slots_by_key_;

@@ -7,10 +7,13 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -18,6 +21,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::DataType;
 using core::runtime::KernelBase;
 using core::runtime::KernelContext;
 using core::runtime::NodeKernelFn;
@@ -41,6 +45,70 @@ struct LifecycleState {
   int factory_calls = 0;
   int attribute_reads = 0;
   std::vector<KernelRecord> kernels;
+};
+
+struct PreparationRecord {
+  std::vector<int> executed;
+  std::string source = "B";
+  bool tune = false;
+  int64_t configured = -1;
+  bool fail = false;
+  int runs = 0;
+};
+
+class DeclarativeKernel final : public KernelBase {
+public:
+  explicit DeclarativeKernel(std::shared_ptr<PreparationRecord> record)
+      : KernelBase(KernelContext{}), record_(std::move(record)) {}
+
+  bool HasPreparations(const std::unordered_set<std::string> &) const override { return true; }
+
+  int32_t TuningInputIndex() const noexcept override { return record_->tune ? 0 : -1; }
+
+  core::runtime::KernelTuningKey TuningKey(int32_t element_type) const override {
+    if (!record_->tune || element_type == static_cast<int32_t>(DataType::UNDEFINED))
+      return {};
+    return {
+        "preparation_test", "Declarative", "test", element_type, core::symbolic::Device::kCPU, 1};
+  }
+
+  void Configure(const core::runtime::KernelTuningParameters &parameters) override {
+    record_->configured = parameters.Get<int64_t>("algorithm.threshold");
+  }
+
+  void DeclarePreparations(const std::unordered_set<std::string> &,
+                           std::vector<core::runtime::KernelPreparation> &preparations) override {
+    const size_t first = preparations.size();
+    for (int stage : {1, 2}) {
+      core::runtime::KernelPreparation preparation;
+      preparation.info.source_inputs = {record_->source};
+      preparation.info.representation = "test";
+      if (stage == 2)
+        preparation.info.dependencies = {first};
+      preparation.estimate_memory = [](const RuntimeContext &) {
+        return core::runtime::KernelPreparationMemory{};
+      };
+      preparation.execute = [record = record_, stage](RuntimeContext &rt) {
+        EXPECT_NE(rt.cpu_executor(), nullptr);
+        EXPECT_FLOAT_EQ(rt.Get(record->source).AsFloat()[0], 1);
+        if (record->tune) {
+          EXPECT_EQ(record->configured, 10);
+        }
+        record->executed.push_back(stage);
+        if (record->fail)
+          throw std::invalid_argument("preparation failed");
+      };
+      preparations.push_back(std::move(preparation));
+    }
+  }
+
+  void Run(RuntimeContext &) override {
+    EXPECT_EQ(record_->executed, (std::vector<int>{1, 2}));
+    ++record_->runs;
+  }
+
+private:
+  std::shared_ptr<PreparationRecord> record_;
 };
 
 class InstrumentedKernel final : public KernelBase {
@@ -126,6 +194,7 @@ Tensor MakeInput(int64_t rows, float value = 4, int64_t columns = 20) {
 }
 
 ModelProto MakeGemmModel(bool overridable_weight) {
+  onnx_kernels::RegisterKernelFunctions();
   ModelProto model;
   model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
@@ -150,6 +219,7 @@ ModelProto MakeGemmModel(bool overridable_weight) {
 }
 
 ModelProto MakeManyGemmModel(size_t count) {
+  onnx_kernels::RegisterKernelFunctions();
   ModelProto model;
   model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
@@ -332,6 +402,295 @@ TEST(KernelLifecycle, RuntimeSessionPreparesImmutableGemmWeightOnce) {
             (std::vector<float>{5, 8}));
 }
 
+TEST(KernelLifecycle, GemmDeclarationDoesNotReadOrSeedUnloadedPayload) {
+  ModelProto model = MakeGemmModel(false);
+  auto *weight = model.mutable_graph()->mutable_initializer(0);
+  weight->clear_raw_data();
+  weight->set_data_location(TensorProto::EXTERNAL);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  session.DeclarePreparations(rt);
+  EXPECT_FALSE(rt.HasValue("B"));
+  EXPECT_FALSE(rt.HasValue("Y"));
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  ASSERT_EQ(session.pending_preparations().size(), 1u);
+  EXPECT_EQ(session.pending_preparations()[0].source_inputs, (std::vector<std::string>{"B"}));
+  EXPECT_THROW(session.EstimatePreparationMemory(rt, 0), std::invalid_argument);
+  EXPECT_THROW(session.EstimatePreparationMemory(rt, 1), std::invalid_argument);
+  session.ExecutePreparations(rt);
+  session.Prepare(rt);
+  EXPECT_FALSE(rt.HasValue("B"));
+  EXPECT_EQ(session.pending_preparations().size(), 1u);
+
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+  session.ExecutePreparations(rt);
+  EXPECT_TRUE(session.pending_preparations().empty());
+  EXPECT_EQ(session.prepared_bytes(), 6 * sizeof(float));
+  EXPECT_FALSE(rt.HasValue("Y"));
+}
+
+TEST(KernelLifecycle, PreparationDiagnosticsOutliveSessionWithoutExecutableBorrows) {
+  const ModelProto model = MakeGemmModel(false);
+  std::vector<core::runtime::KernelPreparationInfo> pending;
+  {
+    RuntimeContext rt;
+    RuntimeSession session(model);
+    session.DeclarePreparations(rt);
+    pending = session.pending_preparations();
+  }
+  ASSERT_EQ(pending.size(), 1u);
+  EXPECT_EQ(pending[0].index, 0u);
+  EXPECT_EQ(pending[0].source_inputs, (std::vector<std::string>{"B"}));
+  EXPECT_EQ(pending[0].representation, "Gemm:B:column-major-k-v1");
+}
+
+TEST(KernelLifecycle, ExplicitGemmPreparationMatchesLazyExecutionWithoutFakeFeeds) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession explicit_session(model);
+  RuntimeSession lazy_session(model);
+  RuntimeContext explicit_rt;
+  RuntimeContext lazy_rt;
+  explicit_session.Prepare(explicit_rt);
+  EXPECT_FALSE(explicit_rt.HasValue("A"));
+  EXPECT_FALSE(explicit_rt.HasValue("Y"));
+  EXPECT_TRUE(explicit_session.pending_preparations().empty());
+  EXPECT_EQ(explicit_session.prepared_bytes(), 6 * sizeof(float));
+  explicit_session.Prepare(explicit_rt);
+  EXPECT_EQ(explicit_session.prepared_bytes(), 6 * sizeof(float));
+  explicit_rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  lazy_rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  explicit_session.Run(explicit_rt);
+  lazy_session.Run(lazy_rt);
+  EXPECT_EQ(std::memcmp(explicit_rt.Get("Y").bytes(), lazy_rt.Get("Y").bytes(),
+                        explicit_rt.Get("Y").size_bytes()),
+            0);
+}
+
+TEST(KernelLifecycle, GemmPreparationDefersWhenPeakMemoryCannotBeAdmitted) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  session.DeclarePreparations(rt);
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+  const std::string sources[] = {"B"};
+  session.ExecutePreparations(rt, 12 * sizeof(float) - 1, sources);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  ASSERT_EQ(session.pending_preparations().size(), 1u);
+  const auto memory =
+      session.EstimatePreparationMemory(rt, session.pending_preparations()[0].index);
+  EXPECT_EQ(memory.source_bytes, 6 * sizeof(float));
+  EXPECT_EQ(memory.temporary_bytes, 0u);
+  EXPECT_EQ(memory.prepared_bytes, 6 * sizeof(float));
+  session.ExecutePreparations(rt, 12 * sizeof(float), {});
+  EXPECT_TRUE(session.pending_preparations().empty());
+}
+
+TEST(KernelLifecycle, GemmPreparationFailureIsStickyAndDoesNotPublishOutput) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  session.DeclarePreparations(rt);
+  rt.Put("B", Tensor("B", DataType::FLOAT, {3, 2}, std::vector<uint8_t>(1)));
+  EXPECT_THROW(session.ExecutePreparations(rt), std::invalid_argument);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  EXPECT_EQ(session.value_store_owner()->slot_count(), 0u);
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  EXPECT_THROW(session.ExecutePreparations(rt), std::invalid_argument);
+  EXPECT_THROW(session.Prepare(rt), std::invalid_argument);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+  EXPECT_FALSE(rt.HasValue("Y"));
+}
+
+TEST(KernelLifecycle, DeclarativeWorkHonorsDependenciesAndStickyExecutionFailures) {
+  for (const bool fail : {false, true}) {
+    const ModelProto model = MakeGemmModel(false);
+    RuntimeSession session(model);
+    RuntimeContext rt;
+    const auto record = std::make_shared<PreparationRecord>();
+    record->fail = fail;
+    ASSERT_TRUE(
+        rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                            [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                              return std::make_unique<DeclarativeKernel>(record);
+                            }));
+    session.DeclarePreparations(rt);
+    ASSERT_EQ(session.pending_preparations().size(), 2u);
+    EXPECT_TRUE(record->executed.empty());
+    session.ExecutePreparations(rt);
+    EXPECT_TRUE(record->executed.empty());
+    rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+    if (fail) {
+      EXPECT_THROW(session.ExecutePreparations(rt), std::invalid_argument);
+      EXPECT_THROW(session.ExecutePreparations(rt), std::invalid_argument);
+      EXPECT_THROW(session.Run(rt), std::invalid_argument);
+      EXPECT_EQ(record->executed, (std::vector<int>{1}));
+      EXPECT_EQ(session.pending_preparations().size(), 2u);
+    } else {
+      session.ExecutePreparations(rt);
+      session.ExecutePreparations(rt);
+      EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+      EXPECT_TRUE(session.pending_preparations().empty());
+    }
+    EXPECT_EQ(record->runs, 0);
+  }
+}
+
+TEST(KernelLifecycle, PreexistingGemmWeightIsNotImplicitlyImmutable) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+  session.Prepare(rt);
+  EXPECT_TRUE(session.pending_preparations().empty());
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {0, 0, 0, 0, 0, 0}));
+  session.Run(rt);
+  EXPECT_EQ(rt.Get("Y").AsFloat()[0], 0);
+  EXPECT_EQ(rt.Get("Y").AsFloat()[1], 0);
+}
+
+TEST(KernelLifecycle, PreparationWaitsForRuntimeTuningBeforeExecuting) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->tune = true;
+  DeclarativeKernel prototype(record);
+  const auto key = prototype.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  core::runtime::RegisterKernelTuningSchema(core::runtime::KernelTuningSchema(
+      core::runtime::KernelTuningParameters{key, {{"algorithm.threshold", int64_t{10}}}}));
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  session.Prepare(rt);
+  EXPECT_TRUE(record->executed.empty());
+  EXPECT_EQ(record->configured, -1);
+  ASSERT_EQ(session.pending_preparations().size(), 2u);
+  EXPECT_TRUE(session.pending_preparations()[0].awaits_runtime_tuning);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_EQ(record->configured, 10);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 1);
+  EXPECT_TRUE(session.pending_preparations().empty());
+}
+
+TEST(KernelLifecycle, PreparationWaitsForIntermediateBeforeItsConsumerOnly) {
+  ModelProto model = MakeGemmModel(false);
+  NodeProto producer;
+  producer.set_op_type("Identity");
+  producer.add_input("B");
+  producer.add_output("ready_B");
+  model.ref_graph().ref_node().push_back(producer);
+  std::swap(model.ref_graph().ref_node()[0], model.ref_graph().ref_node()[1]);
+  model.ref_graph().ref_node()[1].ref_input()[1] = "ready_B";
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->source = "ready_B";
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  rt.Put("ready_B", Tensor::FromFloat("ready_B", {3, 2}, {99, 99, 99, 99, 99, 99}));
+  session.Prepare(rt);
+  EXPECT_TRUE(record->executed.empty());
+  EXPECT_EQ(session.pending_preparations().size(), 2u);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 1);
+  EXPECT_TRUE(session.pending_preparations().empty());
+  rt.Remove("ready_B");
+  session.Run(rt);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 2);
+}
+
+TEST(KernelLifecycle, MissingPreparationSourceRejectsBeforeConsumerRuns) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->source = "unavailable";
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  session.Prepare(rt);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+  EXPECT_EQ(record->runs, 0);
+  EXPECT_TRUE(record->executed.empty());
+}
+
+TEST(KernelLifecycle, RepeatedPreparationInstallsSessionStoreOnNewContext) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext first;
+  session.Prepare(first);
+  RuntimeContext second;
+  session.Prepare(second);
+  EXPECT_EQ(second.value_store_owner(), session.value_store_owner());
+  EXPECT_EQ(session.prepared_bytes(), 6 * sizeof(float));
+}
+
+TEST(KernelLifecycle, ExplicitPreparationDoesNotFreezeDefaultedGraphInput) {
+  const ModelProto model = MakeGemmModel(true);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  session.Prepare(rt);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 22);
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {2, 2, 2, 2, 2, 2}));
+  session.Run(rt);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 12);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[1], 12);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+}
+
+TEST(KernelLifecycle, ExplicitGemmPreparationsReuseSharedValueStore) {
+  const ModelProto model = MakeGemmModel(false);
+  core::runtime::RuntimeSessionOptions options;
+  options.value_store = std::make_shared<core::runtime::ValueStore>();
+  RuntimeSession first(model, options);
+  RuntimeSession second(model, options);
+  RuntimeContext first_rt;
+  RuntimeContext second_rt;
+  first.Prepare(first_rt);
+  second.Prepare(second_rt);
+  EXPECT_EQ(first.prepared_bytes(), 6 * sizeof(float));
+  EXPECT_EQ(second.prepared_bytes(), first.prepared_bytes());
+  EXPECT_EQ(options.value_store->slot_count(), 1u);
+}
+
+TEST(KernelLifecycle, DirectGemmPreparationRejectsMalformedStorageBeforeHashing) {
+  onnx_kernels::kernel::Gemm gemm(KernelContext{});
+  core::runtime::ValueStore store;
+  EXPECT_THROW(gemm.PrepareConstantB(Tensor("B", DataType::FLOAT, {-1, 2}, {}), 0, store),
+               std::invalid_argument);
+  EXPECT_THROW(gemm.PrepareConstantB(Tensor("B", DataType::FLOAT, {3, 2}, {0}), 0, store),
+               std::invalid_argument);
+  EXPECT_THROW(
+      gemm.PrepareConstantB(
+          Tensor("B", DataType::FLOAT, {std::numeric_limits<int64_t>::max(), 2}, {}), 0, store),
+      std::invalid_argument);
+  EXPECT_EQ(store.slot_count(), 0u);
+  EXPECT_TRUE(gemm.PrepareConstantB(Tensor("empty", DataType::FLOAT,
+                                           {0, std::numeric_limits<int64_t>::max()}, {}),
+                                    0, store)
+                  .IsReady());
+}
+
 TEST(KernelLifecycle, RuntimeSessionDoesNotPrepareOverridableGemmWeight) {
   const ModelProto model = MakeGemmModel(true);
   RuntimeSession session(model);
@@ -391,6 +750,8 @@ TEST(KernelLifecycle, NestedFunctionPreparesBoundImmutableGemmWeight) {
     RuntimeSession session(model);
     RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
     core::runtime::RegisterModelFunctions(model, rt);
+    session.Prepare(rt);
+    EXPECT_EQ(session.prepared_bytes(), 0u);
     rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
     if (overridable)
       rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
@@ -434,6 +795,8 @@ TEST(KernelLifecycle, NestedGraphPreparesCapturedImmutableGemmWeight) {
 
     RuntimeSession session(model);
     RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+    session.Prepare(rt);
+    EXPECT_EQ(session.prepared_bytes(), 0u);
     rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
     rt.Put("cond", Tensor::FromBool("cond", {}, {true}));
     if (overridable)

@@ -14,8 +14,12 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
+#include <deque>
+#include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -246,6 +250,28 @@ public:
    */
   void Run(RuntimeContext &rt);
 
+  /// Resolves and tunes kernels and declares work without seeding or reading payloads.
+  void DeclarePreparations(RuntimeContext &rt);
+  /// Seeds available initializers and completes ready work without running inference.
+  void Prepare(RuntimeContext &rt);
+  /// Drains ready work within a peak-byte budget without seeding initializer payloads.
+  /// Calls on this session and sessions sharing its store must be serialized.
+  void ExecutePreparations(RuntimeContext &rt,
+                           size_t memory_limit = std::numeric_limits<size_t>::max());
+  /// Revisits only consumers of changed sources and newly satisfied dependencies.
+  /// Source names are scheduling hints; availability and provenance are still checked.
+  void ExecutePreparations(RuntimeContext &rt, size_t memory_limit,
+                           std::span<const std::string> changed_sources);
+  /// Returns the number of pending declarations inspected for readiness.
+  size_t preparation_readiness_checks() const noexcept { return preparation_readiness_checks_; }
+  /// Returns deferred declarations, including unavailable sources and budget-limited work.
+  std::vector<KernelPreparationInfo> pending_preparations() const;
+  /// Estimates one declaration's peak bytes while retaining its callables in this session.
+  KernelPreparationMemory EstimatePreparationMemory(const RuntimeContext &rt,
+                                                    size_t preparation_index) const;
+  /// Returns the peak admitted store, source and work bytes of executed preparations.
+  size_t preparation_peak_bytes() const noexcept { return preparation_peak_bytes_; }
+
   /**
    * Runs in the supplied context and commits persistent feedback only on success.
    *
@@ -449,6 +475,9 @@ private:
     std::unique_ptr<KernelBase> instance;
     std::vector<uint32_t> input_slots;
     std::vector<uint32_t> output_slots;
+    size_t preparation_begin = 0;
+    size_t preparation_end = 0;
+    bool tuning_deferred = false;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,
@@ -456,6 +485,16 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt,
                          const std::unordered_set<std::string> &preparable_inputs);
+  void ExecutePreparationsImpl(RuntimeContext &rt, size_t memory_limit,
+                               const std::unordered_set<std::string> &available_outputs);
+  void QueuePreparation(size_t index);
+  void QueuePreparationsForSource(const std::string &name);
+  int32_t
+  TuningElementType(const NodeProto &node, const KernelBase &kernel, const RuntimeContext &rt,
+                    const std::unordered_set<std::string> *available_outputs = nullptr) const;
+  void ResolveDeferredTuning(size_t node_index, RuntimeContext &rt,
+                             const std::unordered_set<std::string> &available_outputs,
+                             bool at_consumer = false);
   void ResolveKernelValueSlots(RuntimeContext &rt);
   const OpsetImports *EffectiveOpsetImports() const noexcept;
   const FunctionMap *EffectiveModelFunctions() const noexcept;
@@ -520,6 +559,23 @@ private:
   std::shared_ptr<ValueStore> value_store_;
   std::unique_ptr<PersistentValueState> persistent_state_;
   std::vector<PreparedKernel> kernels_;
+  std::vector<KernelPreparation> preparations_;
+  std::vector<size_t> preparation_node_indices_;
+  std::vector<bool> preparation_complete_;
+  std::vector<bool> preparation_queued_;
+  std::deque<size_t> preparation_candidates_;
+  std::unordered_map<std::string, std::vector<size_t>> preparation_source_consumers_;
+  std::vector<std::vector<size_t>> preparation_dependents_;
+  std::unordered_set<size_t> preparation_budget_blocked_;
+  size_t preparation_memory_limit_ = 0;
+  size_t preparation_store_bytes_ = 0;
+  size_t preparation_readiness_checks_ = 0;
+  std::unordered_set<std::string> node_output_names_;
+  size_t pending_preparation_count_ = 0;
+  size_t pending_tuning_count_ = 0;
+  size_t preparation_peak_bytes_ = 0;
+  std::exception_ptr preparation_failure_;
+  std::unordered_set<std::string> seeded_initializer_names_;
   const GraphProto *initializer_graph_ = nullptr;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;

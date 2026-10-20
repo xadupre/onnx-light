@@ -9,6 +9,8 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
+#include <new>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -182,6 +184,7 @@ TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {
   rejected.As<float>()[0] = -1.0f;
   EXPECT_THROW(second.Publish(first_slot, RuntimeValue(std::move(rejected))), std::runtime_error);
   EXPECT_FALSE(second.IsReady(second_slot));
+  EXPECT_EQ(second.prepared_bytes(), 0u);
 
   Tensor first_value = first.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
   first_value.As<float>()[0] = 7.0f;
@@ -202,6 +205,31 @@ TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {
   EXPECT_FLOAT_EQ(second_read.Get().tensor.As<float>()[0], 9.0f);
   EXPECT_FLOAT_EQ(first.Get(first_slot).tensor.As<float>()[0], 7.0f);
   EXPECT_FLOAT_EQ(second.Get(second_slot).tensor.As<float>()[0], 9.0f);
+}
+
+TEST(ValueStore, LiveBytesTrackUnpublishedReleaseReuseAndAllocationFailure) {
+  ValueStore store;
+  Tensor retained = store.AllocateTensor(TensorProto::FLOAT, {2}, 2 * sizeof(float));
+  retained.As<float>()[0] = 7.0f;
+  EXPECT_EQ(store.prepared_bytes(), 2 * sizeof(float));
+  const auto slot = store.Bind("retained");
+  store.Publish(slot, RuntimeValue(std::move(retained)));
+  {
+    Tensor temporary = store.AllocateTensor(TensorProto::FLOAT, {3}, 3 * sizeof(float));
+    EXPECT_EQ(store.prepared_bytes(), 5 * sizeof(float));
+    auto *allocator = temporary.allocation_owner();
+    EXPECT_THROW(allocator->Allocate(sizeof(float)), std::bad_alloc);
+    EXPECT_EQ(store.prepared_bytes(), 5 * sizeof(float));
+    EXPECT_THROW(allocator->Allocate(std::numeric_limits<size_t>::max()), std::runtime_error);
+    EXPECT_EQ(store.prepared_bytes(), 5 * sizeof(float));
+    temporary = Tensor{};
+    EXPECT_EQ(store.prepared_bytes(), 2 * sizeof(float));
+    auto *buffer = allocator->Allocate(sizeof(float));
+    EXPECT_EQ(store.prepared_bytes(), 3 * sizeof(float));
+    allocator->Free(buffer);
+    EXPECT_EQ(store.prepared_bytes(), 2 * sizeof(float));
+  }
+  EXPECT_FLOAT_EQ(store.Get(slot).tensor.As<float>()[0], 7.0f);
 }
 
 TEST(ValueStore, RejectsUnboundSlotsAndSlotsFromPreviousStoreLifetimes) {

@@ -1643,27 +1643,29 @@ QuantizationParameterCatalogue::Get(const std::string &name) const {
   return found->second;
 }
 
-std::shared_ptr<const QuantizationParameterCatalogue>
-QuantizationParameterCatalogue::Build(const ModelProto &model) {
-  auto result = std::make_shared<QuantizationParameterCatalogue>();
+namespace {
+
+template <typename Visitor>
+void VisitSharedQuantizationParameters(const ModelProto &model, Visitor visit) {
   constexpr std::string_view prefix = "onnx_light.quantization.parameters:";
   bool has_parameters = false;
   for (const auto &annotation : model.graph().quantization_annotation())
     has_parameters |= annotation.tensor_name().value().starts_with(prefix);
   if (!has_parameters)
-    return result;
+    return;
   StructTypeCatalogue types;
   types.Build(model);
   std::unordered_map<std::string, const TensorProto *> initializers;
   for (const auto &tensor : model.graph().initializer())
     EXT_ENFORCE_INVALID(initializers.emplace(tensor.name().value(), &tensor).second,
                         "Duplicate root initializer.");
+  std::unordered_set<std::string> references;
   for (const auto &annotation : model.graph().quantization_annotation()) {
     const std::string name = annotation.tensor_name().value();
     if (!name.starts_with(prefix))
       continue;
     const std::string reference = name.substr(prefix.size());
-    EXT_ENFORCE_INVALID(!reference.empty() && !result->entries_.contains(reference),
+    EXT_ENFORCE_INVALID(!reference.empty() && references.insert(reference).second,
                         "Empty or duplicate quantization parameter set.");
     std::unordered_map<std::string, const TensorProto *> tensors;
     for (const auto &mapping : annotation.quant_parameter_tensor_names()) {
@@ -1691,7 +1693,7 @@ QuantizationParameterCatalogue::Build(const ModelProto &model) {
                           "Shared descriptor must be a rank-one UINT8 tensor.");
       return std::string(reinterpret_cast<const char *>(tensor.bytes()), tensor.size_bytes());
     };
-    Entry entry;
+    QuantizationParameterCatalogue::Entry entry;
     EXT_ENFORCE_INVALID(entry.storage_type.ParseFromString(descriptor("storage_type")),
                         "Invalid shared storage_type descriptor.");
     EXT_ENFORCE_INVALID(entry.logical_type.ParseFromString(descriptor("logical_type")),
@@ -1716,6 +1718,136 @@ QuantizationParameterCatalogue::Build(const ModelProto &model) {
       count = Product(count, dim.dim_value());
     }
     Product(count, FloatBytes(logical.elem_type()));
+    visit(reference, entry, tensors, shape, count);
+  }
+}
+
+size_t AddQuantizationBytes(size_t left, size_t right) {
+  EXT_ENFORCE_INVALID(right <= std::numeric_limits<size_t>::max() - left,
+                      "Shared quantization memory size overflow.");
+  return left + right;
+}
+
+} // namespace
+
+QuantizationParameterCatalogue::MemoryEstimate
+QuantizationParameterCatalogue::EstimateMemory(const ModelProto &model) {
+  MemoryEstimate estimate;
+  VisitSharedQuantizationParameters(model, [&](const std::string &, Entry &entry,
+                                               const auto &tensors, const Shape &shape,
+                                               size_t value_count) {
+    MemoryEstimate current;
+    size_t indices = 0, numerical = 0;
+    for (const auto &[role, tensor] : tensors) {
+      if (role == "storage_type" || role == "logical_type")
+        continue;
+      size_t count = 1;
+      for (int64_t dim : tensor->dims()) {
+        EXT_ENFORCE_INVALID(dim >= 0, "Negative shared parameter dimension.");
+        count = Product(count, dim);
+      }
+      // Owned tensors coexist with their double/int64 conversions.
+      current.temporary_bytes =
+          AddQuantizationBytes(current.temporary_bytes, Product(count, 2 * sizeof(double)));
+      if (role == "permutation" || role == "outliers") {
+        indices = std::max(indices, count);
+        numerical = AddQuantizationBytes(numerical, Product(count, sizeof(int64_t)));
+      } else if (role == "forward" || role == "inverse") {
+        numerical = AddQuantizationBytes(numerical, Product(count, sizeof(double)));
+      }
+    }
+    const auto &root = entry.storage_type;
+    const std::string name = root.name().value();
+    EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported Quantize storage type.");
+    const auto format =
+        ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+    size_t blocks = 0, runs = 0, tables = 0, common = 0;
+    if (OrtBits(format)) {
+      const auto &parameters = GetField(root, 0, "parameters");
+      EXT_ENFORCE_INVALID(parameters.has_constant() &&
+                              parameters.constant().int64_data().size() == 2 &&
+                              parameters.constant().int64_data(1) > 0,
+                          "Invalid ORT Quantize parameters.");
+      const OrtStorage storage(shape, entry.logical_type.tensor_type().elem_type(), format,
+                               parameters.constant().int64_data(1),
+                               entry.logical_type.tensor_type().elem_type());
+      blocks = Product(storage.n, storage.groups);
+      runs = 1;
+      common = AddQuantizationBytes(storage.scale_bytes, storage.zero_bytes);
+      current.temporary_bytes = AddQuantizationBytes(
+          current.temporary_bytes, AddQuantizationBytes(Product(blocks, 2 * sizeof(double)),
+                                                        Product(storage.groups, sizeof(uint32_t))));
+      current.retained_bytes = 2 * sizeof(int64_t);
+    } else {
+      const auto &field = GetField(root, 6, "blocks");
+      EXT_ENFORCE_INVALID(field.has_type() && field.type().has_struct_type() &&
+                              field.type().struct_type().has_structure(),
+                          "Invalid Quantize block structure.");
+      const auto &fields = field.type().struct_type().structure().field();
+      // Only one profile-default block is constructed, never the expanded run.
+      const auto defaults = MakeQuantizationPlan(format, 1, 1);
+      const size_t default_table = defaults.runs[0].blocks[0].codebook.size();
+      size_t consumed = 0, largest_table = default_table;
+      for (size_t i = 1; i < fields.size(); ++i) {
+        const auto &run = fields[i];
+        EXT_ENFORCE_INVALID(run.has_type() && run.type().has_struct_type() &&
+                                run.type().struct_type().has_array(),
+                            "Invalid Quantize block run.");
+        const auto &array = run.type().struct_type().array();
+        EXT_ENFORCE_INVALID(array.element_type().has_struct_type() && array.dimension() > 0,
+                            "Invalid Quantize block array.");
+        const auto layout = BlockParameters(array.element_type().struct_type());
+        EXT_ENFORCE_INVALID(layout.count > 0 &&
+                                layout.count <= (value_count - consumed) / array.dimension(),
+                            "Quantize blocks exceed the input size.");
+        consumed += Product(layout.count, array.dimension());
+        blocks = AddQuantizationBytes(blocks, array.dimension());
+        const size_t table = TableSize(layout);
+        largest_table = std::max(largest_table, table);
+        tables = AddQuantizationBytes(
+            tables,
+            Product(array.dimension(),
+                    std::max(table, layout.method == QuantizationMethod::kCodebook ? default_table
+                                                                                   : size_t{0})));
+        ++runs;
+      }
+      EXT_ENFORCE_INVALID(consumed == value_count, "Quantize blocks must cover the input exactly.");
+      common = AddQuantizationBytes(
+          1, AddQuantizationBytes(numerical, Product(blocks, 3 * sizeof(double))));
+      common = AddQuantizationBytes(common, Product(tables, sizeof(double)));
+      // Validation sets, profile defaults and a replaced codebook can coexist.
+      current.temporary_bytes = AddQuantizationBytes(
+          current.temporary_bytes,
+          AddQuantizationBytes(
+              AddQuantizationBytes(Product(indices, 8 * sizeof(size_t)),
+                                   sizeof(QuantizationRun) + sizeof(QuantizationBlockParameters)),
+              Product(AddQuantizationBytes(2 * default_table, largest_table), sizeof(double))));
+    }
+    current.retained_bytes = AddQuantizationBytes(
+        current.retained_bytes,
+        AddQuantizationBytes(common,
+                             AddQuantizationBytes(numerical, Product(tables, 2 * sizeof(double)))));
+    current.retained_bytes = AddQuantizationBytes(
+        current.retained_bytes, Product(blocks, sizeof(QuantizationBlockParameters)));
+    current.retained_bytes =
+        AddQuantizationBytes(current.retained_bytes, Product(runs, 2 * sizeof(QuantizationRun)));
+    current.retained_bytes =
+        AddQuantizationBytes(current.retained_bytes,
+                             Product(OrtBits(format) ? size_t{1} : AddQuantizationBytes(blocks, 1),
+                                     2 * sizeof(std::pair<size_t, size_t>)));
+    estimate.retained_bytes = AddQuantizationBytes(estimate.retained_bytes, current.retained_bytes);
+    estimate.temporary_bytes = std::max(estimate.temporary_bytes, current.temporary_bytes);
+  });
+  return estimate;
+}
+
+std::shared_ptr<const QuantizationParameterCatalogue>
+QuantizationParameterCatalogue::Build(const ModelProto &model) {
+  auto result = std::make_shared<QuantizationParameterCatalogue>();
+  VisitSharedQuantizationParameters(model, [&](const std::string &reference, Entry &entry,
+                                               const auto &tensors, const Shape &shape,
+                                               size_t count) {
+    const auto &logical = entry.logical_type.tensor_type();
     std::unordered_map<std::string, Tensor> owned;
     for (const auto &[key, proto] : tensors) {
       if (key == "storage_type" || key == "logical_type")
@@ -1777,7 +1909,7 @@ QuantizationParameterCatalogue::Build(const ModelProto &model) {
       common.Finish();
     }
     result->entries_.emplace(reference, std::move(entry));
-  }
+  });
   return result;
 }
 

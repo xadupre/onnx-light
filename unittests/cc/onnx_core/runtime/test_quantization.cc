@@ -169,7 +169,23 @@ TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
     RuntimeValue shared;
     {
       auto model = SharedModel(plan, full.Encoded());
+      const auto memory = QuantizationParameterCatalogue::EstimateMemory(model);
       auto parameters = QuantizationParameterCatalogue::Build(model);
+      const auto &entry = parameters->Get("weights");
+      size_t retained = entry.common.capacity() +
+                        entry.local_ranges.capacity() * sizeof(std::pair<size_t, size_t>) +
+                        entry.plan.runs.capacity() * sizeof(QuantizationRun);
+      for (const auto &run : entry.plan.runs) {
+        retained += run.blocks.capacity() * sizeof(QuantizationBlockParameters);
+        for (const auto &block : run.blocks)
+          retained += block.codebook.capacity() * sizeof(double);
+      }
+      retained += (entry.plan.permutation.capacity() + entry.plan.outliers.capacity() +
+                   entry.plan.matrix_shape.size()) *
+                  sizeof(int64_t);
+      retained += (entry.plan.forward.capacity() + entry.plan.inverse.capacity()) * sizeof(double);
+      EXPECT_GE(memory.retained_bytes, retained);
+      EXPECT_GT(memory.temporary_bytes, 0u);
       shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
       EXPECT_EQ(shared.quantization_parameters, parameters);
       const auto second =

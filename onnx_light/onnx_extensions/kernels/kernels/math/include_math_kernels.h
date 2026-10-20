@@ -1042,8 +1042,8 @@ public:
   KernelTuningKey TuningKey(int32_t element_type) const override;
   void Configure(const KernelTuningParameters &parameters) override;
   bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const override;
-  void Prepare(RuntimeContext &rt,
-               const std::unordered_set<std::string> &immutable_inputs) override;
+  void DeclarePreparations(const std::unordered_set<std::string> &immutable_inputs,
+                           std::vector<KernelPreparation> &preparations) override;
   void Run(RuntimeContext &rt) override;
   /**
    * Prepares one immutable constant B in the session hierarchy's preparation store.

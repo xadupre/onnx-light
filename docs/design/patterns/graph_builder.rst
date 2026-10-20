@@ -59,6 +59,23 @@ advanced authoring.
 The same builder can be constructed from an existing ``ModelProto`` to
 optimize or extend a model that was produced elsewhere.
 
+Value tags during rewriting
+---------------------------
+
+Initial tag inference uses declared metadata and the graph's consumers to
+classify values. For example, an initializer ``dims`` used as the second
+input of ``Reshape(X, dims)`` is tagged ``shape``, and ``Neg(dims)`` inherits
+that tag.
+
+Subsequent graph rewriting preserves the existing tags associated with
+retained result names. Removing a consumer does not invalidate or reclassify
+those values. If ``dims`` and ``Neg(dims)`` remain graph outputs while the
+unused ``Reshape`` is removed, both retain their ``shape`` tags. This differs
+from initial inference on the reduced graph without tag metadata, where
+``dims`` would be inferred as ``weight`` and ``Neg(dims)`` would inherit
+``weight``. A fresh inference on an untagged reduced graph is therefore not
+the reference for retained tags after a rewrite.
+
 Relation to the rest of the core pipeline
 -----------------------------------------
 

@@ -1,6 +1,8 @@
 #include "onnx_verify.h"
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
+#include <string>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -837,6 +839,58 @@ TEST(onnx_verify, VerifyTensor_Packed2BitInt32DataTooSmall) {
     ok.add_int32_data(0);
     ok.add_int32_data(0);
     EXPECT_NO_THROW(VerifyTensor(ok));
+  }
+}
+
+TEST(onnx_verify, VerifyTensor_PackedInt32DataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    const int64_t padding = dtype == TensorProto::INT2 || dtype == TensorProto::UINT2 ? 15 : 7;
+    const int64_t limit = std::numeric_limits<int64_t>::max() - padding;
+    for (const int64_t nelem : {limit, limit + 1, std::numeric_limits<int64_t>::max()}) {
+      SCOPED_TRACE(nelem);
+      TensorProto tensor;
+      tensor.set_name("w");
+      tensor.set_data_type(dtype);
+      tensor.add_dims(nelem);
+      tensor.add_int32_data(0);
+      try {
+        VerifyTensor(tensor);
+        FAIL() << "Expected invalid packed tensor to be rejected";
+      } catch (const std::invalid_argument &error) {
+        const char *message =
+            nelem > limit ? "too large for packed-element rounding" : "int32_data size";
+        EXPECT_NE(std::string(error.what()).find(message), std::string::npos);
+      }
+    }
+  }
+}
+
+TEST(onnx_verify, VerifyTensor_PackedRawDataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    const int64_t padding = dtype == TensorProto::INT2 || dtype == TensorProto::UINT2 ? 3 : 1;
+    const int64_t limit = std::numeric_limits<int64_t>::max() - padding;
+    for (const int64_t nelem : {limit, limit + 1, std::numeric_limits<int64_t>::max()}) {
+      SCOPED_TRACE(nelem);
+      TensorProto tensor;
+      tensor.set_name("w");
+      tensor.set_data_type(dtype);
+      tensor.add_dims(nelem);
+      tensor.ref_raw_data().push_back(0);
+      try {
+        VerifyTensor(tensor);
+        FAIL() << "Expected invalid packed tensor to be rejected";
+      } catch (const std::invalid_argument &error) {
+        const char *message =
+            nelem > limit ? "too large for packed-element rounding" : "raw_data size";
+        EXPECT_NE(std::string(error.what()).find(message), std::string::npos);
+      }
+    }
   }
 }
 

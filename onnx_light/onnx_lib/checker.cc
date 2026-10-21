@@ -394,6 +394,15 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
                #field, "' instead of '", value_field, "'");                                        \
   }
 
+    const auto dtype = tensor.data_type();
+    if (((dtype == TensorProto::UINT4 || dtype == TensorProto::INT4 ||
+          dtype == TensorProto::FLOAT4E2M1) &&
+         nelem > std::numeric_limits<int64_t>::max() - 7) ||
+        ((dtype == TensorProto::UINT2 || dtype == TensorProto::INT2) &&
+         nelem > std::numeric_limits<int64_t>::max() - 15)) {
+      fail_check("TensorProto (tensor name: ", tensor.name(),
+                 ") has a shape too large for packed-element rounding.");
+    }
     switch (tensor.data_type()) {
     case TensorProto::FLOAT:
     case TensorProto::COMPLEX64:

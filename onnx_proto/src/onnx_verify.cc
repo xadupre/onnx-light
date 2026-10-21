@@ -1302,6 +1302,15 @@ void VerifyTensor(const TensorProto &tensor) {
   EXT_ENFORCE_INVALID(num_value_fields == 1, "TensorProto '", tensor.name(),
                       "' must carry exactly one data field, found ", num_value_fields, ".");
 
+  const auto dtype = tensor.data_type();
+  EXT_ENFORCE_INVALID(!((dtype == TensorProto::UINT4 || dtype == TensorProto::INT4 ||
+                         dtype == TensorProto::FLOAT4E2M1) &&
+                        nelem > std::numeric_limits<int64_t>::max() - (has_raw ? 1 : 7)) &&
+                          !((dtype == TensorProto::UINT2 || dtype == TensorProto::INT2) &&
+                            nelem > std::numeric_limits<int64_t>::max() - (has_raw ? 3 : 15)),
+                      "TensorProto '", tensor.name(),
+                      "' has a shape too large for packed-element rounding.");
+
   if (has_raw) {
     EXT_ENFORCE_INVALID(tensor.data_type() != TensorProto::STRING, "TensorProto '", tensor.name(),
                         "' stores STRING data in 'raw_data', which is not allowed.");

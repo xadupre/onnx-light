@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -1007,6 +1008,32 @@ TEST(CHECKER_COVERAGE, TensorPackedSubByteInt32DataTooSmall) {
     ok.add_int32_data(0);
     ok.add_int32_data(0); // ceil(20/16) = 2
     EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+}
+
+TEST(CHECKER_COVERAGE, TensorPackedInt32DataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    const int64_t padding = dtype == TensorProto::INT2 || dtype == TensorProto::UINT2 ? 15 : 7;
+    const int64_t limit = std::numeric_limits<int64_t>::max() - padding;
+    for (const int64_t nelem : {limit, limit + 1, std::numeric_limits<int64_t>::max()}) {
+      SCOPED_TRACE(nelem);
+      TensorProto tensor;
+      tensor.set_name("t");
+      tensor.set_data_type(dtype);
+      tensor.add_dims(nelem);
+      tensor.add_int32_data(0);
+      try {
+        checker::check_tensor(tensor, MakeCtx());
+        FAIL() << "Expected invalid packed tensor to be rejected";
+      } catch (const ValidationError &error) {
+        const char *message =
+            nelem > limit ? "too large for packed-element rounding" : "int32_data size";
+        EXPECT_NE(std::string(error.what()).find(message), std::string::npos);
+      }
+    }
   }
 }
 

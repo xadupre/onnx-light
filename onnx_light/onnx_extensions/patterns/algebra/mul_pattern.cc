@@ -20,6 +20,7 @@ namespace {
 
 using collections::FreeInitializerName;
 using collections::IsDefaultOp;
+using collections::MakeScalarTensor;
 using core::builder::BuilderError;
 using core::symbolic::SymDim;
 using core::symbolic::SymShape;
@@ -95,102 +96,11 @@ std::vector<int64_t> ProductShape(const TensorProto &left, const TensorProto &ri
   return {};
 }
 
-TensorProto MakeScalarTensor(const std::string &name, TensorProto::DataType type,
-                             const std::vector<int64_t> &dims, double value) {
-  TensorProto tensor;
-  tensor.set_name(name);
-  tensor.set_data_type(type);
-  for (int64_t dim : dims) {
-    tensor.add_dims(dim);
-  }
-  switch (type) {
-  case TensorProto::DataType::FLOAT16:
-    tensor.ref_int32_data().push_back(
-        static_cast<int32_t>(core::runtime::FloatToFloat16Bits(static_cast<float>(value))));
-    break;
-  case TensorProto::DataType::BFLOAT16:
-    tensor.ref_int32_data().push_back(
-        static_cast<int32_t>(core::runtime::FloatToBfloat16Bits(static_cast<float>(value))));
-    break;
-  case TensorProto::DataType::FLOAT:
-    tensor.ref_float_data().push_back(static_cast<float>(value));
-    break;
-  case TensorProto::DataType::DOUBLE:
-    tensor.ref_double_data().push_back(value);
-    break;
-  case TensorProto::DataType::INT64:
-    tensor.ref_int64_data().push_back(static_cast<int64_t>(value));
-    break;
-  case TensorProto::DataType::UINT64:
-    tensor.ref_uint64_data().push_back(static_cast<uint64_t>(value));
-    break;
-  case TensorProto::DataType::UINT32:
-    tensor.ref_uint64_data().push_back(static_cast<uint32_t>(value));
-    break;
-  case TensorProto::DataType::INT32:
-    tensor.ref_int32_data().push_back(static_cast<int32_t>(value));
-    break;
-  case TensorProto::DataType::INT16:
-    tensor.ref_int32_data().push_back(static_cast<int16_t>(value));
-    break;
-  case TensorProto::DataType::INT8:
-    tensor.ref_int32_data().push_back(static_cast<int8_t>(value));
-    break;
-  case TensorProto::DataType::UINT16:
-    tensor.ref_int32_data().push_back(static_cast<uint16_t>(value));
-    break;
-  case TensorProto::DataType::UINT8:
-  case TensorProto::DataType::BOOL:
-    tensor.ref_int32_data().push_back(static_cast<uint8_t>(value));
-    break;
-  default:
-    tensor.ref_int32_data().push_back(static_cast<int32_t>(value));
-    break;
-  }
-  return tensor;
-}
-
 TensorProto MakeIntegerScalarTensor(const std::string &name, TensorProto::DataType type,
                                     const std::vector<int64_t> &dims, int64_t left, int64_t right) {
-  TensorProto tensor;
-  tensor.set_name(name);
-  tensor.set_data_type(type);
-  for (int64_t dim : dims) {
-    tensor.add_dims(dim);
-  }
   const uint64_t product = static_cast<uint64_t>(left) * static_cast<uint64_t>(right);
-  switch (type) {
-  case TensorProto::DataType::INT64:
-    tensor.ref_int64_data().push_back(static_cast<int64_t>(product));
-    break;
-  case TensorProto::DataType::UINT64:
-    tensor.ref_uint64_data().push_back(product);
-    break;
-  case TensorProto::DataType::INT32:
-    tensor.ref_int32_data().push_back(static_cast<int32_t>(product));
-    break;
-  case TensorProto::DataType::UINT32:
-    tensor.ref_uint64_data().push_back(static_cast<uint32_t>(product));
-    break;
-  case TensorProto::DataType::INT16:
-    tensor.ref_int32_data().push_back(static_cast<int16_t>(product));
-    break;
-  case TensorProto::DataType::UINT16:
-    tensor.ref_int32_data().push_back(static_cast<uint16_t>(product));
-    break;
-  case TensorProto::DataType::INT8:
-    tensor.ref_int32_data().push_back(static_cast<int8_t>(product));
-    break;
-  case TensorProto::DataType::UINT8:
-    tensor.ref_int32_data().push_back(static_cast<uint8_t>(product));
-    break;
-  case TensorProto::DataType::BOOL:
-    tensor.ref_int32_data().push_back(left != 0 && right != 0 ? 1 : 0);
-    break;
-  default:
-    break;
-  }
-  return tensor;
+  return MakeScalarTensor(name, type, dims,
+                          type == TensorProto::BOOL ? uint64_t(left != 0 && right != 0) : product);
 }
 
 bool CombineConstants(const TensorProto &left, const TensorProto &right, bool reciprocal_left,

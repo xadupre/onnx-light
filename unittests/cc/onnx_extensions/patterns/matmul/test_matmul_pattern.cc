@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -270,6 +271,9 @@ TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
   const TensorProto *product = FindInitializer(builder, replacements[1].input()[1].value());
   ASSERT_NE(product, nullptr);
+  EXPECT_TRUE(product->is_raw_data());
+  ASSERT_EQ(product->dims_size(), 1u);
+  EXPECT_EQ(product->dims(0), 1);
   std::vector<double> product_values;
   ASSERT_TRUE(ReadFloatingValues(*product, product_values));
   ASSERT_EQ(product_values.size(), 1u);
@@ -285,6 +289,35 @@ TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar
   rejected.MakeNode("MatMul", {"left", "right"}, {"out"});
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[2]).pattern, nullptr);
+}
+
+TEST(MulMulMatMulPattern, PreservesLargeIntegerProductsInRawData) {
+  for (const auto &values : {std::make_pair((int64_t(1) << 53) + 1, int64_t(-3)),
+                             std::make_pair(std::numeric_limits<int64_t>::max(), int64_t(2))}) {
+    core::builder::GraphBuilder builder("integers", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape({2, 3}));
+    builder.MakeInput("y", core::symbolic::TensorType::kInt64, Shape({3, 4}));
+    builder.MakeInitializer(MakeInitializer<int64_t>("c1", {}, {values.first}));
+    builder.MakeInitializer(MakeInitializer<int64_t>("c2", {}, {values.second}));
+    builder.MakeNode("Mul", {"x", "c1"}, {"left"});
+    builder.MakeNode("Mul", {"y", "c2"}, {"right"});
+    builder.MakeNode("MatMul", {"left", "right"}, {"out"});
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::MulMulMatMulPattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[2]);
+    ASSERT_EQ(match.pattern, &pattern);
+    const auto replacements = pattern.Apply(graph, match.nodes);
+    ASSERT_EQ(replacements.size(), 2u);
+    const TensorProto *product = FindInitializer(builder, replacements[1].input()[1].value());
+    ASSERT_NE(product, nullptr);
+    EXPECT_TRUE(product->is_raw_data());
+    EXPECT_EQ(product->dims_size(), 0u);
+    std::vector<int64_t> actual;
+    ASSERT_TRUE(ReadIntegerValues(*product, actual));
+    ASSERT_EQ(actual.size(), 1u);
+    EXPECT_EQ(actual[0], static_cast<int64_t>(static_cast<uint64_t>(values.first) *
+                                              static_cast<uint64_t>(values.second)));
+  }
 }
 
 TEST(MatMulBatchNormalizationFusionPattern, FoldsConstantsAndRejectsDynamicWeight) {

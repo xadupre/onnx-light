@@ -26,6 +26,7 @@ from onnx_light.onnx_lib import RewritingProto, parser
 from onnx_light.onnx_core.optimization import (
     GraphBuilder,
     GraphGraph,
+    TransposeTransposePattern,
     apply_rewritings,
     standard_patterns,
 )
@@ -93,21 +94,28 @@ print(pretty_onnx(replayed_graph))
 # With ``OptimizationMode.kRewritings`` it keeps the canonical graph and stores
 # the captured plan under ``"optimized"``. The default ``OptimizationMode.kNone``
 # preserves ordinary export. The source builder is not optimized in place.
-# A constant transpose illustrates why the bundle stores a recipe instead of
-# another weight payload.
+# Composing two constant transposes illustrates why the bundle stores a recipe
+# instead of another weight payload.
 
 exporter = GraphBuilder("export_weights", opsets=18)
 x = exporter.inp("x", onnx.TensorProto.FLOAT, [3, 2])
 weight = exporter.init(numpy.arange(6, dtype=numpy.float32).reshape(2, 3), name="weight")
-transposed = exporter.op.Transpose(weight, perm=[1, 0])
+weight_identity = exporter.op.Transpose(weight, perm=[0, 1])
+transposed = exporter.op.Transpose(weight_identity, perm=[1, 0])
 y = exporter.op.Add(x, transposed, outputs="y")
 exporter.out(y)
+exporter.register_pattern(TransposeTransposePattern(priority=-1))
 canonical = exporter.to_onnx()
 materialized = exporter.to_onnx(optimize=OptimizationMode.kOptimize)
 bundled = exporter.to_onnx(optimize=OptimizationMode.kRewritings)
 assert bundled.graph.SerializeToString() == canonical.graph.SerializeToString()
 assert not materialized.rewritings
 assert any(edit.initializer_calls for edit in bundled.rewritings["optimized"].rewrites)
+assert any(
+    node.op_type == "Transpose"
+    for function in bundled.rewritings["optimized"].added_functions
+    for node in function.node
+)
 
 # %%
 # Save, relocate weights, reload, and select a plan

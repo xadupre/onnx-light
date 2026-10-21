@@ -394,6 +394,15 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
                #field, "' instead of '", value_field, "'");                                        \
   }
 
+    const auto dtype = tensor.data_type();
+    if (((dtype == TensorProto::UINT4 || dtype == TensorProto::INT4 ||
+          dtype == TensorProto::FLOAT4E2M1) &&
+         nelem > std::numeric_limits<int64_t>::max() - 7) ||
+        ((dtype == TensorProto::UINT2 || dtype == TensorProto::INT2) &&
+         nelem > std::numeric_limits<int64_t>::max() - 15)) {
+      fail_check("TensorProto (tensor name: ", tensor.name(),
+                 ") has a shape too large for packed-element rounding.");
+    }
     switch (tensor.data_type()) {
     case TensorProto::FLOAT:
     case TensorProto::COMPLEX64:
@@ -450,7 +459,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       check_field(int32_data);
       if (nelem > 0) {
         // Each int32 stores 4 bytes = 8 4-bit elements.
-        const int64_t expected_int32s = nelem / 8 + (nelem % 8 != 0);
+        const int64_t expected_int32s = (nelem + 7) / 8;
         if (static_cast<int64_t>(tensor.int32_data().size()) < expected_int32s) {
           fail_check("TensorProto (tensor name: ", tensor.name(), ") int32_data size (",
                      tensor.int32_data().size(),
@@ -464,7 +473,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       check_field(int32_data);
       if (nelem > 0) {
         // Each int32 stores 4 bytes = 16 2-bit elements.
-        const int64_t expected_int32s = nelem / 16 + (nelem % 16 != 0);
+        const int64_t expected_int32s = (nelem + 15) / 16;
         if (static_cast<int64_t>(tensor.int32_data().size()) < expected_int32s) {
           fail_check("TensorProto (tensor name: ", tensor.name(), ") int32_data size (",
                      tensor.int32_data().size(),

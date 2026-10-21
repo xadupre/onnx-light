@@ -365,6 +365,9 @@ jobs:
         # Linux CI run 39420698713 measures 1663032 installed bytes, 1174058 text bytes
         # and 865 symbols. Only the text budget changes; installed-size, symbol and
         # dependency limits remain unchanged.
+
+        # After merging main, Linux CI run 39580117738 measures 1174506 text bytes,
+        # 1663032 installed bytes and 865 symbols; only the text budget changes.
         # Named rewriting plans add ModelProto map serialization, comparison and printing.
         # Linux CI run 39580960813 (f0a84c8d) measures 1683544 installed bytes,
         # 1192474 text bytes and 868 symbols. Installed and text limits match these

@@ -432,50 +432,6 @@ public:
     counts_.Update(rank, false);
   }
 
-  void InsertBefore(const std::vector<const NodeProto *> &added, const NodeProto *anchor) {
-    if (added.empty())
-      return;
-    const auto anchor_rank = anchor == nullptr ? slots_.size() : Rank(anchor);
-    const auto position = counts_.Before(anchor_rank);
-    if (std::all_of(added.begin(), added.end(),
-                    [&](const auto *node) { return Position(node) == position; }))
-      return;
-    std::size_t first = anchor_rank, last = anchor_rank;
-    std::unordered_set<const NodeProto *> selected(added.begin(), added.end());
-    std::vector<std::shared_ptr<NodeProto>> additions;
-    for (const auto *node : added) {
-      const auto rank = Rank(node);
-      first = std::min(first, rank);
-      last = std::max(last, rank + 1);
-      additions.push_back(slots_[rank]);
-    }
-    std::vector<std::shared_ptr<NodeProto>> interval;
-    for (std::size_t rank = first; rank < last; ++rank) {
-      if (rank == anchor_rank)
-        interval.insert(interval.end(), additions.begin(), additions.end());
-      if (selected.count(slots_[rank].get()) == 0)
-        interval.push_back(slots_[rank]);
-    }
-    if (anchor_rank == last)
-      interval.insert(interval.end(), additions.begin(), additions.end());
-    for (std::size_t offset = 0; offset < interval.size(); ++offset) {
-      const auto rank = first + offset;
-      if (Contains(slots_[rank].get())) {
-        entries_.erase(rank);
-        counts_.Update(rank, false);
-      }
-    }
-    for (std::size_t offset = 0; offset < interval.size(); ++offset) {
-      const auto rank = first + offset;
-      slots_[rank] = std::move(interval[offset]);
-      ranks_[slots_[rank].get()] = rank;
-      if (Contains(slots_[rank].get())) {
-        entries_.emplace(rank, slots_[rank]);
-        counts_.Update(rank, true);
-      }
-    }
-  }
-
   std::vector<std::shared_ptr<NodeProto>> Interval(std::size_t first, std::size_t last) const {
     std::vector<std::shared_ptr<NodeProto>> result;
     for (auto it = entries_.lower_bound(first); it != entries_.end() && it->first <= last; ++it)
@@ -557,7 +513,6 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
   std::vector<std::shared_ptr<NodeProto>> slots;
   slots.reserve(total_nodes);
   std::unordered_set<const NodeProto *> originals;
-  std::set<std::size_t> retained_originals;
   for (std::size_t index = 0; index <= node_count; ++index) {
     const auto additions = insertions.find(index);
     if (additions != insertions.end())
@@ -565,11 +520,12 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     if (index < node_count) {
       slots.push_back(original_nodes.shared_at(index));
       originals.insert(&original_nodes[index]);
-      retained_originals.insert(index);
       index_node(original_nodes[index]);
     }
   }
   LiveNodeOrder nodes(std::move(slots), originals);
+  // Preparation order must not change the reserved insertion order at shared anchors.
+  OrderPreparationDependencies(replacements);
   std::vector<bool> removed(node_count, false);
   std::sort(initializer_positions.begin(), initializer_positions.end());
   if (initializer_positions.size() > std::numeric_limits<std::size_t>::max() - initializer_count) {
@@ -587,9 +543,6 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     std::vector<std::size_t> matched_positions;
     std::vector<const NodeProto *> matched;
     std::unordered_set<std::string> changed_outputs;
-    const auto insertion = retained_originals.lower_bound(replacements[i].position);
-    const auto *anchor =
-        insertion == retained_originals.end() ? nullptr : &original_nodes[*insertion];
     for (uint64_t &position : rewrite.ref_matched_nodes()) {
       const std::size_t original = CheckedPosition(position);
       if (original >= node_count || removed[original]) {
@@ -600,7 +553,6 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
       matched.push_back(node);
       position = nodes.Position(node);
       matched_positions.push_back(position);
-      retained_originals.erase(original);
       for (const auto &output : node->output())
         if (!output.empty()) {
           producers.erase(output.value());
@@ -612,7 +564,6 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     std::vector<const NodeProto *> additions;
     for (const auto &node : rewrite.added_nodes())
       additions.push_back(&node);
-    nodes.InsertBefore(additions, anchor);
     for (const auto *node : additions) {
       nodes.Activate(node);
       index_node(*node);
@@ -1411,7 +1362,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         replacement.rewriting.ref_added_nodes() = std::move(unfolded_nodes);
       }
 
-      OrderPreparationDependencies(replacements);
       std::unordered_set<std::string> available = builder_.inherited_names_;
       for (const auto &input : builder_.inputs_)
         available.insert(input.name().value());
@@ -1908,6 +1858,11 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   const std::size_t final_initializer_count = retained_initializers + added_initializers.size();
   std::vector<const TensorProto *> initializers_by_position(final_initializer_count, nullptr);
   for (const auto &addition : added_initializers) {
+    for (std::size_t position : removed_initializers) {
+      if (initializers[position].name() == addition.initializer->name()) {
+        throw BuilderError("ApplyRewriting: initializer name is already reserved.");
+      }
+    }
     if (addition.position >= final_initializer_count) {
       throw BuilderError(
           "ApplyRewriting: added initializer position is outside the rewritten graph.");
@@ -1969,7 +1924,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
 
   RewriteInitializerReferences(value_renames);
   for (const auto &addition : added_initializers) {
-    // Replacing an existing default must not bypass the public-input contract.
+    // First-time defaults must respect the public-input contract.
     ValidateInputDefault(inputs_, *addition.initializer);
     const auto &name = addition.initializer->name();
     bool replaces_removed_value = false;
@@ -1978,12 +1933,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
         replaces_removed_value = replaces_removed_value || output == name;
       }
     }
-    for (std::size_t position : removed_initializers) {
-      replaces_removed_value = replaces_removed_value || initializers[position].name() == name;
-    }
-    for (std::size_t position : removed_extended)
-      replaces_removed_value =
-          replaces_removed_value || extended_initializers_[position].name() == name;
     if (!replaces_removed_value) {
       const bool input_default = std::any_of(
           inputs_.begin(), inputs_.end(), [&](const auto &input) { return input.name() == name; });
@@ -2221,6 +2170,63 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     }
   }
   GraphBuilder result(model, schema_lookup_);
+  const auto validate_tags = [&](const auto &self, const GraphBuilder &source,
+                                 const GraphBuilder &reconstructed,
+                                 const std::string &path) -> void {
+    const auto &tags = reconstructed.Compute().ValueTags();
+    for (const auto &[name, tag] : source.Compute().ValueTags()) {
+      const auto found = tags.find(name);
+      if (found == tags.end() || found->second != tag) {
+        throw BuilderError("ApplyRewritings: value '" + name + "' in '" + path +
+                           "' has existing tag '" + tag + "' but reconstructed tag " +
+                           (found == tags.end() ? "<absent>" : "'" + found->second + "'") + ".");
+      }
+    }
+    if (source.nodes_.size() != reconstructed.nodes_.size()) {
+      throw BuilderError("ApplyRewritings: incompatible reconstructed node count in '" + path +
+                         "'.");
+    }
+    for (std::size_t index = 0; index < source.nodes_.size(); ++index) {
+      const auto originals = source.ReferencedSubgraphs(source.nodes_[index]);
+      const auto children = reconstructed.ReferencedSubgraphs(reconstructed.nodes_[index]);
+      for (std::size_t child = 0; child < originals.size(); ++child)
+        self(self, *originals[child], *children.at(child),
+             path + "/subgraph:" + originals[child]->name_);
+    }
+  };
+  validate_tags(validate_tags, *this, result, name_);
+  using ScopedFunction = std::pair<const GraphBuilder *, std::string>;
+  std::map<FunctionIdentifier, std::vector<ScopedFunction>> source_functions;
+  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope,
+                                     const std::string &path) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto function_path = path + "/function:" + function->function_domain_ +
+                                 "::" + function->name_ + ":" +
+                                 function->function_template_.overload().value();
+      source_functions[identity].emplace_back(function.get(), function_path);
+      self(self, *function, function_path);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph, path + "/subgraph:" + subgraph->name_);
+  };
+  collect_functions(collect_functions, *this, name_);
+  const auto validate_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto originals = source_functions.find(identity);
+      if (originals != source_functions.end()) {
+        for (const auto &[original, path] : originals->second)
+          validate_tags(validate_tags, *original, *function, path);
+      }
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  validate_functions(validate_functions, result);
   result.set_device(device_);
   std::size_t index = 0;
   while (index < rewrites.rewrites().size()) {

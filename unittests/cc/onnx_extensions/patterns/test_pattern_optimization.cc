@@ -125,14 +125,15 @@ public:
 
 class ReorderedFoldingPattern final : public core::builder::PatternOptimization {
 public:
-  explicit ReorderedFoldingPattern(std::string op_type)
-      : PatternOptimization(1, "Fold" + op_type), op_type_(std::move(op_type)) {}
+  explicit ReorderedFoldingPattern(std::string op_type, bool shared_anchor = false)
+      : PatternOptimization(1, "Fold" + op_type), op_type_(std::move(op_type)),
+        shared_anchor_(shared_anchor) {}
 
   std::set<std::string> FastOpType() const override { return {op_type_}; }
 
-  core::builder::MatchResult Match(core::builder::GraphGraph &,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override {
-    return {this, {&candidate}, &candidate};
+    return {this, {&candidate}, shared_anchor_ ? graph.NodeBefore("anchor") : &candidate};
   }
 
   utils::RepeatedProtoField<NodeProto>
@@ -140,19 +141,25 @@ public:
         const std::vector<const NodeProto *> &nodes) const override {
     const std::string output = nodes[0]->output(0).value();
     TensorProto literal;
-    literal.set_name(output + "_literal");
+    literal.set_name(shared_anchor_ ? "second_literal" : output + "_literal");
     literal.set_data_type(TensorProto::FLOAT);
     literal.add_dims(1);
     literal.add_float_data(op_type_ == "Relu" ? 2.0f : 5.0f);
-    graph.Builder().MakeInitializer(literal);
+    if (!shared_anchor_ || op_type_ == "Relu")
+      graph.Builder().MakeInitializer(literal);
     utils::RepeatedProtoField<NodeProto> result;
-    result.push_back(MakeNode("Add", {"base", literal.name().value()}, {output + "_weight"}));
+    result.push_back(
+        MakeNode("Add",
+                 {shared_anchor_ && op_type_ == "Identity" ? literal.name().value() : "base",
+                  literal.name().value()},
+                 {output + "_weight"}));
     result.push_back(MakeNode("Add", {"x", output + "_weight"}, {output}));
     return result;
   }
 
 private:
   std::string op_type_;
+  bool shared_anchor_;
 };
 
 class NullPlaceholderPattern final : public core::builder::PatternOptimization {
@@ -1503,6 +1510,54 @@ TEST(PatternOptimization, SequentialRebasingPreservesReorderedFoldingBatch) {
             builder.BuildGraph().SerializeAsString());
 }
 
+TEST(PatternOptimization, SequentialRebasingPreservesSharedAnchorWithReorderedPreparation) {
+  ScopedAddKernel kernel;
+  core::builder::GraphBuilder builder("shared_anchor", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInitializer(MakeInitializer<float>("base", {1}, {1.0f}));
+  builder.MakeNode("Identity", {"x"}, {"first"});
+  builder.MakeNode("Relu", {"x"}, {"second"});
+  builder.MakeNode("Abs", {"x"}, {"anchor"});
+  builder.MakeOutput("first");
+  builder.MakeOutput("second");
+  builder.MakeOutput("anchor");
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReorderedFoldingPattern>("Identity", true));
+  patterns.push_back(std::make_unique<ReorderedFoldingPattern>("Relu", true));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  const auto plan = optimizer.Optimize(1, nullptr, {}, false);
+  ASSERT_EQ(plan.rewrites().size(), 2u);
+  const auto &producer = plan.rewrites(0);
+  const auto &consumer = plan.rewrites(1);
+  EXPECT_EQ(producer.pattern_name(), "FoldRelu");
+  EXPECT_EQ(consumer.pattern_name(), "FoldIdentity");
+  ASSERT_EQ(producer.added_nodes().size(), 1u);
+  ASSERT_EQ(consumer.added_nodes().size(), 1u);
+  ASSERT_EQ(producer.initializer_calls().size(), 1u);
+  ASSERT_EQ(consumer.initializer_calls().size(), 1u);
+  ASSERT_EQ(producer.added_initializers().size(), 1u);
+  EXPECT_EQ(producer.added_initializers(0).name(), "second_literal");
+  ASSERT_EQ(consumer.initializer_calls(0).input().size(), 1u);
+  EXPECT_EQ(consumer.initializer_calls(0).input(0), "second_literal");
+  EXPECT_EQ(producer.added_nodes_positions().values(), (std::vector<uint64_t>{1}));
+  EXPECT_EQ(consumer.added_nodes_positions().values(), (std::vector<uint64_t>{0}));
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].output(0), "first");
+  EXPECT_EQ(builder.Nodes()[1].output(0), "second");
+  EXPECT_EQ(builder.Nodes()[2].output(0), "anchor");
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_TRUE(loaded.Equals(plan));
+  EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                .ApplyRewritings(loaded)
+                .BuildGraph()
+                .SerializeAsString(),
+            builder.BuildGraph().SerializeAsString());
+}
+
 TEST(PatternOptimization, SequentialRebasingPreservesLargeMixedBatch) {
   ScopedAddKernel kernel;
   core::builder::GraphBuilder builder("mixed_batch", SchemaLookup());
@@ -1878,6 +1933,7 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   builder.MakeOutput("y");
   const ModelProto original = builder.ToModel();
   for (const TensorProto &tensor : {
+           MakeInitializer<float>("x", {2}, {3.0f, 4.0f}),
            MakeInitializer<int64_t>("x", {2}, {1, 2}),
            MakeInitializer<float>("x", {}, {1.0f}),
            MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f}),
@@ -1902,6 +1958,99 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   EXPECT_EQ(replayed.initializer(0).SerializeAsString(),
             original.graph().initializer(0).SerializeAsString());
   EXPECT_EQ(replayed.input(0).SerializeAsString(), original.graph().input(0).SerializeAsString());
+}
+
+TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
+  ScopedAddKernel kernel;
+  for (bool input_default : {false, true}) {
+    for (bool computed : {false, true}) {
+      SCOPED_TRACE(input_default);
+      SCOPED_TRACE(computed);
+      core::builder::GraphBuilder source("replacement", SchemaLookup(), {{"", 18}});
+      core::symbolic::SymShape input_shape;
+      input_shape.PushBack(core::symbolic::SymDim(1));
+      if (input_default)
+        source.MakeInput("p", core::symbolic::TensorType::kFloat, input_shape);
+      source.MakeInitializer(MakeInitializer<float>("p", {1}, {1.0f}));
+      source.MakeInitializer(MakeInitializer<float>("seed", {1}, {3.0f}));
+      source.MakeNode("Identity", {"seed"}, {"y"});
+      source.MakeOutput("p");
+      source.MakeOutput("y");
+      const auto original = source.ToModel().SerializeAsString();
+      const auto tags = source.Compute().ValueTags();
+      const auto node_tags = source.Compute().NodeTags();
+      const auto memory = source.Compute().Memory();
+      const auto shape = source.GetShape("p");
+      RewritingProto plan;
+      auto &edit = *plan.add_rewrites();
+      edit.add_removed_initializers(0);
+      auto &rename = *edit.add_value_renames();
+      rename.set_key("seed");
+      rename.set_value("p");
+      if (computed) {
+        plan.ref_added_functions().push_back(PreparationAdd());
+        auto &opset = *plan.add_required_opset_imports();
+        opset.set_domain("test.prepare");
+        opset.set_version(1);
+        edit.ref_initializer_calls().push_back(
+            MakeNode("Prepare", {"seed", "seed"}, {"p", "other"}, "test.prepare"));
+        edit.add_computed_initializer_positions(0);
+        edit.add_computed_initializer_positions(2);
+      } else {
+        edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {1}, {5.0f}));
+        edit.add_added_initializer_positions(0);
+      }
+      RewritingProto loaded;
+      ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      EXPECT_THROW(source.ApplyRewritings(loaded), core::builder::BuilderError);
+      EXPECT_EQ(source.ToModel().SerializeAsString(), original);
+      EXPECT_EQ(source.Compute().ValueTags(), tags);
+      EXPECT_EQ(source.Compute().NodeTags(), node_tags);
+      EXPECT_EQ(source.Compute().Memory(), memory);
+      EXPECT_EQ(source.GetShape("p"), shape);
+      EXPECT_EQ(source.Nodes()[0].input(0), "seed");
+    }
+  }
+}
+
+TEST(PatternOptimization, ReplayAllowsFreshInitializerWithRewrittenReferences) {
+  core::builder::GraphBuilder source("fresh_initializer", SchemaLookup(), {{"", 18}});
+  source.MakeInitializer(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
+  source.MakeNode("Identity", {"p"}, {"y"});
+  source.MakeOutput("y");
+  RewritingProto plan;
+  auto &edit = *plan.add_rewrites();
+  edit.add_removed_initializers(0);
+  edit.ref_added_initializers().push_back(MakeInitializer<float>("fresh", {2}, {3.0f, 4.0f}));
+  edit.add_added_initializer_positions(0);
+  auto &rename = *edit.add_value_renames();
+  rename.set_key("p");
+  rename.set_value("fresh");
+  const auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Initializers().size(), 1u);
+  EXPECT_EQ(result.Initializers()[0].name(), "fresh");
+  EXPECT_EQ(result.Initializers()[0].SerializeAsString(),
+            edit.added_initializers(0).SerializeAsString());
+  EXPECT_EQ(result.Nodes()[0].input(0), "fresh");
+  EXPECT_FALSE(result.HasShape("p"));
+  EXPECT_EQ(result.GetShape("fresh").Shape(), source.GetShape("p").Shape());
+  EXPECT_EQ(result.GetShape("fresh").Dtype(), source.GetShape("p").Dtype());
+}
+
+TEST(PatternOptimization, ReplayAllowsFirstInputDefault) {
+  core::builder::GraphBuilder source("first_default", SchemaLookup(), {{"", 18}});
+  source.MakeInput("p", core::symbolic::TensorType::kFloat, Shape());
+  source.MakeOutput("p");
+  RewritingProto plan;
+  auto &edit = *plan.add_rewrites();
+  edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
+  edit.add_added_initializer_positions(0);
+  const auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Initializers().size(), 1u);
+  EXPECT_EQ(result.Initializers()[0].name(), "p");
+  EXPECT_EQ(result.GetShape("p"), source.GetShape("p"));
+  EXPECT_FALSE(result.Compute().IsConstantValue("p"));
+  EXPECT_EQ(result.BuildGraph().input(0).name(), "p");
 }
 
 TEST(PatternOptimization, ReplayPositionsInitializersAmongRetainedValues) {

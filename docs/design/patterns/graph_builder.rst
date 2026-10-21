@@ -76,6 +76,12 @@ from initial inference on the reduced graph without tag metadata, where
 ``weight``. A fresh inference on an untagged reduced graph is therefore not
 the reference for retained tags after a rewrite.
 
+Before replaying a serialized plan, ``ApplyRewritings`` rejects reconstruction
+that changes or drops existing tag assignments. Functions are matched
+by domain, name and overload across all source scopes, including when a plan
+hoists a subgraph-owned or function-owned definition to the model root.
+Diagnostics retain the original source scope path.
+
 Relation to the rest of the core pipeline
 -----------------------------------------
 

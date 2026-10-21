@@ -220,6 +220,13 @@ the pipeline or supplied explicitly with ``GenerationOptions``. The single feed
 map and ``RuntimeContext`` are passed as separate arguments; callers never need
 to duplicate or manually separate feeds by model.
 
+See :ref:`l-example-pipeline-proto` for a runnable, download-free example that
+constructs, validates, and saves a ``PipelineProto``, then generates tokens from
+its reloaded models. Python does not yet expose the C++ ``Generate(PipelineProto,
+...)`` overload: use ``ReferenceEvaluator.generate`` with the individual models
+and explicitly forward the supported settings. A separate ``decode`` model and
+top-k/top-p filtering are not currently supported by generation.
+
 A basic feedback loop
 ---------------------
 

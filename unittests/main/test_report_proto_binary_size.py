@@ -1,7 +1,6 @@
 import importlib.util
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
@@ -20,7 +19,7 @@ def _load_reporter():
     return module
 
 
-class TestReportProtoBinarySize(ExtTestCase):
+class TestReportProtoBinarySize(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.reporter = _load_reporter()
@@ -39,6 +38,19 @@ class TestReportProtoBinarySize(ExtTestCase):
     def test_optional_size_budget_accepts_limit(self):
         measurements = [{"source": "lib.so", "text_size": 1024}]
         self.reporter._enforce_optional_size_budget(measurements, "text_size", ".text size", 1024)
+
+    def test_text_size_budget_boundary(self):
+        measurements = [{"source": "lib.so", "text_size": 1_174_506}]
+        self.reporter._enforce_optional_size_budget(
+            measurements, "text_size", ".text size", 1_174_506
+        )
+        measurements[0]["text_size"] += 1
+        with self.assertRaisesRegex(
+            RuntimeError, r"\.text size budget exceeded.*maximum 1,174,506.*lib\.so: 1,174,507"
+        ):
+            self.reporter._enforce_optional_size_budget(
+                measurements, "text_size", ".text size", 1_174_506
+            )
 
     def test_optional_size_budget_rejects_unavailable_measurement(self):
         measurements = [{"source": "lib.so", "dynamic_symbols": None}]

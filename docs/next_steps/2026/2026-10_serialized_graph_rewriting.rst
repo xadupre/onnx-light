@@ -23,7 +23,8 @@ construction (``Apply``), in C++ or Python. ``MatchResult`` identifies one
 match. ``GraphGraph::Optimize`` returns a ``RewritingProto`` containing ordered
 ``LocalRewritingProto`` edits:
 matched node positions, added nodes and their positions, added/removed
-initializers, value renames and subgraph path.
+initializers and subgraph path. Reversible capture starts from the cleaned
+canonical graph, after all cleanups that redirect value references.
 
 ``builder.ApplyRewritings(rewrites)`` reconstructs a ``GraphBuilder`` without
 running the matcher. Matched and removed positions refer to the graph
@@ -51,10 +52,11 @@ independently named plans against the canonical graph.
 
 Constant folding retains the computation as shared functions and ordered
 ``initializer_calls``, not materialized results in ``added_initializers``.
-Literal constants still use ``added_initializers``. Cleanup records only
-removed initializer positions and renames, without re-embedding retained
-weights. Serializing a transposed-weight recipe therefore stores no second
-transposed payload.
+Literal constants still use ``added_initializers``. Removed definitions and
+payloads needed to undo reversible edits are retained separately from removal
+positions. The forward recipe avoids embedding a transposed payload in
+``added_initializers``; the current inverse-validation snapshot has the
+additional storage cost described below.
 
 The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
 the existing protobuf-free message layer. The schema below includes fields
@@ -121,6 +123,11 @@ protobuf compiler or ``libprotobuf``. Step 3 added the
      repeated NodeProto initializer_calls = 11;
      repeated uint64 computed_initializer_positions = 12;
      repeated uint64 removed_extended_initializers = 13;
+     optional GraphProto inverse_before = 14;
+     optional GraphProto inverse_after = 15;
+     uint64 inverse_node_count = 16;
+     uint64 inverse_initializer_count = 17;
+     uint64 inverse_extended_initializer_count = 18;
    }
 
    message RewritingProto {
@@ -136,6 +143,12 @@ each edit: ``removed_initializers`` indexes dense initializers,
 ``GraphProto.extended_initializer`` list of encoded constants and paged caches.
 Both payload alternatives share this index space and retain their declaration
 order across builder import/export and replay.
+
+Inverse records retain the removed definitions in ``inverse_before`` in the
+same order as their removal positions. Graph headers preserve information such
+as value annotations that forward replacement prunes. Counts and expected
+replacement information distinguish a complete inverse record from a legacy
+forward-only edit; a removal position alone cannot restore a definition.
 
 **Modify only onnx-light's ``ModelProto``** to add
 ``map<string, RewritingProto> rewritings``, keyed by variant name, without
@@ -210,15 +223,46 @@ necessarily allocating a second buffer during preparation. Reuse a view only
 when supported by the tensor representation and consumer. Materialized plain
 ONNX export may intentionally store computed weights instead.
 
-``LocalRewritingProto.value_renames`` reuses ``StringStringEntryProto``:
-``key`` is the old reference and ``value`` its replacement. It mirrors the
-former ``LocalRewriting.value_renames`` and redirects references to an
-eliminated value, rather than renaming a
-surviving producer. For example, removing ``b = Identity(a)`` redirects
-consumers of ``b`` to ``a``. Existing identity/duplicate-node cleanup and
-initializer deduplication record these substitutions, including nested
-captures. Ordinary replacements can create fresh internal names and preserve
-boundary outputs without this field; retain it to replay cleanup too.
+``LocalRewritingProto.value_renames`` remains a legacy forward-replay field:
+``key`` is the old reference and ``value`` its replacement. Reversible plans
+must leave it empty. Removing ``b = Identity(a)`` redirects consumers of ``b``
+to ``a`` but does not identify which consumers already used ``a``. Inverting
+that substitution is deliberately outside the reversible-plan contract.
+
+Identity removal, duplicate-node elimination and initializer deduplication
+therefore run before capture, including in nested graphs. They establish the
+canonical graph and are not themselves recorded as reversible edits. Do not
+repeat these renaming cleanups between recorded rewrites; replacements may use
+fresh internal names but must preserve names at their boundaries.
+
+Inverse replay processes recorded edits in reverse application order. It
+restores only definitions removed by these edits, never Identity nodes or
+duplicate constants removed before capture. It validates positions, expected
+replacement definitions, dependencies and subgraph paths, and explicitly
+rejects records lacking the information needed for exact restoration. A
+failure must not leave the caller's builder partially restored.
+
+``GraphGraph::Canonicalize`` (Python: ``graph.canonicalize()``) performs the
+renaming cleanups explicitly, allowing callers to save the reference graph
+before calling ``Optimize``. Optimization also canonicalizes before capture.
+``GraphBuilder::UndoRewritings`` (Python: ``builder.undo_rewritings(plan)``)
+returns a new builder at the cleaned canonical state. Legacy forward-only
+records without inverse definitions are not sufficient for this operation.
+
+The current inverse format also retains an exact optimized-graph snapshot for
+strict target validation. This is an interim storage cost, including its
+initializer payloads, not yet the compact representation needed to eliminate
+the canonical-model copy in export modes.
+
+.. code-block:: text
+
+   Initial graph
+     -> renaming cleanups
+     -> cleaned canonical graph
+     -> capture and apply reversible rewrites
+     -> optimized graph
+     -> inverse replay
+     -> cleaned canonical graph
 
 Every variant starts from the canonical model containing it, not another
 variant. Standalone distribution of rewrite plans is outside this proposal.
@@ -268,6 +312,12 @@ Each PR depends on the preceding one.
        small end-to-end example and external-data handling.
      - Save/reload/replay matches direct optimization; compare inference
        outputs and states; plain exports use only standard ONNX fields.
+    * - 5. Reversible capture
+     - Move reference-renaming cleanups before canonical capture. Retain
+       removed definitions and validate inverse replay in reverse edit order.
+     - Forward then inverse replay restores the cleaned canonical graph,
+       including nested graphs and prepared constants, without resurrecting
+       pre-capture identities. Incomplete or incompatible plans fail atomically.
 
 Export workflow
 +++++++++++++++
@@ -289,23 +339,30 @@ them. Python ``to_onnx(optimize=OptimizationMode.kOptimize)`` optimizes an
 independent builder and exports the materialized result without attached
 variants; model export rejects nonstandard fields through ``to_standard_model``.
 ``to_onnx(optimize=OptimizationMode.kRewritings)`` instead returns the finalized
-canonical model with the captured plan named ``"optimized"``. It retains other plans,
-rejects a duplicate name, and requires model export. The default
+canonical model with the captured plan named ``"optimized"``. It rejects a
+duplicate name and requires model export. Other plans can only be retained
+when their canonical reference remains unchanged; renaming cleanups invalidate
+plans against the earlier graph. The default
 ``OptimizationMode.kNone`` continues to export the current builder without
 running optimization. Only members of ``OptimizationMode`` are accepted.
 Both modes use the existing global and builder-local pattern registrations.
-The source remains at its finalized canonical state; no inverse replay is
-needed. Load external weights before optimization and use the existing
+The source remains at its finalized state; the independent working copy is
+cleaned before its canonical reference is saved. The export modes still keep
+that reference copy rather than relying on inverse replay. Load external
+weights before optimization and use the existing
 external-data save options to relocate the payloads with either export.
 See :ref:`l-example-plot-pattern-replay`.
 
 1. Finalize the canonical model first, including cleanup, ordering, names,
    imports and external-data layout.
-2. Optimize an independent copy for each selected target, recording all edits.
+2. Optimize an independent copy for each selected target, recording only
+   reversible edits after the renaming cleanups.
    Capture constant computations as functions/calls instead of embedding
    computed weight payloads. The optimizer returns ``RewritingProto`` directly;
    optionally attach descriptive metadata. Verify replay against direct
    optimization before publishing the variant.
+   Inverse replay can eventually replace the full canonical-model copy retained
+   by the export modes; this does not require undoing pre-capture cleanups.
 3. Export either the untouched canonical model, a bundled onnx-light model
    containing the canonical graph and rewrite map, or a standard ONNX model
    with one selected variant materialized and the extension map removed.

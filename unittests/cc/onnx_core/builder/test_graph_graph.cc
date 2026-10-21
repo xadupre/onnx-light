@@ -137,6 +137,25 @@ public:
   }
 };
 
+class ReplaceNegWithIdentity : public core::builder::PatternOptimization {
+public:
+  ReplaceNegWithIdentity() : PatternOptimization(1, "ReplaceNegWithIdentity") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.op_type() == "Neg" ? core::builder::MatchResult{this, {&candidate}, &candidate}
+                                        : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(
+        MakeNode("Identity", {matched[0]->input(0).value()}, {matched[0]->output(0).value()}));
+    return result;
+  }
+};
+
 class CaptureOutputAndDropIdentity : public core::builder::PatternOptimization {
 public:
   CaptureOutputAndDropIdentity() : PatternOptimization(1, "CaptureOutputAndDropIdentity") {}
@@ -280,6 +299,7 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     }
     builder.MakeOutput("x");
     const ModelProto original = builder.ToModel();
+    const GraphProto canonical = builder.BuildGraph();
     core::builder::GraphGraph graph(builder);
     const auto rewrites = graph.Optimize();
     ASSERT_EQ(rewrites.rewrites().size(), 1u);
@@ -292,7 +312,108 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
                                     .ApplyRewritings(rewrites)
                                     .BuildGraph();
     EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
+    EXPECT_EQ(builder.UndoRewritings(rewrites).BuildGraph().SerializeAsString(),
+              canonical.SerializeAsString());
   }
+}
+
+TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Identity", {"x"}, {"a"});
+  builder.MakeNode("Identity", {"a"}, {"b"});
+  builder.MakeNode("Mul", {"a", "x"}, {"p"});
+  builder.MakeNode("Mul", {"b", "z"}, {"q"});
+  builder.MakeNode("Add", {"p", "q"}, {"y"});
+  builder.MakeOutput("y");
+  core::builder::GraphGraph graph(builder,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<MarkReversedProducer>()});
+  EXPECT_EQ(graph.Canonicalize(), 2u);
+  const GraphProto canonical = builder.BuildGraph();
+  ASSERT_EQ(canonical.node().size(), 3u);
+  EXPECT_EQ(canonical.node(0).input(0), "x");
+  EXPECT_EQ(canonical.node(1).input(0), "x");
+  const auto plan = graph.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 2u);
+  for (const auto &rewrite : plan.rewrites()) {
+    EXPECT_TRUE(rewrite.value_renames().empty());
+    EXPECT_EQ(rewrite.inverse_before().node().size(), rewrite.matched_nodes().size());
+  }
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            canonical.SerializeAsString());
+  EXPECT_EQ(builder.BuildGraph().output(0).name(), "y");
+}
+
+TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Mul", {"x", "x"}, {"y"});
+  builder.MakeOutput("y");
+  core::builder::GraphGraph graph(builder,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<MarkReversedProducer>()});
+  const auto plan = graph.Optimize();
+  const auto optimized = builder.BuildGraph().SerializeAsString();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_FALSE(plan.inverse_original_opsets().empty());
+  for (int kind = 0; kind < 11; ++kind) {
+    SCOPED_TRACE(kind);
+    auto invalid = plan;
+    auto &edit = invalid.ref_rewrites()[0];
+    if (kind == 0)
+      edit.clear_inverse_before();
+    else if (kind == 1)
+      edit.ref_matched_nodes()[0] = 99;
+    else if (kind == 2)
+      edit.ref_added_nodes_positions()[0] = 99;
+    else if (kind == 3)
+      edit.mutable_inverse_before()->ref_node()[0].ref_input()[0] = "undefined";
+    else if (kind == 4)
+      edit.mutable_inverse_after()->ref_node()[0].set_op_type("Abs");
+    else if (kind == 5) {
+      edit.add_value_renames()->set_key("x");
+    } else if (kind == 6) {
+      invalid.mutable_inverse_optimized_graph()->set_name("other");
+    } else if (kind == 7) {
+      invalid.clear_inverse_original_graph_headers();
+    } else if (kind == 8) {
+      invalid.ref_inverse_original_opsets()[0].set_version(27);
+    } else if (kind == 9) {
+      edit.mutable_inverse_before()->set_name("ignored");
+    } else {
+      invalid.mutable_inverse_original_graph_headers()->ref_node()[0].set_op_type("ignored");
+    }
+    EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
+  }
+  EXPECT_THROW(builder.UndoRewritings(RewritingProto{}), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, CaptureKeepsNewIdentityAndDistinctConsumerNames) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Neg", {"a"}, {"b"});
+  builder.MakeNode("Abs", {"b"}, {"left"});
+  builder.MakeNode("Abs", {"a"}, {"right"});
+  builder.MakeNode("Add", {"left", "right"}, {"y"});
+  builder.MakeOutput("y");
+  const GraphProto canonical = builder.BuildGraph();
+  core::builder::GraphGraph graph(builder,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<ReplaceNegWithIdentity>()});
+  const auto plan = graph.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Identity");
+  EXPECT_EQ(builder.Nodes()[1].input(0), "b");
+  EXPECT_EQ(builder.Nodes()[2].input(0), "a");
+  EXPECT_TRUE(plan.rewrites(0).value_renames().empty());
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            canonical.SerializeAsString());
 }
 
 TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
@@ -320,6 +441,7 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     ASSERT_TRUE(builder.Shapes().HasEncodedValue("encoded"));
     ASSERT_TRUE(builder.Shapes().HasType("cache"));
     const ModelProto original = builder.ToModel();
+    const GraphProto canonical = builder.BuildGraph();
     core::builder::GraphGraph optimizer(builder);
     const auto plan = optimizer.Optimize();
     ASSERT_EQ(plan.rewrites().size(), 1u);
@@ -330,6 +452,8 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
     EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
+    EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+              canonical.SerializeAsString());
     for (const std::string name : {"encoded", "cache"}) {
       EXPECT_FALSE(builder.Shapes().HasEncodedValue(name));
       EXPECT_FALSE(builder.Shapes().HasType(name));
@@ -385,19 +509,20 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
         builder.MakeNode("Neg", {"X"}, {"Y"});
         builder.MakeOutput("Y");
       }
-      const ModelProto original = builder.ToModel();
       core::builder::GraphGraph optimizer(builder);
+      optimizer.Canonicalize();
+      const ModelProto original = builder.ToModel();
       const auto plan = optimizer.Optimize();
-      ASSERT_EQ(plan.rewrites().size(), 1u);
-      const auto &edit = plan.rewrites(0);
-      EXPECT_EQ(edit.removed_initializers().values(),
-                (kinds & 1) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
-      std::vector<uint64_t> removed_extended;
-      if (kinds & 2)
-        removed_extended.push_back(1);
-      if (kinds & 4)
-        removed_extended.push_back((kinds & 2) ? 3 : 1);
-      EXPECT_EQ(edit.removed_extended_initializers().values(), removed_extended);
+      ASSERT_EQ(plan.rewrites().size(), (kinds == 2 && !add_dead_node) ? 0u : 1u);
+      if (!plan.rewrites().empty()) {
+        const auto &edit = plan.rewrites(0);
+        EXPECT_EQ(edit.removed_initializers().values(),
+                  (kinds & 1) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
+        std::vector<uint64_t> removed_extended;
+        if (kinds & 4)
+          removed_extended.push_back((kinds & 2) ? 2 : 1);
+        EXPECT_EQ(edit.removed_extended_initializers().values(), removed_extended);
+      }
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
       auto expected = builder.ToGraph();
@@ -513,19 +638,20 @@ TEST(GraphGraph, CleanupReplaysDuplicateEncodedInitializers) {
   builder.MakeEncodedInitializer(encoded);
   encoded.set_name("duplicate");
   builder.MakeEncodedInitializer(encoded);
-  const ModelProto original = builder.ToModel();
   core::builder::GraphGraph optimizer(builder);
+  EXPECT_EQ(optimizer.Canonicalize(), 1u);
+  const ModelProto original = builder.ToModel();
+  const GraphProto canonical = builder.BuildGraph();
   const auto plan = optimizer.Optimize(-1, nullptr, {}, false);
-  ASSERT_EQ(plan.rewrites().size(), 1u);
-  EXPECT_EQ(plan.rewrites(0).pattern_name(), "RemoveDuplicateInitializers");
-  EXPECT_TRUE(plan.rewrites(0).removed_initializers().empty());
-  EXPECT_EQ(plan.rewrites(0).removed_extended_initializers().values(), std::vector<uint64_t>({1}));
+  EXPECT_TRUE(plan.rewrites().empty());
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
   EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
   EXPECT_FALSE(replayed.Shapes().HasEncodedValue("duplicate"));
   EXPECT_TRUE(replayed.Shapes().HasEncodedValue("first"));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            canonical.SerializeAsString());
 }
 
 TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
@@ -956,10 +1082,12 @@ TEST(GraphGraph, NormalizationRecordsDisplacedRetainedNodesForCoordinateReplay) 
     SCOPED_TRACE(batch_dependency);
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    if (batch_dependency)
+      builder.MakeInput("D", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
     builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
     builder.MakeNode("Relu", {"p"}, {"C"});
     builder.MakeNode("Exp", {"X"}, {"I"});
-    builder.MakeNode(batch_dependency ? "Neg" : "Abs", {"X"}, {"a"});
+    builder.MakeNode(batch_dependency ? "Neg" : "Abs", {batch_dependency ? "D" : "X"}, {"a"});
     builder.MakeOutput("C");
     builder.MakeOutput("I");
     ModelProto original;

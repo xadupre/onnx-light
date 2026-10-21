@@ -79,6 +79,9 @@ public:
   /// Rejects conflicting existing devices before modifying any builder.
   void SetTargetDevice(symbolic::Device device);
 
+  /// Establishes canonical value names before reversible optimization capture.
+  std::size_t Canonicalize();
+
   /**
    * Applies patterns and cleanup passes until convergence.
    *

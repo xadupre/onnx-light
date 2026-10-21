@@ -631,6 +631,10 @@ public:
   /// their original scope paths in diagnostics even when reconstruction hoists them.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
+  /// Reverses a complete captured plan atomically, without undoing canonical cleanup.
+  /// Rejects incomplete records and mismatching optimized graphs.
+  GraphBuilder UndoRewritings(const RewritingProto &rewrites) const;
+
   /// Adds an independently selectable plan against this canonical model.
   /// Rejects duplicate/empty names and non-root builders. Mutations invalidate plans.
   void AddRewriting(const std::string &name, const RewritingProto &rewrites);

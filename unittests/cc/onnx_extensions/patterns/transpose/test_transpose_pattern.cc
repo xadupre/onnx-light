@@ -143,6 +143,8 @@ TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
     EXPECT_TRUE(edit.added_initializers().empty());
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
   EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
                 .ApplyRewritings(loaded)
                 .BuildGraph()
@@ -203,6 +205,12 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
   EXPECT_EQ(calls, 2u);
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
+  auto replay_builder =
+      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+  EXPECT_EQ(replay_builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
   const auto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
   EXPECT_EQ(replayed.graph().SerializeAsString(), builder.ToGraph().SerializeAsString());

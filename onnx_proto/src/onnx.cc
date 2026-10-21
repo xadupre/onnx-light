@@ -2088,6 +2088,11 @@ SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream 
   SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
   SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
   SIZE_REPEATED_FIELD(size, options, stream, removed_extended_initializers)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, inverse_before)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, inverse_after)
+  SIZE_FIELD(size, options, stream, inverse_node_count)
+  SIZE_FIELD(size, options, stream, inverse_initializer_count)
+  SIZE_FIELD(size, options, stream, inverse_extended_initializer_count)
   return size;
 }
 void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2105,6 +2110,11 @@ void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, initializer_calls)
   WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
   WRITE_REPEATED_FIELD(options, stream, removed_extended_initializers)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, inverse_before)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, inverse_after)
+  WRITE_FIELD(options, stream, inverse_node_count)
+  WRITE_FIELD(options, stream, inverse_initializer_count)
+  WRITE_FIELD(options, stream, inverse_extended_initializer_count)
 }
 bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, LocalRewritingProto)
@@ -2121,6 +2131,11 @@ bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_REPEATED_FIELD(options, stream, initializer_calls)
   READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
   READ_REPEATED_FIELD(options, stream, removed_extended_initializers)
+  READ_OPTIONAL_PROTO_FIELD(options, stream, inverse_before)
+  READ_OPTIONAL_PROTO_FIELD(options, stream, inverse_after)
+  READ_FIELD(options, stream, inverse_node_count)
+  READ_FIELD(options, stream, inverse_initializer_count)
+  READ_FIELD(options, stream, inverse_extended_initializer_count)
   READ_END(options, stream, LocalRewritingProto)
   return true;
 }
@@ -2133,7 +2148,10 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
       NAME_EXIST_VALUE(value_renames), NAME_EXIST_VALUE(metadata_props),
       NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions),
-      NAME_EXIST_VALUE(removed_extended_initializers));
+      NAME_EXIST_VALUE(removed_extended_initializers), NAME_EXIST_VALUE(inverse_before),
+      NAME_EXIST_VALUE(inverse_after), NAME_EXIST_VALUE(inverse_node_count),
+      NAME_EXIST_VALUE(inverse_initializer_count),
+      NAME_EXIST_VALUE(inverse_extended_initializer_count));
 }
 
 IMPLEMENT_PROTO(RewritingProto)
@@ -2144,6 +2162,14 @@ SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stre
   SIZE_REPEATED_FIELD(size, options, stream, required_opset_imports)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, added_functions)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, inverse_optimized_graph)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_original_opsets)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_original_functions)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_optimized_opsets)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_optimized_functions)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_original_struct_types)
+  SIZE_REPEATED_FIELD(size, options, stream, inverse_optimized_struct_types)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, inverse_original_graph_headers)
   return size;
 }
 void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2152,6 +2178,14 @@ void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, required_opset_imports)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, added_functions)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, inverse_optimized_graph)
+  WRITE_REPEATED_FIELD(options, stream, inverse_original_opsets)
+  WRITE_REPEATED_FIELD(options, stream, inverse_original_functions)
+  WRITE_REPEATED_FIELD(options, stream, inverse_optimized_opsets)
+  WRITE_REPEATED_FIELD(options, stream, inverse_optimized_functions)
+  WRITE_REPEATED_FIELD(options, stream, inverse_original_struct_types)
+  WRITE_REPEATED_FIELD(options, stream, inverse_optimized_struct_types)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, inverse_original_graph_headers)
 }
 bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, RewritingProto)
@@ -2159,6 +2193,14 @@ bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, required_opset_imports)
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, added_functions)
+  READ_OPTIONAL_PROTO_FIELD(options, stream, inverse_optimized_graph)
+  READ_REPEATED_FIELD(options, stream, inverse_original_opsets)
+  READ_REPEATED_FIELD(options, stream, inverse_original_functions)
+  READ_REPEATED_FIELD(options, stream, inverse_optimized_opsets)
+  READ_REPEATED_FIELD(options, stream, inverse_optimized_functions)
+  READ_REPEATED_FIELD(options, stream, inverse_original_struct_types)
+  READ_REPEATED_FIELD(options, stream, inverse_optimized_struct_types)
+  READ_OPTIONAL_PROTO_FIELD(options, stream, inverse_original_graph_headers)
   READ_END(options, stream, RewritingProto)
   return true;
 }
@@ -2166,7 +2208,13 @@ void RewritingProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(rewrites), NAME_EXIST_VALUE(required_opset_imports),
-      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions));
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions),
+      NAME_EXIST_VALUE(inverse_optimized_graph), NAME_EXIST_VALUE(inverse_original_opsets),
+      NAME_EXIST_VALUE(inverse_original_functions), NAME_EXIST_VALUE(inverse_optimized_opsets),
+      NAME_EXIST_VALUE(inverse_optimized_functions),
+      NAME_EXIST_VALUE(inverse_original_struct_types),
+      NAME_EXIST_VALUE(inverse_optimized_struct_types),
+      NAME_EXIST_VALUE(inverse_original_graph_headers));
 }
 
 // ModelProto
@@ -3012,6 +3060,11 @@ bool LocalRewritingProto::Equals(const LocalRewritingProto &right, std::string *
   COMPARE_FIELD(metadata_props)
   COMPARE_FIELD(initializer_calls)
   COMPARE_FIELD(computed_initializer_positions)
+  COMPARE_FIELD(inverse_before)
+  COMPARE_FIELD(inverse_after)
+  COMPARE_FIELD(inverse_node_count)
+  COMPARE_FIELD(inverse_initializer_count)
+  COMPARE_FIELD(inverse_extended_initializer_count)
   return true;
 }
 
@@ -3022,6 +3075,14 @@ bool RewritingProto::Equals(const RewritingProto &right, std::string *difference
   COMPARE_FIELD(required_opset_imports)
   COMPARE_FIELD(metadata_props)
   COMPARE_FIELD(added_functions)
+  COMPARE_FIELD(inverse_optimized_graph)
+  COMPARE_FIELD(inverse_original_opsets)
+  COMPARE_FIELD(inverse_original_functions)
+  COMPARE_FIELD(inverse_optimized_opsets)
+  COMPARE_FIELD(inverse_optimized_functions)
+  COMPARE_FIELD(inverse_original_struct_types)
+  COMPARE_FIELD(inverse_optimized_struct_types)
+  COMPARE_FIELD(inverse_original_graph_headers)
   return true;
 }
 

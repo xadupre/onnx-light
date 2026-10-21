@@ -3273,7 +3273,12 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(LocalRewritingProto, value_renames)
       .PYFIELD(LocalRewritingProto, metadata_props)
       .PYFIELD(LocalRewritingProto, initializer_calls)
-      .PYFIELD(LocalRewritingProto, computed_initializer_positions);
+      .PYFIELD(LocalRewritingProto, computed_initializer_positions)
+      .PYFIELD_OPTIONAL_PROTO(LocalRewritingProto, inverse_before)
+      .PYFIELD_OPTIONAL_PROTO(LocalRewritingProto, inverse_after)
+      .PYFIELD(LocalRewritingProto, inverse_node_count)
+      .PYFIELD(LocalRewritingProto, inverse_initializer_count)
+      .PYFIELD(LocalRewritingProto, inverse_extended_initializer_count);
   PYADD_PROTO_SERIALIZATION(LocalRewritingProto);
   nb_LocalRewritingProto
       .def("__repr__", [](LocalRewritingProto &self) { return proto_repr_with_short_line(self); })
@@ -3282,6 +3287,10 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
           [](const LocalRewritingProto &self, const std::string &field_name) {
             if (field_name == "pattern_name")
               return self.has_pattern_name();
+            if (field_name == "inverse_before")
+              return self.has_inverse_before();
+            if (field_name == "inverse_after")
+              return self.has_inverse_after();
             throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
           },
           nb::arg("field_name"));
@@ -3292,13 +3301,25 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(RewritingProto, rewrites)
       .PYFIELD(RewritingProto, required_opset_imports)
       .PYFIELD(RewritingProto, metadata_props)
-      .PYFIELD(RewritingProto, added_functions);
+      .PYFIELD(RewritingProto, added_functions)
+      .PYFIELD_OPTIONAL_PROTO(RewritingProto, inverse_optimized_graph)
+      .PYFIELD(RewritingProto, inverse_original_opsets)
+      .PYFIELD(RewritingProto, inverse_original_functions)
+      .PYFIELD(RewritingProto, inverse_optimized_opsets)
+      .PYFIELD(RewritingProto, inverse_optimized_functions)
+      .PYFIELD(RewritingProto, inverse_original_struct_types)
+      .PYFIELD(RewritingProto, inverse_optimized_struct_types)
+      .PYFIELD_OPTIONAL_PROTO(RewritingProto, inverse_original_graph_headers);
   PYADD_PROTO_SERIALIZATION(RewritingProto);
   nb_RewritingProto
       .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })
       .def(
           "HasField",
-          [](const RewritingProto &, const std::string &field_name) -> bool {
+          [](const RewritingProto &self, const std::string &field_name) -> bool {
+            if (field_name == "inverse_optimized_graph")
+              return self.has_inverse_optimized_graph();
+            if (field_name == "inverse_original_graph_headers")
+              return self.has_inverse_original_graph_headers();
             throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
           },
           nb::arg("field_name"));

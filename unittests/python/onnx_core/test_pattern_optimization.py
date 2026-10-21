@@ -691,8 +691,21 @@ class TestPatternOptimization(ExtTestCase):
         edit.metadata_props.add().key = "local"
         edit.initializer_calls.append(oh.make_node("Prepare", ["weight"], ["prepared"]))
         edit.computed_initializer_positions.extend([2])
+        edit.inverse_before.CopyFrom(_double_neg_model().graph)
+        edit.inverse_after.CopyFrom(_double_neg_model().graph)
+        edit.inverse_node_count = 2
+        edit.inverse_initializer_count = 1
+        edit.inverse_extended_initializer_count = 3
         plan.required_opset_imports.append(oh.make_opsetid("custom", 1))
         plan.added_functions.add().name = "Prepare"
+        plan.inverse_optimized_graph.CopyFrom(_double_neg_model().graph)
+        plan.inverse_original_graph_headers.CopyFrom(_double_neg_model().graph)
+        plan.inverse_original_opsets.append(oh.make_opsetid("", 18))
+        plan.inverse_optimized_opsets.append(oh.make_opsetid("", 18))
+        plan.inverse_original_functions.add().name = "Original"
+        plan.inverse_optimized_functions.add().name = "Optimized"
+        plan.inverse_original_struct_types.add().type_ref = 1
+        plan.inverse_optimized_struct_types.add().type_ref = 1
         plan.metadata_props.add().key = "collection"
         parsed = optim.RewritingProto()
         parsed.ParseFromString(plan.SerializeToString())
@@ -702,6 +715,41 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(local.matched_nodes), [0, 2**64 - 1])
         self.assertEqual(local.value_renames[0].key, "old")
         self.assertEqual(local.value_renames[0].value, "new")
+        self.assertTrue(parsed.HasField("inverse_optimized_graph"))
+        self.assertTrue(local.HasField("inverse_before"))
+        self.assertEqual(local.inverse_extended_initializer_count, 3)
+
+    def test_canonicalize_and_inverse_restore_only_captured_edits(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Identity", ["x"], ["forwarded"]),
+                    oh.make_node("Neg", ["forwarded"], ["middle"]),
+                    oh.make_node("Neg", ["middle"], ["y"]),
+                ],
+                "inverse",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, [NegNegPattern()])
+        self.assertEqual(graph.canonicalize(), 1)
+        canonical = builder.build_graph().SerializeToString()
+        plan = graph.optimize()
+        self.assertTrue(all(not edit.value_renames for edit in plan.rewrites))
+        optimized = builder.build_graph().SerializeToString()
+        self.assertEqual(
+            builder.undo_rewritings(plan).build_graph().SerializeToString(), canonical
+        )
+        self.assertEqual(builder.build_graph().SerializeToString(), optimized)
+        invalid = optim.RewritingProto()
+        invalid.ParseFromString(plan.SerializeToString())
+        invalid.rewrites[0].inverse_before = None
+        with self.assertRaises(ValueError):
+            builder.undo_rewritings(invalid)
+        self.assertEqual(builder.build_graph().SerializeToString(), optimized)
 
     def test_replay_rejects_malformed_preparation_fields(self):
         model = _double_neg_model()

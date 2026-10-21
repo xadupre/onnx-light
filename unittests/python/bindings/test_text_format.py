@@ -63,6 +63,44 @@ class TestTextFormat(ExtTestCase):
         parsed = parse_from_textproto(text, onnxl.ModelProto())
         self.assertEqual(model.SerializeToString(), parsed.SerializeToString())
 
+    def test_round_trip_inverse_rewriting_payloads(self):
+        """Tests inverse declarations and dense, encoded and paged payloads."""
+        plan = onnxl.RewritingProto()
+        edit = plan.rewrites.add()
+        edit.pattern_name = "inverse"
+        edit.inverse_node_count = 2
+        edit.inverse_initializer_count = 1
+        edit.inverse_extended_initializer_count = 2
+        edit.inverse_before.CopyFrom(_rich_model().graph)
+        encoded = edit.inverse_before.extended_initializer.add().encoded_value
+        encoded.name = "encoded"
+        encoded.struct_type.type_ref = 1
+        encoded.raw_data = b"\x00\xff"
+        cache = edit.inverse_before.extended_initializer.add().paged_cache
+        cache.name = "cache"
+        block = cache.blocks.add()
+        block.start, block.length = 0, 1
+        block.key.CopyFrom(oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [2.0]))
+        block.value.CopyFrom(block.key)
+        edit.inverse_after.CopyFrom(edit.inverse_before)
+        plan.inverse_optimized_graph.CopyFrom(edit.inverse_after)
+        plan.inverse_original_graph_headers.CopyFrom(_rich_model().graph)
+        plan.inverse_original_opsets.append(oh.make_opsetid("", 18))
+        plan.inverse_optimized_opsets.append(oh.make_opsetid("", 18))
+        plan.inverse_original_functions.add().name = "original"
+        plan.inverse_optimized_functions.add().name = "optimized"
+        declaration = plan.inverse_original_struct_types.add()
+        declaration.type_id = 1
+        field = declaration.structure.field.add()
+        field.name = "value"
+        field.type.tensor_type.elem_type = onnxl.TensorProto.FLOAT
+        plan.inverse_optimized_struct_types.append(declaration)
+        text = serialize_to_textproto(plan)
+        self.assertIn("inverse_before {", text)
+        self.assertIn("extended_initializer {", text)
+        restored = parse_from_textproto(text, onnxl.RewritingProto())
+        self.assertEqual(plan.SerializeToString(), restored.SerializeToString())
+
     def test_round_trip_pipeline(self):
         """Tests models and generation settings in a pipeline textproto."""
         pipeline = onnxl.PipelineProto(

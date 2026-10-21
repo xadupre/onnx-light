@@ -32,5 +32,15 @@ ORT serialization and standard-model builder export reject bundled variants
 rather than silently discarding them. Export modes and external-data packaging
 remain the following implementation step.
 
+Binary-size budget
+------------------
+
+The named-plan map adds serialization, comparison and printing code to
+``lib_onnx_proto``. Linux CI run ``39580960813`` at commit ``f0a84c8d``
+measures 1,683,544 installed bytes, 1,192,474 ``.text`` bytes and 868 defined
+dynamic symbols. The installed-size and text limits match these measurements,
+increasing the previous limits by 20,272 and 18,416 bytes respectively.
+The 891-symbol limit and shared-library dependency allowlist are unchanged.
+
 .. autoclass:: onnx_light.onnx.ModelProto
     :members:

@@ -6,6 +6,7 @@
 #include "stream.h"
 #include "visibility.h"
 #include <functional>
+#include <map>
 #include <sstream>
 #include <type_traits>
 #include <utility>
@@ -311,6 +312,30 @@ public:                                                                         
   inline bool packed_##name() const { return false; }                                              \
   utils::RepeatedProtoField<type> name##_;                                                         \
   using name##_t = type;
+
+#define FIELD_MAP_PROTO(type, name, order, doc)                                                    \
+public:                                                                                            \
+  using name##_t = std::map<std::string, type>;                                                    \
+  inline name##_t &ref_##name() { return name##_; }                                                \
+  inline const name##_t &ref_##name() const { return name##_; }                                    \
+  inline name##_t &name() { return name##_; }                                                      \
+  inline const name##_t &name() const { return name##_; }                                          \
+  inline name##_t *mutable_##name() { return &name##_; }                                           \
+  inline const name##_t *ptr_##name() const { return &name##_; }                                   \
+  inline bool has_##name() const { return !name##_.empty(); }                                      \
+  inline int order_##name() const { return order; }                                                \
+  inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  inline type &add_##name(const std::string &key, const type &value) {                             \
+    EXT_ENFORCE(!key.empty(), #name " keys must not be empty.");                                   \
+    auto inserted = name##_.try_emplace(key, value);                                               \
+    EXT_ENFORCE(inserted.second, "Duplicate " #name " key: ", key);                                \
+    return inserted.first->second;                                                                 \
+  }                                                                                                \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  name##_t name##_;
 
 #define FIELD_REPEATED_PACKED(type, name, order, doc)                                              \
 public:                                                                                            \

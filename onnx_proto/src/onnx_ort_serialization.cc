@@ -174,6 +174,7 @@ public:
     Require(model.functions().empty(), "model-local functions are unsupported");
     Require(model.configuration().empty(), "device configurations are unsupported");
     Require(model.struct_types().empty(), "structured types are unsupported");
+    Require(model.rewritings().empty(), "named rewriting variants are unsupported");
     Require(!model.opset_import().empty(), "model has no opset imports");
     std::map<std::string, int64_t> domains;
     for (const auto &opset : model.opset_import()) {

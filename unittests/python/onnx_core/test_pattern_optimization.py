@@ -11,7 +11,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx import TensorProto
+from onnx_light.onnx import ModelProto, TensorProto
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
 from onnx_light.onnx_core.shape_inference import Device
@@ -296,6 +296,42 @@ class TestPatternOptimization(ExtTestCase):
         replayed = optim.apply_rewritings(model, rewrites)
 
         self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
+
+    def test_named_variants_model_map_and_explicit_selection(self):
+        value = oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+        model = oh.make_model(oh.make_graph([], "canonical", [value], [value]))
+        model.add_rewriting("first", optim.RewritingProto())
+        second = optim.RewritingProto()
+        second.metadata_props.add(key="target", value="second")
+        model.rewritings["second"] = second
+        loaded = ModelProto()
+        loaded.ParseFromString(model.SerializeToString())
+        self.assertEqual(set(loaded.rewritings), {"first", "second"})
+        self.assertEqual(loaded.rewritings["second"].metadata_props[0].value, "second")
+        self.assertEqual(loaded.graph.SerializeToString(), model.graph.SerializeToString())
+        constructed = ModelProto(rewritings={"second": second})
+        self.assertEqual(
+            constructed.rewritings["second"].SerializeToString(), second.SerializeToString()
+        )
+        with self.assertRaisesRegex(RuntimeError, "Duplicate"):
+            loaded.add_rewriting("first", optim.RewritingProto())
+        with self.assertRaisesRegex(RuntimeError, "empty"):
+            loaded.add_rewriting("", optim.RewritingProto())
+        builder = optim.GraphBuilder(loaded)
+        self.assertEqual(set(builder.to_model().rewritings), {"first", "second"})
+        selected = builder.apply_variant("second").to_model()
+        self.assertEqual(len(selected.rewritings), 0)
+        self.assertEqual(len(selected.graph.node), 0)
+        with self.assertRaisesRegex(ValueError, "unknown variant"):
+            builder.apply_variant("missing")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            builder.add_rewriting("first", optim.RewritingProto())
+        builder.make_input(oh.make_tensor_value_info("unused", TensorProto.FLOAT, [2]))
+        self.assertEqual(len(builder.to_model().rewritings), 0)
+        retained = loaded.rewritings["second"]
+        loaded.clear_rewritings()
+        self.assertFalse(loaded.HasField("rewritings"))
+        self.assertEqual(retained.metadata_props[0].value, "second")
 
     def test_rewriting_proto_binary_roundtrip_all_fields(self):
         plan = optim.RewritingProto()

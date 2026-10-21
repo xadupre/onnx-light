@@ -2242,6 +2242,10 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "GraphProto without running the finalisation analyses.")
       .def("apply_rewritings", &GraphBuilder::ApplyRewritings, nb::arg("rewrites"),
            "Applies captured rewrites and returns a new validated GraphBuilder.")
+      .def("add_rewriting", &GraphBuilder::AddRewriting, nb::arg("name"), nb::arg("rewrites"),
+           "Adds an independent named plan, rejecting duplicate names.")
+      .def("apply_variant", &GraphBuilder::ApplyVariant, nb::arg("name"),
+           "Applies the requested named variant, rejecting unavailable implementations.")
       .def(
           "make_local_function",
           [](GraphBuilder &self, const std::string &name, const std::string &domain)

@@ -85,6 +85,7 @@ digraph protos {
     ModelProto -> DeviceConfigurationProto [label="configuration"];
     ModelProto -> StringStringEntryProto [label="metadata_props"];
     ModelProto -> StructTypeProto [label="struct_types"];
+    ModelProto -> RewritingProto [label="rewritings"];
 
     RewritingProto -> LocalRewritingProto [label="rewrites"];
     RewritingProto -> OperatorSetIdProto [label="required_opset_imports"];

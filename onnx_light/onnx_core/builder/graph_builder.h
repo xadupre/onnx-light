@@ -632,6 +632,18 @@ public:
   /// definitions, even when a later edit would remove those calls.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
+  /// Adds an independently selectable plan against this canonical model.
+  /// Rejects duplicate/empty names and non-root builders. Mutations invalidate plans.
+  void AddRewriting(const std::string &name, const RewritingProto &rewrites);
+
+  /// Returns the named plans retained from the canonical model.
+  const ModelProto::rewritings_t &Rewritings() const noexcept { return rewritings_; }
+
+  /// Applies exactly the requested variant to the canonical model.
+  /// Throws on unknown names, invalid plans or unavailable operator implementations.
+  /// The result carries no variants; the source builder remains unchanged.
+  GraphBuilder ApplyVariant(const std::string &name) const;
+
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
   const ComputeContext &Compute() const noexcept { return compute_; }
 
@@ -661,7 +673,7 @@ public:
   /// @param ir_version IR version to write; ``0`` selects the library default.
   ModelProto ToModel(int64_t ir_version = 0);
 
-  /// Returns a standard ONNX model, rejecting native structured extensions.
+  /// Returns a standard ONNX model, rejecting structured extensions and named plans.
   ModelProto ToStandardModel(int64_t ir_version = 0);
 
   /// Returns the finalized nodes wrapped in a :cpp:class:`FunctionProto`.
@@ -670,6 +682,8 @@ public:
   FunctionProto ToFunction(const std::string &domain = "");
 
 private:
+  void InvalidateRewritings();
+
   class AncestorRefreshGuard {
   public:
     explicit AncestorRefreshGuard(GraphBuilder &builder)
@@ -896,6 +910,7 @@ private:
   utils::RepeatedProtoField<EncodedValueProto> encoded_initializers_;
   utils::RepeatedProtoField<PagedCacheProto> paged_cache_initializers_;
   ModelProto model_template_;
+  ModelProto::rewritings_t rewritings_;
   GraphProto graph_template_;
   FunctionProto function_template_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;

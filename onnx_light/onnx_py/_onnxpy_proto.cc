@@ -16,6 +16,7 @@
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/bind_map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
@@ -397,7 +398,10 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   if (repeated_like) {
     nb::object attr = nb::getattr(py, key.c_str());
     attr.attr("clear")();
-    attr.attr("extend")(value);
+    if (nb::hasattr(attr, "update"))
+      attr.attr("update")(value);
+    else
+      attr.attr("extend")(value);
   } else {
     nb::setattr(py, key.c_str(), value);
   }
@@ -3282,6 +3286,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
           nb::arg("field_name"));
   define_repeated_field_type_proto(rep_function, rep_function_proto);
 
+  nb::bind_map<ModelProto::rewritings_t>(m, "RewritingMap");
+
   PYDEFINE_PROTO(m, ModelProto)
       .PYFIELD_STR(ModelProto, producer_name)
       .PYFIELD_STR(ModelProto, producer_version)
@@ -3295,6 +3301,18 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, struct_types)
       .PYFIELD(ModelProto, configuration);
+  nb_ModelProto
+      .def_prop_ro(
+          "rewritings",
+          [](ModelProto &self) -> ModelProto::rewritings_t & { return self.ref_rewritings(); },
+          nb::rv_policy::reference_internal, ModelProto::DOC_rewritings)
+      .def(
+          "add_rewriting",
+          [](ModelProto &self, const std::string &name, const RewritingProto &rewrites) {
+            self.add_rewritings(name, rewrites);
+          },
+          nb::arg("name"), nb::arg("rewrites"), "Adds a named plan, rejecting duplicate names.")
+      .def("clear_rewritings", &ModelProto::clear_rewritings);
   PYADD_PROTO_SERIALIZATION(ModelProto);
   nb_ModelProto
       .def(
@@ -3322,6 +3340,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_functions();
             if (field_name == "struct_types")
               return self.has_struct_types();
+            if (field_name == "rewritings")
+              return self.has_rewritings();
             if (field_name == "configuration")
               return self.has_configuration();
             throw nb::attribute_error(

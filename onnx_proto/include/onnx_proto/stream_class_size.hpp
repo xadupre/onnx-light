@@ -57,6 +57,23 @@ SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, cons
 }
 
 template <typename T>
+SerializeSizeResult size_map_field(utils::BinaryWriteStream &stream, int order,
+                                   const std::map<std::string, T> &field,
+                                   SerializeOptions &options) {
+  SerializeSizeResult total;
+  for (const auto &[key, value] : field) {
+    EXT_ENFORCE(!key.empty(), "Map keys must not be empty.");
+    auto entry = size_field(stream, 2, value, options);
+    entry += make_proto_size(stream.size_field_header(1, FIELD_FIXED_SIZE) +
+                             stream.size_string(utils::RefString(key.data(), key.size())));
+    entry += make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                             stream.VarintSize(static_cast<uint64_t>(entry.proto_size)));
+    total += entry;
+  }
+  return total;
+}
+
+template <typename T>
 SerializeSizeResult size_optional_proto_field(utils::BinaryWriteStream &stream, int order,
                                               const utils::OptionalField<T> &field,
                                               SerializeOptions &options) {

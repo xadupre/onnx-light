@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -315,6 +316,62 @@ GraphProto GraphHeader(const GraphProto &graph) {
   return result;
 }
 
+using PreparedInitializers = std::map<std::vector<std::string>, std::unordered_set<std::string>>;
+
+PreparedInitializers PreparationOutputs(const RewritingProto &plan) {
+  PreparedInitializers result;
+  for (const auto &rewrite : plan.rewrites()) {
+    std::vector<std::string> path;
+    for (const auto &component : rewrite.graph_path())
+      path.push_back(component.value());
+    for (const auto &call : rewrite.initializer_calls())
+      for (const auto &output : call.output())
+        if (output.empty() || !result[path].insert(output.value()).second)
+          throw BuilderError("Rewriting: ambiguous initializer preparation output.");
+  }
+  return result;
+}
+
+void ClearPreparedPayload(TensorProto &tensor) {
+  tensor.clear_raw_data();
+  tensor.clr_float_data();
+  tensor.clr_int32_data();
+  tensor.clr_string_data();
+  tensor.clr_int64_data();
+  tensor.clr_double_data();
+  tensor.clr_uint64_data();
+  tensor.clr_external_data();
+}
+
+void ProjectPreparedGraph(GraphProto &graph, const PreparedInitializers &prepared,
+                          const std::vector<std::string> &path);
+
+void ProjectPreparedNode(NodeProto &node, const PreparedInitializers &prepared,
+                         const std::vector<std::string> &path) {
+  for (auto &attribute : node.ref_attribute()) {
+    const auto visit = [&](GraphProto &child) {
+      auto child_path = path;
+      child_path.push_back(child.name().value());
+      ProjectPreparedGraph(child, prepared, child_path);
+    };
+    if (attribute.has_g())
+      visit(*attribute.mutable_g());
+    for (auto &child : attribute.ref_graphs())
+      visit(child);
+  }
+}
+
+void ProjectPreparedGraph(GraphProto &graph, const PreparedInitializers &prepared,
+                          const std::vector<std::string> &path) {
+  const auto found = prepared.find(path);
+  if (found != prepared.end())
+    for (auto &initializer : graph.ref_initializer())
+      if (found->second.count(initializer.name().value()) != 0)
+        ClearPreparedPayload(initializer);
+  for (auto &node : graph.ref_node())
+    ProjectPreparedNode(node, prepared, path);
+}
+
 GraphProto GraphHeaders(const GraphProto &graph) {
   GraphProto result = GraphHeader(graph);
   for (const auto &node : graph.node()) {
@@ -400,7 +457,8 @@ Field SelectPositions(const Field &values, const Positions &positions) {
 template <typename Field, typename Positions>
 Field UndoEntries(const Field &current, const Positions &added_positions, const Field &added_values,
                   const Positions &removed_positions, const Field &removed_values,
-                  uint64_t encoded_count) {
+                  uint64_t encoded_count, const PreparedInitializers *prepared = nullptr,
+                  const std::vector<std::string> &path = {}) {
   const auto original_count = CheckedPosition(encoded_count);
   if (added_positions.size() != added_values.size() ||
       removed_positions.size() != removed_values.size() || removed_values.size() > original_count ||
@@ -409,9 +467,20 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
       current.size() != original_count - removed_values.size() + added_values.size())
     throw BuilderError("UndoRewritings: incomplete inverse payload or incompatible counts.");
   const auto expected = SelectPositions(current, added_positions);
-  for (std::size_t i = 0; i < expected.size(); ++i)
-    if (!expected[i].Equals(added_values[i]))
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    auto actual = expected[i];
+    if (prepared != nullptr) {
+      if constexpr (std::is_same_v<Field, utils::RepeatedProtoField<TensorProto>>) {
+        const auto found = prepared->find(path);
+        if (found != prepared->end() && found->second.count(actual.name().value()) != 0)
+          ClearPreparedPayload(actual);
+      } else if constexpr (std::is_same_v<Field, utils::RepeatedProtoField<NodeProto>>) {
+        ProjectPreparedNode(actual, *prepared, path);
+      }
+    }
+    if (!actual.Equals(added_values[i]))
       throw BuilderError("UndoRewritings: replacement definition does not match.");
+  }
   std::unordered_set<std::size_t> added(added_positions.begin(), added_positions.end());
   std::unordered_map<std::size_t, std::size_t> removed;
   for (std::size_t i = 0; i < removed_positions.size(); ++i) {
@@ -1312,6 +1381,15 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       MergeImport(result.ref_inverse_optimized_opsets(), opset);
     result.ref_inverse_original_struct_types() = original_struct_types;
     result.ref_inverse_optimized_struct_types() = root->Shapes().StructTypes();
+    const auto prepared = PreparationOutputs(result);
+    ProjectPreparedGraph(*result.mutable_inverse_optimized_graph(), prepared, {});
+    for (auto &rewrite : result.ref_rewrites()) {
+      std::vector<std::string> path;
+      for (const auto &component : rewrite.graph_path())
+        path.push_back(component.value());
+      ProjectPreparedGraph(*rewrite.mutable_inverse_before(), prepared, path);
+      ProjectPreparedGraph(*rewrite.mutable_inverse_after(), prepared, path);
+    }
   }
   return result;
 }
@@ -2628,7 +2706,10 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     }
     return definitions.empty();
   };
-  if (!model.graph().Equals(rewrites.inverse_optimized_graph()))
+  const auto prepared = PreparationOutputs(rewrites);
+  GraphProto projected = model.graph();
+  ProjectPreparedGraph(projected, prepared, {});
+  if (!projected.Equals(rewrites.inverse_optimized_graph()))
     throw BuilderError("UndoRewritings: optimized graph does not match the capture.");
   if (!equal_opsets(model.opset_import(), rewrites.inverse_optimized_opsets()))
     throw BuilderError("UndoRewritings: optimized imports do not match the capture.");
@@ -2650,6 +2731,9 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     GraphProto &graph = *FindGraph(*model.mutable_graph(), rewrite.graph_path());
     const auto &before = rewrite.inverse_before();
     const auto &after = rewrite.inverse_after();
+    std::vector<std::string> path;
+    for (const auto &component : rewrite.graph_path())
+      path.push_back(component.value());
     if (!GraphHeader(before).Equals(GraphProto{}) || !GraphHeader(after).Equals(GraphProto{}) ||
         rewrite.added_nodes().size() != rewrite.added_nodes_positions().size() ||
         rewrite.added_initializers().size() != rewrite.added_initializer_positions().size())
@@ -2670,10 +2754,11 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
         !after.extended_initializer().empty())
       throw BuilderError("UndoRewritings: incomplete initializer preparation payload.");
     auto nodes = UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
-                             rewrite.matched_nodes(), before.node(), rewrite.inverse_node_count());
+                             rewrite.matched_nodes(), before.node(), rewrite.inverse_node_count(),
+                             &prepared, path);
     auto initializers = UndoEntries(graph.initializer(), initializer_positions, after.initializer(),
                                     rewrite.removed_initializers(), before.initializer(),
-                                    rewrite.inverse_initializer_count());
+                                    rewrite.inverse_initializer_count(), &prepared, path);
     utils::RepeatedField<uint64_t> none;
     utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
     auto extended = UndoEntries(

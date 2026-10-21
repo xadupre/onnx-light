@@ -139,12 +139,25 @@ TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
   ASSERT_FALSE(plan.rewrites().empty());
   ASSERT_EQ(plan.rewrites(0).initializer_calls().size(), 1u);
   EXPECT_EQ(plan.rewrites(0).initializer_calls(0).input(0), "weight");
+  ASSERT_EQ(plan.rewrites(0).inverse_after().initializer().size(), 1u);
+  EXPECT_TRUE(plan.rewrites(0).inverse_after().initializer(0).raw_data().empty());
+  EXPECT_TRUE(plan.rewrites(0).inverse_after().initializer(0).float_data().empty());
+  EXPECT_TRUE(plan.inverse_optimized_graph().initializer(0).raw_data().empty());
   for (const auto &edit : plan.rewrites())
     EXPECT_TRUE(edit.added_initializers().empty());
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
             original.graph().SerializeAsString());
+  ModelProto mismatch;
+  mismatch.add_opset("", 28);
+  *mismatch.mutable_graph() = builder.BuildGraph();
+  mismatch.mutable_graph()->ref_initializer()[0] =
+      MakeInitializer<float>("weight_t", {3, 2}, {1, 4, 2, 5, 3, 999});
+  core::builder::GraphBuilder changed(mismatch, SchemaLookup());
+  const auto changed_graph = changed.BuildGraph().SerializeAsString();
+  EXPECT_THROW(changed.UndoRewritings(loaded), core::builder::BuilderError);
+  EXPECT_EQ(changed.BuildGraph().SerializeAsString(), changed_graph);
   EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
                 .ApplyRewritings(loaded)
                 .BuildGraph()
@@ -201,6 +214,11 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
     EXPECT_TRUE(edit.added_initializers().empty());
     ASSERT_EQ(edit.graph_path().size(), 1u);
     EXPECT_EQ(edit.graph_path(0), "branch");
+    for (const auto &initializer : edit.inverse_before().initializer())
+      if (initializer.name() == "first") {
+        EXPECT_TRUE(initializer.raw_data().empty());
+        EXPECT_TRUE(initializer.float_data().empty());
+      }
   }
   EXPECT_EQ(calls, 2u);
   RewritingProto loaded;

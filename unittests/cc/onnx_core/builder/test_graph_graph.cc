@@ -416,6 +416,54 @@ TEST(GraphGraph, CaptureKeepsNewIdentityAndDistinctConsumerNames) {
             canonical.SerializeAsString());
 }
 
+TEST(GraphGraph, InverseRestoresValueInfoOrderAndExistingDependencies) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}, {"existing", 1}});
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &function = source.MakeLocalFunction("Existing", "existing");
+  function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Identity", {"arg"}, {"result"});
+  function.MakeOutput("result");
+  source.MakeNode("Abs", {"x"}, {"first_dead"});
+  source.MakeNode("Neg", {"x"}, {"second_dead"});
+  source.MakeNode("Mul", {"x", "x"}, {"y"});
+  source.MakeOutput("y");
+  ModelProto model;
+  model.add_opset("", 28);
+  model.add_opset("existing", 1);
+  model.ref_functions().push_back(function.ToFunction("existing"));
+  *model.mutable_graph() = source.BuildGraph();
+  for (const auto &name : {"second_dead", "first_dead"}) {
+    auto &value = *model.mutable_graph()->add_value_info();
+    value.set_name(name);
+    auto &metadata = *value.add_metadata_props();
+    metadata.set_key("annotation");
+    metadata.set_value(name);
+  }
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  const auto canonical = builder.BuildGraph();
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  const auto plan = graph.Optimize();
+  EXPECT_TRUE(builder.BuildGraph().value_info().empty());
+  ASSERT_EQ(plan.inverse_original_functions().size(), 1u);
+  EXPECT_TRUE(plan.added_functions().empty());
+  auto restored = builder.UndoRewritings(plan);
+  EXPECT_TRUE(restored.HasLocalFunction("Existing"));
+  EXPECT_EQ(restored.OpsetVersion("existing"), 1);
+  EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical.SerializeAsString());
+  ASSERT_EQ(restored.BuildGraph().value_info().size(), 2u);
+  EXPECT_EQ(restored.BuildGraph().value_info(0).name(), "second_dead");
+  EXPECT_EQ(restored.BuildGraph().value_info(1).name(), "first_dead");
+  auto redundant_dependencies = plan;
+  redundant_dependencies.ref_added_functions().push_back(plan.inverse_original_functions(0));
+  auto &opset = *redundant_dependencies.add_required_opset_imports();
+  opset.set_domain("existing");
+  opset.set_version(1);
+  auto retained = builder.UndoRewritings(redundant_dependencies);
+  EXPECT_TRUE(retained.HasLocalFunction("Existing"));
+  EXPECT_EQ(retained.OpsetVersion("existing"), 1);
+}
+
 TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
   for (const bool add_dead_node : {false, true}) {
     SCOPED_TRACE(add_dead_node);
@@ -1148,6 +1196,8 @@ TEST(GraphGraph, NormalizationRebasesManyIndependentReplacements) {
   core::builder::ConstantFoldingOptions options;
   options.enabled = false;
   const auto plan = optimizer.Optimize(1, nullptr, options);
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
   ASSERT_EQ(plan.rewrites().size(), 512u);
   for (std::size_t index = 0; index < plan.rewrites().size(); ++index) {
     EXPECT_EQ(plan.rewrites(index).matched_nodes(0), index);

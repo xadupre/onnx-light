@@ -271,10 +271,10 @@ class TestPatternOptimization(ExtTestCase):
 
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18]>\n'
-            "agraph (float[2] x) => (float[2] y1, float[2] y2) {\n"
+            "agraph (float[2] x, float[2] z) => (float[2] y1, float[2] y2) {\n"
             "  middle1 = Neg(x)\n"
             "  y1 = Neg(middle1)\n"
-            "  middle2 = Neg(x)\n"
+            "  middle2 = Neg(z)\n"
             "  y2 = Neg(middle2)\n"
             "}\n"
         )

@@ -28,12 +28,39 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
+namespace detail {
+
+struct RewritingUndoState {
+  struct Edit {
+    Edit() = default;
+
+    GraphProto before;
+    GraphProto after;
+    std::size_t node_count = 0;
+    std::size_t initializer_count = 0;
+    std::size_t extended_initializer_count = 0;
+  };
+
+  RewritingProto plan;
+  std::vector<Edit> edits;
+  GraphProto original_graph_headers;
+  GraphProto optimized_graph;
+  utils::RepeatedProtoField<OperatorSetIdProto> original_opsets, optimized_opsets;
+  utils::RepeatedProtoField<FunctionProto> original_functions, optimized_functions;
+  utils::RepeatedProtoField<StructTypeProto> original_struct_types, optimized_struct_types;
+};
+
+} // namespace detail
+
 namespace {
+
+using UndoState = detail::RewritingUndoState;
 
 struct PendingReplacement {
   std::size_t position;
   utils::RepeatedProtoField<NodeProto> nodes;
   LocalRewritingProto rewriting;
+  UndoState::Edit undo;
 };
 
 struct AcceptedMatch {
@@ -531,43 +558,6 @@ GraphProto *FindGraph(GraphProto &root, const utils::RepeatedStringField &path) 
   return graph;
 }
 
-void CaptureInversePlan(RewritingProto &plan, GraphProto &canonical) {
-  for (auto &rewrite : plan.ref_rewrites()) {
-    if (!rewrite.value_renames().empty())
-      throw BuilderError("Optimize: value renaming during capture is unsupported.");
-    GraphProto &graph = *FindGraph(canonical, rewrite.graph_path());
-    rewrite.set_inverse_node_count(graph.node().size());
-    rewrite.set_inverse_initializer_count(graph.initializer().size());
-    rewrite.set_inverse_extended_initializer_count(graph.extended_initializer().size());
-    auto &before = *rewrite.mutable_inverse_before();
-    before.ref_node() = SelectPositions(graph.node(), rewrite.matched_nodes());
-    before.ref_initializer() = SelectPositions(graph.initializer(), rewrite.removed_initializers());
-    before.ref_extended_initializer() =
-        SelectPositions(graph.extended_initializer(), rewrite.removed_extended_initializers());
-    auto &after = *rewrite.mutable_inverse_after();
-    if (after.node().size() != rewrite.added_nodes().size())
-      throw BuilderError("Optimize: incomplete materialized replacement definitions.");
-    if (rewrite.initializer_calls().empty())
-      after.ref_initializer() = rewrite.added_initializers();
-    auto positions = rewrite.added_initializer_positions();
-    for (auto position : rewrite.computed_initializer_positions())
-      positions.push_back(position);
-    graph.ref_node() = UndoEntries(
-        graph.node(), rewrite.matched_nodes(), before.node(), rewrite.added_nodes_positions(),
-        after.node(), graph.node().size() - before.node().size() + after.node().size());
-    graph.ref_initializer() = UndoEntries(graph.initializer(), rewrite.removed_initializers(),
-                                          before.initializer(), positions, after.initializer(),
-                                          graph.initializer().size() - before.initializer().size() +
-                                              after.initializer().size());
-    utils::RepeatedField<uint64_t> none;
-    utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
-    graph.ref_extended_initializer() =
-        UndoEntries(graph.extended_initializer(), rewrite.removed_extended_initializers(),
-                    before.extended_initializer(), none, no_values,
-                    graph.extended_initializer().size() - before.extended_initializer().size());
-  }
-}
-
 // A Fenwick tree counts live entries before a fixed ordering rank.
 class LiveRanks {
 public:
@@ -943,7 +933,8 @@ bool HasNestedGraph(const NodeProto &node) {
   });
 }
 
-// Batches edits only when each replacement preserves its input/output dependencies.
+// Replay batches preserve input/output dependencies. Undo capture also batches
+// cardinality-changing edits already applied by the optimizer.
 // Buckets precede original nodes; live counts translate sequential coordinates.
 class RewritingNodeBatch {
 public:
@@ -954,12 +945,13 @@ public:
       live_.Update(i, true);
   }
 
-  bool Append(const LocalRewritingProto &rewrite) {
+  bool Append(const LocalRewritingProto &rewrite, UndoState::Edit *inverse = nullptr) {
     if (!IsNodeOnlyRewrite(rewrite) ||
         rewrite.added_nodes().size() != rewrite.added_nodes_positions().size())
       return false;
     const std::size_t node_count = live_.Before(added_.size());
     std::vector<std::size_t> originals;
+    utils::RepeatedProtoField<NodeProto> removed_nodes;
     std::unordered_set<const NodeProto *> matched;
     std::size_t insertion_position = node_count;
     for (uint64_t encoded : rewrite.matched_nodes()) {
@@ -974,6 +966,8 @@ public:
       if (HasNestedGraph(nodes_[original]))
         return false;
       originals.push_back(original);
+      if (inverse != nullptr)
+        removed_nodes.push_back(nodes_[original]);
       insertion_position = std::min(insertion_position, position);
     }
     std::vector<std::pair<std::size_t, const NodeProto *>> additions;
@@ -989,17 +983,19 @@ public:
       if (additions[i].first != insertion_position + i || HasNestedGraph(*additions[i].second))
         return false;
     }
-    if (originals.size() != additions.size())
-      return false;
-    std::sort(originals.begin(), originals.end());
-    for (std::size_t i = 0; i < originals.size(); ++i) {
-      const auto &original = nodes_[originals[i]];
-      const auto &replacement = *additions[i].second;
-      if (!std::equal(original.input().begin(), original.input().end(), replacement.input().begin(),
-                      replacement.input().end()) ||
-          !std::equal(original.output().begin(), original.output().end(),
-                      replacement.output().begin(), replacement.output().end()))
+    if (inverse == nullptr) {
+      if (originals.size() != additions.size())
         return false;
+      std::sort(originals.begin(), originals.end());
+      for (std::size_t i = 0; i < originals.size(); ++i) {
+        const auto &original = nodes_[originals[i]];
+        const auto &replacement = *additions[i].second;
+        if (!std::equal(original.input().begin(), original.input().end(),
+                        replacement.input().begin(), replacement.input().end()) ||
+            !std::equal(original.output().begin(), original.output().end(),
+                        replacement.output().begin(), replacement.output().end()))
+          return false;
+      }
     }
     for (std::size_t original : originals) {
       removed_[original] = true;
@@ -1024,6 +1020,10 @@ public:
       (void)position;
       added_[anchor].push_back(node);
       live_.Update(anchor, true);
+    }
+    if (inverse != nullptr) {
+      inverse->node_count = node_count;
+      inverse->before.ref_node() = std::move(removed_nodes);
     }
     committed = true;
     return true;
@@ -1053,6 +1053,79 @@ private:
   std::vector<std::vector<const NodeProto *>> added_;
   LiveRanks live_;
 };
+
+void CaptureInversePlan(const RewritingProto &plan, UndoState &undo, GraphProto &canonical) {
+  if (undo.edits.size() != plan.rewrites().size())
+    throw BuilderError("Optimize: incomplete in-memory undo capture.");
+  std::size_t index = 0;
+  while (index < plan.rewrites().size()) {
+    const auto &rewrite = plan.rewrites(index);
+    auto &inverse = undo.edits[index];
+    if (!rewrite.value_renames().empty())
+      throw BuilderError("Optimize: value renaming during capture is unsupported.");
+    GraphProto &graph = *FindGraph(canonical, rewrite.graph_path());
+    const auto capture_counts = [&](UndoState::Edit &edit) {
+      edit.initializer_count = graph.initializer().size();
+      edit.extended_initializer_count = graph.extended_initializer().size();
+    };
+    RewritingNodeBatch batch(graph.node());
+    std::size_t end = index;
+    while (end < plan.rewrites().size()) {
+      const auto &edit = plan.rewrites(end);
+      auto &captured = undo.edits[end];
+      if (!SameGraphPath(rewrite, edit) ||
+          captured.after.node().size() != edit.added_nodes().size() ||
+          !batch.Append(edit, &captured))
+        break;
+      capture_counts(captured);
+      ++end;
+    }
+    if (end != index) {
+      // Capture independent edits in live coordinates and materialize their combined edit once.
+      const auto combined = batch.Rewriting();
+      const auto removed = SelectPositions(graph.node(), combined.matched_nodes());
+      graph.ref_node() =
+          UndoEntries(graph.node(), combined.matched_nodes(), removed,
+                      combined.added_nodes_positions(), combined.added_nodes(),
+                      graph.node().size() - removed.size() + combined.added_nodes().size());
+      index = end;
+      continue;
+    }
+    inverse.node_count = graph.node().size();
+    capture_counts(inverse);
+    auto &before = inverse.before;
+    before.ref_node() = SelectPositions(graph.node(), rewrite.matched_nodes());
+    before.ref_initializer() = SelectPositions(graph.initializer(), rewrite.removed_initializers());
+    before.ref_extended_initializer() =
+        SelectPositions(graph.extended_initializer(), rewrite.removed_extended_initializers());
+    auto &after = inverse.after;
+    if (after.node().size() != rewrite.added_nodes().size())
+      throw BuilderError("Optimize: incomplete materialized replacement definitions.");
+    if (rewrite.initializer_calls().empty())
+      after.ref_initializer() = rewrite.added_initializers();
+    graph.ref_node() = UndoEntries(
+        graph.node(), rewrite.matched_nodes(), before.node(), rewrite.added_nodes_positions(),
+        after.node(), graph.node().size() - before.node().size() + after.node().size());
+    if (!rewrite.removed_initializers().empty() || !after.initializer().empty()) {
+      auto positions = rewrite.added_initializer_positions();
+      for (auto position : rewrite.computed_initializer_positions())
+        positions.push_back(position);
+      graph.ref_initializer() = UndoEntries(
+          graph.initializer(), rewrite.removed_initializers(), before.initializer(), positions,
+          after.initializer(),
+          graph.initializer().size() - before.initializer().size() + after.initializer().size());
+    }
+    if (!rewrite.removed_extended_initializers().empty()) {
+      utils::RepeatedField<uint64_t> none;
+      utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
+      graph.ref_extended_initializer() =
+          UndoEntries(graph.extended_initializer(), rewrite.removed_extended_initializers(),
+                      before.extended_initializer(), none, no_values,
+                      graph.extended_initializer().size() - before.extended_initializer().size());
+    }
+    ++index;
+  }
+}
 
 int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
@@ -1184,14 +1257,6 @@ void GraphGraph::Rebuild() {
 
 std::size_t GraphGraph::Canonicalize() {
   std::size_t removed = 0;
-  for (const auto &function : builder_.local_functions_) {
-    GraphGraph child(*function, patterns_);
-    removed += child.Canonicalize();
-  }
-  for (const auto &subgraph : builder_.subgraphs_) {
-    GraphGraph child(*subgraph, patterns_);
-    removed += child.Canonicalize();
-  }
   const auto original_nodes = builder_.nodes_;
   GraphBuilder::InitializerContentIndex inherited;
   std::vector<const EncodedValueProto *> encoded_inherited;
@@ -1281,6 +1346,14 @@ std::size_t GraphGraph::Canonicalize() {
       }
     builder_.RefreshAfterRewriting(indices, std::move(affected));
   }
+  for (const auto &function : builder_.local_functions_) {
+    GraphGraph child(*function, patterns_);
+    removed += child.Canonicalize();
+  }
+  for (const auto &subgraph : builder_.subgraphs_) {
+    GraphGraph child(*subgraph, patterns_);
+    removed += child.Canonicalize();
+  }
   computed_constants_.clear();
   Rebuild();
   return removed + local_removed;
@@ -1300,6 +1373,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     canonical = root->BuildGraph();
   const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
+  auto undo = std::make_shared<UndoState>();
   RewritingProto collection;
   const auto capture_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &function : scope.local_functions_) {
@@ -1313,7 +1387,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   capture_functions(capture_functions, *root);
   const auto original_definitions = collection.added_functions();
   const std::size_t original_functions = collection.added_functions().size();
-  auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection);
+  auto result =
+      OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
   capture_functions(capture_functions, *root);
   FunctionIndex functions;
   for (const auto &function : collection.added_functions())
@@ -1358,38 +1433,41 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   result.ref_added_functions() = std::move(collection.ref_added_functions());
   result.ref_required_opset_imports() = std::move(collection.ref_required_opset_imports());
   if (&builder_ == root) {
-    *result.mutable_inverse_original_graph_headers() = GraphHeaders(canonical);
-    CaptureInversePlan(result, canonical);
-    *result.mutable_inverse_optimized_graph() = root->BuildGraph();
-    if (!GraphStructure(canonical).Equals(GraphStructure(result.inverse_optimized_graph())))
+    undo->original_graph_headers = GraphHeaders(canonical);
+    CaptureInversePlan(result, *undo, canonical);
+    undo->optimized_graph = root->BuildGraph();
+    if (!GraphStructure(canonical).Equals(GraphStructure(undo->optimized_graph)))
       throw BuilderError("Optimize: a mutation is not represented by the captured plan.");
-    result.ref_inverse_original_functions() = original_definitions;
+    undo->original_functions = original_definitions;
     for (const auto &[domain, version] : original_opsets) {
-      auto &opset = *result.add_inverse_original_opsets();
+      auto &opset = undo->original_opsets.add();
       opset.set_domain(domain);
       opset.set_version(version);
     }
-    result.ref_inverse_optimized_functions() = original_definitions;
+    undo->optimized_functions = original_definitions;
     for (const auto &function : result.added_functions())
-      MergeFunction(result.ref_inverse_optimized_functions(), function);
+      MergeFunction(undo->optimized_functions, function);
     for (const auto &[domain, version] : root->opsets_) {
-      auto &opset = *result.add_inverse_optimized_opsets();
+      auto &opset = undo->optimized_opsets.add();
       opset.set_domain(domain);
       opset.set_version(version);
     }
     for (const auto &opset : result.required_opset_imports())
-      MergeImport(result.ref_inverse_optimized_opsets(), opset);
-    result.ref_inverse_original_struct_types() = original_struct_types;
-    result.ref_inverse_optimized_struct_types() = root->Shapes().StructTypes();
+      MergeImport(undo->optimized_opsets, opset);
+    undo->original_struct_types = original_struct_types;
+    undo->optimized_struct_types = root->Shapes().StructTypes();
     const auto prepared = PreparationOutputs(result);
-    ProjectPreparedGraph(*result.mutable_inverse_optimized_graph(), prepared, {});
-    for (auto &rewrite : result.ref_rewrites()) {
+    ProjectPreparedGraph(undo->optimized_graph, prepared, {});
+    for (std::size_t i = 0; i < result.rewrites().size(); ++i) {
+      const auto &rewrite = result.rewrites(i);
       std::vector<std::string> path;
       for (const auto &component : rewrite.graph_path())
         path.push_back(component.value());
-      ProjectPreparedGraph(*rewrite.mutable_inverse_before(), prepared, path);
-      ProjectPreparedGraph(*rewrite.mutable_inverse_after(), prepared, path);
+      ProjectPreparedGraph(undo->edits[i].before, prepared, path);
+      ProjectPreparedGraph(undo->edits[i].after, prepared, path);
     }
+    undo->plan = result;
+    root->rewriting_undo_ = std::move(undo);
   }
   return result;
 }
@@ -1397,7 +1475,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
 RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,
-                                        bool remove_unused, RewritingProto &collection) {
+                                        bool remove_unused, RewritingProto &collection,
+                                        detail::RewritingUndoState &undo) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1429,7 +1508,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
     RewritingProto child_rewrites =
         child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
-                                 folding_options, remove_unused, collection);
+                                 folding_options, remove_unused, collection, undo);
 
     applied.extend(std::move(child_rewrites.ref_rewrites()));
 
@@ -1634,7 +1713,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         rewriting.add_added_initializer_positions(i);
       }
       replacements.push_back(
-          PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting)});
+          PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting), {}});
       for (const NodeProto *node : match.nodes) {
         if (node != nullptr) {
           removed.insert(node);
@@ -1732,8 +1811,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         }
       }
       for (PendingReplacement &replacement : replacements) {
-        replacement.rewriting.mutable_inverse_after()->ref_initializer() =
-            replacement.rewriting.added_initializers();
+        replacement.undo.after.ref_initializer() = replacement.rewriting.added_initializers();
         utils::RepeatedProtoField<NodeProto> unfolded_nodes;
         for (const NodeProto &node : replacement.rewriting.added_nodes()) {
           bool folded = !node.output().empty();
@@ -1752,7 +1830,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               if (output.empty())
                 continue;
               rewrite.add_computed_initializer_positions(folded_positions.at(output.value()));
-              rewrite.mutable_inverse_after()->ref_initializer().push_back(
+              replacement.undo.after.ref_initializer().push_back(
                   builder_.initializers_[folded_positions.at(output.value())]);
             }
           } else {
@@ -1814,11 +1892,12 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes());
       }
       for (auto &replacement : replacements) {
-        auto &snapshot = *replacement.rewriting.mutable_inverse_after();
+        auto &snapshot = replacement.undo.after;
         snapshot.ref_node() = replacement.rewriting.added_nodes();
         for (auto &node : snapshot.ref_node())
           builder_.MaterializeGraphReferences(node);
         applied.push_back(std::move(replacement.rewriting));
+        undo.edits.push_back(std::move(replacement.undo));
       }
     }
     if (report != nullptr) {
@@ -1831,7 +1910,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       cleanup_start = std::chrono::steady_clock::now();
     }
     const std::size_t rewrites_before_cleanup = applied.size();
-    const std::size_t cleaned = Cleanup(applied, remove_unused);
+    const std::size_t cleaned = Cleanup(applied, remove_unused, undo);
     for (std::size_t i = rewrites_before_cleanup; i < applied.size(); ++i) {
       for (const auto &name : graph_path) {
         applied[i].add_graph_path(name);
@@ -1854,7 +1933,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
 }
 
 std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites,
-                                bool remove_unused) {
+                                bool remove_unused, detail::RewritingUndoState &undo) {
   const auto original_nodes = builder_.nodes_;
   const std::size_t first_rewrite = rewrites.size();
   const auto initializer_names = [](const auto &initializers) {
@@ -1898,7 +1977,8 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       rewriting.add_matched_nodes(i);
     }
     rewriting.ref_added_nodes() = builder_.nodes_;
-    auto &snapshot = *rewriting.mutable_inverse_after();
+    UndoState::Edit inverse;
+    auto &snapshot = inverse.after;
     snapshot.ref_node() = rewriting.added_nodes();
     for (auto &node : snapshot.ref_node())
       builder_.MaterializeGraphReferences(node);
@@ -1913,6 +1993,7 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
                                   rewriting.ref_removed_extended_initializers());
     }
     rewrites.push_back(std::move(rewriting));
+    undo.edits.push_back(std::move(inverse));
     return removed + removed_initializers;
   };
 
@@ -2479,8 +2560,6 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     throw BuilderError("ApplyRewritings requires a root model builder.");
   ModelProto model = model_template_;
   model.ref_struct_types() = Shapes().StructTypes();
-  if (rewrites.has_inverse_optimized_graph())
-    model.ref_struct_types() = rewrites.inverse_optimized_struct_types();
   for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
   for (const auto &function : local_functions_)
@@ -2637,9 +2716,11 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
 }
 
 GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const {
-  if (parent_ != nullptr || is_local_function_ || !rewrites.has_inverse_optimized_graph() ||
-      !rewrites.has_inverse_original_graph_headers())
-    throw BuilderError("UndoRewritings: requires a complete root-model capture.");
+  if (parent_ != nullptr || is_local_function_ || rewriting_undo_ == nullptr)
+    throw BuilderError("UndoRewritings: requires an in-memory root-model capture.");
+  const auto &undo = *rewriting_undo_;
+  if (rewrites.SerializeAsString() != undo.plan.SerializeAsString())
+    throw BuilderError("UndoRewritings: plan does not match the in-memory capture.");
   RewritingProto preparation;
   for (const auto &function : rewrites.added_functions())
     if (function.domain() == "onnx.light.rewriting")
@@ -2659,9 +2740,9 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   // Recipe definitions are normalized just as they are by forward replay.
   ModelProto dependency_model;
   dependency_model.mutable_graph()->set_name("dependencies");
-  dependency_model.ref_opset_import() = rewrites.inverse_optimized_opsets();
-  dependency_model.ref_functions() = rewrites.inverse_optimized_functions();
-  dependency_model.ref_struct_types() = rewrites.inverse_optimized_struct_types();
+  dependency_model.ref_opset_import() = undo.optimized_opsets;
+  dependency_model.ref_functions() = undo.optimized_functions;
+  dependency_model.ref_struct_types() = undo.optimized_struct_types;
   GraphBuilder dependencies(dependency_model, schema_lookup_);
   utils::RepeatedProtoField<FunctionProto> expected_functions;
   for (const auto &function : dependencies.local_functions_)
@@ -2709,28 +2790,24 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   const auto prepared = PreparationOutputs(rewrites);
   GraphProto projected = model.graph();
   ProjectPreparedGraph(projected, prepared, {});
-  if (!projected.Equals(rewrites.inverse_optimized_graph()))
+  if (!projected.Equals(undo.optimized_graph))
     throw BuilderError("UndoRewritings: optimized graph does not match the capture.");
-  if (!equal_opsets(model.opset_import(), rewrites.inverse_optimized_opsets()))
+  if (!equal_opsets(model.opset_import(), undo.optimized_opsets))
     throw BuilderError("UndoRewritings: optimized imports do not match the capture.");
   if (!equal_functions(model.functions(), expected_functions))
     throw BuilderError("UndoRewritings: optimized functions do not match the capture: " +
                        function_difference);
-  if (!equal_entries(model.struct_types(), rewrites.inverse_optimized_struct_types()))
+  if (!equal_entries(model.struct_types(), undo.optimized_struct_types))
     throw BuilderError("UndoRewritings: optimized declarations do not match the capture.");
-  if (!equal_opsets(rewrites.inverse_original_opsets(), rewrites.inverse_original_opsets()) ||
-      !equal_functions(rewrites.inverse_original_functions(),
-                       rewrites.inverse_original_functions()))
-    throw BuilderError("UndoRewritings: malformed original dependencies.");
   const GraphProto optimized = model.graph();
   for (std::size_t index = rewrites.rewrites().size(); index != 0; --index) {
     const auto &rewrite = rewrites.rewrites(index - 1);
-    if (!rewrite.has_inverse_before() || !rewrite.has_inverse_after() ||
-        !rewrite.value_renames().empty())
+    const auto &inverse = undo.edits[index - 1];
+    if (!rewrite.value_renames().empty())
       throw BuilderError("UndoRewritings: incomplete or rename-producing edit.");
     GraphProto &graph = *FindGraph(*model.mutable_graph(), rewrite.graph_path());
-    const auto &before = rewrite.inverse_before();
-    const auto &after = rewrite.inverse_after();
+    const auto &before = inverse.before;
+    const auto &after = inverse.after;
     std::vector<std::string> path;
     for (const auto &component : rewrite.graph_path())
       path.push_back(component.value());
@@ -2753,30 +2830,32 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
         after.initializer().size() != rewrite.added_initializers().size() + prepared_count ||
         !after.extended_initializer().empty())
       throw BuilderError("UndoRewritings: incomplete initializer preparation payload.");
-    auto nodes = UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
-                             rewrite.matched_nodes(), before.node(), rewrite.inverse_node_count(),
-                             &prepared, path);
+    auto nodes =
+        UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
+                    rewrite.matched_nodes(), before.node(), inverse.node_count, &prepared, path);
     auto initializers = UndoEntries(graph.initializer(), initializer_positions, after.initializer(),
                                     rewrite.removed_initializers(), before.initializer(),
-                                    rewrite.inverse_initializer_count(), &prepared, path);
+                                    inverse.initializer_count, &prepared, path);
     utils::RepeatedField<uint64_t> none;
     utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
-    auto extended = UndoEntries(
-        graph.extended_initializer(), none, no_values, rewrite.removed_extended_initializers(),
-        before.extended_initializer(), rewrite.inverse_extended_initializer_count());
+    auto extended = UndoEntries(graph.extended_initializer(), none, no_values,
+                                rewrite.removed_extended_initializers(),
+                                before.extended_initializer(), inverse.extended_initializer_count);
     graph.ref_node() = std::move(nodes);
     graph.ref_initializer() = std::move(initializers);
     graph.ref_extended_initializer() = std::move(extended);
   }
-  model.ref_opset_import() = rewrites.inverse_original_opsets();
-  model.ref_functions() = rewrites.inverse_original_functions();
-  model.ref_struct_types() = rewrites.inverse_original_struct_types();
-  RestoreGraphHeaders(*model.mutable_graph(), rewrites.inverse_original_graph_headers());
+  model.ref_opset_import() = undo.original_opsets;
+  model.ref_functions() = undo.original_functions;
+  model.ref_struct_types() = undo.original_struct_types;
+  RestoreGraphHeaders(*model.mutable_graph(), undo.original_graph_headers);
   model.clr_rewritings();
   GraphBuilder result(model, schema_lookup_);
   result.set_device(device_);
   // Replaying validates dependencies, positions, recipes and the complete roundtrip.
-  auto verified = result.ApplyRewritings(rewrites);
+  ModelProto verification_model = model;
+  verification_model.ref_struct_types() = undo.optimized_struct_types;
+  auto verified = GraphBuilder(verification_model, schema_lookup_).ApplyRewritings(rewrites);
   utils::RepeatedProtoField<OperatorSetIdProto> verified_opsets;
   for (const auto &[domain, version] : verified.opsets_) {
     auto &opset = verified_opsets.add();
@@ -2787,7 +2866,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   for (const auto &function : verified.local_functions_)
     verified_functions.push_back(function->BuildFunction(function->function_domain_));
   if (!verified.BuildGraph().Equals(optimized) ||
-      !equal_opsets(verified_opsets, rewrites.inverse_optimized_opsets()) ||
+      !equal_opsets(verified_opsets, undo.optimized_opsets) ||
       !equal_functions(verified_functions, expected_functions))
     throw BuilderError("UndoRewritings: inverse payload does not reproduce the optimized graph.");
   return result;

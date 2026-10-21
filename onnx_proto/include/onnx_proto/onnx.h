@@ -1633,14 +1633,6 @@ FIELD_REPEATED(uint64_t, computed_initializer_positions, 12,
                "Reserved for prepared initializer positions.")
 FIELD_REPEATED(uint64_t, removed_extended_initializers, 13,
                "Removed extended initializer positions before this edit.")
-FIELD_OPTIONAL(GraphProto, inverse_before, 14,
-               "Original graph header and removed node and initializer definitions.")
-FIELD_OPTIONAL(GraphProto, inverse_after, 15,
-               "Resulting graph header and added node and initializer definitions.")
-FIELD(uint64_t, inverse_node_count, 16, "Node count before this edit.")
-FIELD(uint64_t, inverse_initializer_count, 17, "Dense initializer count before this edit.")
-FIELD(uint64_t, inverse_extended_initializer_count, 18,
-      "Extended initializer count before this edit.")
 END_PROTO()
 
 BEGIN_PROTO(RewritingProto, "Stores ordered sequential graph edits.")
@@ -1648,18 +1640,6 @@ FIELD_REPEATED_PROTO(LocalRewritingProto, rewrites, 1, "Edits in application ord
 FIELD_REPEATED_PROTO(OperatorSetIdProto, required_opset_imports, 2, "Required additional imports.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 3, "Descriptive metadata.")
 FIELD_REPEATED_PROTO(FunctionProto, added_functions, 4, "Shared additional functions.")
-FIELD_OPTIONAL(GraphProto, inverse_optimized_graph, 5,
-               "Exact optimized graph required by inverse replay.")
-FIELD_REPEATED_PROTO(OperatorSetIdProto, inverse_original_opsets, 6, "Original model imports.")
-FIELD_REPEATED_PROTO(FunctionProto, inverse_original_functions, 7, "Original model functions.")
-FIELD_REPEATED_PROTO(OperatorSetIdProto, inverse_optimized_opsets, 8, "Optimized model imports.")
-FIELD_REPEATED_PROTO(FunctionProto, inverse_optimized_functions, 9, "Optimized model functions.")
-FIELD_REPEATED_PROTO(StructTypeProto, inverse_original_struct_types, 10,
-                     "Original structured declarations.")
-FIELD_REPEATED_PROTO(StructTypeProto, inverse_optimized_struct_types, 11,
-                     "Optimized structured declarations.")
-FIELD_OPTIONAL(GraphProto, inverse_original_graph_headers, 12,
-               "Original graph declarations, including affected ancestor scopes.")
 END_PROTO()
 
 // ModelProto

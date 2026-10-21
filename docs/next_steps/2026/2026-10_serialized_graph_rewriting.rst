@@ -53,10 +53,10 @@ independently named plans against the canonical graph.
 Constant folding retains the computation as shared functions and ordered
 ``initializer_calls``, not materialized results in ``added_initializers``.
 Literal constants still use ``added_initializers``. Removed definitions and
-payloads needed to undo reversible edits are retained separately from removal
-positions. The forward recipe avoids embedding a transposed payload in
-``added_initializers``; the current inverse-validation snapshot has the
-additional storage cost described below.
+payloads needed to undo reversible edits are retained only in the optimizing
+``GraphBuilder``, separately from the serialized removal positions. Neither
+rewriting proto nor exported models contain undo history. The forward recipe
+avoids embedding a transposed payload in ``added_initializers``.
 
 The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
 the existing protobuf-free message layer. The schema below includes fields
@@ -72,6 +72,8 @@ by the optimizer and existing replay engine.** ``RewritingProto`` holds the
 ordered records and their shared function definitions/imports. Do not maintain
 parallel C++/proto records or introduce a second replay engine and conversion
 layer.
+Undo-only information is private, non-serialized builder state; it does not
+extend these forward proto records.
 
 Migrate ``Optimize`` results, replay arguments, cleanup recording, C++/Python
 bindings, diagnostics, tests and examples to the new messages. Keep matching
@@ -123,11 +125,6 @@ protobuf compiler or ``libprotobuf``. Step 3 added the
      repeated NodeProto initializer_calls = 11;
      repeated uint64 computed_initializer_positions = 12;
      repeated uint64 removed_extended_initializers = 13;
-     optional GraphProto inverse_before = 14;
-     optional GraphProto inverse_after = 15;
-     uint64 inverse_node_count = 16;
-     uint64 inverse_initializer_count = 17;
-     uint64 inverse_extended_initializer_count = 18;
    }
 
    message RewritingProto {
@@ -144,11 +141,11 @@ each edit: ``removed_initializers`` indexes dense initializers,
 Both payload alternatives share this index space and retain their declaration
 order across builder import/export and replay.
 
-Inverse records retain the removed definitions in ``inverse_before`` in the
-same order as their removal positions. Graph headers preserve information such
-as value annotations that forward replacement prunes. Counts and expected
-replacement information distinguish a complete inverse record from a legacy
-forward-only edit; a removal position alone cannot restore a definition.
+The optimizing builder retains removed definitions in the same order as their
+removal positions. Its in-memory undo history also preserves graph declarations,
+counts and expected replacements needed for strict restoration. This history is
+not part of either proto: a serialized plan contains only forward edits, and a
+removal position alone cannot restore a definition.
 
 **Modify only onnx-light's ``ModelProto``** to add
 ``map<string, RewritingProto> rewritings``, keyed by variant name, without
@@ -239,20 +236,27 @@ Inverse replay processes recorded edits in reverse application order. It
 restores only definitions removed by these edits, never Identity nodes or
 duplicate constants removed before capture. It validates positions, expected
 replacement definitions, dependencies and subgraph paths, and explicitly
-rejects records lacking the information needed for exact restoration. A
+rejects builders lacking the in-memory information needed for exact restoration. A
 failure must not leave the caller's builder partially restored.
 
 ``GraphGraph::Canonicalize`` (Python: ``graph.canonicalize()``) performs the
 renaming cleanups explicitly, allowing callers to save the reference graph
 before calling ``Optimize``. Optimization also canonicalizes before capture.
+Ancestor substitutions are applied before cleaning descendant scopes, so
+canonicalization is idempotent even when captured values become equivalent.
 ``GraphBuilder::UndoRewritings`` (Python: ``builder.undo_rewritings(plan)``)
-returns a new builder at the cleaned canonical state. Legacy forward-only
-records without inverse definitions are not sufficient for this operation.
+returns a new builder at the cleaned canonical state. It requires the builder
+that performed optimization and its matching plan. Exporting and reloading an
+optimized model does not retain this history; applying a serialized forward
+plan to a fresh builder does not recreate it either.
 
-The current inverse format also retains an exact optimized-graph snapshot for
-strict target validation. This is an interim storage cost, including its
-initializer payloads, not yet the compact representation needed to eliminate
-the canonical-model copy in export modes.
+The builder currently also retains an optimized-graph snapshot in memory for
+strict target validation. This is an interim memory cost, not a serialized
+format or the compact representation needed to eliminate the canonical-model
+copy in export modes.
+Independent node edits share indexed live-order tracking during inverse capture;
+their node lists are materialized once per batch, and unchanged initializer
+lists are retained.
 
 .. code-block:: text
 
@@ -312,12 +316,13 @@ Each PR depends on the preceding one.
        small end-to-end example and external-data handling.
      - Save/reload/replay matches direct optimization; compare inference
        outputs and states; plain exports use only standard ONNX fields.
-    * - 5. Reversible capture
+   * - 5. Reversible capture
      - Move reference-renaming cleanups before canonical capture. Retain
-       removed definitions and validate inverse replay in reverse edit order.
-     - Forward then inverse replay restores the cleaned canonical graph,
+       removed definitions only in the optimizing builder and validate undo
+       in reverse edit order, without adding proto fields.
+     - Optimization then in-memory undo restores the cleaned canonical graph,
        including nested graphs and prepared constants, without resurrecting
-       pre-capture identities. Incomplete or incompatible plans fail atomically.
+       pre-capture identities. Missing history or incompatible plans fail atomically.
 
 Export workflow
 +++++++++++++++

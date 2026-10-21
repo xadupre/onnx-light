@@ -120,7 +120,8 @@ public:
 
 class ReplaceIndependentNeg : public core::builder::PatternOptimization {
 public:
-  ReplaceIndependentNeg() : PatternOptimization(1, "ReplaceIndependentNeg") {}
+  explicit ReplaceIndependentNeg(bool expand = false)
+      : PatternOptimization(1, "ReplaceIndependentNeg"), expand(expand) {}
 
   core::builder::MatchResult Match(core::builder::GraphGraph &,
                                    const NodeProto &candidate) const override {
@@ -131,10 +132,17 @@ public:
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
     utils::RepeatedProtoField<NodeProto> nodes;
-    nodes.push_back(
-        MakeNode("Abs", {matched[0]->input(0).value()}, {matched[0]->output(0).value()}));
+    auto input = matched[0]->input(0).value();
+    if (expand) {
+      const auto intermediate = matched[0]->output(0).value() + "_abs";
+      nodes.push_back(MakeNode("Abs", {input}, {intermediate}));
+      input = intermediate;
+    }
+    nodes.push_back(MakeNode("Abs", {input}, {matched[0]->output(0).value()}));
     return nodes;
   }
+
+  bool expand;
 };
 
 class ReplaceNegWithIdentity : public core::builder::PatternOptimization {
@@ -339,13 +347,61 @@ TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
   ASSERT_EQ(plan.rewrites().size(), 2u);
   for (const auto &rewrite : plan.rewrites()) {
     EXPECT_TRUE(rewrite.value_renames().empty());
-    EXPECT_EQ(rewrite.inverse_before().node().size(), rewrite.matched_nodes().size());
   }
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
             canonical.SerializeAsString());
   EXPECT_EQ(builder.BuildGraph().output(0).name(), "y");
+}
+
+TEST(GraphGraph, CanonicalizesParentSubstitutionsBeforeNestedDuplicates) {
+  for (const int depth : {1, 2}) {
+    SCOPED_TRACE(depth);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+    builder.MakeNode("Identity", {"x"}, {"a"});
+    const auto make_body = [&](const auto &self, core::builder::GraphBuilder &scope,
+                               int remaining) -> void {
+      if (remaining == 0) {
+        scope.MakeNode("Abs", {"a"}, {"p"});
+        scope.MakeNode("Abs", {"x"}, {"q"});
+        scope.MakeNode("Add", {"p", "q"}, {"sum"});
+        scope.MakeNode("Neg", {"sum"}, {"y"});
+      } else {
+        utils::RepeatedProtoField<AttributeProto> attributes;
+        for (const auto &name : {"then_branch", "else_branch"}) {
+          const auto graph_name = scope.name() + "_" + name;
+          auto &child = scope.MakeSubgraph(graph_name);
+          self(self, child, remaining - 1);
+          auto &reference = attributes.add();
+          reference.set_name(std::string(name) + "_ref");
+          reference.set_type(AttributeProto::STRING);
+          reference.set_s(graph_name);
+        }
+        scope.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+      }
+      scope.MakeOutput("y");
+    };
+    make_body(make_body, builder, depth);
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<ReplaceIndependentNeg>()});
+    EXPECT_EQ(graph.Canonicalize(), 1u + (1u << depth));
+    const auto canonical = builder.BuildGraph();
+    EXPECT_EQ(graph.Canonicalize(), 0u);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), canonical.SerializeAsString());
+    const auto plan = graph.Optimize();
+    ASSERT_EQ(plan.rewrites().size(), 1u << depth);
+    ModelProto reference;
+    reference.add_opset("", 28);
+    *reference.mutable_graph() = canonical;
+    auto replayed = core::builder::GraphBuilder(reference, SchemaLookup()).ApplyRewritings(plan);
+    EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
+    EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+              canonical.SerializeAsString());
+  }
 }
 
 TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
@@ -359,38 +415,33 @@ TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
   const auto plan = graph.Optimize();
   const auto optimized = builder.BuildGraph().SerializeAsString();
   ASSERT_EQ(plan.rewrites().size(), 1u);
-  ASSERT_FALSE(plan.inverse_original_opsets().empty());
-  for (int kind = 0; kind < 11; ++kind) {
+  for (int kind = 0; kind < 6; ++kind) {
     SCOPED_TRACE(kind);
     auto invalid = plan;
     auto &edit = invalid.ref_rewrites()[0];
     if (kind == 0)
-      edit.clear_inverse_before();
+      invalid.clr_rewrites();
     else if (kind == 1)
       edit.ref_matched_nodes()[0] = 99;
     else if (kind == 2)
       edit.ref_added_nodes_positions()[0] = 99;
     else if (kind == 3)
-      edit.mutable_inverse_before()->ref_node()[0].ref_input()[0] = "undefined";
+      edit.ref_added_nodes()[0].ref_input()[0] = "undefined";
     else if (kind == 4)
-      edit.mutable_inverse_after()->ref_node()[0].set_op_type("Abs");
+      edit.ref_added_nodes()[0].set_op_type("Abs");
     else if (kind == 5) {
       edit.add_value_renames()->set_key("x");
-    } else if (kind == 6) {
-      invalid.mutable_inverse_optimized_graph()->set_name("other");
-    } else if (kind == 7) {
-      invalid.clear_inverse_original_graph_headers();
-    } else if (kind == 8) {
-      invalid.ref_inverse_original_opsets()[0].set_version(27);
-    } else if (kind == 9) {
-      edit.mutable_inverse_before()->set_name("ignored");
-    } else {
-      invalid.mutable_inverse_original_graph_headers()->ref_node()[0].set_op_type("ignored");
     }
     EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
     EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
   }
   EXPECT_THROW(builder.UndoRewritings(RewritingProto{}), core::builder::BuilderError);
+  core::builder::GraphBuilder reloaded(builder.ToModel(), SchemaLookup());
+  EXPECT_THROW(reloaded.UndoRewritings(plan), core::builder::BuilderError);
+  core::builder::GraphBuilder moved(std::move(builder));
+  EXPECT_NO_THROW(moved.UndoRewritings(plan));
+  moved.MakeNode("Abs", {"y"}, {"extra"});
+  EXPECT_THROW(moved.UndoRewritings(plan), core::builder::BuilderError);
 }
 
 TEST(GraphGraph, CaptureKeepsNewIdentityAndDistinctConsumerNames) {
@@ -445,7 +496,6 @@ TEST(GraphGraph, InverseRestoresValueInfoOrderAndExistingDependencies) {
       builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
   const auto plan = graph.Optimize();
   EXPECT_TRUE(builder.BuildGraph().value_info().empty());
-  ASSERT_EQ(plan.inverse_original_functions().size(), 1u);
   EXPECT_TRUE(plan.added_functions().empty());
   auto restored = builder.UndoRewritings(plan);
   EXPECT_TRUE(restored.HasLocalFunction("Existing"));
@@ -455,13 +505,11 @@ TEST(GraphGraph, InverseRestoresValueInfoOrderAndExistingDependencies) {
   EXPECT_EQ(restored.BuildGraph().value_info(0).name(), "second_dead");
   EXPECT_EQ(restored.BuildGraph().value_info(1).name(), "first_dead");
   auto redundant_dependencies = plan;
-  redundant_dependencies.ref_added_functions().push_back(plan.inverse_original_functions(0));
+  redundant_dependencies.ref_added_functions().push_back(model.functions(0));
   auto &opset = *redundant_dependencies.add_required_opset_imports();
   opset.set_domain("existing");
   opset.set_version(1);
-  auto retained = builder.UndoRewritings(redundant_dependencies);
-  EXPECT_TRUE(retained.HasLocalFunction("Existing"));
-  EXPECT_EQ(retained.OpsetVersion("existing"), 1);
+  EXPECT_THROW(builder.UndoRewritings(redundant_dependencies), core::builder::BuilderError);
 }
 
 TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
@@ -1179,32 +1227,37 @@ TEST(GraphGraph, NormalizationRecordsDisplacedRetainedNodesForCoordinateReplay) 
 }
 
 TEST(GraphGraph, NormalizationRebasesManyIndependentReplacements) {
-  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
-  for (std::size_t index = 0; index < 512; ++index) {
-    const auto input = "in_" + std::to_string(index);
-    const auto output = "out_" + std::to_string(index);
-    builder.MakeInput(input, core::symbolic::TensorType::kFloat, MakeShape({2}));
-    builder.MakeNode("Neg", {input}, {output});
-    builder.MakeOutput(output);
+  for (const bool expand : {false, true}) {
+    SCOPED_TRACE(expand);
+    const std::size_t count = expand ? 16 : 512;
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    for (std::size_t index = 0; index < count; ++index) {
+      const auto input = "in_" + std::to_string(index);
+      const auto output = "out_" + std::to_string(index);
+      builder.MakeInput(input, core::symbolic::TensorType::kFloat, MakeShape({2}));
+      builder.MakeNode("Neg", {input}, {output});
+      builder.MakeOutput(output);
+    }
+    ModelProto original;
+    *original.mutable_graph() = builder.BuildGraph();
+    original.add_opset("", 28);
+    core::builder::GraphGraph optimizer(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<ReplaceIndependentNeg>(expand)});
+    core::builder::ConstantFoldingOptions options;
+    options.enabled = false;
+    const auto plan = optimizer.Optimize(1, nullptr, options);
+    EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+              original.graph().SerializeAsString());
+    ASSERT_EQ(plan.rewrites().size(), count);
+    for (std::size_t index = 0; index < plan.rewrites().size(); ++index) {
+      const auto &edit = plan.rewrites(index);
+      EXPECT_EQ(edit.matched_nodes(0), index * (expand ? 2 : 1));
+      EXPECT_EQ(edit.added_nodes_positions(0), index * (expand ? 2 : 1));
+    }
+    auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
+    EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
   }
-  ModelProto original;
-  *original.mutable_graph() = builder.BuildGraph();
-  original.add_opset("", 28);
-  core::builder::GraphGraph optimizer(
-      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
-                   std::make_shared<ReplaceIndependentNeg>()});
-  core::builder::ConstantFoldingOptions options;
-  options.enabled = false;
-  const auto plan = optimizer.Optimize(1, nullptr, options);
-  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
-            original.graph().SerializeAsString());
-  ASSERT_EQ(plan.rewrites().size(), 512u);
-  for (std::size_t index = 0; index < plan.rewrites().size(); ++index) {
-    EXPECT_EQ(plan.rewrites(index).matched_nodes(0), index);
-    EXPECT_EQ(plan.rewrites(index).added_nodes_positions(0), index);
-  }
-  auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
-  EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
 }
 
 TEST(GraphGraph, ReplayRestoresDependenciesAndReuseBeforeExport) {

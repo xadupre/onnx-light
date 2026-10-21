@@ -189,7 +189,8 @@ public:
 private:
   void Rebuild();
   void RebuildSuccessors();
-  std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused);
+  std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused,
+                      detail::RewritingUndoState &undo);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -208,7 +209,7 @@ private:
   RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
-                              RewritingProto &collection);
+                              RewritingProto &collection, detail::RewritingUndoState &undo);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

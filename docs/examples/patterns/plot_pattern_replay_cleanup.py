@@ -81,7 +81,8 @@ print(pretty_onnx(builder.to_onnx()))
 #
 # Forward replay starts from the cleaned canonical model. Inverse replay
 # restores the Cast and dead-end node, but not the pre-capture Identity or
-# duplicate weight.
+# duplicate weight. Undo uses history retained by the builder that optimized
+# the graph. That history is never exported in the model or rewriting protos.
 
 for rewrite in rewrites.rewrites:
     print(rewrite)

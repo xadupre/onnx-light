@@ -74,6 +74,10 @@ using ::onnx_light::core::symbolic::TensorType;
 /// optimizer (declared in ``graph_graph.h``).
 class GraphGraph;
 
+namespace detail {
+struct RewritingUndoState;
+}
+
 /// Selects which ONNX proto :cpp:func:`GraphBuilder::ToOnnx` produces.
 enum class ProtoKind {
   /// Produce a :cpp:class:`ModelProto` (the default).
@@ -632,7 +636,8 @@ public:
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
   /// Reverses a complete captured plan atomically, without undoing canonical cleanup.
-  /// Rejects incomplete records and mismatching optimized graphs.
+  /// Uses undo information retained only by the builder that ran GraphGraph::Optimize.
+  /// Rejects missing in-memory history, changed plans and mismatching optimized graphs.
   GraphBuilder UndoRewritings(const RewritingProto &rewrites) const;
 
   /// Adds an independently selectable plan against this canonical model.
@@ -923,6 +928,7 @@ private:
   utils::RepeatedProtoField<ExtendedInitializerProto> extended_initializers_;
   ModelProto model_template_;
   ModelProto::rewritings_t rewritings_;
+  std::shared_ptr<const detail::RewritingUndoState> rewriting_undo_;
   GraphProto graph_template_;
   FunctionProto function_template_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;

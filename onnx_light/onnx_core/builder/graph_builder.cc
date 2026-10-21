@@ -542,6 +542,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
     return *this;
   }
   name_ = std::move(other.name_);
+  rewriting_undo_ = std::move(other.rewriting_undo_);
   is_local_function_ = other.is_local_function_;
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);

@@ -2561,7 +2561,7 @@ TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer)
   EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
             original.graph().SerializeAsString());
   auto invalid = plan;
-  invalid.ref_rewrites()[0].mutable_inverse_after()->ref_initializer()[0].set_name("mismatch");
+  invalid.ref_rewrites()[0].ref_initializer_calls()[0].ref_output()[0] = "mismatch";
   EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
 }
 

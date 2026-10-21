@@ -45,27 +45,9 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
        ++entry) {
     auto &plan = entry->second;
     add_functions(plan.ref_added_functions());
-    add_functions(plan.ref_inverse_original_functions());
-    add_functions(plan.ref_inverse_optimized_functions());
-    if (plan.has_inverse_optimized_graph()) {
-      auto &graph = plan.ref_inverse_optimized_graph();
-      positions_.push_back(Position{&graph.ref_node(), &graph.ref_initializer()});
-    }
-    if (plan.has_inverse_original_graph_headers()) {
-      auto &graph = plan.ref_inverse_original_graph_headers();
-      positions_.push_back(Position{&graph.ref_node(), &graph.ref_initializer()});
-    }
     auto &edits = plan.ref_rewrites();
     for (size_t i = edits.size(); i > 0; --i) {
       auto &edit = edits[i - 1];
-      if (edit.has_inverse_before()) {
-        auto &graph = edit.ref_inverse_before();
-        positions_.push_back(Position{&graph.ref_node(), &graph.ref_initializer()});
-      }
-      if (edit.has_inverse_after()) {
-        auto &graph = edit.ref_inverse_after();
-        positions_.push_back(Position{&graph.ref_node(), &graph.ref_initializer()});
-      }
       positions_.push_back(Position{&edit.ref_initializer_calls()});
       positions_.push_back(Position{&edit.ref_added_nodes(), &edit.ref_added_initializers()});
     }

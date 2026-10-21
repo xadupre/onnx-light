@@ -148,6 +148,17 @@ TEST(TransposeConstantFolding, FoldsRewrittenFloatInitializer) {
     EXPECT_TRUE(edit.added_initializers().empty());
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
+  ModelProto mismatch;
+  mismatch.add_opset("", 28);
+  *mismatch.mutable_graph() = builder.BuildGraph();
+  mismatch.mutable_graph()->ref_initializer()[0] =
+      MakeInitializer<float>("weight_t", {3, 2}, {1, 4, 2, 5, 3, 999});
+  core::builder::GraphBuilder changed(mismatch, SchemaLookup());
+  const auto changed_graph = changed.BuildGraph().SerializeAsString();
+  EXPECT_THROW(changed.UndoRewritings(loaded), core::builder::BuilderError);
+  EXPECT_EQ(changed.BuildGraph().SerializeAsString(), changed_graph);
   EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
                 .ApplyRewritings(loaded)
                 .BuildGraph()
@@ -210,6 +221,11 @@ TEST(TransposeConstantFolding, ReplaysNestedRecipesWithoutWeightPayloads) {
   EXPECT_EQ(calls, 2u);
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
+  auto replay_builder =
+      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+  EXPECT_THROW(replay_builder.UndoRewritings(loaded), core::builder::BuilderError);
   const auto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
   EXPECT_EQ(replayed.graph().SerializeAsString(), builder.ToGraph().SerializeAsString());

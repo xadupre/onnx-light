@@ -1502,6 +1502,8 @@ TEST(PatternOptimization, SequentialRebasingPreservesReorderedFoldingBatch) {
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(bytes));
   EXPECT_TRUE(loaded.Equals(plan));
+  EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
   EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
                 .ApplyRewritings(loaded)
                 .BuildGraph()
@@ -2245,10 +2247,13 @@ TEST(PatternOptimization, OptimizeCastProducesExpectedGraph) {
   core::builder::GraphGraph graph(builder, std::move(patterns));
   graph.Optimize();
 
-  ASSERT_EQ(builder.Nodes().size(), 1u);
-  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Identity");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
-  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "middle");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[1].input()[0].value(), "middle");
+  EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "y");
 }
 
 TEST(PatternOptimization, AcceptsCustomPriority) {
@@ -2323,13 +2328,12 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
 
   const RewritingProto plan = graph.Optimize();
   const auto &rewrites = plan.rewrites();
-  ASSERT_EQ(rewrites.size(), 2u);
+  ASSERT_EQ(rewrites.size(), 1u);
   EXPECT_EQ(rewrites[0].pattern_name(), "CastCast");
   EXPECT_EQ(rewrites[0].matched_nodes().values(), std::vector<uint64_t>({0, 1}));
   EXPECT_EQ(rewrites[0].added_nodes().size(), 1u);
   EXPECT_EQ(rewrites[0].added_nodes_positions().values(), std::vector<uint64_t>({0}));
   EXPECT_TRUE(rewrites[0].added_initializers().empty());
-  EXPECT_EQ(rewrites[1].pattern_name(), "RemoveIdentityNodes");
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
@@ -2350,36 +2354,25 @@ TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {
   builder.MakeNode("Relu", {"x"}, {"dead"});
   builder.MakeOutput("y");
 
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  EXPECT_EQ(graph.Canonicalize(), 3u);
   ModelProto original;
   *original.mutable_graph() = builder.BuildGraph();
   AddOpsetImports(original, builder);
-
-  core::builder::GraphGraph graph(
-      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
   const RewritingProto plan = graph.Optimize();
   const auto &rewrites = plan.rewrites();
 
-  ASSERT_EQ(rewrites.size(), 4u);
-  EXPECT_EQ(rewrites[0].pattern_name(), "RemoveDuplicateNodes");
-  EXPECT_EQ(rewrites[1].pattern_name(), "RemoveIdentityNodes");
-  EXPECT_EQ(rewrites[2].pattern_name(), "RemoveUnusedNodes");
-  EXPECT_EQ(rewrites[3].pattern_name(), "RemoveDuplicateInitializers");
-  ASSERT_EQ(rewrites[0].value_renames().size(), 1u);
-  EXPECT_EQ(rewrites[0].value_renames(0).key(), "b");
-  EXPECT_EQ(rewrites[0].value_renames(0).value(), "a");
-  ASSERT_EQ(rewrites[1].value_renames().size(), 1u);
-  EXPECT_EQ(rewrites[1].value_renames(0).key(), "forwarded");
-  EXPECT_EQ(rewrites[1].value_renames(0).value(), "a");
-  ASSERT_EQ(rewrites[3].value_renames().size(), 1u);
-  EXPECT_EQ(rewrites[3].value_renames(0).key(), "c2");
-  EXPECT_EQ(rewrites[3].value_renames(0).value(), "c1");
-  EXPECT_EQ(rewrites[3].removed_initializers().values(), std::vector<uint64_t>({1}));
-  EXPECT_TRUE(rewrites[3].added_initializers().empty());
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_EQ(rewrites[0].pattern_name(), "RemoveUnusedNodes");
+  EXPECT_TRUE(rewrites[0].value_renames().empty());
 
   const GraphProto optimized = builder.BuildGraph();
   const GraphProto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
   EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
 }
 
 TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
@@ -2478,6 +2471,12 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   const GraphProto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
   EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
+  auto invalid = plan;
+  invalid.ref_rewrites()[0].ref_graph_path()[1] = "missing";
+  EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
+  EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
 }
 
 TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {
@@ -2558,6 +2557,11 @@ TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer)
   ASSERT_EQ(replayed.initializer_size(), 3);
   EXPECT_EQ(replayed.initializer(2).name().value(), "y");
   EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(replayed.initializer(2)).AsFloat()[0], 3.0f);
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
+  auto invalid = plan;
+  invalid.ref_rewrites()[0].ref_initializer_calls()[0].ref_output()[0] = "mismatch";
+  EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
 }
 
 TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {

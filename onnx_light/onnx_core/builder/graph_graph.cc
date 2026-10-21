@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -27,12 +28,49 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
+namespace detail {
+
+struct RewritingUndoState {
+  struct ScopeDevices {
+    Device device = Device::kUndefined;
+    core::compute::ComputeContext::TagState tags;
+    std::vector<std::string> initializer_names;
+    std::map<std::string, ScopeDevices> subgraphs;
+
+    bool operator==(const ScopeDevices &) const = default;
+  };
+
+  struct Edit {
+    Edit() = default;
+
+    GraphProto before;
+    GraphProto after;
+    std::size_t node_count = 0;
+    std::size_t initializer_count = 0;
+    std::size_t extended_initializer_count = 0;
+  };
+
+  RewritingProto plan;
+  std::vector<Edit> edits;
+  GraphProto original_graph_headers;
+  utils::RepeatedProtoField<OperatorSetIdProto> original_opsets;
+  utils::RepeatedProtoField<FunctionProto> original_functions;
+  utils::RepeatedProtoField<StructTypeProto> original_struct_types;
+  ScopeDevices devices;
+  std::map<std::tuple<std::string, std::string, std::string>, ScopeDevices> function_devices;
+};
+
+} // namespace detail
+
 namespace {
+
+using UndoState = detail::RewritingUndoState;
 
 struct PendingReplacement {
   std::size_t position;
   utils::RepeatedProtoField<NodeProto> nodes;
   LocalRewritingProto rewriting;
+  UndoState::Edit undo;
 };
 
 struct AcceptedMatch {
@@ -307,15 +345,217 @@ void ValidateInputDefault(const utils::RepeatedProtoField<ValueInfoProto> &input
   }
 }
 
-void RecordRenames(LocalRewritingProto &rewrite,
-                   const std::unordered_map<std::string, std::string> &renames) {
-  std::vector<std::pair<std::string, std::string>> sorted(renames.begin(), renames.end());
-  std::sort(sorted.begin(), sorted.end());
-  for (const auto &[key, value] : sorted) {
-    auto *entry = rewrite.add_value_renames();
-    entry->set_key(key);
-    entry->set_value(value);
+GraphProto GraphHeader(const GraphProto &graph) {
+  GraphProto result = graph;
+  result.clr_node();
+  result.clr_initializer();
+  result.clr_extended_initializer();
+  return result;
+}
+
+using PreparedInitializers = std::map<std::vector<std::string>, std::unordered_set<std::string>>;
+
+PreparedInitializers PreparationOutputs(const RewritingProto &plan) {
+  PreparedInitializers result;
+  for (const auto &rewrite : plan.rewrites()) {
+    std::vector<std::string> path;
+    for (const auto &component : rewrite.graph_path())
+      path.push_back(component.value());
+    for (const auto &call : rewrite.initializer_calls())
+      for (const auto &output : call.output())
+        if (output.empty() || !result[path].insert(output.value()).second)
+          throw BuilderError("Rewriting: ambiguous initializer preparation output.");
   }
+  return result;
+}
+
+void ClearPreparedPayload(TensorProto &tensor) {
+  tensor.clear_raw_data();
+  tensor.clr_float_data();
+  tensor.clr_int32_data();
+  tensor.clr_string_data();
+  tensor.clr_int64_data();
+  tensor.clr_double_data();
+  tensor.clr_uint64_data();
+  tensor.clr_external_data();
+}
+
+void ProjectPreparedGraph(GraphProto &graph, const PreparedInitializers &prepared,
+                          const std::vector<std::string> &path);
+
+void ProjectPreparedNode(NodeProto &node, const PreparedInitializers &prepared,
+                         const std::vector<std::string> &path) {
+  for (auto &attribute : node.ref_attribute()) {
+    const auto visit = [&](GraphProto &child) {
+      auto child_path = path;
+      child_path.push_back(child.name().value());
+      ProjectPreparedGraph(child, prepared, child_path);
+    };
+    if (attribute.has_g())
+      visit(*attribute.mutable_g());
+    for (auto &child : attribute.ref_graphs())
+      visit(child);
+  }
+}
+
+void ProjectPreparedGraph(GraphProto &graph, const PreparedInitializers &prepared,
+                          const std::vector<std::string> &path) {
+  const auto found = prepared.find(path);
+  if (found != prepared.end())
+    for (auto &initializer : graph.ref_initializer())
+      if (found->second.count(initializer.name().value()) != 0)
+        ClearPreparedPayload(initializer);
+  for (auto &node : graph.ref_node())
+    ProjectPreparedNode(node, prepared, path);
+}
+
+GraphProto GraphHeaders(const GraphProto &graph) {
+  GraphProto result = GraphHeader(graph);
+  for (const auto &node : graph.node()) {
+    auto &entry = *result.add_node();
+    for (const auto &attribute : node.attribute()) {
+      if (!attribute.has_g() && attribute.graphs().empty())
+        continue;
+      auto &copy = *entry.add_attribute();
+      copy = attribute;
+      if (attribute.has_g())
+        *copy.mutable_g() = GraphHeaders(attribute.g());
+      copy.clr_graphs();
+      for (const auto &child : attribute.graphs())
+        copy.ref_graphs().push_back(GraphHeaders(child));
+    }
+  }
+  return result;
+}
+
+void RestoreGraphHeaders(GraphProto &graph, const GraphProto &headers) {
+  if (graph.node().size() != headers.node().size() || !headers.initializer().empty() ||
+      !headers.extended_initializer().empty())
+    throw BuilderError("UndoRewritings: incompatible original graph structure.");
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
+    NodeProto shell = headers.node(i);
+    shell.clr_attribute();
+    if (!shell.Equals(NodeProto{}))
+      throw BuilderError("UndoRewritings: malformed original graph headers.");
+    auto &node = graph.ref_node()[i];
+    std::size_t graph_attributes = 0;
+    for (auto &attribute : node.ref_attribute()) {
+      if (!attribute.has_g() && attribute.graphs().empty())
+        continue;
+      ++graph_attributes;
+      const auto &expected = headers.node(i).attribute();
+      const auto found = std::find_if(expected.begin(), expected.end(), [&](const auto &value) {
+        return value.name() == attribute.name();
+      });
+      if (found == expected.end() || found->has_g() != attribute.has_g() ||
+          found->graphs().size() != attribute.graphs().size())
+        throw BuilderError("UndoRewritings: incompatible original subgraph structure.");
+      if (attribute.has_g())
+        RestoreGraphHeaders(*attribute.mutable_g(), found->g());
+      for (std::size_t j = 0; j < attribute.graphs().size(); ++j)
+        RestoreGraphHeaders(attribute.ref_graphs()[j], found->graphs(j));
+    }
+    if (graph_attributes != headers.node(i).attribute().size())
+      throw BuilderError("UndoRewritings: missing original subgraph.");
+  }
+  GraphProto restored = GraphHeader(headers);
+  restored.ref_node() = std::move(graph.ref_node());
+  restored.ref_initializer() = std::move(graph.ref_initializer());
+  restored.ref_extended_initializer() = std::move(graph.ref_extended_initializer());
+  graph = std::move(restored);
+}
+
+template <typename Field, typename Positions>
+Field SelectPositions(const Field &values, const Positions &positions) {
+  Field result;
+  std::unordered_set<std::size_t> seen;
+  for (uint64_t encoded : positions) {
+    const auto position = CheckedPosition(encoded);
+    if (position >= values.size() || !seen.insert(position).second)
+      throw BuilderError("Rewriting: invalid or duplicate inverse position.");
+    result.add() = values[position];
+  }
+  return result;
+}
+
+template <typename Field, typename Positions>
+Field UndoEntries(const Field &current, const Positions &added_positions, const Field &added_values,
+                  const Positions &removed_positions, const Field &removed_values,
+                  uint64_t encoded_count, const PreparedInitializers *prepared = nullptr,
+                  const std::vector<std::string> &path = {}) {
+  const auto original_count = CheckedPosition(encoded_count);
+  if (added_positions.size() != added_values.size() ||
+      removed_positions.size() != removed_values.size() || removed_values.size() > original_count ||
+      original_count - removed_values.size() >
+          std::numeric_limits<std::size_t>::max() - added_values.size() ||
+      current.size() != original_count - removed_values.size() + added_values.size())
+    throw BuilderError("UndoRewritings: incomplete inverse payload or incompatible counts.");
+  const auto expected = SelectPositions(current, added_positions);
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    auto actual = expected[i];
+    if (prepared != nullptr) {
+      if constexpr (std::is_same_v<Field, utils::RepeatedProtoField<TensorProto>>) {
+        const auto found = prepared->find(path);
+        if (found != prepared->end() && found->second.count(actual.name().value()) != 0)
+          ClearPreparedPayload(actual);
+      } else if constexpr (std::is_same_v<Field, utils::RepeatedProtoField<NodeProto>>) {
+        ProjectPreparedNode(actual, *prepared, path);
+      }
+    }
+    std::string difference;
+    if (!actual.Equals(added_values[i], &difference))
+      throw BuilderError("UndoRewritings: replacement definition does not match: " + difference);
+  }
+  std::unordered_set<std::size_t> added;
+  for (uint64_t position : added_positions)
+    added.insert(CheckedPosition(position));
+  std::unordered_map<std::size_t, std::size_t> removed;
+  for (std::size_t i = 0; i < removed_positions.size(); ++i) {
+    const auto position = CheckedPosition(removed_positions[i]);
+    if (position >= original_count || !removed.emplace(position, i).second)
+      throw BuilderError("UndoRewritings: invalid original position.");
+  }
+  Field result;
+  std::size_t index = 0;
+  for (std::size_t position = 0; position < original_count; ++position) {
+    const auto found = removed.find(position);
+    if (found != removed.end()) {
+      result.add() = removed_values[found->second];
+    } else {
+      while (index < current.size() && added.count(index) != 0)
+        ++index;
+      if (index == current.size())
+        throw BuilderError("UndoRewritings: incomplete retained definitions.");
+      result.add();
+      result.get(result.size() - 1) = current.shared_at(index++);
+    }
+  }
+  return result;
+}
+
+GraphProto *FindGraph(GraphProto &root, const utils::RepeatedStringField &path) {
+  GraphProto *graph = &root;
+  for (const auto &component : path) {
+    GraphProto *found = nullptr;
+    const auto visit = [&](GraphProto &child) {
+      if (child.name().value() == component.value()) {
+        if (found != nullptr)
+          throw BuilderError("UndoRewritings: ambiguous subgraph path.");
+        found = &child;
+      }
+    };
+    for (auto &node : graph->ref_node())
+      for (auto &attribute : node.ref_attribute()) {
+        if (attribute.has_g())
+          visit(*attribute.mutable_g());
+        for (auto &child : attribute.ref_graphs())
+          visit(child);
+      }
+    if (found == nullptr)
+      throw BuilderError("UndoRewritings: unknown subgraph path.");
+    graph = found;
+  }
+  return graph;
 }
 
 // A Fenwick tree counts live entries before a fixed ordering rank.
@@ -693,7 +933,8 @@ bool HasNestedGraph(const NodeProto &node) {
   });
 }
 
-// Batches edits only when each replacement preserves its input/output dependencies.
+// Replay batches preserve input/output dependencies. Undo capture also batches
+// cardinality-changing edits already applied by the optimizer.
 // Buckets precede original nodes; live counts translate sequential coordinates.
 class RewritingNodeBatch {
 public:
@@ -704,12 +945,13 @@ public:
       live_.Update(i, true);
   }
 
-  bool Append(const LocalRewritingProto &rewrite) {
+  bool Append(const LocalRewritingProto &rewrite, UndoState::Edit *inverse = nullptr) {
     if (!IsNodeOnlyRewrite(rewrite) ||
         rewrite.added_nodes().size() != rewrite.added_nodes_positions().size())
       return false;
     const std::size_t node_count = live_.Before(added_.size());
     std::vector<std::size_t> originals;
+    utils::RepeatedProtoField<NodeProto> removed_nodes;
     std::unordered_set<const NodeProto *> matched;
     std::size_t insertion_position = node_count;
     for (uint64_t encoded : rewrite.matched_nodes()) {
@@ -724,6 +966,8 @@ public:
       if (HasNestedGraph(nodes_[original]))
         return false;
       originals.push_back(original);
+      if (inverse != nullptr)
+        removed_nodes.push_back(nodes_[original]);
       insertion_position = std::min(insertion_position, position);
     }
     std::vector<std::pair<std::size_t, const NodeProto *>> additions;
@@ -739,17 +983,19 @@ public:
       if (additions[i].first != insertion_position + i || HasNestedGraph(*additions[i].second))
         return false;
     }
-    if (originals.size() != additions.size())
-      return false;
-    std::sort(originals.begin(), originals.end());
-    for (std::size_t i = 0; i < originals.size(); ++i) {
-      const auto &original = nodes_[originals[i]];
-      const auto &replacement = *additions[i].second;
-      if (!std::equal(original.input().begin(), original.input().end(), replacement.input().begin(),
-                      replacement.input().end()) ||
-          !std::equal(original.output().begin(), original.output().end(),
-                      replacement.output().begin(), replacement.output().end()))
+    if (inverse == nullptr) {
+      if (originals.size() != additions.size())
         return false;
+      std::sort(originals.begin(), originals.end());
+      for (std::size_t i = 0; i < originals.size(); ++i) {
+        const auto &original = nodes_[originals[i]];
+        const auto &replacement = *additions[i].second;
+        if (!std::equal(original.input().begin(), original.input().end(),
+                        replacement.input().begin(), replacement.input().end()) ||
+            !std::equal(original.output().begin(), original.output().end(),
+                        replacement.output().begin(), replacement.output().end()))
+          return false;
+      }
     }
     for (std::size_t original : originals) {
       removed_[original] = true;
@@ -774,6 +1020,10 @@ public:
       (void)position;
       added_[anchor].push_back(node);
       live_.Update(anchor, true);
+    }
+    if (inverse != nullptr) {
+      inverse->node_count = node_count;
+      inverse->before.ref_node() = std::move(removed_nodes);
     }
     committed = true;
     return true;
@@ -803,6 +1053,125 @@ private:
   std::vector<std::vector<const NodeProto *>> added_;
   LiveRanks live_;
 };
+
+void CaptureInversePlan(const RewritingProto &plan, UndoState &undo, GraphProto &canonical) {
+  if (undo.edits.size() != plan.rewrites().size())
+    throw BuilderError("Optimize: incomplete in-memory undo capture.");
+  std::size_t index = 0;
+  while (index < plan.rewrites().size()) {
+    const auto &rewrite = plan.rewrites(index);
+    auto &inverse = undo.edits[index];
+    if (!rewrite.value_renames().empty())
+      throw BuilderError("Optimize: value renaming during capture is unsupported.");
+    GraphProto &graph = *FindGraph(canonical, rewrite.graph_path());
+    const auto capture_counts = [&](UndoState::Edit &edit) {
+      edit.initializer_count = graph.initializer().size();
+      edit.extended_initializer_count = graph.extended_initializer().size();
+    };
+    RewritingNodeBatch batch(graph.node());
+    std::size_t end = index;
+    while (end < plan.rewrites().size()) {
+      const auto &edit = plan.rewrites(end);
+      auto &captured = undo.edits[end];
+      if (!SameGraphPath(rewrite, edit) ||
+          captured.after.node().size() != edit.added_nodes().size() ||
+          !batch.Append(edit, &captured))
+        break;
+      capture_counts(captured);
+      ++end;
+    }
+    if (end != index) {
+      // Capture independent edits in live coordinates and materialize their combined edit once.
+      const auto combined = batch.Rewriting();
+      const auto removed = SelectPositions(graph.node(), combined.matched_nodes());
+      graph.ref_node() =
+          UndoEntries(graph.node(), combined.matched_nodes(), removed,
+                      combined.added_nodes_positions(), combined.added_nodes(),
+                      graph.node().size() - removed.size() + combined.added_nodes().size());
+      index = end;
+      continue;
+    }
+    inverse.node_count = graph.node().size();
+    capture_counts(inverse);
+    auto &before = inverse.before;
+    before.ref_node() = SelectPositions(graph.node(), rewrite.matched_nodes());
+    before.ref_initializer() = SelectPositions(graph.initializer(), rewrite.removed_initializers());
+    before.ref_extended_initializer() =
+        SelectPositions(graph.extended_initializer(), rewrite.removed_extended_initializers());
+    auto &after = inverse.after;
+    if (after.node().size() != rewrite.added_nodes().size())
+      throw BuilderError("Optimize: incomplete materialized replacement definitions.");
+    if (rewrite.initializer_calls().empty())
+      after.ref_initializer() = rewrite.added_initializers();
+    graph.ref_node() = UndoEntries(
+        graph.node(), rewrite.matched_nodes(), before.node(), rewrite.added_nodes_positions(),
+        after.node(), graph.node().size() - before.node().size() + after.node().size());
+    if (!rewrite.removed_initializers().empty() || !after.initializer().empty()) {
+      auto positions = rewrite.added_initializer_positions();
+      for (auto position : rewrite.computed_initializer_positions())
+        positions.push_back(position);
+      graph.ref_initializer() = UndoEntries(
+          graph.initializer(), rewrite.removed_initializers(), before.initializer(), positions,
+          after.initializer(),
+          graph.initializer().size() - before.initializer().size() + after.initializer().size());
+    }
+    if (!rewrite.removed_extended_initializers().empty()) {
+      utils::RepeatedField<uint64_t> none;
+      utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
+      graph.ref_extended_initializer() =
+          UndoEntries(graph.extended_initializer(), rewrite.removed_extended_initializers(),
+                      before.extended_initializer(), none, no_values,
+                      graph.extended_initializer().size() - before.extended_initializer().size());
+    }
+    ++index;
+  }
+}
+
+std::size_t UndoNodeBatch(GraphProto &graph, const RewritingProto &plan, const UndoState &undo,
+                          std::size_t end) {
+  const auto &last = plan.rewrites(end - 1);
+  if (!IsNodeOnlyRewrite(last))
+    return end;
+  RewritingNodeBatch batch(graph.node());
+  std::vector<LocalRewritingProto> reversed;
+  std::size_t begin = end;
+  while (begin != 0) {
+    const auto &rewrite = plan.rewrites(begin - 1);
+    const auto &inverse = undo.edits[begin - 1];
+    if (!SameGraphPath(last, rewrite) || !IsNodeOnlyRewrite(rewrite))
+      break;
+    if (!GraphHeader(inverse.before).Equals(GraphProto{}) ||
+        !GraphHeader(inverse.after).Equals(GraphProto{}) || !inverse.before.initializer().empty() ||
+        !inverse.after.initializer().empty() || !inverse.before.extended_initializer().empty() ||
+        !inverse.after.extended_initializer().empty() ||
+        graph.initializer().size() != inverse.initializer_count ||
+        graph.extended_initializer().size() != inverse.extended_initializer_count)
+      throw BuilderError("UndoRewritings: incompatible node-only undo capture.");
+    auto &reverse = reversed.emplace_back();
+    reverse.ref_matched_nodes() = rewrite.added_nodes_positions();
+    reverse.ref_added_nodes() = inverse.before.node();
+    reverse.ref_added_nodes_positions() = rewrite.matched_nodes();
+    UndoState::Edit displaced;
+    if (!batch.Append(reverse, &displaced))
+      break;
+    if (displaced.before.node().size() != inverse.after.node().size() ||
+        displaced.node_count - displaced.before.node().size() + inverse.before.node().size() !=
+            inverse.node_count)
+      throw BuilderError("UndoRewritings: incompatible node-only undo counts.");
+    for (std::size_t i = 0; i < displaced.before.node().size(); ++i)
+      if (!displaced.before.node(i).Equals(inverse.after.node(i)))
+        throw BuilderError("UndoRewritings: replacement definition does not match.");
+    --begin;
+  }
+  if (begin != end) {
+    const auto combined = batch.Rewriting();
+    const auto removed = SelectPositions(graph.node(), combined.matched_nodes());
+    graph.ref_node() = UndoEntries(graph.node(), combined.matched_nodes(), removed,
+                                   combined.added_nodes_positions(), combined.added_nodes(),
+                                   undo.edits[begin].node_count);
+  }
+  return begin;
+}
 
 int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
@@ -932,13 +1301,151 @@ void GraphGraph::Rebuild() {
   RebuildSuccessors();
 }
 
+std::size_t GraphGraph::Canonicalize() {
+  std::size_t removed = 0;
+  const auto original_nodes = builder_.nodes_;
+  GraphBuilder::InitializerContentIndex inherited;
+  std::vector<const EncodedValueProto *> encoded_inherited;
+  std::unordered_set<std::string> inherited_names;
+  if (!builder_.is_local_function_)
+    for (auto *parent = builder_.parent_; parent != nullptr; parent = parent->parent_) {
+      const auto visible = [&](const std::string &name) {
+        return builder_.inherited_names_.count(name) != 0 && inherited_names.insert(name).second &&
+               std::none_of(parent->inputs_.begin(), parent->inputs_.end(),
+                            [&](const auto &input) { return input.name() == name; });
+      };
+      for (const auto &initializer : parent->initializers_)
+        if (visible(initializer.name().value()))
+          inherited[initializer.ContentHash(false)].push_back(&initializer);
+      for (const auto &initializer : parent->extended_initializers_)
+        if (initializer.has_encoded_value() && visible(initializer.name().value()))
+          encoded_inherited.push_back(&initializer.encoded_value());
+      if (parent->is_local_function_)
+        break;
+    }
+  std::vector<std::string> original_initializers;
+  for (const auto &initializer : builder_.initializers_)
+    original_initializers.push_back(initializer.name().value());
+  for (const auto &initializer : builder_.extended_initializers_)
+    original_initializers.push_back(initializer.name().value());
+  std::unordered_set<std::string> affected;
+  std::size_t iteration, local_removed = 0;
+  const auto cleanup = [&](const auto &run) {
+    std::unordered_map<std::string, std::string> renames;
+    const auto count = run(renames);
+    for (const auto &[source, target] : renames) {
+      affected.insert(source);
+      affected.insert(target);
+    }
+    return count;
+  };
+  do {
+    iteration =
+        cleanup([&](auto &renames) { return builder_.RemoveDuplicateNodesImpl(false, &renames); });
+    iteration +=
+        cleanup([&](auto &renames) { return builder_.RemoveIdentityNodesImpl(false, &renames); });
+    iteration += cleanup([&](auto &renames) {
+      return builder_.DeduplicateInitializers(inherited, false, &renames, encoded_inherited);
+    });
+    local_removed += iteration;
+  } while (iteration != 0);
+  builder_.PruneValueInfos();
+  if (local_removed != 0) {
+    std::unordered_map<std::string, std::size_t> originals;
+    for (std::size_t i = 0; i < original_nodes.size(); ++i)
+      for (const auto &output : original_nodes[i].output())
+        if (!output.empty())
+          originals.emplace(output.value(), i);
+    std::vector<std::size_t> indices;
+    std::unordered_set<std::size_t> retained;
+    for (const auto &node : builder_.nodes_) {
+      const auto output = std::find_if(node.output().begin(), node.output().end(),
+                                       [](const auto &value) { return !value.empty(); });
+      if (output == node.output().end())
+        throw BuilderError("Canonicalize: a node must produce a named value.");
+      const auto index = originals.at(output->value());
+      indices.push_back(index);
+      retained.insert(index);
+      if (!node.Equals(original_nodes[index]))
+        for (const auto &name : node.output())
+          if (!name.empty())
+            affected.insert(name.value());
+    }
+    for (std::size_t i = 0; i < original_nodes.size(); ++i)
+      if (retained.count(i) == 0) {
+        builder_.compute_.Shapes().EraseNodeConstraints(original_nodes[i]);
+        for (const auto &output : original_nodes[i].output())
+          if (!output.empty()) {
+            affected.insert(output.value());
+            builder_.compute_.Shapes().Erase(output.value());
+          }
+      }
+    std::unordered_set<std::string> initializers;
+    for (const auto &initializer : builder_.initializers_)
+      initializers.insert(initializer.name().value());
+    for (const auto &initializer : builder_.extended_initializers_)
+      initializers.insert(initializer.name().value());
+    for (const auto &name : original_initializers)
+      if (initializers.count(name) == 0) {
+        affected.insert(name);
+        builder_.compute_.EraseValue(name);
+        builder_.compute_.Shapes().Erase(name);
+      }
+    builder_.RefreshAfterRewriting(indices, std::move(affected));
+  }
+  for (const auto &function : builder_.local_functions_) {
+    GraphGraph child(*function, patterns_);
+    removed += child.Canonicalize();
+  }
+  for (const auto &subgraph : builder_.subgraphs_) {
+    GraphGraph child(*subgraph, patterns_);
+    removed += child.Canonicalize();
+  }
+  builder_.MoveShapeAndSizeNodesImpl(false);
+  computed_constants_.clear();
+  Rebuild();
+  return removed + local_removed;
+}
+
 RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     const ConstantFoldingOptions &folding_options,
                                     bool remove_unused) {
+  if (max_iter < -1)
+    throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
+  Canonicalize();
   GraphBuilder *root = &builder_;
   while (root->parent_ != nullptr)
     root = root->parent_;
+  GraphProto canonical;
+  if (&builder_ == root)
+    canonical = root->BuildGraph();
+  const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
+  auto undo = std::make_shared<UndoState>();
+  if (&builder_ == root) {
+    const auto capture_devices = [&](const auto &self,
+                                     const GraphBuilder &scope) -> UndoState::ScopeDevices {
+      UndoState::ScopeDevices devices;
+      devices.device = scope.device_;
+      devices.tags = scope.compute_.CaptureTagState();
+      if (scope.is_local_function_)
+        for (const auto &initializer : scope.initializers_)
+          devices.initializer_names.push_back(initializer.name().value());
+      for (const auto &subgraph : scope.subgraphs_)
+        devices.subgraphs.emplace(subgraph->name_, self(self, *subgraph));
+      for (const auto &function : scope.local_functions_) {
+        auto targets = self(self, *function);
+        const FunctionKey key{RewriteDomain(function->function_domain_), function->name_,
+                              function->function_template_.overload().value()};
+        const auto [found, inserted] = undo->function_devices.emplace(key, targets);
+        if (!inserted && found->second != targets)
+          throw BuilderError("Optimize: conflicting device targets for exported function '" +
+                             function->name_ + "'.");
+      }
+      return devices;
+    };
+    undo->devices = capture_devices(capture_devices, *root);
+  }
   RewritingProto collection;
   const auto capture_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &function : scope.local_functions_) {
@@ -950,8 +1457,10 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       self(self, *subgraph);
   };
   capture_functions(capture_functions, *root);
+  const auto original_definitions = collection.added_functions();
   const std::size_t original_functions = collection.added_functions().size();
-  auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection);
+  auto result =
+      OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
   capture_functions(capture_functions, *root);
   FunctionIndex functions;
   for (const auto &function : collection.added_functions())
@@ -995,13 +1504,36 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     collection.ref_added_functions().erase(collection.ref_added_functions().begin());
   result.ref_added_functions() = std::move(collection.ref_added_functions());
   result.ref_required_opset_imports() = std::move(collection.ref_required_opset_imports());
+  if (&builder_ == root) {
+    undo->original_graph_headers = GraphHeaders(canonical);
+    CaptureInversePlan(result, *undo, canonical);
+    undo->original_functions = original_definitions;
+    for (const auto &[domain, version] : original_opsets) {
+      auto &opset = undo->original_opsets.add();
+      opset.set_domain(domain);
+      opset.set_version(version);
+    }
+    undo->original_struct_types = original_struct_types;
+    const auto prepared = PreparationOutputs(result);
+    for (std::size_t i = 0; i < result.rewrites().size(); ++i) {
+      const auto &rewrite = result.rewrites(i);
+      std::vector<std::string> path;
+      for (const auto &component : rewrite.graph_path())
+        path.push_back(component.value());
+      ProjectPreparedGraph(undo->edits[i].before, prepared, path);
+      ProjectPreparedGraph(undo->edits[i].after, prepared, path);
+    }
+    undo->plan = result;
+    root->rewriting_undo_ = std::move(undo);
+  }
   return result;
 }
 
 RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,
-                                        bool remove_unused, RewritingProto &collection) {
+                                        bool remove_unused, RewritingProto &collection,
+                                        detail::RewritingUndoState &undo) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1033,7 +1565,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
     RewritingProto child_rewrites =
         child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
-                                 folding_options, remove_unused, collection);
+                                 folding_options, remove_unused, collection, undo);
 
     applied.extend(std::move(child_rewrites.ref_rewrites()));
 
@@ -1238,7 +1770,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         rewriting.add_added_initializer_positions(i);
       }
       replacements.push_back(
-          PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting)});
+          PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting), {}});
       for (const NodeProto *node : match.nodes) {
         if (node != nullptr) {
           removed.insert(node);
@@ -1298,6 +1830,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           if (!output.empty())
             builder_.names_.insert(output.value());
       }
+      builder_.PruneValueInfos();
       builder_.RefreshAfterRewriting(old_indices, std::move(affected_values));
 
       std::unordered_map<std::string, std::size_t> output_owners;
@@ -1336,6 +1869,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         }
       }
       for (PendingReplacement &replacement : replacements) {
+        replacement.undo.after.ref_initializer() = replacement.rewriting.added_initializers();
         utils::RepeatedProtoField<NodeProto> unfolded_nodes;
         for (const NodeProto &node : replacement.rewriting.added_nodes()) {
           bool folded = !node.output().empty();
@@ -1354,6 +1888,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               if (output.empty())
                 continue;
               rewrite.add_computed_initializer_positions(folded_positions.at(output.value()));
+              replacement.undo.after.ref_initializer().push_back(
+                  builder_.initializers_[folded_positions.at(output.value())]);
             }
           } else {
             unfolded_nodes.push_back(node);
@@ -1414,7 +1950,12 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes());
       }
       for (auto &replacement : replacements) {
+        auto &snapshot = replacement.undo.after;
+        snapshot.ref_node() = replacement.rewriting.added_nodes();
+        for (auto &node : snapshot.ref_node())
+          builder_.MaterializeGraphReferences(node);
         applied.push_back(std::move(replacement.rewriting));
+        undo.edits.push_back(std::move(replacement.undo));
       }
     }
     if (report != nullptr) {
@@ -1427,7 +1968,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       cleanup_start = std::chrono::steady_clock::now();
     }
     const std::size_t rewrites_before_cleanup = applied.size();
-    const std::size_t cleaned = Cleanup(applied, remove_unused);
+    const std::size_t cleaned = Cleanup(applied, remove_unused, undo);
     for (std::size_t i = rewrites_before_cleanup; i < applied.size(); ++i) {
       for (const auto &name : graph_path) {
         applied[i].add_graph_path(name);
@@ -1450,7 +1991,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
 }
 
 std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites,
-                                bool remove_unused) {
+                                bool remove_unused, detail::RewritingUndoState &undo) {
   const auto original_nodes = builder_.nodes_;
   const std::size_t first_rewrite = rewrites.size();
   const auto initializer_names = [](const auto &initializers) {
@@ -1480,8 +2021,7 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     const std::size_t node_count = builder_.nodes_.size();
     const auto original_initializers = initializer_names(builder_.initializers_);
     const auto original_extended = initializer_names(builder_.extended_initializers_);
-    std::unordered_map<std::string, std::string> applied_renames;
-    const std::size_t removed = cleanup(applied_renames);
+    const std::size_t removed = cleanup();
     const std::size_t removed_initializers =
         original_initializers.size() - builder_.initializers_.size() + original_extended.size() -
         builder_.extended_initializers_.size();
@@ -1495,6 +2035,11 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       rewriting.add_matched_nodes(i);
     }
     rewriting.ref_added_nodes() = builder_.nodes_;
+    UndoState::Edit inverse;
+    auto &snapshot = inverse.after;
+    snapshot.ref_node() = rewriting.added_nodes();
+    for (auto &node : snapshot.ref_node())
+      builder_.MaterializeGraphReferences(node);
     rewriting.ref_added_nodes_positions().reserve(builder_.nodes_.size());
     for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
       rewriting.add_added_nodes_positions(i);
@@ -1505,47 +2050,15 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       record_removed_initializers(original_extended, builder_.extended_initializers_,
                                   rewriting.ref_removed_extended_initializers());
     }
-    RecordRenames(rewriting, applied_renames);
     rewrites.push_back(std::move(rewriting));
+    undo.edits.push_back(std::move(inverse));
     return removed + removed_initializers;
   };
 
-  std::size_t cleaned = record_nodes("RemoveDuplicateNodes", [&](auto &renames) {
-    return builder_.RemoveDuplicateNodesImpl(false, &renames);
-  });
-  cleaned += record_nodes("RemoveIdentityNodes", [&](auto &renames) {
-    return builder_.RemoveIdentityNodesImpl(false, &renames);
-  });
+  std::size_t cleaned = 0;
   if (remove_unused) {
-    cleaned += record_nodes("RemoveUnusedNodes",
-                            [&](auto &) { return builder_.RemoveUnusedNodesImpl(false); });
-  }
-
-  const std::size_t node_count = builder_.nodes_.size();
-  const auto original_initializers = initializer_names(builder_.initializers_);
-  const auto original_extended = initializer_names(builder_.extended_initializers_);
-  std::unordered_map<std::string, std::string> applied_renames;
-  const std::size_t removed_initializers = builder_.DeduplicateInitializers(
-      GraphBuilder::InitializerContentIndex{}, false, &applied_renames);
-  if (removed_initializers != 0) {
-    LocalRewritingProto rewriting;
-    rewriting.set_pattern_name("RemoveDuplicateInitializers");
-    rewriting.ref_matched_nodes().reserve(node_count);
-    for (std::size_t i = 0; i < node_count; ++i) {
-      rewriting.add_matched_nodes(i);
-    }
-    rewriting.ref_added_nodes() = builder_.nodes_;
-    rewriting.ref_added_nodes_positions().reserve(builder_.nodes_.size());
-    for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
-      rewriting.add_added_nodes_positions(i);
-    }
-    record_removed_initializers(original_initializers, builder_.initializers_,
-                                rewriting.ref_removed_initializers());
-    record_removed_initializers(original_extended, builder_.extended_initializers_,
-                                rewriting.ref_removed_extended_initializers());
-    RecordRenames(rewriting, applied_renames);
-    rewrites.push_back(std::move(rewriting));
-    cleaned += removed_initializers;
+    cleaned +=
+        record_nodes("RemoveUnusedNodes", [&]() { return builder_.RemoveUnusedNodesImpl(false); });
   }
   const auto remaining_initializers = all_initializer_names();
   if (cleaned != 0 || initializers_before != remaining_initializers) {
@@ -2107,10 +2620,10 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
   model.ref_struct_types() = Shapes().StructTypes();
   for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
-  for (const auto &opset : rewrites.required_opset_imports())
-    MergeImport(model.ref_opset_import(), opset);
   for (const auto &function : local_functions_)
     MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+  for (const auto &opset : rewrites.required_opset_imports())
+    MergeImport(model.ref_opset_import(), opset);
   for (const auto &function : rewrites.added_functions()) {
     const auto key = Identity(function);
     const auto identical =
@@ -2257,6 +2770,118 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     index = end;
   }
   result.BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
+  return result;
+}
+
+GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const {
+  if (parent_ != nullptr || is_local_function_ || rewriting_undo_ == nullptr)
+    throw BuilderError("UndoRewritings: requires an in-memory root-model capture.");
+  const auto &undo = *rewriting_undo_;
+  if (!rewrites.Equals(undo.plan))
+    throw BuilderError("UndoRewritings: plan does not match the in-memory capture.");
+  ModelProto model = model_template_;
+  *model.mutable_graph() = BuildGraph();
+  const auto prepared = PreparationOutputs(rewrites);
+  std::size_t index = rewrites.rewrites().size();
+  while (index != 0) {
+    const auto &rewrite = rewrites.rewrites(index - 1);
+    const auto &inverse = undo.edits[index - 1];
+    if (!rewrite.value_renames().empty())
+      throw BuilderError("UndoRewritings: incomplete or rename-producing edit.");
+    GraphProto &graph = *FindGraph(*model.mutable_graph(), rewrite.graph_path());
+    const auto begin = UndoNodeBatch(graph, rewrites, undo, index);
+    if (begin != index) {
+      index = begin;
+      continue;
+    }
+    const auto &before = inverse.before;
+    const auto &after = inverse.after;
+    std::vector<std::string> path;
+    for (const auto &component : rewrite.graph_path())
+      path.push_back(component.value());
+    if (!GraphHeader(before).Equals(GraphProto{}) || !GraphHeader(after).Equals(GraphProto{}) ||
+        rewrite.added_nodes().size() != rewrite.added_nodes_positions().size() ||
+        rewrite.added_initializers().size() != rewrite.added_initializer_positions().size())
+      throw BuilderError("UndoRewritings: graph header or edit positions do not match.");
+    auto initializer_positions = rewrite.added_initializer_positions();
+    for (auto position : rewrite.computed_initializer_positions())
+      initializer_positions.push_back(position);
+    std::size_t prepared_count = 0;
+    for (const auto &call : rewrite.initializer_calls()) {
+      if (call.output().size() > std::numeric_limits<std::size_t>::max() - prepared_count)
+        throw BuilderError("UndoRewritings: initializer count overflow.");
+      prepared_count += call.output().size();
+    }
+    if (prepared_count != rewrite.computed_initializer_positions().size() ||
+        prepared_count >
+            std::numeric_limits<std::size_t>::max() - rewrite.added_initializers().size() ||
+        after.initializer().size() != rewrite.added_initializers().size() + prepared_count ||
+        !after.extended_initializer().empty())
+      throw BuilderError("UndoRewritings: incomplete initializer preparation payload.");
+    if (!rewrite.matched_nodes().empty() || !rewrite.added_nodes().empty())
+      graph.ref_node() =
+          UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
+                      rewrite.matched_nodes(), before.node(), inverse.node_count, &prepared, path);
+    else if (graph.node().size() != inverse.node_count)
+      throw BuilderError("UndoRewritings: incompatible retained node count.");
+    if (!initializer_positions.empty() || !rewrite.removed_initializers().empty())
+      graph.ref_initializer() =
+          UndoEntries(graph.initializer(), initializer_positions, after.initializer(),
+                      rewrite.removed_initializers(), before.initializer(),
+                      inverse.initializer_count, &prepared, path);
+    else if (graph.initializer().size() != inverse.initializer_count)
+      throw BuilderError("UndoRewritings: incompatible retained initializer count.");
+    if (!rewrite.removed_extended_initializers().empty()) {
+      utils::RepeatedField<uint64_t> none;
+      utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
+      graph.ref_extended_initializer() = UndoEntries(
+          graph.extended_initializer(), none, no_values, rewrite.removed_extended_initializers(),
+          before.extended_initializer(), inverse.extended_initializer_count);
+    } else if (graph.extended_initializer().size() != inverse.extended_initializer_count) {
+      throw BuilderError("UndoRewritings: incompatible retained extended initializer count.");
+    }
+    --index;
+  }
+  model.ref_opset_import() = undo.original_opsets;
+  model.ref_functions() = undo.original_functions;
+  model.ref_struct_types() = undo.original_struct_types;
+  RestoreGraphHeaders(*model.mutable_graph(), undo.original_graph_headers);
+  model.clr_rewritings();
+  GraphBuilder result(model, schema_lookup_);
+  const auto restore_devices = [&](const auto &self, GraphBuilder &scope,
+                                   const UndoState::ScopeDevices &devices) -> void {
+    if (scope.subgraphs_.size() != devices.subgraphs.size())
+      throw BuilderError("UndoRewritings: incompatible restored device scopes.");
+    std::size_t node_offset = 0;
+    if (scope.is_local_function_ && scope.nodes_.size() != devices.tags.nodes.size()) {
+      node_offset = devices.initializer_names.size();
+      if (node_offset > scope.nodes_.size())
+        throw BuilderError("UndoRewritings: incompatible restored function initializers.");
+      for (std::size_t index = 0; index < node_offset; ++index) {
+        const auto &node = scope.nodes_[index];
+        if (node.op_type() != "Constant" || RewriteDomain(node.domain().value()) != "ai.onnx" ||
+            node.output().size() != 1 || node.output(0) != devices.initializer_names[index])
+          throw BuilderError("UndoRewritings: incompatible restored function initializer.");
+      }
+    }
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
+    scope.set_device(devices.device);
+    for (const auto &subgraph : scope.subgraphs_) {
+      const auto found = devices.subgraphs.find(subgraph->name_);
+      if (found == devices.subgraphs.end())
+        throw BuilderError("UndoRewritings: missing captured subgraph device.");
+      self(self, *subgraph, found->second);
+    }
+    for (const auto &function : scope.local_functions_) {
+      const FunctionKey key{RewriteDomain(function->function_domain_), function->name_,
+                            function->function_template_.overload().value()};
+      const auto found = undo.function_devices.find(key);
+      if (found == undo.function_devices.end())
+        throw BuilderError("UndoRewritings: missing captured function device.");
+      self(self, *function, found->second);
+    }
+  };
+  restore_devices(restore_devices, result, undo.devices);
   return result;
 }
 

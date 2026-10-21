@@ -342,8 +342,22 @@ class GraphBuilder(_C.GraphBuilder):
             working.register_pattern(pattern)
         plan = GraphGraph(working).optimize()
         if optimize is OptimizationMode.kRewritings:
-            canonical.add_rewriting("optimized", plan)
-            return canonical
+            restored = working.undo_rewritings(plan).to_model(ir_version)
+            if (
+                canonical.rewritings
+                and restored.graph.Equals(canonical.graph)
+                and len(restored.functions) == len(canonical.functions)
+                and all(
+                    restored_function.Equals(canonical_function)
+                    for restored_function, canonical_function in zip(
+                        restored.functions, canonical.functions
+                    )
+                )
+            ):
+                for name, existing in canonical.rewritings.items():
+                    restored.add_rewriting(name, existing)
+            restored.add_rewriting("optimized", plan)
+            return restored
         if kind == ProtoKind.kModel:
             return working.to_standard_model(ir_version)
         return working.to_onnx(kind, ir_version, domain)

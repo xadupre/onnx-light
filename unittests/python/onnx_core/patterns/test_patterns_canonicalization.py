@@ -180,8 +180,11 @@ class TestCanonicalizationPatterns(ExtTestCase):
         graph = optimization.GraphGraph(builder, [pattern])
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites.rewrites))
+        reference = type(model)()
+        reference.CopyFrom(model)
+        reference.graph.CopyFrom(builder.undo_rewritings(all_rewrites).build_graph())
         self.assertEqual(
-            optimization.apply_rewritings(model, all_rewrites).SerializeToString(),
+            optimization.apply_rewritings(reference, all_rewrites).SerializeToString(),
             builder.build_graph().SerializeToString(),
         )
         rewrites = [
@@ -216,7 +219,15 @@ class TestCanonicalizationPatterns(ExtTestCase):
                 optimized, rewrites, _ = self._optimize(model, "Cast")
                 self.assertEqual(
                     _op_types(optimized),
-                    ["Unsqueeze", "Unsqueeze", "Reshape", "Reshape", "MatMul", "Reshape"],
+                    [
+                        "Unsqueeze",
+                        "Unsqueeze",
+                        "Reshape",
+                        "Reshape",
+                        "Identity",
+                        "MatMul",
+                        "Reshape",
+                    ],
                 )
                 self.assertEqual(len(rewrites), 1)
                 self.assertEqual(
@@ -557,7 +568,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         optimized, rewrites, _ = self._optimize(model, "Identity")
 
-        self.assertEqual(_op_types(optimized), ["Neg"])
+        self.assertEqual(_op_types(optimized), ["Identity", "Neg"])
         self.assertEqual(len(rewrites), 1)
         got = ReferenceEvaluator(optimized).run(None, feeds)[0]
         np.testing.assert_array_equal(got, -feeds["X"])
@@ -614,7 +625,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         optimized, rewrites, _ = self._optimize(model, "Identity")
 
-        self.assertEqual(_op_types(optimized), ["Identity"])
+        self.assertEqual(_op_types(optimized), ["Identity", "Identity"])
         self.assertEqual(len(rewrites), 2)
         self._assert_equivalent(model, optimized, feeds)
 
@@ -633,7 +644,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         optimized, rewrites, _ = self._optimize(model, "Identity")
 
-        self.assertEqual(_op_types(optimized), ["Mul"])
+        self.assertEqual(_op_types(optimized), ["Identity", "Mul"])
         self.assertEqual(len(rewrites), 1)
         self._assert_equivalent(model, optimized, feeds)
 
@@ -850,7 +861,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         optimized, rewrites, _ = self._optimize(model, "Dropout")
 
-        self.assertEqual(_op_types(optimized), ["LayerNormalization", "Add"])
+        self.assertEqual(_op_types(optimized), ["LayerNormalization", "Identity", "Add"])
         self.assertGreaterEqual(len(rewrites), 1)
         self.assertEqual(
             {initializer.name for initializer in optimized.graph.initializer},

@@ -272,10 +272,10 @@ class TestPatternOptimization(ExtTestCase):
 
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18]>\n'
-            "agraph (float[2] x) => (float[2] y1, float[2] y2) {\n"
+            "agraph (float[2] x, float[2] z) => (float[2] y1, float[2] y2) {\n"
             "  middle1 = Neg(x)\n"
             "  y1 = Neg(middle1)\n"
-            "  middle2 = Neg(x)\n"
+            "  middle2 = Neg(z)\n"
             "  y2 = Neg(middle2)\n"
             "}\n"
         )
@@ -386,6 +386,87 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
+
+    def test_to_onnx_bundle_keeps_positions_after_identity_cleanup_and_shape_hoisting(self):
+        for op_type in ("Shape", "Size"):
+            with self.subTest(op_type=op_type):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node("Relu", ["x"], ["p"]),
+                            oh.make_node("Cast", ["z"], ["q"], to=TensorProto.FLOAT),
+                            oh.make_node("Identity", ["p"], ["a"]),
+                            oh.make_node(op_type, ["a"], ["s"]),
+                        ],
+                        "shape_order",
+                        [
+                            oh.make_tensor_value_info("x", TensorProto.FLOAT, ["N", 2]),
+                            oh.make_tensor_value_info("z", TensorProto.FLOAT, ["N", 2]),
+                        ],
+                        [
+                            oh.make_tensor_value_info("q", TensorProto.FLOAT, ["N", 2]),
+                            oh.make_tensor_value_info(
+                                "s", TensorProto.INT64, [2] if op_type == "Shape" else []
+                            ),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                builder = optim.GraphBuilder(model)
+                builder.register_pattern(optim.CastPattern())
+                optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+                bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+                self.assertEqual(
+                    [node.op_type for node in bundled.graph.node], ["Relu", op_type, "Cast"]
+                )
+                self.assertEqual(
+                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [2]
+                )
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / "bundle.onnx"
+                    onnx.save(bundled, path)
+                    loaded = onnx.load(path)
+                replayed = (
+                    optim.GraphBuilder(loaded).apply_rewritings("optimized").to_standard_model()
+                )
+                self.assertEqual(
+                    replayed.graph.SerializeToString(), optimized.graph.SerializeToString()
+                )
+                feeds = {
+                    "x": numpy.array([[-1, 2], [3, -4]], dtype=numpy.float32),
+                    "z": numpy.ones((2, 2), dtype=numpy.float32),
+                }
+                for actual, expected in zip(
+                    ReferenceEvaluator(replayed).run(None, feeds),
+                    ReferenceEvaluator(model).run(None, feeds),
+                ):
+                    self.assertEqualArray(actual, expected)
+
+    def test_to_onnx_drops_old_plans_when_function_canonicalization_changes_reference(self):
+        model = _double_neg_model()
+        model.functions.append(
+            oh.make_function(
+                "local",
+                "ForwardedNeg",
+                ["arg"],
+                ["result"],
+                [
+                    oh.make_node("Identity", ["arg"], ["forwarded"]),
+                    oh.make_node("Neg", ["forwarded"], ["result"]),
+                ],
+                opset_imports=[oh.make_opsetid("", 18)],
+            )
+        )
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        builder = optim.GraphBuilder(model)
+        builder.register_pattern(NegNegPattern())
+        builder.add_rewriting("other", optim.RewritingProto())
+        source = builder.to_onnx()
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertEqual(bundled.graph.SerializeToString(), source.graph.SerializeToString())
+        self.assertEqual(set(bundled.rewritings), {"optimized"})
+        self.assertEqual([node.op_type for node in bundled.functions[0].node], ["Neg"])
+        self.assertEqual(set(builder.to_onnx().rewritings), {"other"})
 
     def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
         model = _transpose_weight_model()
@@ -711,6 +792,83 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(local.matched_nodes), [0, 2**64 - 1])
         self.assertEqual(local.value_renames[0].key, "old")
         self.assertEqual(local.value_renames[0].value, "new")
+
+    def test_inverse_restores_empty_initializer_and_output_annotations(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Concat", ["x", "z", "empty"], ["y"], axis=0)],
+                "inverse_annotations",
+                [
+                    oh.make_tensor_value_info("x", TensorProto.INT64, [2]),
+                    oh.make_tensor_value_info("z", TensorProto.INT64, [3]),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.INT64, ["size"])],
+                [onh.from_array(numpy.array([], dtype=numpy.int64), name="empty")],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        canonical = builder.build_graph()
+        plan = optim.GraphGraph(builder, ["ConcatEmpty"]).optimize()
+        self.assertEqual(list(builder.build_graph().node[0].input), ["x", "z"])
+        self.assertFalse(builder.build_graph().initializer)
+        restored = builder.undo_rewritings(plan).build_graph()
+        self.assertEqual(
+            restored.output[0].SerializeToString(), canonical.output[0].SerializeToString()
+        )
+        self.assertEqual(
+            restored.node[0].SerializeToString(), canonical.node[0].SerializeToString()
+        )
+        self.assertEqual([value.name for value in restored.initializer], ["empty"])
+        numpy.testing.assert_array_equal(
+            onh.to_array(restored.initializer[0]), onh.to_array(canonical.initializer[0])
+        )
+
+    def test_canonicalize_and_inverse_restore_only_captured_edits(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Identity", ["x"], ["forwarded"]),
+                    oh.make_node("Neg", ["forwarded"], ["middle"]),
+                    oh.make_node("Neg", ["middle"], ["y"]),
+                ],
+                "inverse",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        reference = optim.GraphBuilder(model)
+        self.assertEqual(reference.remove_identity_nodes(), 1)
+        canonical = reference.build_graph().SerializeToString()
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, [NegNegPattern()])
+        plan = graph.optimize()
+        self.assertTrue(all(not edit.value_renames for edit in plan.rewrites))
+        optimized = builder.build_graph().SerializeToString()
+        self.assertEqual(
+            builder.undo_rewritings(plan).build_graph().SerializeToString(), canonical
+        )
+        self.assertEqual(builder.build_graph().SerializeToString(), optimized)
+        loaded = optim.RewritingProto()
+        loaded.ParseFromString(plan.SerializeToString())
+        self.assertEqual(
+            builder.undo_rewritings(loaded).build_graph().SerializeToString(), canonical
+        )
+        self.assertFalse(any(name.startswith("inverse_") for name in dir(plan)))
+        self.assertFalse(any(name.startswith("inverse_") for name in dir(plan.rewrites[0])))
+        exported = builder.to_model()
+        loaded_model = ModelProto()
+        loaded_model.ParseFromString(exported.SerializeToString())
+        reloaded = optim.GraphBuilder(loaded_model)
+        with self.assertRaisesRegex(ValueError, "in-memory"):
+            reloaded.undo_rewritings(loaded)
+        invalid = optim.RewritingProto()
+        invalid.ParseFromString(plan.SerializeToString())
+        invalid.rewrites[0].pattern_name = "mismatch"
+        with self.assertRaises(ValueError):
+            builder.undo_rewritings(invalid)
+        self.assertEqual(builder.build_graph().SerializeToString(), optimized)
 
     def test_replay_rejects_malformed_preparation_fields(self):
         model = _double_neg_model()

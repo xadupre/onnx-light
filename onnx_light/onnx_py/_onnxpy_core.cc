@@ -2245,6 +2245,8 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           },
           nb::arg("rewrites"),
           "Applies captured rewrites and returns a new validated GraphBuilder.")
+      .def("undo_rewritings", &GraphBuilder::UndoRewritings, nb::arg("rewrites"),
+           "Restores canonical cleanup using this builder's non-serialized optimization history.")
       .def("add_rewriting", &GraphBuilder::AddRewriting, nb::arg("name"), nb::arg("rewrites"),
            "Adds an independent named plan, rejecting duplicate names.")
       .def(

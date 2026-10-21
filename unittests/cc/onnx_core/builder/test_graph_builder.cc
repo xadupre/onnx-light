@@ -1871,6 +1871,36 @@ TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
   EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Abs");
 }
 
+TEST(GraphBuilder, RewritingPreservesTagsWhenConsumerIsRemoved) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("dims", {2}, {3, 2}));
+  builder.MakeNode("Reshape", {"X", "dims"}, {"unused"});
+  builder.MakeNode("Neg", {"dims"}, {"neg_dims"});
+  builder.MakeOutput("dims");
+  builder.MakeOutput("neg_dims");
+
+  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
+  EXPECT_EQ(builder.Compute().NodeTag(1), "shape");
+
+  RewritingProto plan;
+  plan.add_rewrites()->add_matched_nodes(0);
+  const auto rewritten = builder.ApplyRewritings(plan);
+  ASSERT_EQ(rewritten.Nodes().size(), 1u);
+  EXPECT_EQ(rewritten.Nodes()[0].op_type().value(), "Neg");
+  ASSERT_EQ(rewritten.Initializers().size(), 1u);
+  EXPECT_EQ(rewritten.Initializers()[0].name().value(), "dims");
+  EXPECT_EQ(rewritten.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(rewritten.Compute().ValueTags().at("neg_dims"), "shape");
+  EXPECT_EQ(rewritten.Compute().NodeTag(0), "shape");
+
+  // Fresh inference on the untagged reduced graph is not the rewrite's tag contract.
+  const auto fresh_tags = core::compute::InferValueAndNodeTags(rewritten.BuildGraph());
+  EXPECT_EQ(fresh_tags.first.at("dims"), "weight");
+  EXPECT_EQ(fresh_tags.first.at("neg_dims"), "weight");
+}
+
 TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -3085,12 +3115,12 @@ TEST(GraphBuilder, NativeGenericFunctionImportsAndSpecializesNestedMatMul) {
   outer.add_opset("", 18);
   outer.add_opset("local", 1);
   outer.add_node(MakeNode("Inner", {"a", "b"}, {"r"}, "local"));
-  model.add_function(outer);
   FunctionProto inner = outer;
   inner.set_name("Inner");
   inner.ref_node().clear();
   inner.add_node(MakeNode("MatMul", {"a", "b"}, {"r"}));
   model.add_function(inner);
+  model.add_function(outer);
   model.mutable_graph()->add_node(MakeNode("Outer", {"X", "W"}, {"Y"}, "local"));
   core::builder::GraphBuilder builder(model, SchemaLookup());
   EXPECT_FALSE(builder.LocalFunction("Inner").HasShape("a"));
@@ -3109,6 +3139,188 @@ TEST(GraphBuilder, NativeGenericFunctionImportsAndSpecializesNestedMatMul) {
   ASSERT_TRUE(typed.LocalFunction("Inner").HasShape("r"));
   EXPECT_EQ(typed.LocalFunction("Inner").GetShape("r").Shape(), MakeShape({2, 4}));
   EXPECT_EQ(typed.GetShape("Y").Shape(), MakeShape({2, 4}));
+}
+
+TEST(GraphBuilder, RejectsForwardLocalFunctionInsteadOfNativeFallback) {
+  for (const std::string domain : {"", "ai.onnx", "local"}) {
+    for (const bool callee_first : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(callee_first);
+      core::builder::GraphBuilder seed("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+      seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      ModelProto model = seed.ToModel();
+      FunctionProto callee;
+      callee.set_name("Neg");
+      callee.set_domain(domain);
+      callee.set_overload("custom");
+      callee.add_input("a");
+      callee.add_output("r");
+      callee.add_opset("", 18);
+      ValueInfoProto input = model.graph().input(0);
+      input.set_name("a");
+      callee.add_value_info(input);
+      callee.add_node(MakeNode("Identity", {"a"}, {"r"}));
+      FunctionProto wrapper = callee;
+      wrapper.set_name("Wrapper");
+      wrapper.set_domain("local");
+      wrapper.set_overload("");
+      wrapper.add_opset("local", 1);
+      wrapper.ref_node().clear();
+      NodeProto call = MakeNode("Neg", {"a"}, {"r"}, domain == "ai.onnx" ? "" : domain.c_str());
+      call.set_overload("custom");
+      wrapper.add_node(call);
+      FunctionProto other_overload = callee;
+      other_overload.set_overload("other");
+      model.add_function(other_overload);
+      model.add_function(callee_first ? callee : wrapper);
+      model.add_function(callee_first ? wrapper : callee);
+      model.mutable_graph()->add_node(MakeNode("Wrapper", {"X"}, {"Y"}, "local"));
+      if (callee_first) {
+        core::builder::GraphBuilder imported(model, SchemaLookup());
+        EXPECT_EQ(imported.GetShape("Y").Shape(), MakeShape({2, 3}));
+      } else {
+        try {
+          core::builder::GraphBuilder imported(model, SchemaLookup());
+          FAIL() << "Expected an explicit forward-call error";
+        } catch (const core::builder::BuilderError &error) {
+          EXPECT_NE(std::string(error.what()).find("not yet imported"), std::string::npos);
+          EXPECT_NE(std::string(error.what()).find("Neg"), std::string::npos);
+          EXPECT_NE(std::string(error.what()).find("custom"), std::string::npos);
+        }
+      }
+    }
+  }
+}
+
+TEST(GraphBuilder, ForwardLocalFunctionCheckUsesCompleteIdentity) {
+  for (const int different_field : {0, 1, 2}) {
+    SCOPED_TRACE(different_field);
+    core::builder::GraphBuilder seed("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+    seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    ModelProto model = seed.ToModel();
+    FunctionProto wrapper;
+    wrapper.set_name("Wrapper");
+    wrapper.set_domain("local");
+    wrapper.add_input("a");
+    wrapper.add_output("r");
+    wrapper.add_opset("", 18);
+    NodeProto call = MakeNode("Neg", {"a"}, {"r"});
+    call.set_overload("custom");
+    wrapper.add_node(call);
+    model.add_function(wrapper);
+    FunctionProto callee = wrapper;
+    callee.set_domain(different_field == 0 ? "local" : "");
+    callee.set_name(different_field == 1 ? "Abs" : "Neg");
+    callee.set_overload(different_field == 2 ? "other" : "custom");
+    callee.ref_node().clear();
+    callee.add_node(MakeNode("Identity", {"a"}, {"r"}));
+    model.add_function(callee);
+    model.mutable_graph()->add_node(MakeNode("Wrapper", {"X"}, {"Y"}, "local"));
+    core::builder::GraphBuilder imported(model, SchemaLookup());
+    EXPECT_EQ(imported.GetShape("Y").Shape(), MakeShape({2, 3}));
+  }
+}
+
+TEST(GraphBuilder, RejectsForwardLocalFunctionInsideNestedGraphAttributes) {
+  for (const bool repeated_graphs : {false, true}) {
+    SCOPED_TRACE(repeated_graphs);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 18);
+    FunctionProto wrapper;
+    wrapper.set_name("Wrapper");
+    wrapper.set_domain("local");
+    wrapper.add_input("a");
+    wrapper.add_input("condition");
+    wrapper.add_output("r");
+    wrapper.add_opset("", 18);
+    NodeProto call = MakeNode("Neg", {"a"}, {"r"});
+    call.set_overload("custom");
+    for (int depth = 0; depth < 2; ++depth) {
+      AttributeProto attribute;
+      attribute.set_name(repeated_graphs ? "body" : "then_branch");
+      attribute.set_type(repeated_graphs ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+      if (repeated_graphs) {
+        GraphProto *first = attribute.add_graphs();
+        first->set_name("first");
+        first->add_node(MakeNode("Identity", {"a"}, {"first_result"}));
+        first->add_output()->set_name("first_result");
+      }
+      GraphProto *graph = repeated_graphs ? attribute.add_graphs() : attribute.mutable_g();
+      graph->set_name("nested");
+      graph->add_node(call);
+      graph->add_output()->set_name("r");
+      call = repeated_graphs ? MakeNode("Identity", {"a"}, {"r"})
+                             : MakeNode("If", {"condition"}, {"r"});
+      call.add_attribute(attribute);
+      if (!repeated_graphs) {
+        attribute.set_name("else_branch");
+        call.add_attribute(attribute);
+      }
+    }
+    wrapper.add_node(call);
+    model.add_function(wrapper);
+    FunctionProto callee = wrapper;
+    callee.set_name("Neg");
+    callee.set_domain("");
+    callee.set_overload("custom");
+    callee.ref_input().clear();
+    callee.add_input("a");
+    callee.ref_node().clear();
+    callee.add_node(MakeNode("Identity", {"a"}, {"r"}));
+    model.add_function(callee);
+    try {
+      core::builder::GraphBuilder imported(model, SchemaLookup());
+      FAIL() << "Expected an explicit nested forward-call error";
+    } catch (const core::builder::BuilderError &error) {
+      EXPECT_NE(std::string(error.what()).find("not yet imported"), std::string::npos);
+    }
+    if (!repeated_graphs) {
+      model.ref_functions().clear();
+      model.add_function(callee);
+      model.add_function(wrapper);
+      EXPECT_NO_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()));
+    }
+  }
+}
+
+TEST(GraphBuilder, RejectsForwardLocalFunctionInsideDefaultGraphAttributes) {
+  for (const bool repeated_graphs : {false, true}) {
+    SCOPED_TRACE(repeated_graphs);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 18);
+    FunctionProto wrapper;
+    wrapper.set_name("Wrapper");
+    wrapper.set_domain("local");
+    wrapper.add_input("a");
+    wrapper.add_output("r");
+    wrapper.add_opset("", 18);
+    wrapper.add_node(MakeNode("Identity", {"a"}, {"r"}));
+    AttributeProto attribute;
+    attribute.set_name("body");
+    attribute.set_type(repeated_graphs ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+    GraphProto *graph = repeated_graphs ? attribute.add_graphs() : attribute.mutable_g();
+    graph->set_name("default_body");
+    NodeProto call = MakeNode("Neg", {"a"}, {"branch_result"});
+    call.set_overload("custom");
+    graph->add_node(call);
+    graph->add_output()->set_name("branch_result");
+    wrapper.add_attribute_proto(attribute);
+    model.add_function(wrapper);
+    FunctionProto callee = wrapper;
+    callee.set_name("Neg");
+    callee.set_domain("");
+    callee.set_overload("custom");
+    callee.ref_attribute_proto().clear();
+    model.add_function(callee);
+    EXPECT_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()),
+                 core::builder::BuilderError);
+    model.ref_functions().clear();
+    model.add_function(callee);
+    model.add_function(wrapper);
+    EXPECT_NO_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()));
+  }
 }
 
 TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfterMove) {
@@ -3354,8 +3566,14 @@ TEST(GraphBuilder, NativeFunctionRejectsRecursionAndWrongArity) {
   function.add_output("r");
   function.add_node(MakeNode("Recursive", {"a"}, {"r"}, "local"));
   model.add_function(function);
+  EXPECT_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()),
+               core::builder::BuilderError);
+  function.add_opset("", 18);
+  function.ref_node().clear();
+  function.add_node(MakeNode("Identity", {"a"}, {"r"}));
+  model.ref_functions().clear();
+  model.add_function(function);
   core::builder::GraphBuilder builder(model, SchemaLookup());
-  EXPECT_THROW(builder.MakeNode("Recursive", {"X"}, {"recursive"}, "local"), std::invalid_argument);
   EXPECT_THROW(builder.MakeNode("Recursive", {"X", "X"}, {"arity"}, "local"),
                std::invalid_argument);
 }

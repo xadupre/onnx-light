@@ -777,7 +777,15 @@ TEST(GraphGraph, NormalizationRecordsDisplacedRetainedNodesForCoordinateReplay) 
     core::builder::ConstantFoldingOptions options;
     options.enabled = false;
     auto plan = optimizer.Optimize(1, nullptr, options);
-    auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
+    for (const auto &edit : plan.rewrites()) {
+      for (const auto &node : edit.added_nodes()) {
+        ASSERT_FALSE(node.op_type().empty());
+        ASSERT_EQ(node.output().size(), 1u);
+      }
+    }
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
     EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
     ASSERT_EQ(builder.Nodes().size(), 4u);
     EXPECT_EQ(builder.Nodes()[0].output(0), "I");

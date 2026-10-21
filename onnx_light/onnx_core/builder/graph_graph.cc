@@ -582,6 +582,7 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
   };
   for (std::size_t i = 0; i < replacements.size(); ++i) {
     auto &rewrite = replacements[i].rewriting;
+    const std::size_t added_node_count = rewrite.added_nodes().size();
     std::vector<std::size_t> matched_positions;
     std::vector<const NodeProto *> matched;
     std::unordered_set<std::string> changed_outputs;
@@ -699,6 +700,11 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     for (const auto &added : rewrite.added_nodes()) {
       rewrite.add_added_nodes_positions(nodes.Position(&added));
     }
+    // Cleanup moves live nodes; recorded retained nodes must own independent snapshots.
+    for (std::size_t index = added_node_count; index < rewrite.added_nodes().size(); ++index) {
+      rewrite.ref_added_nodes().get(index) =
+          std::make_shared<NodeProto>(rewrite.added_nodes(index));
+    }
     const auto final_positions = rewrite.added_initializer_positions();
     const auto computed_positions = rewrite.computed_initializer_positions();
     for (uint64_t position : final_positions)
@@ -735,7 +741,7 @@ bool HasNestedGraph(const NodeProto &node) {
   });
 }
 
-// Batches independent edits only when their boundary descriptors stay identical.
+// Batches edits only when each replacement preserves its input/output dependencies.
 // Buckets precede original nodes; live counts translate sequential coordinates.
 class RewritingNodeBatch {
 public:
@@ -744,10 +750,6 @@ public:
         live_(nodes.size() + 1) {
     for (std::size_t i = 0; i < removed_.size(); ++i)
       live_.Update(i, true);
-    for (std::size_t index = 0; index < nodes.size(); ++index)
-      for (const auto &output : nodes[index].output())
-        if (!output.empty())
-          producers_.emplace(output.value(), index);
   }
 
   bool Append(const LocalRewritingProto &rewrite) {
@@ -785,28 +787,18 @@ public:
       if (additions[i].first != insertion_position + i || HasNestedGraph(*additions[i].second))
         return false;
     }
-    std::unordered_set<std::string> matched_outputs, added_outputs;
-    for (const NodeProto *node : matched)
-      for (const auto &output : node->output())
-        if (!output.empty())
-          matched_outputs.insert(output.value());
-    const auto first_original = *std::min_element(originals.begin(), originals.end());
-    for (const auto &[position, node] : additions) {
-      (void)position;
-      for (const auto &input : node->input()) {
-        if (input.empty() || added_outputs.count(input.value()) != 0)
-          continue;
-        const auto producer = producers_.find(input.value());
-        if (matched_outputs.count(input.value()) != 0 ||
-            (producer != producers_.end() && producer->second >= first_original))
-          return false;
-      }
-      for (const auto &output : node->output())
-        if (!output.empty() && !added_outputs.insert(output.value()).second)
-          return false;
-    }
-    if (matched_outputs != added_outputs)
+    if (originals.size() != additions.size())
       return false;
+    std::sort(originals.begin(), originals.end());
+    for (std::size_t i = 0; i < originals.size(); ++i) {
+      const auto &original = nodes_[originals[i]];
+      const auto &replacement = *additions[i].second;
+      if (!std::equal(original.input().begin(), original.input().end(), replacement.input().begin(),
+                      replacement.input().end()) ||
+          !std::equal(original.output().begin(), original.output().end(),
+                      replacement.output().begin(), replacement.output().end()))
+        return false;
+    }
     for (std::size_t original : originals) {
       removed_[original] = true;
       live_.Update(original, false);
@@ -855,7 +847,6 @@ public:
 
 private:
   const utils::RepeatedProtoField<NodeProto> &nodes_;
-  std::unordered_map<std::string, std::size_t> producers_;
   std::vector<bool> removed_;
   std::vector<std::vector<const NodeProto *>> added_;
   LiveRanks live_;

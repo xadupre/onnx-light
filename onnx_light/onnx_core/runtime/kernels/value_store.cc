@@ -77,6 +77,13 @@ ValueStore::Slot ValueStore::Bind(std::string key) {
   return Slot(identity_, slot);
 }
 
+std::optional<ValueStore::Slot> ValueStore::Find(const std::string &key) const {
+  const auto found = slots_by_key_.find(key);
+  if (found == slots_by_key_.end())
+    return std::nullopt;
+  return Slot(identity_, found->second);
+}
+
 bool ValueStore::IsReady(const Slot &slot) const { return ValueAt(slot).has_value(); }
 
 Tensor ValueStore::AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {

@@ -97,6 +97,13 @@ public:
   ValueStore &operator=(ValueStore &&) = delete;
 
   Slot Bind(std::string key);
+  /**
+   * Returns an existing slot without creating one, or nullopt for an unknown key.
+   *
+   * An empty key is unknown. A returned slot belongs to this store but may be
+   * unpublished; IsReady checks publication before Get or BindForRead.
+   */
+  std::optional<Slot> Find(const std::string &key) const;
   bool IsReady(const Slot &slot) const;
   Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);
   void Publish(const Slot &slot, RuntimeValue value);

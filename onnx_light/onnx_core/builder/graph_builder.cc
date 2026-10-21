@@ -535,6 +535,7 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
         MakeFunctionIdentifier(function_domain, function_name, function.overload()));
   }
   ImportGraph(model.graph());
+  rewritings_ = model.rewritings();
 }
 
 GraphBuilder::~GraphBuilder() = default;
@@ -564,6 +565,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   encoded_initializers_ = std::move(other.encoded_initializers_);
   paged_cache_initializers_ = std::move(other.paged_cache_initializers_);
   model_template_ = std::move(other.model_template_);
+  rewritings_ = std::move(other.rewritings_);
   graph_template_ = std::move(other.graph_template_);
   function_template_ = std::move(other.function_template_);
   local_functions_ = std::move(other.local_functions_);
@@ -590,6 +592,8 @@ void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
   }
   const std::string key = NormaliseDomain(domain);
   const bool changed = OpsetVersion(key) != version;
+  if (changed)
+    InvalidateRewritings();
   if (RefreshOpsetVersion(key, version) || (changed && is_local_function_)) {
     RefreshAncestors();
   }
@@ -769,6 +773,7 @@ void GraphBuilder::set_device(Device device) {
 }
 
 void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
+  InvalidateRewritings();
   compute_.Shapes().SetStructTypes(types);
   for (const auto &child : subgraphs_) {
     child->SetStructTypes(types);
@@ -789,7 +794,13 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
   RebuildStructuredState();
 }
 
+void GraphBuilder::InvalidateRewritings() {
+  for (GraphBuilder *builder = this; builder != nullptr; builder = builder->parent_)
+    builder->rewritings_.clear();
+}
+
 void GraphBuilder::RefreshAncestors() {
+  InvalidateRewritings();
   if (ancestor_refresh_suppressed_ || outputs_.empty() || parent_ == nullptr) {
     return;
   }
@@ -1098,6 +1109,7 @@ void GraphBuilder::RefreshAfterMutation() {
 }
 
 void GraphBuilder::RebuildMetadata() {
+  InvalidateRewritings();
   compute_.ResetMetadata();
   for (const auto &value : value_infos_) {
     compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value));
@@ -1166,6 +1178,7 @@ void GraphBuilder::RebuildMetadata() {
 }
 
 void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
+  InvalidateRewritings();
   auto &shapes = compute_.Shapes();
   shapes.ClearInferredState();
   for (const auto &[domain, version] : opsets_) {
@@ -3513,6 +3526,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
   RefreshLocalFunctionDefinition(ref);
+  InvalidateRewritings();
   return ref;
 }
 
@@ -3548,6 +3562,7 @@ void GraphBuilder::MakePersistentBinding(const PersistentBindingProto &binding) 
     throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
   }
   graph_template_.add_persistent_bindings(binding);
+  InvalidateRewritings();
 }
 
 GraphProto GraphBuilder::BuildGraph() const {
@@ -4085,6 +4100,7 @@ GraphProto GraphBuilder::ToGraph() {
 }
 
 ModelProto GraphBuilder::ToModel(int64_t ir_version) {
+  GraphProto graph = ToGraph();
   ModelProto model = model_template_;
   model.set_ir_version(
       ir_version > 0
@@ -4097,14 +4113,18 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
   for (const auto &entry : opsets_) {
     model.add_opset(entry.first, entry.second);
   }
-  *model.mutable_graph() = ToGraph();
+  *model.mutable_graph() = std::move(graph);
   for (const auto &function : local_functions_) {
     model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
   }
+  model.ref_rewritings() = rewritings_;
   return model;
 }
 
 ModelProto GraphBuilder::ToStandardModel(int64_t ir_version) {
+  if (!rewritings_.empty()) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent named rewriting variants.");
+  }
   if (!Shapes().StructTypes().empty()) {
     throw BuilderError("GraphBuilder: standard ONNX cannot represent a structured type catalogue.");
   }

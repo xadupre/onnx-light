@@ -393,6 +393,18 @@ inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &option
   write_into_stream_optional(ss, options, field_name, field);
 }
 
+template <typename T>
+void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
+                       const std::map<std::string, T> &field) {
+  for (const auto &[key, value] : field) {
+    ss << field_name << ": { key: " << utils::quote_string(key) << " value: ";
+    value.PrintToStringStream(ss, options);
+    ss << " } ";
+    if (utils::enforce_short_repr_length(ss, options))
+      break;
+  }
+}
+
 template <typename... Args>
 void write_proto_into_vector_string(std::stringstream &ss, utils::PrintOptions &options,
                                     const Args &...args) {

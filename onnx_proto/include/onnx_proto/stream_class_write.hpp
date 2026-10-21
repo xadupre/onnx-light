@@ -43,6 +43,22 @@ void write_field(utils::BinaryWriteStream &stream, int order, const T &field,
 }
 
 template <typename T>
+void write_map_field(utils::BinaryWriteStream &stream, int order,
+                     const std::map<std::string, T> &field, SerializeOptions &options) {
+  for (const auto &[key, value] : field) {
+    EXT_ENFORCE(!key.empty(), "Map keys must not be empty.");
+    const auto size = size_field(stream, 2, value, options);
+    const auto key_size = stream.size_field_header(1, FIELD_FIXED_SIZE) +
+                          stream.size_string(utils::RefString(key.data(), key.size()));
+    stream.write_field_header(order, FIELD_FIXED_SIZE);
+    stream.write_variant_uint64(key_size + static_cast<uint64_t>(size.proto_size));
+    stream.write_field_header(1, FIELD_FIXED_SIZE);
+    stream.write_string(utils::RefString(key.data(), key.size()));
+    write_field(stream, 2, value, options);
+  }
+}
+
+template <typename T>
 void write_optional_proto_field(utils::BinaryWriteStream &stream, int order,
                                 const utils::OptionalField<T> &field, SerializeOptions &options) {
   if (field.has_value()) {

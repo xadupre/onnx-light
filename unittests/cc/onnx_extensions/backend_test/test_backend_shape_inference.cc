@@ -2621,6 +2621,41 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
 }
 
+TEST(BackendTestCaseShapeInference, Qwen3CasesUseCanonicalSequenceDimensions) {
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_big_qwen3_4_layers_like") != 0)
+      continue;
+    TestCaseUnloadGuard unload_guard(tc);
+    SCOPED_TRACE(tc.name);
+    const auto &graph = tc.model().graph();
+    const auto check_dimensions = [](const auto &values) {
+      for (const auto &value : values) {
+        const auto *tensor = TensorTypeOf(value.type());
+        if (tensor == nullptr)
+          continue;
+        for (const auto &dim : tensor->shape().dim()) {
+          EXPECT_EQ(dim.dim_param().find("total_sequence"), std::string::npos) << value.name();
+        }
+        if (value.name() == "attention_mask" || value.name() == "to") {
+          ASSERT_EQ(tensor->shape().dim_size(), 2);
+          EXPECT_EQ(tensor->shape().dim(1).dim_param(), "past_sequence_length+sequence_length");
+        } else if (value.name() == "to::RSh-1") {
+          ASSERT_EQ(tensor->shape().dim_size(), 1);
+          EXPECT_EQ(tensor->shape().dim(0).dim_param(),
+                    "batch_size*(past_sequence_length+sequence_length)");
+        }
+      }
+    };
+    check_dimensions(graph.input());
+    check_dimensions(graph.output());
+    check_dimensions(graph.value_info());
+    ++checked;
+  }
+  EXPECT_EQ(checked, 4u);
+}
+
 TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferSymbolicShapes) {
   std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   size_t checked = 0;
@@ -2643,10 +2678,7 @@ TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferSymbolicShapes) {
     const bool paged =
         tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged";
     const std::string expected =
-        paged ? "sequence_length"
-        : tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_fused"
-            ? "batch_size*(past_sequence_length+sequence_length)"
-            : "batch_size*total_sequence_length";
+        paged ? "sequence_length" : "batch_size*(past_sequence_length+sequence_length)";
     const std::string name = paged ? "_onx_range_dim1::Sq__1" : "_onx_add_unsqueeze_12::RSh-1";
     bool found = false;
     for (const auto &vi : model.graph().value_info()) {
@@ -2777,7 +2809,7 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
       expected_node_meta.push_back(std::move(subset));
     }
     if (qwen_reuse) {
-      EXPECT_EQ(expected_inplace_count, fused_qwen ? 114u : persistent_qwen ? 115u : 106u);
+      EXPECT_EQ(expected_inplace_count, paged_qwen ? 106u : 115u);
       EXPECT_EQ(expected_node_meta.size(), paged_qwen ? 170u : 193u);
     }
     // A case may embed only per-value tags (onnx_light.value_tag) without any

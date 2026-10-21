@@ -270,10 +270,7 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
   persistent_model = source;
   persistent_model.mutable_graph()->set_name(persistent_name);
   MakeQwenCacheInputsExclusive(*persistent_model.mutable_graph());
-  // The node order and shapes stay the same, but node 3 now reuses input 1
-  // and node 36 has an additional opportunity.
-  persistent_model.mutable_graph()->mutable_node(36)->add_metadata(
-      core::compute::kInPlaceReuseMetadataKey, "0:0:equal");
+  // The node order and shapes stay the same, but node 3 now reuses input 1.
   for (auto &entry : persistent_model.mutable_graph()->mutable_node(3)->ref_metadata_props()) {
     if (entry.key() == core::compute::kInPlaceReuseMetadataKey)
       entry.set_value("0:1:equal");
@@ -338,7 +335,7 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 //
 //   Inputs:
 //     input_ids               INT64[batch_size, sequence_length]
-//     attention_mask          INT64[batch_size, total_sequence_length]
+//     attention_mask          INT64[batch_size, past_sequence_length+sequence_length]
 //     past_key_values_key_N   FP16[batch_size, 8, past_sequence_length, 128]
 //     past_key_values_value_N FP16[batch_size, 8, past_sequence_length, 128]
 //
@@ -815,9 +812,9 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_value_info(), "past_key_values_value_2::Shape:1", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "to", DataType::BOOL,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       AppendValueInfo(*graph->add_value_info(), "to::RSh-1", DataType::BOOL,
-                      {DimSpec("batch_size*total_sequence_length")});
+                      {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
       AppendValueInfo(*graph->add_value_info(), "to::Shape-1:", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
@@ -967,7 +964,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,
                       {DimSpec("batch_size"), DimSpec("sequence_length")});
       AppendValueInfo(*graph->add_input(), "attention_mask", DataType::INT64,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       for (int layer = 0; layer < 4; ++layer) {
         const std::string li = std::to_string(layer);
         AppendValueInfo(*graph->add_input(), "past_key_values_key_" + li, DataType::FLOAT16,
@@ -995,13 +992,13 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       // order. All these opportunities reuse the sole data input with equal
       // byte size; nodes not listed must not have an in-place annotation.
       constexpr int inplace_nodes[] = {
-          3,   7,   9,   12,  15,  19,  20,  25,  26,  29,  30,  31,  34,  35,  37,  39,  41,
-          45,  46,  47,  49,  50,  51,  52,  53,  54,  56,  58,  59,  60,  62,  64,  65,  66,
-          67,  68,  69,  71,  75,  77,  79,  82,  83,  84,  86,  87,  88,  89,  90,  91,  93,
-          95,  96,  97,  99,  101, 102, 103, 104, 105, 106, 108, 112, 114, 116, 119, 120, 121,
-          123, 124, 125, 126, 127, 128, 130, 132, 133, 134, 136, 138, 139, 140, 141, 142, 143,
-          145, 149, 151, 153, 156, 157, 158, 160, 161, 162, 163, 164, 165, 167, 169, 170, 171,
-          173, 175, 176, 177, 178, 179, 180, 182, 186, 188, 190, 191};
+          3,   7,   9,   12,  15,  19,  20,  25,  26,  29,  30,  31,  34,  35,  36,  37,  39,
+          41,  45,  46,  47,  49,  50,  51,  52,  53,  54,  56,  58,  59,  60,  62,  64,  65,
+          66,  67,  68,  69,  71,  75,  77,  79,  82,  83,  84,  86,  87,  88,  89,  90,  91,
+          93,  95,  96,  97,  99,  101, 102, 103, 104, 105, 106, 108, 112, 114, 116, 119, 120,
+          121, 123, 124, 125, 126, 127, 128, 130, 132, 133, 134, 136, 138, 139, 140, 141, 142,
+          143, 145, 149, 151, 153, 156, 157, 158, 160, 161, 162, 163, 164, 165, 167, 169, 170,
+          171, 173, 175, 176, 177, 178, 179, 180, 182, 186, 188, 190, 191};
       for (int index : inplace_nodes) {
         graph->mutable_node(index)->add_metadata(core::compute::kInPlaceReuseMetadataKey,
                                                  "0:0:equal");
@@ -1265,7 +1262,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
           "weight", "0:0:equal", "_onx_add_unsqueeze_12", "");
       tag(AddNode(*graph, "Gather", {"to::RSh-1", "_onx_add_unsqueeze_12::RSh-1"},
                   {"_onx_gather_to::RSh-1"}),
-          "weight", "", "to::RSh-1;_onx_add_unsqueeze_12::RSh-1", "");
+          "weight", "0:0:equal", "to::RSh-1;_onx_add_unsqueeze_12::RSh-1", "");
       tag(AddNode(*graph, "Reshape", {"_onx_gather_to::RSh-1", "_onx_add_unsqueeze_12::Shape:"},
                   {"index"}),
           "weight", "0:0:equal",
@@ -1713,8 +1710,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       // shape so shape inference is validated on the full model: each entry is
       // stripped before inference runs and must be recovered with the same
       // elem_type, the same rank and identical concrete dims (symbolic dims such
-      // as batch_size / sequence_length / past_sequence_length /
-      // total_sequence_length, and arithmetic expressions thereof, are tolerated).
+      // as batch_size / sequence_length / past_sequence_length, and arithmetic
+      // expressions thereof, are tolerated).
       // elem_type: FLOAT=float32 RMSNorm accumulators, FLOAT16=model activations,
       // INT64=shape / index math, BOOL=attention masks.
       //
@@ -1815,9 +1812,9 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_value_info(), "past_key_values_value_2::Shape:1", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "to", DataType::BOOL,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       AppendValueInfo(*graph->add_value_info(), "to::RSh-1", DataType::BOOL,
-                      {DimSpec("batch_size*total_sequence_length")});
+                      {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
       AppendValueInfo(*graph->add_value_info(), "to::Shape-1:", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
@@ -2097,7 +2094,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,
                       {DimSpec("batch_size"), DimSpec("sequence_length")});
       AppendValueInfo(*graph->add_input(), "attention_mask", DataType::INT64,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       for (int layer = 0; layer < 4; ++layer) {
         const std::string li = std::to_string(layer);
         AppendValueInfo(*graph->add_input(), "past_key_values_key_" + li, DataType::FLOAT16,

@@ -630,6 +630,10 @@ public:
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
+  /// Throws before applying rewrites if reconstruction changes or loses an existing
+  /// value tag, including tags in reconstructed nested builders.
+  /// Matches functions across source scopes by domain, name and overload, preserving
+  /// their original scope paths in diagnostics even when reconstruction hoists them.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
   /// Adds an independently selectable plan against this canonical model.

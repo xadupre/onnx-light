@@ -7,6 +7,20 @@ from pathlib import Path
 
 
 class TestCMakeHardening(unittest.TestCase):
+    def test_project_cmake_preserves_unwind_tables(self):
+        """Keeps unwind tables available for stack walking, matching ONNX PR 8613."""
+        root = Path(__file__).resolve().parents[2]
+        cmake_files = [
+            root / "CMakeLists.txt",
+            root / "onnx_proto" / "CMakeLists.txt",
+            *sorted((root / "cmake").rglob("*.cmake")),
+        ]
+        for cmake_file in cmake_files:
+            with self.subTest(cmake_file=cmake_file):
+                content = cmake_file.read_text(encoding="utf-8")
+                self.assertNotIn("-fno-unwind-tables", content)
+                self.assertNotIn("-fno-asynchronous-unwind-tables", content)
+
     def test_hardening_flags_and_caller_mode(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:

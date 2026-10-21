@@ -6,6 +6,8 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include <cstring>
 #include <gtest/gtest.h>
+#include <memory>
+#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -114,9 +116,17 @@ TEST(PagedCacheProto, CopyFromReplacesExistingBlocksAndPresence) {
   cache.CopyFrom(cache);
   EXPECT_TRUE(cache.Equals(Cache()));
   PagedCacheBlockProto block = cache.blocks(0);
+  block.CopyFrom(EncodedCache().blocks(0));
+  EXPECT_TRUE(block.Equals(EncodedCache().blocks(0)));
+  block.CopyFrom(cache.blocks(0));
+  EXPECT_TRUE(block.Equals(cache.blocks(0)));
+  block.CopyFrom(block);
+  EXPECT_TRUE(block.Equals(cache.blocks(0)));
   block.CopyFrom(PagedCacheBlockProto{});
   EXPECT_FALSE(block.has_start());
+  EXPECT_FALSE(block.has_length());
   EXPECT_FALSE(block.has_key_payload());
+  EXPECT_FALSE(block.has_value_payload());
   cache.CopyFrom(PagedCacheProto{});
   EXPECT_TRUE(cache.blocks().empty());
   EXPECT_FALSE(cache.has_name());
@@ -345,6 +355,53 @@ TEST(PagedCacheProto, GraphBuilderPreservesAndPrunesInitializer) {
   builder.MakePagedCacheInitializer(unused);
   builder.RemoveUnusedNodes();
   EXPECT_EQ(builder.ExtendedInitializers().size(), 1u);
+}
+
+TEST(PagedCacheProto, GraphExportRetainsDenseAndEncodedPayloadOwners) {
+  for (bool encoded : {false, true}) {
+    SCOPED_TRACE(encoded);
+    bool released[2] = {false, false};
+    const uint8_t *payloads[2] = {nullptr, nullptr};
+    ModelProto exported;
+    {
+      auto model = CacheModel();
+      auto *cache = model.mutable_graph()->mutable_extended_initializer(0)->mutable_paged_cache();
+      if (encoded) {
+        *cache = EncodedCache();
+        model.mutable_graph()->mutable_output(0)->set_name(cache->name());
+      }
+      auto *block = cache->mutable_blocks(0);
+      for (size_t i = 0; i < 2; ++i) {
+        auto bytes = std::make_shared<std::vector<uint8_t>>(encoded ? 4 : 16, 1);
+        payloads[i] = bytes->data();
+        auto deleter = [bytes, &released, i]() { released[i] = true; };
+        if (encoded) {
+          auto *value = i == 0 ? block->mutable_encoded_key() : block->mutable_encoded_value();
+          value->set_raw_data_with_deleter(bytes->data(), bytes->size(), std::move(deleter));
+        } else {
+          auto *value = i == 0 ? block->mutable_key() : block->mutable_value();
+          value->clear_float_data();
+          value->set_raw_data_with_deleter(bytes->data(), bytes->size(), std::move(deleter));
+        }
+      }
+      core::builder::GraphBuilder builder(model);
+      model.Clear();
+      exported = builder.ToModel();
+    }
+    for (size_t i = 0; i < 2; ++i) {
+      EXPECT_FALSE(released[i]);
+      const auto &block = exported.graph().extended_initializer(0).paged_cache().blocks(0);
+      const auto &payload =
+          encoded ? (i == 0 ? block.encoded_key().raw_data() : block.encoded_value().raw_data())
+                  : (i == 0 ? block.key().raw_data() : block.value().raw_data());
+      EXPECT_EQ(payload.data(), payloads[i]);
+      ASSERT_EQ(payload.size(), encoded ? 4u : 16u);
+      EXPECT_EQ(payload[0], 1);
+    }
+    exported.Clear();
+    EXPECT_TRUE(released[0]);
+    EXPECT_TRUE(released[1]);
+  }
 }
 
 TEST(PagedCacheProto, RejectsInitializerNameCollisionsAndMismatchedDeclaredDefaults) {

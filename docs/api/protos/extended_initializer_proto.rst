@@ -17,7 +17,8 @@ graph validation rejects entries without a payload.
 
 The initializer name belongs to the selected payload, not to the wrapper.
 Type and quantization references remain scoped to the containing model.
-Native copies retain payload owners without a serialization round trip;
+Native copies retain raw payload owners without a serialization round trip,
+including dense and encoded key/value pages in a paged cache;
 ``CopyFrom`` replaces the selected alternative, including when copying an
 empty message.
 

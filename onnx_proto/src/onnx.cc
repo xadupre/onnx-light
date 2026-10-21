@@ -1594,8 +1594,19 @@ void EncodedValueProto::PrintToStringStream(std::stringstream &ss,
 }
 
 void PagedCacheBlockProto::CopyFrom(const PagedCacheBlockProto &proto) {
+  if (this == &proto)
+    return;
   PagedCacheBlockProto copy;
-  CopyProtoFrom(copy, proto);
+  copy.start_ = proto.start_;
+  copy.length_ = proto.length_;
+  if (proto.has_key())
+    *copy.mutable_key() = proto.key();
+  else if (proto.has_encoded_key())
+    *copy.mutable_encoded_key() = proto.encoded_key();
+  if (proto.has_value())
+    *copy.mutable_value() = proto.value();
+  else if (proto.has_encoded_value())
+    *copy.mutable_encoded_value() = proto.encoded_value();
   *this = std::move(copy);
 }
 SerializeSizeResult PagedCacheBlockProto::SerializeSize(utils::BinaryWriteStream &stream,

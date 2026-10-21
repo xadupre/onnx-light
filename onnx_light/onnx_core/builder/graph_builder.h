@@ -625,8 +625,8 @@ public:
   GraphProto BuildGraph() const;
 
   /// Applies ordered captured rewrites and returns a new, validated builder.
-  /// Preserves the source builder and recorded node order, and merges added
-  /// functions and opset imports. Requires a root model builder.
+  /// Preserves the source builder, maintains dependency-consistent node order,
+  /// and merges added functions and opset imports. Requires a root model builder.
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
@@ -801,8 +801,7 @@ private:
   bool RefreshDependentNodes(
       const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
           &is_affected,
-      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true,
-      const std::vector<std::size_t> *node_order = nullptr);
+      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true);
   void RefreshAfterRewriting(const std::vector<std::size_t> &old_indices,
                              std::unordered_set<std::string> affected_values);
   void RebuildMetadata();
@@ -832,6 +831,14 @@ private:
   void SortNodesTopologically();
   void ApplyRewriting(const LocalRewritingProto &rewrite,
                       const utils::RepeatedProtoField<FunctionProto> &functions);
+  // Returns an empty permutation when no insertion is necessary. Otherwise
+  // inserts new producers before consumers, delaying affected consumers only
+  // when the producers' own dependencies prevent an earlier insertion.
+  static std::vector<std::size_t>
+  InsertNodesInDependencyOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
+                               const std::unordered_set<std::string> &available,
+                               const std::vector<std::vector<std::string>> &references,
+                               const std::vector<bool> &added);
   static std::vector<std::size_t>
   TopologicalNodeOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
                        const std::unordered_set<std::string> &available,

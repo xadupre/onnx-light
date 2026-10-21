@@ -181,8 +181,12 @@ TEST(GatherUpstreamPropagationPattern, SerializedReplayKeepsInferenceDropoutUnfo
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   auto rewritten = core::builder::GraphBuilder(original, schema_lookup).ApplyRewritings(loaded);
   EXPECT_TRUE(rewritten.BuildGraph().Equals(builder.BuildGraph()));
+  EXPECT_EQ(rewritten.Compute().NodeReuse(0), builder.Compute().NodeReuse(0));
+  EXPECT_EQ(rewritten.Compute().Memory(), builder.Compute().Memory());
+  EXPECT_EQ(rewritten.Compute().PeakMemory(), builder.Compute().PeakMemory());
   const auto replayed = rewritten.ToModel();
-  EXPECT_TRUE(replayed.graph().Equals(builder.ToGraph()));
+  std::string difference;
+  EXPECT_TRUE(replayed.graph().Equals(builder.ToGraph(), &difference)) << difference;
   EXPECT_FLOAT_EQ(core::runtime::RunModel(original, {})[0].AsFloat()[0], 2.5f);
   EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 2.5f);
 }

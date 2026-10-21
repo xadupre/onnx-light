@@ -2277,6 +2277,9 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "device", [](const GraphBuilder &self) { return self.device(); },
           [](GraphBuilder &self, Device device) { self.set_device(device); },
           "Logical target for pattern matching, constant folding and peak-memory analysis.")
+      .def("copy_device_targets_from", &GraphBuilder::CopyDeviceTargetsFrom, nb::arg("source"),
+           "Copies devices from an equivalent builder, including nested scopes and exported "
+           "functions; rejects incompatible scopes before changing devices.")
       .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
            "Returns the finalised graph wrapped in a ModelProto.")

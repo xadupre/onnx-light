@@ -762,6 +762,45 @@ void GraphBuilder::set_device(Device device) {
   compute_.ComputePeakMemory(BuildGraph(), device_);
 }
 
+void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
+  std::vector<std::pair<GraphBuilder *, Device>> updates;
+  const auto collect = [&](const auto &self, GraphBuilder &target,
+                           const GraphBuilder &original) -> void {
+    // Exported functions materialize their initializers before the original nodes.
+    const size_t offset =
+        target.nodes_.size() != original.nodes_.size() && original.is_local_function_
+            ? original.initializers_.size()
+            : 0;
+    if (target.nodes_.size() != original.nodes_.size() + offset)
+      throw BuilderError("CopyDeviceTargetsFrom: incompatible node counts.");
+    for (size_t index = 0; index < original.nodes_.size(); ++index) {
+      const auto originals = original.ReferencedSubgraphs(original.nodes_[index]);
+      const auto children = target.ReferencedSubgraphs(target.nodes_[index + offset]);
+      if (originals.size() != children.size())
+        throw BuilderError("CopyDeviceTargetsFrom: incompatible subgraph references.");
+      for (size_t child = 0; child < originals.size(); ++child)
+        self(self, *children[child], *originals[child]);
+    }
+    for (const auto &function : target.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto found = std::find_if(
+          original.local_functions_.begin(), original.local_functions_.end(),
+          [&](const auto &candidate) {
+            return MakeFunctionIdentifier(candidate->function_domain_, candidate->name_,
+                                          candidate->function_template_.overload()) == identity;
+          });
+      if (found == original.local_functions_.end())
+        throw BuilderError("CopyDeviceTargetsFrom: incompatible exported functions.");
+      self(self, *function, **found);
+    }
+    updates.emplace_back(&target, original.device_);
+  };
+  collect(collect, *this, source);
+  for (const auto &[scope, device] : updates)
+    scope->set_device(device);
+}
+
 void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
   InvalidateRewritings();
   compute_.Shapes().SetStructTypes(types);
@@ -4006,6 +4045,7 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   }
   std::unordered_set<std::string> live_values;
   if constexpr (std::is_same_v<Proto, FunctionProto>) {
+    PrependInitializerConstants(graph);
     for (const auto &input : graph.input()) {
       live_values.insert(input);
     }
@@ -4101,16 +4141,17 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   if (!model_scoped && !Shapes().StructTypes().empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry a structured type catalogue.");
   }
-  if (!initializers_.empty() || !extended_initializers_.empty()) {
-    throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
-                       "produce a model / graph instead.");
+  if (!extended_initializers_.empty()) {
+    throw BuilderError(
+        "GraphBuilder: a FunctionProto cannot carry extended initializers; remove them or "
+        "produce a model / graph instead.");
   }
   SortNodesTopologically();
   MoveShapeAndSizeNodes();
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
-  FunctionProto function = BuildFunction(domain);
+  FunctionProto function = BuildFunction(domain, /*include_initializer_constants=*/false);
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];
     auto tag = std::find_if(
@@ -4128,7 +4169,35 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   return function;
 }
 
-FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
+void GraphBuilder::PrependInitializerConstants(FunctionProto &function) const {
+  if (initializers_.empty())
+    return;
+  if (OpsetVersion("") <= 0)
+    throw BuilderError(
+        "GraphBuilder: exporting initializer constants requires a default-domain opset.");
+  utils::RepeatedProtoField<NodeProto> nodes;
+  nodes.reserve(initializers_.size() + function.node().size());
+  for (const auto &initializer : initializers_) {
+    const auto &name = initializer.name().value();
+    if (std::any_of(inputs_.begin(), inputs_.end(),
+                    [&](const auto &input) { return input.name() == name; }))
+      throw BuilderError("GraphBuilder: a FunctionProto cannot preserve overridable initializer '" +
+                         name + "'.");
+    auto &node = nodes.add();
+    node.set_op_type("Constant");
+    node.add_output(name);
+    auto *attribute = node.add_attribute();
+    attribute->set_name("value");
+    attribute->set_type(AttributeProto::TENSOR);
+    *attribute->mutable_t() = initializer;
+  }
+  for (auto &node : function.ref_node())
+    nodes.push_back(std::move(node));
+  function.ref_node() = std::move(nodes);
+}
+
+FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
+                                          bool include_initializer_constants) const {
   if (!graph_template_.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry persistent bindings.");
   }
@@ -4167,6 +4236,8 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
     MaterializeGraphReferences(materialized);
     function.ref_node().push_back(std::move(materialized));
   }
+  if (include_initializer_constants)
+    PrependInitializerConstants(function);
   return function;
 }
 

@@ -10,7 +10,9 @@ inference. :meth:`GraphBuilder.to_onnx` finalises the accumulated graph into a
 ``ModelProto`` by default, or a ``GraphProto`` or ``FunctionProto`` selected with
 :class:`ProtoKind`, writing the inferred shapes, the
 in-place / release-after metadata, the value tags and the peak-memory
-estimates.
+estimates. ``to_onnx(optimize=OptimizationMode.kOptimize)`` optimizes a copy and
+exports the result; ``to_onnx(optimize=OptimizationMode.kRewritings)`` exports
+the canonical model with the captured plan named ``"optimized"`` instead.
 
 Typical usage::
 
@@ -32,12 +34,13 @@ from __future__ import annotations
 import importlib.util
 import sys
 from collections.abc import Callable
+from enum import Enum
 from typing import TypeAlias
 
 import numpy
 
 import onnx_light.onnx.helper as oh
-from ..onnx import TensorProto
+from ..onnx import FunctionProto, GraphProto, ModelProto, TensorProto
 from ..onnx.defs import onnx_opset_version
 import onnx_light.onnx.numpy_helper as onh
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
@@ -53,6 +56,14 @@ ProtoKind: TypeAlias = _C.ProtoKind
 PatternOptimization: TypeAlias = _C.PatternOptimization
 
 SchemaLookup: TypeAlias = Callable[[str], "list[LightOpSchema]"]
+
+
+class OptimizationMode(Enum):
+    """Selects the optimization workflow used by ``GraphBuilder.to_onnx``."""
+
+    kNone = 0
+    kOptimize = 1
+    kRewritings = 2
 
 
 def _default_schema_lookup(op_type: str) -> list[LightOpSchema]:
@@ -179,6 +190,7 @@ class GraphBuilder(_C.GraphBuilder):
                 name, schema_lookup, {"": opsets} if isinstance(opsets, int) else opsets
             )
         self._registered_patterns: dict[str, PatternOptimization] = {}
+        self._schema_lookup = schema_lookup
         self._op = _OperatorProxy(self)
         self._initializer_counter = 0
 
@@ -288,10 +300,59 @@ class GraphBuilder(_C.GraphBuilder):
         """Returns builder-local pattern names in registration order."""
         return tuple(self._registered_patterns)
 
+    def to_onnx(
+        self,
+        kind: ProtoKind = ProtoKind.kModel,
+        ir_version: int = 0,
+        domain: str = "",
+        *,
+        optimize: OptimizationMode = OptimizationMode.kNone,
+    ) -> ModelProto | GraphProto | FunctionProto:
+        """Exports the current graph, an optimized copy, or captured rewritings.
+
+        With ``OptimizationMode.kNone`` (the default), preserves the existing
+        export behavior. With ``OptimizationMode.kOptimize``, optimizes an
+        independent builder using the global and builder-local pattern
+        registrations, then exports the result without attached plans.
+        Model export requires standard ONNX constructs.
+
+        With ``OptimizationMode.kRewritings``, returns the finalized canonical
+        ModelProto and attaches the captured plan as ``rewritings["optimized"]``.
+        Requires ``kind=ProtoKind.kModel`` and rejects an existing plan with that
+        name. Other named plans are retained. Optimization never edits the source
+        builder; ordinary export finalization still runs before taking the copy.
+        """
+        if not isinstance(optimize, OptimizationMode):
+            raise TypeError("optimize must be an OptimizationMode.")
+        if optimize is OptimizationMode.kNone:
+            return super().to_onnx(kind, ir_version, domain)
+        if not isinstance(kind, _C.ProtoKind):
+            raise TypeError("kind must be a ProtoKind.")
+        if optimize is OptimizationMode.kRewritings and kind != ProtoKind.kModel:
+            raise ValueError("Exporting rewritings requires kind=ProtoKind.kModel.")
+
+        from .optimization import GraphGraph
+
+        canonical = super().to_model(ir_version)
+        if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
+            raise ValueError("A rewriting plan named 'optimized' already exists.")
+        working = GraphBuilder(canonical, self._schema_lookup)
+        working.copy_device_targets_from(self)
+        for pattern in self.registered_patterns():
+            working.register_pattern(pattern)
+        plan = GraphGraph(working).optimize()
+        if optimize is OptimizationMode.kRewritings:
+            canonical.add_rewriting("optimized", plan)
+            return canonical
+        if kind == ProtoKind.kModel:
+            return working.to_standard_model(ir_version)
+        return working.to_onnx(kind, ir_version, domain)
+
 
 __all__ = [
     "ConstantFoldingOptions",
     "GraphBuilder",
+    "OptimizationMode",
     "PatternOptimization",
     "ProtoKind",
     "SchemaLookup",

@@ -8,15 +8,24 @@ from __future__ import annotations
 import gc
 import re
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import numpy
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+from onnx_light import onnx
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import ModelProto, TensorProto
+from onnx_light.onnx.external_data_helper import load_external_data_for_model
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
+from onnx_light.onnx_op import GetAllOnnxOpSchemasWithHistory
+from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions, OptimizationMode, ProtoKind
 from onnx_light.onnx_core.shape_inference import Device
 
 optim = import_or_skip("onnx_light.onnx_core.optimization")
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
 def _double_neg_model():
@@ -27,6 +36,26 @@ def _double_neg_model():
         "  middle = Neg(x)\n"
         "  y = Neg(middle)\n"
         "}\n"
+    )
+
+
+def _transpose_weight_model():
+    """Builds a model with a deferred constant transpose."""
+    return oh.make_model(
+        oh.make_graph(
+            [
+                oh.make_node("Transpose", ["weight"], ["transposed"], perm=[1, 0]),
+                oh.make_node("Add", ["x", "transposed"], ["y"]),
+            ],
+            "transpose_weight",
+            [oh.make_tensor_value_info("x", TensorProto.FLOAT, [3, 2])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [3, 2])],
+            initializer=[
+                onh.from_array(numpy.arange(6, dtype=numpy.float32).reshape(2, 3), "weight")
+            ],
+        ),
+        opset_imports=[oh.make_opsetid("", 18)],
+        ir_version=10,
     )
 
 
@@ -333,6 +362,318 @@ class TestPatternOptimization(ExtTestCase):
         loaded.clear_rewritings()
         self.assertFalse(loaded.HasField("rewritings"))
         self.assertEqual(retained.metadata_props[0].value, "second")
+
+    def test_to_onnx_optimization_exports_keep_the_canonical_builder(self):
+        builder = optim.GraphBuilder(_double_neg_model())
+        builder.register_pattern(NegNegPattern())
+        builder.add_rewriting("other", optim.RewritingProto())
+        canonical = builder.to_onnx()
+        before = canonical.SerializeToString()
+        optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertEqual(
+            builder.to_onnx(optimize=OptimizationMode.kNone).SerializeToString(), before
+        )
+        self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
+        self.assertFalse(optimized.rewritings)
+        self.assertEqual(bundled.graph.SerializeToString(), canonical.graph.SerializeToString())
+        self.assertEqual(set(bundled.rewritings), {"other", "optimized"})
+        self.assertEqual(bundled.rewritings["optimized"].rewrites[0].pattern_name, "NegNeg")
+        loaded = ModelProto()
+        loaded.ParseFromString(bundled.SerializeToString())
+        replayed = optim.GraphBuilder(loaded).apply_rewritings("optimized").to_standard_model()
+        self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
+        self.assertEqual(builder.to_onnx().SerializeToString(), before)
+        self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
+
+    def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
+        model = _transpose_weight_model()
+        feeds = {"x": numpy.ones((3, 2), dtype=numpy.float32)}
+        expected = ReferenceEvaluator(model).run(None, feeds)[0]
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "source"
+            target = Path(directory) / "target"
+            source.mkdir()
+            target.mkdir()
+            onnx.save(model, source / "model.onnx", save_as_external_data=True, size_threshold=0)
+            builder = optim.GraphBuilder(
+                onnx.load(source / "model.onnx", load_external_data=True)
+            )
+            before = builder.to_onnx().SerializeToString()
+            optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+            bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+            edits = bundled.rewritings["optimized"].rewrites
+            self.assertTrue(any(edit.initializer_calls for edit in edits))
+            self.assertFalse(any(edit.added_initializers for edit in edits))
+            for name, exported in (("plain", optimized), ("bundle", bundled)):
+                path = target / f"{name}.onnx"
+                onnx.save(exported, path, save_as_external_data=True, size_threshold=0)
+                self.assertEqual(builder.to_onnx().SerializeToString(), before)
+            (source / "model.onnx").unlink()
+            (source / "model.onnx.data").unlink()
+            plain = onnx.load(target / "plain.onnx", load_external_data=True)
+            restored = onnx.load(target / "bundle.onnx", load_external_data=True)
+            self.assertEqual(list(restored.rewritings), ["optimized"])
+            replayed = (
+                optim.GraphBuilder(restored).apply_rewritings("optimized").to_standard_model()
+            )
+            for exported in (plain, restored, replayed):
+                numpy.testing.assert_array_equal(
+                    ReferenceEvaluator(exported).run(None, feeds)[0], expected
+                )
+            self.assertEqual(
+                [node.op_type for node in replayed.graph.node],
+                [node.op_type for node in plain.graph.node],
+            )
+            self.assertEqual(
+                onh.to_array(replayed.graph.initializer[0]).tolist(),
+                onh.to_array(plain.graph.initializer[0]).tolist(),
+            )
+
+    def test_to_onnx_optimization_options_validate_before_matching(self):
+        builder = optim.GraphBuilder(_double_neg_model())
+        before = builder.to_onnx().SerializeToString()
+        for option in (None, False, True, 0, 1, "rewritings", "unknown", ProtoKind.kModel):
+            with (
+                self.subTest(option=option),
+                self.assertRaisesRegex(TypeError, "OptimizationMode"),
+            ):
+                builder.to_onnx(optimize=option)
+            self.assertEqual(builder.to_onnx().SerializeToString(), before)
+        for kind in (ProtoKind.kGraph, ProtoKind.kFunction):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "kModel"):
+                builder.to_onnx(kind, optimize=OptimizationMode.kRewritings)
+        builder.add_rewriting("optimized", optim.RewritingProto())
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        builder_model = builder.to_onnx()
+        builder_model.clear_rewritings()
+        self.assertEqual(builder_model.SerializeToString(), before)
+
+    def test_to_onnx_bundle_externalizes_replacement_tensor_payloads(self):
+        class LiteralNegNegPattern(NegNegPattern):
+            def apply(self, graph, nodes):
+                return [
+                    oh.make_node(
+                        "Constant",
+                        [],
+                        ["zero"],
+                        value=onh.from_array(numpy.zeros(2, dtype=numpy.float32)),
+                    ),
+                    oh.make_node("Add", [nodes[0].input[0], "zero"], list(nodes[1].output)),
+                ]
+
+        builder = optim.GraphBuilder(_double_neg_model())
+        builder.register_pattern(LiteralNegNegPattern())
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertFalse(bundled.graph.initializer)
+        values = numpy.array([4, -5], dtype=numpy.float32)
+        default_tensor = onh.from_array(values, "default_weight")
+        default_graph = oh.make_graph(
+            [],
+            "default_graph",
+            [],
+            [oh.make_tensor_value_info("default_weight", TensorProto.FLOAT, [2])],
+            initializer=[default_tensor],
+        )
+        plan = bundled.rewritings["optimized"]
+        plan.added_functions.append(
+            oh.make_function(
+                "local",
+                "Defaults",
+                [],
+                ["default_weight"],
+                [oh.make_node("Constant", [], ["default_weight"], value=default_tensor)],
+                opset_imports=[oh.make_opsetid("", 18)],
+                attribute_protos=[
+                    oh.make_attribute("tensor", default_tensor),
+                    oh.make_attribute("tensors", [default_tensor, default_tensor]),
+                    oh.make_attribute("graphs", [default_graph, default_graph]),
+                ],
+            )
+        )
+        bundled.rewritings["optimized"] = plan
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "source"
+            target = Path(directory) / "target"
+            source.mkdir()
+            target.mkdir()
+            path = source / "bundle.onnx"
+            onnx.save(
+                bundled,
+                path,
+                save_as_external_data=True,
+                size_threshold=0,
+                convert_attribute=True,
+            )
+            self.assertGreater((source / "bundle.onnx.data").stat().st_size, 0)
+            deferred = onnx.load(path, load_external_data=False)
+            load_external_data_for_model(deferred, str(source))
+            onnx.save(
+                deferred, target / "deferred.onnx", save_as_external_data=True, size_threshold=0
+            )
+            onnx.align_external_data_streaming(
+                str(path),
+                str(target / "aligned.onnx"),
+                str(target / "aligned.data"),
+                alignment=64,
+                chunk_size=3,
+            )
+            path.unlink()
+            (source / "bundle.onnx.data").unlink()
+            for name in ("deferred.onnx", "aligned.onnx"):
+                with self.subTest(name=name):
+                    restored = onnx.load(target / name, load_external_data=True)
+                    attributes = (
+                        restored.rewritings["optimized"].added_functions[-1].attribute_proto
+                    )
+                    tensors = [
+                        attributes[0].t,
+                        *attributes[1].tensors,
+                        *(graph.initializer[0] for graph in attributes[2].graphs),
+                    ]
+                    for tensor in tensors:
+                        numpy.testing.assert_array_equal(onh.to_array(tensor), values)
+                    replayed = (
+                        optim.GraphBuilder(restored).apply_rewritings("optimized").to_model()
+                    )
+                    x = numpy.array([2, -3], dtype=numpy.float32)
+                    numpy.testing.assert_array_equal(
+                        ReferenceEvaluator(replayed).run(None, {"x": x})[0], x
+                    )
+
+    def test_to_onnx_optimization_preserves_nested_device_targets(self):
+        builder = optim.GraphBuilder("root", opsets=18)
+        builder.make_input(oh.make_tensor_value_info("condition", TensorProto.BOOL, []))
+        builder.make_input(oh.make_tensor_value_info("x", TensorProto.FLOAT, [2]))
+        observed = []
+
+        class CPUOnlyNegNegPattern(NegNegPattern):
+            def match(self, graph, node):
+                observed.append(graph.builder.device)
+                if graph.builder.device != Device.kCPU:
+                    return self.no_match(node, "requires a CPU target")
+                return super().match(graph, node)
+
+        builder.register_pattern(CPUOnlyNegNegPattern())
+        for name, device in (("gpu", Device.kGPU0), ("cpu", Device.kCPU)):
+            body = builder.make_subgraph(name)
+            body.device = device
+            body.make_node("Neg", ["x"], ["middle"])
+            body.make_node("Neg", ["middle"], ["result"])
+            body.make_output("result")
+        builder.make_node(
+            "If",
+            ["condition"],
+            ["y"],
+            attributes={"then_branch_ref": "gpu", "else_branch_ref": "cpu"},
+        )
+        builder.make_output("y")
+        before = builder.to_onnx().SerializeToString()
+        for option in (OptimizationMode.kOptimize, OptimizationMode.kRewritings):
+            observed.clear()
+            exported = builder.to_onnx(optimize=option)
+            self.assertIn(Device.kGPU0, observed)
+            self.assertIn(Device.kCPU, observed)
+            if option is OptimizationMode.kRewritings:
+                self.assertTrue(exported.rewritings["optimized"].rewrites)
+                self.assertTrue(
+                    all(
+                        edit.graph_path == ["cpu"]
+                        for edit in exported.rewritings["optimized"].rewrites
+                    )
+                )
+            self.assertEqual(builder.device, Device.kUndefined)
+            self.assertEqual(builder.to_onnx().SerializeToString(), before)
+
+    def test_to_onnx_optimized_function_preserves_constant_values(self):
+        values = numpy.array([1, 2], dtype=numpy.float32)
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Constant", [], ["weight"], value=onh.from_array(values)),
+                    oh.make_node("Add", ["x", "weight"], ["y"]),
+                ],
+                "F",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        before = builder.to_onnx().SerializeToString()
+        for mode in (OptimizationMode.kNone, OptimizationMode.kOptimize):
+            with self.subTest(mode=mode):
+                function = builder.to_onnx(ProtoKind.kFunction, domain="local", optimize=mode)
+                self.assertEqual([node.op_type for node in function.node], ["Constant", "Add"])
+                numpy.testing.assert_array_equal(
+                    onh.to_array(function.node[0].attribute[0].t), values
+                )
+                called = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("F", ["x"], ["y"], domain="local")],
+                        "call",
+                        list(model.graph.input),
+                        list(model.graph.output),
+                    ),
+                    functions=[function],
+                    opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("local", 1)],
+                )
+                x = numpy.array([3, -4], dtype=numpy.float32)
+                numpy.testing.assert_array_equal(
+                    ReferenceEvaluator(called).run(None, {"x": x})[0], x + values
+                )
+                self.assertEqual(builder.to_onnx().SerializeToString(), before)
+
+    def test_to_onnx_no_op_optimization_and_other_proto_kinds(self):
+        value = oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+        model = oh.make_model(oh.make_graph([], "no_op", [value], [value]))
+        model.add_rewriting("other", optim.RewritingProto())
+        builder = optim.GraphBuilder(model)
+        before = builder.to_onnx().SerializeToString()
+        plain = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+        self.assertFalse(plain.rewritings)
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertFalse(bundled.rewritings["optimized"].rewrites)
+        self.assertFalse(
+            optim.GraphBuilder(bundled).apply_rewritings("optimized").to_model().rewritings
+        )
+        self.assertEqual(
+            len(builder.to_onnx(ProtoKind.kGraph, optimize=OptimizationMode.kOptimize).node), 0
+        )
+        function = builder.to_onnx(
+            ProtoKind.kFunction, domain="local", optimize=OptimizationMode.kOptimize
+        )
+        self.assertEqual(function.domain, "local")
+        self.assertEqual(builder.to_onnx().SerializeToString(), before)
+
+    def test_to_onnx_optimization_preserves_schema_lookup_and_propagates_errors(self):
+        schema_calls = []
+
+        def schema_lookup(op_type):
+            schema_calls.append(op_type)
+            return GetAllOnnxOpSchemasWithHistory(op_type, False)
+
+        builder = optim.GraphBuilder(_double_neg_model(), schema_lookup=schema_lookup)
+        builder.register_pattern(NegNegPattern())
+        schema_calls.clear()
+        builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertIn("Neg", schema_calls)
+
+        class FailingPattern(NegNegPattern):
+            def match(self, graph, node):
+                raise RuntimeError("export matcher failed")
+
+        builder = optim.GraphBuilder(_double_neg_model(), schema_lookup=None)
+        builder.register_pattern(FailingPattern())
+        before = builder.to_onnx().SerializeToString()
+        for option in (OptimizationMode.kOptimize, OptimizationMode.kRewritings):
+            with (
+                self.subTest(option=option),
+                self.assertRaisesRegex(RuntimeError, "export matcher failed"),
+            ):
+                builder.to_onnx(optimize=option)
+        self.assertEqual(builder.to_onnx().SerializeToString(), before)
 
     def test_rewriting_proto_binary_roundtrip_all_fields(self):
         plan = optim.RewritingProto()

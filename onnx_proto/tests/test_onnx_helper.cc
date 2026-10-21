@@ -82,6 +82,90 @@ TEST(onnx_helper, IteratorTensorProto) {
   EXPECT_EQ(dt[1], 1);
 }
 
+TEST(onnx_helper, IteratorTensorProto_ModelFunctionsAndRewritings) {
+  ModelProto model;
+  std::vector<TensorProto *> tensors;
+  const auto add_tensor = [&](TensorProto *tensor) {
+    tensor->set_name("tensor_" + std::to_string(tensors.size()));
+    tensor->set_data_type(TensorProto::DataType::FLOAT);
+    tensor->ref_dims().push_back(1);
+    for (int i = 0; i < 4; ++i)
+      tensor->ref_raw_data().push_back(static_cast<uint8_t>(tensors.size() + 1));
+    tensors.push_back(tensor);
+  };
+  add_tensor(model.ref_graph().add_initializer());
+  auto *function = model.add_functions();
+  add_tensor(function->add_node()->add_attribute()->add_t());
+  add_tensor(function->add_attribute_proto()->add_t());
+  auto &plan = model.ref_rewritings()["optimized"];
+  auto *edit = plan.add_rewrites();
+  add_tensor(edit->add_added_initializers());
+  add_tensor(edit->add_added_nodes()->add_attribute()->add_t());
+  add_tensor(edit->add_initializer_calls()->add_attribute()->add_t());
+  auto *preparation = plan.add_added_functions();
+  add_tensor(preparation->add_node()->add_attribute()->add_t());
+  add_tensor(preparation->add_attribute_proto()->add_g()->add_initializer());
+  auto *tensor_list = function->add_attribute_proto();
+  add_tensor(tensor_list->add_tensors());
+  add_tensor(tensor_list->add_tensors());
+  auto *graphs = function->add_node()->add_attribute();
+  add_tensor(graphs->add_graphs()->add_initializer());
+  add_tensor(graphs->add_graphs()->add_node()->add_attribute()->add_t());
+  auto *preparation_tensors = preparation->add_node()->add_attribute();
+  add_tensor(preparation_tensors->add_tensors());
+  auto *preparation_graphs = preparation->add_attribute_proto();
+  add_tensor(preparation_graphs->add_graphs()->add_initializer());
+  add_tensor(preparation_graphs->add_graphs()->add_initializer());
+
+  IteratorTensorProto iterator(&model);
+  std::unordered_map<TensorProto *, size_t> visits;
+  while (iterator.next())
+    ++visits[&*iterator];
+  ASSERT_EQ(visits.size(), tensors.size());
+  for (auto *tensor : tensors)
+    EXPECT_EQ(visits.at(tensor), 1);
+
+  std::string original;
+  model.SerializeToString(original);
+  EXPECT_EQ(PopulateExternalData(model, 0, "weights.bin"), 4 * tensors.size());
+  for (auto *tensor : tensors) {
+    EXPECT_EQ(tensor->ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    ASSERT_EQ(tensor->ref_external_data().size(), 3);
+    EXPECT_EQ(tensor->ref_external_data()[0].ref_value(), "weights.bin");
+  }
+  ClearExternalData(model);
+  std::string restored;
+  model.SerializeToString(restored);
+  EXPECT_EQ(restored, original);
+
+  SerializeOptions options;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  options.raw_data_threshold = 1024;
+  ASSERT_TRUE(model.SerializeToString(serialized, external_files, 8, "weights", options));
+  EXPECT_TRUE(external_files.empty());
+  EXPECT_EQ(serialized, original);
+  options.raw_data_threshold = 0;
+  ASSERT_TRUE(model.SerializeToString(serialized, external_files, 8, "weights", options));
+  ASSERT_EQ(external_files.size(), (tensors.size() + 1) / 2);
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  IteratorTensorProto loaded(&parsed);
+  size_t count = 0;
+  while (loaded.next()) {
+    ASSERT_EQ(loaded->ref_external_data().size(), 3);
+    const auto &data = loaded->ref_external_data();
+    const auto &payload = external_files.at(data[0].ref_value());
+    const size_t offset = std::stoull(data[1].ref_value());
+    ASSERT_LE(offset + 4, payload.size());
+    const uint8_t expected = static_cast<uint8_t>(std::stoul(loaded->ref_name().substr(7)) + 1);
+    for (size_t i = 0; i < 4; ++i)
+      EXPECT_EQ(static_cast<uint8_t>(payload[offset + i]), expected);
+    ++count;
+  }
+  EXPECT_EQ(count, tensors.size());
+}
+
 TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
   ModelProto model;
 

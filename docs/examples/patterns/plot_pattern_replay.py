@@ -14,6 +14,14 @@ running pattern matching again.
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import numpy
+
+from onnx_light import onnx
+from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.onnx_core.graph_builder import OptimizationMode
 from onnx_light.onnx_lib import RewritingProto, parser
 from onnx_light.onnx_core.optimization import (
     GraphBuilder,
@@ -75,3 +83,55 @@ replayed_graph = apply_rewritings(model, loaded)
 assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("Replayed graph:")
 print(pretty_onnx(replayed_graph))
+
+# %%
+# Export a materialized model or bundle its rewritings
+# ---------------------------------------------------
+#
+# The existing ``to_onnx`` method can optimize an independent copy. With
+# ``OptimizationMode.kOptimize`` it exports the optimized model without plans.
+# With ``OptimizationMode.kRewritings`` it keeps the canonical graph and stores
+# the captured plan under ``"optimized"``. The default ``OptimizationMode.kNone``
+# preserves ordinary export. The source builder is not optimized in place.
+# A constant transpose illustrates why the bundle stores a recipe instead of
+# another weight payload.
+
+exporter = GraphBuilder("export_weights", opsets=18)
+x = exporter.inp("x", onnx.TensorProto.FLOAT, [3, 2])
+weight = exporter.init(numpy.arange(6, dtype=numpy.float32).reshape(2, 3), name="weight")
+transposed = exporter.op.Transpose(weight, perm=[1, 0])
+y = exporter.op.Add(x, transposed, outputs="y")
+exporter.out(y)
+canonical = exporter.to_onnx()
+materialized = exporter.to_onnx(optimize=OptimizationMode.kOptimize)
+bundled = exporter.to_onnx(optimize=OptimizationMode.kRewritings)
+assert bundled.graph.SerializeToString() == canonical.graph.SerializeToString()
+assert not materialized.rewritings
+assert any(edit.initializer_calls for edit in bundled.rewritings["optimized"].rewrites)
+
+# %%
+# Save, relocate weights, reload, and select a plan
+# ------------------------------------------------
+#
+# Both files use the existing external-data writer. Loading explicitly brings
+# external weights into memory so replay can prepare its constant transpose.
+# Loading alone leaves the canonical graph unchanged; selecting a named plan
+# invokes replay without running any pattern matchers.
+
+feeds = {"x": numpy.ones((3, 2), dtype=numpy.float32)}
+expected = ReferenceEvaluator(canonical).run(None, feeds)[0]
+with TemporaryDirectory() as directory:
+    path = Path(directory)
+    for name, exported in (("materialized", materialized), ("bundled", bundled)):
+        onnx.save(exported, path / f"{name}.onnx", save_as_external_data=True, size_threshold=0)
+    restored = onnx.load(path / "bundled.onnx", load_external_data=True)
+    selected = GraphBuilder(restored).apply_rewritings("optimized").to_standard_model()
+    plain = onnx.load(path / "materialized.onnx", load_external_data=True)
+    for exported in (restored, selected, plain):
+        numpy.testing.assert_array_equal(
+            ReferenceEvaluator(exported).run(None, feeds)[0], expected
+        )
+    assert selected.graph.SerializeToString() == materialized.graph.SerializeToString()
+    print(f"Canonical nodes: {len(restored.graph.node)}")
+    print(f"Materialized nodes: {len(plain.graph.node)}")
+    print("Both exports and replay produce identical outputs.")

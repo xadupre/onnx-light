@@ -657,6 +657,11 @@ public:
 
   /// Logical target for pattern matching, constant folding and peak-memory analysis.
   void set_device(Device device);
+
+  /// Copies per-scope devices from a builder with the same canonical nodes.
+  /// Matches subgraphs by node references and exported functions by
+  /// domain/name/overload. Validates matching scopes before changing devices.
+  void CopyDeviceTargetsFrom(const GraphBuilder &source);
   Device device() const noexcept { return device_; }
 
   // ── Finalization ─────────────────────────────────────────────────────
@@ -676,6 +681,9 @@ public:
   ModelProto ToStandardModel(int64_t ir_version = 0);
 
   /// Returns the finalized nodes wrapped in a :cpp:class:`FunctionProto`.
+  /// Materializes dense initializers as Constant nodes without changing the
+  /// builder. Requires a default-domain opset; rejects overridable defaults
+  /// and extended initializers, which a function cannot represent.
   ///
   /// @param domain Function domain.
   FunctionProto ToFunction(const std::string &domain = "");
@@ -837,7 +845,9 @@ private:
   void RefreshLocalFunctions();
 
   // Builds a function without running inference on its unspecialized body.
-  FunctionProto BuildFunction(const std::string &domain) const;
+  FunctionProto BuildFunction(const std::string &domain,
+                              bool include_initializer_constants = true) const;
+  void PrependInitializerConstants(FunctionProto &function) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
   // Orders producers before consumers, including lexical subgraph captures.

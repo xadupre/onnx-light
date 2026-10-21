@@ -33,32 +33,64 @@
 namespace ONNX_LIGHT_NAMESPACE {
 ExternalDataLocationExistsError::~ExternalDataLocationExistsError() = default;
 
+IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
+  const auto add_functions = [&](auto &functions) {
+    for (size_t i = functions.size(); i > 0; --i) {
+      auto &function = functions[i - 1];
+      positions_.push_back(Position{nullptr, nullptr, &function.ref_attribute_proto()});
+      positions_.push_back(Position{&function.ref_node()});
+    }
+  };
+  for (auto entry = model->ref_rewritings().rbegin(); entry != model->ref_rewritings().rend();
+       ++entry) {
+    auto &plan = entry->second;
+    add_functions(plan.ref_added_functions());
+    auto &edits = plan.ref_rewrites();
+    for (size_t i = edits.size(); i > 0; --i) {
+      auto &edit = edits[i - 1];
+      positions_.push_back(Position{&edit.ref_initializer_calls()});
+      positions_.push_back(Position{&edit.ref_added_nodes(), &edit.ref_added_initializers()});
+    }
+  }
+  add_functions(model->ref_functions());
+  if (model->has_graph())
+    positions_.push_back(
+        Position{&model->ref_graph().ref_node(), &model->ref_graph().ref_initializer()});
+}
+
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();
     // loops over nodes
     bool break_loop = false;
-    if (pos.graph->ref_node().size() > 0) {
-      while (pos.node_index < static_cast<int>(pos.graph->ref_node().size())) {
-        NodeProto *node = &(pos.graph->ref_node()[pos.node_index]);
-        while (pos.attr_index < static_cast<int>(node->ref_attribute().size())) {
-          AttributeProto &att = node->ref_attribute()[pos.attr_index];
-          if (att.has_t()) {
-            tp_ = &(att.ref_t());
-            ++pos.attr_index;
+    const size_t node_count =
+        pos.nodes != nullptr ? pos.nodes->size() : (pos.attributes != nullptr ? 1 : 0);
+    if (node_count > 0) {
+      while (pos.node_index < node_count) {
+        auto &attributes = pos.attributes != nullptr ? *pos.attributes
+                                                     : (*pos.nodes)[pos.node_index].ref_attribute();
+        while (pos.attr_index < attributes.size()) {
+          AttributeProto &att = attributes[pos.attr_index];
+          const size_t single_tensor = att.has_t() ? 1 : 0;
+          if (pos.attr_tensor_index < single_tensor + att.ref_tensors().size()) {
+            const size_t index = pos.attr_tensor_index++;
+            tp_ = single_tensor != 0 && index == 0 ? &att.ref_t()
+                                                   : &att.ref_tensors()[index - single_tensor];
             return true;
-          } else if (att.has_g()) {
-            GraphProto *subgraph = &(att.ref_g());
-            // Do not switch this line with the next one, if vector needs to be resized,
-            // the address of (Position&) pos changes as well.
-            ++pos.attr_index;
-            positions_.emplace_back(Position{subgraph});
+          }
+          const size_t single_graph = att.has_g() ? 1 : 0;
+          if (pos.attr_graph_index < single_graph + att.ref_graphs().size()) {
+            const size_t index = pos.attr_graph_index++;
+            GraphProto *subgraph = single_graph != 0 && index == 0
+                                       ? &att.ref_g()
+                                       : &att.ref_graphs()[index - single_graph];
+            positions_.emplace_back(Position{&subgraph->ref_node(), &subgraph->ref_initializer()});
             break_loop = true;
             break;
           }
-          EXT_ENFORCE(!att.has_tensors(), "not implemented yet for attribute with tensors");
-          EXT_ENFORCE(!att.has_graphs(), "not implemented yet for attribute with graphs");
           ++pos.attr_index;
+          pos.attr_tensor_index = 0;
+          pos.attr_graph_index = 0;
         }
         if (break_loop)
           break;
@@ -69,9 +101,9 @@ bool IteratorTensorProto::next() {
     if (break_loop)
       continue;
     // loop over initializers
-    if (pos.graph->ref_initializer().size() > 0) {
-      if (pos.node_initializer_index < static_cast<int64_t>(pos.graph->ref_initializer().size())) {
-        tp_ = &(pos.graph->ref_initializer()[pos.node_initializer_index]);
+    if (pos.initializers != nullptr) {
+      if (pos.node_initializer_index < pos.initializers->size()) {
+        tp_ = &(*pos.initializers)[pos.node_initializer_index];
         ++pos.node_initializer_index;
         return true;
       }
@@ -126,7 +158,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
   onnx_light_helpers::ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
   offset_t offset = 0;
   int64_t file_index = 0;
-  IteratorTensorProto it(&model.ref_graph());
+  IteratorTensorProto it(&model);
   while (it.next()) {
     if (it->has_raw_data() && it->raw_data_.size() >= threshold) {
       if (use_external_data_location && it->has_data_location() &&
@@ -178,7 +210,7 @@ bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
 }
 
 void ClearExternalData(ModelProto &model) {
-  IteratorTensorProto it(&model.ref_graph());
+  IteratorTensorProto it(&model);
   while (it.next()) {
     if (it->has_external_data()) {
       EXT_ENFORCE(it->has_raw_data(), "raw_data is empty, external data should not be removed.");
@@ -498,25 +530,16 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
 }
 
 void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir) {
-  auto handle_tensor = [&](TensorProto &tensor) {
+  IteratorTensorProto iterator(&model);
+  while (iterator.next()) {
+    TensorProto &tensor = *iterator;
     if (!tensor.has_data_location() ||
         tensor.ref_data_location() != TensorProto::DataLocation::EXTERNAL) {
-      return;
+      continue;
     }
     tensor.LoadExternalData(base_dir);
     tensor.ref_data_location() = TensorProto::DataLocation::DEFAULT;
     tensor.clr_external_data();
-  };
-
-  if (model.has_graph()) {
-    ForEachInitializerTensor(model.ref_graph(), handle_tensor);
-    ForEachAttributeTensorInGraph(model.ref_graph(), handle_tensor);
-  }
-  if (model.has_functions()) {
-    for (int i = 0; i < static_cast<int>(model.ref_functions().size()); ++i) {
-      FunctionProto &fn = model.ref_functions()[i];
-      ForEachAttributeTensorInNodes(fn.ref_node(), handle_tensor);
-    }
   }
 }
 
@@ -826,7 +849,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
   std::vector<char> buffer(static_cast<size_t>(chunk_size));
   offset_t current_offset = 0;
 
-  IteratorTensorProto it(&model.ref_graph());
+  IteratorTensorProto it(&model);
   while (it.next()) {
     TensorProto &tensor = *it;
     const bool has_inline_raw = tensor.has_raw_data() && tensor.raw_data_.size() > 0;
@@ -1165,7 +1188,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
         // (offset, length) tuples stored in external_data and pre-allocate each one so the
         // parallel writers can scatter into independent locations.
         std::unordered_map<std::string, int64_t> per_location_size;
-        IteratorTensorProto it_chunks(&model.ref_graph());
+        IteratorTensorProto it_chunks(&model);
         while (it_chunks.next()) {
           if (!it_chunks->has_external_data())
             continue;

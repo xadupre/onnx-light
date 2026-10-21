@@ -111,13 +111,10 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
   EXT_ENFORCE(max_external_file_size > 0, "max_external_file_size must be > 0.");
   onnx_light_helpers::ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
   std::vector<std::string> locations;
-  if (!model.has_graph()) {
-    return locations;
-  }
   size_t file_index = 0;
   int64_t file_offset = 0;
   std::string current_location = external_file_prefix + "_0.data";
-  IteratorTensorProto it(&model.ref_graph());
+  IteratorTensorProto it(&model);
   while (it.next()) {
     if (!it->has_raw_data() || it->raw_data_.size() < threshold) {
       continue;

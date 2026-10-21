@@ -164,6 +164,27 @@ public:
   }
 };
 
+class SwapAddInputs : public core::builder::PatternOptimization {
+public:
+  SwapAddInputs() : PatternOptimization(1, "SwapAddInputs") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.op_type() == "Add" && candidate.input(0) == "W"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
+    utils::RepeatedProtoField<NodeProto> nodes;
+    auto node = *matched[0];
+    std::swap(node.ref_input()[0], node.ref_input()[1]);
+    nodes.push_back(std::move(node));
+    return nodes;
+  }
+};
+
 class CaptureOutputAndDropIdentity : public core::builder::PatternOptimization {
 public:
   CaptureOutputAndDropIdentity() : PatternOptimization(1, "CaptureOutputAndDropIdentity") {}
@@ -353,6 +374,132 @@ TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
   EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
             canonical.SerializeAsString());
   EXPECT_EQ(builder.BuildGraph().output(0).name(), "y");
+}
+
+TEST(GraphGraph, CanonicalReferencePrunesAnnotatedIdentityValues) {
+  for (const bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    auto *scope = &source;
+    if (nested) {
+      source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+      scope = &source.MakeSubgraph("then_branch");
+    }
+    scope->MakeNode("Identity", {"x"}, {"a"});
+    scope->MakeNode("Neg", {"a"}, {"y"});
+    scope->MakeOutput("y");
+    if (nested) {
+      auto &other = source.MakeSubgraph("else_branch");
+      other.MakeNode("Abs", {"x"}, {"y"});
+      other.MakeOutput("y");
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto &reference = attributes.add();
+        reference.set_name(std::string(name) + "_ref");
+        reference.set_type(AttributeProto::STRING);
+        reference.set_s(name);
+      }
+      source.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+      source.MakeOutput("selected");
+    }
+    ModelProto model;
+    model.add_opset("", 28);
+    *model.mutable_graph() = source.BuildGraph();
+    auto *annotated = model.mutable_graph();
+    if (nested)
+      for (auto &attribute : annotated->ref_node()[0].ref_attribute())
+        if (attribute.name() == "then_branch") {
+          annotated = attribute.mutable_g();
+          break;
+        }
+    auto &info = *annotated->add_value_info();
+    info.set_name("a");
+    auto &annotation = *info.add_metadata_props();
+    annotation.set_key("annotation");
+    annotation.set_value("removed identity");
+    core::builder::GraphBuilder builder(model, SchemaLookup());
+    source.RemoveIdentityNodes();
+    const auto canonical = source.BuildGraph();
+    const auto plan =
+        core::builder::GraphGraph(
+            builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{})
+            .Optimize();
+    ASSERT_TRUE(plan.rewrites().empty());
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), canonical.SerializeAsString());
+    *model.mutable_graph() = canonical;
+    EXPECT_EQ(core::builder::GraphBuilder(model, SchemaLookup())
+                  .ApplyRewritings(plan)
+                  .BuildGraph()
+                  .SerializeAsString(),
+              canonical.SerializeAsString());
+    EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+              canonical.SerializeAsString());
+  }
+}
+
+TEST(GraphGraph, InversePreservesPerScopeDevicesIncludingRestoredSubgraphs) {
+  for (const bool remove_branch : {false, true}) {
+    SCOPED_TRACE(remove_branch);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    builder.set_device(core::symbolic::Device::kGPU0);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+    auto &function = builder.MakeLocalFunction("Body", "local");
+    function.set_device(core::symbolic::Device::kCPU);
+    function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    function.MakeInput("flag", core::symbolic::TensorType::kBool, MakeShape({}));
+    utils::RepeatedProtoField<AttributeProto> function_attributes;
+    for (const auto &name : {"body_then", "body_else"}) {
+      auto &branch = function.MakeSubgraph(name);
+      if (std::string(name) == "body_then")
+        branch.set_device(core::symbolic::Device::kGPU0);
+      branch.MakeNode("Neg", {"arg"}, {"body_result"});
+      branch.MakeOutput("body_result");
+      auto &reference = function_attributes.add();
+      reference.set_name(std::string(name) == "body_then" ? "then_branch_ref" : "else_branch_ref");
+      reference.set_type(AttributeProto::STRING);
+      reference.set_s(name);
+    }
+    function.MakeNode("If", {"flag"}, {"result"}, "", "", function_attributes);
+    function.MakeOutput("result");
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &name : {"then_branch", "else_branch"}) {
+      auto &branch = builder.MakeSubgraph(name);
+      if (std::string(name) == "then_branch")
+        branch.set_device(core::symbolic::Device::kCPU);
+      branch.MakeNode("Neg", {"x"}, {"result"});
+      branch.MakeOutput("result");
+      auto &reference = attributes.add();
+      reference.set_name(std::string(name) + "_ref");
+      reference.set_type(AttributeProto::STRING);
+      reference.set_s(name);
+    }
+    builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+    builder.MakeNode("Body", {"x", "condition"}, {"y"}, "local");
+    builder.MakeOutput("y");
+    if (!remove_branch)
+      builder.MakeOutput("selected");
+    const auto canonical = builder.BuildGraph().SerializeAsString();
+    const auto plan =
+        core::builder::GraphGraph(builder,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<ReplaceIndependentNeg>()})
+            .Optimize();
+    if (remove_branch) {
+      EXPECT_FALSE(builder.HasSubgraph("then_branch"));
+    }
+    auto restored = builder.UndoRewritings(plan);
+    EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
+    EXPECT_EQ(restored.device(), core::symbolic::Device::kGPU0);
+    EXPECT_EQ(restored.Subgraph("then_branch").device(), core::symbolic::Device::kCPU);
+    EXPECT_EQ(restored.Subgraph("else_branch").device(), core::symbolic::Device::kUndefined);
+    EXPECT_EQ(restored.LocalFunction("Body").device(), core::symbolic::Device::kCPU);
+    EXPECT_EQ(restored.LocalFunction("Body").Subgraph("body_then").device(),
+              core::symbolic::Device::kGPU0);
+    EXPECT_EQ(restored.LocalFunction("Body").Subgraph("body_else").device(),
+              core::symbolic::Device::kUndefined);
+  }
 }
 
 TEST(GraphGraph, CanonicalizesParentSubstitutionsBeforeNestedDuplicates) {
@@ -1229,8 +1376,9 @@ TEST(GraphGraph, NormalizationRecordsDisplacedRetainedNodesForCoordinateReplay) 
 TEST(GraphGraph, NormalizationRebasesManyIndependentReplacements) {
   for (const bool expand : {false, true}) {
     SCOPED_TRACE(expand);
-    const std::size_t count = expand ? 16 : 512;
+    const std::size_t count = expand ? 128 : 512;
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInitializer(MakeInitializer<float>("unused_weight", {2}, {1, 2}));
     for (std::size_t index = 0; index < count; ++index) {
       const auto input = "in_" + std::to_string(index);
       const auto output = "out_" + std::to_string(index);
@@ -1246,7 +1394,7 @@ TEST(GraphGraph, NormalizationRebasesManyIndependentReplacements) {
                      std::make_shared<ReplaceIndependentNeg>(expand)});
     core::builder::ConstantFoldingOptions options;
     options.enabled = false;
-    const auto plan = optimizer.Optimize(1, nullptr, options);
+    const auto plan = optimizer.Optimize(1, nullptr, options, /*remove_unused=*/false);
     EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
               original.graph().SerializeAsString());
     ASSERT_EQ(plan.rewrites().size(), count);
@@ -1289,6 +1437,54 @@ TEST(GraphGraph, ReplayRestoresDependenciesAndReuseBeforeExport) {
   EXPECT_FALSE(replayed.Compute().NodeReuse(2).empty());
   EXPECT_EQ(replayed.Compute().Memory(), reversed.Compute().Memory());
   EXPECT_EQ(replayed.Compute().PeakMemory(), reversed.Compute().PeakMemory());
+}
+
+TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
+  for (const bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    auto *scope = &builder;
+    if (nested) {
+      builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+      scope = &builder.MakeSubgraph("then_branch");
+    }
+    scope->MakeInitializer(MakeInitializer<int64_t>("W", {2}, {1, 2}));
+    scope->MakeNode("Shape", {"W"}, {"S"});
+    scope->MakeNode("Add", {"W", "S"}, {"Y"});
+    scope->MakeNode("Identity", {"Y"}, {"Z"});
+    scope->MakeOutput("Z");
+    if (nested) {
+      auto &other = builder.MakeSubgraph("else_branch");
+      other.MakeInitializer(MakeInitializer<int64_t>("Z", {2}, {1, 2}));
+      other.MakeOutput("Z");
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto &reference = attributes.add();
+        reference.set_name(std::string(name) + "_ref");
+        reference.set_type(AttributeProto::STRING);
+        reference.set_s(name);
+      }
+      builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+      builder.MakeOutput("selected");
+    }
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<SwapAddInputs>()});
+    graph.Canonicalize();
+    const auto canonical = builder.BuildGraph().SerializeAsString();
+    const auto tags = scope->Compute().ValueTags();
+    core::builder::ConstantFoldingOptions options;
+    options.enabled = false;
+    const auto plan = graph.Optimize(1, nullptr, options);
+    ASSERT_EQ(plan.rewrites().size(), 1u);
+    EXPECT_EQ(scope->Compute().ValueTags().at("Y"), "weight");
+    const auto optimized = builder.BuildGraph().SerializeAsString();
+    EXPECT_THROW(builder.ApplyRewritings(RewritingProto{}), core::builder::BuilderError);
+    auto restored = builder.UndoRewritings(plan);
+    EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
+    EXPECT_EQ((nested ? restored.Subgraph("then_branch") : restored).Compute().ValueTags(), tags);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
+  }
 }
 
 TEST(GraphGraph, ReplayRejectsReconstructedTagChangesBeforeFollowUpRewrites) {

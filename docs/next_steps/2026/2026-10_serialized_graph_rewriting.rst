@@ -244,6 +244,8 @@ canonicalization method is needed. Export obtains the cleaned reference from
 the optimizing builder's in-memory undo history.
 Ancestor substitutions are applied before cleaning descendant scopes, so
 canonicalization is idempotent even when captured values become equivalent.
+Annotations for values removed by these cleanups are pruned before capturing
+the reference, including when no reversible edits follow.
 Identity nodes and duplicate constants introduced by recorded replacements
 remain in place: cleaning them up would redirect references after capture and
 is outside the reversible-plan contract. Consequently, later patterns may not
@@ -258,9 +260,14 @@ The builder currently also retains an optimized-graph snapshot in memory for
 strict target validation. This is an interim memory cost, not a serialized
 format or the compact representation needed to eliminate the canonical-model
 copy in export modes.
-Independent node edits share indexed live-order tracking during inverse capture;
-their node lists are materialized once per batch, and unchanged initializer
-lists are retained.
+Independent node edits share indexed live-order tracking during both inverse
+capture and undo; their node lists are materialized once per batch, and
+unchanged initializer lists are retained. Undo validates the captured optimized
+graph directly rather than requiring its incrementally preserved tags to
+match fresh shape inference. Forward replay retains its strict tag validation.
+Device targets for the canonical root, subgraphs and local functions are
+captured privately and restored by undo, including scopes removed during
+optimization. None of this device or inverse history is serialized.
 
 .. code-block:: text
 

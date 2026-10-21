@@ -31,6 +31,13 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 namespace detail {
 
 struct RewritingUndoState {
+  struct ScopeDevices {
+    Device device = Device::kUndefined;
+    std::map<std::string, ScopeDevices> subgraphs;
+
+    bool operator==(const ScopeDevices &) const = default;
+  };
+
   struct Edit {
     Edit() = default;
 
@@ -48,6 +55,8 @@ struct RewritingUndoState {
   utils::RepeatedProtoField<OperatorSetIdProto> original_opsets, optimized_opsets;
   utils::RepeatedProtoField<FunctionProto> original_functions, optimized_functions;
   utils::RepeatedProtoField<StructTypeProto> original_struct_types, optimized_struct_types;
+  ScopeDevices devices;
+  std::map<std::tuple<std::string, std::string, std::string>, ScopeDevices> function_devices;
 };
 
 } // namespace detail
@@ -1133,6 +1142,52 @@ void CaptureInversePlan(const RewritingProto &plan, UndoState &undo, GraphProto 
   }
 }
 
+std::size_t UndoNodeBatch(GraphProto &graph, const RewritingProto &plan, const UndoState &undo,
+                          std::size_t end) {
+  const auto &last = plan.rewrites(end - 1);
+  if (!IsNodeOnlyRewrite(last))
+    return end;
+  RewritingNodeBatch batch(graph.node());
+  std::vector<LocalRewritingProto> reversed;
+  std::size_t begin = end;
+  while (begin != 0) {
+    const auto &rewrite = plan.rewrites(begin - 1);
+    const auto &inverse = undo.edits[begin - 1];
+    if (!SameGraphPath(last, rewrite) || !IsNodeOnlyRewrite(rewrite))
+      break;
+    if (!GraphHeader(inverse.before).Equals(GraphProto{}) ||
+        !GraphHeader(inverse.after).Equals(GraphProto{}) || !inverse.before.initializer().empty() ||
+        !inverse.after.initializer().empty() || !inverse.before.extended_initializer().empty() ||
+        !inverse.after.extended_initializer().empty() ||
+        graph.initializer().size() != inverse.initializer_count ||
+        graph.extended_initializer().size() != inverse.extended_initializer_count)
+      throw BuilderError("UndoRewritings: incompatible node-only undo capture.");
+    auto &reverse = reversed.emplace_back();
+    reverse.ref_matched_nodes() = rewrite.added_nodes_positions();
+    reverse.ref_added_nodes() = inverse.before.node();
+    reverse.ref_added_nodes_positions() = rewrite.matched_nodes();
+    UndoState::Edit displaced;
+    if (!batch.Append(reverse, &displaced))
+      break;
+    if (displaced.before.node().size() != inverse.after.node().size() ||
+        displaced.node_count - displaced.before.node().size() + inverse.before.node().size() !=
+            inverse.node_count)
+      throw BuilderError("UndoRewritings: incompatible node-only undo counts.");
+    for (std::size_t i = 0; i < displaced.before.node().size(); ++i)
+      if (!displaced.before.node(i).Equals(inverse.after.node(i)))
+        throw BuilderError("UndoRewritings: replacement definition does not match.");
+    --begin;
+  }
+  if (begin != end) {
+    const auto combined = batch.Rewriting();
+    const auto removed = SelectPositions(graph.node(), combined.matched_nodes());
+    graph.ref_node() = UndoEntries(graph.node(), combined.matched_nodes(), removed,
+                                   combined.added_nodes_positions(), combined.added_nodes(),
+                                   undo.edits[begin].node_count);
+  }
+  return begin;
+}
+
 int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
                                                               start)
@@ -1309,6 +1364,7 @@ std::size_t GraphGraph::Canonicalize() {
     });
     local_removed += iteration;
   } while (iteration != 0);
+  builder_.PruneValueInfos();
   if (local_removed != 0) {
     std::unordered_map<std::string, std::size_t> originals;
     for (std::size_t i = 0; i < original_nodes.size(); ++i)
@@ -1380,6 +1436,26 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
   auto undo = std::make_shared<UndoState>();
+  if (&builder_ == root) {
+    const auto capture_devices = [&](const auto &self,
+                                     const GraphBuilder &scope) -> UndoState::ScopeDevices {
+      UndoState::ScopeDevices devices;
+      devices.device = scope.device_;
+      for (const auto &subgraph : scope.subgraphs_)
+        devices.subgraphs.emplace(subgraph->name_, self(self, *subgraph));
+      for (const auto &function : scope.local_functions_) {
+        auto targets = self(self, *function);
+        const FunctionKey key{RewriteDomain(function->function_domain_), function->name_,
+                              function->function_template_.overload().value()};
+        const auto [found, inserted] = undo->function_devices.emplace(key, targets);
+        if (!inserted && found->second != targets)
+          throw BuilderError("Optimize: conflicting device targets for exported function '" +
+                             function->name_ + "'.");
+      }
+      return devices;
+    };
+    undo->devices = capture_devices(capture_devices, *root);
+  }
   RewritingProto collection;
   const auto capture_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &function : scope.local_functions_) {
@@ -2730,22 +2806,13 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   const auto &undo = *rewriting_undo_;
   if (rewrites.SerializeAsString() != undo.plan.SerializeAsString())
     throw BuilderError("UndoRewritings: plan does not match the in-memory capture.");
-  RewritingProto preparation;
-  for (const auto &function : rewrites.added_functions())
-    if (function.domain() == "onnx.light.rewriting")
-      preparation.ref_added_functions().push_back(function);
-  if (!preparation.added_functions().empty())
-    for (const auto &opset : rewrites.required_opset_imports())
-      if (opset.domain() == "onnx.light.rewriting")
-        preparation.ref_required_opset_imports().push_back(opset);
-  auto source = ApplyRewritings(preparation);
-  ModelProto model = source.model_template_;
-  *model.mutable_graph() = source.BuildGraph();
-  for (const auto &[domain, version] : source.opsets_)
+  ModelProto model = model_template_;
+  *model.mutable_graph() = BuildGraph();
+  for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
-  for (const auto &function : source.local_functions_)
+  for (const auto &function : local_functions_)
     MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
-  model.ref_struct_types() = source.Shapes().StructTypes();
+  model.ref_struct_types() = Shapes().StructTypes();
   // Recipe definitions are normalized just as they are by forward replay.
   ModelProto dependency_model;
   dependency_model.mutable_graph()->set_name("dependencies");
@@ -2756,6 +2823,19 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   utils::RepeatedProtoField<FunctionProto> expected_functions;
   for (const auto &function : dependencies.local_functions_)
     expected_functions.push_back(function->BuildFunction(function->function_domain_));
+  FunctionIndex normalized_functions;
+  for (const auto &function : expected_functions)
+    normalized_functions.emplace(Identity(function), &function);
+  bool has_preparation = false;
+  for (const auto &function : rewrites.added_functions())
+    if (function.domain() == "onnx.light.rewriting") {
+      MergeFunction(model.ref_functions(), *normalized_functions.at(Identity(function)));
+      has_preparation = true;
+    }
+  if (has_preparation)
+    for (const auto &opset : rewrites.required_opset_imports())
+      if (opset.domain() == "onnx.light.rewriting")
+        MergeImport(model.ref_opset_import(), opset);
   const auto equal_entries = [](const auto &left, const auto &right) {
     if (left.size() != right.size())
       return false;
@@ -2809,12 +2889,18 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   if (!equal_entries(model.struct_types(), undo.optimized_struct_types))
     throw BuilderError("UndoRewritings: optimized declarations do not match the capture.");
   const GraphProto optimized = model.graph();
-  for (std::size_t index = rewrites.rewrites().size(); index != 0; --index) {
+  std::size_t index = rewrites.rewrites().size();
+  while (index != 0) {
     const auto &rewrite = rewrites.rewrites(index - 1);
     const auto &inverse = undo.edits[index - 1];
     if (!rewrite.value_renames().empty())
       throw BuilderError("UndoRewritings: incomplete or rename-producing edit.");
     GraphProto &graph = *FindGraph(*model.mutable_graph(), rewrite.graph_path());
+    const auto begin = UndoNodeBatch(graph, rewrites, undo, index);
+    if (begin != index) {
+      index = begin;
+      continue;
+    }
     const auto &before = inverse.before;
     const auto &after = inverse.after;
     std::vector<std::string> path;
@@ -2839,20 +2925,29 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
         after.initializer().size() != rewrite.added_initializers().size() + prepared_count ||
         !after.extended_initializer().empty())
       throw BuilderError("UndoRewritings: incomplete initializer preparation payload.");
-    auto nodes =
-        UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
-                    rewrite.matched_nodes(), before.node(), inverse.node_count, &prepared, path);
-    auto initializers = UndoEntries(graph.initializer(), initializer_positions, after.initializer(),
-                                    rewrite.removed_initializers(), before.initializer(),
-                                    inverse.initializer_count, &prepared, path);
-    utils::RepeatedField<uint64_t> none;
-    utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
-    auto extended = UndoEntries(graph.extended_initializer(), none, no_values,
-                                rewrite.removed_extended_initializers(),
-                                before.extended_initializer(), inverse.extended_initializer_count);
-    graph.ref_node() = std::move(nodes);
-    graph.ref_initializer() = std::move(initializers);
-    graph.ref_extended_initializer() = std::move(extended);
+    if (!rewrite.matched_nodes().empty() || !rewrite.added_nodes().empty())
+      graph.ref_node() =
+          UndoEntries(graph.node(), rewrite.added_nodes_positions(), after.node(),
+                      rewrite.matched_nodes(), before.node(), inverse.node_count, &prepared, path);
+    else if (graph.node().size() != inverse.node_count)
+      throw BuilderError("UndoRewritings: incompatible retained node count.");
+    if (!initializer_positions.empty() || !rewrite.removed_initializers().empty())
+      graph.ref_initializer() =
+          UndoEntries(graph.initializer(), initializer_positions, after.initializer(),
+                      rewrite.removed_initializers(), before.initializer(),
+                      inverse.initializer_count, &prepared, path);
+    else if (graph.initializer().size() != inverse.initializer_count)
+      throw BuilderError("UndoRewritings: incompatible retained initializer count.");
+    if (!rewrite.removed_extended_initializers().empty()) {
+      utils::RepeatedField<uint64_t> none;
+      utils::RepeatedProtoField<ExtendedInitializerProto> no_values;
+      graph.ref_extended_initializer() = UndoEntries(
+          graph.extended_initializer(), none, no_values, rewrite.removed_extended_initializers(),
+          before.extended_initializer(), inverse.extended_initializer_count);
+    } else if (graph.extended_initializer().size() != inverse.extended_initializer_count) {
+      throw BuilderError("UndoRewritings: incompatible retained extended initializer count.");
+    }
+    --index;
   }
   model.ref_opset_import() = undo.original_opsets;
   model.ref_functions() = undo.original_functions;
@@ -2860,7 +2955,27 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   RestoreGraphHeaders(*model.mutable_graph(), undo.original_graph_headers);
   model.clr_rewritings();
   GraphBuilder result(model, schema_lookup_);
-  result.set_device(device_);
+  const auto restore_devices = [&](const auto &self, GraphBuilder &scope,
+                                   const UndoState::ScopeDevices &devices) -> void {
+    if (scope.subgraphs_.size() != devices.subgraphs.size())
+      throw BuilderError("UndoRewritings: incompatible restored device scopes.");
+    scope.set_device(devices.device);
+    for (const auto &subgraph : scope.subgraphs_) {
+      const auto found = devices.subgraphs.find(subgraph->name_);
+      if (found == devices.subgraphs.end())
+        throw BuilderError("UndoRewritings: missing captured subgraph device.");
+      self(self, *subgraph, found->second);
+    }
+    for (const auto &function : scope.local_functions_) {
+      const FunctionKey key{RewriteDomain(function->function_domain_), function->name_,
+                            function->function_template_.overload().value()};
+      const auto found = undo.function_devices.find(key);
+      if (found == undo.function_devices.end())
+        throw BuilderError("UndoRewritings: missing captured function device.");
+      self(self, *function, found->second);
+    }
+  };
+  restore_devices(restore_devices, result, undo.devices);
   // Replaying validates dependencies, positions, recipes and the complete roundtrip.
   ModelProto verification_model = model;
   verification_model.ref_struct_types() = undo.optimized_struct_types;

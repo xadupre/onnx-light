@@ -328,3 +328,25 @@ TEST(SharedPayloadCopy, WritableDLPackTransferDetachesOwnedSnapshot) {
   EXPECT_FALSE(source.has_raw_data());
   exported->deleter(exported);
 }
+
+TEST(SharedPayloadCopy, ReplacementDropsExportStateButRetainsOldReadOnlyView) {
+  TensorProto source;
+  source.set_data_type(TensorProto::UINT8);
+  source.add_dims(6);
+  source.set_raw_data("first!");
+  auto old_lease = source.raw_data().acquire_export_guard();
+  const auto *old_view = std::as_const(source).raw_data().data();
+
+  source.set_raw_data("second");
+  EXPECT_FALSE(source.raw_data().has_active_exports());
+  auto snapshot = utils::CopyWithSharedPayloads(source);
+  EXPECT_EQ(std::as_const(source).raw_data().data(), std::as_const(snapshot).raw_data().data());
+  EXPECT_EQ(std::memcmp(old_view, "first!", 6), 0);
+
+  auto *exported = ReleaseDLPack(source);
+  EXPECT_EQ(std::memcmp(exported->dl_tensor.data, "second", 6), 0);
+  EXPECT_EQ(std::string(snapshot.raw_data()), "second");
+  source.Clear();
+  EXPECT_EQ(std::memcmp(old_view, "first!", 6), 0);
+  exported->deleter(exported);
+}

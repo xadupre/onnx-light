@@ -1684,10 +1684,12 @@ TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
       SCOPED_TRACE(input_default);
       SCOPED_TRACE(computed);
       core::builder::GraphBuilder source("replacement", SchemaLookup(), {{"", 18}});
+      core::symbolic::SymShape input_shape;
+      input_shape.PushBack(core::symbolic::SymDim(1));
       if (input_default)
-        source.MakeInput("p", core::symbolic::TensorType::kFloat, Shape());
-      source.MakeInitializer(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
-      source.MakeInitializer(MakeInitializer<float>("seed", {2}, {3.0f, 4.0f}));
+        source.MakeInput("p", core::symbolic::TensorType::kFloat, input_shape);
+      source.MakeInitializer(MakeInitializer<float>("p", {1}, {1.0f}));
+      source.MakeInitializer(MakeInitializer<float>("seed", {1}, {3.0f}));
       source.MakeNode("Identity", {"seed"}, {"y"});
       source.MakeOutput("p");
       source.MakeOutput("y");
@@ -1712,7 +1714,7 @@ TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
         edit.add_computed_initializer_positions(0);
         edit.add_computed_initializer_positions(2);
       } else {
-        edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {2}, {5.0f, 6.0f}));
+        edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {1}, {5.0f}));
         edit.add_added_initializer_positions(0);
       }
       RewritingProto loaded;
@@ -1744,9 +1746,12 @@ TEST(PatternOptimization, ReplayAllowsFreshInitializerWithRewrittenReferences) {
   const auto result = source.ApplyRewritings(plan);
   ASSERT_EQ(result.Initializers().size(), 1u);
   EXPECT_EQ(result.Initializers()[0].name(), "fresh");
+  EXPECT_EQ(result.Initializers()[0].SerializeAsString(),
+            edit.added_initializers(0).SerializeAsString());
   EXPECT_EQ(result.Nodes()[0].input(0), "fresh");
   EXPECT_FALSE(result.HasShape("p"));
-  EXPECT_EQ(result.GetShape("fresh"), source.GetShape("p"));
+  EXPECT_EQ(result.GetShape("fresh").Shape(), source.GetShape("p").Shape());
+  EXPECT_EQ(result.GetShape("fresh").Dtype(), source.GetShape("p").Dtype());
 }
 
 TEST(PatternOptimization, ReplayAllowsFirstInputDefault) {

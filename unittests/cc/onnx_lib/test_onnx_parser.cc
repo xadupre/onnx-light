@@ -909,6 +909,26 @@ f (y, z) => (w)
   EXPECT_EQ(fn.ref_opset_import().size(), 1u);
 }
 
+TEST(onnx_defs, Parser_FunctionProto_RejectsInvalidAttributeDefault) {
+  FunctionProto fn;
+  auto status = OnnxParser::Parse(fn, "f <a: int = 1.0> () => () {}");
+  ASSERT_FALSE(status.IsOK());
+  EXPECT_NE(status.ErrorMessage().find("Mismatch between expected attribute type"),
+            std::string::npos);
+}
+
+TEST(onnx_defs, Parser_FunctionProto_AttributeDefault) {
+  FunctionProto fn;
+  ParseIt(fn, "f <required, a: int = 1> () => () {}");
+  ASSERT_EQ(fn.ref_attribute().size(), 1u);
+  EXPECT_EQ(fn.ref_attribute()[0], "required");
+  ASSERT_EQ(fn.ref_attribute_proto().size(), 1u);
+  const auto &attr = fn.ref_attribute_proto()[0];
+  EXPECT_EQ(attr.ref_name(), "a");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::INT);
+  EXPECT_EQ(attr.ref_i(), int64_t{1});
+}
+
 TEST(onnx_defs, Parser_FunctionProto_ValueInfo) {
   const char *code = R"ONNX(
 <

@@ -1253,6 +1253,9 @@ void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph) {
 }
 
 void VerifyTensor(const TensorProto &tensor) {
+  EXT_ENFORCE_INVALID(TensorProto::DataType_IsValid(tensor.data_type()), "TensorProto '",
+                      tensor.name(), "' has unrecognized data_type (",
+                      static_cast<int>(tensor.data_type()), ").");
   EXT_ENFORCE_INVALID(tensor.data_type() != TensorProto::UNDEFINED, "TensorProto '", tensor.name(),
                       "' has data_type UNDEFINED.");
 

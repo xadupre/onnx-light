@@ -1,4 +1,6 @@
 import importlib.util
+import subprocess
+import sys
 import unittest
 
 from pathlib import Path
@@ -38,6 +40,41 @@ class TestReportProtoBinarySize(unittest.TestCase):
     def test_optional_size_budget_accepts_limit(self):
         measurements = [{"source": "lib.so", "text_size": 1024}]
         self.reporter._enforce_optional_size_budget(measurements, "text_size", ".text size", 1024)
+
+    def test_size_budget_margin_boundary(self):
+        for key in ("installed_size", "text_size"):
+            with self.subTest(key=key):
+                measurements = [{"source": "lib.so", key: 106}]
+                if key == "installed_size":
+                    enforce = self.reporter._enforce_installed_size_budget
+                    arguments = ()
+                else:
+                    enforce = self.reporter._enforce_optional_size_budget
+                    arguments = (key, ".text size")
+                enforce(measurements, *arguments, 101, margin_percent=5)
+                measurements[0][key] = 107
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    r"maximum 106.*lib\.so: 107.*Reference: 101 bytes; margin: 5%.*"
+                    r"New proto fields, native code, or compiler/build changes",
+                ):
+                    enforce(measurements, *arguments, 101, margin_percent=5)
+
+    def test_negative_size_budget_margin_is_rejected(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                self.reporter.__file__,
+                "unused.so",
+                "--size-budget-margin-percent",
+                "-1",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--size-budget-margin-percent must be non-negative", result.stderr)
 
     def test_text_size_budget_boundary(self):
         measurements = [{"source": "lib.so", "text_size": 1_174_506}]

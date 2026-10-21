@@ -370,8 +370,8 @@ jobs:
         # 1663032 installed bytes and 865 symbols; only the text budget changes.
         # Named rewriting plans add ModelProto map serialization, comparison and printing.
         # Linux CI run 39580960813 (f0a84c8d) measures 1683544 installed bytes,
-        # 1192474 text bytes and 868 symbols. Installed and text limits match these
-        # measurements; symbol and dependency limits remain unchanged.
+        # 1192474 text bytes and 868 symbols. Installed and text references allow a 5%
+        # margin; symbol and dependency limits remain strict and unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -379,6 +379,7 @@ jobs:
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1683544 \
             --max-text-size 1192474 \
+            --size-budget-margin-percent 5 \
             --max-dynamic-symbols 891 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \

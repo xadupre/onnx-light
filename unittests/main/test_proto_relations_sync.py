@@ -141,6 +141,8 @@ class TestProtoRelationsSync(ExtTestCase):
         svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
         _, _, width, height = map(float, svg.getroot().attrib["viewBox"].split())
         self.assertGreater(height, width)
+        # Keeps both dimensions below the original landscape diagram's width.
+        self.assertLess(height, 5000)
 
     def test_svg_matches_dot(self):
         svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")

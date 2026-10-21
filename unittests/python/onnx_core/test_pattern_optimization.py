@@ -400,12 +400,20 @@ class TestPatternOptimization(ExtTestCase):
             builder = optim.GraphBuilder(
                 onnx.load(source / "model.onnx", load_external_data=True)
             )
+            builder.register_pattern(optim.TransposeTransposePattern(priority=-1))
             before = builder.to_onnx().SerializeToString()
             optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
             bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
             edits = bundled.rewritings["optimized"].rewrites
             self.assertTrue(any(edit.initializer_calls for edit in edits))
             self.assertFalse(any(edit.added_initializers for edit in edits))
+            self.assertTrue(
+                any(
+                    node.op_type == "Transpose"
+                    for function in bundled.rewritings["optimized"].added_functions
+                    for node in function.node
+                )
+            )
             for name, exported in (("plain", optimized), ("bundle", bundled)):
                 path = target / f"{name}.onnx"
                 onnx.save(exported, path, save_as_external_data=True, size_threshold=0)

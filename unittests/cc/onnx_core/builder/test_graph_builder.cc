@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 
@@ -1785,6 +1786,96 @@ TEST(GraphBuilder, ToFunctionRejectsOverridableInitializersAndMissingOpset) {
   missing_opset.MakeInitializer(MakeInitializer<float>("w", {2}, {1.0f, 2.0f}));
   missing_opset.MakeOutput("w");
   EXPECT_THROW(missing_opset.ToFunction("custom"), core::builder::BuilderError);
+}
+
+TEST(GraphBuilder, ToFunctionValidatesInitializerTypesAtSelectedOpset) {
+  for (int opset : {8, 9}) {
+    for (bool optimize : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "opset=" << opset << ", optimize=" << optimize);
+      core::builder::GraphBuilder builder("reshape", SchemaLookup(), {{"", opset}, {"custom", 1}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      const auto dims = MakeInitializer<int64_t>("dims", {2}, {3, 2});
+      builder.MakeInitializer(dims);
+      builder.MakeNode("Reshape", {"x", "dims"}, {"y"});
+      builder.MakeOutput("y");
+      if (optimize) {
+        core::builder::GraphGraph graph(builder);
+        graph.Optimize();
+      }
+      const auto before = builder.BuildGraph().SerializeAsString();
+      const auto opsets = builder.OpsetVersions();
+      const auto shape = builder.GetShape("y").Shape();
+      if (opset == 8) {
+        try {
+          builder.ToFunction("custom");
+          FAIL() << "INT64 initializer must not become Constant-1";
+        } catch (const core::builder::BuilderError &error) {
+          const std::string message = error.what();
+          EXPECT_NE(message.find("dims"), std::string::npos);
+          EXPECT_NE(message.find("INT64"), std::string::npos);
+          EXPECT_NE(message.find("opset 8"), std::string::npos);
+        }
+      } else {
+        const auto function = builder.ToFunction("custom");
+        ASSERT_EQ(function.node().size(), 2u);
+        EXPECT_EQ(function.node(0).op_type(), "Constant");
+        EXPECT_EQ(function.node(0).output(0), "dims");
+        EXPECT_EQ(function.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
+        ASSERT_EQ(function.opset_import().size(), opsets.size());
+        for (const auto &entry : function.opset_import())
+          EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+      }
+      EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
+      EXPECT_EQ(builder.OpsetVersions(), opsets);
+      EXPECT_EQ(builder.GetShape("y").Shape(), shape);
+    }
+  }
+}
+
+TEST(GraphBuilder, ToFunctionAllowsFloatingInitializerAtOpset8) {
+  core::builder::GraphBuilder builder("add", SchemaLookup(), {{"", 8}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  const auto weight = MakeInitializer<float>("w", {2}, {1.f, 2.f});
+  builder.MakeInitializer(weight);
+  builder.MakeNode("Add", {"x", "w"}, {"y"});
+  builder.MakeOutput("y");
+  const auto function = builder.ToFunction("custom");
+  ASSERT_EQ(function.node().size(), 2u);
+  EXPECT_EQ(function.node(0).op_type(), "Constant");
+  EXPECT_EQ(function.node(0).attribute(0).t().SerializeAsString(), weight.SerializeAsString());
+  ASSERT_EQ(function.opset_import().size(), 1u);
+  EXPECT_EQ(function.opset_import(0).version(), 8);
+  EXPECT_EQ(builder.OpsetVersion(""), 8);
+}
+
+TEST(GraphBuilder, LocalFunctionDefinitionValidatesInitializerConstantTypes) {
+  for (int opset : {8, 9}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", opset}, {"custom", 1}});
+    auto &function = builder.MakeLocalFunction("F", "custom");
+    function.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    const auto dims = MakeInitializer<int64_t>("dims", {2}, {3, 2});
+    function.MakeInitializer(dims);
+    function.MakeNode("Reshape", {"x", "dims"}, {"y"});
+    const auto opsets = function.OpsetVersions();
+    if (opset == 8) {
+      EXPECT_THROW(function.MakeOutput("y"), core::builder::BuilderError);
+      EXPECT_THROW(builder.ToModel(), core::builder::BuilderError);
+    } else {
+      function.MakeOutput("y");
+      const auto model = builder.ToModel();
+      ASSERT_EQ(model.functions().size(), 1u);
+      const auto &exported = model.functions(0);
+      ASSERT_EQ(exported.node().size(), 2u);
+      EXPECT_EQ(exported.node(0).op_type(), "Constant");
+      EXPECT_EQ(exported.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
+      for (const auto &entry : exported.opset_import())
+        EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+    }
+    EXPECT_EQ(function.OpsetVersions(), opsets);
+    EXPECT_EQ(builder.OpsetVersions(), opsets);
+    ASSERT_EQ(function.Initializers().size(), 1u);
+    EXPECT_EQ(function.Initializers()[0].SerializeAsString(), dims.SerializeAsString());
+  }
 }
 
 TEST(GraphBuilder, LocalFunctionWithInitializerPreservesShapeInferenceAndModelExport) {

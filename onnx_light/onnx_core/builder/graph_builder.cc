@@ -4146,6 +4146,7 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
         "GraphBuilder: a FunctionProto cannot carry extended initializers; remove them or "
         "produce a model / graph instead.");
   }
+  ValidateInitializerConstants();
   SortNodesTopologically();
   MoveShapeAndSizeNodes();
   if (parent_ == nullptr) {
@@ -4169,23 +4170,58 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   return function;
 }
 
-void GraphBuilder::PrependInitializerConstants(FunctionProto &function) const {
+void GraphBuilder::ValidateInitializerConstants() const {
   if (initializers_.empty())
     return;
-  if (OpsetVersion("") <= 0)
+  const int opset = OpsetVersion("");
+  if (opset <= 0)
     throw BuilderError(
         "GraphBuilder: exporting initializer constants requires a default-domain opset.");
-  utils::RepeatedProtoField<NodeProto> nodes;
-  nodes.reserve(initializers_.size() + function.node().size());
+  const auto schemas = schema_lookup_ ? schema_lookup_("Constant") : std::vector<LightOpSchema>{};
+  const LightOpSchema *schema = nullptr;
+  for (const auto &candidate : schemas) {
+    if (NormaliseDomain(candidate.domain()) == NormaliseDomain("") &&
+        candidate.since_version() <= opset &&
+        (schema == nullptr || candidate.since_version() > schema->since_version())) {
+      schema = &candidate;
+    }
+  }
   for (const auto &initializer : initializers_) {
     const auto &name = initializer.name().value();
     if (std::any_of(inputs_.begin(), inputs_.end(),
                     [&](const auto &input) { return input.name() == name; }))
       throw BuilderError("GraphBuilder: a FunctionProto cannot preserve overridable initializer '" +
                          name + "'.");
+    if (schema != nullptr) {
+      const auto &constraints = schema->type_constraints();
+      const auto constraint =
+          std::find_if(constraints.begin(), constraints.end(), [&](const auto &entry) {
+            return !schema->outputs().empty() &&
+                   entry.type_param_str == schema->outputs().front().type;
+          });
+      const auto type = core::symbolic::DataTypeToTensorType(initializer.data_type());
+      if (constraint == constraints.end() ||
+          std::find(constraint->allowed_type_strs.begin(), constraint->allowed_type_strs.end(),
+                    type) == constraint->allowed_type_strs.end()) {
+        throw BuilderError("GraphBuilder: initializer '" + name + "' of type " +
+                           TensorProto::DataType_Name(initializer.data_type()) +
+                           " cannot be converted to Constant at ONNX opset " +
+                           std::to_string(opset) + ".");
+      }
+    }
+  }
+}
+
+void GraphBuilder::PrependInitializerConstants(FunctionProto &function) const {
+  ValidateInitializerConstants();
+  if (initializers_.empty())
+    return;
+  utils::RepeatedProtoField<NodeProto> nodes;
+  nodes.reserve(initializers_.size() + function.node().size());
+  for (const auto &initializer : initializers_) {
     auto &node = nodes.add();
     node.set_op_type("Constant");
-    node.add_output(name);
+    node.add_output(initializer.name().value());
     auto *attribute = node.add_attribute();
     attribute->set_name("value");
     attribute->set_type(AttributeProto::TENSOR);

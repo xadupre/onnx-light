@@ -14,6 +14,8 @@ plan. ``GraphBuilder.apply_rewritings(name)`` explicitly applies one plan to thi
 canonical source and rejects unknown names, invalid edits and unavailable
 implementations, without falling back to another variant.
 The same method accepts a ``RewritingProto`` directly instead of a name.
+For ``SequenceMap``, named-plan compatibility also requires a registered
+output-packing callback, not just the control-flow handler and body kernels.
 
 ``model.add_rewriting(name, plan)`` rejects duplicate names.
 ``model.rewritings`` is a mutable map, not a detached Python dictionary.

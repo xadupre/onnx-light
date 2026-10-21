@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
@@ -22,6 +23,7 @@
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
+#include "onnx_lib/common/scoped_resource.h"
 #include "onnx_op/operator_sets.h"
 
 #include <algorithm>
@@ -554,6 +556,65 @@ TEST(PatternOptimization, NamedVariantsCheckControlFlowAndBoundFunctionGraphs) {
         EXPECT_NO_THROW(builder.ApplyRewritings("variant"));
     }
   }
+}
+
+TEST(PatternOptimization, NamedRewritingsRequireSequenceMapPackingCallback) {
+  auto previous = core::runtime::GetSequenceMapPackFn();
+  int pack_calls = 0;
+  ScopeExit restore(
+      [&]() noexcept { core::runtime::RegisterSequenceMapPackFn(std::move(previous)); });
+  core::runtime::RegisterSequenceMapPackFn({});
+
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 18);
+  auto &graph = *model.mutable_graph();
+  graph.set_name("sequence_map");
+  auto &input = *graph.add_input();
+  input.set_name("xs");
+  auto &element =
+      *input.mutable_type()->mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  element.set_elem_type(TensorProto::FLOAT);
+  element.mutable_shape()->add_dim()->set_dim_value(1);
+  auto output = input;
+  output.set_name("ys");
+  graph.add_output(output);
+  auto node = MakeNode("SequenceMap", {"xs"}, {"ys"});
+  auto &attribute = *node.add_attribute();
+  attribute.set_name("body");
+  attribute.set_type(AttributeProto::GRAPH);
+  auto &body = *attribute.mutable_g();
+  body.set_name("passthrough");
+  auto &item = *body.add_input();
+  item.set_name("item");
+  item.mutable_type()->mutable_tensor_type()->CopyFrom(element);
+  body.add_output(item);
+  graph.ref_node().push_back(std::move(node));
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  builder.AddRewriting("mapped", RewritingProto{});
+  EXPECT_THROW(builder.ApplyRewritings("mapped"), core::builder::BuilderError);
+
+  core::runtime::RegisterSequenceMapPackFn([&](core::runtime::RuntimeContext &,
+                                               const core::runtime::Sequence &sequence,
+                                               const std::vector<core::runtime::Tensors> &outputs) {
+    ++pack_calls;
+    return core::runtime::Sequences{
+        core::runtime::Sequence("packed", sequence.elem_type, outputs.at(0))};
+  });
+  const auto selected = builder.ApplyRewritings("mapped").BuildGraph();
+  EXPECT_EQ(pack_calls, 0);
+  core::runtime::RuntimeContext runtime(
+      core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
+  runtime.PutSequence(
+      "xs", core::runtime::Sequence("xs", TensorProto::FLOAT,
+                                    {core::runtime::Tensor::FromFloat("first", {1}, {2}),
+                                     core::runtime::Tensor::FromFloat("second", {1}, {3})}));
+  core::runtime::RuntimeSession session(runtime.GetExecutionPlan(selected));
+  session.Run(runtime);
+  EXPECT_EQ(pack_calls, 1);
+  ASSERT_EQ(runtime.GetSequence("ys").size(), 2u);
+  EXPECT_FLOAT_EQ(runtime.GetSequence("ys").at(0).AsFloat()[0], 2);
+  EXPECT_FLOAT_EQ(runtime.GetSequence("ys").at(1).AsFloat()[0], 3);
 }
 
 TEST(PatternOptimization, ModelReplayPreparesDependentOutputsBeforeRemovingSources) {

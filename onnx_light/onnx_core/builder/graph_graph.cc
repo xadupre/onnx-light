@@ -2091,6 +2091,11 @@ GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
             const bool control_flow = RewriteDomain(node.domain().value()) == kDefaultOnnxDomain &&
                                       (node.op_type() == "If" || node.op_type() == "Loop" ||
                                        node.op_type() == "Scan" || node.op_type() == "SequenceMap");
+            if (control_flow && node.op_type() == "SequenceMap" &&
+                !core::runtime::GetSequenceMapPackFn()) {
+              throw BuilderError("ApplyRewritings '" + name +
+                                 "': no SequenceMap packing function has been registered.");
+            }
             if (!control_flow &&
                 core::runtime::KernelDispatchTable().count(
                     key + core::symbolic::DeviceKeySuffix(device)) == 0 &&

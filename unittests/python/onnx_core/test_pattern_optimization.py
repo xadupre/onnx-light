@@ -21,7 +21,7 @@ from onnx_light.onnx import ModelProto, TensorProto
 from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_op import GetAllOnnxOpSchemasWithHistory
-from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions, ProtoKind
+from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions, OptimizationMode, ProtoKind
 from onnx_light.onnx_core.shape_inference import Device
 
 optim = import_or_skip("onnx_light.onnx_core.optimization")
@@ -368,8 +368,11 @@ class TestPatternOptimization(ExtTestCase):
         builder.add_rewriting("other", optim.RewritingProto())
         canonical = builder.to_onnx()
         before = canonical.SerializeToString()
-        optimized = builder.to_onnx(optimize=True)
-        bundled = builder.to_onnx(optimize="rewritings")
+        optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertEqual(
+            builder.to_onnx(optimize=OptimizationMode.kNone).SerializeToString(), before
+        )
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
         self.assertFalse(optimized.rewritings)
         self.assertEqual(bundled.graph.SerializeToString(), canonical.graph.SerializeToString())
@@ -396,8 +399,8 @@ class TestPatternOptimization(ExtTestCase):
                 onnx.load(source / "model.onnx", load_external_data=True)
             )
             before = builder.to_onnx().SerializeToString()
-            optimized = builder.to_onnx(optimize=True)
-            bundled = builder.to_onnx(optimize="rewritings")
+            optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+            bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
             edits = bundled.rewritings["optimized"].rewrites
             self.assertTrue(any(edit.initializer_calls for edit in edits))
             self.assertFalse(any(edit.added_initializers for edit in edits))
@@ -429,15 +432,19 @@ class TestPatternOptimization(ExtTestCase):
     def test_to_onnx_optimization_options_validate_before_matching(self):
         builder = optim.GraphBuilder(_double_neg_model())
         before = builder.to_onnx().SerializeToString()
-        for option in (None, 0, 1, "unknown"):
-            with self.subTest(option=option), self.assertRaisesRegex(ValueError, "optimize"):
+        for option in (None, False, True, 0, 1, "rewritings", "unknown", ProtoKind.kModel):
+            with (
+                self.subTest(option=option),
+                self.assertRaisesRegex(TypeError, "OptimizationMode"),
+            ):
                 builder.to_onnx(optimize=option)
+            self.assertEqual(builder.to_onnx().SerializeToString(), before)
         for kind in (ProtoKind.kGraph, ProtoKind.kFunction):
             with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "kModel"):
-                builder.to_onnx(kind, optimize="rewritings")
+                builder.to_onnx(kind, optimize=OptimizationMode.kRewritings)
         builder.add_rewriting("optimized", optim.RewritingProto())
         with self.assertRaisesRegex(ValueError, "already exists"):
-            builder.to_onnx(optimize="rewritings")
+            builder.to_onnx(optimize=OptimizationMode.kRewritings)
         builder_model = builder.to_onnx()
         builder_model.clear_rewritings()
         self.assertEqual(builder_model.SerializeToString(), before)
@@ -457,7 +464,7 @@ class TestPatternOptimization(ExtTestCase):
 
         builder = optim.GraphBuilder(_double_neg_model())
         builder.register_pattern(LiteralNegNegPattern())
-        bundled = builder.to_onnx(optimize="rewritings")
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertFalse(bundled.graph.initializer)
         with TemporaryDirectory() as directory:
             path = Path(directory) / "bundle.onnx"
@@ -482,15 +489,19 @@ class TestPatternOptimization(ExtTestCase):
         model.add_rewriting("other", optim.RewritingProto())
         builder = optim.GraphBuilder(model)
         before = builder.to_onnx().SerializeToString()
-        plain = builder.to_onnx(optimize=True)
+        plain = builder.to_onnx(optimize=OptimizationMode.kOptimize)
         self.assertFalse(plain.rewritings)
-        bundled = builder.to_onnx(optimize="rewritings")
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertFalse(bundled.rewritings["optimized"].rewrites)
         self.assertFalse(
             optim.GraphBuilder(bundled).apply_rewritings("optimized").to_model().rewritings
         )
-        self.assertEqual(len(builder.to_onnx(ProtoKind.kGraph, optimize=True).node), 0)
-        function = builder.to_onnx(ProtoKind.kFunction, domain="local", optimize=True)
+        self.assertEqual(
+            len(builder.to_onnx(ProtoKind.kGraph, optimize=OptimizationMode.kOptimize).node), 0
+        )
+        function = builder.to_onnx(
+            ProtoKind.kFunction, domain="local", optimize=OptimizationMode.kOptimize
+        )
         self.assertEqual(function.domain, "local")
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
 
@@ -504,7 +515,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(_double_neg_model(), schema_lookup=schema_lookup)
         builder.register_pattern(NegNegPattern())
         schema_calls.clear()
-        builder.to_onnx(optimize="rewritings")
+        builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertIn("Neg", schema_calls)
 
         class FailingPattern(NegNegPattern):
@@ -514,7 +525,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(_double_neg_model(), schema_lookup=None)
         builder.register_pattern(FailingPattern())
         before = builder.to_onnx().SerializeToString()
-        for option in (True, "rewritings"):
+        for option in (OptimizationMode.kOptimize, OptimizationMode.kRewritings):
             with (
                 self.subTest(option=option),
                 self.assertRaisesRegex(RuntimeError, "export matcher failed"),

@@ -21,6 +21,7 @@ import numpy
 
 from onnx_light import onnx
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.onnx_core.graph_builder import OptimizationMode
 from onnx_light.onnx_lib import RewritingProto, parser
 from onnx_light.onnx_core.optimization import (
     GraphBuilder,
@@ -88,9 +89,10 @@ print(pretty_onnx(replayed_graph))
 # ---------------------------------------------------
 #
 # The existing ``to_onnx`` method can optimize an independent copy. With
-# ``optimize=True`` it exports the optimized model without plans. With
-# ``optimize="rewritings"`` it keeps the canonical graph and stores the captured
-# plan under ``"optimized"``. The source builder is not optimized in place.
+# ``OptimizationMode.kOptimize`` it exports the optimized model without plans.
+# With ``OptimizationMode.kRewritings`` it keeps the canonical graph and stores
+# the captured plan under ``"optimized"``. The default ``OptimizationMode.kNone``
+# preserves ordinary export. The source builder is not optimized in place.
 # A constant transpose illustrates why the bundle stores a recipe instead of
 # another weight payload.
 
@@ -101,8 +103,8 @@ transposed = exporter.op.Transpose(weight, perm=[1, 0])
 y = exporter.op.Add(x, transposed, outputs="y")
 exporter.out(y)
 canonical = exporter.to_onnx()
-materialized = exporter.to_onnx(optimize=True)
-bundled = exporter.to_onnx(optimize="rewritings")
+materialized = exporter.to_onnx(optimize=OptimizationMode.kOptimize)
+bundled = exporter.to_onnx(optimize=OptimizationMode.kRewritings)
 assert bundled.graph.SerializeToString() == canonical.graph.SerializeToString()
 assert not materialized.rewritings
 assert any(edit.initializer_calls for edit in bundled.rewritings["optimized"].rewrites)

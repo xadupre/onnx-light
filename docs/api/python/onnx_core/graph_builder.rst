@@ -24,22 +24,27 @@ applies to models, and ``domain`` applies to functions. String selectors such as
 
 The keyword-only ``optimize`` option selects an optimization/export workflow::
 
+    from onnx_light.onnx_core.graph_builder import OptimizationMode
+
     canonical = builder.to_onnx()
-    materialized = builder.to_onnx(optimize=True)
-    bundled = builder.to_onnx(optimize="rewritings")
+    materialized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+    bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
     replayed = GraphBuilder(bundled).apply_rewritings("optimized").to_standard_model()
 
-``False`` remains the default and preserves the existing export behavior.
-``True`` optimizes a copy with the global and builder-local pattern registrations
-and returns the optimized result without rewrite plans. Model exports use
-``to_standard_model`` and reject constructs that standard ONNX cannot represent.
-Graph and function exports also accept ``True``.
+``OptimizationMode.kNone`` is the default and preserves the existing export
+behavior. ``OptimizationMode.kOptimize`` optimizes a copy with the global and
+builder-local pattern registrations and returns the optimized result without
+rewrite plans. Model exports use ``to_standard_model`` and reject constructs that
+standard ONNX cannot represent.
+Graph and function exports also accept ``OptimizationMode.kOptimize``.
 
-``"rewritings"`` returns the finalized, non-optimized canonical model with the
-captured plan in ``ModelProto.rewritings["optimized"]``. This mode requires
+``OptimizationMode.kRewritings`` returns the finalized, non-optimized canonical
+model with the captured plan in ``ModelProto.rewritings["optimized"]``. This mode requires
 ``ProtoKind.kModel``; graphs and functions cannot contain the map. Other attached
 plans are retained, but an existing ``"optimized"`` key is an error rather than
 being overwritten. Loading a bundle does not execute its plan.
+The option accepts only ``OptimizationMode`` members, not booleans, integers,
+strings, or members of another enum.
 
 Both optimization modes preserve the source builder's graph and registrations
 after ordinary export finalization. They keep a canonical copy rather than

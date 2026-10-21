@@ -11,8 +11,9 @@ captures initializer recipes and shared function definitions in
 ``LocalRewritingProto`` / ``RewritingProto``. ``GraphBuilder::ApplyRewritings``
 (Python: ``builder.apply_rewritings``) returns a new builder, prepares constants
 once and preserves model-level additions. ``GraphBuilder.to_onnx`` exports
-the canonical model by default, the optimized result with ``optimize=True``,
-or the canonical model with its captured plan with ``optimize="rewritings"``.
+the canonical model by default (``OptimizationMode.kNone``), the optimized
+result with ``optimize=OptimizationMode.kOptimize``, or the canonical model
+with its captured plan with ``optimize=OptimizationMode.kRewritings``.
 
 Existing building blocks
 ++++++++++++++++++++++++
@@ -284,13 +285,14 @@ builders and finalization that changes node order. Finalize before attaching
 plans. Callers editing proto fields directly must explicitly clear or
 regenerate the map; no source fingerprint or hidden repair is performed.
 ORT and standard-model export reject attached variants rather than dropping
-them. Python ``to_onnx(optimize=True)`` optimizes an independent builder and
-exports the materialized result without attached variants; model export rejects
-nonstandard fields through ``to_standard_model``.
-``to_onnx(optimize="rewritings")`` instead returns the finalized canonical
-model with the captured plan named ``"optimized"``. It retains other plans,
-rejects a duplicate name, and requires model export. The default ``False``
-continues to export the current builder without running optimization.
+them. Python ``to_onnx(optimize=OptimizationMode.kOptimize)`` optimizes an
+independent builder and exports the materialized result without attached
+variants; model export rejects nonstandard fields through ``to_standard_model``.
+``to_onnx(optimize=OptimizationMode.kRewritings)`` instead returns the finalized
+canonical model with the captured plan named ``"optimized"``. It retains other plans,
+rejects a duplicate name, and requires model export. The default
+``OptimizationMode.kNone`` continues to export the current builder without
+running optimization. Only members of ``OptimizationMode`` are accepted.
 Both modes use the existing global and builder-local pattern registrations.
 The source remains at its finalized canonical state; no inverse replay is
 needed. Load external weights before optimization and use the existing

@@ -2128,8 +2128,18 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
              path + "/subgraph:" + originals[child]->name_);
     }
     for (const auto &child : reconstructed.local_functions_) {
-      if (const auto *original = FindNamedBuilder(source.local_functions_, child->name_))
-        self(self, *original, *child, path + "/function:" + child->name_);
+      const auto identity = MakeFunctionIdentifier(child->function_domain_, child->name_,
+                                                   child->function_template_.overload());
+      const auto original = std::find_if(
+          source.local_functions_.begin(), source.local_functions_.end(),
+          [&](const auto &function) {
+            return MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                          function->function_template_.overload()) == identity;
+          });
+      if (original != source.local_functions_.end())
+        self(self, **original, *child,
+             path + "/function:" + child->function_domain_ + "::" + child->name_ + ":" +
+                 child->function_template_.overload().value());
     }
   };
   validate_tags(validate_tags, *this, result, name_);

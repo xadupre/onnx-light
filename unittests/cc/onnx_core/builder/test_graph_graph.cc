@@ -998,6 +998,40 @@ TEST(GraphGraph, ReplayValidatesScopedTagsAndAllowsUntaggedValues) {
   }
 }
 
+TEST(GraphGraph, ReplayMatchesFunctionTagsByDomainAndOverload) {
+  for (const bool overload : {false, true}) {
+    SCOPED_TRACE(overload);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 28);
+    for (const bool shape : {false, true}) {
+      auto &function = *model.add_functions();
+      function.set_name("Body");
+      function.set_domain(shape && !overload ? "other" : "local");
+      if (shape && overload)
+        function.set_overload("shape");
+      function.add_opset("", 28);
+      function.add_input("X");
+      function.add_output("Y");
+      function.add_node(MakeNode(shape ? "Shape" : "Neg", {"X"}, {"Y"}));
+    }
+    core::builder::GraphBuilder source(model, SchemaLookup());
+    ASSERT_EQ(source.LocalFunctions().size(), 2u);
+    EXPECT_EQ(source.LocalFunctions()[0]->Compute().ValueTags().at("Y"), "weight");
+    EXPECT_EQ(source.LocalFunctions()[1]->Compute().ValueTags().at("Y"), "shape");
+    auto matching = source.ApplyRewritings(RewritingProto{});
+    ASSERT_EQ(matching.LocalFunctions().size(), 2u);
+    for (std::size_t index = 0; index < 2; ++index) {
+      EXPECT_EQ(matching.LocalFunctions()[index]->Compute().ValueTags(),
+                source.LocalFunctions()[index]->Compute().ValueTags());
+    }
+    auto &compute =
+        const_cast<core::compute::ComputeContext &>(source.LocalFunctions()[1]->Compute());
+    compute.SeedValueTag("Y", "axes", source.LocalFunctions()[1]->Nodes());
+    EXPECT_THROW(source.ApplyRewritings(RewritingProto{}), core::builder::BuilderError);
+  }
+}
+
 TEST(GraphGraph, FoldedInitializerRefreshesLastUseWithoutChangingConsumerReferences) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
   source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));

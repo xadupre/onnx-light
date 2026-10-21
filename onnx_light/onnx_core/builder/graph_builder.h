@@ -630,6 +630,8 @@ public:
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
+  /// Throws before applying rewrites if reconstruction changes or loses an existing
+  /// value tag, including tags in reconstructed nested builders.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.

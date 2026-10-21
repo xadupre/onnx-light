@@ -2108,6 +2108,31 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     }
   }
   GraphBuilder result(model, schema_lookup_);
+  const auto validate_tags = [&](const auto &self, const GraphBuilder &source,
+                                 const GraphBuilder &reconstructed,
+                                 const std::string &path) -> void {
+    const auto &tags = reconstructed.Compute().ValueTags();
+    for (const auto &[name, tag] : source.Compute().ValueTags()) {
+      const auto found = tags.find(name);
+      if (found == tags.end() || found->second != tag) {
+        throw BuilderError("ApplyRewritings: value '" + name + "' in '" + path +
+                           "' has existing tag '" + tag + "' but reconstructed tag " +
+                           (found == tags.end() ? "<absent>" : "'" + found->second + "'") + ".");
+      }
+    }
+    for (std::size_t index = 0; index < source.nodes_.size(); ++index) {
+      const auto originals = source.ReferencedSubgraphs(source.nodes_[index]);
+      const auto children = reconstructed.ReferencedSubgraphs(reconstructed.nodes_[index]);
+      for (std::size_t child = 0; child < originals.size(); ++child)
+        self(self, *originals[child], *children.at(child),
+             path + "/subgraph:" + originals[child]->name_);
+    }
+    for (const auto &child : reconstructed.local_functions_) {
+      if (const auto *original = FindNamedBuilder(source.local_functions_, child->name_))
+        self(self, *original, *child, path + "/function:" + child->name_);
+    }
+  };
+  validate_tags(validate_tags, *this, result, name_);
   result.set_device(device_);
   std::size_t index = 0;
   while (index < rewrites.rewrites().size()) {

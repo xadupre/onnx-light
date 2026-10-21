@@ -137,10 +137,22 @@ def _render(measurements: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _size_budget_explanation(reference_size: int, margin_percent: int) -> str:
+    """Explains the reference and possible causes of binary-size growth."""
+    return (
+        f" Reference: {reference_size:,} bytes; margin: {margin_percent}%. "
+        "The binary exceeds the recorded CI reference plus its allowed margin. "
+        "New proto fields, native code, or compiler/build changes can increase its size. "
+        "Inspect the changes and build configuration before deliberately updating the reference."
+    )
+
+
 def _enforce_installed_size_budget(
-    measurements: list[dict[str, object]], maximum_size: int
+    measurements: list[dict[str, object]], maximum_size: int, margin_percent: int = 0
 ) -> None:
     """Raises an error when an installed library exceeds the size budget."""
+    reference_size = maximum_size
+    maximum_size = reference_size * (100 + margin_percent) // 100
     oversized = [
         measurement
         for measurement in measurements
@@ -156,13 +168,20 @@ def _enforce_installed_size_budget(
     raise RuntimeError(
         f"lib_onnx_proto installed-size budget exceeded "
         f"(maximum {maximum_size:,} bytes): {details}"
+        + _size_budget_explanation(reference_size, margin_percent)
     )
 
 
 def _enforce_optional_size_budget(
-    measurements: list[dict[str, object]], key: str, label: str, maximum_size: int
+    measurements: list[dict[str, object]],
+    key: str,
+    label: str,
+    maximum_size: int,
+    margin_percent: int = 0,
 ) -> None:
     """Raises an error when a measured optional size exceeds its budget."""
+    reference_size = maximum_size
+    maximum_size = reference_size * (100 + margin_percent) // 100
     unavailable = [
         str(measurement["source"]) for measurement in measurements if measurement[key] is None
     ]
@@ -175,6 +194,11 @@ def _enforce_optional_size_budget(
         )
         raise RuntimeError(
             f"lib_onnx_proto {label} budget exceeded (maximum {maximum_size:,}): {details}"
+            + (
+                _size_budget_explanation(reference_size, margin_percent)
+                if key == "text_size"
+                else ""
+            )
         )
 
 
@@ -209,12 +233,18 @@ def main() -> None:
     parser.add_argument(
         "--max-installed-size",
         type=int,
-        help="fails when any installed proto library exceeds this number of bytes",
+        help="installed-size reference in bytes, before applying the size-budget margin",
     )
     parser.add_argument(
         "--max-text-size",
         type=int,
-        help="fails when any proto library .text section exceeds this number of bytes",
+        help=".text size reference in bytes, before applying the size-budget margin",
+    )
+    parser.add_argument(
+        "--size-budget-margin-percent",
+        type=int,
+        default=0,
+        help="percentage margin for installed and .text sizes only (default: 0)",
     )
     parser.add_argument(
         "--max-dynamic-symbols",
@@ -228,7 +258,12 @@ def main() -> None:
         help="shared library permitted in DT_NEEDED; repeat for every allowed dependency",
     )
     arguments = parser.parse_args()
-    for option in ("max_installed_size", "max_text_size", "max_dynamic_symbols"):
+    for option in (
+        "max_installed_size",
+        "max_text_size",
+        "max_dynamic_symbols",
+        "size_budget_margin_percent",
+    ):
         value = getattr(arguments, option)
         if value is not None and value < 0:
             parser.error(f"--{option.replace('_', '-')} must be non-negative")
@@ -245,10 +280,16 @@ def main() -> None:
         with arguments.summary.open("a", encoding="utf-8") as summary:
             summary.write(report)
     if arguments.max_installed_size is not None:
-        _enforce_installed_size_budget(measurements, arguments.max_installed_size)
+        _enforce_installed_size_budget(
+            measurements, arguments.max_installed_size, arguments.size_budget_margin_percent
+        )
     if arguments.max_text_size is not None:
         _enforce_optional_size_budget(
-            measurements, "text_size", ".text size", arguments.max_text_size
+            measurements,
+            "text_size",
+            ".text size",
+            arguments.max_text_size,
+            arguments.size_budget_margin_percent,
         )
     if arguments.max_dynamic_symbols is not None:
         _enforce_optional_size_budget(

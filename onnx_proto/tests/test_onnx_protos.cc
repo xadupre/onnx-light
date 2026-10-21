@@ -112,13 +112,63 @@ TEST(onnx_proto, ModelRewritingsRoundTripAndDeepCopy) {
   EXPECT_THROW(source.SerializeToString(output, ort), std::invalid_argument);
 }
 
+TEST(onnx_proto, ModelRewritingsCopyFromReplacesDestination) {
+  for (const std::string source_key : {"shared", "source_only", ""}) {
+    SCOPED_TRACE(source_key);
+    ModelProto source;
+    source.set_ir_version(10);
+    source.mutable_graph()->set_name("source");
+    if (!source_key.empty()) {
+      RewritingProto rewriting;
+      rewriting.add_rewrites()->set_pattern_name("source_pattern");
+      source.add_rewritings(source_key, rewriting);
+    }
+    const auto source_bytes = source.SerializeAsString();
+    ModelProto destination;
+    destination.set_ir_version(9);
+    destination.set_producer_name("destination_only");
+    destination.mutable_graph()->set_name("destination");
+    destination.mutable_graph()->add_node()->set_op_type("Identity");
+    RewritingProto old_rewriting;
+    old_rewriting.add_rewrites()->set_pattern_name("old_pattern");
+    destination.add_rewritings("shared", old_rewriting);
+    destination.add_rewritings("destination_only", old_rewriting);
+
+    ASSERT_NO_THROW(destination.CopyFrom(source));
+    EXPECT_TRUE(destination.Equals(source));
+    EXPECT_EQ(destination.SerializeAsString(), source_bytes);
+    EXPECT_EQ(destination.rewritings_size(), source_key.empty() ? 0 : 1);
+    EXPECT_EQ(destination.rewritings().count("destination_only"), 0);
+    EXPECT_FALSE(destination.has_producer_name());
+    if (!source_key.empty()) {
+      destination.ref_rewritings().at(source_key).ref_rewrites()[0].set_pattern_name("changed");
+    }
+    EXPECT_EQ(source.SerializeAsString(), source_bytes);
+  }
+}
+
+TEST(onnx_proto, ModelRewritingsCopyFromSelf) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.mutable_graph()->set_name("canonical");
+  model.mutable_graph()->ref_node().push_back(MakeNode("Identity", {"x"}, {"y"}));
+  RewritingProto rewriting;
+  rewriting.add_rewrites()->set_pattern_name("pattern");
+  model.add_rewritings("variant", rewriting);
+  const auto bytes = model.SerializeAsString();
+
+  ASSERT_NO_THROW(model.CopyFrom(model));
+  EXPECT_EQ(model.SerializeAsString(), bytes);
+}
+
 TEST(onnx_proto, ModelRewritingsRejectDuplicateAndMalformedEntries) {
   const std::string entry("\xca\x3e\x05\x0a\x01x\x12\x00", 8);
   ModelProto model;
   ASSERT_TRUE(model.ParseFromString(entry));
   ASSERT_EQ(model.rewritings_size(), 1);
   EXPECT_TRUE(model.rewritings().at("x").rewrites().empty());
-  EXPECT_FALSE(model.ParseFromString(entry + entry));
+  ModelProto duplicate_keys;
+  EXPECT_FALSE(duplicate_keys.ParseFromString(entry + entry));
   const std::vector<std::string> malformed{
       entry.substr(0, entry.size() - 1),
       std::string("\xca\x3e\x02\x12\x00", 5),

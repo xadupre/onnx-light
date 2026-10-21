@@ -261,6 +261,9 @@ static int64_t parse_external_data_integer(const StringStringEntryProto &entry,
 
 void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
   enforce_has_field(tensor, data_type);
+  if (!TensorProto::DataType_IsValid(tensor.data_type())) {
+    fail_check("Unrecognized data_type (tensor name: ", tensor.name(), "): ", tensor.data_type());
+  }
   if (tensor.data_type() == TensorProto::UNDEFINED) {
     fail_check("setting data_type field (tensor name: ", tensor.name(),
                ") to UNDEFINED is not allowed");

@@ -26,6 +26,7 @@ namespace {
 
 using collections::FreeInitializerName;
 using collections::IsDefaultOp;
+using collections::MakeScalarTensor;
 using core::builder::BuilderError;
 using core::symbolic::SymDim;
 using core::symbolic::SymShape;
@@ -221,95 +222,27 @@ std::vector<int64_t> ScalarProductShape(const TensorProto &left, const TensorPro
 }
 
 TensorProto MakeScalarProduct(const TensorProto &left, const TensorProto &right, double product) {
-  TensorProto tensor;
   const auto type = static_cast<TensorProto::DataType>(left.data_type());
-  tensor.set_data_type(type);
-  for (int64_t dim : ScalarProductShape(left, right)) {
-    tensor.add_dims(dim);
-  }
-  switch (type) {
-  case TensorProto::DataType::FLOAT16:
-    tensor.ref_int32_data().push_back(
-        static_cast<int32_t>(core::runtime::FloatToFloat16Bits(static_cast<float>(product))));
-    break;
-  case TensorProto::DataType::BFLOAT16:
-    tensor.ref_int32_data().push_back(
-        static_cast<int32_t>(core::runtime::FloatToBfloat16Bits(static_cast<float>(product))));
-    break;
-  case TensorProto::DataType::FLOAT:
-    tensor.ref_float_data().push_back(static_cast<float>(product));
-    break;
-  case TensorProto::DataType::DOUBLE:
-    tensor.ref_double_data().push_back(product);
-    break;
-  case TensorProto::DataType::INT64:
-    tensor.ref_int64_data().push_back(static_cast<int64_t>(product));
-    break;
-  case TensorProto::DataType::UINT64:
-    tensor.ref_uint64_data().push_back(static_cast<uint64_t>(product));
-    break;
-  case TensorProto::DataType::UINT32:
-    tensor.ref_uint64_data().push_back(static_cast<uint32_t>(product));
-    break;
-  case TensorProto::DataType::INT32:
-    tensor.ref_int32_data().push_back(static_cast<int32_t>(product));
-    break;
-  case TensorProto::DataType::INT16:
-    tensor.ref_int32_data().push_back(static_cast<int16_t>(product));
-    break;
-  case TensorProto::DataType::UINT16:
-    tensor.ref_int32_data().push_back(static_cast<uint16_t>(product));
-    break;
-  case TensorProto::DataType::INT8:
-    tensor.ref_int32_data().push_back(static_cast<int8_t>(product));
-    break;
-  case TensorProto::DataType::UINT8:
-    tensor.ref_int32_data().push_back(static_cast<uint8_t>(product));
-    break;
-  case TensorProto::DataType::BOOL:
-    tensor.ref_int32_data().push_back(product != 0.0 ? 1 : 0);
-    break;
-  default:
-    break;
-  }
-  return tensor;
+  return MakeScalarTensor("", type, ScalarProductShape(left, right), product);
 }
 
 bool MakeIntegerScalarProduct(const TensorProto &left, const TensorProto &right, int64_t left_value,
                               int64_t right_value, TensorProto &result) {
   const auto type = static_cast<TensorProto::DataType>(left.data_type());
-  result.set_data_type(type);
-  for (int64_t dim : ScalarProductShape(left, right)) {
-    result.add_dims(dim);
-  }
   const uint64_t product = static_cast<uint64_t>(left_value) * static_cast<uint64_t>(right_value);
   switch (type) {
   case TensorProto::DataType::INT64:
-    result.ref_int64_data().push_back(static_cast<int64_t>(product));
-    break;
   case TensorProto::DataType::UINT64:
-    result.ref_uint64_data().push_back(product);
-    break;
   case TensorProto::DataType::INT32:
-    result.ref_int32_data().push_back(static_cast<int32_t>(product));
-    break;
   case TensorProto::DataType::UINT32:
-    result.ref_uint64_data().push_back(static_cast<uint32_t>(product));
-    break;
   case TensorProto::DataType::INT16:
-    result.ref_int32_data().push_back(static_cast<int16_t>(product));
-    break;
   case TensorProto::DataType::UINT16:
-    result.ref_int32_data().push_back(static_cast<uint16_t>(product));
-    break;
   case TensorProto::DataType::INT8:
-    result.ref_int32_data().push_back(static_cast<int8_t>(product));
-    break;
   case TensorProto::DataType::UINT8:
-    result.ref_int32_data().push_back(static_cast<uint8_t>(product));
-    break;
   case TensorProto::DataType::BOOL:
-    result.ref_int32_data().push_back(left_value != 0 && right_value != 0 ? 1 : 0);
+    result = MakeScalarTensor(
+        "", type, ScalarProductShape(left, right),
+        type == TensorProto::BOOL ? uint64_t(left_value != 0 && right_value != 0) : product);
     break;
   default:
     return false;

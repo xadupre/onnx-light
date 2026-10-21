@@ -9,10 +9,12 @@
 #include "onnx_extensions/patterns/algebra/reduce_pattern.h"
 #include "onnx_extensions/patterns/algebra/shape_pattern.h"
 #include "onnx_extensions/patterns/algebra/sub_pattern.h"
+#include "onnx_extensions/patterns/collections/collections_utils.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -70,6 +72,78 @@ NodeProto NodeWithIntAttribute(const char *op_type, const std::vector<std::strin
   NodeProto node = MakeNode(op_type, inputs, outputs);
   AddAttribute<int64_t>(node, attribute, value);
   return node;
+}
+
+TEST(ScalarTensor, StoresArithmeticTypesAsLittleEndianRawData) {
+  const std::vector<std::pair<TensorProto::DataType, std::vector<uint8_t>>> cases = {
+      {TensorProto::FLOAT16, {0, 0x3e}},
+      {TensorProto::BFLOAT16, {0xc0, 0x3f}},
+      {TensorProto::FLOAT, {0, 0, 0xc0, 0x3f}},
+      {TensorProto::DOUBLE, {0, 0, 0, 0, 0, 0, 0xf8, 0x3f}},
+      {TensorProto::INT64, {1, 0, 0, 0, 0, 0, 0, 0}},
+      {TensorProto::UINT64, {1, 0, 0, 0, 0, 0, 0, 0}},
+      {TensorProto::INT32, {1, 0, 0, 0}},
+      {TensorProto::UINT32, {1, 0, 0, 0}},
+      {TensorProto::INT16, {1, 0}},
+      {TensorProto::UINT16, {1, 0}},
+      {TensorProto::INT8, {1}},
+      {TensorProto::UINT8, {1}},
+      {TensorProto::BOOL, {1}}};
+  for (const auto &test : cases) {
+    for (const std::vector<int64_t> &dims : {std::vector<int64_t>{}, {1}, {1, 1}}) {
+      const TensorProto tensor =
+          onnx_patterns::collections::MakeScalarTensor("scalar", test.first, dims, 1.5);
+      EXPECT_EQ(tensor.name().value(), "scalar");
+      EXPECT_EQ(tensor.data_type(), test.first);
+      ASSERT_EQ(tensor.dims_size(), dims.size());
+      for (std::size_t i = 0; i < dims.size(); ++i) {
+        EXPECT_EQ(tensor.dims(i), dims[i]);
+      }
+      ASSERT_TRUE(tensor.is_raw_data());
+      ASSERT_EQ(tensor.ref_raw_data().size(), test.second.size());
+      for (std::size_t i = 0; i < test.second.size(); ++i) {
+        EXPECT_EQ(tensor.ref_raw_data()[i], test.second[i]);
+      }
+      EXPECT_TRUE(tensor.float_data().empty());
+      EXPECT_TRUE(tensor.double_data().empty());
+      EXPECT_TRUE(tensor.int32_data().empty());
+      EXPECT_TRUE(tensor.int64_data().empty());
+      EXPECT_TRUE(tensor.uint64_data().empty());
+    }
+  }
+}
+
+TEST(ScalarTensor, PreservesIntegerPrecisionAndBooleanValues) {
+  for (int64_t value : {std::numeric_limits<int64_t>::min(), int64_t(-2), (int64_t(1) << 53) + 1,
+                        std::numeric_limits<int64_t>::max()}) {
+    const TensorProto tensor =
+        onnx_patterns::collections::MakeScalarTensor("", TensorProto::INT64, {}, value);
+    std::vector<int64_t> values;
+    ASSERT_TRUE(ReadIntegerValues(tensor, values));
+    ASSERT_EQ(values.size(), 1u);
+    EXPECT_EQ(values[0], value);
+  }
+  const TensorProto tensor = onnx_patterns::collections::MakeScalarTensor(
+      "", TensorProto::UINT64, {}, std::numeric_limits<uint64_t>::max());
+  ASSERT_EQ(tensor.ref_raw_data().size(), 8u);
+  for (std::size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(tensor.ref_raw_data()[i], 0xff);
+  }
+  for (int value : {0, -1, 256}) {
+    const TensorProto boolean =
+        onnx_patterns::collections::MakeScalarTensor("", TensorProto::BOOL, {}, value);
+    ASSERT_EQ(boolean.ref_raw_data().size(), 1u);
+    EXPECT_EQ(boolean.ref_raw_data()[0], value != 0 ? 1 : 0);
+  }
+}
+
+TEST(ScalarTensor, RejectsUnsupportedTypesAndNonScalarShapes) {
+  EXPECT_THROW(onnx_patterns::collections::MakeScalarTensor("", TensorProto::STRING, {}, 1),
+               core::builder::BuilderError);
+  for (int64_t dim : {-1, 0, 2}) {
+    EXPECT_THROW(onnx_patterns::collections::MakeScalarTensor("", TensorProto::FLOAT, {dim}, 1),
+                 core::builder::BuilderError);
+  }
 }
 
 TEST(DivMulPattern, FusesReciprocalTimesValue) {
@@ -162,7 +236,10 @@ TEST(MulMulMulScalarPattern, CombinesTwoDivisions) {
   EXPECT_EQ(replacements[1].op_type().value(), "Div");
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
   ASSERT_EQ(builder.Initializers().size(), 3u);
-  EXPECT_EQ(builder.Initializers()[2].float_data()[0], 6.0F);
+  double value = 0.0;
+  ASSERT_TRUE(ReadScalarAsDouble(builder.Initializers()[2], value));
+  EXPECT_EQ(value, 6.0);
+  EXPECT_TRUE(builder.Initializers()[2].is_raw_data());
 }
 
 TEST(MulMulMulScalarPattern, RejectsSharedInnerResult) {
@@ -201,7 +278,10 @@ TEST(MulMulMulScalarPattern, CombinesFloat16DivisionConstants) {
   (void)pattern.Apply(graph, match.nodes);
   ASSERT_EQ(builder.Initializers().size(), 3u);
   EXPECT_EQ(builder.Initializers()[2].data_type(), TensorProto::DataType::FLOAT16);
-  EXPECT_EQ(builder.Initializers()[2].int32_data()[0], 0x4600);
+  const auto &raw = builder.Initializers()[2].ref_raw_data();
+  ASSERT_EQ(raw.size(), 2u);
+  EXPECT_EQ(raw[0], 0);
+  EXPECT_EQ(raw[1], 0x46);
 }
 
 TEST(SwitchOrderBinaryPattern, MovesTheSmallBroadcastBeforeTheLargeOne) {

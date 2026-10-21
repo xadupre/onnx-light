@@ -123,14 +123,15 @@ public:
 
 class ReorderedFoldingPattern final : public core::builder::PatternOptimization {
 public:
-  explicit ReorderedFoldingPattern(std::string op_type)
-      : PatternOptimization(1, "Fold" + op_type), op_type_(std::move(op_type)) {}
+  explicit ReorderedFoldingPattern(std::string op_type, bool shared_anchor = false)
+      : PatternOptimization(1, "Fold" + op_type), op_type_(std::move(op_type)),
+        shared_anchor_(shared_anchor) {}
 
   std::set<std::string> FastOpType() const override { return {op_type_}; }
 
-  core::builder::MatchResult Match(core::builder::GraphGraph &,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override {
-    return {this, {&candidate}, &candidate};
+    return {this, {&candidate}, shared_anchor_ ? graph.NodeBefore("anchor") : &candidate};
   }
 
   utils::RepeatedProtoField<NodeProto>
@@ -138,19 +139,25 @@ public:
         const std::vector<const NodeProto *> &nodes) const override {
     const std::string output = nodes[0]->output(0).value();
     TensorProto literal;
-    literal.set_name(output + "_literal");
+    literal.set_name(shared_anchor_ ? "second_literal" : output + "_literal");
     literal.set_data_type(TensorProto::FLOAT);
     literal.add_dims(1);
     literal.add_float_data(op_type_ == "Relu" ? 2.0f : 5.0f);
-    graph.Builder().MakeInitializer(literal);
+    if (!shared_anchor_ || op_type_ == "Relu")
+      graph.Builder().MakeInitializer(literal);
     utils::RepeatedProtoField<NodeProto> result;
-    result.push_back(MakeNode("Add", {"base", literal.name().value()}, {output + "_weight"}));
+    result.push_back(
+        MakeNode("Add",
+                 {shared_anchor_ && op_type_ == "Identity" ? literal.name().value() : "base",
+                  literal.name().value()},
+                 {output + "_weight"}));
     result.push_back(MakeNode("Add", {"x", output + "_weight"}, {output}));
     return result;
   }
 
 private:
   std::string op_type_;
+  bool shared_anchor_;
 };
 
 class NullPlaceholderPattern final : public core::builder::PatternOptimization {
@@ -1267,6 +1274,54 @@ TEST(PatternOptimization, SequentialRebasingPreservesReorderedFoldingBatch) {
   ASSERT_TRUE(plan.SerializeToString(bytes));
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(bytes));
+  EXPECT_TRUE(loaded.Equals(plan));
+  EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                .ApplyRewritings(loaded)
+                .BuildGraph()
+                .SerializeAsString(),
+            builder.BuildGraph().SerializeAsString());
+}
+
+TEST(PatternOptimization, SequentialRebasingPreservesSharedAnchorWithReorderedPreparation) {
+  ScopedAddKernel kernel;
+  core::builder::GraphBuilder builder("shared_anchor", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInitializer(MakeInitializer<float>("base", {1}, {1.0f}));
+  builder.MakeNode("Identity", {"x"}, {"first"});
+  builder.MakeNode("Relu", {"x"}, {"second"});
+  builder.MakeNode("Abs", {"x"}, {"anchor"});
+  builder.MakeOutput("first");
+  builder.MakeOutput("second");
+  builder.MakeOutput("anchor");
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReorderedFoldingPattern>("Identity", true));
+  patterns.push_back(std::make_unique<ReorderedFoldingPattern>("Relu", true));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  const auto plan = optimizer.Optimize(1, nullptr, {}, false);
+  ASSERT_EQ(plan.rewrites().size(), 2u);
+  const auto &producer = plan.rewrites(0);
+  const auto &consumer = plan.rewrites(1);
+  EXPECT_EQ(producer.pattern_name(), "FoldRelu");
+  EXPECT_EQ(consumer.pattern_name(), "FoldIdentity");
+  ASSERT_EQ(producer.added_nodes().size(), 1u);
+  ASSERT_EQ(consumer.added_nodes().size(), 1u);
+  ASSERT_EQ(producer.initializer_calls().size(), 1u);
+  ASSERT_EQ(consumer.initializer_calls().size(), 1u);
+  ASSERT_EQ(producer.added_initializers().size(), 1u);
+  EXPECT_EQ(producer.added_initializers(0).name(), "second_literal");
+  ASSERT_EQ(consumer.initializer_calls(0).input().size(), 1u);
+  EXPECT_EQ(consumer.initializer_calls(0).input(0), "second_literal");
+  EXPECT_EQ(producer.added_nodes_positions().values(), (std::vector<uint64_t>{1}));
+  EXPECT_EQ(consumer.added_nodes_positions().values(), (std::vector<uint64_t>{0}));
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].output(0), "first");
+  EXPECT_EQ(builder.Nodes()[1].output(0), "second");
+  EXPECT_EQ(builder.Nodes()[2].output(0), "anchor");
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   EXPECT_TRUE(loaded.Equals(plan));
   EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
                 .ApplyRewritings(loaded)

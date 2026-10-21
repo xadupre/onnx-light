@@ -40,16 +40,16 @@ class TestReportProtoBinarySize(unittest.TestCase):
         self.reporter._enforce_optional_size_budget(measurements, "text_size", ".text size", 1024)
 
     def test_text_size_budget_boundary(self):
-        measurements = [{"source": "lib.so", "text_size": 1_174_106}]
+        measurements = [{"source": "lib.so", "text_size": 1_174_506}]
         self.reporter._enforce_optional_size_budget(
-            measurements, "text_size", ".text size", 1_174_106
+            measurements, "text_size", ".text size", 1_174_506
         )
         measurements[0]["text_size"] += 1
         with self.assertRaisesRegex(
-            RuntimeError, r"\.text size budget exceeded.*maximum 1,174,106.*lib\.so: 1,174,107"
+            RuntimeError, r"\.text size budget exceeded.*maximum 1,174,506.*lib\.so: 1,174,507"
         ):
             self.reporter._enforce_optional_size_budget(
-                measurements, "text_size", ".text size", 1_174_106
+                measurements, "text_size", ".text size", 1_174_506
             )
 
     def test_optional_size_budget_rejects_unavailable_measurement(self):

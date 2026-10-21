@@ -338,7 +338,7 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 //
 //   Inputs:
 //     input_ids               INT64[batch_size, sequence_length]
-//     attention_mask          INT64[batch_size, total_sequence_length]
+//     attention_mask          INT64[batch_size, past_sequence_length+sequence_length]
 //     past_key_values_key_N   FP16[batch_size, 8, past_sequence_length, 128]
 //     past_key_values_value_N FP16[batch_size, 8, past_sequence_length, 128]
 //
@@ -815,9 +815,9 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_value_info(), "past_key_values_value_2::Shape:1", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "to", DataType::BOOL,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       AppendValueInfo(*graph->add_value_info(), "to::RSh-1", DataType::BOOL,
-                      {DimSpec("batch_size*total_sequence_length")});
+                      {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
       AppendValueInfo(*graph->add_value_info(), "to::Shape-1:", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
@@ -967,7 +967,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,
                       {DimSpec("batch_size"), DimSpec("sequence_length")});
       AppendValueInfo(*graph->add_input(), "attention_mask", DataType::INT64,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       for (int layer = 0; layer < 4; ++layer) {
         const std::string li = std::to_string(layer);
         AppendValueInfo(*graph->add_input(), "past_key_values_key_" + li, DataType::FLOAT16,
@@ -1713,8 +1713,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       // shape so shape inference is validated on the full model: each entry is
       // stripped before inference runs and must be recovered with the same
       // elem_type, the same rank and identical concrete dims (symbolic dims such
-      // as batch_size / sequence_length / past_sequence_length /
-      // total_sequence_length, and arithmetic expressions thereof, are tolerated).
+      // as batch_size / sequence_length / past_sequence_length, and arithmetic
+      // expressions thereof, are tolerated).
       // elem_type: FLOAT=float32 RMSNorm accumulators, FLOAT16=model activations,
       // INT64=shape / index math, BOOL=attention masks.
       //
@@ -1815,9 +1815,9 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_value_info(), "past_key_values_value_2::Shape:1", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "to", DataType::BOOL,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       AppendValueInfo(*graph->add_value_info(), "to::RSh-1", DataType::BOOL,
-                      {DimSpec("batch_size*total_sequence_length")});
+                      {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
       AppendValueInfo(*graph->add_value_info(), "to::Shape-1:", DataType::INT64,
                       {DimSpec(INT64_C(1))});
       AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
@@ -2097,7 +2097,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,
                       {DimSpec("batch_size"), DimSpec("sequence_length")});
       AppendValueInfo(*graph->add_input(), "attention_mask", DataType::INT64,
-                      {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+                      {DimSpec("batch_size"), DimSpec("past_sequence_length+sequence_length")});
       for (int layer = 0; layer < 4; ++layer) {
         const std::string li = std::to_string(layer);
         AppendValueInfo(*graph->add_input(), "past_key_values_key_" + li, DataType::FLOAT16,

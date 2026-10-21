@@ -2120,6 +2120,10 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
                            (found == tags.end() ? "<absent>" : "'" + found->second + "'") + ".");
       }
     }
+    if (source.nodes_.size() != reconstructed.nodes_.size()) {
+      throw BuilderError("ApplyRewritings: incompatible reconstructed node count in '" + path +
+                         "'.");
+    }
     for (std::size_t index = 0; index < source.nodes_.size(); ++index) {
       const auto originals = source.ReferencedSubgraphs(source.nodes_[index]);
       const auto children = reconstructed.ReferencedSubgraphs(reconstructed.nodes_[index]);

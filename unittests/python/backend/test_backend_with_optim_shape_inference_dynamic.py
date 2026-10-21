@@ -3,6 +3,8 @@ import unittest
 from onnx_light.ext_test_case import import_or_skip
 
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx_core.expressions import rename_dynamic_expression, simplify_expression
 import onnx_light.onnx_core.shape_inference as shape_inference
 
 # The backend test registries are only available in the full build; skip this
@@ -24,7 +26,7 @@ def _inputs(inputs):
     return ", ".join([_v(i) for i in inputs])
 
 
-def _check_match(inputs, expected, inferred, rank_only=False) -> None:
+def _check_match(inputs, expected, inferred, rank_only=False, replacements=None) -> None:
     expected_dict = {vi.name: vi for vi in expected}
     inferred_dict = {vi.name: vi for vi in inferred}
     for name, value in expected_dict.items():
@@ -39,10 +41,19 @@ def _check_match(inputs, expected, inferred, rank_only=False) -> None:
         vt = value.type.tensor_type
         it = infe.type.tensor_type
         assert (
-            vt.elem_type == vt.elem_type
+            vt.elem_type == it.elem_type
         ), f"Element type mismatch for {name!r}: {vt} != {it}, inputs: {_inputs(inputs)}"
         v_shape = tuple(d.dim_param or d.dim_value for d in vt.shape.dim)
         i_shape = tuple(d.dim_param or d.dim_value for d in it.shape.dim)
+        if replacements:
+            i_shape = tuple(
+                (
+                    simplify_expression(rename_dynamic_expression(d, replacements))
+                    if isinstance(d, str)
+                    else d
+                )
+                for d in i_shape
+            )
         if rank_only:
             assert len(v_shape) == len(
                 i_shape
@@ -59,8 +70,8 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     work.CopyFrom(model)
     if work.graph.value_info:
         work.graph.value_info.clear()
-    for o in work.graph.output:
-        o.type.Clear()
+    # Output annotations constrain the expected intermediate shapes and symbolic
+    # aliases. Only intermediate value_info is discarded before inference.
 
     def _has_dim_value(dim) -> bool:
         return dim.has_dim_value()
@@ -104,7 +115,35 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     shape_inference.infer_shapes_model(
         work, prefill_with_value_info_output=prefill_with_value_info_output
     )
-    _check_match(model.graph.input, model.graph.value_info, work.graph.value_info)
+    # Compare at the original concrete input sizes: inference now sees genuinely
+    # symbolic dimensions because Dimension.Clear() removes dim_value.
+    replacements = {
+        symbol: str(size) for size, symbol in mapping.items() if isinstance(size, int)
+    }
+    _check_match(
+        model.graph.input,
+        model.graph.value_info,
+        work.graph.value_info,
+        replacements=replacements,
+    )
+
+
+class TestDynamicShapeComparison(unittest.TestCase):
+    def test_specialization_preserves_shape_and_type_checks(self):
+        expected = oh.make_tensor_value_info("value", onnxl.TensorProto.FLOAT, [6, "sequence"])
+        inferred = oh.make_tensor_value_info(
+            "value", onnxl.TensorProto.FLOAT, ["2*input_0", "sequence"]
+        )
+        _check_match([], [expected], [inferred], replacements={"input_0": "3"})
+        for replacement in ("2", "unknown"):
+            with (
+                self.subTest(replacement=replacement),
+                self.assertRaisesRegex(AssertionError, "Element shape mismatch"),
+            ):
+                _check_match([], [expected], [inferred], replacements={"input_0": replacement})
+        inferred.type.tensor_type.elem_type = onnxl.TensorProto.INT64
+        with self.assertRaisesRegex(AssertionError, "Element type mismatch"):
+            _check_match([], [expected], [inferred], replacements={"input_0": "3"})
 
 
 TestOptimShapeInferenceDynamicBackend = make_test_class(

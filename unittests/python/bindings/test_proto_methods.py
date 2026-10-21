@@ -161,6 +161,23 @@ class TestProtoMethods(ExtTestCase):
         tensor.ClearField("dims")
         self.assertEqual(list(tensor.dims), [])
 
+    def test_clear_nested_type_and_dimension(self):
+        value = oh.make_tensor_value_info("x", TensorProto.FLOAT, [4])
+        dimension = value.type.tensor_type.shape.dim[0]
+        dimension.denotation = "DATA_BATCH"
+        dimension.Clear()
+        self.assertFalse(dimension.has_dim_value())
+        self.assertFalse(dimension.has_dim_param())
+        self.assertFalse(dimension.has_denotation())
+        dimension.dim_param = "batch"
+        self.assertEqual(value.type.tensor_type.shape.dim[0].dim_param, "batch")
+        self.assertFalse(value.type.tensor_type.shape.dim[0].has_dim_value())
+
+        value.type.Clear()
+        self.assertFalse(value.type.has_tensor_type())
+        self.assertEqual(value.type.SerializeToString(), b"")
+        self.assertEqual(value.name, "x")
+
     def test_clear_field_string(self):
         tensor = TensorProto()
         tensor.name = "abc"

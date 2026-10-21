@@ -63,9 +63,9 @@ Discussion
     * - Plan
       - Contribution
     * - :ref:`l-next-steps-ort-plugin-compatibility`
-      - Hosts ORT-compatible custom kernels and kernel-based or compiling
-        plugin EPs without ONNX Runtime, with a function inventory and staged
-        CPU/device compatibility gates.
+      - Defines an external interoperability repository with separate targets
+        for hosting ORT-compatible plugins without ORT and exposing onnx-light
+        kernels to ORT, with API inventories and staged acceptance gates.
     * - :ref:`l-next-steps-serialized-graph-rewriting`
       - Serializes concrete graph rewrites, bundles alternative model variants,
         and defines canonical, bundled and materialized exports in four PRs.

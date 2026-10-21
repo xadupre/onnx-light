@@ -1,7 +1,7 @@
 .. _l-next-steps-ort-plugin-compatibility:
 
-ORT-compatible custom kernels and plugin EPs without ONNX Runtime
-=================================================================
+Standalone ORT plugin interoperability
+======================================
 
 :Date: 2026-10-21
 
@@ -9,12 +9,16 @@ ORT-compatible custom kernels and plugin EPs without ONNX Runtime
 and plugin execution providers (EPs) in onnx-light, using their public ORT C
 interfaces but **without installing, loading, linking, or executing ONNX
 Runtime**. This proposal adds a compatibility host, not an ORT backend.
+The same external repository also supplies a separate target for the reverse
+direction: exposing onnx-light kernels to a real ORT host as custom ops and,
+later, a plugin EP. The no-ORT-runtime requirement applies to the compatibility
+host, not to integration tests of plugins running inside ORT.
 Only public interface declarations are reused; retain their license notices.
 
 Scope and compatibility boundary
 ++++++++++++++++++++++++++++++++
 
-Support three separately testable profiles:
+The compatibility host supports three separately testable profiles:
 
 * **Custom ops:** libraries exporting ``RegisterCustomOps`` and supplying
   ``OrtCustomOp`` implementations.
@@ -93,9 +97,26 @@ Repository boundary and architecture
 **Implement the compatibility host in a separate repository**, provisionally
 named ``onnx-light-ort-plugins``, not as a compatibility target inside
 onnx-light. The name is illustrative; this proposal does not create that
-repository. It depends on onnx-light and pinned public ORT headers, never on
-the ORT runtime. Version and release it independently, with a tested matrix of
-onnx-light versions, plugin libraries, platforms and accepted ORT ABIs.
+repository. Its production targets depend on onnx-light and pinned public ORT
+headers, without linking an ORT runtime library. Version and release it
+independently, with a tested matrix of onnx-light versions, plugin libraries,
+platforms and accepted ORT ABIs.
+
+Provide **two independently selectable build targets** in that repository:
+
+* **Compatibility host:** loads ORT-compatible custom ops and EPs into
+  onnx-light. Building, testing and using this target must not require an ORT
+  installation or load any ORT runtime code.
+* **Plugin for ORT:** exposes onnx-light kernels through ``RegisterCustomOps``,
+  then optionally the public plugin EP exports. It runs inside a real ORT
+  host, but builds using the public headers and the API passed by that host.
+  Only its explicitly enabled integration tests require ORT.
+
+Share provider-neutral type/shape conversions, buffer-contract helpers and
+fixture data where appropriate. Do not link the plugin-for-ORT target to the
+compatibility host's API tables or bootstrap exports: they must not interpose
+on the real host's ``OrtGetApiBase`` or replace its API with the shim.
+Neither target may pull in the other's runtime requirements transitively.
 
 The external repository owns plugin loading, ``OrtApi`` / ``OrtEpApi`` tables,
 opaque-object adapters, custom-op and EP registration bridges, plugin-owned
@@ -145,6 +166,68 @@ compiled states, custom-op domains and plugin-owned deleters. Release compute
 states and kernels before EP instances, factories and the library handle.
 Handle partial registration/compilation failures with the same ownership rules.
 Do not cache a construction-time ``RuntimeContext`` reference.
+
+Reverse direction: onnx-light kernels in ORT
+++++++++++++++++++++++++++++++++++++++++++++
+
+Start with a CPU custom-op library, not a full EP. Export
+``RegisterCustomOps`` and use the supplied ``OrtApiBase::GetApi`` to initialize
+the public API wrappers manually. Avoid static initialization that calls
+``OrtGetApiBase`` and avoid a link-time dependency on an ORT shared library.
+ORT owns the real session, dispatch and output allocation in this direction;
+onnx-light supplies the numerical implementation.
+
+The plugin implements the relevant ``OrtCustomOp`` callbacks listed below:
+signature, types, attributes/shape inference, ``CreateKernelV2``,
+``KernelComputeV2`` and ``KernelDestroy``. Registration uses the real host's
+``CreateCustomOpDomain``, ``CustomOpDomain_Add`` and ``AddCustomOpDomain``.
+Keep descriptors/domains alive for their required session lifetime and create
+one onnx-light kernel adapter per resolved custom-op instance.
+
+During construction, read attributes through ``KernelInfoGetAttribute_*`` and
+metadata through ``KernelInfo_GetInputTypeInfo`` /
+``KernelInfo_GetOutputTypeInfo``. At execution, use the real host's
+``KernelContext_GetInput``, ``GetTensorTypeAndShape``,
+``GetTensorMutableData`` and ``KernelContext_GetOutput`` with the corresponding
+count, dimension, memory-info and release functions from the shared inventory.
+The plugin consumes those functions; it does not implement an ``OrtApi``
+table. Translate failures into host-created statuses at V2 callback boundaries.
+
+Borrow input buffers only while their owners remain valid; do not mutate graph
+inputs or reinterpret an ``OrtValue`` as an onnx-light tensor. Prefer writing
+into ORT-allocated output buffers through a generic external-buffer adapter.
+If a selected kernel cannot honor that allocation contract, start with an
+explicitly documented output copy rather than unsafe ownership transfer.
+Retain kernel preparation between runs, but adapt to current input shapes and
+never cache a per-call kernel context.
+
+Give custom ops their own domain and names, for example domain
+``onnx_light`` and operator ``MyOp``. Export or rewrite models to call those
+operators explicitly; do not present custom-op registration as transparent
+replacement of ORT's standard kernels.
+
+As a separate milestone, add a CPU kernel-based plugin EP in the same
+plugin-for-ORT target. Implement ``CreateEpFactories``, ``ReleaseEpFactory``,
+the factory/device callbacks, ``OrtEp::GetCapability`` /
+``GetKernelRegistry``, registered ``OrtKernelCreateFunc`` factories and
+``OrtKernelImpl::Compute`` / ``Release``. Use the real host's registry and
+kernel-definition APIs inventoried below. Advertise only verified
+operator/opset/type/memory combinations; leave unsupported nodes unassigned
+for the ORT host to handle. This supports eligible standard nodes without
+rewriting their operator names.
+
+A compiling EP delegating partitions to onnx-light is a later extension,
+using ``Compile`` and ``OrtNodeComputeInfo`` callbacks. Keep that separate
+from the initial single-kernel prototype and from hosting foreign EPs in
+onnx-light.
+
+Validate the reverse target with real ORT sessions in a separately enabled
+test job: load its custom-op library, execute an explicitly rewritten model,
+then test its EP on a mixed supported/unsupported model. Check numerical
+results, changing shapes, repeated-instance reuse, missing attributes, type
+errors, scalar/empty tensors, output-copy accounting and teardown. Build both
+production targets without ORT binaries, and independently prove that the
+compatibility-host tests never import or load ORT.
 
 Host functions shared by custom ops and EPs
 +++++++++++++++++++++++++++++++++++++++++++
@@ -334,8 +417,8 @@ Schema-query support comprises ``OrtEpApi::GetOpSchema``, ``ReleaseOpSchema``,
 ``OpSchemaTypeConstraint_GetInputIndices`` and
 ``OpSchemaTypeConstraint_GetOutputIndices``.
 
-Non-sharing ``OrtKernelImpl::PrePack`` is a later optimization, not permission
-to release initializer storage prematurely. Shared packing additionally needs
+Non-sharing ``OrtKernelImpl::PrePackWeight`` is a later optimization, not
+permission to release initializer storage prematurely. Shared packing additionally needs
 ``OrtKernelImpl::SetSharedPrePackedWeight`` and
 ``OrtEpApi::SharedPrePackedWeightCache_StoreWeightData``; defer it until
 ownership and cross-session sharing are specified. The initial profile must
@@ -444,6 +527,10 @@ Implementation sequence and acceptance gates
 Steps below are implemented in the external repository. Land any prerequisite
 provider-neutral extension APIs in separate onnx-light PRs before using them;
 do not move ORT compatibility code into onnx-light to bypass that boundary.
+The numbered sequence covers the compatibility-host target. The reverse
+target has an independent sequence: CPU custom op first, kernel-based EP
+second, and compiling EP only as a later extension. It does not require
+implementing the host's shim tables first.
 
 1. **ABI host and loader:** pin headers and accepted layouts; add typed
    tables, error/configuration/logging objects, trusted explicit-path loading,
@@ -470,7 +557,7 @@ do not move ORT compatibility code into onnx-light to bypass that boundary.
    device transfers/streams and other extensions. Publish a tested
    library/platform/ABI matrix rather than a universal compatibility claim.
 
-For each delivered profile, run end-to-end in an environment without the
+For each delivered compatibility-host profile, run end-to-end without the
 ``onnxruntime`` Python package or shared libraries. Inspect binary imports and
 the transitive loader dependencies (including delayed loads during inference)
 to establish that no ORT code is used. Compare fixture outputs to independent

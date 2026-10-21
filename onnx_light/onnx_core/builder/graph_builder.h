@@ -684,6 +684,8 @@ public:
   /// Materializes dense initializers as Constant nodes without changing the
   /// builder. Requires a default-domain opset; rejects overridable defaults
   /// and extended initializers, which a function cannot represent.
+  /// When a schema is available, rejects initializer types unsupported by
+  /// Constant at the selected opset rather than increasing the opset.
   ///
   /// @param domain Function domain.
   FunctionProto ToFunction(const std::string &domain = "");
@@ -847,6 +849,7 @@ private:
   // Builds a function without running inference on its unspecialized body.
   FunctionProto BuildFunction(const std::string &domain,
                               bool include_initializer_constants = true) const;
+  void ValidateInitializerConstants() const;
   void PrependInitializerConstants(FunctionProto &function) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 

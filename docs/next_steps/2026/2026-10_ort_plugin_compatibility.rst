@@ -87,19 +87,41 @@ initializers run. Do not satisfy that import by loading ``libonnxruntime``.
 An existing binary with a hard dependency on an ORT shared library must be
 rebuilt without that dependency; table compatibility alone cannot remove it.
 
-Architecture in onnx-light
-++++++++++++++++++++++++++
+Repository boundary and architecture
+++++++++++++++++++++++++++++++++++++
 
-Implement an optional compatibility library above ``onnx_core``. Keep ORT
-names and opaque wrappers out of the ordinary public runtime interfaces.
-Expose onnx-light loader entry points rather than implementing ORT's complete
-environment and session creation APIs.
+**Implement the compatibility host in a separate repository**, provisionally
+named ``onnx-light-ort-plugins``, not as a compatibility target inside
+onnx-light. The name is illustrative; this proposal does not create that
+repository. It depends on onnx-light and pinned public ORT headers, never on
+the ORT runtime. Version and release it independently, with a tested matrix of
+onnx-light versions, plugin libraries, platforms and accepted ORT ABIs.
+
+The external repository owns plugin loading, ``OrtApi`` / ``OrtEpApi`` tables,
+opaque-object adapters, custom-op and EP registration bridges, plugin-owned
+resource lifetimes, and compatibility fixtures. Expose its loader and provider
+selection entry points rather than implementing ORT's complete environment
+and session creation APIs.
+
+Keep only reusable, provider-neutral extension mechanisms in onnx-light:
+existing kernel factories and, where required for compiling EPs, an interface
+for externally prepared executable partitions with explicit inputs, outputs,
+shape/memory contracts and lifecycle. No ``Ort*`` type or ORT-specific ABI
+handling belongs in those interfaces. The dependency direction is strictly
+external compatibility library -> onnx-light; onnx-light must not depend on
+or automatically load the compatibility library.
+
+This roadmap stays in onnx-light to document that integration boundary.
+Implementation PRs belong in the external repository; any missing generic
+extension points require separate, narrowly scoped onnx-light PRs. Creating
+the external repository and implementing either side are outside this
+documentation PR.
 
 .. code-block:: text
 
    plugin .so / .dll
-       -> public ORT C ABI compatibility host
-       -> onnx-light registration / partition preparation
+       -> external repository: public ORT C ABI compatibility host
+       -> onnx-light: generic registration / executable partition interfaces
        -> session-owned KernelBase wrappers
        -> RuntimeContext inputs, output allocators and executor
 
@@ -194,7 +216,7 @@ Host registration functions:
   when registration and descriptor validation succeed.
 * Do not require ``RegisterCustomOpsLibrary``,
   ``RegisterCustomOpsLibrary_V2`` or ``RegisterCustomOpsUsingFunction`` in
-  the shim: loading is initiated by the onnx-light API. Reject recursive
+  the shim: loading is initiated by the external library's API. Reject recursive
   library registration in the initial profile.
 
 Invoke and validate these ``OrtCustomOp`` callbacks where present in the
@@ -269,7 +291,8 @@ Host functions needed for CPU device discovery and factory configuration:
 * ``OrtApi::CreateMemoryInfo_V2``, ``MemoryInfoGetDeviceMemType``,
   ``MemoryInfoGetVendorId`` for device-aware memory descriptors.
 
-As with custom ops, expose native onnx-light loading/selection APIs; implementing
+As with custom ops, expose the external library's loading/selection APIs;
+implementing
 ``RegisterExecutionProviderLibrary``, ``UnregisterExecutionProviderLibrary``,
 ``GetEpDevices`` and ``SessionOptionsAppendExecutionProvider_V2`` is not a
 prerequisite. Libraries relying on those host-side convenience APIs require
@@ -417,6 +440,10 @@ implementation:
 
 Implementation sequence and acceptance gates
 ++++++++++++++++++++++++++++++++++++++++++++
+
+Steps below are implemented in the external repository. Land any prerequisite
+provider-neutral extension APIs in separate onnx-light PRs before using them;
+do not move ORT compatibility code into onnx-light to bypass that boundary.
 
 1. **ABI host and loader:** pin headers and accepted layouts; add typed
    tables, error/configuration/logging objects, trusted explicit-path loading,

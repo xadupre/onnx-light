@@ -1032,6 +1032,89 @@ TEST(GraphGraph, ReplayMatchesFunctionTagsByDomainAndOverload) {
   }
 }
 
+TEST(GraphGraph, ReplayValidatesHoistedFunctionTagsAcrossSourceScopes) {
+  for (const bool function_owner : {false, true}) {
+    SCOPED_TRACE(function_owner);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    auto &owner =
+        function_owner ? source.MakeLocalFunction("Owner", "local") : source.MakeSubgraph("Owner");
+    if (function_owner)
+      owner.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    owner.MakeNode("Neg", {"X"}, {"result"});
+    owner.MakeOutput("result");
+    if (function_owner) {
+      source.MakeOutput("X");
+    } else {
+      source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const std::string name : {"then_branch", "else_branch"}) {
+        auto &reference = attributes.add();
+        reference.set_name(name + "_ref");
+        reference.set_type(AttributeProto::STRING);
+        reference.set_s("Owner");
+      }
+      source.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+      source.MakeOutput("selected");
+    }
+    auto &function = owner.MakeLocalFunction("Body", "local");
+    function.MakeInput("U", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    function.MakeNode("Neg", {"U"}, {"V"});
+    function.MakeOutput("V");
+    RewritingProto plan;
+    plan.ref_added_functions().push_back(function.ToFunction("local"));
+    auto matching = source.ApplyRewritings(plan);
+    EXPECT_EQ(matching.LocalFunction("Body").Compute().ValueTags(), function.Compute().ValueTags());
+    auto &compute = const_cast<core::compute::ComputeContext &>(function.Compute());
+    compute.SeedValueTag("V", "axes", function.Nodes());
+    const auto before = source.BuildGraph().SerializeAsString();
+    const auto tags = function.Compute().ValueTags();
+    try {
+      source.ApplyRewritings(plan);
+      FAIL() << "Expected inconsistent hoisted function tags to be rejected.";
+    } catch (const core::builder::BuilderError &error) {
+      const std::string message = error.what();
+      const std::string path = function_owner ? "g/function:local::Owner:/function:local::Body:"
+                                              : "g/subgraph:Owner/function:local::Body:";
+      EXPECT_NE(message.find(path), std::string::npos);
+      EXPECT_NE(message.find("'V'"), std::string::npos);
+      EXPECT_NE(message.find("existing tag 'axes'"), std::string::npos);
+      EXPECT_NE(message.find("reconstructed tag 'weight'"), std::string::npos);
+    }
+    EXPECT_EQ(source.BuildGraph().SerializeAsString(), before);
+    EXPECT_EQ(function.Compute().ValueTags(), tags);
+  }
+}
+
+TEST(GraphGraph, ReplayValidatesEverySourceOfAHoistedFunction) {
+  for (const std::string changed_scope : {"first", "second"}) {
+    SCOPED_TRACE(changed_scope);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    for (const std::string name : {"first", "second"}) {
+      auto &function = source.MakeSubgraph(name).MakeLocalFunction("Body", "local");
+      function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      function.MakeNode("Neg", {"X"}, {"Y"});
+      function.MakeOutput("Y");
+    }
+    RewritingProto plan;
+    plan.ref_added_functions().push_back(
+        source.Subgraph("first").LocalFunction("Body").ToFunction("local"));
+    EXPECT_NO_THROW(source.ApplyRewritings(plan));
+    auto &function = source.Subgraph(changed_scope).LocalFunction("Body");
+    auto &compute = const_cast<core::compute::ComputeContext &>(function.Compute());
+    compute.SeedValueTag("Y", "axes", function.Nodes());
+    try {
+      source.ApplyRewritings(plan);
+      FAIL() << "Expected every original function scope to be validated.";
+    } catch (const core::builder::BuilderError &error) {
+      EXPECT_NE(
+          std::string(error.what()).find("g/subgraph:" + changed_scope + "/function:local::Body:"),
+          std::string::npos)
+          << error.what();
+    }
+  }
+}
+
 TEST(GraphGraph, FoldedInitializerRefreshesLastUseWithoutChangingConsumerReferences) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
   source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));

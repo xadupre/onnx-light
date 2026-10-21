@@ -2127,22 +2127,40 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
         self(self, *originals[child], *children.at(child),
              path + "/subgraph:" + originals[child]->name_);
     }
-    for (const auto &child : reconstructed.local_functions_) {
-      const auto identity = MakeFunctionIdentifier(child->function_domain_, child->name_,
-                                                   child->function_template_.overload());
-      const auto original = std::find_if(
-          source.local_functions_.begin(), source.local_functions_.end(),
-          [&](const auto &function) {
-            return MakeFunctionIdentifier(function->function_domain_, function->name_,
-                                          function->function_template_.overload()) == identity;
-          });
-      if (original != source.local_functions_.end())
-        self(self, **original, *child,
-             path + "/function:" + child->function_domain_ + "::" + child->name_ + ":" +
-                 child->function_template_.overload().value());
-    }
   };
   validate_tags(validate_tags, *this, result, name_);
+  using ScopedFunction = std::pair<const GraphBuilder *, std::string>;
+  std::map<FunctionIdentifier, std::vector<ScopedFunction>> source_functions;
+  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope,
+                                     const std::string &path) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto function_path = path + "/function:" + function->function_domain_ +
+                                 "::" + function->name_ + ":" +
+                                 function->function_template_.overload().value();
+      source_functions[identity].emplace_back(function.get(), function_path);
+      self(self, *function, function_path);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph, path + "/subgraph:" + subgraph->name_);
+  };
+  collect_functions(collect_functions, *this, name_);
+  const auto validate_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto originals = source_functions.find(identity);
+      if (originals != source_functions.end()) {
+        for (const auto &[original, path] : originals->second)
+          validate_tags(validate_tags, *original, *function, path);
+      }
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  validate_functions(validate_functions, result);
   result.set_device(device_);
   std::size_t index = 0;
   while (index < rewrites.rewrites().size()) {

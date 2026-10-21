@@ -632,6 +632,8 @@ public:
   /// definitions, even when a later edit would remove those calls.
   /// Throws before applying rewrites if reconstruction changes or loses an existing
   /// value tag, including tags in reconstructed nested builders.
+  /// Matches functions across source scopes by domain, name and overload, preserving
+  /// their original scope paths in diagnostics even when reconstruction hoists them.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.

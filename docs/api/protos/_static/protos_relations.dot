@@ -1,7 +1,7 @@
 digraph protos {
-    rankdir=TB;
-    nodesep=0.5;
-    ranksep=0.7;
+    rankdir=LR;
+    nodesep=0.6;
+    ranksep=0.1;
     node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];
     edge [fontname="Helvetica", fontsize=10, color="#566573"];
 

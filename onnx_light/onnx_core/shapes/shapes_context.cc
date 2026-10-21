@@ -262,7 +262,7 @@ void ShapesContext::SetEncodedValue(const std::string &name, const EncodedValueP
   if (struct_types_model_) {
     catalogue.Build(*struct_types_model_);
   }
-  EncodedValueProto owned = value;
+  EncodedValueProto owned = utils::CopyWithSharedPayloads(value);
   owned.set_name(name);
   catalogue.ValidateEncodedValue(owned);
   TypeProto type;
@@ -340,8 +340,8 @@ void ShapesContext::CheckStructuredCompatibility(const std::string &name,
   EXT_ENFORCE_INVALID(HasEncodedValue(name) == other.HasEncodedValue(other_name),
                       "Control-flow outputs have incompatible encoded layouts.");
   if (HasEncodedValue(name)) {
-    EncodedValueProto left = GetEncodedValue(name);
-    EncodedValueProto right = other.GetEncodedValue(other_name);
+    EncodedValueProto left = utils::CopyWithSharedPayloads(GetEncodedValue(name));
+    EncodedValueProto right = utils::CopyWithSharedPayloads(other.GetEncodedValue(other_name));
     left.set_name("");
     right.set_name("");
     std::string difference;

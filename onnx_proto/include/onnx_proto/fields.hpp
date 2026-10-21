@@ -17,7 +17,7 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
   // Keep string items quoted to match protobuf-like debug text output.
   constexpr bool quote_strings = true;
   ss << "[ ";
-  for (const auto &p : values_) {
+  for (const auto &p : values()) {
     if constexpr (requires(const T &value) { value.PrintToStringStream(ss, options); }) {
       p.PrintToStringStream(ss, options);
     } else if constexpr (std::is_same_v<T, utils::String>) {

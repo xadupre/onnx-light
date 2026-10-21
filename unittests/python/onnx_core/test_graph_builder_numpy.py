@@ -365,6 +365,65 @@ class TestGraphBuilderNumpy(ExtTestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    @unittest.skipUnless(sys.platform == "linux", "Requires Linux address-space accounting.")
+    def test_rewriting_export_capture_and_undo_do_not_allocate_payloads(self):
+        code = textwrap.dedent("""
+            import os
+            import resource
+            import sys
+            import numpy
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.graph_builder import (
+                ConstantFoldingOptions, GraphBuilder, OptimizationMode,
+            )
+            from onnx_light.onnx_core.optimization import GraphGraph
+
+            owned = sys.argv[1] == "owned"
+            arrays = [numpy.full(2**24, value, dtype=numpy.float32) for value in (1, 2)]
+            source = GraphBuilder("sharing", opsets=18)
+            source.make_input("x", TensorProto.FLOAT, [2**24])
+            source.init(arrays[0], name="weight", copy=owned)
+            source.init(arrays[1], name="unused", copy=owned)
+            source.make_node("Add", ["x", "weight"], ["y"])
+            source.make_output("y")
+            options = ConstantFoldingOptions()
+            options.enabled = False
+            with open("/proc/self/statm") as stream:
+                virtual_size = int(stream.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            # A single 64 MiB copy must fail, including a temporary copy during capture.
+            resource.setrlimit(resource.RLIMIT_AS, (virtual_size + 16 * 2**20, hard))
+            before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            canonical = source.to_onnx()
+            pointers = [
+                numpy.from_dlpack(tensor).ctypes.data for tensor in canonical.graph.initializer
+            ]
+            working = GraphBuilder(canonical)
+            plan = GraphGraph(working, []).optimize(folding_options=options)
+            assert any(edit.removed_initializers for edit in plan.rewrites)
+            restored = working.undo_rewritings(plan).to_model()
+            bundled = source.to_onnx(optimize=OptimizationMode.kRewritings)
+            optimized = source.to_onnx(optimize=OptimizationMode.kOptimize)
+            for model in (restored, bundled):
+                assert [
+                    numpy.from_dlpack(tensor).ctypes.data for tensor in model.graph.initializer
+                ] == pointers
+            assert numpy.from_dlpack(optimized.graph.initializer[0]).ctypes.data == pointers[0]
+            if not owned:
+                assert pointers == [array.ctypes.data for array in arrays]
+            growth = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before
+            print(f"{sys.argv[1]}: peak RSS growth {growth} KiB; payloads 131072 KiB")
+            """)
+        for storage in ("owned", "borrowed"):
+            with self.subTest(storage=storage):
+                result = subprocess.run(
+                    [sys.executable, "-c", code, storage],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

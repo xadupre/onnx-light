@@ -242,7 +242,11 @@ public:
 
   // ── Initializers ─────────────────────────────────────────────────────
 
-  /// Copies ``tensor`` as a graph initializer. The tensor may carry external
+  /// Snapshots ``tensor`` as a graph initializer, sharing owned payload storage
+  /// until mutable access detaches it. Borrowed buffers retain their owner;
+  /// ownerless buffers are copied. Existing mutable C++ payload views must be
+  /// reacquired after this snapshot boundary, as for import and export.
+  /// The tensor may carry external
   /// data (``data_location == EXTERNAL``). Returns the initializer name.
   /// A public-input default must match its declared element type, rank and
   /// static dimensions; unspecified rank and symbolic dimensions are allowed.

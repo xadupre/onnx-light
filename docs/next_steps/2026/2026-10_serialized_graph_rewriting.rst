@@ -287,7 +287,27 @@ owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
 Export compares canonical graphs and function definitions only when existing
 named plans need a compatibility decision; these comparisons use native
-field equality rather than serialization.
+field equality rather than serialization. The initial Python model is released
+as soon as the working builder has imported it, before optimization and inverse
+capture. Only when existing named plans need preservation is the source builder
+exported again for that compatibility decision.
+
+Builder import/export and private undo definitions use explicit payload
+snapshots: message structure remains independent, while unchanged owned raw
+buffers and typed tensor arrays share storage until a mutable container access
+detaches it. Nested graph attributes, local functions, recipes and removed
+initializer definitions use the same mechanism. Ordinary proto copies retain
+their existing semantics; sharing is requested with
+``utils::CopyWithSharedPayloads`` rather than enabled globally.
+Borrowed buffers with an owner retain that owner and remain read-only through
+the proto API. Ownerless borrowed buffers are copied into safe owned storage.
+As with the existing zero-copy import APIs, callers must not modify borrowed
+storage externally while it is in use.
+Mutable C++ pointers, iterators and references obtained before a snapshot
+boundary must be reacquired afterward. Active exported raw-data views use a
+copy fallback. Genuinely transformed weights receive new allocations; undo
+retains the original definitions needed for exact restoration, not additional
+copies of their unchanged bytes.
 
 .. code-block:: text
 
@@ -397,8 +417,8 @@ See :ref:`l-example-plot-pattern-replay`.
    computed weight payloads. The optimizer returns ``RewritingProto`` directly;
    optionally attach descriptive metadata. Verify replay against direct
    optimization before publishing the variant.
-   Inverse replay can eventually replace the full canonical-model copy retained
-   by the export modes; this does not require undoing pre-capture cleanups.
+   Inverse replay reconstructs the cleaned reference without retaining the
+   original Python canonical model or undoing pre-capture cleanups.
 3. Export either the untouched canonical model, a bundled onnx-light model
    containing the canonical graph and rewrite map, or a standard ONNX model
    with one selected variant materialized and the extension map removed.

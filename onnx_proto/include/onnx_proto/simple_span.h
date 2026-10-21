@@ -10,6 +10,36 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
+namespace detail {
+/** Bounds native payload sharing to one synchronous copy operation across library boundaries. */
+class ONNX_LIGHT_PROTO_API SharedPayloadCopyScope {
+public:
+  SharedPayloadCopyScope() noexcept;
+  ~SharedPayloadCopyScope();
+  SharedPayloadCopyScope(const SharedPayloadCopyScope &) = delete;
+  SharedPayloadCopyScope &operator=(const SharedPayloadCopyScope &) = delete;
+};
+
+/** Returns whether the current native copy explicitly requests shared payload storage. */
+ONNX_LIGHT_PROTO_API bool IsSharedPayloadCopy() noexcept;
+} // namespace detail
+
+/**
+ * Copies message structure independently while sharing eligible payload allocations.
+ *
+ * Subsequent mutable container accesses detach owned payloads. Mutable payload pointers, element
+ * references, iterators and underlying vector references obtained before this call must not be used
+ * afterward; reacquire them from the appropriate copy. Later mutable accesses can invalidate
+ * payload views as storage detaches. References to message and field objects remain valid.
+ * Borrowed storage with an owner remains read-only and retains its
+ * owner; ownerless borrowed storage and actively exported storage are copied instead. The caller
+ * must synchronize access to the source during copying, including its logically const storage.
+ */
+template <typename T> T CopyWithSharedPayloads(const T &source) {
+  detail::SharedPayloadCopyScope scope;
+  return T(source);
+}
+
 /**
  * Non-owning, read-only view of a contiguous byte sequence.
  * It references existing memory and never allocates or frees storage.
@@ -17,7 +47,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
  */
 class ONNX_LIGHT_PROTO_API Span {
 protected:
-  const uint8_t *ptr_ = nullptr;
+  mutable const uint8_t *ptr_ = nullptr;
   size_t size_ = 0;
 
 public:
@@ -55,12 +85,20 @@ public:
   OwnedByteBuffer() = default;
 
   /** Creates a deep copy of the stored bytes. */
-  inline OwnedByteBuffer(const OwnedByteBuffer &other) { assign(other.data(), other.size()); }
+  inline OwnedByteBuffer(const OwnedByteBuffer &other) {
+    assign(other.data(), other.size());
+    if (other.data() != nullptr && other.size() == 0) {
+      resize(1);
+      clear();
+    }
+  }
 
   /** Replaces the buffer with a deep copy of the stored bytes. */
   inline OwnedByteBuffer &operator=(const OwnedByteBuffer &other) {
-    if (this != &other)
-      assign(other.data(), other.size());
+    if (this != &other) {
+      OwnedByteBuffer copied(other);
+      *this = std::move(copied);
+    }
     return *this;
   }
 
@@ -96,13 +134,45 @@ public:
   inline size_t size() const { return size_; }
 
   /** Returns a mutable pointer to the stored bytes. */
-  inline uint8_t *data() { return storage_.get(); }
+  inline uint8_t *data() {
+    detach();
+    return storage_.get();
+  }
 
   /** Returns a const pointer to the stored bytes. */
   inline const uint8_t *data() const { return storage_.get(); }
 
   /** Clears the logical content while preserving capacity. */
-  inline void clear() { size_ = 0; }
+  inline void clear() {
+    if (is_shared()) {
+      reset();
+      return;
+    }
+    size_ = 0;
+  }
+
+  /** Shares an allocation only for an explicitly requested payload copy. */
+  inline void share_from(const OwnedByteBuffer &other) {
+    storage_ = other.storage_;
+    size_ = other.size_;
+    capacity_ = other.capacity_;
+  }
+
+  /** Returns whether another buffer retains the allocation. */
+  inline bool is_shared() const { return storage_.use_count() > 1; }
+
+  /** Returns a token retaining the allocation independently of this buffer. */
+  inline std::shared_ptr<void> storage_owner() const { return storage_; }
+
+  /** Detaches shared storage before mutation. */
+  inline void detach() {
+    if (is_shared()) {
+      std::shared_ptr<uint8_t[]> next(new uint8_t[capacity_]);
+      if (size_ > 0)
+        std::memcpy(next.get(), storage_.get(), size_);
+      storage_ = std::move(next);
+    }
+  }
 
   /** Releases all storage. */
   inline void reset() {
@@ -114,6 +184,7 @@ public:
   /** Resizes the buffer without value-initializing newly exposed bytes. */
   inline void resize(size_t n) {
     if (n <= capacity_) {
+      detach();
       size_ = n;
       return;
     }
@@ -127,7 +198,7 @@ public:
       clear();
       return;
     }
-    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
+    std::shared_ptr<uint8_t[]> next(new uint8_t[n]);
     std::memcpy(next.get(), src, n);
     storage_ = std::move(next);
     size_ = n;
@@ -139,6 +210,7 @@ public:
 
   /** Appends one byte, growing geometrically when needed. */
   inline void push_back(uint8_t v) {
+    detach();
     if (size_ == capacity_) {
       size_t next =
           capacity_ == 0 ? 1 : (capacity_ < 4096 ? capacity_ * 2 : capacity_ + capacity_ / 2);
@@ -152,14 +224,14 @@ private:
   inline void reserve(size_t n) {
     if (n <= capacity_)
       return;
-    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
+    std::shared_ptr<uint8_t[]> next(new uint8_t[n]);
     if (size_ > 0)
       std::memcpy(next.get(), storage_.get(), size_);
     storage_ = std::move(next);
     capacity_ = n;
   }
 
-  std::unique_ptr<uint8_t[]> storage_;
+  std::shared_ptr<uint8_t[]> storage_;
   size_t size_ = 0;
   size_t capacity_ = 0;
 };
@@ -199,7 +271,18 @@ public:
   inline ByteSpan(const ByteSpan &other)
       : Span(nullptr, 0), borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_),
         align_(other.align_), owner_(other.owner_) {
-    if (other.aligned_owned_) {
+    if (detail::IsSharedPayloadCopy() && other.borrowed_ &&
+        (other.owner_.use_count() == 0 || other.has_active_exports())) {
+      borrowed_ = false;
+      owner_.reset();
+      owned_.assign(other.data(), other.size());
+      if (other.data() != nullptr && other.empty())
+        resize(0);
+    } else if (detail::IsSharedPayloadCopy() && !other.borrowed_ && !other.has_active_exports()) {
+      owned_.share_from(other.owned_);
+      ptr_ = other.ptr_;
+      size_ = other.size_;
+    } else if (other.aligned_owned_) {
       // Re-allocate and re-align, then copy only the logical data bytes.
       const size_t n = other.size_;
       owned_.resize(n + align_ - 1);
@@ -222,30 +305,8 @@ public:
   /** Copy assignment: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan &operator=(const ByteSpan &other) {
     if (this != &other) {
-      if (other.empty() && other.data() == nullptr) {
-        clear();
-        return *this;
-      }
-      borrowed_ = other.borrowed_;
-      aligned_owned_ = other.aligned_owned_;
-      align_ = other.align_;
-      owner_ = other.owner_;
-      if (other.aligned_owned_) {
-        const size_t n = other.size_;
-        owned_.resize(n + align_ - 1);
-        void *vptr = owned_.data();
-        size_t space = owned_.size();
-        void *aligned = std::align(align_, n, vptr, space);
-        EXT_ENFORCE(aligned != nullptr, "ByteSpan: copy assignment re-alignment failed.");
-        ptr_ = static_cast<uint8_t *>(aligned);
-        size_ = n;
-        if (n > 0)
-          std::memcpy(const_cast<uint8_t *>(ptr_), other.ptr_, n);
-      } else {
-        owned_ = other.owned_;
-        ptr_ = other.ptr_;
-        size_ = other.size_;
-      }
+      ByteSpan copied(other);
+      *this = std::move(copied);
     }
     return *this;
   }
@@ -286,6 +347,7 @@ public:
 
   /** Assigns owned data by copying from a std::vector<uint8_t>; clears all special modes. */
   inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
+    export_guard_.reset();
     owned_ = v;
     if (v.empty()) {
       owned_.resize(1);
@@ -336,7 +398,7 @@ public:
   inline const uint8_t *data() const {
     if (aligned_owned_)
       return ptr_;
-    return borrowed_ ? ptr_ : owned_.data();
+    return borrowed_ ? ptr_ : static_cast<const OwnedByteBuffer &>(owned_).data();
   }
   /** Returns a const reference to the byte at index i (no bounds check). */
   inline const uint8_t &operator[](size_t i) const { return data()[i]; }
@@ -367,10 +429,12 @@ public:
   // --- Mutable operations ---
 
   /** Returns a mutable pointer to the owned data.
-   *  Calling this in borrowed mode raises an error at runtime. */
+   *  Calling this in borrowed mode raises an error at runtime.
+   *  The pointer must be reacquired after a shared snapshot or a later mutable buffer access. */
   inline uint8_t *data() {
     EXT_ENFORCE(!borrowed_, "ByteSpan: mutable data() called on a borrowed (zero-copy) buffer; "
                             "use const data() or assign owned data first.");
+    detach_owned();
     if (aligned_owned_)
       return const_cast<uint8_t *>(ptr_);
     return owned_.data();
@@ -385,6 +449,7 @@ public:
 
   /** Resizes the owned buffer to n bytes and switches to plain owned mode. */
   inline void resize(size_t n) {
+    export_guard_.reset();
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -422,6 +487,7 @@ public:
    *  If align <= 1 or n == 0, falls back to plain resize(n).
    *  The caller may read/write the data via data() as usual; size() returns n. */
   inline void resize_aligned(size_t n, size_t align) {
+    export_guard_.reset();
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -453,6 +519,7 @@ public:
       return;
     }
     owned_.clear();
+    export_guard_.reset();
     ptr_ = ptr;
     size_ = sz;
     borrowed_ = true;
@@ -487,12 +554,14 @@ public:
    *  register cleanup for data that has already been parsed (for example a tensor's raw_data
    *  relocated by a parse callback).  Any previously stored owner token is replaced. */
   template <typename Deleter> inline void attach_deleter(Deleter &&deleter) {
+    export_guard_.reset();
     owner_ = std::shared_ptr<void>(static_cast<void *>(nullptr),
                                    [d = std::forward<Deleter>(deleter)](void *) { d(); });
   }
 
   /** Clears all data and resets to the empty owned state. */
   inline void clear() {
+    export_guard_.reset();
     owned_.reset();
     ptr_ = nullptr;
     size_ = 0;
@@ -504,6 +573,7 @@ public:
 
   /** Appends a single byte; switches to owned mode (copying any borrowed/aligned data first). */
   inline void push_back(uint8_t v) {
+    export_guard_.reset();
     if (borrowed_) {
       owned_.assign(ptr_, ptr_ + size_);
       ptr_ = nullptr;
@@ -560,7 +630,29 @@ public:
   }
 
 private:
-  OwnedByteBuffer owned_;
+  /** Preserves logical bytes and alignment when detaching an owned allocation. */
+  inline void detach_owned() const {
+    if (!owned_.is_shared())
+      return;
+    if (!aligned_owned_) {
+      owned_.detach();
+      export_guard_.reset();
+      return;
+    }
+    OwnedByteBuffer next;
+    next.resize(size_ + align_ - 1);
+    void *vptr = next.data();
+    size_t space = next.size();
+    void *aligned = std::align(align_, size_, vptr, space);
+    EXT_ENFORCE(aligned != nullptr, "ByteSpan: detach re-alignment failed.");
+    if (size_ > 0)
+      std::memcpy(aligned, ptr_, size_);
+    owned_ = std::move(next);
+    ptr_ = static_cast<uint8_t *>(aligned);
+    export_guard_.reset();
+  }
+
+  mutable OwnedByteBuffer owned_;
   bool borrowed_ = false;
   bool aligned_owned_ = false;
   /** Stored alignment for aligned-owned mode; used to re-align on copy. */

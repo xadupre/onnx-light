@@ -126,6 +126,9 @@ DLManagedTensor *ReleaseDLPack(TensorProto &tensor) {
               "TensorProto ReleaseDLPack: borrowed raw_data requires a lifetime owner.");
   auto owner = std::make_unique<DLPackOwner>();
   owner->metadata = std::move(metadata);
+  // A transferred DLPack pointer is writable and must not alias an owned snapshot.
+  if (!raw.is_borrowed())
+    tensor.ref_raw_data().data();
   owner->managed.dl_tensor = {raw.empty() ? nullptr : const_cast<uint8_t *>(raw.data()),
                               {kDLCPU, 0},
                               static_cast<int32_t>(owner->metadata.shape.size()),

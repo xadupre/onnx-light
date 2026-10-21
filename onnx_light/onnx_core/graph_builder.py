@@ -337,25 +337,28 @@ class GraphBuilder(_C.GraphBuilder):
         if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
             raise ValueError("A rewriting plan named 'optimized' already exists.")
         working = GraphBuilder(canonical, self._schema_lookup)
+        preserve_plans = bool(canonical.rewritings)
+        del canonical
         working.copy_device_targets_from(self)
         for pattern in self.registered_patterns():
             working.register_pattern(pattern)
         plan = GraphGraph(working).optimize()
         if optimize is OptimizationMode.kRewritings:
             restored = working.undo_rewritings(plan).to_model(ir_version)
-            if (
-                canonical.rewritings
-                and restored.graph.Equals(canonical.graph)
-                and len(restored.functions) == len(canonical.functions)
-                and all(
-                    restored_function.Equals(canonical_function)
-                    for restored_function, canonical_function in zip(
-                        restored.functions, canonical.functions
+            if preserve_plans:
+                reference = super().to_model(ir_version)
+                if (
+                    restored.graph.Equals(reference.graph)
+                    and len(restored.functions) == len(reference.functions)
+                    and all(
+                        restored_function.Equals(reference_function)
+                        for restored_function, reference_function in zip(
+                            restored.functions, reference.functions
+                        )
                     )
-                )
-            ):
-                for name, existing in canonical.rewritings.items():
-                    restored.add_rewriting(name, existing)
+                ):
+                    for name, existing in reference.rewritings.items():
+                        restored.add_rewriting(name, existing)
             restored.add_rewriting("optimized", plan)
             return restored
         if kind == ProtoKind.kModel:

@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -110,42 +111,82 @@ template <typename T> class RepeatedField {
 public:
   /** Constructs an empty field. */
   explicit inline RepeatedField() {}
+  /** Copies values, sharing only primitive/string payloads during an explicit snapshot. */
+  inline RepeatedField(const RepeatedField &other) {
+    constexpr bool payload = std::is_arithmetic_v<T> || std::is_enum_v<T> ||
+                             std::is_same_v<T, utils::String> || std::is_same_v<T, std::string>;
+    if constexpr (payload) {
+      if (detail::IsSharedPayloadCopy() && !other.empty()) {
+        if (!other.shared_values_)
+          other.shared_values_ = std::make_shared<std::vector<T>>(std::move(other.values_));
+        shared_values_ = other.shared_values_;
+        return;
+      }
+    }
+    values_ = other.values();
+  }
+  /** Transfers the payload without copying. */
+  inline RepeatedField(RepeatedField &&other) noexcept = default;
+  /** Replaces values with ordinary value semantics unless sharing was explicitly requested. */
+  inline RepeatedField &operator=(const RepeatedField &other) {
+    if (this != &other) {
+      RepeatedField copied(other);
+      *this = std::move(copied);
+    }
+    return *this;
+  }
+  /** Transfers the payload without copying. */
+  inline RepeatedField &operator=(RepeatedField &&other) noexcept = default;
   /** Constructs from an iterator range. */
   template <typename Iter> inline RepeatedField(Iter first, Iter last) : values_(first, last) {}
   inline RepeatedField &operator=(std::initializer_list<T> init) {
-    values_.assign(init.begin(), init.end());
+    mutable_values().assign(init.begin(), init.end());
     return *this;
   }
   /** Reserves storage for at least n elements. */
-  inline void reserve(size_t n) { values_.reserve(n); }
+  inline void reserve(size_t n) { mutable_values().reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */
-  inline void Reserve(size_t n) { values_.reserve(static_cast<size_t>(n)); }
+  inline void Reserve(size_t n) { reserve(n); }
   /** Removes all elements. */
-  inline void clear() { values_.clear(); }
+  inline void clear() {
+    shared_values_.reset();
+    values_.clear();
+  }
   /** Removes all elements. */
-  inline void Clear() { values_.clear(); }
+  inline void Clear() { clear(); }
   /** Returns a const iterator to the first element (protobuf compat). */
-  inline typename std::vector<T>::const_iterator cbegin() const { return values_.cbegin(); }
+  inline typename std::vector<T>::const_iterator cbegin() const { return values().cbegin(); }
   /** Returns a const iterator past the last element (protobuf compat). */
-  inline typename std::vector<T>::const_iterator cend() const { return values_.cend(); }
+  inline typename std::vector<T>::const_iterator cend() const { return values().cend(); }
   /** Returns true if the field contains no elements. */
-  inline bool empty() const { return values_.empty(); }
+  inline bool empty() const { return values().empty(); }
   /** Returns the number of elements. */
-  inline size_t size() const { return values_.size(); }
+  inline size_t size() const { return values().size(); }
   /** Returns a mutable reference to the element at the given index. */
-  inline T &operator[](size_t index) { return values_[index]; }
+  inline T &operator[](size_t index) { return mutable_values()[index]; }
   /** Returns a const reference to the element at the given index. */
-  inline const T &Get(size_t index) const { return values_[index]; }
+  inline const T &Get(size_t index) const { return values()[index]; }
   /** Sets the element at the given index (protobuf compat). */
-  inline void Set(size_t index, const T &value) { values_[index] = value; }
+  inline void Set(size_t index, const T &value) { mutable_values()[index] = value; }
   /** Returns a mutable reference to the owning pointer at the given index. */
-  inline T *Mutable(size_t index) { return &values_[index]; }
+  inline T *Mutable(size_t index) { return &mutable_values()[index]; }
   /** Returns a const reference to the underlying vector. */
-  inline const std::vector<T> &values() const { return values_; }
-  /** Returns a mutable reference to the underlying vector. */
-  inline std::vector<T> &mutable_values() { return values_; }
+  inline const std::vector<T> &values() const { return shared_values_ ? *shared_values_ : values_; }
+  /** Returns a mutable reference after detaching shared payload storage.
+   *  The returned vector and its element views must be reacquired after a shared snapshot or
+   *  another mutable field access; callers must not retain them across those boundaries. */
+  inline std::vector<T> &mutable_values() {
+    if (shared_values_) {
+      if (shared_values_.unique())
+        values_ = std::move(*shared_values_);
+      else
+        values_ = *shared_values_;
+      shared_values_.reset();
+    }
+    return values_;
+  }
   /** Returns a const reference to the element at the given index. */
-  inline const T &operator[](size_t index) const { return values_[index]; }
+  inline const T &operator[](size_t index) const { return values()[index]; }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */
   inline void remove_range(size_t start, size_t stop, size_t step) {
     EXT_ENFORCE(step == 1, "remove_range not implemented for step=", static_cast<int>(step));
@@ -155,67 +196,74 @@ public:
     clear();
   }
   /** Appends a copy of v at the end. */
-  inline void push_back(const T &v) { values_.push_back(v); }
+  inline void push_back(const T &v) { mutable_values().push_back(v); }
   /** Appends all elements from a vector. */
   inline void extend(const std::vector<T> &v) {
-    values_.reserve(values_.size() + v.size());
-    values_.insert(values_.end(), v.begin(), v.end());
+    auto &target = mutable_values();
+    target.reserve(target.size() + v.size());
+    target.insert(target.end(), v.begin(), v.end());
   }
   /** Appends all elements from another RepeatedField. */
   inline void extend(const RepeatedField<T> &v) {
-    values_.reserve(values_.size() + v.size());
-    values_.insert(values_.end(), v.begin(), v.end());
+    if (this == &v) {
+      const auto copied = values();
+      extend(copied);
+      return;
+    }
+    extend(v.values());
   }
-  inline T &add() { return values_.emplace_back(); }
-  inline T *Add() { return &values_.emplace_back(); }
+  inline T &add() { return mutable_values().emplace_back(); }
+  inline T *Add() { return &mutable_values().emplace_back(); }
   /** Appends a single value (protobuf compat). Accepts anything convertible to T,
    *  including types with an explicit conversion (e.g. std::string -> utils::String). */
-  template <class U> inline void Add(U &&v) { values_.emplace_back(std::forward<U>(v)); }
+  template <class U> inline void Add(U &&v) { mutable_values().emplace_back(std::forward<U>(v)); }
   /** Appends all elements in [first, last) (protobuf RepeatedField::Add range compat). */
   template <class InputIt> inline void Add(InputIt first, InputIt last) {
-    values_.insert(values_.end(), first, last);
+    auto &target = mutable_values();
+    target.insert(target.end(), first, last);
   }
   /** Returns a reference to the last element. */
-  inline T &back() { return values_.back(); }
+  inline T &back() { return mutable_values().back(); }
   /** Returns a mutable iterator to the first element. */
-  inline typename std::vector<T>::iterator begin() { return values_.begin(); }
+  inline typename std::vector<T>::iterator begin() { return mutable_values().begin(); }
   /** Returns a mutable iterator past the last element. */
-  inline typename std::vector<T>::iterator end() { return values_.end(); }
+  inline typename std::vector<T>::iterator end() { return mutable_values().end(); }
   /** Returns a const iterator to the first element. */
-  inline typename std::vector<T>::const_iterator begin() const { return values_.begin(); }
+  inline typename std::vector<T>::const_iterator begin() const { return values().begin(); }
   /** Returns a const iterator past the last element. */
-  inline typename std::vector<T>::const_iterator end() const { return values_.end(); }
+  inline typename std::vector<T>::const_iterator end() const { return values().end(); }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
     if constexpr (sizeof...(Args) == 0) {
       add();
     } else {
-      values_.emplace_back(std::forward<Args>(args)...);
+      mutable_values().emplace_back(std::forward<Args>(args)...);
     }
   }
   /** Returns a pointer to the underlying data array. */
-  inline T *data() { return values_.data(); }
+  inline T *data() { return mutable_values().data(); }
   /** Returns a mutable pointer to the underlying data array (protobuf compat). */
-  inline T *mutable_data() { return values_.data(); }
+  inline T *mutable_data() { return mutable_values().data(); }
   /** Returns a const pointer to the underlying data array. */
-  inline const T *data() const { return values_.data(); }
+  inline const T *data() const { return values().data(); }
   /** Resizes the field to n elements, filling new slots with value. */
-  inline void Resize(size_t n, const T &value) { values_.resize(n, value); }
+  inline void Resize(size_t n, const T &value) { mutable_values().resize(n, value); }
   /** Resizes the field to n elements, default-constructing new slots. */
-  inline void resize(size_t n) { values_.resize(n); }
+  inline void resize(size_t n) { mutable_values().resize(n); }
   /** Assigns the contents from an iterator range. */
   template <typename InputIt> inline void Assign(InputIt first, InputIt last) {
-    values_.assign(first, last);
+    mutable_values().assign(first, last);
   }
   /** Copies all elements from another RepeatedField. */
-  inline void CopyFrom(const RepeatedField<T> &other) { values_ = other.values_; }
+  inline void CopyFrom(const RepeatedField<T> &other) { *this = other; }
   /** Returns the number of elements as int (protobuf compat). */
-  inline int size_int() const { return static_cast<int>(values_.size()); }
+  inline int size_int() const { return static_cast<int>(size()); }
   /** Writes string representations of the contained values to ss. */
   void PrintToStringStream(std::stringstream &ss, PrintOptions &options) const;
 
 private:
-  std::vector<T> values_;
+  mutable std::vector<T> values_;
+  mutable std::shared_ptr<std::vector<T>> shared_values_;
 };
 
 /** Repeated field used by name-like string lists (for example NodeProto inputs/outputs). */

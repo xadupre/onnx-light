@@ -56,6 +56,13 @@ removed initializer positions and renames, without re-embedding retained
 weights. Serializing a transposed-weight recipe therefore stores no second
 transposed payload.
 
+``TransposeToInitializerPattern`` is no longer needed: it only re-emitted an
+unchanged ``Transpose`` to trigger folding. The optimizer captures preparation
+nodes produced by actual rewrites (for example, ``TransposeTransposePattern``)
+as shared ``FunctionProto`` recipes. An untouched constant ``Transpose`` remains
+in the canonical graph; explicit ``GraphBuilder::ConstantFold`` still folds it
+when materialization is desired.
+
 The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
 the existing protobuf-free message layer. The schema below includes fields
 used by constant preparation. The returned builder exposes ``BuildGraph()``

@@ -44,7 +44,8 @@ def _transpose_weight_model():
     return oh.make_model(
         oh.make_graph(
             [
-                oh.make_node("Transpose", ["weight"], ["transposed"], perm=[1, 0]),
+                oh.make_node("Transpose", ["weight"], ["weight_identity"], perm=[0, 1]),
+                oh.make_node("Transpose", ["weight_identity"], ["transposed"], perm=[1, 0]),
                 oh.make_node("Add", ["x", "transposed"], ["y"]),
             ],
             "transpose_weight",
@@ -966,7 +967,6 @@ class TestPatternOptimization(ExtTestCase):
             "SwapUnsqueezeTranspose",
             "TransposeEqualReshape",
             "TransposeReshapeTranspose",
-            "TransposeToInitializer",
             "MulMulMulScalar",
             "SwitchOrderBinary",
             "SwapRangeAddScalar",
@@ -1022,10 +1022,15 @@ class TestPatternOptimization(ExtTestCase):
                 self.assertIsInstance(
                     getattr(optim, f"{name}Pattern")(), optim.PatternOptimization
                 )
+        self.assertNotIn("TransposeToInitializer", registered)
+        self.assertFalse(hasattr(optim, "TransposeToInitializerPattern"))
 
     def test_transpose_folding_options_are_forwarded(self):
         graph = oh.make_graph(
-            [oh.make_node("Transpose", ["weight"], ["y"], perm=[1, 0])],
+            [
+                oh.make_node("Transpose", ["weight"], ["weight_identity"], perm=[0, 1]),
+                oh.make_node("Transpose", ["weight_identity"], ["y"], perm=[1, 0]),
+            ],
             "g",
             [],
             [oh.make_tensor_value_info("y", TensorProto.FLOAT, [3, 2])],
@@ -1036,7 +1041,7 @@ class TestPatternOptimization(ExtTestCase):
         )
         options = ConstantFoldingOptions()
         options.enabled = False
-        optim.GraphGraph(builder, ["TransposeToInitializer"]).optimize(folding_options=options)
+        optim.GraphGraph(builder, ["TransposeTranspose"]).optimize(folding_options=options)
         self.assertEqual([node.op_type for node in builder.build_graph().node], ["Transpose"])
 
     def test_python_pattern_runs_recursively_in_subgraph(self):

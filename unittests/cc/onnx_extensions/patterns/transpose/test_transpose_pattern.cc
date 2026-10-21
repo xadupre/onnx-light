@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/builder/pattern_registry.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -119,24 +121,27 @@ private:
   core::runtime::NodeKernelFn previous_;
 };
 
-TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
+TEST(TransposeConstantFolding, FoldsRewrittenFloatInitializer) {
   ScopedTransposeKernel kernel;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(
       MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
-  builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "transpose_weight", PermAttr({1, 0}));
+  builder.MakeNode("Transpose", {"weight"}, {"weight_identity"}, "", "", PermAttr({0, 1}));
+  builder.MakeNode("Transpose", {"weight_identity"}, {"weight_t"}, "", "transpose_weight",
+                   PermAttr({1, 0}));
   builder.MakeOutput("weight_t");
   ModelProto original;
   original.add_opset("", 28);
   *original.mutable_graph() = builder.BuildGraph();
 
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-  patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
   const auto plan = graph.Optimize();
   ASSERT_EQ(plan.added_functions().size(), 1u);
   EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Transpose");
   ASSERT_FALSE(plan.rewrites().empty());
+  EXPECT_EQ(plan.rewrites(0).pattern_name(), "TransposeTranspose");
   ASSERT_EQ(plan.rewrites(0).initializer_calls().size(), 1u);
   EXPECT_EQ(plan.rewrites(0).initializer_calls(0).input(0), "weight");
   for (const auto &edit : plan.rewrites())
@@ -170,13 +175,15 @@ TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
             (std::vector<float>{1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f}));
 }
 
-TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutWeightPayloads) {
+TEST(TransposeConstantFolding, ReplaysNestedRecipesWithoutWeightPayloads) {
   ScopedTransposeKernel kernel;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   auto &branch = builder.MakeSubgraph("branch");
   branch.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
-  branch.MakeNode("Transpose", {"weight"}, {"first"}, "", "", PermAttr({1, 0}));
-  branch.MakeNode("Transpose", {"first"}, {"second"}, "", "", PermAttr({1, 0}));
+  branch.MakeNode("Transpose", {"weight"}, {"weight_identity"}, "", "", PermAttr({0, 1}));
+  branch.MakeNode("Transpose", {"weight_identity"}, {"first"}, "", "", PermAttr({1, 0}));
+  branch.MakeNode("Transpose", {"first"}, {"first_identity"}, "", "", PermAttr({0, 1}));
+  branch.MakeNode("Transpose", {"first_identity"}, {"second"}, "", "", PermAttr({1, 0}));
   branch.MakeOutput("second");
   utils::RepeatedProtoField<AttributeProto> references;
   auto &reference = references.add();
@@ -189,7 +196,7 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
   original.add_opset("", 28);
   *original.mutable_graph() = builder.BuildGraph();
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-  patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
   const auto plan = graph.Optimize();
   ASSERT_EQ(plan.added_functions().size(), 1u);
@@ -214,7 +221,7 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
             (std::vector<float>{1, 2, 3, 4, 5, 6}));
 }
 
-TEST(TransposeToInitializerPattern, RecipeFunctionNamesDoNotConflictWithSourceGraphNames) {
+TEST(TransposeConstantFolding, RecipeFunctionNamesDoNotConflictWithSourceGraphNames) {
   ScopedTransposeKernel kernel;
   for (int kind = 0; kind < 3; ++kind) {
     SCOPED_TRACE(kind);
@@ -237,13 +244,14 @@ TEST(TransposeToInitializerPattern, RecipeFunctionNamesDoNotConflictWithSourceGr
       builder.MakeOutput("result");
     }
     builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
-    builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
+    builder.MakeNode("Transpose", {"weight"}, {"weight_identity"}, "", "", PermAttr({0, 1}));
+    builder.MakeNode("Transpose", {"weight_identity"}, {"weight_t"}, "", "", PermAttr({1, 0}));
     builder.MakeOutput("weight_t");
     ModelProto original;
     original.add_opset("", 28);
     *original.mutable_graph() = builder.BuildGraph();
     std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-    patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+    patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
     core::builder::GraphGraph optimizer(builder, std::move(patterns));
     const auto plan = optimizer.Optimize();
     ASSERT_EQ(plan.added_functions().size(), 1u);
@@ -259,34 +267,36 @@ TEST(TransposeToInitializerPattern, RecipeFunctionNamesDoNotConflictWithSourceGr
   }
 }
 
-TEST(TransposeToInitializerPattern, UsesDefaultReversePermutation) {
+TEST(TransposeConstantFolding, UsesDefaultReversePermutation) {
   ScopedTransposeKernel kernel;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<int64_t>("weight", {2, 1, 3}, {1, 2, 3, 4, 5, 6}));
   builder.MakeNode("Transpose", {"weight"}, {"weight_t"});
   builder.MakeOutput("weight_t");
 
-  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-  patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
-  core::builder::GraphGraph graph(builder, std::move(patterns));
-  graph.Optimize();
+  EXPECT_EQ(builder.ConstantFold(), 1u);
 
   EXPECT_TRUE(builder.Nodes().empty());
-  ASSERT_EQ(builder.Initializers().size(), 1u);
-  const TensorProto &folded = builder.Initializers()[0];
+  ASSERT_EQ(builder.Initializers().size(), 2u);
+  const TensorProto &folded = builder.Initializers()[1];
+  EXPECT_EQ(folded.name().value(), "weight_t");
   EXPECT_EQ(folded.data_type(), TensorProto::DataType::INT64);
   ASSERT_EQ(folded.dims().size(), 3u);
   EXPECT_EQ(folded.dims()[0], 3);
   EXPECT_EQ(folded.dims()[1], 1);
   EXPECT_EQ(folded.dims()[2], 2);
+  const auto tensor = core::runtime::TensorFromProto(folded);
+  EXPECT_EQ(std::vector<int64_t>(tensor.AsInt64(), tensor.AsInt64() + 6),
+            (std::vector<int64_t>{1, 4, 2, 5, 3, 6}));
 }
 
-TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
+TEST(TransposeConstantFolding, RespectsFoldingOptions) {
   ScopedTransposeKernel kernel;
   for (int setting = 0; setting < 4; ++setting) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
-    builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
+    builder.MakeNode("Transpose", {"weight"}, {"weight_identity"}, "", "", PermAttr({0, 1}));
+    builder.MakeNode("Transpose", {"weight_identity"}, {"weight_t"}, "", "", PermAttr({1, 0}));
     builder.MakeOutput("weight_t");
 
     core::builder::ConstantFoldingOptions options;
@@ -300,7 +310,7 @@ TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
       options.max_element_count = 5;
     }
     std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-    patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+    patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
     core::builder::GraphGraph graph(builder, std::move(patterns));
     graph.Optimize(-1, nullptr, options);
 
@@ -310,33 +320,32 @@ TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
   }
 }
 
-TEST(TransposeToInitializerPattern, RejectsRuntimeInput) {
+TEST(TransposeConstantFolding, DoesNotRewriteOriginalTranspose) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  builder.MakeNode("Transpose", {"weight"}, {"y"}, "", "transpose_weight", PermAttr({1, 0}));
+  builder.MakeOutput("y");
+  const std::string original = builder.BuildGraph().SerializeAsString();
+
+  ScopedTransposeKernel kernel;
+  onnx_patterns::RegisterPatterns();
+  core::builder::GraphGraph graph(builder, core::builder::CreateRegisteredPatterns());
+  const auto plan = graph.Optimize();
+  EXPECT_TRUE(plan.rewrites().empty());
+  EXPECT_TRUE(plan.added_functions().empty());
+  EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original);
+}
+
+TEST(TransposeConstantFolding, RejectsRuntimeInput) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeNode("Transpose", {"x"}, {"y"}, "", "", PermAttr({1, 0}));
   builder.MakeOutput("y");
 
-  core::builder::GraphGraph graph(builder);
-  onnx_patterns::TransposeToInitializerPattern pattern;
-  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
-  EXPECT_EQ(match.pattern, nullptr);
-}
-
-TEST(TransposeToInitializerPattern, RejectsConstantNodeOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
-  utils::RepeatedProtoField<AttributeProto> attributes;
-  AttributeProto &value = attributes.add();
-  value.set_name("value");
-  value.set_type(AttributeProto::AttributeType::TENSOR);
-  *value.mutable_t() = MakeInitializer<float>("", {2, 3}, {1, 2, 3, 4, 5, 6});
-  builder.MakeNode("Constant", {}, {"weight"}, "", "", attributes);
-  builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
-  builder.MakeOutput("weight_t");
-
-  core::builder::GraphGraph graph(builder);
-  onnx_patterns::TransposeToInitializerPattern pattern;
-  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
-  EXPECT_EQ(match.pattern, nullptr);
+  ScopedTransposeKernel kernel;
+  EXPECT_EQ(builder.ConstantFold(), 0u);
+  EXPECT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_TRUE(builder.Initializers().empty());
 }
 
 TEST(TransposeTransposePattern, CancelsOppositeTransposes) {

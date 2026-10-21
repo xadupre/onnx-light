@@ -47,6 +47,57 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  GraphBuilder source("root", SchemaLookup(), {{"", 18}});
+  source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+  source.MakeInput("condition", TensorType::kBool, MakeShape({}));
+  auto &body = source.MakeSubgraph("body");
+  body.MakeNode("Identity", {"x"}, {"result"});
+  body.MakeOutput("result");
+  body.set_device(Device::kGPU0);
+  auto &function = source.MakeLocalFunction("F", "local");
+  function.MakeInput("a", TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Neg", {"a"}, {"b"});
+  function.MakeOutput("b");
+  function.set_device(Device::kCPU);
+  body.MakeLocalFunction("Unused", "local");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch_ref", "else_branch_ref"}) {
+    auto &attribute = attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s("body");
+  }
+  source.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+  source.MakeOutput("y");
+  GraphBuilder target(source.ToModel(), SchemaLookup());
+  target.CopyDeviceTargetsFrom(source);
+  EXPECT_EQ(target.device(), Device::kUndefined);
+  ASSERT_EQ(target.Subgraphs().size(), 2);
+  for (const auto &child : target.Subgraphs())
+    EXPECT_EQ(child->device(), Device::kGPU0);
+  EXPECT_EQ(target.LocalFunction("F").device(), Device::kCPU);
+  EXPECT_EQ(source.device(), Device::kUndefined);
+  EXPECT_EQ(body.device(), Device::kGPU0);
+
+  GraphBuilder incompatible("other", SchemaLookup(), {{"", 18}});
+  incompatible.set_device(Device::kCPU);
+  EXPECT_THROW(incompatible.CopyDeviceTargetsFrom(source), core::builder::BuilderError);
+  EXPECT_EQ(incompatible.device(), Device::kCPU);
+
+  target.MakeLocalFunction("Extra", "local");
+  target.set_device(Device::kCPU);
+  for (const auto &child : target.Subgraphs())
+    child->set_device(Device::kCPU);
+  EXPECT_THROW(target.CopyDeviceTargetsFrom(source), core::builder::BuilderError);
+  EXPECT_EQ(target.device(), Device::kCPU);
+  for (const auto &child : target.Subgraphs())
+    EXPECT_EQ(child->device(), Device::kCPU);
+}
+
 TEST(GraphBuilder, ConstructorOpsets) {
   for (const std::string domain : {"", "ai.onnx"}) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});

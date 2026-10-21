@@ -762,6 +762,40 @@ void GraphBuilder::set_device(Device device) {
   compute_.ComputePeakMemory(BuildGraph(), device_);
 }
 
+void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
+  std::vector<std::pair<GraphBuilder *, Device>> updates;
+  const auto collect = [&](const auto &self, GraphBuilder &target,
+                           const GraphBuilder &original) -> void {
+    if (target.nodes_.size() != original.nodes_.size())
+      throw BuilderError("CopyDeviceTargetsFrom: incompatible node counts.");
+    for (size_t index = 0; index < original.nodes_.size(); ++index) {
+      const auto originals = original.ReferencedSubgraphs(original.nodes_[index]);
+      const auto children = target.ReferencedSubgraphs(target.nodes_[index]);
+      if (originals.size() != children.size())
+        throw BuilderError("CopyDeviceTargetsFrom: incompatible subgraph references.");
+      for (size_t child = 0; child < originals.size(); ++child)
+        self(self, *children[child], *originals[child]);
+    }
+    for (const auto &function : target.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto found = std::find_if(
+          original.local_functions_.begin(), original.local_functions_.end(),
+          [&](const auto &candidate) {
+            return MakeFunctionIdentifier(candidate->function_domain_, candidate->name_,
+                                          candidate->function_template_.overload()) == identity;
+          });
+      if (found == original.local_functions_.end())
+        throw BuilderError("CopyDeviceTargetsFrom: incompatible exported functions.");
+      self(self, *function, **found);
+    }
+    updates.emplace_back(&target, original.device_);
+  };
+  collect(collect, *this, source);
+  for (const auto &[scope, device] : updates)
+    scope->set_device(device);
+}
+
 void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
   InvalidateRewritings();
   compute_.Shapes().SetStructTypes(types);

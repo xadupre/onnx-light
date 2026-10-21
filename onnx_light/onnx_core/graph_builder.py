@@ -337,7 +337,7 @@ class GraphBuilder(_C.GraphBuilder):
         if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
             raise ValueError("A rewriting plan named 'optimized' already exists.")
         working = GraphBuilder(canonical, self._schema_lookup)
-        working.device = self.device
+        working.copy_device_targets_from(self)
         for pattern in self.registered_patterns():
             working.register_pattern(pattern)
         plan = GraphGraph(working).optimize()

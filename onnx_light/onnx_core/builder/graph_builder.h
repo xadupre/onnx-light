@@ -657,6 +657,11 @@ public:
 
   /// Logical target for pattern matching, constant folding and peak-memory analysis.
   void set_device(Device device);
+
+  /// Copies per-scope devices from a builder with the same canonical nodes.
+  /// Matches subgraphs by node references and exported functions by
+  /// domain/name/overload. Validates matching scopes before changing devices.
+  void CopyDeviceTargetsFrom(const GraphBuilder &source);
   Device device() const noexcept { return device_; }
 
   // ── Finalization ─────────────────────────────────────────────────────

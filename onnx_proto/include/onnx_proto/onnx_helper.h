@@ -372,6 +372,11 @@ protected:
      */
     size_t attr_index = 0;
     /**
+     * Stores the tensor and graph indices within the current attribute.
+     */
+    size_t attr_tensor_index = 0;
+    size_t attr_graph_index = 0;
+    /**
      * Stores the current initializer index.
      */
     size_t node_initializer_index = 0;

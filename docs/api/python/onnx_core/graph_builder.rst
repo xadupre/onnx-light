@@ -47,14 +47,19 @@ The option accepts only ``OptimizationMode`` members, not booleans, integers,
 strings, or members of another enum.
 
 Both optimization modes preserve the source builder's graph and registrations
-after ordinary export finalization. They keep a canonical copy rather than
-trying to invert destructive edits. Builder-local Python patterns remain live
+after ordinary export finalization. The working copy retains each scope's
+device, including subgraphs with a different target from their parent and
+exported local functions. Both modes keep a canonical copy rather than trying
+to invert destructive edits. Builder-local Python patterns remain live
 callbacks during capture; only their resulting proto records are serialized.
 
 Load external weights with ``onnx_light.onnx.load(path, load_external_data=True)``
 before optimization. Save either exported model with the existing
 ``onnx_light.onnx.save(..., save_as_external_data=True)`` to write its weights
 beside the new model instead of retaining references to the old directory.
+Deferred loading through ``load_external_data_for_model`` and streaming
+alignment also cover function defaults and rewrite payloads, including tensors
+in repeated tensor and graph attributes.
 See :ref:`l-example-plot-pattern-replay` for a save/load/replay example.
 
 .. automodule:: onnx_light.onnx_core.graph_builder

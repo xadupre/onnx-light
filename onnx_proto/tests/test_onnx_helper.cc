@@ -105,6 +105,17 @@ TEST(onnx_helper, IteratorTensorProto_ModelFunctionsAndRewritings) {
   auto *preparation = plan.add_added_functions();
   add_tensor(preparation->add_node()->add_attribute()->add_t());
   add_tensor(preparation->add_attribute_proto()->add_g()->add_initializer());
+  auto *tensor_list = function->add_attribute_proto();
+  add_tensor(tensor_list->add_tensors());
+  add_tensor(tensor_list->add_tensors());
+  auto *graphs = function->add_node()->add_attribute();
+  add_tensor(graphs->add_graphs()->add_initializer());
+  add_tensor(graphs->add_graphs()->add_node()->add_attribute()->add_t());
+  auto *preparation_tensors = preparation->add_node()->add_attribute();
+  add_tensor(preparation_tensors->add_tensors());
+  auto *preparation_graphs = preparation->add_attribute_proto();
+  add_tensor(preparation_graphs->add_graphs()->add_initializer());
+  add_tensor(preparation_graphs->add_graphs()->add_initializer());
 
   IteratorTensorProto iterator(&model);
   std::unordered_map<TensorProto *, size_t> visits;
@@ -128,11 +139,15 @@ TEST(onnx_helper, IteratorTensorProto_ModelFunctionsAndRewritings) {
   EXPECT_EQ(restored, original);
 
   SerializeOptions options;
-  options.raw_data_threshold = 0;
   std::string serialized;
   std::unordered_map<std::string, std::string> external_files;
+  options.raw_data_threshold = 1024;
   ASSERT_TRUE(model.SerializeToString(serialized, external_files, 8, "weights", options));
-  ASSERT_EQ(external_files.size(), 4);
+  EXPECT_TRUE(external_files.empty());
+  EXPECT_EQ(serialized, original);
+  options.raw_data_threshold = 0;
+  ASSERT_TRUE(model.SerializeToString(serialized, external_files, 8, "weights", options));
+  ASSERT_EQ(external_files.size(), (tensors.size() + 1) / 2);
   ModelProto parsed;
   parsed.ParseFromString(serialized);
   IteratorTensorProto loaded(&parsed);

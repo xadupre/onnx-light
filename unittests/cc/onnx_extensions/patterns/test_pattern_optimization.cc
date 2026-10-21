@@ -1878,6 +1878,7 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   builder.MakeOutput("y");
   const ModelProto original = builder.ToModel();
   for (const TensorProto &tensor : {
+           MakeInitializer<float>("x", {2}, {3.0f, 4.0f}),
            MakeInitializer<int64_t>("x", {2}, {1, 2}),
            MakeInitializer<float>("x", {}, {1.0f}),
            MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f}),
@@ -1902,6 +1903,99 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   EXPECT_EQ(replayed.initializer(0).SerializeAsString(),
             original.graph().initializer(0).SerializeAsString());
   EXPECT_EQ(replayed.input(0).SerializeAsString(), original.graph().input(0).SerializeAsString());
+}
+
+TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
+  ScopedAddKernel kernel;
+  for (bool input_default : {false, true}) {
+    for (bool computed : {false, true}) {
+      SCOPED_TRACE(input_default);
+      SCOPED_TRACE(computed);
+      core::builder::GraphBuilder source("replacement", SchemaLookup(), {{"", 18}});
+      core::symbolic::SymShape input_shape;
+      input_shape.PushBack(core::symbolic::SymDim(1));
+      if (input_default)
+        source.MakeInput("p", core::symbolic::TensorType::kFloat, input_shape);
+      source.MakeInitializer(MakeInitializer<float>("p", {1}, {1.0f}));
+      source.MakeInitializer(MakeInitializer<float>("seed", {1}, {3.0f}));
+      source.MakeNode("Identity", {"seed"}, {"y"});
+      source.MakeOutput("p");
+      source.MakeOutput("y");
+      const auto original = source.ToModel().SerializeAsString();
+      const auto tags = source.Compute().ValueTags();
+      const auto node_tags = source.Compute().NodeTags();
+      const auto memory = source.Compute().Memory();
+      const auto shape = source.GetShape("p");
+      RewritingProto plan;
+      auto &edit = *plan.add_rewrites();
+      edit.add_removed_initializers(0);
+      auto &rename = *edit.add_value_renames();
+      rename.set_key("seed");
+      rename.set_value("p");
+      if (computed) {
+        plan.ref_added_functions().push_back(PreparationAdd());
+        auto &opset = *plan.add_required_opset_imports();
+        opset.set_domain("test.prepare");
+        opset.set_version(1);
+        edit.ref_initializer_calls().push_back(
+            MakeNode("Prepare", {"seed", "seed"}, {"p", "other"}, "test.prepare"));
+        edit.add_computed_initializer_positions(0);
+        edit.add_computed_initializer_positions(2);
+      } else {
+        edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {1}, {5.0f}));
+        edit.add_added_initializer_positions(0);
+      }
+      RewritingProto loaded;
+      ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      EXPECT_THROW(source.ApplyRewritings(loaded), core::builder::BuilderError);
+      EXPECT_EQ(source.ToModel().SerializeAsString(), original);
+      EXPECT_EQ(source.Compute().ValueTags(), tags);
+      EXPECT_EQ(source.Compute().NodeTags(), node_tags);
+      EXPECT_EQ(source.Compute().Memory(), memory);
+      EXPECT_EQ(source.GetShape("p"), shape);
+      EXPECT_EQ(source.Nodes()[0].input(0), "seed");
+    }
+  }
+}
+
+TEST(PatternOptimization, ReplayAllowsFreshInitializerWithRewrittenReferences) {
+  core::builder::GraphBuilder source("fresh_initializer", SchemaLookup(), {{"", 18}});
+  source.MakeInitializer(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
+  source.MakeNode("Identity", {"p"}, {"y"});
+  source.MakeOutput("y");
+  RewritingProto plan;
+  auto &edit = *plan.add_rewrites();
+  edit.add_removed_initializers(0);
+  edit.ref_added_initializers().push_back(MakeInitializer<float>("fresh", {2}, {3.0f, 4.0f}));
+  edit.add_added_initializer_positions(0);
+  auto &rename = *edit.add_value_renames();
+  rename.set_key("p");
+  rename.set_value("fresh");
+  const auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Initializers().size(), 1u);
+  EXPECT_EQ(result.Initializers()[0].name(), "fresh");
+  EXPECT_EQ(result.Initializers()[0].SerializeAsString(),
+            edit.added_initializers(0).SerializeAsString());
+  EXPECT_EQ(result.Nodes()[0].input(0), "fresh");
+  EXPECT_FALSE(result.HasShape("p"));
+  EXPECT_EQ(result.GetShape("fresh").Shape(), source.GetShape("p").Shape());
+  EXPECT_EQ(result.GetShape("fresh").Dtype(), source.GetShape("p").Dtype());
+}
+
+TEST(PatternOptimization, ReplayAllowsFirstInputDefault) {
+  core::builder::GraphBuilder source("first_default", SchemaLookup(), {{"", 18}});
+  source.MakeInput("p", core::symbolic::TensorType::kFloat, Shape());
+  source.MakeOutput("p");
+  RewritingProto plan;
+  auto &edit = *plan.add_rewrites();
+  edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
+  edit.add_added_initializer_positions(0);
+  const auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Initializers().size(), 1u);
+  EXPECT_EQ(result.Initializers()[0].name(), "p");
+  EXPECT_EQ(result.GetShape("p"), source.GetShape("p"));
+  EXPECT_FALSE(result.Compute().IsConstantValue("p"));
+  EXPECT_EQ(result.BuildGraph().input(0).name(), "p");
 }
 
 TEST(PatternOptimization, ReplayPositionsInitializersAmongRetainedValues) {

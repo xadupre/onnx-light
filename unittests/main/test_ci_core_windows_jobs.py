@@ -3,8 +3,10 @@ import unittest
 
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestCiCoreWindowsJobs(unittest.TestCase):
+
+class TestCiCoreWindowsJobs(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]

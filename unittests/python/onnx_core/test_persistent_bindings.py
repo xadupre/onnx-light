@@ -3,6 +3,7 @@
 import unittest
 
 from onnx_light import onnx
+from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_pb import PersistentBindingProto
 from onnx_light.onnx_core.graph_builder import GraphBuilder, ProtoKind
@@ -45,7 +46,7 @@ def model_with_binding(input_type=None, output_type=None):
     return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
 
 
-class TestPersistentBindings(unittest.TestCase):
+class TestPersistentBindings(ExtTestCase):
     def test_requires_persistent_input_use(self):
         model = model_with_binding()
         model.graph.input.append(onnx.ValueInfoProto(name="other", type=tensor_type()))

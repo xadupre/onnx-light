@@ -7,9 +7,10 @@ import textwrap
 import unittest
 
 from onnx_light.__main__ import _build_parser
+from onnx_light.ext_test_case import ExtTestCase
 
 
-class TestCommandLineDocs(unittest.TestCase):
+class TestCommandLineDocs(ExtTestCase):
     """Tests API command-line coverage and executable help snippets."""
 
     ROOT = Path(__file__).resolve().parents[2]

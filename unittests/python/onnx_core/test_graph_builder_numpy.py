@@ -15,14 +15,14 @@ import weakref
 import ml_dtypes
 import numpy
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import ModelProto, TensorProto, checker
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 
 @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
-class TestGraphBuilderNumpy(unittest.TestCase):
+class TestGraphBuilderNumpy(ExtTestCase):
     def assertPointer(self, tensor, array):
         view = numpy.from_dlpack(tensor)
         self.assertEqual(view.ctypes.data, array.ctypes.data)

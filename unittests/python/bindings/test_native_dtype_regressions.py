@@ -7,7 +7,7 @@ import unittest
 
 import numpy
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
@@ -16,7 +16,7 @@ from onnx_light.onnx_core.graph_builder import GraphBuilder
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
-class TestNativeDtypeRegressions(unittest.TestCase):
+class TestNativeDtypeRegressions(ExtTestCase):
     def run_node(self, op_type, feeds, opset=18, **attributes):
         """Runs a node using only compiled native kernels."""
         node = oh.make_node(op_type, list(feeds), ["result"], **attributes)

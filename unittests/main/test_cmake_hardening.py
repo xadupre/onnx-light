@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestCMakeHardening(unittest.TestCase):
+
+class TestCMakeHardening(ExtTestCase):
     def test_hardening_flags_and_caller_mode(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:

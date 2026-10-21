@@ -1,8 +1,10 @@
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestKernelReportsWorkflow(unittest.TestCase):
+
+class TestKernelReportsWorkflow(ExtTestCase):
     def test_initializes_cache_from_runner_environment(self):
         """Keeps runner-dependent cache initialization inside a workflow step."""
         root = Path(__file__).resolve().parents[2]

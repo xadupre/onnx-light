@@ -586,6 +586,45 @@ class TestPatternOptimization(ExtTestCase):
             self.assertEqual(builder.device, Device.kUndefined)
             self.assertEqual(builder.to_onnx().SerializeToString(), before)
 
+    def test_to_onnx_optimized_function_preserves_constant_values(self):
+        values = numpy.array([1, 2], dtype=numpy.float32)
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Constant", [], ["weight"], value=onh.from_array(values)),
+                    oh.make_node("Add", ["x", "weight"], ["y"]),
+                ],
+                "F",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        before = builder.to_onnx().SerializeToString()
+        for mode in (OptimizationMode.kNone, OptimizationMode.kOptimize):
+            with self.subTest(mode=mode):
+                function = builder.to_onnx(ProtoKind.kFunction, domain="local", optimize=mode)
+                self.assertEqual([node.op_type for node in function.node], ["Constant", "Add"])
+                numpy.testing.assert_array_equal(
+                    onh.to_array(function.node[0].attribute[0].t), values
+                )
+                called = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("F", ["x"], ["y"], domain="local")],
+                        "call",
+                        list(model.graph.input),
+                        list(model.graph.output),
+                    ),
+                    functions=[function],
+                    opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("local", 1)],
+                )
+                x = numpy.array([3, -4], dtype=numpy.float32)
+                numpy.testing.assert_array_equal(
+                    ReferenceEvaluator(called).run(None, {"x": x})[0], x + values
+                )
+                self.assertEqual(builder.to_onnx().SerializeToString(), before)
+
     def test_to_onnx_no_op_optimization_and_other_proto_kinds(self):
         value = oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])
         model = oh.make_model(oh.make_graph([], "no_op", [value], [value]))

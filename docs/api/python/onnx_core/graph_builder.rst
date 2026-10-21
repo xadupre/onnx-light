@@ -37,6 +37,11 @@ builder-local pattern registrations and returns the optimized result without
 rewrite plans. Model exports use ``to_standard_model`` and reject constructs that
 standard ONNX cannot represent.
 Graph and function exports also accept ``OptimizationMode.kOptimize``.
+Function export represents dense initializers as leading ``Constant`` nodes,
+including initializers introduced by optimization, without changing the source
+builder. Tensor payloads and external-data descriptors are preserved. This
+requires a default-domain opset import. Overridable input defaults and extended
+initializers cannot be represented this way and are rejected explicitly.
 
 ``OptimizationMode.kRewritings`` returns the finalized, non-optimized canonical
 model with the captured plan in ``ModelProto.rewritings["optimized"]``. This mode requires

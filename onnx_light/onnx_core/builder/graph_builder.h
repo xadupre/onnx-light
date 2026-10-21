@@ -681,6 +681,9 @@ public:
   ModelProto ToStandardModel(int64_t ir_version = 0);
 
   /// Returns the finalized nodes wrapped in a :cpp:class:`FunctionProto`.
+  /// Materializes dense initializers as Constant nodes without changing the
+  /// builder. Requires a default-domain opset; rejects overridable defaults
+  /// and extended initializers, which a function cannot represent.
   ///
   /// @param domain Function domain.
   FunctionProto ToFunction(const std::string &domain = "");
@@ -842,7 +845,9 @@ private:
   void RefreshLocalFunctions();
 
   // Builds a function without running inference on its unspecialized body.
-  FunctionProto BuildFunction(const std::string &domain) const;
+  FunctionProto BuildFunction(const std::string &domain,
+                              bool include_initializer_constants = true) const;
+  void PrependInitializerConstants(FunctionProto &function) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
   // Orders producers before consumers, including lexical subgraph captures.

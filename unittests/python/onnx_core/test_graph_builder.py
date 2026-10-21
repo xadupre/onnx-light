@@ -484,12 +484,30 @@ class TestGraphBuilder(ExtTestCase):
         self.assertIsInstance(body.to_onnx(ProtoKind.kGraph), onnxl.GraphProto)
         self.assertIsInstance(body.to_onnx(ProtoKind.kFunction), onnxl.FunctionProto)
 
-    def test_to_function_rejects_initializers(self):
+    def test_to_function_materializes_external_initializer(self):
         builder = GraphBuilder("g")
         builder.make_external_initializer("w", FLOAT, [2, 2], "w.bin", 0, 16)
-        self.assertRaise(
-            lambda: builder.to_onnx(ProtoKind.kFunction, domain="custom"), ValueError
+        builder.make_output("w")
+        before = builder.to_graph().SerializeToString()
+        function = builder.to_onnx(ProtoKind.kFunction, domain="custom")
+        self.assertEqual(len(function.node), 1)
+        self.assertEqual(function.node[0].op_type, "Constant")
+        self.assertEqual(list(function.node[0].output), ["w"])
+        tensor = function.node[0].attribute[0].t
+        self.assertEqual(list(tensor.dims), [2, 2])
+        self.assertEqual(
+            {entry.key: entry.value for entry in tensor.external_data},
+            {"location": "w.bin", "offset": "0", "length": "16"},
         )
+        self.assertEqual(builder.to_graph().SerializeToString(), before)
+
+    def test_to_function_rejects_overridable_initializer(self):
+        builder = GraphBuilder("g")
+        builder.make_input("w", FLOAT, [2])
+        builder.make_initializer(oh.make_tensor("w", FLOAT, [2], [1, 2]))
+        builder.make_output("w")
+        with self.assertRaisesRegex(ValueError, "cannot preserve overridable initializer 'w'"):
+            builder.to_onnx(ProtoKind.kFunction, domain="custom")
 
     def test_to_onnx_rejects_non_enum_kind(self):
         builder = GraphBuilder("g")

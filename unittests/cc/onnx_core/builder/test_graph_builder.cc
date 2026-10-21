@@ -1746,10 +1746,83 @@ TEST(GraphBuilder, BuildsTranslatedLinearModel) {
   EXPECT_EQ(model.graph().output()[0].name().value(), "Y");
 }
 
-TEST(GraphBuilder, ToFunctionRejectsInitializers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
-  builder.MakeExternalInitializer("w", core::symbolic::TensorType::kFloat, {2, 2}, "w.bin", 0, 16);
+TEST(GraphBuilder, ToFunctionMaterializesInitializersWithoutMutatingBuilder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInitializer(MakeInitializer<float>("w", {2}, {1.0f, 2.0f}));
+  builder.MakeExternalInitializer("external", core::symbolic::TensorType::kFloat, {2}, "w.bin", 0,
+                                  8);
+  builder.MakeNode("Add", {"x", "w"}, {"middle"});
+  builder.MakeNode("Add", {"middle", "external"}, {"y"});
+  builder.MakeOutput("y");
+  const auto before = builder.ToGraph();
+  const auto function = builder.ToFunction("custom");
+  ASSERT_EQ(function.node().size(), 4u);
+  for (size_t index = 0; index < 2; ++index) {
+    const auto &node = function.node(index);
+    EXPECT_EQ(node.op_type(), "Constant");
+    ASSERT_EQ(node.attribute().size(), 1u);
+    EXPECT_EQ(node.attribute(0).name(), "value");
+    EXPECT_EQ(node.attribute(0).t().SerializeAsString(),
+              builder.Initializers()[index].SerializeAsString());
+    EXPECT_EQ(node.output(0), builder.Initializers()[index].name().value());
+    EXPECT_EQ(function.node(index + 2).SerializeAsString(), before.node(index).SerializeAsString());
+  }
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), before.SerializeAsString());
+  EXPECT_EQ(builder.ToFunction("custom").SerializeAsString(), function.SerializeAsString());
+}
+
+TEST(GraphBuilder, ToFunctionRejectsOverridableInitializersAndMissingOpset) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInitializer(MakeInitializer<float>("w", {2}, {1.0f, 2.0f}));
+  builder.MakeOutput("w");
+  const auto before = builder.ToGraph().SerializeAsString();
   EXPECT_THROW(builder.ToFunction("custom"), core::builder::BuilderError);
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), before);
+
+  core::builder::GraphBuilder missing_opset("constant", SchemaLookup());
+  missing_opset.MakeInitializer(MakeInitializer<float>("w", {2}, {1.0f, 2.0f}));
+  missing_opset.MakeOutput("w");
+  EXPECT_THROW(missing_opset.ToFunction("custom"), core::builder::BuilderError);
+}
+
+TEST(GraphBuilder, LocalFunctionWithInitializerPreservesShapeInferenceAndModelExport) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+  auto &function = builder.MakeLocalFunction("F", "custom");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInitializer(MakeInitializer<float>("w", {2}, {1.0f, 2.0f}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto &branch = function.MakeSubgraph(name);
+    branch.MakeNode("Add", {"a", "w"}, {"result"});
+    branch.MakeOutput("result");
+    branch.set_device(core::symbolic::Device::kGPU0);
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  function.MakeNode("If", {"condition"}, {"b"}, "", "", attributes);
+  function.MakeOutput("b");
+  function.set_device(core::symbolic::Device::kCPU);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("F", {"x", "condition"}, {"y"}, "custom");
+  builder.MakeOutput("y");
+  EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2}));
+  const auto model = builder.ToModel();
+  ASSERT_EQ(model.functions().size(), 1u);
+  ASSERT_EQ(model.functions(0).node().size(), 2u);
+  EXPECT_EQ(model.functions(0).node(0).op_type(), "Constant");
+  EXPECT_EQ(model.functions(0).node(1).op_type(), "If");
+  EXPECT_NO_THROW(VerifyModel(model));
+  core::builder::GraphBuilder copy(model, SchemaLookup());
+  copy.CopyDeviceTargetsFrom(builder);
+  EXPECT_EQ(copy.LocalFunction("F").device(), core::symbolic::Device::kCPU);
+  for (const auto &branch : copy.LocalFunction("F").Subgraphs())
+    EXPECT_EQ(branch->device(), core::symbolic::Device::kGPU0);
 }
 
 TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {

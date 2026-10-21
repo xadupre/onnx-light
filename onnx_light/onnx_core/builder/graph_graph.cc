@@ -1883,6 +1883,11 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   const std::size_t final_initializer_count = retained_initializers + added_initializers.size();
   std::vector<const TensorProto *> initializers_by_position(final_initializer_count, nullptr);
   for (const auto &addition : added_initializers) {
+    for (std::size_t position : removed_initializers) {
+      if (initializers[position].name() == addition.initializer->name()) {
+        throw BuilderError("ApplyRewriting: initializer name is already reserved.");
+      }
+    }
     if (addition.position >= final_initializer_count) {
       throw BuilderError(
           "ApplyRewriting: added initializer position is outside the rewritten graph.");
@@ -1948,7 +1953,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
 
   RewriteInitializerReferences(value_renames);
   for (const auto &addition : added_initializers) {
-    // Replacing an existing default must not bypass the public-input contract.
+    // First-time defaults must respect the public-input contract.
     ValidateInputDefault(inputs_, *addition.initializer);
     const auto &name = addition.initializer->name();
     bool replaces_removed_value = false;
@@ -1956,9 +1961,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       for (const auto &output : node->output()) {
         replaces_removed_value = replaces_removed_value || output == name;
       }
-    }
-    for (std::size_t position : removed_initializers) {
-      replaces_removed_value = replaces_removed_value || initializers[position].name() == name;
     }
     if (!replaces_removed_value) {
       const bool input_default = std::any_of(

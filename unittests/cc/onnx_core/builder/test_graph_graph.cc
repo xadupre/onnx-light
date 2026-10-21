@@ -926,6 +926,91 @@ TEST(GraphGraph, ReplayInsertsProducerBeforeConsumersWithoutSortingIndependentNo
   }
 }
 
+TEST(GraphGraph, ReplayRejectsCyclesDuringDependencyInsertion) {
+  for (const int cycle_size : {1, 2, 3}) {
+    for (const bool external_prerequisite : {false, true}) {
+      SCOPED_TRACE(cycle_size);
+      SCOPED_TRACE(external_prerequisite);
+      core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+      source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      source.MakeNode("Abs", {"X"}, {"a"});
+      source.MakeOutput("a");
+      RewritingProto plan;
+      auto &rewrite = *plan.add_rewrites();
+      for (int index = 0; index < cycle_size; ++index) {
+        const std::string input = "v" + std::to_string((index + 1) % cycle_size);
+        const std::string output = "v" + std::to_string(index);
+        rewrite.add_added_nodes_positions(index);
+        rewrite.add_added_nodes(external_prerequisite && index == 0
+                                    ? MakeNode("Add", {input, "a"}, {output})
+                                    : MakeNode("Neg", {input}, {output}));
+      }
+      try {
+        source.ApplyRewritings(plan);
+        ADD_FAILURE() << "Expected a cyclic dependency error.";
+      } catch (const core::builder::BuilderError &error) {
+        EXPECT_NE(std::string(error.what()).find("cyclic node dependencies"), std::string::npos);
+      }
+    }
+  }
+}
+
+TEST(GraphGraph, ReplayAcceptsSharedPrerequisitesDuringDependencyInsertion) {
+  for (const bool diamond : {false, true}) {
+    SCOPED_TRACE(diamond);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    source.MakeNode("Abs", {"X"}, {"a"});
+    source.MakeOutput("a");
+    core::builder::GraphBuilder expected("g", SchemaLookup(), {{"", 28}});
+    expected.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    if (diamond) {
+      expected.MakeNode("Abs", {"X"}, {"a"});
+      expected.MakeNode("Add", {"X", "a"}, {"c"});
+      expected.MakeNode("Neg", {"c"}, {"b"});
+      expected.MakeNode("Relu", {"c"}, {"d"});
+      expected.MakeNode("Add", {"b", "d"}, {"e"});
+    } else {
+      expected.MakeNode("Neg", {"X"}, {"b"});
+      expected.MakeNode("Abs", {"X"}, {"a"});
+      expected.MakeNode("Add", {"b", "a"}, {"c"});
+    }
+    const std::string output = diamond ? "e" : "c";
+    expected.MakeOutput("a");
+    expected.MakeOutput(output);
+    source.MakeNode("Identity", {"a"}, {output});
+    source.MakeOutput(output);
+    RewritingProto plan;
+    auto &rewrite = *plan.add_rewrites();
+    rewrite.add_matched_nodes(1);
+    rewrite.add_added_nodes_positions(0);
+    rewrite.add_added_nodes(MakeNode("Add", {diamond ? "X" : "b", "a"}, {"c"}));
+    rewrite.add_added_nodes_positions(1);
+    rewrite.add_added_nodes(MakeNode("Neg", {diamond ? "c" : "X"}, {"b"}));
+    if (diamond) {
+      rewrite.add_added_nodes_positions(2);
+      rewrite.add_added_nodes(MakeNode("Relu", {"c"}, {"d"}));
+      rewrite.add_added_nodes_positions(3);
+      rewrite.add_added_nodes(MakeNode("Add", {"b", "d"}, {"e"}));
+    }
+    auto result = source.ApplyRewritings(plan);
+    ASSERT_EQ(result.Nodes().size(), expected.Nodes().size());
+    for (std::size_t index = 0; index < expected.Nodes().size(); ++index) {
+      const std::string output = expected.Nodes()[index].output(0);
+      EXPECT_EQ(result.Nodes()[index].output(0), output);
+      EXPECT_EQ(result.GetShape(output), expected.GetShape(output));
+      EXPECT_EQ(result.Compute().NodeReuse(index), expected.Compute().NodeReuse(index));
+    }
+    EXPECT_EQ(result.Compute().Memory(), expected.Compute().Memory());
+    EXPECT_EQ(result.Compute().PeakMemory(), expected.Compute().PeakMemory());
+    auto actual_graph = result.BuildGraph();
+    auto expected_graph = expected.BuildGraph();
+    result.Compute().WriteToGraph(actual_graph);
+    expected.Compute().WriteToGraph(expected_graph);
+    EXPECT_EQ(actual_graph.SerializeAsString(), expected_graph.SerializeAsString());
+  }
+}
+
 TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
   source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

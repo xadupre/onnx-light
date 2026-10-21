@@ -12,6 +12,7 @@
     2026-10_kernel_parallelization_completion
     2026-10_guarded_kernel_replay
     2026-10_serialized_graph_rewriting
+    2026-10_ort_plugin_compatibility
     2026-10_offline_semantic_documentation_search
     2026-10_native_lora_reinforcement_learning
     2026-08_onnxruntime_fast_model_loading
@@ -61,6 +62,10 @@ Discussion
 
     * - Plan
       - Contribution
+    * - :ref:`l-next-steps-ort-plugin-compatibility`
+      - Defines an external interoperability repository with separate targets
+        for hosting ORT-compatible plugins without ORT and exposing onnx-light
+        kernels to ORT, with API inventories and staged acceptance gates.
     * - :ref:`l-next-steps-serialized-graph-rewriting`
       - Serializes concrete graph rewrites, bundles alternative model variants,
         and defines canonical, bundled and materialized exports in four PRs.

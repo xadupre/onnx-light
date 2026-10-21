@@ -781,6 +781,23 @@ TEST(PatternOptimization, UpdatesOnlyAffectedShapesAndRefreshesRemovedLastUses) 
   }
 }
 
+TEST(PatternOptimization, OptimizerDoesNotReinferUnaffectedShapes) {
+  auto original = PreparationModel();
+  core::builder::GraphBuilder builder(original, SchemaLookup());
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Abs", {"X"}, {"unchanged"});
+  builder.MakeOutput("unchanged");
+  ScopedAbsShapeCounter counter;
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<CountingFastOpTypePattern>()});
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  EXPECT_FALSE(optimizer.Optimize(1, nullptr, options).rewrites().empty());
+  EXPECT_EQ(counter.calls, 0u);
+  EXPECT_EQ(builder.GetShape("unchanged"), builder.GetShape("X"));
+}
+
 TEST(PatternOptimization, PreservesExistingTagsWhenRenamingToInputs) {
   for (bool declared_tag : {false, true}) {
     SCOPED_TRACE(declared_tag);
@@ -1033,6 +1050,13 @@ TEST(PatternOptimization, AppliesOverridesInsideReachableFunctions) {
       override.ref_node().push_back(MakeNode("Add", {"A", "A"}, {"C"}));
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded),
+                   core::builder::BuilderError);
+      const auto functions = original.functions();
+      original.ref_functions().clear();
+      original.add_function(override);
+      for (const auto &function : functions)
+        original.add_function(function);
       const auto replayed =
           core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
       EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], reachable ? 2 : 3);
@@ -1103,6 +1127,13 @@ TEST(PatternOptimization, AppliesOverridesInsideNestedFunctionGraphs) {
   override.add_output("C");
   override.add_opset("", 18);
   override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
+  EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
+               core::builder::BuilderError);
+  const auto functions = original.functions();
+  original.ref_functions().clear();
+  original.add_function(override);
+  for (const auto &function : functions)
+    original.add_function(function);
   EXPECT_NO_THROW(
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel());
 }
@@ -1167,6 +1198,15 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
     override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    if (!explicit_binding) {
+      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded),
+                   core::builder::BuilderError);
+    }
+    const auto functions = original.functions();
+    original.ref_functions().clear();
+    original.add_function(override);
+    for (const auto &function : functions)
+      original.add_function(function);
     const auto replayed =
         core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
     EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 1);
@@ -1333,6 +1373,40 @@ TEST(PatternOptimization, ReplayBatchStillValidatesLaterSequentialEdits) {
     EXPECT_THROW(
         core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph(),
         core::builder::BuilderError);
+  }
+}
+
+TEST(PatternOptimization, ReplayRejectsForwardReferencesAcrossEdits) {
+  for (bool independent_prefix : {false, true}) {
+    SCOPED_TRACE(independent_prefix);
+    core::builder::GraphBuilder builder("forward_reference_replay", SchemaLookup());
+    builder.SetOpsetVersion("", 18);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    RewritingProto plan;
+    if (independent_prefix) {
+      builder.MakeNode("Abs", {"x"}, {"prefix"});
+      auto *edit = plan.add_rewrites();
+      edit->add_matched_nodes(0);
+      edit->add_added_nodes(MakeNode("Neg", {"x"}, {"prefix"}));
+      edit->add_added_nodes_positions(0);
+    }
+    const std::size_t position = builder.Nodes().size();
+    builder.MakeNode("Abs", {"x"}, {"a"});
+    builder.MakeNode("Abs", {"x"}, {"b"});
+    builder.MakeOutput("a");
+    const ModelProto original = builder.ToModel();
+    auto *first = plan.add_rewrites();
+    first->add_matched_nodes(position);
+    first->add_added_nodes(MakeNode("Neg", {"later"}, {"a"}));
+    first->add_added_nodes_positions(position);
+    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
+                 core::builder::BuilderError);
+    auto *second = plan.add_rewrites();
+    second->add_matched_nodes(position + 1);
+    second->add_added_nodes(MakeNode("Neg", {"x"}, {"later"}));
+    second->add_added_nodes_positions(position + 1);
+    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
+                 core::builder::BuilderError);
   }
 }
 

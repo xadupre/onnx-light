@@ -21,6 +21,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#include <utility>
 
 #include "onnx_lib/common/common.h"
 
@@ -359,6 +360,11 @@ Common::Status OnnxParser::Parse(TensorShapeProto &shape) {
 }
 
 Common::Status OnnxParser::Parse(TypeProto &typeProto) {
+  if (recursion_depth_ >= kMaxRecursionDepth) {
+    return ParseError("Maximum parser recursion depth of ", kMaxRecursionDepth, " exceeded.");
+  }
+  RecursionDepthGuard recursion_guard(recursion_depth_);
+
   std::string id;
   CHECK_PARSER_STATUS(ParseIdentifier(id));
   int dtype = PrimitiveTypeNameMap::Lookup(id);
@@ -578,7 +584,7 @@ Common::Status OnnxParser::ParseValueInfo(ValueInfoList &value_infos, TensorList
           CHECK_PARSER_STATUS(Parse(tp, vi.ref_type()));
         } else {
           // valueinfo
-          value_infos.push_back(vi);
+          value_infos.push_back(std::move(vi));
         }
       } while (Matches(','));
       MATCH('>');
@@ -751,7 +757,7 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
         CHECK_PARSER_STATUS(Parse(tensorProto, typeProto));
       } else {
         attr.set_type(AttributeProto::AttributeType::TYPE_PROTO);
-        attr.ref_tp().CopyFrom(typeProto);
+        attr.ref_tp() = std::move(typeProto);
       }
     } else {
       if (NextIsValidFloatString()) {
@@ -943,8 +949,8 @@ Common::Status OnnxParser::Parse(NodeProto &node) {
   }
   AttrList attrs;
   PARSE(attrs);
-  for (const auto &a : attrs)
-    node.add_attribute(a);
+  for (auto &a : attrs)
+    node.add_attribute(std::move(a));
   MATCH('(');
   IdList inputs;
   PARSE(inputs);
@@ -955,8 +961,8 @@ Common::Status OnnxParser::Parse(NodeProto &node) {
     // Permit attributes to be specified before or after parameters.
     AttrList attrs2;
     PARSE(attrs2);
-    for (const auto &a : attrs2)
-      node.add_attribute(a);
+    for (auto &a : attrs2)
+      node.add_attribute(std::move(a));
   }
   return Common::Status::OK();
 }
@@ -978,14 +984,19 @@ Common::Status OnnxParser::Parse(GraphProto &graph) {
 }
 
 Common::Status OnnxParser::Parse(const std::string &name, GraphProto &graph) {
+  if (recursion_depth_ >= kMaxRecursionDepth) {
+    return ParseError("Maximum parser recursion depth of ", kMaxRecursionDepth, " exceeded.");
+  }
+  RecursionDepthGuard recursion_guard(recursion_depth_);
+
   graph.set_name(name);
   graph.ref_initializer().clear();
 
   ValueInfoList inputs;
   TensorList initializers;
   CHECK_PARSER_STATUS(ParseInput(inputs, initializers));
-  for (const auto &vi : inputs)
-    graph.add_input(vi);
+  for (auto &vi : inputs)
+    graph.add_input(std::move(vi));
   for (const auto &t : initializers)
     graph.add_initializer(t);
 
@@ -994,21 +1005,21 @@ Common::Status OnnxParser::Parse(const std::string &name, GraphProto &graph) {
 
   ValueInfoList outputs;
   CHECK_PARSER_STATUS(ParseGraphInputOutput(outputs));
-  for (const auto &vi : outputs)
-    graph.add_output(vi);
+  for (auto &vi : outputs)
+    graph.add_output(std::move(vi));
 
   ValueInfoList value_infos;
   TensorList more_initializers;
   CHECK_PARSER_STATUS(ParseValueInfo(value_infos, more_initializers));
-  for (const auto &vi : value_infos)
-    graph.add_value_info(vi);
+  for (auto &vi : value_infos)
+    graph.add_value_info(std::move(vi));
   for (const auto &t : more_initializers)
     graph.add_initializer(t);
 
   NodeList nodes;
   PARSE(nodes);
-  for (const auto &node : nodes)
-    graph.add_node(node);
+  for (auto &node : nodes)
+    graph.add_node(std::move(node));
   return Common::Status::OK();
 }
 
@@ -1055,8 +1066,8 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   PARSE('<', fn_attrs, fn_attr_protos, '>');
   for (const auto &a : fn_attrs)
     *fn.add_attribute() = a;
-  for (const auto &ap : fn_attr_protos)
-    fn.add_attribute_proto(ap);
+  for (auto &ap : fn_attr_protos)
+    fn.add_attribute_proto(std::move(ap));
 
   fn.ref_value_info().clear();
 
@@ -1065,8 +1076,8 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   CHECK_PARSER_STATUS(ParseFunctionInputOutput(fn_inputs, fn_input_vis));
   for (const auto &inp : fn_inputs)
     *fn.add_input() = inp;
-  for (const auto &vi : fn_input_vis)
-    fn.add_value_info(vi);
+  for (auto &vi : fn_input_vis)
+    fn.add_value_info(std::move(vi));
 
   MATCH('=');
   MATCH('>', false);
@@ -1076,20 +1087,20 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   CHECK_PARSER_STATUS(ParseFunctionInputOutput(fn_outputs, fn_output_vis));
   for (const auto &out : fn_outputs)
     *fn.add_output() = out;
-  for (const auto &vi : fn_output_vis)
-    fn.add_value_info(vi);
+  for (auto &vi : fn_output_vis)
+    fn.add_value_info(std::move(vi));
 
   if (NextChar() == '<') {
     ValueInfoList extra_vis;
     PARSE('<', extra_vis, '>');
-    for (const auto &vi : extra_vis)
-      fn.add_value_info(vi);
+    for (auto &vi : extra_vis)
+      fn.add_value_info(std::move(vi));
   }
 
   NodeList nodes;
   PARSE(nodes);
-  for (const auto &node : nodes)
-    fn.add_node(node);
+  for (auto &node : nodes)
+    fn.add_node(std::move(node));
   return Common::Status::OK();
 }
 
@@ -1179,7 +1190,7 @@ Common::Status OnnxParser::Parse(ModelProto &model) {
   while (!EndOfInput()) {
     FunctionProto fn;
     PARSE(fn);
-    functions.push_back(fn);
+    functions.push_back(std::move(fn));
   }
   return Common::Status::OK();
 }

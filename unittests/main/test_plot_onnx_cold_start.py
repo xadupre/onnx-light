@@ -33,6 +33,9 @@ def _load_example_helpers():
 class TestPlotOnnxColdStart(ExtTestCase):
     def test_plot_results_creates_timing_graph(self):
         """Verifies collected cold-start timings produce a graph."""
+        import matplotlib
+
+        matplotlib.use("Agg")
         results = [
             {"implementation": "onnx", "end_to_end_ms": 20.0, "first_load_after_imports_ms": 8.0},
             {
@@ -46,6 +49,7 @@ class TestPlotOnnxColdStart(ExtTestCase):
             axis = _load_example_helpers()._plot_results(results, str(graph_path))
 
             self.assertTrue(graph_path.exists())
+            self.assertEqual(graph_path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
             self.assertEqual(axis.get_ylabel(), "milliseconds")
             self.assertEqual(
                 [tick.get_text() for tick in axis.get_xticklabels()], ["onnx", "onnx_light"]

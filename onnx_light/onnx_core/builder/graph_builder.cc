@@ -911,6 +911,7 @@ bool GraphBuilder::RefreshDependentNodes(
 
 void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_indices,
                                          std::unordered_set<std::string> affected_values) {
+  compute::ComputeContext::ValueTagPreservationGuard preserve_tags(compute_);
   std::unordered_set<GraphBuilder *> referenced_subgraphs;
   for (const auto &node : nodes_) {
     for (GraphBuilder *child : ReferencedSubgraphs(node)) {
@@ -943,6 +944,16 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
     CollectNodeReferences(nodes_[index], references[index]);
   }
   const auto order = TopologicalNodeOrder(nodes_, available, references);
+  for (const auto &initializer : initializers_) {
+    const std::string name = initializer.name().value();
+    if (affected_values.count(name) != 0) {
+      const bool is_input = std::any_of(inputs_.begin(), inputs_.end(), [&](const auto &input) {
+        return input.name() == initializer.name();
+      });
+      compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                              /*allow_input_overwrite=*/false);
+    }
+  }
   const auto old_count = compute_.Size();
   for (std::size_t index : order) {
     if (old_indices[index] == old_count ||
@@ -981,8 +992,6 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
       compute_.SeedConstant(name);
     }
     compute_.SeedValueTag(name, DeclaredValueTag(initializer), nodes_);
-    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
-                            /*allow_input_overwrite=*/false);
   }
   for (const auto &info : value_infos_) {
     if (affected_values.count(info.name().value()) != 0) {

@@ -171,6 +171,24 @@ public:
 
   ComputeContext() = default;
 
+  /// Preserves existing value tags during a rewrite while allowing new tags to converge.
+  class ValueTagPreservationGuard {
+  public:
+    explicit ValueTagPreservationGuard(ComputeContext &context);
+    ~ValueTagPreservationGuard();
+    ValueTagPreservationGuard(const ValueTagPreservationGuard &) = delete;
+    ValueTagPreservationGuard &operator=(const ValueTagPreservationGuard &) = delete;
+
+  private:
+    ComputeContext &context_;
+  };
+
+  /// Returns whether a rewrite protects the existing tag of ``name``.
+  bool IsValueTagPreserved(const std::string &name) const {
+    return new_rewrite_tags_.has_value() && value_tags_.count(name) != 0 &&
+           new_rewrite_tags_->count(name) == 0;
+  }
+
   /**
    * Infers semantic ``shape`` / ``axes`` / ``weight`` tags for the values and
    * nodes in ``graph`` and stores the result in ``*this`` (replacing any
@@ -277,7 +295,7 @@ public:
 
   /// Sets or updates a value tag and returns ``true`` when the internal map changed.
   /// Returns ``false`` when ``name`` is empty, when ``tag`` is invalid/empty,
-  /// or when setting it would not change the map.
+  /// when setting it would not change the map, or when a rewrite protects its existing tag.
   bool TrySetValueTag(const std::string &name, const std::string &tag);
 
   /// Sets or updates a per-node tag and returns ``true`` when the internal list changed.
@@ -713,6 +731,7 @@ private:
   }
 
   std::unordered_map<std::string, std::string> value_tags_;
+  std::optional<std::unordered_set<std::string>> new_rewrite_tags_;
   std::vector<std::string> node_tags_;
   // Incremental constant analysis state (see SeedConstant / AppendNodeConstant).
   std::unordered_set<std::string> constant_values_;

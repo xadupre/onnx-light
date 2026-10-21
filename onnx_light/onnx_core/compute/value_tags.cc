@@ -216,6 +216,9 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
       }
     }
   };
+  const auto set_tag = [&](const std::string &name, const std::string &tag) {
+    return ctx != nullptr ? ctx->TrySetValueTag(name, tag) : TrySetValueTag(value_tags, name, tag);
+  };
 
   const std::string op_type = node.op_type();
   std::string explicit_output_tag;
@@ -227,21 +230,21 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
 
   if (node.input().size() >= 2) {
     if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
-      note(node.input(1), TrySetValueTag(value_tags, node.input(1), "shape"));
+      note(node.input(1), set_tag(node.input(1), "shape"));
     } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
                op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
-      note(node.input(1), TrySetValueTag(value_tags, node.input(1), "axes"));
+      note(node.input(1), set_tag(node.input(1), "axes"));
     }
   }
   if (op_type == "Slice") {
     if (node.input().size() > 2) {
-      note(node.input(2), TrySetValueTag(value_tags, node.input(2), "shape"));
+      note(node.input(2), set_tag(node.input(2), "shape"));
     }
     if (node.input().size() > 3) {
-      note(node.input(3), TrySetValueTag(value_tags, node.input(3), "axes"));
+      note(node.input(3), set_tag(node.input(3), "axes"));
     }
     if (node.input().size() > 4) {
-      note(node.input(4), TrySetValueTag(value_tags, node.input(4), "shape"));
+      note(node.input(4), set_tag(node.input(4), "shape"));
     }
   }
   // Custom callbacks run for every node type.
@@ -283,7 +286,12 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
       }
     }
   }
-  if (op_type == "Constant" && output_tags_are_consistent && !current_output_tag.empty()) {
+  const bool preserved_outputs =
+      ctx != nullptr && !node.output().empty() &&
+      std::all_of(node.output().begin(), node.output().end(),
+                  [&](const auto &name) { return ctx->IsValueTagPreserved(name); });
+  if ((op_type == "Constant" || preserved_outputs) && output_tags_are_consistent &&
+      !current_output_tag.empty()) {
     explicit_output_tag = current_output_tag;
   }
 
@@ -345,7 +353,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
   }
   if (!node_tag.empty()) {
     for (std::size_t o = 0; o < node.output().size(); ++o) {
-      note(node.output(o), TrySetValueTag(value_tags, node.output(o), node_tag));
+      note(node.output(o), set_tag(node.output(o), node_tag));
     }
   }
 
@@ -354,7 +362,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
     if (output_tags_are_consistent && !current_output_tag.empty()) {
       for (int idx : backward_inputs) {
         if (idx >= 0 && static_cast<std::size_t>(idx) < node.input().size()) {
-          note(node.input(idx), TrySetValueTag(value_tags, node.input(idx), current_output_tag));
+          note(node.input(idx), set_tag(node.input(idx), current_output_tag));
         }
       }
     }

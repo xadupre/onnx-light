@@ -207,10 +207,27 @@ ComputeContext::ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProt
   return {value_tags_, node_tags_};
 }
 
+ComputeContext::ValueTagPreservationGuard::ValueTagPreservationGuard(ComputeContext &context)
+    : context_(context) {
+  EXT_ENFORCE_INVALID(!context_.new_rewrite_tags_.has_value(),
+                      "Value-tag preservation scopes must not overlap.");
+  context_.new_rewrite_tags_.emplace();
+}
+
+ComputeContext::ValueTagPreservationGuard::~ValueTagPreservationGuard() {
+  context_.new_rewrite_tags_.reset();
+}
+
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
+  if (IsValueTagPreserved(name)) {
+    return false;
+  }
   const bool changed =
       ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
   if (changed) {
+    if (new_rewrite_tags_.has_value()) {
+      new_rewrite_tags_->insert(name);
+    }
     custom_value_tags_changed_ = true;
   }
   return changed;
@@ -233,12 +250,12 @@ bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) 
 }
 
 void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag) {
-  ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
+  TrySetValueTag(name, tag);
 }
 
 void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag,
                                   const utils::RepeatedProtoField<NodeProto> &nodes) {
-  if (!::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag)) {
+  if (!TrySetValueTag(name, tag)) {
     return;
   }
   std::vector<int> seeds;

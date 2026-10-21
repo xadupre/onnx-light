@@ -11,3 +11,7 @@ interfaces and token-generation settings are stored directly on the pipeline.
 A value transferred between two models must have the same name on the source
 output and target input; the pipeline does not contain a connection or
 renaming graph.
+
+See :ref:`l-example-pipeline-proto` for a self-contained example covering
+construction, validation, binary serialization, and deterministic generation
+from the reloaded models, including the current Python execution limitations.

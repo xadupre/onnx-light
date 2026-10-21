@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
@@ -22,6 +23,7 @@
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
+#include "onnx_lib/common/scoped_resource.h"
 #include "onnx_op/operator_sets.h"
 
 #include <algorithm>
@@ -388,6 +390,232 @@ ModelProto PreparationModel() {
 }
 
 } // namespace
+
+TEST(PatternOptimization, NamedVariantsRoundTripSelectIndependentlyAndKeepCanonical) {
+  ScopedAddKernel kernel;
+  core::builder::GraphBuilder source(PreparationModel(), SchemaLookup());
+  const auto canonical = source.ToModel();
+  source.AddRewriting("prepared", PreparationPlan());
+  source.AddRewriting("unchanged", RewritingProto{});
+  EXPECT_THROW(source.AddRewriting("prepared", RewritingProto{}), core::builder::BuilderError);
+  EXPECT_THROW(source.AddRewriting("", RewritingProto{}), core::builder::BuilderError);
+  const auto bundled = source.ToModel();
+  EXPECT_TRUE(bundled.graph().Equals(canonical.graph()));
+  ModelProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(bundled.SerializeAsString()));
+  ASSERT_EQ(loaded.rewritings_size(), 2);
+  core::builder::GraphBuilder restored(loaded, SchemaLookup());
+  EXPECT_EQ(restored.Rewritings().size(), 2u);
+  const auto prepared = restored.ApplyRewritings("prepared").ToModel();
+  const auto unchanged = restored.ApplyRewritings("unchanged").ToModel();
+  EXPECT_TRUE(prepared.rewritings().empty());
+  EXPECT_TRUE(unchanged.rewritings().empty());
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(prepared, {})[0].AsFloat()[0], 12);
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(unchanged, {})[0].AsFloat()[0], 3);
+  EXPECT_TRUE(restored.ToModel().graph().Equals(canonical.graph()));
+  EXPECT_EQ(restored.Rewritings().size(), 2u);
+  EXPECT_THROW(restored.ApplyRewritings("absent"), core::builder::BuilderError);
+  EXPECT_THROW(restored.ToStandardModel(), core::builder::BuilderError);
+  EXPECT_TRUE(restored.ApplyRewritings(RewritingProto{}).Rewritings().empty());
+}
+
+TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
+  using Mutation = std::function<void(core::builder::GraphBuilder &)>;
+  const std::vector<Mutation> mutations{
+      [](auto &builder) { builder.MakeNode("Identity", {"y"}, {"extra"}); },
+      [](auto &builder) { builder.MakeInitializer(MakeInitializer<float>("extra", {1}, {1})); },
+      [](auto &builder) { builder.MakeOutput("a"); },
+      [](auto &builder) { builder.SetOpsetVersion("", 19); },
+      [](auto &builder) { builder.MakeLocalFunction("Extra", "test.variant"); }};
+  for (std::size_t i = 0; i < mutations.size(); ++i) {
+    SCOPED_TRACE(i);
+    core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
+    builder.AddRewriting("variant", RewritingProto{});
+    mutations[i](builder);
+    EXPECT_TRUE(builder.Rewritings().empty());
+    EXPECT_FALSE(builder.ToModel().has_rewritings());
+    EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
+  }
+  core::builder::GraphBuilder parent(PreparationModel(), SchemaLookup());
+  auto &function = parent.MakeLocalFunction("Nested", "test.variant");
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  function.MakeNode("Identity", {"x"}, {"y"});
+  function.MakeOutput("y");
+  parent.AddRewriting("variant", RewritingProto{});
+  function.MakeNode("Neg", {"y"}, {"extra"});
+  EXPECT_TRUE(parent.Rewritings().empty());
+  auto &body = parent.MakeSubgraph("body");
+  body.MakeNode("Identity", {"a"}, {"out"});
+  body.MakeOutput("out");
+  AddSubgraphReference(parent, "body", "body", "subgraph_out");
+  parent.AddRewriting("nested", RewritingProto{});
+  body.MakeNode("Neg", {"out"}, {"unused"});
+  EXPECT_TRUE(parent.Rewritings().empty());
+}
+
+TEST(PatternOptimization, NamedVariantsInvalidateOnFinalizationReordering) {
+  core::builder::GraphBuilder builder("canonical", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Neg", {"x"}, {"a"});
+  builder.MakeNode("Neg", {"a"}, {"b"});
+  builder.MakeNode("Shape", {"a"}, {"s"});
+  builder.MakeOutput("b");
+  builder.MakeOutput("s");
+  builder.AddRewriting("before_finalization", RewritingProto{});
+  const auto finalized = builder.ToModel();
+  ASSERT_EQ(finalized.graph().node_size(), 3);
+  EXPECT_EQ(finalized.graph().node(1).op_type(), "Shape");
+  EXPECT_FALSE(finalized.has_rewritings());
+  EXPECT_TRUE(builder.Rewritings().empty());
+  builder.AddRewriting("finalized", RewritingProto{});
+  EXPECT_EQ(builder.ToModel().rewritings_size(), 1);
+}
+
+TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidPlans) {
+  core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
+  RewritingProto invalid;
+  invalid.add_rewrites()->add_matched_nodes(UINT64_MAX);
+  builder.AddRewriting("invalid", invalid);
+  EXPECT_THROW(builder.ApplyRewritings("invalid"), core::builder::BuilderError);
+  RewritingProto unavailable;
+  auto &edit = *unavailable.add_rewrites();
+  edit.add_matched_nodes(0);
+  edit.ref_added_nodes().push_back(MakeNode("MissingVariantKernel", {"a", "b"}, {"y"}));
+  edit.add_added_nodes_positions(0);
+  builder.AddRewriting("missing", unavailable);
+  EXPECT_THROW(
+      {
+        try {
+          builder.ApplyRewritings("missing");
+        } catch (const core::builder::BuilderError &error) {
+          EXPECT_NE(std::string(error.what()).find("no implementation"), std::string::npos);
+          EXPECT_NE(std::string(error.what()).find("MissingVariantKernel"), std::string::npos);
+          throw;
+        }
+      },
+      core::builder::BuilderError);
+  EXPECT_EQ(builder.Rewritings().size(), 2u);
+}
+
+TEST(PatternOptimization, NamedVariantsCheckControlFlowAndBoundFunctionGraphs) {
+  ScopedIdentityKernel kernel;
+  for (int mode : {0, 1, 2}) {
+    for (bool missing : {false, true}) {
+      SCOPED_TRACE(mode);
+      SCOPED_TRACE(missing);
+      auto model = PreparationModel();
+      auto &condition = *model.mutable_graph()->add_input();
+      condition.set_name("condition");
+      condition.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::BOOL);
+      condition.mutable_type()->mutable_tensor_type()->mutable_shape();
+      FunctionProto wrapper;
+      wrapper.set_domain("variant.test");
+      wrapper.set_name("Wrapper");
+      wrapper.add_input("a");
+      wrapper.add_input("condition");
+      wrapper.add_output("C");
+      wrapper.add_opset("", 18);
+      NodeProto conditional = MakeNode("If", {"condition"}, {mode == 0 ? "y" : "C"});
+      NodeProto call = MakeNode("Wrapper", {"a", "condition"}, {"y"}, "variant.test");
+      for (const char *name : {"then_branch", "else_branch"}) {
+        AttributeProto branch;
+        branch.set_name(name);
+        branch.set_type(AttributeProto::GRAPH);
+        branch.mutable_g()->set_name(name);
+        branch.mutable_g()->ref_node().push_back(
+            MakeNode(missing ? "Neg" : "Identity", {"a"}, {"out"}));
+        auto output = model.graph().output(0);
+        output.set_name("out");
+        branch.mutable_g()->add_output(output);
+        if (mode == 0) {
+          conditional.add_attribute(branch);
+        } else {
+          wrapper.add_attribute_proto(branch);
+          auto &reference = *conditional.add_attribute();
+          reference.set_name(name);
+          reference.set_type(AttributeProto::GRAPH);
+          reference.set_ref_attr_name(name);
+          if (mode == 2) {
+            branch.mutable_g()->ref_node()[0].set_op_type("Identity");
+            call.add_attribute(branch);
+          }
+        }
+      }
+      if (mode != 0) {
+        wrapper.ref_node().push_back(std::move(conditional));
+        model.add_function(wrapper);
+        model.add_opset("variant.test", 1);
+      }
+      model.mutable_graph()->ref_node()[0] = mode == 0 ? conditional : call;
+      core::builder::GraphBuilder builder(model, SchemaLookup());
+      builder.set_device(core::symbolic::Device::kGPU0);
+      builder.AddRewriting("variant", RewritingProto{});
+      if (missing && mode != 2)
+        EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
+      else
+        EXPECT_NO_THROW(builder.ApplyRewritings("variant"));
+    }
+  }
+}
+
+TEST(PatternOptimization, NamedRewritingsRequireSequenceMapPackingCallback) {
+  auto previous = core::runtime::GetSequenceMapPackFn();
+  int pack_calls = 0;
+  ScopeExit restore(
+      [&]() noexcept { core::runtime::RegisterSequenceMapPackFn(std::move(previous)); });
+  core::runtime::RegisterSequenceMapPackFn({});
+
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 18);
+  auto &graph = *model.mutable_graph();
+  graph.set_name("sequence_map");
+  auto &input = *graph.add_input();
+  input.set_name("xs");
+  auto &element =
+      *input.mutable_type()->mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  element.set_elem_type(TensorProto::FLOAT);
+  element.mutable_shape()->add_dim()->set_dim_value(1);
+  auto output = input;
+  output.set_name("ys");
+  graph.add_output(output);
+  auto node = MakeNode("SequenceMap", {"xs"}, {"ys"});
+  auto &attribute = *node.add_attribute();
+  attribute.set_name("body");
+  attribute.set_type(AttributeProto::GRAPH);
+  auto &body = *attribute.mutable_g();
+  body.set_name("passthrough");
+  auto &item = *body.add_input();
+  item.set_name("item");
+  item.mutable_type()->mutable_tensor_type()->CopyFrom(element);
+  body.add_output(item);
+  graph.ref_node().push_back(std::move(node));
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  builder.AddRewriting("mapped", RewritingProto{});
+  EXPECT_THROW(builder.ApplyRewritings("mapped"), core::builder::BuilderError);
+
+  core::runtime::RegisterSequenceMapPackFn([&](core::runtime::RuntimeContext &,
+                                               const core::runtime::Sequence &sequence,
+                                               const std::vector<core::runtime::Tensors> &outputs) {
+    ++pack_calls;
+    return core::runtime::Sequences{
+        core::runtime::Sequence("packed", sequence.elem_type, outputs.at(0))};
+  });
+  const auto selected = builder.ApplyRewritings("mapped").BuildGraph();
+  EXPECT_EQ(pack_calls, 0);
+  core::runtime::RuntimeContext runtime(
+      core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
+  runtime.PutSequence(
+      "xs", core::runtime::Sequence("xs", TensorProto::FLOAT,
+                                    {core::runtime::Tensor::FromFloat("first", {1}, {2}),
+                                     core::runtime::Tensor::FromFloat("second", {1}, {3})}));
+  core::runtime::RuntimeSession session(runtime.GetExecutionPlan(selected));
+  session.Run(runtime);
+  EXPECT_EQ(pack_calls, 1);
+  ASSERT_EQ(runtime.GetSequence("ys").size(), 2u);
+  EXPECT_FLOAT_EQ(runtime.GetSequence("ys").at(0).AsFloat()[0], 2);
+  EXPECT_FLOAT_EQ(runtime.GetSequence("ys").at(1).AsFloat()[0], 3);
+}
 
 TEST(PatternOptimization, ModelReplayPreparesDependentOutputsBeforeRemovingSources) {
   ScopedAddKernel kernel;

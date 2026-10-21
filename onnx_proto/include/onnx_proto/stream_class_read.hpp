@@ -455,6 +455,37 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type, utils::Repe
 }
 
 template <typename T>
+void read_map_field(utils::BinaryStream &stream, int wire_type, std::map<std::string, T> &field,
+                    const char *name, ParseOptions &options) {
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
+  RecursionGuard recursion_guard(options);
+  recursion_guard.validate();
+  stream.LimitToNext(stream.next_uint64());
+  StreamLimitGuard limit_guard(stream);
+  utils::String key;
+  T value;
+  bool has_key = false, has_value = false;
+  while (stream.NotEnd()) {
+    const auto tag = stream.next_field();
+    if (tag.field_number == 1 && tag.wire_type == FIELD_FIXED_SIZE) {
+      EXT_ENFORCE(!has_key, "Duplicate key field in ", name, " map entry.");
+      read_field(stream, static_cast<int>(tag.wire_type), key, "key", options);
+      has_key = true;
+    } else if (tag.field_number == 2 && tag.wire_type == FIELD_FIXED_SIZE) {
+      EXT_ENFORCE(!has_value, "Duplicate value field in ", name, " map entry.");
+      read_field(stream, static_cast<int>(tag.wire_type), value, "value", options);
+      has_value = true;
+    } else {
+      EXT_ENFORCE(tag.field_number != 0, "Invalid map entry field number.");
+      SkipFieldByWireType(stream, tag.wire_type, name);
+    }
+  }
+  EXT_ENFORCE(has_key && !key.empty() && has_value, "Invalid ", name, " map entry.");
+  EXT_ENFORCE(field.emplace(key.value(), std::move(value)).second, "Duplicate ", name,
+              " key: ", key);
+}
+
+template <typename T>
 void read_repeated_field(utils::BinaryStream &stream, int wire_type,
                          utils::RepeatedProtoField<T> &field, const char *name, bool is_packed,
                          ParseOptions &options) {

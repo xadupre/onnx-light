@@ -2164,6 +2164,7 @@ SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, functions)
   SIZE_REPEATED_FIELD(size, options, stream, configuration)
   SIZE_REPEATED_FIELD(size, options, stream, struct_types)
+  size += size_map_field(stream, order_rewritings(), rewritings_, options);
   return size;
 }
 void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2237,6 +2238,7 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, functions)
   WRITE_REPEATED_FIELD(options, stream, configuration)
   WRITE_REPEATED_FIELD(options, stream, struct_types)
+  write_map_field(stream, order_rewritings(), rewritings_, options);
 }
 bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
@@ -2256,16 +2258,21 @@ bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, functions)      //
   READ_REPEATED_FIELD(options, stream, configuration)  //
   READ_REPEATED_FIELD(options, stream, struct_types)   //
-  READ_END(options, stream, ModelProto)                //  // NOLINT
+  else if (field_number.field_number == static_cast<uint64_t>(order_rewritings())) {
+    read_map_field(stream, static_cast<int>(field_number.wire_type), rewritings_, "rewritings",
+                   options);
+  }
+  READ_END(options, stream, ModelProto) //  // NOLINT
   return true;
 }
 void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
-  write_proto_into_vector_string(
-      ss, options, NAME_EXIST_VALUE(ir_version), NAME_EXIST_VALUE(opset_import),
-      NAME_EXIST_VALUE(producer_name), NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
-      NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(graph),
-      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(functions),
-      NAME_EXIST_VALUE(configuration), NAME_EXIST_VALUE(struct_types));
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(ir_version),
+                                 NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(producer_name),
+                                 NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
+                                 NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string),
+                                 NAME_EXIST_VALUE(graph), NAME_EXIST_VALUE(metadata_props),
+                                 NAME_EXIST_VALUE(functions), NAME_EXIST_VALUE(configuration),
+                                 NAME_EXIST_VALUE(struct_types), NAME_EXIST_VALUE(rewritings));
 }
 
 bool ModelProto::SerializeToString(std::string &out,
@@ -2716,6 +2723,22 @@ public:
 
   bool Compare(const utils::RepeatedStringField &left, const utils::RepeatedStringField &right) {
     return CompareRepeated(left, right);
+  }
+
+  template <typename T>
+  bool Compare(const std::map<std::string, T> &left, const std::map<std::string, T> &right) {
+    if (left.size() != right.size())
+      return Fail(": size differs");
+    for (const auto &[key, value] : left) {
+      const auto found = right.find(key);
+      if (found == right.end())
+        return Fail(": missing key '" + key + "'");
+      if (!Compare(value, found->second)) {
+        Prefix("[" + key + "]");
+        return false;
+      }
+    }
+    return true;
   }
 
   template <typename T>
@@ -3191,6 +3214,7 @@ bool ModelProto::Equals(const ModelProto &right, std::string *difference) const 
   COMPARE_FIELD(functions)
   COMPARE_FIELD(configuration)
   COMPARE_FIELD(struct_types)
+  COMPARE_FIELD(rewritings);
   return true;
 }
 

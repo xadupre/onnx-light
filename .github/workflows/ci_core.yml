@@ -365,17 +365,20 @@ jobs:
         # Linux CI run 39420698713 measures 1663032 installed bytes, 1174058 text bytes
         # and 865 symbols. Only the text budget changes; installed-size, symbol and
         # dependency limits remain unchanged.
-        # Rejecting unknown tensor data types adds 48 text bytes in Linux CI run
-        # 39567217873 (1174106 total); the other limits remain unchanged.
+        
         # After merging main, Linux CI run 39580117738 measures 1174506 text bytes,
         # 1663032 installed bytes and 865 symbols; only the text budget changes.
+        # Named rewriting plans add ModelProto map serialization, comparison and printing.
+        # Linux CI run 39580960813 (f0a84c8d) measures 1683544 installed bytes,
+        # 1192474 text bytes and 868 symbols. Installed and text limits match these
+        # measurements; symbol and dependency limits remain unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1663272 \
-            --max-text-size 1174506 \
+            --max-installed-size 1683544 \
+            --max-text-size 1192474 \
             --max-dynamic-symbols 891 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \

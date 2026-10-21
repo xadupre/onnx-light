@@ -1602,7 +1602,8 @@ BEGIN_PROTO(LocalRewritingProto, "Describes one sequential, materialized graph e
 FIELD_STR(pattern_name, 1, "Diagnostic name of the pattern.")
 FIELD_REPEATED_STR(utils::String, graph_path, 2, "Subgraph path before this edit.")
 FIELD_REPEATED(uint64_t, matched_nodes, 3, "Removed node positions before this edit.")
-FIELD_REPEATED(uint64_t, removed_initializers, 4, "Removed initializer positions before this edit.")
+FIELD_REPEATED(uint64_t, removed_initializers, 4,
+               "Removed dense initializer positions before this edit.")
 FIELD_REPEATED_PROTO(NodeProto, added_nodes, 5, "Replacement nodes.")
 FIELD_REPEATED(uint64_t, added_nodes_positions, 6, "Node positions after this edit.")
 FIELD_REPEATED_PROTO(TensorProto, added_initializers, 7, "Materialized replacement initializers.")
@@ -1614,6 +1615,10 @@ FIELD_REPEATED_PROTO(NodeProto, initializer_calls, 11,
                      "Reserved for initializer preparation calls.")
 FIELD_REPEATED(uint64_t, computed_initializer_positions, 12,
                "Reserved for prepared initializer positions.")
+FIELD_REPEATED(uint64_t, removed_encoded_initializers, 13,
+               "Removed encoded initializer positions before this edit.")
+FIELD_REPEATED(uint64_t, removed_paged_cache_initializers, 14,
+               "Removed paged-cache initializer positions before this edit.")
 END_PROTO()
 
 BEGIN_PROTO(RewritingProto, "Stores ordered sequential graph edits.")

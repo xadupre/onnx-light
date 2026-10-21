@@ -319,17 +319,168 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     builder.MakeOutput("X");
     ASSERT_TRUE(builder.Shapes().HasEncodedValue("encoded"));
     ASSERT_TRUE(builder.Shapes().HasType("cache"));
+    const ModelProto original = builder.ToModel();
     core::builder::GraphGraph optimizer(builder);
-    optimizer.Optimize();
+    const auto plan = optimizer.Optimize();
+    ASSERT_EQ(plan.rewrites().size(), 1u);
+    EXPECT_EQ(plan.rewrites(0).removed_encoded_initializers().values(), std::vector<uint64_t>({0}));
+    EXPECT_EQ(plan.rewrites(0).removed_paged_cache_initializers().values(),
+              std::vector<uint64_t>({0}));
     EXPECT_TRUE(builder.EncodedInitializers().empty());
     EXPECT_TRUE(builder.PagedCacheInitializers().empty());
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+    EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
     for (const std::string name : {"encoded", "cache"}) {
       EXPECT_FALSE(builder.Shapes().HasEncodedValue(name));
       EXPECT_FALSE(builder.Shapes().HasType(name));
       EXPECT_FALSE(builder.Compute().IsConstantValue(name));
       EXPECT_EQ(builder.Compute().ValueTags().count(name), 0u);
+      EXPECT_FALSE(replayed.Shapes().HasEncodedValue(name));
+      EXPECT_FALSE(replayed.Shapes().HasType(name));
+      EXPECT_FALSE(replayed.Compute().IsConstantValue(name));
+      EXPECT_EQ(replayed.Compute().ValueTags().count(name), 0u);
     }
   }
+}
+
+TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
+  for (const int kinds : {1, 2, 4, 7}) {
+    for (const bool add_dead_node : {false, true}) {
+      SCOPED_TRACE(kinds);
+      SCOPED_TRACE(add_dead_node);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      builder.MakeOutput("X");
+      if (kinds & 1) {
+        builder.MakeInitializer(MakeInitializer<float>("live_dense", {1}, {1.f}));
+        builder.MakeInitializer(MakeInitializer<float>("dead_dense", {1}, {2.f}));
+        builder.MakeOutput("live_dense");
+      }
+      if (kinds & 2) {
+        builder.MakeStructType(RewriteRecord());
+        EncodedValueProto encoded;
+        encoded.set_name("live_encoded");
+        encoded.mutable_struct_type()->set_type_ref(101);
+        encoded.set_raw_data(std::string(sizeof(float), '\0'));
+        builder.MakeEncodedInitializer(encoded);
+        encoded.set_name("dead_encoded");
+        builder.MakeEncodedInitializer(encoded);
+        builder.MakeOutput("live_encoded");
+      }
+      if (kinds & 4) {
+        PagedCacheProto cache;
+        cache.set_name("live_cache");
+        auto *block = cache.add_blocks();
+        block->set_start(0);
+        block->set_length(1);
+        *block->mutable_key() = MakeInitializer<float>("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+        *block->mutable_value() = block->key();
+        builder.MakePagedCacheInitializer(cache);
+        cache.set_name("dead_cache");
+        builder.MakePagedCacheInitializer(cache);
+        builder.MakeOutput("live_cache");
+      }
+      if (add_dead_node) {
+        builder.MakeNode("Abs", {"X"}, {"dead"});
+        builder.MakeNode("Neg", {"X"}, {"Y"});
+        builder.MakeOutput("Y");
+      }
+      const ModelProto original = builder.ToModel();
+      core::builder::GraphGraph optimizer(builder);
+      const auto plan = optimizer.Optimize();
+      ASSERT_EQ(plan.rewrites().size(), 1u);
+      const auto &edit = plan.rewrites(0);
+      EXPECT_EQ(edit.removed_initializers().values(),
+                (kinds & 1) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
+      EXPECT_EQ(edit.removed_encoded_initializers().values(),
+                (kinds & 2) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
+      EXPECT_EQ(edit.removed_paged_cache_initializers().values(),
+                (kinds & 4) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
+      RewritingProto loaded;
+      ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      auto expected = builder.ToGraph();
+      if (add_dead_node) {
+        auto *follow_up = loaded.add_rewrites();
+        follow_up->add_matched_nodes(0);
+        follow_up->ref_added_nodes().push_back(MakeNode("Abs", {"X"}, {"Y"}));
+        follow_up->add_added_nodes_positions(0);
+        expected.ref_node()[0].set_op_type("Abs");
+      }
+      auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+      EXPECT_EQ(replayed.ToGraph().SerializeAsString(), expected.SerializeAsString());
+    }
+  }
+}
+
+TEST(GraphGraph, ReplayRejectsInvalidStructuredInitializerRemovals) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Neg", {"X"}, {"Y"});
+  builder.MakeOutput("Y");
+  EncodedValueProto encoded;
+  encoded.set_name("encoded");
+  builder.MakeStructType(RewriteRecord());
+  encoded.mutable_struct_type()->set_type_ref(101);
+  encoded.set_raw_data(std::string(sizeof(float), '\0'));
+  builder.MakeEncodedInitializer(encoded);
+  PagedCacheProto cache;
+  cache.set_name("cache");
+  auto *block = cache.add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  *block->mutable_key() = MakeInitializer<float>("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  *block->mutable_value() = block->key();
+  builder.MakePagedCacheInitializer(cache);
+  const auto original = builder.BuildGraph().SerializeAsString();
+  for (const bool paged : {false, true}) {
+    for (const uint64_t position : {uint64_t{0}, uint64_t{1}, UINT64_MAX}) {
+      RewritingProto plan;
+      auto *node_edit = plan.add_rewrites();
+      node_edit->add_matched_nodes(0);
+      node_edit->ref_added_nodes().push_back(MakeNode("Abs", {"X"}, {"Y"}));
+      node_edit->add_added_nodes_positions(0);
+      auto *edit = plan.add_rewrites();
+      edit->add_matched_nodes(0);
+      edit->ref_added_nodes().push_back(MakeNode("Neg", {"X"}, {"Y"}));
+      edit->add_added_nodes_positions(0);
+      auto &positions = paged ? edit->ref_removed_paged_cache_initializers()
+                              : edit->ref_removed_encoded_initializers();
+      positions.push_back(position);
+      if (position == 0)
+        positions.push_back(position);
+      EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+      EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original);
+    }
+  }
+}
+
+TEST(GraphGraph, CleanupReplaysDuplicateEncodedInitializers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeOutput("X");
+  builder.MakeStructType(RewriteRecord());
+  EncodedValueProto encoded;
+  encoded.set_name("first");
+  encoded.mutable_struct_type()->set_type_ref(101);
+  encoded.set_raw_data(std::string(sizeof(float), '\0'));
+  builder.MakeEncodedInitializer(encoded);
+  encoded.set_name("duplicate");
+  builder.MakeEncodedInitializer(encoded);
+  const ModelProto original = builder.ToModel();
+  core::builder::GraphGraph optimizer(builder);
+  const auto plan = optimizer.Optimize(-1, nullptr, {}, false);
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  EXPECT_EQ(plan.rewrites(0).pattern_name(), "RemoveDuplicateInitializers");
+  EXPECT_TRUE(plan.rewrites(0).removed_initializers().empty());
+  EXPECT_EQ(plan.rewrites(0).removed_encoded_initializers().values(), std::vector<uint64_t>({1}));
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+  EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
+  EXPECT_FALSE(replayed.Shapes().HasEncodedValue("duplicate"));
+  EXPECT_TRUE(replayed.Shapes().HasEncodedValue("first"));
 }
 
 TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {

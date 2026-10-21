@@ -223,6 +223,8 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("graph_path", _STR, True),
             ("matched_nodes", _INT, True),
             ("removed_initializers", _INT, True),
+            ("removed_encoded_initializers", _INT, True),
+            ("removed_paged_cache_initializers", _INT, True),
             ("added_nodes", _msg(NodeProto), True),
             ("added_nodes_positions", _INT, True),
             ("added_initializers", _msg(TensorProto), True),

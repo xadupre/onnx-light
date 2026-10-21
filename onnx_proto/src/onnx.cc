@@ -2048,6 +2048,8 @@ SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream 
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
   SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
+  SIZE_REPEATED_FIELD(size, options, stream, removed_encoded_initializers)
+  SIZE_REPEATED_FIELD(size, options, stream, removed_paged_cache_initializers)
   return size;
 }
 void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2064,6 +2066,8 @@ void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, initializer_calls)
   WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
+  WRITE_REPEATED_FIELD(options, stream, removed_encoded_initializers)
+  WRITE_REPEATED_FIELD(options, stream, removed_paged_cache_initializers)
 }
 bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, LocalRewritingProto)
@@ -2079,6 +2083,8 @@ bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, initializer_calls)
   READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
+  READ_REPEATED_FIELD(options, stream, removed_encoded_initializers)
+  READ_REPEATED_FIELD(options, stream, removed_paged_cache_initializers)
   READ_END(options, stream, LocalRewritingProto)
   return true;
 }
@@ -2090,7 +2096,9 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(added_nodes), NAME_EXIST_VALUE(added_nodes_positions),
       NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
       NAME_EXIST_VALUE(value_renames), NAME_EXIST_VALUE(metadata_props),
-      NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions));
+      NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions),
+      NAME_EXIST_VALUE(removed_encoded_initializers),
+      NAME_EXIST_VALUE(removed_paged_cache_initializers));
 }
 
 IMPLEMENT_PROTO(RewritingProto)
@@ -2937,6 +2945,8 @@ bool LocalRewritingProto::Equals(const LocalRewritingProto &right, std::string *
   COMPARE_FIELD(graph_path)
   COMPARE_FIELD(matched_nodes)
   COMPARE_FIELD(removed_initializers)
+  COMPARE_FIELD(removed_encoded_initializers)
+  COMPARE_FIELD(removed_paged_cache_initializers)
   COMPARE_FIELD(added_nodes)
   COMPARE_FIELD(added_nodes_positions)
   COMPARE_FIELD(added_initializers)

@@ -32,6 +32,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   edit.add_matched_nodes(0);
   edit.add_matched_nodes(UINT64_MAX);
   edit.add_removed_initializers(2);
+  edit.add_removed_encoded_initializers(1);
+  edit.add_removed_paged_cache_initializers(UINT64_MAX);
   edit.add_added_nodes()->set_op_type("Identity");
   edit.add_added_nodes_positions(1);
   edit.add_added_initializers()->set_name("literal");
@@ -56,6 +58,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   std::string difference;
   EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
   EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
+  EXPECT_EQ(loaded.rewrites(0).removed_encoded_initializers(0), 1u);
+  EXPECT_EQ(loaded.rewrites(0).removed_paged_cache_initializers(0), UINT64_MAX);
   RewritingProto copied;
   copied.CopyFrom(loaded);
   EXPECT_TRUE(copied.Equals(source, &difference)) << difference;

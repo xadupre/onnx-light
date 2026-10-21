@@ -117,6 +117,8 @@ remains deferred to step 3.
      repeated StringStringEntryProto metadata_props = 10;
      repeated NodeProto initializer_calls = 11;
      repeated uint64 computed_initializer_positions = 12;
+     repeated uint64 removed_encoded_initializers = 13;
+     repeated uint64 removed_paged_cache_initializers = 14;
    }
 
    message RewritingProto {
@@ -125,6 +127,11 @@ remains deferred to step 3.
      repeated StringStringEntryProto metadata_props = 3;
      repeated FunctionProto added_functions = 4;
    }
+
+Removal positions are relative to the corresponding initializer list before
+each edit: ``removed_initializers`` indexes dense initializers,
+``removed_encoded_initializers`` indexes encoded initializers, and
+``removed_paged_cache_initializers`` indexes paged-cache initializers.
 
 **Modify only onnx-light's ``ModelProto``** to add
 ``map<string, RewritingProto> rewritings``, keyed by variant name, without

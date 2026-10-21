@@ -348,25 +348,33 @@ ONNX_LIGHT_PROTO_API void LoadExternalDataForModel(ModelProto &model, const std:
 class ONNX_LIGHT_PROTO_API IteratorTensorProto {
 protected:
   /**
-   * Tracks traversal indices for one graph level in the DFS stack.
+   * Tracks traversal indices for one scope in the DFS stack.
    */
   struct Position {
     /**
-     * Points to the graph traversed at this stack level.
+     * Points to the nodes traversed at this stack level.
      */
-    GraphProto *graph;
+    utils::RepeatedProtoField<NodeProto> *nodes = nullptr;
     /**
-     * Stores the current node index in graph->ref_node().
+     * Points to the optional initializer list at this stack level.
      */
-    int node_index = 0;
+    utils::RepeatedProtoField<TensorProto> *initializers = nullptr;
+    /**
+     * Points to function-default attributes when no node owns them.
+     */
+    utils::RepeatedProtoField<AttributeProto> *attributes = nullptr;
+    /**
+     * Stores the current node index.
+     */
+    size_t node_index = 0;
     /**
      * Stores the current attribute index in node->ref_attribute().
      */
-    int attr_index = 0;
+    size_t attr_index = 0;
     /**
-     * Stores the current initializer index in graph->ref_initializer().
+     * Stores the current initializer index.
      */
-    int node_initializer_index = 0;
+    size_t node_initializer_index = 0;
   };
 
 public:
@@ -375,8 +383,13 @@ public:
    * @param graph Root graph to traverse.
    */
   explicit inline IteratorTensorProto(GraphProto *graph) : tp_(nullptr), positions_() {
-    positions_.emplace_back(Position{graph});
+    positions_.emplace_back(Position{&graph->ref_node(), &graph->ref_initializer()});
   }
+  /**
+   * Initializes the iterator from a model, including functions and rewrite plans.
+   * @param model Root model to traverse.
+   */
+  explicit IteratorTensorProto(ModelProto *model);
   /**
    * Returns the current tensor reference.
    */

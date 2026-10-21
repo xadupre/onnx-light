@@ -5,12 +5,14 @@ Serialized graph rewrites and model variants
 
 :Date: 2026-10-20
 
-**Steps 1 and 2 implemented: proto records and extended replay.** The optimizer
+**Steps 1 through 4 implemented: proto records, replay, model envelope and Python export.**
+The optimizer
 captures initializer recipes and shared function definitions in
 ``LocalRewritingProto`` / ``RewritingProto``. ``GraphBuilder::ApplyRewritings``
 (Python: ``builder.apply_rewritings``) returns a new builder, prepares constants
-once and preserves model-level additions.
-The model envelope and export operations below remain proposals.
+once and preserves model-level additions. ``GraphBuilder.to_onnx`` exports
+the canonical model by default, the optimized result with ``optimize=True``,
+or the canonical model with its captured plan with ``optimize="rewritings"``.
 
 Existing building blocks
 ++++++++++++++++++++++++
@@ -43,8 +45,8 @@ dependency-order violation is actually detected.
 
 The two rewrite messages support binary serialization and Python bindings.
 Records contain a diagnostic pattern name, not a live pattern pointer or
-timings. Timing remains in ``OptimizationReport``. There is not yet a rewrite
-map in ``ModelProto``.
+timings. Timing remains in ``OptimizationReport``. ``ModelProto.rewritings`` stores
+independently named plans against the canonical graph.
 
 Constant folding retains the computation as shared functions and ordered
 ``initializer_calls``, not materialized results in ``added_initializers``.
@@ -98,8 +100,8 @@ New and modified proto messages
 
 The wire schema is below. The first two messages use onnx-light's existing
 ``BEGIN_PROTO`` / ``FIELD_*`` layer, parser and serializer, without adding a
-protobuf compiler or ``libprotobuf``. The ``ModelProto.rewritings`` field
-remains deferred to step 3.
+protobuf compiler or ``libprotobuf``. Step 3 added the
+``ModelProto.rewritings`` field.
 
 .. code-block:: protobuf
 
@@ -260,7 +262,7 @@ Each PR depends on the preceding one.
      - Two independent variants survive save/load; the canonical graph stays
        unchanged; mutations invalidate variants; duplicate keys and missing
        kernels are diagnosed.
-   * - 4. Export workflow
+   * - 4. Export workflow (implemented)
      - Add explicit canonical, bundled and materialized export modes, with a
        small end-to-end example and external-data handling.
      - Save/reload/replay matches direct optimization; compare inference
@@ -282,7 +284,18 @@ builders and finalization that changes node order. Finalize before attaching
 plans. Callers editing proto fields directly must explicitly clear or
 regenerate the map; no source fingerprint or hidden repair is performed.
 ORT and standard-model export reject attached variants rather than dropping
-them. The export modes and packaging below remain step 4.
+them. Python ``to_onnx(optimize=True)`` optimizes an independent builder and
+exports the materialized result without attached variants; model export rejects
+nonstandard fields through ``to_standard_model``.
+``to_onnx(optimize="rewritings")`` instead returns the finalized canonical
+model with the captured plan named ``"optimized"``. It retains other plans,
+rejects a duplicate name, and requires model export. The default ``False``
+continues to export the current builder without running optimization.
+Both modes use the existing global and builder-local pattern registrations.
+The source remains at its finalized canonical state; no inverse replay is
+needed. Load external weights before optimization and use the existing
+external-data save options to relocate the payloads with either export.
+See :ref:`l-example-plot-pattern-replay`.
 
 1. Finalize the canonical model first, including cleanup, ordering, names,
    imports and external-data layout.

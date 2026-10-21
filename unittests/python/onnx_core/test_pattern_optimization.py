@@ -319,11 +319,12 @@ class TestPatternOptimization(ExtTestCase):
             loaded.add_rewriting("", optim.RewritingProto())
         builder = optim.GraphBuilder(loaded)
         self.assertEqual(set(builder.to_model().rewritings), {"first", "second"})
-        selected = builder.apply_variant("second").to_model()
+        selected = builder.apply_rewritings("second").to_model()
         self.assertEqual(len(selected.rewritings), 0)
         self.assertEqual(len(selected.graph.node), 0)
+        self.assertEqual(len(builder.apply_rewritings(name="first").to_model().rewritings), 0)
         with self.assertRaisesRegex(ValueError, "unknown variant"):
-            builder.apply_variant("missing")
+            builder.apply_rewritings("missing")
         with self.assertRaisesRegex(ValueError, "duplicate"):
             builder.add_rewriting("first", optim.RewritingProto())
         builder.make_input(oh.make_tensor_value_info("unused", TensorProto.FLOAT, [2]))

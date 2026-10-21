@@ -2047,10 +2047,10 @@ void GraphBuilder::AddRewriting(const std::string &name, const RewritingProto &r
   rewritings_.emplace(name, rewrites);
 }
 
-GraphBuilder GraphBuilder::ApplyVariant(const std::string &name) const {
+GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
   const auto found = rewritings_.find(name);
   if (found == rewritings_.end())
-    throw BuilderError("ApplyVariant: unknown variant '" + name + "'.");
+    throw BuilderError("ApplyRewritings: unknown variant '" + name + "'.");
   GraphBuilder result = ApplyRewritings(found->second);
   const auto device = device_ == Device::kUndefined ? Device::kCPU : device_;
   std::set<FunctionKey> active, checked;
@@ -2059,7 +2059,7 @@ GraphBuilder GraphBuilder::ApplyVariant(const std::string &name) const {
       check = [&](const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t depth,
                   const GraphBuilder *scope) {
         if (depth >= 64)
-          throw BuilderError("ApplyVariant: implementation dependency nesting exceeds 64.");
+          throw BuilderError("ApplyRewritings: implementation dependency nesting exceeds 64.");
         for (const auto &node : nodes) {
           const auto *function = result.Shapes().GetLocalFunction(
               ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
@@ -2069,7 +2069,7 @@ GraphBuilder GraphBuilder::ApplyVariant(const std::string &name) const {
                 function->attribute().empty() && function->attribute_proto().empty();
             if (!cacheable || checked.count(key) == 0) {
               if (!active.insert(key).second)
-                throw BuilderError("ApplyVariant: recursive local function dependency.");
+                throw BuilderError("ApplyRewritings: recursive local function dependency.");
               if (cacheable) {
                 check(function->node(), depth + 1, nullptr);
               } else {
@@ -2095,7 +2095,7 @@ GraphBuilder GraphBuilder::ApplyVariant(const std::string &name) const {
                 core::runtime::KernelDispatchTable().count(
                     key + core::symbolic::DeviceKeySuffix(device)) == 0 &&
                 core::runtime::GlobalCustomKernels().count(key) == 0) {
-              throw BuilderError("ApplyVariant '" + name + "': no implementation for '" + key +
+              throw BuilderError("ApplyRewritings '" + name + "': no implementation for '" + key +
                                  "'.");
             }
           }

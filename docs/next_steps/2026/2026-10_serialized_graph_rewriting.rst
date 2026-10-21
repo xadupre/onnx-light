@@ -264,10 +264,11 @@ Export workflow
 The model-envelope API reserves field 1001 for ``ModelProto.rewritings``.
 ``ModelProto.add_rewriting`` (C++ ``add_rewritings``) and
 ``GraphBuilder.add_rewriting`` (C++ ``AddRewriting``) reject duplicate names.
-``GraphBuilder.apply_variant(name)`` (C++ ``ApplyVariant``) selects exactly
+``GraphBuilder.apply_rewritings(name)`` (C++ ``ApplyRewritings``) selects exactly
 one independent plan using existing replay and checks reachable operator
 implementations, including local functions and nested graphs. The replay result
 has no attached variants. Loading a model never executes its plans.
+The method is overloaded to accept either a ``RewritingProto`` or a plan name.
 GraphBuilder mutations invalidate the map, including mutations in nested
 builders and finalization that changes node order. Finalize before attaching
 plans. Callers editing proto fields directly must explicitly clear or

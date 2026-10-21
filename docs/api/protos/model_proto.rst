@@ -10,9 +10,10 @@ Names must be nonempty and unique; duplicate wire keys are rejected rather
 than overwritten.
 
 The graph and functions remain canonical. Reading a model never executes a
-plan. ``GraphBuilder.apply_variant(name)`` explicitly applies one plan to this
+plan. ``GraphBuilder.apply_rewritings(name)`` explicitly applies one plan to this
 canonical source and rejects unknown names, invalid edits and unavailable
 implementations, without falling back to another variant.
+The same method accepts a ``RewritingProto`` directly instead of a name.
 
 ``model.add_rewriting(name, plan)`` rejects duplicate names.
 ``model.rewritings`` is a mutable map, not a detached Python dictionary.

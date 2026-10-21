@@ -642,7 +642,7 @@ public:
   /// Applies exactly the requested variant to the canonical model.
   /// Throws on unknown names, invalid plans or unavailable operator implementations.
   /// The result carries no variants; the source builder remains unchanged.
-  GraphBuilder ApplyVariant(const std::string &name) const;
+  GraphBuilder ApplyRewritings(const std::string &name) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
   const ComputeContext &Compute() const noexcept { return compute_; }

@@ -404,15 +404,15 @@ TEST(PatternOptimization, NamedVariantsRoundTripSelectIndependentlyAndKeepCanoni
   ASSERT_EQ(loaded.rewritings_size(), 2);
   core::builder::GraphBuilder restored(loaded, SchemaLookup());
   EXPECT_EQ(restored.Rewritings().size(), 2u);
-  const auto prepared = restored.ApplyVariant("prepared").ToModel();
-  const auto unchanged = restored.ApplyVariant("unchanged").ToModel();
+  const auto prepared = restored.ApplyRewritings("prepared").ToModel();
+  const auto unchanged = restored.ApplyRewritings("unchanged").ToModel();
   EXPECT_TRUE(prepared.rewritings().empty());
   EXPECT_TRUE(unchanged.rewritings().empty());
   EXPECT_FLOAT_EQ(core::runtime::RunModel(prepared, {})[0].AsFloat()[0], 12);
   EXPECT_FLOAT_EQ(core::runtime::RunModel(unchanged, {})[0].AsFloat()[0], 3);
   EXPECT_TRUE(restored.ToModel().graph().Equals(canonical.graph()));
   EXPECT_EQ(restored.Rewritings().size(), 2u);
-  EXPECT_THROW(restored.ApplyVariant("absent"), core::builder::BuilderError);
+  EXPECT_THROW(restored.ApplyRewritings("absent"), core::builder::BuilderError);
   EXPECT_THROW(restored.ToStandardModel(), core::builder::BuilderError);
   EXPECT_TRUE(restored.ApplyRewritings(RewritingProto{}).Rewritings().empty());
 }
@@ -432,7 +432,7 @@ TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
     mutations[i](builder);
     EXPECT_TRUE(builder.Rewritings().empty());
     EXPECT_FALSE(builder.ToModel().has_rewritings());
-    EXPECT_THROW(builder.ApplyVariant("variant"), core::builder::BuilderError);
+    EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
   }
   core::builder::GraphBuilder parent(PreparationModel(), SchemaLookup());
   auto &function = parent.MakeLocalFunction("Nested", "test.variant");
@@ -474,7 +474,7 @@ TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidP
   RewritingProto invalid;
   invalid.add_rewrites()->add_matched_nodes(UINT64_MAX);
   builder.AddRewriting("invalid", invalid);
-  EXPECT_THROW(builder.ApplyVariant("invalid"), core::builder::BuilderError);
+  EXPECT_THROW(builder.ApplyRewritings("invalid"), core::builder::BuilderError);
   RewritingProto unavailable;
   auto &edit = *unavailable.add_rewrites();
   edit.add_matched_nodes(0);
@@ -484,7 +484,7 @@ TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidP
   EXPECT_THROW(
       {
         try {
-          builder.ApplyVariant("missing");
+          builder.ApplyRewritings("missing");
         } catch (const core::builder::BuilderError &error) {
           EXPECT_NE(std::string(error.what()).find("no implementation"), std::string::npos);
           EXPECT_NE(std::string(error.what()).find("MissingVariantKernel"), std::string::npos);
@@ -549,9 +549,9 @@ TEST(PatternOptimization, NamedVariantsCheckControlFlowAndBoundFunctionGraphs) {
       builder.set_device(core::symbolic::Device::kGPU0);
       builder.AddRewriting("variant", RewritingProto{});
       if (missing && mode != 2)
-        EXPECT_THROW(builder.ApplyVariant("variant"), core::builder::BuilderError);
+        EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
       else
-        EXPECT_NO_THROW(builder.ApplyVariant("variant"));
+        EXPECT_NO_THROW(builder.ApplyRewritings("variant"));
     }
   }
 }

@@ -7,6 +7,7 @@ import gc
 import unittest
 
 from onnx_light import onnx
+from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_pb import AffineLayoutProto, EncodedValueProto, StructTypeProto
 from onnx_light.onnx_core.graph_builder import GraphBuilder
@@ -40,7 +41,7 @@ def encoded(name="weights", logical=True):
     return value
 
 
-class TestStructuredValues(unittest.TestCase):
+class TestStructuredValues(ExtTestCase):
     def test_nested_proto_roundtrip(self):
         record = StructTypeProto(
             type_id=2**40,

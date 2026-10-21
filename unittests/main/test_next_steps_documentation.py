@@ -2,8 +2,10 @@ import re
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestNextStepsDocumentation(unittest.TestCase):
+
+class TestNextStepsDocumentation(ExtTestCase):
     def test_proto_inheritance_abandoned(self):
         """Checks that the abandoned proposal remains accessible but is not active."""
         root = Path(__file__).resolve().parents[2] / "docs" / "next_steps" / "2026"

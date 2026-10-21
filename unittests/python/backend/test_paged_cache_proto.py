@@ -9,7 +9,7 @@ import unittest
 import numpy
 
 from onnx_light import onnx
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import compose
@@ -56,7 +56,7 @@ def make_model():
     return model
 
 
-class TestPagedCacheProto(unittest.TestCase):
+class TestPagedCacheProto(ExtTestCase):
     def test_dictionary_cache_with_layoutless_declaration(self):
         payload = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
         block = {

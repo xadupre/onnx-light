@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy
 
 from onnx_light import onnx
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_lib import parser
@@ -83,7 +83,7 @@ def array(tensor):
     return numpy.from_dlpack(tensor)
 
 
-class TestPersistentValueState(unittest.TestCase):
+class TestPersistentValueState(ExtTestCase):
     def test_session_owns_and_resets_persistent_state(self):
         session = runtime.RuntimeSession(
             make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)}

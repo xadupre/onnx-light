@@ -10,6 +10,7 @@ import weakref
 
 import numpy
 
+from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import FileLoadMode, GraphProto, ModelProto, ParseOptions, TensorProto
 from onnx_light.onnx.numpy_helper import from_array
 
@@ -77,7 +78,7 @@ class CapsuleProducer:
         return (1, 0)
 
 
-class TestTensorProtoDLPack(unittest.TestCase):
+class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_import_numpy(self):
         for dtype in (

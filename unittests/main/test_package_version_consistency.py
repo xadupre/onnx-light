@@ -3,8 +3,10 @@ import unittest
 
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestPackageVersionConsistency(unittest.TestCase):
+
+class TestPackageVersionConsistency(ExtTestCase):
     """Checks package version consistency across release metadata files."""
 
     @classmethod

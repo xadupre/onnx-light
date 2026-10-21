@@ -9,10 +9,12 @@ import sys
 import textwrap
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 HAS_KERNELS = importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None
 
 
-class TestGraphBuilderKernelImport(unittest.TestCase):
+class TestGraphBuilderKernelImport(ExtTestCase):
     @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
     def test_shape_concat_folds_without_evaluator_import(self):
         script = textwrap.dedent("""
@@ -62,7 +64,7 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
     def test_reduced_builder_import_and_missing_folding_kernel(self):
         script = textwrap.dedent("""
             import sys
-            import unittest
+            from onnx_light.ext_test_case import ExtTestCase
             import numpy
             from onnx_light.onnx_core.graph_builder import GraphBuilder
             import onnx_light.onnx.numpy_helper as onh
@@ -77,7 +79,7 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             builder.make_output("y")
             assert len(builder.to_onnx().graph.node) == 2
             assert "onnx_light.onnx_py._onnxpykernels" not in sys.modules
-            with unittest.TestCase().assertRaisesRegex((ValueError, RuntimeError), "Concat"):
+            with ExtTestCase().assertRaisesRegex((ValueError, RuntimeError), "Concat"):
                 builder.constant_fold()
             assert not any(name.startswith("onnx_light._reference") for name in sys.modules)
             """)

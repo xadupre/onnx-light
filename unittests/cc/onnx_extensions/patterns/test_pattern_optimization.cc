@@ -798,29 +798,103 @@ TEST(PatternOptimization, OptimizerDoesNotReinferUnaffectedShapes) {
   EXPECT_EQ(builder.GetShape("unchanged"), builder.GetShape("X"));
 }
 
-TEST(PatternOptimization, PreservesDeclaredTagsWhenRenamingToInputs) {
+TEST(PatternOptimization, PreservesExistingTagsWhenRenamingToInputs) {
+  for (bool declared_tag : {false, true}) {
+    SCOPED_TRACE(declared_tag);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+    ValueInfoProto input;
+    input.set_name("X");
+    auto &type = *input.mutable_type()->mutable_tensor_type();
+    type.set_elem_type(TensorProto::FLOAT);
+    type.mutable_shape()->add_dim()->set_dim_value(2);
+    if (declared_tag) {
+      auto &tag = *input.add_metadata_props();
+      tag.set_key(core::compute::kValueTagMetadataKey);
+      tag.set_value("shape");
+    }
+    source.MakeInput(input);
+    source.MakeNode("Identity", {"X"}, {"p"});
+    source.MakeNode("Neg", {"p"}, {"Y"});
+    source.MakeNode("Unknown", {"Y"}, {"Z"});
+    source.MakeOutput("Z");
+    RewritingProto plan;
+    auto &rewrite = *plan.add_rewrites();
+    rewrite.add_matched_nodes(0);
+    auto &rename = *rewrite.add_value_renames();
+    rename.set_key("p");
+    rename.set_value("X");
+    const auto result = source.ApplyRewritings(plan);
+    EXPECT_EQ(result.Nodes()[0].input(0), "X");
+    for (const std::string name : {"X", "Y", "Z"}) {
+      EXPECT_EQ(source.Compute().ValueTags().at(name), declared_tag ? "shape" : "weight");
+      EXPECT_EQ(result.Compute().ValueTags().at(name), source.Compute().ValueTags().at(name));
+    }
+    EXPECT_EQ(result.Compute().ValueTags().count("p"), 0u);
+  }
+}
+
+TEST(PatternOptimization, PreservesExistingTagsWhenRewritingMixedTagInputs) {
+  for (bool new_intermediate : {false, true}) {
+    SCOPED_TRACE(new_intermediate);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+    source.MakeInput("X", core::symbolic::TensorType::kInt64, Shape());
+    ValueInfoProto shape_input;
+    shape_input.set_name("S");
+    auto &type = *shape_input.mutable_type()->mutable_tensor_type();
+    type.set_elem_type(TensorProto::INT64);
+    type.mutable_shape()->add_dim()->set_dim_value(2);
+    auto &tag = *shape_input.add_metadata_props();
+    tag.set_key(core::compute::kValueTagMetadataKey);
+    tag.set_value("shape");
+    source.MakeInput(shape_input);
+    source.MakeNode("Add", {"X", "S"}, {"Y"});
+    source.MakeNode("Neg", {"Y"}, {"Z"});
+    source.MakeOutput("Z");
+    ASSERT_EQ(source.Compute().ValueTags().at("Y"), "weight");
+    RewritingProto plan;
+    auto &rewrite = *plan.add_rewrites();
+    rewrite.add_matched_nodes(0);
+    rewrite.add_added_nodes_positions(0);
+    rewrite.ref_added_nodes().push_back(
+        MakeNode("Add", {"S", "X"}, {new_intermediate ? "fresh" : "Y"}));
+    if (new_intermediate) {
+      rewrite.add_added_nodes_positions(1);
+      rewrite.ref_added_nodes().push_back(MakeNode("Identity", {"fresh"}, {"Y"}));
+    }
+    auto result = source.ApplyRewritings(plan);
+    for (const std::string name : {"X", "S", "Y", "Z"}) {
+      EXPECT_EQ(result.Compute().ValueTags().at(name), source.Compute().ValueTags().at(name));
+    }
+    EXPECT_EQ(result.Compute().NodeTag(new_intermediate ? 1 : 0), "weight");
+    if (new_intermediate) {
+      EXPECT_EQ(result.Compute().ValueTags().at("fresh"), "shape");
+    }
+    auto tagged_output = shape_input;
+    tagged_output.set_name("Y");
+    result.MakeOutput(tagged_output);
+    EXPECT_EQ(result.Compute().ValueTags().at("Y"), "shape");
+  }
+}
+
+TEST(PatternOptimization, PreservesOutputOnlyTagsWhenFoldingToInitializers) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
-  ValueInfoProto input;
-  input.set_name("X");
-  auto &type = *input.mutable_type()->mutable_tensor_type();
-  type.set_elem_type(TensorProto::FLOAT);
-  type.mutable_shape()->add_dim()->set_dim_value(2);
-  auto &tag = *input.add_metadata_props();
-  tag.set_key(core::compute::kValueTagMetadataKey);
-  tag.set_value("shape");
-  source.MakeInput(input);
-  source.MakeNode("Identity", {"X"}, {"p"});
-  source.MakeNode("Unknown", {"p"}, {"Y"});
-  source.MakeOutput("Y");
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+  source.MakeNode("Shape", {"X"}, {"p"});
+  source.MakeOutput("p");
+  ASSERT_EQ(source.Compute().ValueTags().at("p"), "shape");
   RewritingProto plan;
   auto &rewrite = *plan.add_rewrites();
   rewrite.add_matched_nodes(0);
-  auto &rename = *rewrite.add_value_renames();
-  rename.set_key("p");
-  rename.set_value("X");
+  rewrite.add_added_initializer_positions(0);
+  rewrite.ref_added_initializers().push_back(MakeInitializer<int64_t>("p", {1}, {2}));
   const auto result = source.ApplyRewritings(plan);
-  EXPECT_EQ(result.Nodes()[0].input(0), "X");
-  EXPECT_EQ(result.Compute().ValueTags().at("X"), "shape");
+  EXPECT_TRUE(result.Nodes().empty());
+  ASSERT_EQ(result.Initializers().size(), 1u);
+  EXPECT_EQ(result.Compute().ValueTags().at("p"), "shape");
+  EXPECT_TRUE(result.Compute().IsConstantValue("p"));
+  EXPECT_EQ(result.GetShape("p").Shape(), source.GetShape("p").Shape());
+  EXPECT_EQ(result.GetShape("p").Dtype(), source.GetShape("p").Dtype());
+  EXPECT_EQ(result.BuildGraph().output(0).name(), "p");
 }
 
 TEST(PatternOptimization, RefreshesRenamedCapturesWithoutAParentShapeFunction) {

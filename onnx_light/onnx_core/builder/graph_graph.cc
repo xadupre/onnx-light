@@ -420,7 +420,12 @@ GraphProto GraphHeaders(const GraphProto &graph) {
 
 GraphProto GraphStructure(const GraphProto &graph) {
   GraphProto result = graph;
+  // Inferred types may change; undo restores the saved graph headers separately.
   result.clr_value_info();
+  for (auto &input : result.ref_input())
+    input.clear_type();
+  for (auto &output : result.ref_output())
+    output.clear_type();
   for (auto &node : result.ref_node())
     for (auto &attribute : node.ref_attribute()) {
       if (attribute.has_g())
@@ -476,7 +481,7 @@ Field SelectPositions(const Field &values, const Positions &positions) {
     const auto position = CheckedPosition(encoded);
     if (position >= values.size() || !seen.insert(position).second)
       throw BuilderError("Rewriting: invalid or duplicate inverse position.");
-    result.push_back(values[position]);
+    result.add() = values[position];
   }
   return result;
 }
@@ -505,8 +510,9 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
         ProjectPreparedNode(actual, *prepared, path);
       }
     }
-    if (!actual.Equals(added_values[i]))
-      throw BuilderError("UndoRewritings: replacement definition does not match.");
+    std::string difference;
+    if (!actual.Equals(added_values[i], &difference))
+      throw BuilderError("UndoRewritings: replacement definition does not match: " + difference);
   }
   std::unordered_set<std::size_t> added(added_positions.begin(), added_positions.end());
   std::unordered_map<std::size_t, std::size_t> removed;
@@ -520,7 +526,7 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
   for (std::size_t position = 0; position < original_count; ++position) {
     const auto found = removed.find(position);
     if (found != removed.end()) {
-      result.push_back(removed_values[found->second]);
+      result.add() = removed_values[found->second];
     } else {
       while (index < current.size() && added.count(index) != 0)
         ++index;
@@ -1436,8 +1442,10 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     undo->original_graph_headers = GraphHeaders(canonical);
     CaptureInversePlan(result, *undo, canonical);
     undo->optimized_graph = root->BuildGraph();
-    if (!GraphStructure(canonical).Equals(GraphStructure(undo->optimized_graph)))
-      throw BuilderError("Optimize: a mutation is not represented by the captured plan.");
+    std::string difference;
+    if (!GraphStructure(canonical).Equals(GraphStructure(undo->optimized_graph), &difference))
+      throw BuilderError("Optimize: a mutation is not represented by the captured plan: " +
+                         difference);
     undo->original_functions = original_definitions;
     for (const auto &[domain, version] : original_opsets) {
       auto &opset = undo->original_opsets.add();
@@ -1773,6 +1781,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           if (!output.empty())
             builder_.names_.insert(output.value());
       }
+      builder_.PruneValueInfos();
       builder_.RefreshAfterRewriting(old_indices, std::move(affected_values));
 
       std::unordered_map<std::string, std::size_t> output_owners;

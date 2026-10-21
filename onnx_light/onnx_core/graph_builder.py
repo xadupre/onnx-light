@@ -338,17 +338,18 @@ class GraphBuilder(_C.GraphBuilder):
             raise ValueError("A rewriting plan named 'optimized' already exists.")
         working = GraphBuilder(canonical, self._schema_lookup)
         working.copy_device_targets_from(self)
-        GraphGraph(working).canonicalize()
-        canonical = working.to_model(ir_version)
-        cleaned = working
-        working = GraphBuilder(canonical, self._schema_lookup)
-        working.copy_device_targets_from(cleaned)
         for pattern in self.registered_patterns():
             working.register_pattern(pattern)
         plan = GraphGraph(working).optimize()
         if optimize is OptimizationMode.kRewritings:
-            canonical.add_rewriting("optimized", plan)
-            return canonical
+            restored = working.undo_rewritings(plan).to_model(ir_version)
+            if restored.graph.SerializeToString() == canonical.graph.SerializeToString() and [
+                function.SerializeToString() for function in restored.functions
+            ] == [function.SerializeToString() for function in canonical.functions]:
+                for name, existing in canonical.rewritings.items():
+                    restored.add_rewriting(name, existing)
+            restored.add_rewriting("optimized", plan)
+            return restored
         if kind == ProtoKind.kModel:
             return working.to_standard_model(ir_version)
         return working.to_onnx(kind, ir_version, domain)

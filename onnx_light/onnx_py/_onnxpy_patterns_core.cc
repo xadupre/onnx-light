@@ -177,8 +177,6 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           nb::arg("builder"), nb::arg("patterns"), nb::keep_alive<1, 2>())
       .def_prop_ro("builder", &GraphGraph::Builder, nb::rv_policy::reference_internal)
       .def_prop_ro("patterns", &GraphGraph::Patterns)
-      .def("canonicalize", &GraphGraph::Canonicalize,
-           "Establishes canonical names before capturing reversible rewrites.")
       .def("set_target_device", &GraphGraph::SetTargetDevice, nb::arg("device"),
            "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
       .def(

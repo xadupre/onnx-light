@@ -96,7 +96,7 @@ class TestPatternsReshape(ExtTestCase):
                 oh.make_node("Unsqueeze", ["xu1", "one"], ["xu2"]),
                 oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
                 oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
-                oh.make_node("Cast", ["xm2c"], ["xm2"], to=TensorProto.FLOAT),
+                oh.make_node("Identity", ["xm2c"], ["xm2"]),
                 oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
                 oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
             ],
@@ -116,7 +116,7 @@ class TestPatternsReshape(ExtTestCase):
     def _check_reshape_matmul_reshape(
         self, *, dynamic: bool = False, keep_intermediate: bool = False, combined: bool = False
     ):
-        patterns = ["Cast", "ReshapeMatMulReshape", "UnsqueezeUnsqueeze"]
+        patterns = ["ReshapeMatMulReshape", "UnsqueezeUnsqueeze"]
         if combined:
             patterns.extend(["MatMulReshape2Of3", "ReshapeReshape"])
         expected_ops = (
@@ -128,7 +128,7 @@ class TestPatternsReshape(ExtTestCase):
                 else ["Unsqueeze", "MatMul"]
             )
         )
-        required = {"Cast", "UnsqueezeUnsqueeze"}
+        required = {"UnsqueezeUnsqueeze"}
         forbidden = None
         if dynamic:
             forbidden = {"ReshapeMatMulReshape"}
@@ -277,7 +277,7 @@ class TestPatternsReshape(ExtTestCase):
                 model,
                 feeds,
                 ["ShapedBasedReshape"],
-                ["Add"],
+                ["Identity", "Add"],
                 required_patterns={"ShapedBasedReshape"},
             )
 

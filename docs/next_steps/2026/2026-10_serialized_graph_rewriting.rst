@@ -239,11 +239,15 @@ replacement definitions, dependencies and subgraph paths, and explicitly
 rejects builders lacking the in-memory information needed for exact restoration. A
 failure must not leave the caller's builder partially restored.
 
-``GraphGraph::Canonicalize`` (Python: ``graph.canonicalize()``) performs the
-renaming cleanups explicitly, allowing callers to save the reference graph
-before calling ``Optimize``. Optimization also canonicalizes before capture.
+``GraphGraph::Optimize`` automatically canonicalizes before capture; no Python
+canonicalization method is needed. Export obtains the cleaned reference from
+the optimizing builder's in-memory undo history.
 Ancestor substitutions are applied before cleaning descendant scopes, so
 canonicalization is idempotent even when captured values become equivalent.
+Identity nodes and duplicate constants introduced by recorded replacements
+remain in place: cleaning them up would redirect references after capture and
+is outside the reversible-plan contract. Consequently, later patterns may not
+match across newly introduced Identity boundaries.
 ``GraphBuilder::UndoRewritings`` (Python: ``builder.undo_rewritings(plan)``)
 returns a new builder at the cleaned canonical state. It requires the builder
 that performed optimization and its matching plan. Exporting and reloading an
@@ -352,8 +356,8 @@ plans against the earlier graph. The default
 running optimization. Only members of ``OptimizationMode`` are accepted.
 Both modes use the existing global and builder-local pattern registrations.
 The source remains at its finalized state; the independent working copy is
-cleaned before its canonical reference is saved. The export modes still keep
-that reference copy rather than relying on inverse replay. Load external
+automatically cleaned before capture. Bundled export recovers its canonical
+reference using the working builder's in-memory undo history. Load external
 weights before optimization and use the existing
 external-data save options to relocate the payloads with either export.
 See :ref:`l-example-plot-pattern-replay`.

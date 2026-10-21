@@ -152,6 +152,9 @@ assert "the input is not produced by Neg" in failed_no_match_reasons
 #####################################
 # Apply the custom pattern with the standard patterns
 # +++++++++++++++++++++++++++++++++++++++++++++++++++
+#
+# The replacements retain their output names with Identity nodes. These new
+# identities remain after capture so replay does not rename consumer inputs.
 
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, [*standard_patterns(["Cast"]), NegNegPattern()])
@@ -160,7 +163,11 @@ fully_optimized = builder.to_onnx()
 
 print(pretty_onnx(fully_optimized))
 print([rewrite.pattern_name for rewrite in rewrites.rewrites])
-assert [node.op_type for node in fully_optimized.graph.node] == ["Identity"]
+assert [node.op_type for node in fully_optimized.graph.node] == [
+    "Identity",
+    "Identity",
+    "Identity",
+]
 
 #####################################
 # Select patterns by name, regex or target device

@@ -386,6 +386,32 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
 
+    def test_to_onnx_drops_old_plans_when_function_canonicalization_changes_reference(self):
+        model = _double_neg_model()
+        model.functions.append(
+            oh.make_function(
+                "local",
+                "ForwardedNeg",
+                ["arg"],
+                ["result"],
+                [
+                    oh.make_node("Identity", ["arg"], ["forwarded"]),
+                    oh.make_node("Neg", ["forwarded"], ["result"]),
+                ],
+                opset_imports=[oh.make_opsetid("", 18)],
+            )
+        )
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        builder = optim.GraphBuilder(model)
+        builder.register_pattern(NegNegPattern())
+        builder.add_rewriting("other", optim.RewritingProto())
+        source = builder.to_onnx()
+        bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+        self.assertEqual(bundled.graph.SerializeToString(), source.graph.SerializeToString())
+        self.assertEqual(set(bundled.rewritings), {"optimized"})
+        self.assertEqual([node.op_type for node in bundled.functions[0].node], ["Neg"])
+        self.assertEqual(set(builder.to_onnx().rewritings), {"other"})
+
     def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
         model = _transpose_weight_model()
         feeds = {"x": numpy.ones((3, 2), dtype=numpy.float32)}
@@ -703,6 +729,37 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(local.value_renames[0].key, "old")
         self.assertEqual(local.value_renames[0].value, "new")
 
+    def test_inverse_restores_empty_initializer_and_output_annotations(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Concat", ["x", "z", "empty"], ["y"], axis=0)],
+                "inverse_annotations",
+                [
+                    oh.make_tensor_value_info("x", TensorProto.INT64, [2]),
+                    oh.make_tensor_value_info("z", TensorProto.INT64, [3]),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.INT64, ["size"])],
+                [onh.from_array(numpy.array([], dtype=numpy.int64), name="empty")],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        canonical = builder.build_graph()
+        plan = optim.GraphGraph(builder, ["ConcatEmpty"]).optimize()
+        self.assertEqual(list(builder.build_graph().node[0].input), ["x", "z"])
+        self.assertFalse(builder.build_graph().initializer)
+        restored = builder.undo_rewritings(plan).build_graph()
+        self.assertEqual(
+            restored.output[0].SerializeToString(), canonical.output[0].SerializeToString()
+        )
+        self.assertEqual(
+            restored.node[0].SerializeToString(), canonical.node[0].SerializeToString()
+        )
+        self.assertEqual([value.name for value in restored.initializer], ["empty"])
+        numpy.testing.assert_array_equal(
+            onh.to_array(restored.initializer[0]), onh.to_array(canonical.initializer[0])
+        )
+
     def test_canonicalize_and_inverse_restore_only_captured_edits(self):
         model = oh.make_model(
             oh.make_graph(
@@ -717,10 +774,11 @@ class TestPatternOptimization(ExtTestCase):
             ),
             opset_imports=[oh.make_opsetid("", 18)],
         )
+        reference = optim.GraphBuilder(model)
+        self.assertEqual(reference.remove_identity_nodes(), 1)
+        canonical = reference.build_graph().SerializeToString()
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])
-        self.assertEqual(graph.canonicalize(), 1)
-        canonical = builder.build_graph().SerializeToString()
         plan = graph.optimize()
         self.assertTrue(all(not edit.value_renames for edit in plan.rewrites))
         optimized = builder.build_graph().SerializeToString()

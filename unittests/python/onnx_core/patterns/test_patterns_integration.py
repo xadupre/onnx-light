@@ -76,7 +76,7 @@ class TestPatternsIntegration(ExtTestCase):
         )
         optimized, rewrites = _optimize(model, ["Expand", "ReshapeReshape", "MatMulReshape2Of3"])
 
-        self.assertEqual(_node_types(optimized), ["MatMul"])
+        self.assertEqual(_node_types(optimized), ["Identity", "Identity", "MatMul"])
         self.assertEqual(rewrites.count("Expand"), 2)
         self.assertIn("MatMulReshape2Of3", rewrites)
         feeds = {
@@ -124,7 +124,9 @@ class TestPatternsIntegration(ExtTestCase):
         )
         optimized, rewrites = _optimize(model, ["LayerNormalization", "Dropout", "Cast", "Gelu"])
 
-        self.assertEqual(_node_types(optimized), ["LayerNormalization", "Gelu"])
+        self.assertEqual(
+            _node_types(optimized), ["LayerNormalization", "Identity", "Identity", "Gelu"]
+        )
         self.assertEqual(
             [
                 name
@@ -133,7 +135,7 @@ class TestPatternsIntegration(ExtTestCase):
             ],
             ["Cast", "Gelu", "LayerNormalization", "Dropout"],
         )
-        gelu = optimized.graph.node[1]
+        gelu = optimized.graph.node[-1]
         approximate = next(
             attribute.s for attribute in gelu.attribute if attribute.name == "approximate"
         )

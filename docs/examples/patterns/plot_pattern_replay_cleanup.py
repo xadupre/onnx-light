@@ -53,13 +53,12 @@ model = oh.make_model(
 
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, standard_patterns(["Cast"]))
-graph.canonicalize()
-canonical = builder.to_onnx()
-builder = GraphBuilder(canonical)
-graph = GraphGraph(builder, standard_patterns(["Cast"]))
+rewrites = graph.optimize()
+canonical = oh.make_model(
+    builder.undo_rewritings(rewrites).build_graph(), opset_imports=[oh.make_opsetid("", 18)]
+)
 assert all(node.op_type != "Identity" for node in canonical.graph.node)
 assert [value.name for value in canonical.graph.initializer] == ["weight"]
-rewrites = graph.optimize()
 optimized_graph = builder.build_graph()
 
 assert rewrites.rewrites
@@ -73,7 +72,7 @@ print(pretty_onnx(model))
 print("Cleaned canonical graph:")
 print(pretty_onnx(canonical))
 print("Optimized graph:")
-print(pretty_onnx(builder.to_onnx()))
+print(pretty_onnx(optimized_graph))
 
 #####################################
 # Replay and undo only the captured modifications

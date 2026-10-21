@@ -154,7 +154,7 @@ class TestExpandLayoutPatterns(ExtTestCase):
         optimized, rewrites = _optimize(model, "Expand")
 
         self.assertPatternRewritten(rewrites, "Expand")
-        self.assertEqual(["Reshape", "Cast", "MatMul", "Reshape"], _ops(optimized))
+        self.assertEqual(["Reshape", "Identity", "Cast", "MatMul", "Reshape"], _ops(optimized))
         self.assertEqual([1, 4, 8], _initializer_values(optimized, "shape1").tolist())
         self.assertEqual([2, 3, 4, 5], _initializer_values(optimized, "shape3").tolist())
         self.assertEquivalent(model, optimized, feeds)

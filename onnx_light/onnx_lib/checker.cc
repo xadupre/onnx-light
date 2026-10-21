@@ -964,26 +964,27 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     check_sparse_tensor(sparse_init, ctx);
     lex_ctx.add(name);
   }
-  for (const auto &init : graph.encoded_initializer()) {
-    enforce_non_empty_field(init, name);
+  for (const auto &init : graph.extended_initializer()) {
+    if (!init.has_value())
+      fail_check("Extended initializer has no payload");
+    if (init.name().empty())
+      fail_check("Extended initializer must have a non-empty name");
     const std::string &name = init.name();
     if (!initializer_name_checker.insert(name).second) {
-      fail_check(name + " encoded initializer name is not unique across initializers");
+      fail_check(name + " extended initializer name is not unique across initializers");
     }
-    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init); });
-    lex_ctx.add(name);
-  }
-  for (const auto &init : graph.paged_cache_initializer()) {
-    enforce_non_empty_field(init, name);
-    const std::string &name = init.name();
-    if (!initializer_name_checker.insert(name).second)
-      fail_check(name + " paged cache initializer name is not unique across initializers");
-    const auto input = std::find_if(graph.input().begin(), graph.input().end(),
-                                    [&](const auto &vi) { return vi.name() == name; });
-    check_structured([&]() {
-      ctx.get_struct_type_catalogue().ValidatePagedCache(
-          init, true, input != graph.input().end() && input->has_type() ? &input->type() : nullptr);
-    });
+    if (init.has_encoded_value()) {
+      check_structured(
+          [&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init.encoded_value()); });
+    } else {
+      const auto input = std::find_if(graph.input().begin(), graph.input().end(),
+                                      [&](const auto &vi) { return vi.name() == name; });
+      check_structured([&]() {
+        ctx.get_struct_type_catalogue().ValidatePagedCache(
+            init.paged_cache(), true,
+            input != graph.input().end() && input->has_type() ? &input->type() : nullptr);
+      });
+    }
     lex_ctx.add(name);
   }
   std::unordered_set<std::string> used_experimental_ops;
@@ -1401,15 +1402,21 @@ static void check_quantization_parameter_references(const ModelProto &model,
     active.erase(id);
   };
   graph = [&](const GraphProto &value, bool bind_functions, bool unbound_function) {
-    for (const auto &encoded : value.encoded_initializer())
-      if (encoded.has_parameter_ref())
-        check_structured([&]() { parameters->Validate(encoded, types); });
-    for (const auto &cache : value.paged_cache_initializer())
-      for (const auto &block : cache.blocks())
-        for (const auto *encoded : {block.has_encoded_key() ? &block.encoded_key() : nullptr,
-                                    block.has_encoded_value() ? &block.encoded_value() : nullptr})
-          if (encoded && encoded->has_parameter_ref())
-            check_structured([&]() { parameters->Validate(*encoded, types); });
+    for (const auto &initializer : value.extended_initializer()) {
+      if (initializer.has_encoded_value()) {
+        const auto &encoded = initializer.encoded_value();
+        if (encoded.has_parameter_ref())
+          check_structured([&]() { parameters->Validate(encoded, types); });
+      } else if (initializer.has_paged_cache()) {
+        for (const auto &block : initializer.paged_cache().blocks())
+          for (const auto *encoded : {block.has_encoded_key() ? &block.encoded_key() : nullptr,
+                                      block.has_encoded_value() ? &block.encoded_value() : nullptr})
+            if (encoded && encoded->has_parameter_ref())
+              check_structured([&]() { parameters->Validate(*encoded, types); });
+      } else {
+        fail_check("Extended initializer has no payload");
+      }
+    }
     for (const auto &nested : value.node())
       node(nested, bind_functions, unbound_function);
   };

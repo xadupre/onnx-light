@@ -57,7 +57,7 @@ void RegisterCodecCases(std::vector<TestCase> &registry, bool quantize, TestMode
       } else {
         auto encoded = QuantizeTensor(input, plan).Encoded();
         encoded.set_name("Q");
-        *graph->add_encoded_initializer() = std::move(encoded);
+        *graph->add_extended_initializer()->mutable_encoded_value() = std::move(encoded);
       }
       auto *node = graph->add_node();
       node->set_domain("ai.rt");

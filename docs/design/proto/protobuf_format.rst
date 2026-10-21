@@ -166,9 +166,14 @@ wire type byte and reading the appropriate number of bytes (varint,
 Paged cache extension
 ---------------------
 
-``GraphProto.paged_cache_initializer`` uses field 1002 (repeated, ``LEN``),
-after encoded initializers (1000) and persistent bindings (1001). Its entries
-are ``PagedCacheProto`` messages:
+``GraphProto.extended_initializer`` uses field 1000 (repeated, ``LEN``).
+Each entry is an ``ExtendedInitializerProto`` with a ``value`` oneof:
+``encoded_value`` (field 1, ``EncodedValueProto``) or ``paged_cache``
+(field 2, ``PagedCacheProto``). Persistent bindings retain field 1001.
+The former separate encoded and paged-cache initializer wire format is no
+longer supported; files using it must be regenerated.
+
+The selected ``PagedCacheProto`` contains:
 
 * field 1: repeated ``PagedCacheBlockProto`` blocks (``LEN``);
 * field 2: optional ``name`` (``LEN``);

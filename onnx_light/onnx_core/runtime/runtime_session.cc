@@ -306,7 +306,11 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
-    for (const auto &initializer : initializer_graph_->encoded_initializer())
+    for (const auto &extended : initializer_graph_->extended_initializer()) {
+      EXT_ENFORCE_INVALID(extended.has_value(), "Extended initializer has no payload.");
+      if (!extended.has_encoded_value())
+        continue;
+      const auto &initializer = extended.encoded_value();
       if (!rt.HasValue(initializer.name())) {
         rt.struct_type_catalogue().ValidateEncodedValue(initializer);
         RuntimeValue value;
@@ -326,7 +330,11 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
         rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
-    for (const auto &initializer : initializer_graph_->paged_cache_initializer())
+    }
+    for (const auto &extended : initializer_graph_->extended_initializer()) {
+      if (!extended.has_paged_cache())
+        continue;
+      const auto &initializer = extended.paged_cache();
       if (!rt.HasValue(initializer.name())) {
         rt.PutValue(initializer.name(),
                     RuntimeValue::FromPagedCache(initializer, rt.struct_type_catalogue(),
@@ -334,6 +342,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
                     RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
+    }
   }
   return seeded;
 }

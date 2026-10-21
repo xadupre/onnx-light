@@ -373,8 +373,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   }
 
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeScan");
-  EXT_ENFORCE_INVALID(body.ref_encoded_initializer().empty() &&
-                          body.paged_cache_initializer().empty(),
+  EXT_ENFORCE_INVALID(body.extended_initializer().empty(),
                       "ComputeShapeScan: encoded/paged cache body initializers are unsupported.");
   const int64_t num_scan_inputs64 = RequireIntAttribute(node, "num_scan_inputs");
   EXT_ENFORCE_INVALID(num_scan_inputs64 > 0,

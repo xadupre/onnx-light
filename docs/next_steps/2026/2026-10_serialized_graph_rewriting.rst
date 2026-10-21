@@ -117,8 +117,7 @@ remains deferred to step 3.
      repeated StringStringEntryProto metadata_props = 10;
      repeated NodeProto initializer_calls = 11;
      repeated uint64 computed_initializer_positions = 12;
-     repeated uint64 removed_encoded_initializers = 13;
-     repeated uint64 removed_paged_cache_initializers = 14;
+     repeated uint64 removed_extended_initializers = 13;
    }
 
    message RewritingProto {
@@ -130,8 +129,10 @@ remains deferred to step 3.
 
 Removal positions are relative to the corresponding initializer list before
 each edit: ``removed_initializers`` indexes dense initializers,
-``removed_encoded_initializers`` indexes encoded initializers, and
-``removed_paged_cache_initializers`` indexes paged-cache initializers.
+``removed_extended_initializers`` indexes the unified
+``GraphProto.extended_initializer`` list of encoded constants and paged caches.
+Both payload alternatives share this index space and retain their declaration
+order across builder import/export and replay.
 
 **Modify only onnx-light's ``ModelProto``** to add
 ``map<string, RewritingProto> rewritings``, keyed by variant name, without

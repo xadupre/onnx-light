@@ -195,7 +195,7 @@ same fixed-parameter encoding without constructing a graph.
 For compact serialization, serialize ``shared.encoded`` and keep the declaring
 model alongside it. A parsed bare message has no in-memory owner: pass its model
 to the Python dequantization or materialization helper, or place it in that
-model's ``encoded_initializer`` collection. A reference string alone cannot
+model's ``extended_initializer`` collection (``encoded_value`` alternative). A reference string alone cannot
 recover a missing model resource.
 
 For independent export, call ``materialize_quantized_value(shared)`` first.

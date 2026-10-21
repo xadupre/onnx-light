@@ -323,11 +323,9 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     core::builder::GraphGraph optimizer(builder);
     const auto plan = optimizer.Optimize();
     ASSERT_EQ(plan.rewrites().size(), 1u);
-    EXPECT_EQ(plan.rewrites(0).removed_encoded_initializers().values(), std::vector<uint64_t>({0}));
-    EXPECT_EQ(plan.rewrites(0).removed_paged_cache_initializers().values(),
-              std::vector<uint64_t>({0}));
-    EXPECT_TRUE(builder.EncodedInitializers().empty());
-    EXPECT_TRUE(builder.PagedCacheInitializers().empty());
+    EXPECT_EQ(plan.rewrites(0).removed_extended_initializers().values(),
+              std::vector<uint64_t>({0, 1}));
+    EXPECT_TRUE(builder.ExtendedInitializers().empty());
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
@@ -394,10 +392,12 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
       const auto &edit = plan.rewrites(0);
       EXPECT_EQ(edit.removed_initializers().values(),
                 (kinds & 1) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
-      EXPECT_EQ(edit.removed_encoded_initializers().values(),
-                (kinds & 2) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
-      EXPECT_EQ(edit.removed_paged_cache_initializers().values(),
-                (kinds & 4) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
+      std::vector<uint64_t> removed_extended;
+      if (kinds & 2)
+        removed_extended.push_back(1);
+      if (kinds & 4)
+        removed_extended.push_back((kinds & 2) ? 3 : 1);
+      EXPECT_EQ(edit.removed_extended_initializers().values(), removed_extended);
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
       auto expected = builder.ToGraph();
@@ -412,6 +412,45 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
       EXPECT_EQ(replayed.ToGraph().SerializeAsString(), expected.SerializeAsString());
     }
   }
+}
+
+TEST(GraphGraph, ReplaysUnifiedInitializerPositionsWithoutReordering) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  source.MakeOutput("X");
+  source.MakeStructType(RewriteRecord());
+  EncodedValueProto encoded;
+  encoded.set_name("unused_encoded");
+  encoded.mutable_struct_type()->set_type_ref(101);
+  encoded.set_raw_data(std::string(sizeof(float), '\0'));
+  source.MakeEncodedInitializer(encoded);
+  PagedCacheProto cache;
+  cache.set_name("live_cache");
+  auto *block = cache.add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  *block->mutable_key() = MakeInitializer<float>("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  *block->mutable_value() = block->key();
+  source.MakePagedCacheInitializer(cache);
+  source.MakeOutput("live_cache");
+  ModelProto model = source.ToModel();
+  auto &initializers = model.ref_graph().ref_extended_initializer();
+  std::swap(initializers.get(0), initializers.get(1));
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  ASSERT_TRUE(builder.ExtendedInitializers()[0].has_paged_cache());
+  EXPECT_EQ(builder.ToGraph().extended_initializer(1).name(), "unused_encoded");
+  core::builder::GraphGraph optimizer(builder);
+  const auto plan = optimizer.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  EXPECT_EQ(plan.rewrites(0).removed_extended_initializers().values(), std::vector<uint64_t>({1}));
+  auto replayed = core::builder::GraphBuilder(model, SchemaLookup()).ApplyRewritings(plan);
+  EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
+  ASSERT_EQ(replayed.ExtendedInitializers().size(), 1u);
+  EXPECT_TRUE(replayed.ExtendedInitializers()[0].has_paged_cache());
+  EXPECT_FALSE(replayed.Shapes().HasEncodedValue("unused_encoded"));
+
+  model.mutable_graph()->add_extended_initializer();
+  EXPECT_THROW((core::builder::GraphBuilder(model, SchemaLookup())), core::builder::BuilderError);
 }
 
 TEST(GraphGraph, ReplayRejectsInvalidStructuredInitializerRemovals) {
@@ -435,7 +474,7 @@ TEST(GraphGraph, ReplayRejectsInvalidStructuredInitializerRemovals) {
   builder.MakePagedCacheInitializer(cache);
   const auto original = builder.BuildGraph().SerializeAsString();
   for (const bool paged : {false, true}) {
-    for (const uint64_t position : {uint64_t{0}, uint64_t{1}, UINT64_MAX}) {
+    for (const uint64_t position : {uint64_t{0}, uint64_t{2}, UINT64_MAX}) {
       RewritingProto plan;
       auto *node_edit = plan.add_rewrites();
       node_edit->add_matched_nodes(0);
@@ -445,11 +484,10 @@ TEST(GraphGraph, ReplayRejectsInvalidStructuredInitializerRemovals) {
       edit->add_matched_nodes(0);
       edit->ref_added_nodes().push_back(MakeNode("Neg", {"X"}, {"Y"}));
       edit->add_added_nodes_positions(0);
-      auto &positions = paged ? edit->ref_removed_paged_cache_initializers()
-                              : edit->ref_removed_encoded_initializers();
-      positions.push_back(position);
+      auto &positions = edit->ref_removed_extended_initializers();
+      positions.push_back(position == 0 && paged ? 1 : position);
       if (position == 0)
-        positions.push_back(position);
+        positions.push_back(paged ? 1 : 0);
       EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
       EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original);
     }
@@ -474,7 +512,7 @@ TEST(GraphGraph, CleanupReplaysDuplicateEncodedInitializers) {
   ASSERT_EQ(plan.rewrites().size(), 1u);
   EXPECT_EQ(plan.rewrites(0).pattern_name(), "RemoveDuplicateInitializers");
   EXPECT_TRUE(plan.rewrites(0).removed_initializers().empty());
-  EXPECT_EQ(plan.rewrites(0).removed_encoded_initializers().values(), std::vector<uint64_t>({1}));
+  EXPECT_EQ(plan.rewrites(0).removed_extended_initializers().values(), std::vector<uint64_t>({1}));
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);

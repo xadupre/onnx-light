@@ -2,8 +2,9 @@
 PagedCacheProto
 ===============
 
-Contains ordered KV pages. ``GraphProto.paged_cache_initializer`` embeds a
-named cache as an initializer. Each page selects a dense or encoded payload
+Contains ordered KV pages. ``GraphProto.extended_initializer`` embeds a
+named cache through the ``ExtendedInitializerProto.paged_cache`` alternative.
+Each page selects a dense or encoded payload
 independently for K and V. Referenced type and quantization catalogues remain
 model-scoped. See :doc:`../../howto/python/persistent_feedback`.
 

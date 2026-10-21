@@ -273,7 +273,10 @@ PersistentValueState::PersistentValueState(const ModelProto &model, RuntimeValue
 
 std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueMap initial) const {
   std::shared_ptr<const QuantizationParameterCatalogue> parameters;
-  for (const auto &cache : model_.graph().paged_cache_initializer())
+  for (const auto &initializer : model_.graph().extended_initializer()) {
+    if (!initializer.has_paged_cache())
+      continue;
+    const auto &cache = initializer.paged_cache();
     if (!initial.contains(cache.name()) &&
         std::any_of(bindings_.begin(), bindings_.end(),
                     [&](const auto &binding) { return binding.input == cache.name(); })) {
@@ -281,6 +284,7 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
         parameters = QuantizationParameterCatalogue::Build(model_);
       initial.emplace(cache.name(), RuntimeValue::FromPagedCache(cache, catalogue_, parameters));
     }
+  }
   std::vector<PersistentValue> result;
   result.reserve(bindings_.size());
   Symbols symbols;
@@ -397,10 +401,8 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
       bool initializer = false;
       for (const auto &tensor : state.model_.graph().initializer())
         initializer = initializer || tensor.name() == input.name();
-      for (const auto &encoded : state.model_.graph().encoded_initializer())
-        initializer = initializer || encoded.name() == input.name();
-      for (const auto &cache : state.model_.graph().paged_cache_initializer())
-        initializer = initializer || cache.name() == input.name();
+      for (const auto &value : state.model_.graph().extended_initializer())
+        initializer = initializer || value.name() == input.name();
       EXT_ENFORCE_INVALID(initializer, "PersistentValueState: missing current input '",
                           input.name(), "'.");
       continue;

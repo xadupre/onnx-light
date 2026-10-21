@@ -132,7 +132,7 @@ TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
   EXPECT_TRUE(initial.blocks(0).has_encoded_key());
   EXPECT_TRUE(initial.blocks(0).has_encoded_value());
   auto restored_model = model;
-  *restored_model.mutable_graph()->add_paged_cache_initializer() = initial;
+  *restored_model.mutable_graph()->add_extended_initializer()->mutable_paged_cache() = initial;
   ModelProto parsed;
   ASSERT_TRUE(parsed.ParseFromString(restored_model.SerializeAsString()));
   EXPECT_NO_THROW(VerifyModel(parsed));

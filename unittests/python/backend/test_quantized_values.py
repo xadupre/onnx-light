@@ -204,7 +204,9 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         )
         model.graph.output.clear()
         model.graph.output.append(oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8]))
-        model.graph.encoded_initializer.append(encoded)
+        model.graph.extended_initializer.append(
+            onnx.ExtendedInitializerProto(encoded_value=encoded)
+        )
         serialized = model.SerializeToString()
         model = onnx.ModelProto()
         model.ParseFromString(serialized)
@@ -319,7 +321,9 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                         encoded.parameter_ref = "missing"
                     else:
                         encoded.affine = onnx.AffineLayoutProto()
-                    model.graph.encoded_initializer.append(encoded)
+                    model.graph.extended_initializer.append(
+                        onnx.ExtendedInitializerProto(encoded_value=encoded)
+                    )
                 with self.assertRaises(checker.ValidationError):
                     checker.check_model(model)
                 with self.assertRaises((ValueError, RuntimeError)):
@@ -595,7 +599,7 @@ class TestQuantizedValues(unittest.TestCase):
             [],
             [oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [3])],
         )
-        graph.encoded_initializer.append(encoded)
+        graph.extended_initializer.append(onnx.ExtendedInitializerProto(encoded_value=encoded))
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("ai.rt", 1)])
         model.struct_types.append(declaration)
         return model, values
@@ -609,6 +613,7 @@ class TestQuantizedValues(unittest.TestCase):
 
     def test_checker_encoded_initializer_failures(self):
         for failure in (
+            "empty_payload",
             "empty_name",
             "duplicate",
             "tensor_collision",
@@ -619,11 +624,15 @@ class TestQuantizedValues(unittest.TestCase):
         ):
             with self.subTest(failure=failure):
                 model, values = self.make_encoded_initializer_model()
-                encoded = model.graph.encoded_initializer[0]
-                if failure == "empty_name":
+                encoded = model.graph.extended_initializer[0].encoded_value
+                if failure == "empty_payload":
+                    model.graph.extended_initializer[0].CopyFrom(onnx.ExtendedInitializerProto())
+                elif failure == "empty_name":
                     encoded.name = ""
                 elif failure == "duplicate":
-                    model.graph.encoded_initializer.append(encoded)
+                    model.graph.extended_initializer.append(
+                        onnx.ExtendedInitializerProto(encoded_value=encoded)
+                    )
                 elif failure == "tensor_collision":
                     model.graph.initializer.append(onh.from_array(values, name="Q"))
                 elif failure == "unknown_reference":
@@ -655,7 +664,7 @@ class TestQuantizedValues(unittest.TestCase):
         decode = model.graph.node[0]
         model.graph.node.clear()
         model.graph.node.extend([encode, decode])
-        model.graph.encoded_initializer.clear()
+        model.graph.extended_initializer.clear()
         model.graph.input.append(oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [3]))
         checker.check_model(model)
         model.graph.node[0].attribute[0].tp.struct_type = onnx.StructTypeProto(type_ref=99)
@@ -678,7 +687,9 @@ class TestQuantizedValues(unittest.TestCase):
         model.opset_import.append(oh.make_opsetid("", 21))
         checker.check_model(model)
         branch = model.graph.node[0].attribute[0].g
-        branch.encoded_initializer[0].struct_type = onnx.StructTypeProto(type_ref=99)
+        branch.extended_initializer[0].encoded_value.struct_type = onnx.StructTypeProto(
+            type_ref=99
+        )
         with self.assertRaises(checker.ValidationError):
             checker.check_model(model)
 

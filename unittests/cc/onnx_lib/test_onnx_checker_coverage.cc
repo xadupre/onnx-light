@@ -162,7 +162,7 @@ TEST(CHECKER_COVERAGE, PagedCacheValidatesSharedParameterReferences) {
       core::runtime::Tensor::FromFloat("K", {1, 1, 2, 4}, std::vector<float>(8, 2.f));
   const auto shared = core::runtime::QuantizeTensorShared(
       source, core::runtime::MakeQuantizationType(plan), "common", parameters);
-  auto *cache = model.mutable_graph()->add_paged_cache_initializer();
+  auto *cache = model.mutable_graph()->add_extended_initializer()->mutable_paged_cache();
   cache->set_name("cache");
   auto *block = cache->add_blocks();
   block->set_start(0);
@@ -331,13 +331,13 @@ TEST(CHECKER_COVERAGE, SharedParameterInitializersMatchTheirCatalogue) {
   const auto shared = core::runtime::QuantizeTensorShared(
       source, original.graph().node(0).attribute(0).tp().struct_type(), "common", parameters);
   original.mutable_graph()->clear_node();
-  *original.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+  *original.mutable_graph()->add_extended_initializer()->mutable_encoded_value() = shared.Encoded();
   ASSERT_NO_THROW(checker::check_model(original));
   for (const auto &failure : {"dtype", "shape", "compact_type", "payload", "reserved"}) {
     SCOPED_TRACE(failure);
     ModelProto model;
     model.CopyFrom(original);
-    auto *encoded = model.mutable_graph()->mutable_encoded_initializer(0);
+    auto *encoded = model.mutable_graph()->mutable_extended_initializer(0)->mutable_encoded_value();
     const std::string kind = failure;
     if (kind == "dtype") {
       encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
@@ -366,7 +366,8 @@ TEST(CHECKER_COVERAGE, SharedParameterInitializersMatchTheirCatalogue) {
   auto *definition = original.add_struct_types();
   *definition = shared.Encoded().struct_type();
   definition->set_type_id(1);
-  auto *encoded = original.mutable_graph()->mutable_encoded_initializer(0);
+  auto *encoded =
+      original.mutable_graph()->mutable_extended_initializer(0)->mutable_encoded_value();
   *encoded->mutable_struct_type() = StructTypeProto{};
   encoded->mutable_struct_type()->set_type_ref(1);
   EXPECT_NO_THROW(checker::check_model(original));

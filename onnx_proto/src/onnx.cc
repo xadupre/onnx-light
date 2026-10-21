@@ -1669,6 +1669,41 @@ void PagedCacheProto::PrintToStringStream(std::stringstream &ss,
                                  NAME_EXIST_VALUE(doc_string));
 }
 
+void ExtendedInitializerProto::CopyFrom(const ExtendedInitializerProto &proto) {
+  if (this == &proto)
+    return;
+  ExtendedInitializerProto copy;
+  if (proto.has_encoded_value())
+    *copy.mutable_encoded_value() = proto.encoded_value();
+  else if (proto.has_paged_cache())
+    *copy.mutable_paged_cache() = proto.paged_cache();
+  *this = std::move(copy);
+}
+SerializeSizeResult ExtendedInitializerProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                            SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, encoded_value)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, paged_cache)
+  return size;
+}
+void ExtendedInitializerProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, encoded_value)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, paged_cache)
+}
+bool ExtendedInitializerProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, ExtendedInitializerProto)
+  READ_ONEOF_PROTO_FIELD(options, stream, encoded_value)
+  READ_ONEOF_PROTO_FIELD(options, stream, paged_cache)
+  READ_END(options, stream, ExtendedInitializerProto)
+  return true;
+}
+void ExtendedInitializerProto::PrintToStringStream(std::stringstream &ss,
+                                                   utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(encoded_value),
+                                 NAME_EXIST_VALUE(paged_cache));
+}
+
 // ValueInfoProto
 
 IMPLEMENT_PROTO(ValueInfoProto)
@@ -1913,8 +1948,7 @@ SerializeSizeResult GraphProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, value_info)
   SIZE_REPEATED_FIELD(size, options, stream, quantization_annotation)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
-  SIZE_REPEATED_FIELD(size, options, stream, encoded_initializer)
-  SIZE_REPEATED_FIELD(size, options, stream, paged_cache_initializer)
+  SIZE_REPEATED_FIELD(size, options, stream, extended_initializer)
   SIZE_REPEATED_FIELD(size, options, stream, persistent_bindings)
   return size;
 }
@@ -1930,8 +1964,7 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, value_info)
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
-  WRITE_REPEATED_FIELD(options, stream, encoded_initializer)
-  WRITE_REPEATED_FIELD(options, stream, paged_cache_initializer)
+  WRITE_REPEATED_FIELD(options, stream, extended_initializer)
   WRITE_REPEATED_FIELD(options, stream, persistent_bindings)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
@@ -1950,8 +1983,7 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, value_info)              //
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
-  READ_REPEATED_FIELD(options, stream, encoded_initializer)     //
-  READ_REPEATED_FIELD(options, stream, paged_cache_initializer) //
+  READ_REPEATED_FIELD(options, stream, extended_initializer)    //
   READ_REPEATED_FIELD(options, stream, persistent_bindings)     //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
   if (options.node_callback) {
@@ -1967,8 +1999,7 @@ void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions 
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
       NAME_EXIST_VALUE(initializer), NAME_EXIST_VALUE(sparse_initializer),
       NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(quantization_annotation),
-      NAME_EXIST_VALUE(encoded_initializer), NAME_EXIST_VALUE(persistent_bindings),
-      NAME_EXIST_VALUE(paged_cache_initializer));
+      NAME_EXIST_VALUE(extended_initializer), NAME_EXIST_VALUE(persistent_bindings));
 }
 
 // FunctionProto
@@ -2048,8 +2079,7 @@ SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream 
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
   SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
-  SIZE_REPEATED_FIELD(size, options, stream, removed_encoded_initializers)
-  SIZE_REPEATED_FIELD(size, options, stream, removed_paged_cache_initializers)
+  SIZE_REPEATED_FIELD(size, options, stream, removed_extended_initializers)
   return size;
 }
 void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2066,8 +2096,7 @@ void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, initializer_calls)
   WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
-  WRITE_REPEATED_FIELD(options, stream, removed_encoded_initializers)
-  WRITE_REPEATED_FIELD(options, stream, removed_paged_cache_initializers)
+  WRITE_REPEATED_FIELD(options, stream, removed_extended_initializers)
 }
 bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, LocalRewritingProto)
@@ -2083,8 +2112,7 @@ bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, initializer_calls)
   READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
-  READ_REPEATED_FIELD(options, stream, removed_encoded_initializers)
-  READ_REPEATED_FIELD(options, stream, removed_paged_cache_initializers)
+  READ_REPEATED_FIELD(options, stream, removed_extended_initializers)
   READ_END(options, stream, LocalRewritingProto)
   return true;
 }
@@ -2097,8 +2125,7 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
       NAME_EXIST_VALUE(value_renames), NAME_EXIST_VALUE(metadata_props),
       NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions),
-      NAME_EXIST_VALUE(removed_encoded_initializers),
-      NAME_EXIST_VALUE(removed_paged_cache_initializers));
+      NAME_EXIST_VALUE(removed_extended_initializers));
 }
 
 IMPLEMENT_PROTO(RewritingProto)
@@ -2945,8 +2972,7 @@ bool LocalRewritingProto::Equals(const LocalRewritingProto &right, std::string *
   COMPARE_FIELD(graph_path)
   COMPARE_FIELD(matched_nodes)
   COMPARE_FIELD(removed_initializers)
-  COMPARE_FIELD(removed_encoded_initializers)
-  COMPARE_FIELD(removed_paged_cache_initializers)
+  COMPARE_FIELD(removed_extended_initializers)
   COMPARE_FIELD(added_nodes)
   COMPARE_FIELD(added_nodes_positions)
   COMPARE_FIELD(added_initializers)
@@ -3057,8 +3083,7 @@ bool GraphProto::Equals(const GraphProto &right, std::string *difference) const 
   COMPARE_FIELD(value_info)
   COMPARE_FIELD(quantization_annotation)
   COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(encoded_initializer)
-  COMPARE_FIELD(paged_cache_initializer)
+  COMPARE_FIELD(extended_initializer)
   COMPARE_FIELD(persistent_bindings)
   return true;
 }
@@ -3099,6 +3124,15 @@ bool PagedCacheProto::Equals(const PagedCacheProto &right, std::string *differen
   COMPARE_FIELD(blocks)
   COMPARE_FIELD(name)
   COMPARE_FIELD(doc_string)
+  return true;
+}
+
+bool ExtendedInitializerProto::Equals(const ExtendedInitializerProto &right,
+                                      std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(encoded_value)
+  COMPARE_FIELD(paged_cache)
   return true;
 }
 

@@ -258,14 +258,9 @@ public:
   const std::string &MakeEncodedInitializer(const EncodedValueProto &value);
   /// Validates and appends a dedicated paged-cache initializer.
   const std::string &MakePagedCacheInitializer(const PagedCacheProto &value);
-  /// Returns paged-cache initializers in declaration order.
-  const utils::RepeatedProtoField<PagedCacheProto> &PagedCacheInitializers() const noexcept {
-    return paged_cache_initializers_;
-  }
-
-  /// Returns encoded initializers in declaration order.
-  const utils::RepeatedProtoField<EncodedValueProto> &EncodedInitializers() const noexcept {
-    return encoded_initializers_;
+  /// Returns encoded and paged-cache initializers in declaration order.
+  const utils::RepeatedProtoField<ExtendedInitializerProto> &ExtendedInitializers() const noexcept {
+    return extended_initializers_;
   }
 
   /// Builds and appends an initializer whose data lives in an external file.
@@ -893,8 +888,7 @@ private:
   utils::RepeatedProtoField<ValueInfoProto> value_infos_;
   utils::RepeatedProtoField<NodeProto> nodes_;
   utils::RepeatedProtoField<TensorProto> initializers_;
-  utils::RepeatedProtoField<EncodedValueProto> encoded_initializers_;
-  utils::RepeatedProtoField<PagedCacheProto> paged_cache_initializers_;
+  utils::RepeatedProtoField<ExtendedInitializerProto> extended_initializers_;
   ModelProto model_template_;
   GraphProto graph_template_;
   FunctionProto function_template_;

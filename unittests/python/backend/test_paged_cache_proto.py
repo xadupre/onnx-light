@@ -9,6 +9,7 @@ import unittest
 import numpy
 
 from onnx_light import onnx
+import onnx_light.onnx.checker as checker
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
@@ -49,7 +50,7 @@ def make_model():
         opset_imports=[oh.make_opsetid("", 18)],
         ir_version=10,
     )
-    model.graph.paged_cache_initializer.add().CopyFrom(make_cache())
+    model.graph.extended_initializer.add().paged_cache.CopyFrom(make_cache())
     binding = model.graph.persistent_bindings.add()
     binding.input_name = "past"
     binding.output_name = "present"
@@ -57,6 +58,14 @@ def make_model():
 
 
 class TestPagedCacheProto(unittest.TestCase):
+    def test_empty_initializer_payload_is_rejected(self):
+        model = make_model()
+        model.graph.extended_initializer[0].CopyFrom(onnx.ExtendedInitializerProto())
+        with self.assertRaisesRegex(ValueError, "payload"):
+            verify.verify_model(model)
+        with self.assertRaisesRegex(checker.ValidationError, "payload"):
+            checker.check_model(model)
+
     def test_dictionary_cache_with_layoutless_declaration(self):
         payload = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
         block = {
@@ -125,14 +134,14 @@ class TestPagedCacheProto(unittest.TestCase):
             numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2),
         )
         restored_model = make_model()
-        restored_model.graph.paged_cache_initializer[0].CopyFrom(cache)
-        restored_model.graph.paged_cache_initializer[0].name = "past"
+        restored_model.graph.extended_initializer[0].paged_cache.CopyFrom(cache)
+        restored_model.graph.extended_initializer[0].paged_cache.name = "past"
         restored = runtime.PersistentValueState(restored_model, {})
         self.assertEqual(len(restored.values["past"].blocks), 1)
 
     def test_invalid_cache_is_rejected_before_initialization(self):
         model = make_model()
-        model.graph.paged_cache_initializer[0].blocks[0].length = 3
+        model.graph.extended_initializer[0].paged_cache.blocks[0].length = 3
         with self.assertRaises(ValueError):
             verify.verify_model(model)
         with self.assertRaises(ValueError):
@@ -162,33 +171,33 @@ class TestPagedCacheProto(unittest.TestCase):
         self.assertEqual(len(state_session.run(context, {})["present"].blocks), 1)
 
     def test_text_export_rejects_cache_instead_of_dropping_it(self):
-        with self.assertRaisesRegex(TypeError, "paged_cache_initializer"):
+        with self.assertRaisesRegex(TypeError, "extended_initializer"):
             serialize_to_textproto(make_model())
 
     def test_builder_preserves_cache_and_legacy_composition_rejects_it(self):
         model = make_model()
         graph_builder = builder.GraphBuilder(model)
-        self.assertEqual(len(graph_builder.paged_cache_initializers()), 1)
+        self.assertEqual(len(graph_builder.extended_initializers()), 1)
         exported = graph_builder.to_model()
         self.assertEqual(
-            exported.graph.paged_cache_initializer[0].SerializeToString(),
-            model.graph.paged_cache_initializer[0].SerializeToString(),
+            exported.graph.extended_initializer[0].paged_cache.SerializeToString(),
+            model.graph.extended_initializer[0].paged_cache.SerializeToString(),
         )
         unused = make_cache()
         unused.name = "unused"
         graph_builder.make_paged_cache_initializer(unused)
-        self.assertEqual(len(graph_builder.paged_cache_initializers()), 2)
-        with self.assertRaisesRegex(ValueError, "paged cache"):
+        self.assertEqual(len(graph_builder.extended_initializers()), 2)
+        with self.assertRaisesRegex(ValueError, "extended initializer"):
             compose.add_prefix_graph(model.graph, "prefix_")
-        with self.assertRaisesRegex(ValueError, "paged cache"):
+        with self.assertRaisesRegex(ValueError, "extended initializer"):
             compose.merge_graphs(model.graph, model.graph, [])
 
     def test_ort_export_rejects_cache_instead_of_dropping_it(self):
         model = oh.make_model(oh.make_graph([], "cache", [], []))
-        model.graph.paged_cache_initializer.add().CopyFrom(make_cache())
+        model.graph.extended_initializer.add().paged_cache.CopyFrom(make_cache())
         options = onnx.SerializeOptions()
         options.format = onnx.SerializeFormat.ORT_FLATBUFFERS
-        with self.assertRaisesRegex((ValueError, RuntimeError), "paged cache"):
+        with self.assertRaisesRegex((ValueError, RuntimeError), "extended initializer"):
             model.SerializeToString(options=options)
 
 

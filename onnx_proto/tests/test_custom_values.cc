@@ -453,7 +453,7 @@ void AddExternalEntry(EncodedValueProto &value, const char *key, const std::stri
 /** Adds an encoded initializer referencing a catalogue identity. */
 EncodedValueProto *AddEncodedInitializer(GraphProto &graph, const char *name, uint64_t type_id,
                                          const std::string &payload) {
-  EncodedValueProto *value = graph.add_encoded_initializer();
+  EncodedValueProto *value = graph.add_extended_initializer()->mutable_encoded_value();
   value->set_name(name);
   value->ref_struct_type().set_type_ref(type_id);
   value->set_raw_data(payload);
@@ -510,8 +510,9 @@ TEST(custom_values, WireRoundTripModel) {
   EXPECT_EQ(parsed.ref_struct_types()[2].ref_metadata_props()[0].value(), "onnx-light");
 
   const GraphProto &parsed_graph = parsed.ref_graph();
-  ASSERT_EQ(parsed_graph.ref_encoded_initializer().size(), 2u);
-  const EncodedValueProto &parsed_blocks = parsed_graph.ref_encoded_initializer()[0];
+  ASSERT_EQ(parsed_graph.extended_initializer().size(), 2u);
+  const EncodedValueProto &parsed_blocks =
+      parsed_graph.ref_extended_initializer()[0].ref_encoded_value();
   EXPECT_EQ(parsed_blocks.name(), "blocks");
   EXPECT_EQ(parsed_blocks.layout_case(), EncodedValueProto::kStructType);
   EXPECT_EQ(parsed_blocks.ref_struct_type().ref_type_ref(), kInt4Block);
@@ -590,7 +591,7 @@ TEST(custom_values, PrintsStructuredFields) {
   const std::string text = stream.str();
   EXPECT_NE(text.find("struct_types"), std::string::npos);
   EXPECT_NE(text.find("Int4Block"), std::string::npos);
-  EXPECT_NE(text.find("encoded_initializer"), std::string::npos);
+  EXPECT_NE(text.find("extended_initializer"), std::string::npos);
   EXPECT_NE(text.find("type_ref"), std::string::npos);
 
   std::stringstream packing_stream;
@@ -796,7 +797,8 @@ TEST(custom_values, RejectsUnresolvedReferencesAndCycles) {
 
   ModelProto decorated_reference = MakeModel();
   DeclareInt4Block(decorated_reference);
-  EncodedValueProto *value = decorated_reference.ref_graph().add_encoded_initializer();
+  EncodedValueProto *value =
+      decorated_reference.ref_graph().add_extended_initializer()->mutable_encoded_value();
   value->set_name("w");
   value->ref_struct_type().set_type_ref(kInt4Block);
   value->ref_struct_type().set_name("not allowed on a reference");
@@ -1028,12 +1030,12 @@ TEST(custom_values, HeterogeneousKeyValueDeclarations) {
   catalogue.Build(model);
 
   const GraphProto &verified = model.ref_graph();
-  ASSERT_EQ(verified.ref_encoded_initializer().size(), 3u);
+  ASSERT_EQ(verified.extended_initializer().size(), 3u);
   const uint64_t expected_records[] = {4, 4, 4};
   const uint64_t expected_bits[] = {160, 160, 96};
   for (size_t i = 0; i < 3; ++i) {
     const EncodedValueLayout layout =
-        catalogue.ValidateEncodedValue(verified.ref_encoded_initializer()[i]);
+        catalogue.ValidateEncodedValue(verified.ref_extended_initializer()[i].ref_encoded_value());
     EXPECT_EQ(layout.record_count, expected_records[i]) << i;
     EXPECT_EQ(layout.element_bits, expected_bits[i]) << i;
   }
@@ -1043,7 +1045,7 @@ TEST(custom_values, HeterogeneousKeyValueDeclarations) {
   EXPECT_FALSE(catalogue.FixedBitSize(*catalogue.Find(kKeyValueCache), bits));
   EXPECT_NO_THROW(catalogue.ValidateType(MakeTypeRef(kKeyValueCache)));
 
-  EncodedValueView int8_view(catalogue, verified.ref_encoded_initializer()[1]);
+  EncodedValueView int8_view(catalogue, verified.ref_extended_initializer()[1].ref_encoded_value());
   EncodedFieldRef codes;
   ASSERT_TRUE(FindEncodedField(catalogue, *catalogue.Find(kInt8Block), "codes", codes));
   EXPECT_EQ(codes.count, 16u);
@@ -1057,7 +1059,7 @@ TEST(custom_values, HeterogeneousKeyValueDeclarations) {
 
 TEST(custom_values, AffineInt8PerTensor) {
   ModelProto model = MakeModel();
-  EncodedValueProto *value = model.ref_graph().add_encoded_initializer();
+  EncodedValueProto *value = model.ref_graph().add_extended_initializer()->mutable_encoded_value();
   value->set_name("affine_int8");
   AffineLayoutProto &affine = value->ref_affine();
   affine.set_storage_type(TensorProto::INT8);
@@ -1092,7 +1094,7 @@ TEST(custom_values, AffineInt8PerTensor) {
 
 TEST(custom_values, AffineInt4OddElementCountPadsTheLastNibble) {
   ModelProto model = MakeModel();
-  EncodedValueProto *value = model.ref_graph().add_encoded_initializer();
+  EncodedValueProto *value = model.ref_graph().add_extended_initializer()->mutable_encoded_value();
   value->set_name("affine_int4");
   AffineLayoutProto &affine = value->ref_affine();
   affine.set_storage_type(TensorProto::INT4);
@@ -1302,7 +1304,7 @@ TEST(custom_values, AffineCodeByteCountRejectsCeilOverflow) {
 TEST(custom_values, ExternalPayloadNeedsLocationAndExplicitLength) {
   ModelProto model = MakeModel();
   DeclareInt4Block(model);
-  EncodedValueProto *value = model.ref_graph().add_encoded_initializer();
+  EncodedValueProto *value = model.ref_graph().add_extended_initializer()->mutable_encoded_value();
   value->set_name("external_blocks");
   value->ref_struct_type().set_type_ref(kInt4Block);
   value->set_data_location(TensorProto::EXTERNAL);
@@ -1449,7 +1451,7 @@ TEST(custom_values, InlineLayoutsAndConstantOnlyStructs) {
   GraphProto &graph = model.ref_graph();
 
   // A concrete inline declaration is a valid encoded layout and owns no identity.
-  EncodedValueProto *inline_value = graph.add_encoded_initializer();
+  EncodedValueProto *inline_value = graph.add_extended_initializer()->mutable_encoded_value();
   inline_value->set_name("inline_blocks");
   StructTypeProto &declared = inline_value->ref_struct_type();
   AddField(declared.ref_structure(), "codes", MakeArrayType(TensorProto::INT8, 4));
@@ -1493,7 +1495,9 @@ TEST(custom_values, InlineLayoutsAndConstantOnlyStructs) {
   EXPECT_NE(reason.find("strictly positive"), std::string::npos) << reason;
   ASSERT_TRUE(catalogue.IsByteEncodable(*catalogue.Find(8002), bytes));
   EXPECT_EQ(bytes, 1u);
-  EXPECT_EQ(catalogue.ValidateEncodedValue(graph.ref_encoded_initializer()[1]).record_count, 4u);
+  EXPECT_EQ(catalogue.ValidateEncodedValue(graph.ref_extended_initializer()[1].ref_encoded_value())
+                .record_count,
+            4u);
 
   // A constant-only struct cannot root an encoded payload.
   ModelProto rejected = model;
@@ -1513,7 +1517,7 @@ TEST(custom_values, EncodedInitializersFeedTheGraphScope) {
   EXPECT_NO_THROW(VerifyModel(model));
 
   // Without a layout the value is invalid.
-  EncodedValueProto *broken = graph.add_encoded_initializer();
+  EncodedValueProto *broken = graph.add_extended_initializer()->mutable_encoded_value();
   broken->set_name("broken");
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
 
@@ -1866,7 +1870,8 @@ TEST(custom_values, ValidatesTypedAttributesFunctionsAndSubgraphs) {
   output->set_name("packed");
   AddEncodedInitializer(then_branch, "packed", kInt4Block, MakeInt4BlockPayload(1));
   EXPECT_NO_THROW(VerifyModel(subgraph_model));
-  then_branch.ref_encoded_initializer()[0].ref_struct_type().set_type_ref(424242);
+  then_branch.ref_extended_initializer()[0].ref_encoded_value().ref_struct_type().set_type_ref(
+      424242);
   EXPECT_THROW(VerifyModel(subgraph_model), std::invalid_argument);
 }
 

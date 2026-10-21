@@ -33,7 +33,7 @@ ModelProto StructuredModel() {
   auto *field = record->ref_structure().add_field();
   field->set_name("codes");
   field->ref_type().ref_struct_type().set_type_ref(uint64_t(1));
-  auto *init = model.ref_graph().ref_encoded_initializer().Add();
+  auto *init = model.ref_graph().add_extended_initializer()->mutable_encoded_value();
   init->set_name("encoded");
   init->ref_struct_type().set_type_ref(uint64_t(2));
   init->set_raw_data(std::string(4, '\1'));
@@ -137,7 +137,7 @@ TEST(StructuredInference, CatalogueAndValuesSurviveMove) {
     original.ComputeShapeModel(model);
     owned = std::move(original);
     model.ref_struct_types().Clear();
-    model.ref_graph().ref_encoded_initializer().Clear();
+    model.ref_graph().ref_extended_initializer().Clear();
   }
   const auto layout = owned.GetEncodedLayout("output");
   EXPECT_EQ(layout.root->ref_type_id(), 2u);
@@ -165,7 +165,7 @@ TEST(StructuredInference, RejectsInvalidReferencesAndPayloads) {
   TypeProto missing;
   missing.ref_struct_type().set_type_ref(uint64_t(42));
   EXPECT_THROW(context.SetType("bad", missing), std::invalid_argument);
-  auto encoded = model.graph().ref_encoded_initializer()[0];
+  auto encoded = model.graph().ref_extended_initializer()[0].ref_encoded_value();
   encoded.set_raw_data("x");
   EXPECT_THROW(context.SetEncodedValue("bad", encoded), std::invalid_argument);
   EXPECT_FALSE(context.HasType("bad"));
@@ -178,7 +178,7 @@ TEST(StructuredInference, RejectsInvalidReferencesAndPayloads) {
 TEST(StructuredInference, StructuredInputsAndUnsupportedTransforms) {
   auto model = StructuredModel();
   auto &graph = model.ref_graph();
-  graph.ref_encoded_initializer().Clear();
+  graph.ref_extended_initializer().Clear();
   auto *input = graph.add_input();
   input->set_name("encoded");
   input->ref_type().ref_struct_type().set_type_ref(uint64_t(2));
@@ -207,8 +207,8 @@ TEST(StructuredInference, IfPreservesInheritedEncodingAndRejectsMismatch) {
   context.ComputeShapeNode(IfNode(left, right));
   EXPECT_EQ(context.GetEncodedLayout("result").record_count, 2u);
   EXPECT_TRUE(context.GetType("result").has_struct_type());
-  auto *different = right.ref_encoded_initializer().Add();
-  *different = model.graph().ref_encoded_initializer()[0];
+  auto *different = right.add_extended_initializer()->mutable_encoded_value();
+  *different = model.graph().ref_extended_initializer()[0].ref_encoded_value();
   different->set_name("different");
   different->set_raw_data(std::string(4, '\2'));
   right.ref_node()[0].ref_input()[0] = "different";
@@ -499,7 +499,7 @@ TEST(StructuredInference, IfAndLoopPreserveNestedStructuredContainers) {
 TEST(StructuredInference, RejectsIncompatibleNestedStructuredOutputDeclaration) {
   auto model = StructuredModel();
   auto &graph = model.ref_graph();
-  graph.ref_encoded_initializer().Clear();
+  graph.ref_extended_initializer().Clear();
   auto *input = graph.add_input();
   input->set_name("encoded");
   input->ref_type().ref_sequence_type().ref_elem_type().ref_struct_type().set_type_ref(uint64_t(1));
@@ -558,9 +558,10 @@ TEST(StructuredInference, EncodedDefaultsPreservePublicTensorShapeAndValidatePay
   preseeded.ComputeShapeModel(model);
   EXPECT_EQ(preseeded.Get("output").Shape()[0].AsInt(), 12);
 
-  model.ref_graph().ref_encoded_initializer()[0].set_raw_data("x");
+  model.ref_graph().ref_extended_initializer()[0].ref_encoded_value().set_raw_data("x");
   EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
-  model.ref_graph().ref_encoded_initializer()[0].set_raw_data(std::string(4, '\1'));
+  model.ref_graph().ref_extended_initializer()[0].ref_encoded_value().set_raw_data(
+      std::string(4, '\1'));
   input->ref_type().ref_tensor_type().set_elem_type(TensorProto::INT64);
   EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
 }

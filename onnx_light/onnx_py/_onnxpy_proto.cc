@@ -2768,6 +2768,25 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   DECLARE_REPEATED_FIELD_PROTO(PagedCacheProto, rep_paged_cache);
   define_repeated_field_type_proto(rep_paged_cache, rep_paged_cache_proto);
 
+  PYDEFINE_PROTO(m, ExtendedInitializerProto)
+      .PYFIELD_OPTIONAL_PROTO(ExtendedInitializerProto, encoded_value)
+      .PYFIELD_OPTIONAL_PROTO(ExtendedInitializerProto, paged_cache)
+      .def(
+          "WhichOneof",
+          [](const ExtendedInitializerProto &self, const std::string &name) -> nb::object {
+            if (name != "value")
+              throw nb::value_error("ExtendedInitializerProto has no such oneof.");
+            if (self.has_encoded_value())
+              return nb::str("encoded_value");
+            if (self.has_paged_cache())
+              return nb::str("paged_cache");
+            return nb::none();
+          },
+          nb::arg("oneof_name"));
+  PYADD_PROTO_SERIALIZATION(ExtendedInitializerProto);
+  DECLARE_REPEATED_FIELD_PROTO(ExtendedInitializerProto, rep_extended_initializer);
+  define_repeated_field_type_proto(rep_extended_initializer, rep_extended_initializer_proto);
+
   auto bind_structured_presence = [](auto &cls) {
     cls.def(
         "HasField",
@@ -2790,6 +2809,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   bind_structured_presence(nb_EncodedValueProto);
   bind_structured_presence(nb_PagedCacheBlockProto);
   bind_structured_presence(nb_PagedCacheProto);
+  bind_structured_presence(nb_ExtendedInitializerProto);
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -3050,8 +3070,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_STR(GraphProto, name)
       .PYFIELD(GraphProto, initializer)
       .PYFIELD(GraphProto, sparse_initializer)
-      .PYFIELD(GraphProto, encoded_initializer)
-      .PYFIELD(GraphProto, paged_cache_initializer)
+      .PYFIELD(GraphProto, extended_initializer)
       .PYFIELD(GraphProto, persistent_bindings)
       .PYFIELD_STR(GraphProto, doc_string)
       .PYFIELD(GraphProto, input)
@@ -3074,10 +3093,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_initializer();
             if (field_name == "sparse_initializer")
               return self.has_sparse_initializer();
-            if (field_name == "encoded_initializer")
-              return self.has_encoded_initializer();
-            if (field_name == "paged_cache_initializer")
-              return self.has_paged_cache_initializer();
+            if (field_name == "extended_initializer")
+              return self.has_extended_initializer();
             if (field_name == "input")
               return self.has_input();
             if (field_name == "output")
@@ -3244,8 +3261,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(LocalRewritingProto, graph_path)
       .PYFIELD(LocalRewritingProto, matched_nodes)
       .PYFIELD(LocalRewritingProto, removed_initializers)
-      .PYFIELD(LocalRewritingProto, removed_encoded_initializers)
-      .PYFIELD(LocalRewritingProto, removed_paged_cache_initializers)
+      .PYFIELD(LocalRewritingProto, removed_extended_initializers)
       .PYFIELD(LocalRewritingProto, added_nodes)
       .PYFIELD(LocalRewritingProto, added_nodes_positions)
       .PYFIELD(LocalRewritingProto, added_initializers)

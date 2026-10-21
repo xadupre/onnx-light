@@ -170,7 +170,7 @@ void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
     break;
   }
   case PrivateValueKind::kEncodedInitializer: {
-    EncodedValueProto *initializer = graph.add_encoded_initializer();
+    EncodedValueProto *initializer = graph.add_extended_initializer()->mutable_encoded_value();
     initializer->set_name(name);
     auto *tensor = initializer->mutable_logical_type()->mutable_tensor_type();
     tensor->set_elem_type(TensorProto::FLOAT);
@@ -185,7 +185,7 @@ void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
     break;
   }
   case PrivateValueKind::kPagedCacheInitializer: {
-    PagedCacheProto *initializer = graph.add_paged_cache_initializer();
+    PagedCacheProto *initializer = graph.add_extended_initializer()->mutable_paged_cache();
     initializer->set_name(name);
     auto *block = initializer->add_blocks();
     block->set_start(0);
@@ -904,7 +904,7 @@ TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
                                   {"cache", TensorProto::FLOAT}},
                                  "inputs_embeds");
   auto *graph = embedding.mutable_graph();
-  auto *weights = graph->add_encoded_initializer();
+  auto *weights = graph->add_extended_initializer()->mutable_encoded_value();
   weights->set_name("weights");
   auto *logical = weights->mutable_logical_type()->mutable_tensor_type();
   logical->set_elem_type(TensorProto::FLOAT);
@@ -917,7 +917,7 @@ TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
   affine->mutable_zero_point()->add_int32_data(0);
   weights->set_raw_data(std::string(1, '\2'));
   *graph->mutable_input(1)->mutable_type() = weights->logical_type();
-  auto *cache = graph->add_paged_cache_initializer();
+  auto *cache = graph->add_extended_initializer()->mutable_paged_cache();
   cache->set_name("cache");
   auto *block = cache->add_blocks();
   block->set_start(0);

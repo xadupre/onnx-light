@@ -41,6 +41,7 @@ digraph protos {
         IntIntListEntryProto;
         SimpleShardedDimProto;
         PersistentBindingProto;
+        ExtendedInitializerProto;
 
         subgraph cluster_quantization {
             label="Quantization";
@@ -100,9 +101,10 @@ digraph protos {
     GraphProto -> ValueInfoProto [label="input, output, value_info"];
     GraphProto -> TensorAnnotation [label="quantization_annotation"];
     GraphProto -> StringStringEntryProto [label="metadata_props"];
-    GraphProto -> EncodedValueProto [label="encoded_initializer"];
+    GraphProto -> ExtendedInitializerProto [label="extended_initializer"];
+    ExtendedInitializerProto -> EncodedValueProto [label="encoded_value"];
+    ExtendedInitializerProto -> PagedCacheProto [label="paged_cache"];
     GraphProto -> PersistentBindingProto [label="persistent_bindings"];
-    GraphProto -> PagedCacheProto [label="paged_cache_initializer"];
 
     PagedCacheProto -> PagedCacheBlockProto [label="blocks"];
     PagedCacheBlockProto -> TensorProto [label="key, value"];

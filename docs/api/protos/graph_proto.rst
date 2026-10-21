@@ -2,6 +2,25 @@
 GraphProto
 ==========
 
+Extended initializers
+=====================
+
+``extended_initializer`` (extension field 1000) is a repeated
+:doc:`extended_initializer_proto`. Each entry selects either an
+``EncodedValueProto`` or a ``PagedCacheProto`` through its ``value`` oneof.
+Payload names must be nonempty and unique across all initializer categories.
+The standard ONNX ``initializer`` and ``sparse_initializer`` fields are unchanged.
+
+This format replaces the former separate ``encoded_initializer`` (1000) and
+``paged_cache_initializer`` (1002) extensions. Existing files using those
+extensions must be regenerated; their old wire format is not supported.
+Standard ONNX readers still understand the standard fields, but cannot execute
+graphs that depend on these onnx-light extension payloads.
+
+``GraphBuilder.extended_initializers()`` returns the unified collection in
+declaration order. ``make_encoded_initializer`` and
+``make_paged_cache_initializer`` remain the typed construction methods.
+
 .. autoclass:: onnx_light.onnx.GraphProto
     :members:
 

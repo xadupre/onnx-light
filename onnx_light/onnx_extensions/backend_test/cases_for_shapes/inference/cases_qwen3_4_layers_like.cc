@@ -164,7 +164,7 @@ void ConvertQwenToPagedCache(ModelProto &model) {
     auto *output = graph.add_output();
     output->set_name(present);
     *output->mutable_type() = QwenPagedCacheType();
-    graph.add_paged_cache_initializer()->set_name(cache);
+    graph.add_extended_initializer()->mutable_paged_cache()->set_name(cache);
     auto *binding = graph.add_persistent_bindings();
     binding->set_input_name(cache);
     binding->set_output_name(present);

@@ -1745,10 +1745,7 @@ void CountPersistentInputUses(const GraphProto &graph,
     for (const auto &initializer : graph.sparse_initializer()) {
       shadow(initializer.values().name());
     }
-    for (const auto &initializer : graph.encoded_initializer()) {
-      shadow(initializer.name());
-    }
-    for (const auto &initializer : graph.paged_cache_initializer()) {
+    for (const auto &initializer : graph.extended_initializer()) {
       shadow(initializer.name());
     }
     for (const auto &node : graph.node()) {
@@ -1933,21 +1930,19 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
     register_initializer(name);
     VerifySparseTensor(sparse_init);
   }
-  for (const auto &encoded : graph.encoded_initializer()) {
-    EXT_ENFORCE_INVALID(!encoded.name().empty(), "Graph '", graph.name(),
-                        "' has an encoded initializer without a name.");
-    EXT_ENFORCE_INVALID(initializer_names.insert(ToStdString(encoded.name())).second, "Graph '",
-                        graph.name(), "' encoded initializer '", encoded.name(),
-                        "' is not unique across initializers, sparse_initializers and "
-                        "encoded_initializers.");
-    register_initializer(encoded.name());
-    catalogue.ValidateEncodedValue(encoded, /*require_resolved_reference=*/struct_types != nullptr);
-  }
-  for (const auto &cache : graph.paged_cache_initializer()) {
-    EXT_ENFORCE_INVALID(
-        !cache.name().empty() && initializer_names.insert(ToStdString(cache.name())).second,
-        "Graph '", graph.name(), "' has an empty or duplicate paged cache initializer name.");
-    register_initializer(cache.name());
+  for (const auto &initializer : graph.extended_initializer()) {
+    EXT_ENFORCE_INVALID(initializer.has_value(), "Graph '", graph.name(),
+                        "' has an extended initializer without a payload.");
+    EXT_ENFORCE_INVALID(!initializer.name().empty() &&
+                            initializer_names.insert(ToStdString(initializer.name())).second,
+                        "Graph '", graph.name(),
+                        "' has an empty or duplicate extended initializer name.");
+    register_initializer(initializer.name());
+    if (initializer.has_encoded_value()) {
+      catalogue.ValidateEncodedValue(initializer.encoded_value(), struct_types != nullptr);
+      continue;
+    }
+    const auto &cache = initializer.paged_cache();
     const auto input = std::find_if(graph.input().begin(), graph.input().end(),
                                     [&](const auto &vi) { return vi.name() == cache.name(); });
     catalogue.ValidatePagedCache(cache, struct_types != nullptr,

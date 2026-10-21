@@ -1,5 +1,6 @@
 digraph protos {
     rankdir=TB;
+    ratio=2;
     nodesep=0.5;
     ranksep=0.7;
     node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];

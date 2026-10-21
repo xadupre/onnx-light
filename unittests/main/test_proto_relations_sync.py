@@ -137,6 +137,11 @@ class TestProtoRelationsSync(ExtTestCase):
         }
         self.assertSetEqual(typed, groups["cluster_types"])
 
+    def test_svg_portrait_layout(self):
+        svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
+        _, _, width, height = map(float, svg.getroot().attrib["viewBox"].split())
+        self.assertGreater(height, width)
+
     def test_svg_matches_dot(self):
         svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
         namespace = {"svg": "http://www.w3.org/2000/svg"}

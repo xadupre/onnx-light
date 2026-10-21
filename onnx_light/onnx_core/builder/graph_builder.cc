@@ -3841,7 +3841,8 @@ GraphBuilder::InsertNodesInDependencyOrder(const utils::RepeatedProtoField<NodeP
       }
     }
   }
-  std::vector<bool> moving(count, false);
+  enum class VisitState { Unvisited, Active, Processed };
+  std::vector<VisitState> moving(count, VisitState::Unvisited);
   // Inserts new producers before existing consumers whenever their inputs
   // permit it, rather than moving those consumers past unrelated nodes.
   for (std::size_t index = 0; index < count; ++index) {
@@ -3878,26 +3879,39 @@ GraphBuilder::InsertNodesInDependencyOrder(const utils::RepeatedProtoField<NodeP
     }
     // Delays only the blocked consumer and its affected consumers. Independent
     // nodes retain their relative order, even inside the insertion interval.
-    std::vector<std::size_t> pending{consumer};
-    moving[consumer] = true;
-    for (std::size_t next = 0; next < pending.size(); ++next) {
-      for (const auto dependent : consumers[pending[next]]) {
-        if (positions[dependent] >= position && positions[dependent] <= last &&
-            !moving[dependent]) {
-          moving[dependent] = true;
-          pending.push_back(dependent);
-        }
+    // Active visits detect internal cycles; processed visits allow shared consumers.
+    std::vector<std::pair<std::size_t, std::size_t>> pending{{consumer, 0}};
+    std::size_t moving_count = 1;
+    moving[consumer] = VisitState::Active;
+    while (!pending.empty()) {
+      auto &[current, next] = pending.back();
+      if (next == consumers[current].size()) {
+        moving[current] = VisitState::Processed;
+        pending.pop_back();
+        continue;
+      }
+      const auto dependent = consumers[current][next++];
+      if (positions[dependent] < position || positions[dependent] > last) {
+        continue;
+      }
+      if (moving[dependent] == VisitState::Active) {
+        throw BuilderError("GraphBuilder: cyclic node dependencies.");
+      }
+      if (moving[dependent] == VisitState::Unvisited) {
+        moving[dependent] = VisitState::Active;
+        ++moving_count;
+        pending.emplace_back(dependent, 0);
       }
     }
-    if (moving[order[last]]) {
+    if (moving[order[last]] != VisitState::Unvisited) {
       throw BuilderError("GraphBuilder: cyclic node dependencies.");
     }
     std::vector<std::size_t> delayed;
-    delayed.reserve(pending.size());
+    delayed.reserve(moving_count);
     std::size_t destination = position;
     for (std::size_t source = position; source <= last; ++source) {
       const auto index = order[source];
-      if (moving[index]) {
+      if (moving[index] != VisitState::Unvisited) {
         delayed.push_back(index);
       } else {
         order[destination++] = index;
@@ -3905,7 +3919,7 @@ GraphBuilder::InsertNodesInDependencyOrder(const utils::RepeatedProtoField<NodeP
     }
     for (const auto index : delayed) {
       order[destination++] = index;
-      moving[index] = false;
+      moving[index] = VisitState::Unvisited;
     }
     for (std::size_t index = position; index <= last; ++index) {
       positions[order[index]] = index;

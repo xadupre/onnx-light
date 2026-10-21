@@ -29,6 +29,30 @@ using ONNX_LIGHT_NAMESPACE::ScopedFd;
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Test {
 
+TEST(CHECKER, RejectsUnknownTensorDataType) {
+  checker::CheckerContext ctx;
+  for (int dtype : {-1, 999}) {
+    SCOPED_TRACE(dtype);
+    TensorProto tensor;
+    tensor.set_name("t");
+    tensor.set_data_type(dtype);
+    tensor.add_dims(1);
+    tensor.set_raw_data(std::string(1, '\0'));
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+
+    tensor.clear_raw_data();
+    tensor.ref_dims()[0] = 0;
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+
+    tensor.ref_dims()[0] = 1;
+    tensor.set_data_location(TensorProto::EXTERNAL);
+    auto *location = tensor.add_external_data();
+    location->set_key("location");
+    location->set_value("#in-memory");
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  }
+}
+
 TEST(CHECKER, ValidDataLocationTest) {
 #ifndef ONNX_NO_EXCEPTIONS
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location("localfolder", "..",

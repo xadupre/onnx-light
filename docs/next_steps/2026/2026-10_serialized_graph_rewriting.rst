@@ -27,6 +27,19 @@ running the matcher. Matched and removed positions refer to the graph
 immediately before each edit; added positions describe its result. Internal
 optimizer batches are normalized to this sequential coordinate system. Later
 edits may consume nodes created by earlier ones.
+Normalization keeps an indexed live order and materializes the final sequence
+once. Retained nodes displaced across other retained nodes are explicitly
+recorded in the edit, so replay preserves subsequent positional coordinates.
+These records own snapshots of displaced nodes, independent of later cleanup
+and mutations of the live builder.
+Every rewrite immediately maintains dependency-consistent node order, shapes,
+and compute annotations. Coordinates refer to that actual order, so the returned
+builder can receive another plan, including an empty plan, without exporting first.
+New producers are inserted before existing consumers whenever their own inputs
+permit it. Otherwise, only blocked consumers and their affected consumers are
+displaced. Independent retained nodes keep their relative order. Mutations do
+not topologically sort the graph, and export only uses that fallback if a
+dependency-order violation is actually detected.
 
 The two rewrite messages support binary serialization and Python bindings.
 Records contain a diagnostic pattern name, not a live pattern pointer or

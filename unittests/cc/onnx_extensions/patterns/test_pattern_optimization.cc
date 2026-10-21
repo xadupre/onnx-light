@@ -781,6 +781,23 @@ TEST(PatternOptimization, UpdatesOnlyAffectedShapesAndRefreshesRemovedLastUses) 
   }
 }
 
+TEST(PatternOptimization, OptimizerDoesNotReinferUnaffectedShapes) {
+  auto original = PreparationModel();
+  core::builder::GraphBuilder builder(original, SchemaLookup());
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Abs", {"X"}, {"unchanged"});
+  builder.MakeOutput("unchanged");
+  ScopedAbsShapeCounter counter;
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<CountingFastOpTypePattern>()});
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  EXPECT_FALSE(optimizer.Optimize(1, nullptr, options).rewrites().empty());
+  EXPECT_EQ(counter.calls, 0u);
+  EXPECT_EQ(builder.GetShape("unchanged"), builder.GetShape("X"));
+}
+
 TEST(PatternOptimization, PreservesDeclaredTagsWhenRenamingToInputs) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
   ValueInfoProto input;

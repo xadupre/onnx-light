@@ -868,13 +868,11 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
 bool GraphBuilder::RefreshDependentNodes(
     const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
         &is_affected,
-    std::unordered_set<std::string> &affected_values, bool propagate_to_parent,
-    const std::vector<std::size_t> *node_order) {
+    std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
   bool affected = false;
   std::map<std::size_t, std::vector<std::string>> refreshed_references;
   const auto declarations = StructuredDeclarations(value_infos_);
-  for (std::size_t position = 0; position < nodes_.size(); ++position) {
-    const std::size_t index = node_order == nullptr ? position : node_order->at(position);
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
     const bool directly_affected = is_affected(stored, affected_values);
     if (!directly_affected && affected_values.empty()) {
@@ -982,10 +980,30 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     CollectNodeReferences(nodes_[index], references[index]);
   }
-  const auto order = TopologicalNodeOrder(nodes_, available, references);
   const auto old_count = compute_.Size();
-  for (std::size_t index : order) {
-    if (old_indices[index] == old_count ||
+  std::vector<bool> added(nodes_.size());
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    added[index] = old_indices[index] == old_count;
+  }
+  auto order = InsertNodesInDependencyOrder(nodes_, available, references, added);
+  auto inserted_indices = old_indices;
+  if (!order.empty()) {
+    utils::RepeatedProtoField<NodeProto> inserted;
+    inserted.reserve(nodes_.size());
+    std::vector<std::vector<std::string>> inserted_references;
+    inserted_references.reserve(nodes_.size());
+    for (std::size_t position = 0; position < order.size(); ++position) {
+      const auto index = order[position];
+      inserted.add();
+      inserted.get(position) = nodes_.shared_at(index);
+      inserted_indices[position] = old_indices[index];
+      inserted_references.push_back(std::move(references[index]));
+    }
+    nodes_ = std::move(inserted);
+    references = std::move(inserted_references);
+  }
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    if (inserted_indices[index] == old_count ||
         std::any_of(references[index].begin(), references[index].end(),
                     [&](const auto &name) { return affected_values.count(name) != 0; })) {
       for (const auto &output : nodes_[index].output()) {
@@ -995,7 +1013,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
       }
     }
   }
-  compute_.UpdateNodes(nodes_, old_indices, references, affected_values, device_);
+  compute_.UpdateNodes(nodes_, inserted_indices, references, affected_values, device_);
   auto &shapes = compute_.Shapes();
   for (const auto &name : affected_values) {
     if (parent_ != nullptr && inherited_names_.count(name) != 0) {
@@ -1045,7 +1063,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
         return std::any_of(node.output().begin(), node.output().end(),
                            [&](const auto &name) { return affected_values.count(name) != 0; });
       },
-      affected_values, /*propagate_to_parent=*/false, &order);
+      affected_values, /*propagate_to_parent=*/false);
   for (const auto &child : subgraphs_) {
     std::unordered_set<std::string> captures;
     child->CollectImplicitInputs(captures);
@@ -3026,7 +3044,30 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
 std::size_t
 GraphBuilder::ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs) {
-  return ConstantFoldImpl(options, &included_outputs);
+  std::unordered_map<const NodeProto *, std::size_t> indices;
+  std::vector<std::shared_ptr<NodeProto>> original_nodes;
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    indices.emplace(&nodes_[index], index);
+    original_nodes.push_back(nodes_.shared_at(index));
+  }
+  const auto initializer_count = initializers_.size();
+  const auto removed = ConstantFoldImpl(options, &included_outputs);
+  if (removed != 0) {
+    std::vector<std::size_t> old_indices;
+    std::unordered_set<const NodeProto *> retained;
+    for (const auto &node : nodes_) {
+      old_indices.push_back(indices.at(&node));
+      retained.insert(&node);
+    }
+    for (const auto &node : original_nodes)
+      if (retained.count(node.get()) == 0)
+        compute_.Shapes().EraseNodeConstraints(*node);
+    std::unordered_set<std::string> affected_values;
+    for (std::size_t index = initializer_count; index < initializers_.size(); ++index)
+      affected_values.insert(initializers_[index].name().value());
+    RefreshAfterRewriting(old_indices, std::move(affected_values));
+  }
+  return removed;
 }
 
 std::size_t
@@ -3140,7 +3181,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
     }
     if (!candidate) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3160,7 +3202,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // only folded when the caller opts in, so they can be deferred to a final
     // pass.
     if (!is_shape_result && !options.fold_weights) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3180,7 +3223,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
                            op_type + "' in domain '" + normalised_domain +
                            "', but no runtime kernel is registered.");
       }
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3215,7 +3259,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
     }
     if (!within_threshold) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3687,20 +3732,29 @@ void GraphBuilder::SortNodesTopologically() {
   std::vector<std::vector<std::string>> references(nodes_.size());
   for (std::size_t i = 0; i < nodes_.size(); ++i)
     CollectNodeReferences(nodes_[i], references[i]);
-  const auto order = TopologicalNodeOrder(nodes_, available, references);
+  auto defined = available;
   bool reordered = false;
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
-    if (order[i] != i) {
+    if (std::any_of(references[i].begin(), references[i].end(),
+                    [&](const auto &name) { return defined.count(name) == 0; })) {
       reordered = true;
       break;
     }
+    for (const auto &output : nodes_[i].output()) {
+      if (!output.empty() && !defined.insert(output.value()).second) {
+        throw BuilderError("GraphBuilder: multiple definitions of '" + output.value() + "'.");
+      }
+    }
   }
-  utils::RepeatedProtoField<NodeProto> sorted;
-  sorted.reserve(nodes_.size());
-  for (std::size_t i : order) {
-    sorted.push_back(std::move(nodes_[i]));
+  if (reordered) {
+    const auto order = TopologicalNodeOrder(nodes_, available, references);
+    utils::RepeatedProtoField<NodeProto> sorted;
+    sorted.reserve(nodes_.size());
+    for (std::size_t i : order) {
+      sorted.push_back(std::move(nodes_[i]));
+    }
+    nodes_ = std::move(sorted);
   }
-  nodes_ = std::move(sorted);
   for (const NodeProto &node : nodes_) {
     for (GraphBuilder *child : ReferencedSubgraphs(node)) {
       child->inherited_names_ = available;
@@ -3713,6 +3767,127 @@ void GraphBuilder::SortNodesTopologically() {
   if (reordered) {
     RebuildMetadata();
   }
+}
+
+std::vector<std::size_t>
+GraphBuilder::InsertNodesInDependencyOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                           const std::unordered_set<std::string> &available,
+                                           const std::vector<std::vector<std::string>> &references,
+                                           const std::vector<bool> &added) {
+  const std::size_t count = nodes.size();
+  auto defined = available;
+  bool needs_insertion = false;
+  for (std::size_t index = 0; index < count; ++index) {
+    if (std::any_of(references[index].begin(), references[index].end(),
+                    [&](const auto &name) { return defined.count(name) == 0; })) {
+      needs_insertion = true;
+      break;
+    }
+    for (const auto &output : nodes[index].output()) {
+      if (!output.empty() && !defined.insert(output.value()).second) {
+        throw BuilderError("GraphBuilder: multiple definitions of '" + output.value() + "'.");
+      }
+    }
+  }
+  if (!needs_insertion) {
+    return {};
+  }
+  std::vector<std::size_t> order(count), positions(count);
+  std::iota(order.begin(), order.end(), 0);
+  std::iota(positions.begin(), positions.end(), 0);
+  std::unordered_map<std::string, std::size_t> producers;
+  for (std::size_t index = 0; index < count; ++index) {
+    for (const auto &output : nodes[index].output()) {
+      if (!output.empty() && (available.count(output.value()) != 0 ||
+                              !producers.emplace(output.value(), index).second)) {
+        throw BuilderError("GraphBuilder: multiple definitions of '" + output.value() + "'.");
+      }
+    }
+  }
+  std::vector<std::vector<std::size_t>> dependencies(count), consumers(count);
+  for (std::size_t index = 0; index < count; ++index) {
+    for (const auto &input : references[index]) {
+      const auto producer = producers.find(input);
+      if (producer != producers.end()) {
+        dependencies[index].push_back(producer->second);
+        consumers[producer->second].push_back(index);
+      } else if (available.count(input) == 0) {
+        throw BuilderError("GraphBuilder: node '" + nodes[index].op_type().value() +
+                           "' reads the unknown value '" + input + "'.");
+      }
+    }
+  }
+  std::vector<bool> moving(count, false);
+  // Inserts new producers before existing consumers whenever their inputs
+  // permit it, rather than moving those consumers past unrelated nodes.
+  for (std::size_t index = 0; index < count; ++index) {
+    if (!added[index]) {
+      continue;
+    }
+    std::size_t first = positions[index];
+    for (const auto consumer : consumers[index]) {
+      first = std::min(first, positions[consumer]);
+    }
+    if (first == positions[index] ||
+        std::any_of(dependencies[index].begin(), dependencies[index].end(),
+                    [&](const auto producer) { return positions[producer] >= first; })) {
+      continue;
+    }
+    const auto last = positions[index];
+    std::move_backward(order.begin() + first, order.begin() + last, order.begin() + last + 1);
+    order[first] = index;
+    for (std::size_t position = first; position <= last; ++position) {
+      positions[order[position]] = position;
+    }
+  }
+  for (std::size_t position = count; position-- > 0;) {
+    const auto consumer = order[position];
+    std::size_t last = position;
+    for (const auto producer : dependencies[consumer]) {
+      if (producer == consumer) {
+        throw BuilderError("GraphBuilder: cyclic node dependencies.");
+      }
+      last = std::max(last, positions[producer]);
+    }
+    if (last == position) {
+      continue;
+    }
+    // Delays only the blocked consumer and its affected consumers. Independent
+    // nodes retain their relative order, even inside the insertion interval.
+    std::vector<std::size_t> pending{consumer};
+    moving[consumer] = true;
+    for (std::size_t next = 0; next < pending.size(); ++next) {
+      for (const auto dependent : consumers[pending[next]]) {
+        if (positions[dependent] >= position && positions[dependent] <= last &&
+            !moving[dependent]) {
+          moving[dependent] = true;
+          pending.push_back(dependent);
+        }
+      }
+    }
+    if (moving[order[last]]) {
+      throw BuilderError("GraphBuilder: cyclic node dependencies.");
+    }
+    std::vector<std::size_t> delayed;
+    delayed.reserve(pending.size());
+    std::size_t destination = position;
+    for (std::size_t source = position; source <= last; ++source) {
+      const auto index = order[source];
+      if (moving[index]) {
+        delayed.push_back(index);
+      } else {
+        order[destination++] = index;
+      }
+    }
+    for (const auto index : delayed) {
+      order[destination++] = index;
+      moving[index] = false;
+    }
+    for (std::size_t index = position; index <= last; ++index) {
+      positions[order[index]] = index;
+    }
+  }
+  return order;
 }
 
 std::vector<std::size_t>

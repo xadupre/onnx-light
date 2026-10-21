@@ -301,6 +301,103 @@ TEST(onnx_defs, Parser_AttrList_Basic) {
   EXPECT_EQ(attrs[1].ref_name(), "w");
 }
 
+TEST(onnx_defs, Parser_RejectsExcessivelyNestedTypes) {
+  for (const std::string wrapper : {"seq(", "optional(", "map(int32,"}) {
+    std::string type = "float";
+    for (int i = 0; i < 99; ++i) {
+      type = wrapper + type + ")";
+    }
+
+    TypeProto parsed_type;
+    ParseIt(parsed_type, type);
+
+    AttributeProto attr;
+    ParseIt(attr, "type = " + type);
+    FunctionProto function;
+    ParseIt(function,
+            "f <type = " + type + "> (" + type + " x) => (" + type + " y) <" + type + " z> {}");
+
+    type = wrapper + type + ")";
+    TypeProto excessive_type;
+    auto status = OnnxParser::Parse(excessive_type, type);
+    EXPECT_FALSE(status.IsOK());
+    EXPECT_NE(status.ErrorMessage().find("Maximum parser recursion depth of 100 exceeded."),
+              std::string::npos);
+  }
+}
+
+TEST(onnx_defs, Parser_RejectsExcessivelyNestedGraphs) {
+  std::string graph = "g () => () {}";
+  for (int i = 0; i < 99; ++i) {
+    graph = "g () => () { = Op <body = " + graph + "> () }";
+  }
+
+  GraphProto parsed_graph;
+  ParseIt(parsed_graph, graph);
+
+  NodeProto node;
+  ParseIt(node, "= Op <body = " + graph + "> ()");
+  NodeProto node_with_trailing_attributes;
+  ParseIt(node_with_trailing_attributes, "= Op () <body = " + graph + ">");
+  FunctionProto function;
+  std::string function_text =
+      "f <body = " + graph + "> () => () { = Op <body = " + graph + "> () }";
+  ParseIt(function, function_text);
+  ModelProto model;
+  ParseIt(model, graph + " " + function_text);
+
+  graph = "g () => () { = Op <body = " + graph + "> () }";
+  GraphProto excessive_graph;
+  auto status = OnnxParser::Parse(excessive_graph, graph);
+  EXPECT_FALSE(status.IsOK());
+  EXPECT_NE(status.ErrorMessage().find("Maximum parser recursion depth of 100 exceeded."),
+            std::string::npos);
+}
+
+TEST(onnx_defs, Parser_SharesRecursionDepthBetweenGraphsAndTypes) {
+  std::string type = "float";
+  for (int i = 0; i < 98; ++i) {
+    type = "seq(" + type + ")";
+  }
+
+  GraphProto parsed_graph;
+  ParseIt(parsed_graph, "g (" + type + " x) => (" + type + " y) <" + type + " z> {}");
+
+  type = "seq(" + type + ")";
+  GraphProto excessive_graph;
+  auto status = OnnxParser::Parse(excessive_graph, "g (" + type + " x) => () {}");
+  EXPECT_FALSE(status.IsOK());
+  EXPECT_NE(status.ErrorMessage().find("Maximum parser recursion depth"), std::string::npos);
+}
+
+TEST(onnx_defs, Parser_RestoresRecursionDepth) {
+  std::string type = "float";
+  for (int i = 0; i < 99; ++i) {
+    type = "seq(" + type + ")";
+  }
+  std::string input = type + " " + type;
+  OnnxParser parser(input);
+  TypeProto first, second;
+  ASSERT_TRUE(parser.Parse(first).IsOK());
+  ASSERT_TRUE(parser.Parse(second).IsOK());
+  EXPECT_TRUE(parser.EndOfInput());
+
+  input = "seq(" + type + ")";
+  OnnxParser failing_parser(input);
+  failing_parser.SavePos();
+  TypeProto excessive_type;
+  auto status = failing_parser.Parse(excessive_type);
+  ASSERT_FALSE(status.IsOK());
+  ASSERT_NE(status.ErrorMessage().find("Maximum parser recursion depth"), std::string::npos);
+  failing_parser.RestorePos();
+  ASSERT_TRUE(failing_parser.Matches('s'));
+  ASSERT_TRUE(failing_parser.Matches('e'));
+  ASSERT_TRUE(failing_parser.Matches('q'));
+  ASSERT_TRUE(failing_parser.Matches('('));
+  TypeProto recovered_type;
+  EXPECT_TRUE(failing_parser.Parse(recovered_type).IsOK());
+}
+
 TEST(onnx_defs, Parser_NodeProto_Basic) {
   NodeProto n;
   ParseIt(n, "x = foo(y, z)");
@@ -907,6 +1004,26 @@ f (y, z) => (w)
   EXPECT_EQ(fn.ref_output().size(), 1u);
   EXPECT_EQ(fn.ref_node().size(), 2u);
   EXPECT_EQ(fn.ref_opset_import().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_FunctionProto_RejectsInvalidAttributeDefault) {
+  FunctionProto fn;
+  auto status = OnnxParser::Parse(fn, "f <a: int = 1.0> () => () {}");
+  ASSERT_FALSE(status.IsOK());
+  EXPECT_NE(status.ErrorMessage().find("Mismatch between expected attribute type"),
+            std::string::npos);
+}
+
+TEST(onnx_defs, Parser_FunctionProto_AttributeDefault) {
+  FunctionProto fn;
+  ParseIt(fn, "f <required, a: int = 1> () => () {}");
+  ASSERT_EQ(fn.ref_attribute().size(), 1u);
+  EXPECT_EQ(fn.ref_attribute()[0], "required");
+  ASSERT_EQ(fn.ref_attribute_proto().size(), 1u);
+  const auto &attr = fn.ref_attribute_proto()[0];
+  EXPECT_EQ(attr.ref_name(), "a");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::INT);
+  EXPECT_EQ(attr.ref_i(), int64_t{1});
 }
 
 TEST(onnx_defs, Parser_FunctionProto_ValueInfo) {

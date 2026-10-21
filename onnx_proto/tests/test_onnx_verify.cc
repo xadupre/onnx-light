@@ -1,5 +1,6 @@
 #include "onnx_verify.h"
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -837,6 +838,34 @@ TEST(onnx_verify, VerifyTensor_Packed2BitInt32DataTooSmall) {
     ok.add_int32_data(0);
     ok.add_int32_data(0);
     EXPECT_NO_THROW(VerifyTensor(ok));
+  }
+}
+
+TEST(onnx_verify, VerifyTensor_PackedInt32DataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    TensorProto tensor;
+    tensor.set_name("w");
+    tensor.set_data_type(dtype);
+    tensor.add_dims(std::numeric_limits<int64_t>::max());
+    tensor.add_int32_data(0);
+    EXPECT_THROW(VerifyTensor(tensor), std::invalid_argument);
+  }
+}
+
+TEST(onnx_verify, VerifyTensor_PackedRawDataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    TensorProto tensor;
+    tensor.set_name("w");
+    tensor.set_data_type(dtype);
+    tensor.add_dims(std::numeric_limits<int64_t>::max());
+    tensor.ref_raw_data().push_back(0);
+    EXPECT_THROW(VerifyTensor(tensor), std::invalid_argument);
   }
 }
 

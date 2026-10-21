@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -1007,6 +1008,20 @@ TEST(CHECKER_COVERAGE, TensorPackedSubByteInt32DataTooSmall) {
     ok.add_int32_data(0);
     ok.add_int32_data(0); // ceil(20/16) = 2
     EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+}
+
+TEST(CHECKER_COVERAGE, TensorPackedInt32DataSizeDoesNotOverflow) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    TensorProto tensor;
+    tensor.set_name("t");
+    tensor.set_data_type(dtype);
+    tensor.add_dims(std::numeric_limits<int64_t>::max());
+    tensor.add_int32_data(0);
+    EXPECT_THROW(checker::check_tensor(tensor, MakeCtx()), ValidationError);
   }
 }
 

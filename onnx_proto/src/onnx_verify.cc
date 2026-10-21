@@ -1311,11 +1311,11 @@ void VerifyTensor(const TensorProto &tensor) {
     case TensorProto::UINT4:
     case TensorProto::INT4:
     case TensorProto::FLOAT4E2M1:
-      expected_bytes = (nelem + 1) / 2; // 2 elements per byte, ceiling division
+      expected_bytes = nelem / 2 + (nelem % 2 != 0); // 2 elements per byte, ceiling division
       break;
     case TensorProto::UINT2:
     case TensorProto::INT2:
-      expected_bytes = (nelem + 3) / 4; // 4 elements per byte, ceiling division
+      expected_bytes = nelem / 4 + (nelem % 4 != 0); // 4 elements per byte, ceiling division
       break;
     case TensorProto::FLOAT6E2M3:
     case TensorProto::FLOAT6E3M2:
@@ -1404,7 +1404,7 @@ void VerifyTensor(const TensorProto &tensor) {
     EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
                         "' data_type requires data to be stored in 'int32_data'.");
     // Each int32 packs 8 4-bit elements.
-    const int64_t expected_int32s = (nelem + 7) / 8;
+    const int64_t expected_int32s = nelem / 8 + (nelem % 8 != 0);
     EXT_ENFORCE_INVALID(static_cast<int64_t>(tensor.int32_data().size()) >= expected_int32s,
                         "TensorProto '", tensor.name(), "' int32_data size (",
                         tensor.int32_data().size(),
@@ -1417,7 +1417,7 @@ void VerifyTensor(const TensorProto &tensor) {
     EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
                         "' data_type requires data to be stored in 'int32_data'.");
     // Each int32 packs 16 2-bit elements.
-    const int64_t expected_int32s = (nelem + 15) / 16;
+    const int64_t expected_int32s = nelem / 16 + (nelem % 16 != 0);
     EXT_ENFORCE_INVALID(static_cast<int64_t>(tensor.int32_data().size()) >= expected_int32s,
                         "TensorProto '", tensor.name(), "' int32_data size (",
                         tensor.int32_data().size(),

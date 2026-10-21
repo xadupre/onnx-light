@@ -1721,6 +1721,10 @@ FIELD_REPEATED_PROTO(
     "1000-1099 are reserved for local extensions). Every entry MUST carry a nonzero, unique "
     "type_id; duplicate IDs, unresolved references and reference cycles are invalid, and "
     "reordering the catalogue does not change identity.")
+FIELD_MAP_PROTO(
+    RewritingProto, rewritings, 1001,
+    "Named variants applied independently to the canonical model (onnx-light extension). "
+    "Keys must be nonempty and unique. Model mutations must clear or regenerate these plans.")
 /**
  * Appends *function* to the model's ``functions`` field and returns a
  * reference to the stored copy.

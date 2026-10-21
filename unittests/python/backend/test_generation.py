@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy
 
 from onnx_light import onnx
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_lib import TensorProto, parser
@@ -73,7 +73,7 @@ def _shared_encoded(model, name, values):
     return _shared_value(model, name, values).encoded
 
 
-class TestGeneration(unittest.TestCase):
+class TestGeneration(ExtTestCase):
     def test_attention_mask_gather_releases_after_last_use(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

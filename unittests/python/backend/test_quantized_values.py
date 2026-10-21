@@ -12,7 +12,7 @@ import numpy
 
 from onnx_light import onnx
 import onnx_light.onnx.checker as checker
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
 
@@ -20,7 +20,7 @@ runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 QuantizationFormat = runtime.QuantizationFormat
 
 
-class TestSharedQuantizationParameters(unittest.TestCase):
+class TestSharedQuantizationParameters(ExtTestCase):
     def make_model(self):
         """Returns a two-path model using one fixed parameter set."""
         from onnx_light.onnx_core.quantization import add_quantization_parameters
@@ -485,7 +485,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         )
 
 
-class TestQuantizedValues(unittest.TestCase):
+class TestQuantizedValues(ExtTestCase):
     def test_context_category_replacement_and_identity(self):
         values = numpy.array([-1, 0, 1], dtype=numpy.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size)

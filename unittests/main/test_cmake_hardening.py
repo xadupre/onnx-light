@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestCMakeHardening(unittest.TestCase):
+
+class TestCMakeHardening(ExtTestCase):
     def test_project_cmake_preserves_unwind_tables(self):
         """Keeps unwind tables available for stack walking, matching ONNX PR 8613."""
         root = Path(__file__).resolve().parents[2]

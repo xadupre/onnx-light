@@ -137,8 +137,11 @@ order across builder import/export and replay.
 **Modify only onnx-light's ``ModelProto``** to add
 ``map<string, RewritingProto> rewritings``, keyed by variant name, without
 introducing another named proto message in this plan. Reserve and document
-its extension field number before implementation; no number is assigned by
-this proposal. Reject duplicate keys.
+its extension field number before implementation: field **1001** is reserved
+for this map, following ``struct_types`` at 1000 within ModelProto's local
+1000-1099 extension range. Reject duplicate keys. Each map entry uses the
+protobuf map encoding (string key at field 1, RewritingProto value at field 2);
+no additional public proto message is introduced.
 
 ``NodeProto``, ``GraphProto``, ``TensorProto``, ``FunctionProto`` and
 ``OperatorSetIdProto`` need no new fields. Their existing forms carry the
@@ -251,7 +254,7 @@ Each PR depends on the preceding one.
        recipe stores no duplicate payload; verify results, source removal
        ordering and function conflicts. Retained initializer payloads are reused,
        not deep-copied for every edit, including node-only edits.
-   * - 3. Model envelope
+   * - 3. Model envelope (implemented)
      - Add the ``ModelProto.rewritings`` map, model I/O and bindings;
        define explicit selection and compatibility.
      - Two independent variants survive save/load; the canonical graph stays
@@ -265,6 +268,21 @@ Each PR depends on the preceding one.
 
 Export workflow
 +++++++++++++++
+
+The model-envelope API reserves field 1001 for ``ModelProto.rewritings``.
+``ModelProto.add_rewriting`` (C++ ``add_rewritings``) and
+``GraphBuilder.add_rewriting`` (C++ ``AddRewriting``) reject duplicate names.
+``GraphBuilder.apply_rewritings(name)`` (C++ ``ApplyRewritings``) selects exactly
+one independent plan using existing replay and checks reachable operator
+implementations, including local functions and nested graphs. The replay result
+has no attached variants. Loading a model never executes its plans.
+The method is overloaded to accept either a ``RewritingProto`` or a plan name.
+GraphBuilder mutations invalidate the map, including mutations in nested
+builders and finalization that changes node order. Finalize before attaching
+plans. Callers editing proto fields directly must explicitly clear or
+regenerate the map; no source fingerprint or hidden repair is performed.
+ORT and standard-model export reject attached variants rather than dropping
+them. The export modes and packaging below remain step 4.
 
 1. Finalize the canonical model first, including cleanup, ordering, names,
    imports and external-data layout.

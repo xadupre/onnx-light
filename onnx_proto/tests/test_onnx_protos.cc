@@ -106,6 +106,84 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   EXPECT_TRUE(local.Equals(edit));
 }
 
+TEST(onnx_proto, ModelRewritingsRoundTripAndDeepCopy) {
+  ModelProto source;
+  source.set_ir_version(10);
+  source.add_opset("", 18);
+  source.mutable_graph()->set_name("canonical");
+  source.mutable_graph()->ref_node().push_back(MakeNode("Identity", {"x"}, {"y"}));
+  auto &input = *source.mutable_graph()->add_input();
+  input.set_name("x");
+  auto &type = *input.mutable_type()->mutable_tensor_type();
+  type.set_elem_type(TensorProto::FLOAT);
+  type.mutable_shape()->add_dim()->set_dim_value(1);
+  auto output_info = input;
+  output_info.set_name("y");
+  source.mutable_graph()->add_output(output_info);
+  SerializeOptions ort;
+  ort.format = SerializeFormat::kOrtFlatbuffers;
+  std::string output;
+  ASSERT_TRUE(source.SerializeToString(output, ort));
+  RewritingProto first;
+  first.add_rewrites()->set_pattern_name("first");
+  first.ref_rewrites()[0].ref_added_initializers().push_back(
+      MakeInitializer<float>("literal", {1}, {2}));
+  source.add_rewritings("first", first);
+  source.add_rewritings("second", RewritingProto{});
+  const auto bytes = source.SerializeAsString();
+  ModelProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(bytes));
+  EXPECT_TRUE(loaded.Equals(source));
+  EXPECT_EQ(loaded.graph().SerializeAsString(), source.graph().SerializeAsString());
+  EXPECT_EQ(loaded.SerializeAsString(), bytes);
+  std::stringstream printed;
+  utils::PrintOptions print_options;
+  loaded.PrintToStringStream(printed, print_options);
+  EXPECT_NE(printed.str().find("first"), std::string::npos);
+  ModelProto copied;
+  copied.CopyFrom(loaded);
+  copied.ref_rewritings().at("first").ref_rewrites()[0].set_pattern_name("changed");
+  std::string difference;
+  EXPECT_FALSE(copied.Equals(source, &difference));
+  EXPECT_NE(difference.find("rewritings[first]"), std::string::npos);
+  EXPECT_EQ(source.rewritings().at("first").rewrites(0).pattern_name(), "first");
+  EXPECT_THROW(source.add_rewritings("first", first), std::runtime_error);
+  EXPECT_THROW(source.add_rewritings("", first), std::runtime_error);
+  EXPECT_THROW(source.SerializeToString(output, ort), std::invalid_argument);
+}
+
+TEST(onnx_proto, ModelRewritingsRejectDuplicateAndMalformedEntries) {
+  const std::string entry("\xca\x3e\x05\x0a\x01x\x12\x00", 8);
+  ModelProto model;
+  ASSERT_TRUE(model.ParseFromString(entry));
+  ASSERT_EQ(model.rewritings_size(), 1);
+  EXPECT_TRUE(model.rewritings().at("x").rewrites().empty());
+  EXPECT_FALSE(model.ParseFromString(entry + entry));
+  const std::vector<std::string> malformed{
+      entry.substr(0, entry.size() - 1),
+      std::string("\xca\x3e\x02\x12\x00", 5),
+      std::string("\xca\x3e\x04\x0a\x00\x12\x00", 7),
+      std::string("\xca\x3e\x03\x0a\x01x", 6),
+      std::string("\xca\x3e\x07\x0a\x01x\x12\x00\x12\x00", 10),
+  };
+  for (const auto &bytes : malformed) {
+    ModelProto invalid;
+    EXPECT_FALSE(invalid.ParseFromString(bytes));
+  }
+  ModelProto unknown_fields;
+  EXPECT_TRUE(
+      unknown_fields.ParseFromString(std::string("\xca\x3e\x07\x0a\x01x\x12\x00\x18\x01", 10)));
+  EXPECT_EQ(unknown_fields.rewritings_size(), 1);
+  ModelProto wrong_wire;
+  EXPECT_TRUE(wrong_wire.ParseFromString(std::string("\xc8\x3e\x01", 3)));
+  EXPECT_FALSE(wrong_wire.has_rewritings());
+  ParseOptions options;
+  options.max_recursion_depth = 1;
+  ModelProto limited;
+  EXPECT_THROW(limited.ParseFromString(entry, options), onnx_light_helpers::ParseLimitExceeded);
+  EXPECT_EQ(options._recursion_depth, 0);
+}
+
 TEST(onnx_string, RefString_Constructors) {
   utils::RefString original("test", 4);
   utils::RefString copied(original);

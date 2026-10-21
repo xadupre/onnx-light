@@ -3,10 +3,11 @@
 import copy
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_core.shape_inference import Shape
 
 
-class TestRuntimeShape(unittest.TestCase):
+class TestRuntimeShape(ExtTestCase):
     def test_scalar_and_dimensions(self):
         scalar = Shape()
         self.assertEqual(len(scalar), 0)

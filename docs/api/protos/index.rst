@@ -115,6 +115,7 @@ references are explicitly marked rather than expanded as nested messages.
    │   ├── decoder, encoder → FunctionProto (↑)
    │   ├── metadata_props → StringStringEntryProto
    │   └── type_ref → StructTypeProto (model catalogue ID reference)
+   ├── rewritings → RewritingProto (expanded below)
    └── metadata_props → StringStringEntryProto
 
 ``StructTypeProto.type_ref`` resolves an ID in ``ModelProto.struct_types``.
@@ -146,7 +147,9 @@ The runtime container protos form a separate cycle of their own:
        ├── map_value → MapProto (↑)
        └── optional_value → OptionalProto (↑)
 
-Rewrite records are standalone at this stage, not yet a field of ``ModelProto``:
+Named rewrite plans are stored in ``ModelProto.rewritings`` (local extension
+field 1001), a map from nonempty variant names to independent plans against the
+canonical graph. Loading a model never selects or executes a variant:
 
 .. code-block:: text
 
@@ -165,7 +168,7 @@ Containment attributes
 Quick attribute list used in the graph:
 
 * :doc:`pipeline_proto`: ``embedding``, ``prefill``, ``decode``, ``metadata_props``
-* :doc:`model_proto`: ``graph``, ``opset_import``, ``functions``, ``configuration``, ``metadata_props``, ``struct_types``
+* :doc:`model_proto`: ``graph``, ``opset_import``, ``functions``, ``configuration``, ``metadata_props``, ``struct_types``, ``rewritings``
 * :doc:`graph_proto`: ``node``, ``initializer``, ``sparse_initializer``, ``input``, ``output``, ``value_info``, ``quantization_annotation``, ``metadata_props``, ``extended_initializer``, ``persistent_bindings``
 * :doc:`extended_initializer_proto`: ``encoded_value`` or ``paged_cache``
 * :doc:`function_proto`: ``attribute_proto``, ``node``, ``opset_import``, ``value_info``, ``metadata_props``

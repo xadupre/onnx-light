@@ -1,8 +1,10 @@
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestNormalizerDocumentation(unittest.TestCase):
+
+class TestNormalizerDocumentation(ExtTestCase):
     def test_normalizer_formulas(self):
         """Keeps both Normalizer documentation sources aligned with upstream formulas."""
         root = Path(__file__).resolve().parents[2]

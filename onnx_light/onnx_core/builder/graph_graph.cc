@@ -20,6 +20,7 @@
 #include "onnx_core/compute/constant_info.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_proto/onnx_helper.h"
@@ -2065,6 +2066,89 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     extended_initializers_ = std::move(rebuilt_extended_initializers);
   PruneValueInfos();
   RefreshAfterRewriting(old_indices, std::move(affected_values));
+}
+
+void GraphBuilder::AddRewriting(const std::string &name, const RewritingProto &rewrites) {
+  if (parent_ != nullptr || is_local_function_)
+    throw BuilderError("AddRewriting requires a root model builder.");
+  if (name.empty() || rewritings_.count(name) != 0)
+    throw BuilderError("AddRewriting: empty or duplicate variant name '" + name + "'.");
+  rewritings_.emplace(name, rewrites);
+}
+
+GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
+  const auto found = rewritings_.find(name);
+  if (found == rewritings_.end())
+    throw BuilderError("ApplyRewritings: unknown variant '" + name + "'.");
+  GraphBuilder result = ApplyRewritings(found->second);
+  const auto device = device_ == Device::kUndefined ? Device::kCPU : device_;
+  std::set<FunctionKey> active, checked;
+  std::function<void(const utils::RepeatedProtoField<NodeProto> &, std::size_t,
+                     const GraphBuilder *)>
+      check = [&](const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t depth,
+                  const GraphBuilder *scope) {
+        if (depth >= 64)
+          throw BuilderError("ApplyRewritings: implementation dependency nesting exceeds 64.");
+        for (const auto &node : nodes) {
+          const auto *function = result.Shapes().GetLocalFunction(
+              ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
+          if (function != nullptr) {
+            const auto key = Identity(*function);
+            const bool cacheable =
+                function->attribute().empty() && function->attribute_proto().empty();
+            if (!cacheable || checked.count(key) == 0) {
+              if (!active.insert(key).second)
+                throw BuilderError("ApplyRewritings: recursive local function dependency.");
+              if (cacheable) {
+                check(function->node(), depth + 1, nullptr);
+              } else {
+                NodeProto call = node;
+                if (scope != nullptr)
+                  scope->MaterializeGraphReferences(call, /*share_initializers=*/true);
+                const auto bound = core::runtime::detail::BindFunctionAttributes(*function, call);
+                check(bound.node(), depth + 1, nullptr);
+              }
+              active.erase(key);
+              if (cacheable)
+                checked.insert(key);
+            }
+            continue;
+          } else {
+            const std::string key =
+                RewriteDomain(node.domain().value()) + ":" + node.op_type().value();
+            // ResolveNodeKernelDefault handles control flow outside the dispatch table.
+            const bool control_flow = RewriteDomain(node.domain().value()) == kDefaultOnnxDomain &&
+                                      (node.op_type() == "If" || node.op_type() == "Loop" ||
+                                       node.op_type() == "Scan" || node.op_type() == "SequenceMap");
+            if (control_flow && node.op_type() == "SequenceMap" &&
+                !core::runtime::GetSequenceMapPackFn()) {
+              throw BuilderError("ApplyRewritings '" + name +
+                                 "': no SequenceMap packing function has been registered.");
+            }
+            if (!control_flow &&
+                core::runtime::KernelDispatchTable().count(
+                    key + core::symbolic::DeviceKeySuffix(device)) == 0 &&
+                core::runtime::GlobalCustomKernels().count(key) == 0) {
+              throw BuilderError("ApplyRewritings '" + name + "': no implementation for '" + key +
+                                 "'.");
+            }
+          }
+          if (scope != nullptr) {
+            for (const auto *child : scope->ReferencedSubgraphs(node))
+              check(child->Nodes(), depth + 1, child);
+          } else {
+            for (const auto &attribute : node.attribute()) {
+              if (attribute.has_g())
+                check(attribute.g().node(), depth + 1, nullptr);
+              for (const auto &graph : attribute.graphs())
+                check(graph.node(), depth + 1, nullptr);
+            }
+          }
+        }
+      };
+  check(result.Nodes(), 0, &result);
+  result.set_device(device_);
+  return result;
 }
 
 GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const {

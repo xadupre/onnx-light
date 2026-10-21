@@ -3,8 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestCMakePch(unittest.TestCase):
+
+class TestCMakePch(ExtTestCase):
     def test_extension_pch_policy(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:

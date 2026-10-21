@@ -343,9 +343,17 @@ class GraphBuilder(_C.GraphBuilder):
         plan = GraphGraph(working).optimize()
         if optimize is OptimizationMode.kRewritings:
             restored = working.undo_rewritings(plan).to_model(ir_version)
-            if restored.graph.SerializeToString() == canonical.graph.SerializeToString() and [
-                function.SerializeToString() for function in restored.functions
-            ] == [function.SerializeToString() for function in canonical.functions]:
+            if (
+                canonical.rewritings
+                and restored.graph.Equals(canonical.graph)
+                and len(restored.functions) == len(canonical.functions)
+                and all(
+                    restored_function.Equals(canonical_function)
+                    for restored_function, canonical_function in zip(
+                        restored.functions, canonical.functions
+                    )
+                )
+            ):
                 for name, existing in canonical.rewritings.items():
                     restored.add_rewriting(name, existing)
             restored.add_rewriting("optimized", plan)

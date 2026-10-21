@@ -235,7 +235,7 @@ fresh internal names but must preserve names at their boundaries.
 Inverse replay processes recorded edits in reverse application order. It
 restores only definitions removed by these edits, never Identity nodes or
 duplicate constants removed before capture. It validates positions, expected
-replacement definitions, dependencies and subgraph paths, and explicitly
+replacement definitions and subgraph paths, and explicitly
 rejects builders lacking the in-memory information needed for exact restoration. A
 failure must not leave the caller's builder partially restored.
 
@@ -260,15 +260,16 @@ that performed optimization and its matching plan. Exporting and reloading an
 optimized model does not retain this history; applying a serialized forward
 plan to a fresh builder does not recreate it either.
 
-The builder currently also retains an optimized-graph snapshot in memory for
-strict target validation. This is an interim memory cost, not a serialized
-format or the compact representation needed to eliminate the canonical-model
-copy in export modes.
+Unit tests verify complete canonical/optimized graph roundtrips. Production
+capture and undo do not retain an optimized-graph validation snapshot, compare
+whole graphs, or execute forward replay merely to check their own correctness.
+The supplied plan is compared directly with the captured plan, without
+serialization, and local edit bounds and payload checks remain.
 Independent node edits share indexed live-order tracking during both inverse
 capture and undo; their node lists are materialized once per batch, and
-unchanged initializer lists are retained. Undo validates the captured optimized
-graph directly rather than requiring its incrementally preserved tags to
-match fresh shape inference. Forward replay retains its strict tag validation.
+unchanged initializer lists are retained. Undo uses the optimized graph directly
+rather than requiring its incrementally preserved tags to match fresh shape
+inference. Forward replay retains its strict tag validation.
 Device targets for the canonical root, subgraphs and local functions are
 captured privately and restored by undo, including scopes removed during
 optimization. Canonical value/node tags and custom node-tag override flags
@@ -277,6 +278,9 @@ affected shape-tagged release lists and memory profiles are refreshed.
 Function definitions are collected from every scope, including functions
 owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
+Export compares canonical graphs and function definitions only when existing
+named plans need a compatibility decision; these comparisons use native
+field equality rather than serialization.
 
 .. code-block:: text
 

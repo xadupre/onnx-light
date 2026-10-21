@@ -827,6 +827,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "CopyFrom", [](cls &self, const cls &src) { self.CopyFrom(src); },
           "Copies one instance into this one.")
       .def(
+          "Equals", [](const cls &self, const cls &other) { return self.Equals(other); },
+          nb::arg("other"), "Compares message fields directly without serialization.")
+      .def(
           "ClearField",
           [](nb::handle self, const std::string &field_name) {
             // Mirrors ``google.protobuf.Message.ClearField``: resets a single

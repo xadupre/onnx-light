@@ -53,10 +53,9 @@ struct RewritingUndoState {
   RewritingProto plan;
   std::vector<Edit> edits;
   GraphProto original_graph_headers;
-  GraphProto optimized_graph;
-  utils::RepeatedProtoField<OperatorSetIdProto> original_opsets, optimized_opsets;
-  utils::RepeatedProtoField<FunctionProto> original_functions, optimized_functions;
-  utils::RepeatedProtoField<StructTypeProto> original_struct_types, optimized_struct_types;
+  utils::RepeatedProtoField<OperatorSetIdProto> original_opsets;
+  utils::RepeatedProtoField<FunctionProto> original_functions;
+  utils::RepeatedProtoField<StructTypeProto> original_struct_types;
   ScopeDevices devices;
   std::map<std::tuple<std::string, std::string, std::string>, ScopeDevices> function_devices;
 };
@@ -426,24 +425,6 @@ GraphProto GraphHeaders(const GraphProto &graph) {
         copy.ref_graphs().push_back(GraphHeaders(child));
     }
   }
-  return result;
-}
-
-GraphProto GraphStructure(const GraphProto &graph) {
-  GraphProto result = graph;
-  // Inferred types may change; undo restores the saved graph headers separately.
-  result.clr_value_info();
-  for (auto &input : result.ref_input())
-    input.clear_type();
-  for (auto &output : result.ref_output())
-    output.clear_type();
-  for (auto &node : result.ref_node())
-    for (auto &attribute : node.ref_attribute()) {
-      if (attribute.has_g())
-        *attribute.mutable_g() = GraphStructure(attribute.g());
-      for (auto &child : attribute.ref_graphs())
-        child = GraphStructure(child);
-    }
   return result;
 }
 
@@ -1526,31 +1507,14 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   if (&builder_ == root) {
     undo->original_graph_headers = GraphHeaders(canonical);
     CaptureInversePlan(result, *undo, canonical);
-    undo->optimized_graph = root->BuildGraph();
-    std::string difference;
-    if (!GraphStructure(canonical).Equals(GraphStructure(undo->optimized_graph), &difference))
-      throw BuilderError("Optimize: a mutation is not represented by the captured plan: " +
-                         difference);
     undo->original_functions = original_definitions;
     for (const auto &[domain, version] : original_opsets) {
       auto &opset = undo->original_opsets.add();
       opset.set_domain(domain);
       opset.set_version(version);
     }
-    undo->optimized_functions = original_definitions;
-    for (const auto &function : result.added_functions())
-      MergeFunction(undo->optimized_functions, function);
-    for (const auto &[domain, version] : root->opsets_) {
-      auto &opset = undo->optimized_opsets.add();
-      opset.set_domain(domain);
-      opset.set_version(version);
-    }
-    for (const auto &opset : result.required_opset_imports())
-      MergeImport(undo->optimized_opsets, opset);
     undo->original_struct_types = original_struct_types;
-    undo->optimized_struct_types = root->Shapes().StructTypes();
     const auto prepared = PreparationOutputs(result);
-    ProjectPreparedGraph(undo->optimized_graph, prepared, {});
     for (std::size_t i = 0; i < result.rewrites().size(); ++i) {
       const auto &rewrite = result.rewrites(i);
       std::vector<std::string> path;
@@ -2813,98 +2777,11 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   if (parent_ != nullptr || is_local_function_ || rewriting_undo_ == nullptr)
     throw BuilderError("UndoRewritings: requires an in-memory root-model capture.");
   const auto &undo = *rewriting_undo_;
-  if (rewrites.SerializeAsString() != undo.plan.SerializeAsString())
+  if (!rewrites.Equals(undo.plan))
     throw BuilderError("UndoRewritings: plan does not match the in-memory capture.");
   ModelProto model = model_template_;
   *model.mutable_graph() = BuildGraph();
-  for (const auto &[domain, version] : opsets_)
-    model.add_opset(domain, version);
-  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
-    for (const auto &function : scope.local_functions_) {
-      MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
-      self(self, *function);
-    }
-    for (const auto &subgraph : scope.subgraphs_)
-      self(self, *subgraph);
-  };
-  collect_functions(collect_functions, *this);
-  model.ref_struct_types() = Shapes().StructTypes();
-  // Recipe definitions are normalized just as they are by forward replay.
-  ModelProto dependency_model;
-  dependency_model.mutable_graph()->set_name("dependencies");
-  dependency_model.ref_opset_import() = undo.optimized_opsets;
-  dependency_model.ref_functions() = undo.optimized_functions;
-  dependency_model.ref_struct_types() = undo.optimized_struct_types;
-  GraphBuilder dependencies(dependency_model, schema_lookup_);
-  utils::RepeatedProtoField<FunctionProto> expected_functions;
-  for (const auto &function : dependencies.local_functions_)
-    expected_functions.push_back(function->BuildFunction(function->function_domain_));
-  FunctionIndex normalized_functions;
-  for (const auto &function : expected_functions)
-    normalized_functions.emplace(Identity(function), &function);
-  bool has_preparation = false;
-  for (const auto &function : rewrites.added_functions())
-    if (function.domain() == "onnx.light.rewriting") {
-      MergeFunction(model.ref_functions(), *normalized_functions.at(Identity(function)));
-      has_preparation = true;
-    }
-  if (has_preparation)
-    for (const auto &opset : rewrites.required_opset_imports())
-      if (opset.domain() == "onnx.light.rewriting")
-        MergeImport(model.ref_opset_import(), opset);
-  const auto equal_entries = [](const auto &left, const auto &right) {
-    if (left.size() != right.size())
-      return false;
-    for (std::size_t i = 0; i < left.size(); ++i)
-      if (!left[i].Equals(right[i]))
-        return false;
-    return true;
-  };
-  // Opset order is not semantic; builders store imports in an unordered map.
-  const auto equal_opsets = [](const auto &left, const auto &right) {
-    std::map<std::string, int64_t> a, b;
-    for (const auto &opset : left)
-      if (!a.emplace(RewriteDomain(opset.domain().value()), opset.version()).second)
-        return false;
-    for (const auto &opset : right)
-      if (!b.emplace(RewriteDomain(opset.domain().value()), opset.version()).second)
-        return false;
-    return a == b;
-  };
-  std::string function_difference;
-  const auto equal_functions = [&](const auto &left, const auto &right) {
-    FunctionIndex definitions;
-    for (const auto &function : left)
-      if (!definitions.emplace(Identity(function), &function).second)
-        return false;
-    if (definitions.size() != right.size())
-      return false;
-    for (const auto &function : right) {
-      const auto found = definitions.find(Identity(function));
-      if (found == definitions.end())
-        return false;
-      FunctionProto normalized = function;
-      if (equal_opsets(found->second->opset_import(), function.opset_import()))
-        normalized.ref_opset_import() = found->second->opset_import();
-      if (!found->second->Equals(normalized, &function_difference))
-        return false;
-      definitions.erase(found);
-    }
-    return definitions.empty();
-  };
   const auto prepared = PreparationOutputs(rewrites);
-  GraphProto projected = model.graph();
-  ProjectPreparedGraph(projected, prepared, {});
-  if (!projected.Equals(undo.optimized_graph))
-    throw BuilderError("UndoRewritings: optimized graph does not match the capture.");
-  if (!equal_opsets(model.opset_import(), undo.optimized_opsets))
-    throw BuilderError("UndoRewritings: optimized imports do not match the capture.");
-  if (!equal_functions(model.functions(), expected_functions))
-    throw BuilderError("UndoRewritings: optimized functions do not match the capture: " +
-                       function_difference);
-  if (!equal_entries(model.struct_types(), undo.optimized_struct_types))
-    throw BuilderError("UndoRewritings: optimized declarations do not match the capture.");
-  const GraphProto optimized = model.graph();
   std::size_t index = rewrites.rewrites().size();
   while (index != 0) {
     const auto &rewrite = rewrites.rewrites(index - 1);
@@ -3005,23 +2882,6 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     }
   };
   restore_devices(restore_devices, result, undo.devices);
-  // Replaying validates dependencies, positions, recipes and the complete roundtrip.
-  ModelProto verification_model = model;
-  verification_model.ref_struct_types() = undo.optimized_struct_types;
-  auto verified = GraphBuilder(verification_model, schema_lookup_).ApplyRewritings(rewrites);
-  utils::RepeatedProtoField<OperatorSetIdProto> verified_opsets;
-  for (const auto &[domain, version] : verified.opsets_) {
-    auto &opset = verified_opsets.add();
-    opset.set_domain(domain);
-    opset.set_version(version);
-  }
-  utils::RepeatedProtoField<FunctionProto> verified_functions;
-  for (const auto &function : verified.local_functions_)
-    verified_functions.push_back(function->BuildFunction(function->function_domain_));
-  if (!verified.BuildGraph().Equals(optimized) ||
-      !equal_opsets(verified_opsets, undo.optimized_opsets) ||
-      !equal_functions(verified_functions, expected_functions))
-    throw BuilderError("UndoRewritings: inverse payload does not reproduce the optimized graph.");
   return result;
 }
 

@@ -794,7 +794,7 @@ owned data. Referenced types and shared quantization parameters still belong to
 the containing model, not to the standalone cache. Pass its catalogues to the
 native conversion functions when needed.
 
-``GraphProto.paged_cache_initializer`` (extension field 1002) stores named
+``GraphProto.extended_initializer`` (extension field 1000, ``paged_cache`` alternative) stores named
 cache defaults. Names are unique across all initializer categories. A default
 that also names a graph input may be overridden by a caller; otherwise it is a
 constant graph value. Runtime sessions seed these initializers, and persistent
@@ -808,7 +808,7 @@ current feeds; an explicit feed overrides the default for that invocation.
 Python exposes both messages through ``onnx_light.onnx``. A
 ``PersistentValueState`` accepts and returns ``PagedCacheProto`` for these
 values, including through ``values`` and ``reset``. Serializing a returned
-cache and placing it in a new model's ``paged_cache_initializer`` resumes the
+cache and placing it in a new model's ``extended_initializer`` list with the ``paged_cache`` alternative resumes the
 cache independently of the original state.
 
 Validation rejects missing payload alternatives, negative or non-contiguous

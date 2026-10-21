@@ -79,7 +79,7 @@ TEST(onnx_verify, VerifyModel_Valid) {
 
 TEST(onnx_verify, PagedCacheRejectsEncodedLogicalDimensionsWithSymbolicAlternatives) {
   ModelProto model = MakeValidModel();
-  auto *cache = model.mutable_graph()->add_paged_cache_initializer();
+  auto *cache = model.mutable_graph()->add_extended_initializer()->mutable_paged_cache();
   cache->set_name("cache");
   auto *block = cache->add_blocks();
   block->set_start(0);
@@ -495,7 +495,7 @@ TEST(onnx_verify, PersistentBindings_RespectsLocalDefinitionsAndRestoresSiblingS
       outer->add_sparse_initializer()->mutable_values()->set_name("x");
       break;
     case 3:
-      outer->add_encoded_initializer()->set_name("x");
+      outer->add_extended_initializer()->mutable_encoded_value()->set_name("x");
       break;
     case 4:
       auto *producer = outer->add_node();
@@ -701,10 +701,10 @@ TEST(onnx_verify, VerifyModel_RejectsSubgraphInitializerShadowing) {
       subgraph->add_sparse_initializer()->mutable_values()->set_name("x");
       break;
     case 2:
-      subgraph->add_encoded_initializer()->set_name("x");
+      subgraph->add_extended_initializer()->mutable_encoded_value()->set_name("x");
       break;
     case 3:
-      subgraph->add_paged_cache_initializer()->set_name("x");
+      subgraph->add_extended_initializer()->mutable_paged_cache()->set_name("x");
       break;
     }
     ExpectModelVerificationError(model,

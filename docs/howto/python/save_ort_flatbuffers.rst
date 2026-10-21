@@ -108,7 +108,7 @@ Current writer limitations
   graphs, nodes (including ``Constant`` nodes), tensors, and value infos are
   rejected, including inside nested graphs and tensor attributes.
 * Optional, sparse, opaque, and structured value types, complex tensors,
-  sparse initializers, onnx-light's ``GraphProto.encoded_initializer``
+  sparse initializers, onnx-light's ``GraphProto.extended_initializer``
   extension, and ``GRAPHS``, sparse-tensor, or type-proto attributes are not
   supported.
 * Tensor element types newer than ``FLOAT8E5M2FNUZ`` (20) are not supported:

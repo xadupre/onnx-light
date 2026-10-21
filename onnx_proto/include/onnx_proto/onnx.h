@@ -1180,6 +1180,25 @@ FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer cat
 FIELD_STR(doc_string, 3, "Human-readable documentation.")
 END_PROTO()
 
+BEGIN_PROTO(ExtendedInitializerProto,
+            "A graph initializer represented by exactly one onnx-light extension payload.")
+inline ExtendedInitializerProto(const ExtendedInitializerProto &other) { CopyFrom(other); }
+inline ExtendedInitializerProto &operator=(const ExtendedInitializerProto &other) {
+  CopyFrom(other);
+  return *this;
+}
+inline ExtendedInitializerProto(ExtendedInitializerProto &&other) noexcept = default;
+inline ExtendedInitializerProto &operator=(ExtendedInitializerProto &&other) noexcept = default;
+FIELD_OPTIONAL_ONEOF(EncodedValueProto, encoded_value, 1, value, "Encoded constant payload.")
+FIELD_OPTIONAL_ONEOF(PagedCacheProto, paged_cache, 2, value, "Paged KV cache payload.")
+ONEOF(value, encoded_value_, paged_cache_)
+inline bool has_value() const { return has_encoded_value() || has_paged_cache(); }
+inline const utils::OptionalString &name() const {
+  EXT_ENFORCE_INVALID(has_value(), "Extended initializer has no payload.");
+  return has_encoded_value() ? encoded_value().name() : paged_cache().name();
+}
+END_PROTO()
+
 // ValueInfoProto
 
 // message ValueInfoProto {
@@ -1493,18 +1512,15 @@ FIELD_REPEATED_PROTO(
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                      "Named metadata values; keys should be distinct.")
 FIELD_REPEATED_PROTO(
-    EncodedValueProto, encoded_initializer, 1000,
-    "A list of named byte-encoded constant inputs of the graph (onnx-light extension, field "
-    "numbers 1000-1099 are reserved for local extensions). Each entry MUST have a name, unique "
-    "across initializer, sparse_initializer and encoded_initializer, and the name MAY also "
-    "appear in the input list.")
+    ExtendedInitializerProto, extended_initializer, 1000,
+    "Encoded constants and paged cache defaults (onnx-light extension). Each entry has exactly "
+    "one payload with a name unique across all initializers, and may also name a graph input. "
+    "This replaces the former encoded_initializer and paged_cache_initializer wire format.")
 FIELD_REPEATED_PROTO(
     PersistentBindingProto, persistent_bindings, 1001,
     "Declares persistent output-to-input wiring on the model root graph only. "
     "Destinations must not overlap. Standard ONNX cannot represent this extension.")
-FIELD_REPEATED_PROTO(PagedCacheProto, paged_cache_initializer, 1002,
-                     "Named paged KV cache defaults. Names are unique across all initializers "
-                     "and may also name graph inputs (onnx-light extension).")
+// Field 1002 was used by paged_cache_initializer before the unified extension format.
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.
@@ -1602,7 +1618,8 @@ BEGIN_PROTO(LocalRewritingProto, "Describes one sequential, materialized graph e
 FIELD_STR(pattern_name, 1, "Diagnostic name of the pattern.")
 FIELD_REPEATED_STR(utils::String, graph_path, 2, "Subgraph path before this edit.")
 FIELD_REPEATED(uint64_t, matched_nodes, 3, "Removed node positions before this edit.")
-FIELD_REPEATED(uint64_t, removed_initializers, 4, "Removed initializer positions before this edit.")
+FIELD_REPEATED(uint64_t, removed_initializers, 4,
+               "Removed dense initializer positions before this edit.")
 FIELD_REPEATED_PROTO(NodeProto, added_nodes, 5, "Replacement nodes.")
 FIELD_REPEATED(uint64_t, added_nodes_positions, 6, "Node positions after this edit.")
 FIELD_REPEATED_PROTO(TensorProto, added_initializers, 7, "Materialized replacement initializers.")
@@ -1614,6 +1631,8 @@ FIELD_REPEATED_PROTO(NodeProto, initializer_calls, 11,
                      "Reserved for initializer preparation calls.")
 FIELD_REPEATED(uint64_t, computed_initializer_positions, 12,
                "Reserved for prepared initializer positions.")
+FIELD_REPEATED(uint64_t, removed_extended_initializers, 13,
+               "Removed extended initializer positions before this edit.")
 END_PROTO()
 
 BEGIN_PROTO(RewritingProto, "Stores ordered sequential graph edits.")

@@ -264,7 +264,7 @@ TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) 
     auto model = SharedModel(plan, full.Encoded());
     auto parameters = QuantizationParameterCatalogue::Build(model);
     auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
-    *model.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+    *model.mutable_graph()->add_extended_initializer()->mutable_encoded_value() = shared.Encoded();
     RuntimeSession session(model);
     RuntimeContext context;
     session.Run(context);
@@ -298,7 +298,7 @@ TEST(Quantization, SharedInitializerSeedingRejectsInvalidCompactValues) {
     const auto parameters = QuantizationParameterCatalogue::Build(model);
     const auto shared =
         QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
-    auto *encoded = model.mutable_graph()->add_encoded_initializer();
+    auto *encoded = model.mutable_graph()->add_extended_initializer()->mutable_encoded_value();
     *encoded = shared.Encoded();
     const std::string kind = failure;
     if (kind == "reference")

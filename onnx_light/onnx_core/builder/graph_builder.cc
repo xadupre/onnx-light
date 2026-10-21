@@ -258,10 +258,7 @@ std::unordered_set<std::string> GraphDefinedNames(const GraphProto &graph) {
   for (const auto &initializer : graph.sparse_initializer()) {
     defined.insert(initializer.values().name().value());
   }
-  for (const auto &initializer : graph.encoded_initializer()) {
-    defined.insert(initializer.name().value());
-  }
-  for (const auto &initializer : graph.paged_cache_initializer()) {
+  for (const auto &initializer : graph.extended_initializer()) {
     defined.insert(initializer.name().value());
   }
   for (const auto &node : graph.node()) {
@@ -404,11 +401,8 @@ void RequireStandardGraph(const GraphProto &graph) {
   if (!graph.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: standard ONNX cannot represent persistent bindings.");
   }
-  if (!graph.encoded_initializer().empty()) {
-    throw BuilderError("GraphBuilder: standard ONNX cannot represent encoded initializers.");
-  }
-  if (!graph.paged_cache_initializer().empty()) {
-    throw BuilderError("GraphBuilder: standard ONNX cannot represent paged cache initializers.");
+  if (!graph.extended_initializer().empty()) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent extended initializers.");
   }
   for (const auto &value : graph.input()) {
     if (value.has_type() && HasStructuredType(value.type())) {
@@ -562,8 +556,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   value_infos_ = std::move(other.value_infos_);
   nodes_ = std::move(other.nodes_);
   initializers_ = std::move(other.initializers_);
-  encoded_initializers_ = std::move(other.encoded_initializers_);
-  paged_cache_initializers_ = std::move(other.paged_cache_initializers_);
+  extended_initializers_ = std::move(other.extended_initializers_);
   model_template_ = std::move(other.model_template_);
   rewritings_ = std::move(other.rewritings_);
   graph_template_ = std::move(other.graph_template_);
@@ -703,10 +696,7 @@ void GraphBuilder::CopyInferredValuesFrom(const ShapesContext &source) {
   for (const auto &initializer : initializers_) {
     names.insert(initializer.name().value());
   }
-  for (const auto &initializer : encoded_initializers_) {
-    names.insert(initializer.name().value());
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     names.insert(initializer.name().value());
   }
   for (const auto &node : nodes_) {
@@ -979,10 +969,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (const auto &initializer : initializers_) {
     available.insert(initializer.name().value());
   }
-  for (const auto &initializer : encoded_initializers_) {
-    available.insert(initializer.name().value());
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     available.insert(initializer.name().value());
   }
   for (const auto &initializer : graph_template_.sparse_initializer()) {
@@ -1133,17 +1120,7 @@ void GraphBuilder::RebuildMetadata() {
       compute_.SeedConstant(name);
     }
   }
-  for (const auto &initializer : encoded_initializers_) {
-    const std::string name = initializer.name().value();
-    const bool is_input = input_names.count(name) != 0;
-    compute_.SeedValueTag(name, "weight");
-    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
-                            /*allow_input_overwrite=*/false);
-    if (!is_input) {
-      compute_.SeedConstant(name);
-    }
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     const std::string name = initializer.name().value();
     const bool is_input = input_names.count(name) != 0;
     compute_.SeedValueTag(name, "weight");
@@ -1210,17 +1187,17 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
       }
     }
   }
-  for (const auto &initializer : encoded_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     if (input_names.count(initializer.name().value()) == 0) {
-      shapes.SetEncodedValue(initializer.name().value(), initializer);
+      if (initializer.has_encoded_value()) {
+        shapes.SetEncodedValue(initializer.name().value(), initializer.encoded_value());
+      } else {
+        TypeProto type;
+        type.mutable_struct_type();
+        shapes.SetType(initializer.name().value(), type);
+      }
     }
   }
-  for (const auto &initializer : paged_cache_initializers_)
-    if (input_names.count(initializer.name().value()) == 0) {
-      TypeProto type;
-      type.mutable_struct_type();
-      shapes.SetType(initializer.name().value(), type);
-    }
   const auto declarations = StructuredDeclarations(value_infos_);
   RefreshLocalFunctions();
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
@@ -1261,10 +1238,8 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
   const bool has_initializer =
       std::any_of(initializers_.begin(), initializers_.end(),
                   [&](const TensorProto &v) { return v.name().value() == name; }) ||
-      std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(),
-                  [&](const EncodedValueProto &v) { return v.name().value() == name; }) ||
-      std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(),
-                  [&](const PagedCacheProto &v) { return v.name().value() == name; });
+      std::any_of(extended_initializers_.begin(), extended_initializers_.end(),
+                  [&](const auto &v) { return v.name().value() == name; });
   if (name.empty() || (HasName(name) && (!is_input || has_initializer))) {
     throw BuilderError("GraphBuilder: encoded initializer name is empty or already defined: '" +
                        name + "'.");
@@ -1284,9 +1259,8 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
     }
   }
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
-  // The rvalue overload avoids CopyFrom's wire round-trip and retains borrowed
-  // payload owners as well as the bytes.
-  encoded_initializers_.push_back(EncodedValueProto(value));
+  // Native assignment retains borrowed payload owners without a wire round-trip.
+  *extended_initializers_.Add()->mutable_encoded_value() = value;
   if (!is_input) {
     compute_.Shapes().SetEncodedValue(name, value);
   }
@@ -1308,8 +1282,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   const auto named = [&](const auto &v) { return v.name().value() == name; };
   const bool has_initializer =
       std::any_of(initializers_.begin(), initializers_.end(), named) ||
-      std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(), named) ||
-      std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(), named);
+      std::any_of(extended_initializers_.begin(), extended_initializers_.end(), named);
   if (name.empty() || (HasName(name) && (!is_input || has_initializer)))
     throw BuilderError("GraphBuilder: paged cache initializer name is empty or already defined.");
   ModelProto declarations;
@@ -1319,7 +1292,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   catalogue.ValidatePagedCache(value, true,
                                is_input && input->has_type() ? &input->type() : nullptr);
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
-  paged_cache_initializers_.push_back(PagedCacheProto(value));
+  *extended_initializers_.Add()->mutable_paged_cache() = value;
   if (!is_input) {
     TypeProto type;
     type.mutable_struct_type();
@@ -1354,14 +1327,9 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
                   [&](const TensorProto &initializer) {
                     return initializer.name().value() == tensor_name;
                   }) ||
-      std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(),
-                  [&](const EncodedValueProto &initializer) {
-                    return initializer.name().value() == tensor_name;
-                  }) ||
-      std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(),
-                  [&](const PagedCacheProto &initializer) {
-                    return initializer.name().value() == tensor_name;
-                  });
+      std::any_of(
+          extended_initializers_.begin(), extended_initializers_.end(),
+          [&](const auto &initializer) { return initializer.name().value() == tensor_name; });
   if (is_input && !has_initializer && input->has_type()) {
     if (!input->type().has_tensor_type()) {
       throw BuilderError("GraphBuilder: initializer '" + tensor_name +
@@ -1646,8 +1614,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
   const auto has_graph_content = [](const GraphProto &graph) {
     return !graph.name().empty() || graph.input().size() > 0 || graph.output().size() > 0 ||
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
-           graph.value_info().size() > 0 || !graph.encoded_initializer().empty() ||
-           !graph.paged_cache_initializer().empty();
+           graph.value_info().size() > 0 || !graph.extended_initializer().empty();
   };
   utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
@@ -1738,11 +1705,13 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &initializer : graph.initializer()) {
     MakeInitializer(initializer);
   }
-  for (const auto &initializer : graph.encoded_initializer()) {
-    MakeEncodedInitializer(initializer);
-  }
-  for (const auto &initializer : graph.paged_cache_initializer()) {
-    MakePagedCacheInitializer(initializer);
+  for (const auto &initializer : graph.extended_initializer()) {
+    if (initializer.has_encoded_value())
+      MakeEncodedInitializer(initializer.encoded_value());
+    else if (initializer.has_paged_cache())
+      MakePagedCacheInitializer(initializer.paged_cache());
+    else
+      throw BuilderError("GraphBuilder: extended initializer has no payload.");
   }
   std::unordered_set<std::string> sparse_names;
   for (const auto &initializer : graph.sparse_initializer()) {
@@ -1752,8 +1721,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     const auto named = [&](const auto &value) { return value.name().value() == name; };
     const bool has_other_initializer =
         std::any_of(initializers_.begin(), initializers_.end(), named) ||
-        std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(), named) ||
-        std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(), named);
+        std::any_of(extended_initializers_.begin(), extended_initializers_.end(), named);
     if (name.empty() || !sparse_names.insert(name).second || has_other_initializer ||
         (names_.find(name) != names_.end() && !is_input)) {
       throw BuilderError("GraphBuilder: sparse initializer name is empty or already defined: '" +
@@ -2209,10 +2177,7 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
   for (const TensorProto &initializer : initializers_) {
     defined.insert(initializer.name().value());
   }
-  for (const auto &initializer : encoded_initializers_) {
-    defined.insert(initializer.name().value());
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     defined.insert(initializer.name().value());
   }
   for (const auto &initializer : graph_template_.sparse_initializer()) {
@@ -2336,18 +2301,12 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
       ++it;
     }
   }
-  for (auto it = encoded_initializers_.begin(); it != encoded_initializers_.end();) {
+  for (auto it = extended_initializers_.begin(); it != extended_initializers_.end();) {
     if (used.count(it->name().value()) == 0) {
-      it = encoded_initializers_.erase(it);
+      it = extended_initializers_.erase(it);
     } else {
       ++it;
     }
-  }
-  for (auto it = paged_cache_initializers_.begin(); it != paged_cache_initializers_.end();) {
-    if (used.count(it->name().value()) == 0)
-      it = paged_cache_initializers_.erase(it);
-    else
-      ++it;
   }
   PruneValueInfos();
   return removed + local_removed;
@@ -2364,10 +2323,7 @@ void GraphBuilder::PruneValueInfos() {
   for (const TensorProto &initializer : initializers_) {
     existing.insert(initializer.name().value());
   }
-  for (const auto &initializer : encoded_initializers_) {
-    existing.insert(initializer.name().value());
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     existing.insert(initializer.name().value());
   }
   for (const NodeProto &node : nodes_) {
@@ -2840,10 +2796,10 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     MakeInitializer(clone);
     rename.emplace(old_name, new_name);
   }
-  for (const auto &initializer : function.encoded_initializers_) {
+  for (const auto &initializer : function.extended_initializers_) {
     const std::string &old_name = initializer.name().value();
     if (rename.count(old_name) != 0) {
-      throw BuilderError("GraphBuilder: cannot inline an encoded function initializer that is "
+      throw BuilderError("GraphBuilder: cannot inline an extended function initializer that is "
                          "also a formal input or output.");
     }
     std::string new_name = function.name() + "_" + old_name;
@@ -2851,23 +2807,15 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     while (HasName(new_name)) {
       new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
     }
-    EncodedValueProto clone = initializer;
-    clone.set_name(new_name);
-    MakeEncodedInitializer(clone);
-    rename.emplace(old_name, new_name);
-  }
-
-  for (const auto &initializer : function.paged_cache_initializers_) {
-    const std::string &old_name = initializer.name().value();
-    if (rename.count(old_name) != 0)
-      throw BuilderError("GraphBuilder: cannot inline a cache initializer that is also an input.");
-    std::string new_name = function.name() + "_" + old_name;
-    int suffix = 0;
-    while (HasName(new_name))
-      new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
-    PagedCacheProto clone = initializer;
-    clone.set_name(new_name);
-    MakePagedCacheInitializer(clone);
+    if (initializer.has_encoded_value()) {
+      EncodedValueProto clone = initializer.encoded_value();
+      clone.set_name(new_name);
+      MakeEncodedInitializer(clone);
+    } else {
+      PagedCacheProto clone = initializer.paged_cache();
+      clone.set_name(new_name);
+      MakePagedCacheInitializer(clone);
+    }
     rename.emplace(old_name, new_name);
   }
 
@@ -3401,12 +3349,13 @@ GraphBuilder::DeduplicateEncodedInitializers(std::vector<const EncodedValueProto
     output_names.insert(output.name().value());
   }
   std::size_t removed = 0;
-  utils::RepeatedProtoField<EncodedValueProto> kept;
-  for (auto &value : encoded_initializers_) {
-    if (input_names.count(value.name().value())) {
-      kept.push_back(std::move(value));
+  utils::RepeatedProtoField<ExtendedInitializerProto> kept;
+  for (auto &initializer : extended_initializers_) {
+    if (!initializer.has_encoded_value() || input_names.count(initializer.name().value())) {
+      kept.push_back(std::move(initializer));
       continue;
     }
+    const auto &value = initializer.encoded_value();
     const auto survivor = std::find_if(index.begin(), index.end(), [&](const auto *candidate) {
       return SameEncodedContent(*candidate, value);
     });
@@ -3414,11 +3363,11 @@ GraphBuilder::DeduplicateEncodedInitializers(std::vector<const EncodedValueProto
       rename.emplace(value.name().value(), (*survivor)->name().value());
       ++removed;
     } else {
-      kept.push_back(std::move(value));
-      index.push_back(&kept.back());
+      kept.push_back(std::move(initializer));
+      index.push_back(&kept.back().encoded_value());
     }
   }
-  encoded_initializers_ = std::move(kept);
+  extended_initializers_ = std::move(kept);
   return removed;
 }
 
@@ -3591,11 +3540,8 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings,
       graph.add_initializer(initializers_[i]);
     }
   }
-  for (const auto &initializer : encoded_initializers_) {
-    graph.ref_encoded_initializer().push_back(EncodedValueProto(initializer));
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
-    graph.ref_paged_cache_initializer().push_back(PagedCacheProto(initializer));
+  for (const auto &initializer : extended_initializers_) {
+    graph.ref_extended_initializer().push_back(ExtendedInitializerProto(initializer));
   }
   for (const NodeProto &node : nodes_) {
     NodeProto materialized = node;
@@ -3744,10 +3690,7 @@ void GraphBuilder::SortNodesTopologically() {
   for (const auto &initializer : initializers_) {
     available.insert(initializer.name().value());
   }
-  for (const auto &initializer : encoded_initializers_) {
-    available.insert(initializer.name().value());
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
+  for (const auto &initializer : extended_initializers_) {
     available.insert(initializer.name().value());
   }
   for (const auto &initializer : graph_template_.sparse_initializer()) {
@@ -4070,10 +4013,7 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       live_values.insert(output);
     }
   } else {
-    for (const auto &initializer : graph.encoded_initializer()) {
-      live_values.insert(initializer.name().value());
-    }
-    for (const auto &initializer : graph.paged_cache_initializer()) {
+    for (const auto &initializer : graph.extended_initializer()) {
       live_values.insert(initializer.name().value());
     }
   }
@@ -4161,8 +4101,7 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   if (!model_scoped && !Shapes().StructTypes().empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry a structured type catalogue.");
   }
-  if (!initializers_.empty() || !encoded_initializers_.empty() ||
-      !paged_cache_initializers_.empty()) {
+  if (!initializers_.empty() || !extended_initializers_.empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
   }

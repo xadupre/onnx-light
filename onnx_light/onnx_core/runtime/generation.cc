@@ -135,8 +135,7 @@ void RunGraph(const ModelProto &model, RuntimeContext &invocation, RuntimeValueM
                          [&](const auto &initializer) { return initializer.name() == name; });
     };
     if (value == values.end() && (has_initializer(model.graph().initializer()) ||
-                                  has_initializer(model.graph().encoded_initializer()) ||
-                                  has_initializer(model.graph().paged_cache_initializer())))
+                                  has_initializer(model.graph().extended_initializer())))
       continue;
     EXT_ENFORCE_INVALID(value != values.end(), "Generate: missing graph feed '", name, "'.");
     if (input.type().has_sequence_type() &&
@@ -223,9 +222,7 @@ void CollectGraphValueNames(const GraphProto &graph, bool top_level,
     add_initializer(initializer.name());
   for (const SparseTensorProto &initializer : graph.sparse_initializer())
     add_initializer(initializer.values().name());
-  for (const EncodedValueProto &initializer : graph.encoded_initializer())
-    add_initializer(initializer.name());
-  for (const PagedCacheProto &initializer : graph.paged_cache_initializer())
+  for (const auto &initializer : graph.extended_initializer())
     add_initializer(initializer.name());
   for (const NodeProto &node : graph.node()) {
     for (const std::string &output : node.output()) {

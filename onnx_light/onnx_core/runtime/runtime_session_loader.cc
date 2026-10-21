@@ -75,7 +75,7 @@ void CollectNodes(Nodes &nodes, std::vector<TensorProto *> &tensors, size_t dept
 }
 
 void CollectGraph(GraphProto &graph, std::vector<TensorProto *> &tensors, size_t depth) {
-  if (graph.encoded_initializer().size() != 0 || graph.paged_cache_initializer().size() != 0)
+  if (!graph.extended_initializer().empty())
     throw std::invalid_argument(
         "Runtime loader does not support encoded or paged-cache initializers.");
   for (auto &tensor : graph.ref_initializer())

@@ -147,10 +147,7 @@ void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::str
   for (const SparseTensorProto &initializer : graph.sparse_initializer()) {
     AddValueName(initializer.values().name(), seen, names);
   }
-  for (const EncodedValueProto &initializer : graph.encoded_initializer()) {
-    AddValueName(initializer.name(), seen, names);
-  }
-  for (const PagedCacheProto &initializer : graph.paged_cache_initializer()) {
+  for (const auto &initializer : graph.extended_initializer()) {
     AddValueName(initializer.name(), seen, names);
   }
   CollectNodeValueNames(graph.node(), seen, names);

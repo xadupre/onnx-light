@@ -22,9 +22,7 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
   }
   for (const auto &initializer : graph.sparse_initializer())
     local.insert(initializer.values().name());
-  for (const auto &initializer : graph.encoded_initializer())
-    local.insert(initializer.name());
-  for (const auto &initializer : graph.paged_cache_initializer())
+  for (const auto &initializer : graph.extended_initializer())
     local.insert(initializer.name());
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];

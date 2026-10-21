@@ -80,19 +80,20 @@ references are explicitly marked rather than expanded as nested messages.
    │   │   └── metadata_props → StringStringEntryProto
    │   ├── quantization_annotation → TensorAnnotation
    │   │   └── quant_parameter_tensor_names → StringStringEntryProto
-   │   ├── encoded_initializer → EncodedValueProto
-   │   │   ├── affine → AffineLayoutProto
-   │   │   │   └── scale, zero_point → TensorProto (↑)
-   │   │   ├── struct_type → StructTypeProto (expanded below)
-   │   │   ├── logical_type → TypeProto (↑)
-   │   │   ├── external_data → StringStringEntryProto
-   │   │   └── parameter_ref → TensorAnnotation (model catalogue name reference)
+   │   ├── extended_initializer → ExtendedInitializerProto
+   │   │   ├── encoded_value → EncodedValueProto
+   │   │   │   ├── affine → AffineLayoutProto
+   │   │   │   │   └── scale, zero_point → TensorProto (↑)
+   │   │   │   ├── struct_type → StructTypeProto (expanded below)
+   │   │   │   ├── logical_type → TypeProto (↑)
+   │   │   │   ├── external_data → StringStringEntryProto
+   │   │   │   └── parameter_ref → TensorAnnotation (model catalogue name reference)
+   │   │   └── paged_cache → PagedCacheProto
+   │   │       └── blocks → PagedCacheBlockProto
+   │   │           ├── key, value → TensorProto (↑)
+   │   │           └── encoded_key, encoded_value → EncodedValueProto (↑)
    │   ├── persistent_bindings → PersistentBindingProto
    │   │   └── input_name, output_name → ValueInfoProto (graph IO name references)
-   │   ├── paged_cache_initializer → PagedCacheProto
-   │   │   └── blocks → PagedCacheBlockProto
-   │   │       ├── key, value → TensorProto (↑)
-   │   │       └── encoded_key, encoded_value → EncodedValueProto (↑)
    │   └── metadata_props → StringStringEntryProto
    ├── opset_import → OperatorSetIdProto
    ├── functions → FunctionProto
@@ -168,7 +169,8 @@ Quick attribute list used in the graph:
 
 * :doc:`pipeline_proto`: ``embedding``, ``prefill``, ``decode``, ``metadata_props``
 * :doc:`model_proto`: ``graph``, ``opset_import``, ``functions``, ``configuration``, ``metadata_props``, ``struct_types``, ``rewritings``
-* :doc:`graph_proto`: ``node``, ``initializer``, ``sparse_initializer``, ``input``, ``output``, ``value_info``, ``quantization_annotation``, ``metadata_props``, ``encoded_initializer``, ``persistent_bindings``, ``paged_cache_initializer``
+* :doc:`graph_proto`: ``node``, ``initializer``, ``sparse_initializer``, ``input``, ``output``, ``value_info``, ``quantization_annotation``, ``metadata_props``, ``extended_initializer``, ``persistent_bindings``
+* :doc:`extended_initializer_proto`: ``encoded_value`` or ``paged_cache``
 * :doc:`function_proto`: ``attribute_proto``, ``node``, ``opset_import``, ``value_info``, ``metadata_props``
 * :doc:`node_proto`: ``attribute``, ``device_configurations``, ``metadata_props``
 * :doc:`node_device_configuration_proto`: ``sharding_spec`` (and ``configuration_id``, a name reference to a :doc:`device_configuration_proto` declared in ``ModelProto.configuration``)
@@ -201,6 +203,7 @@ Quick attribute list used in the graph:
     attribute_proto
     device_configuration_proto
     encoded_value_proto
+    extended_initializer_proto
     function_proto
     graph_proto
     int_int_list_entry_proto

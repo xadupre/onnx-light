@@ -998,7 +998,11 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
   current_node_index_ = -2;
-  for (const auto &init : graph.paged_cache_initializer()) {
+  for (const auto &initializer : graph.extended_initializer()) {
+    EXT_ENFORCE_INVALID(initializer.has_value(), "Extended initializer has no payload.");
+    if (!initializer.has_paged_cache())
+      continue;
+    const auto &init = initializer.paged_cache();
     const auto input = std::find_if(graph.input().begin(), graph.input().end(),
                                     [&](const auto &vi) { return vi.name() == init.name(); });
     catalogue.ValidatePagedCache(
@@ -1009,7 +1013,10 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
       SetType(init.name(), type);
     }
   }
-  for (const auto &init : graph.ref_encoded_initializer()) {
+  for (const auto &initializer : graph.extended_initializer()) {
+    if (!initializer.has_encoded_value())
+      continue;
+    const auto &init = initializer.encoded_value();
     const auto input = std::find_if(graph.input().begin(), graph.input().end(),
                                     [&](const auto &vi) { return vi.name() == init.name(); });
     if (input == graph.input().end()) {
@@ -1197,10 +1204,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     seeded.insert(graph.initializer()[i].name());
   }
-  for (const auto &init : graph.ref_encoded_initializer()) {
-    seeded.insert(init.name());
-  }
-  for (const auto &init : graph.paged_cache_initializer()) {
+  for (const auto &init : graph.extended_initializer()) {
     seeded.insert(init.name());
   }
   // Update graph outputs in place.

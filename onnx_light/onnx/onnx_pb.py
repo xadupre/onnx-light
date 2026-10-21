@@ -9,6 +9,7 @@ from . import (  # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,
     EncodedValueProto,
+    ExtendedInitializerProto,
     FunctionProto,
     LocalRewritingProto,
     RewritingProto,

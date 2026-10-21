@@ -200,8 +200,8 @@ print("Explicit:  ", explicit)
 #
 # The encoded message contains its inline storage type and calibrated
 # parameters. A Dequantize-only graph can therefore reconstruct it without
-# the original input or plan. It belongs in ``encoded_initializer``, not in
-# the ordinary tensor ``initializer`` collection.
+# the original input or plan. It belongs in the ``encoded_value`` alternative
+# of ``extended_initializer``, not in the ordinary tensor ``initializer`` collection.
 
 restored = onnx.EncodedValueProto()
 restored.ParseFromString(encoded.SerializeToString())
@@ -211,7 +211,9 @@ initializer_graph = oh.make_graph(
     [],
     [oh.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [values.size])],
 )
-initializer_graph.encoded_initializer.append(restored)
+initializer_graph.extended_initializer.append(
+    onnx.ExtendedInitializerProto(encoded_value=restored)
+)
 initializer_model = oh.make_model(initializer_graph, opset_imports=[oh.make_opsetid("ai.rt", 1)])
 initializer_context = RuntimeContext()
 initializer_session = RuntimeSession(initializer_model)

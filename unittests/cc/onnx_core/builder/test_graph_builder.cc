@@ -3898,7 +3898,7 @@ TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
   auto *graph = model.mutable_graph();
   graph->set_name("native");
   graph->set_doc_string("graph documentation");
-  graph->ref_encoded_initializer().push_back(BuilderEncoded("weight"));
+  *graph->add_extended_initializer()->mutable_encoded_value() = BuilderEncoded("weight");
   graph->add_value_info(BuilderStructuredInfo("weight"))->set_doc_string("encoded descriptor");
   graph->add_value_info(BuilderStructuredInfo("result"));
   graph->add_initializer(MakeInitializer<float>("scale", {}, {2.f}));
@@ -3941,9 +3941,9 @@ TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
   ASSERT_EQ(exported.struct_types().size(), 1u);
   EXPECT_EQ(exported.struct_types()[0].SerializeAsString(),
             model.struct_types()[0].SerializeAsString());
-  ASSERT_EQ(exported.graph().encoded_initializer().size(), 1u);
-  EXPECT_EQ(exported.graph().encoded_initializer()[0].SerializeAsString(),
-            graph->encoded_initializer()[0].SerializeAsString());
+  ASSERT_EQ(exported.graph().extended_initializer().size(), 1u);
+  EXPECT_EQ(exported.graph().extended_initializer()[0].encoded_value().SerializeAsString(),
+            graph->extended_initializer()[0].encoded_value().SerializeAsString());
   EXPECT_EQ(exported.graph().output()[0].type().SerializeAsString(),
             graph->output()[0].type().SerializeAsString());
   core::shapes::ShapesContext context;
@@ -4030,7 +4030,7 @@ TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
   builder.MakeStructType(BuilderRecord());
   EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("bad", 1, 7)), std::invalid_argument);
   EXPECT_FALSE(builder.HasName("bad"));
-  EXPECT_TRUE(builder.EncodedInitializers().empty());
+  EXPECT_TRUE(builder.ExtendedInitializers().empty());
   EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("missing", 999)),
                std::invalid_argument);
   EXPECT_FALSE(builder.HasName("missing"));
@@ -4068,13 +4068,13 @@ TEST(GraphBuilderStructured, DeduplicatesOnlyCompleteSemanticIdentity) {
   builder.MakeOutput("result");
   builder.MakeOutput(BuilderStructuredInfo("public_output"));
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
-  ASSERT_EQ(builder.EncodedInitializers().size(), 4u);
+  ASSERT_EQ(builder.ExtendedInitializers().size(), 4u);
   EXPECT_EQ(builder.Shapes().GetEncodedLayout("first").record_count, 2u);
   EXPECT_EQ(builder.Shapes().GetEncodedLayout("short").record_count, 1u);
   EXPECT_EQ(builder.Nodes()[0].input(0), "first");
   EXPECT_EQ(builder.Nodes()[0].input(1), "different_type");
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("duplicate"));
-  EXPECT_EQ(builder.ToModel().graph().encoded_initializer().size(), 4u);
+  EXPECT_EQ(builder.ToModel().graph().extended_initializer().size(), 4u);
 }
 
 TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
@@ -4095,8 +4095,8 @@ TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
   builder.MakeNode("Capture", {}, {"result"}, "custom", "", attrs);
   builder.MakeOutput("result");
   EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
-  ASSERT_EQ(builder.EncodedInitializers().size(), 1u);
-  EXPECT_EQ(builder.EncodedInitializers()[0].name(), "live");
+  ASSERT_EQ(builder.ExtendedInitializers().size(), 1u);
+  EXPECT_EQ(builder.ExtendedInitializers()[0].name(), "live");
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("dead"));
   const auto model = builder.ToModel();
   EXPECT_EQ(model.graph().node()[0].attribute()[0].g().output()[0].name(), "local_live");
@@ -4111,7 +4111,7 @@ TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {
   child.MakeNode("Identity", {"inner"}, {"result"});
   child.MakeOutput("result");
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
-  EXPECT_TRUE(child.EncodedInitializers().empty());
+  EXPECT_TRUE(child.ExtendedInitializers().empty());
   EXPECT_EQ(child.Nodes()[0].input(0), "outer");
   EXPECT_FALSE(child.Shapes().HasEncodedValue("inner"));
   EXPECT_EQ(child.Shapes().GetEncodedLayout("outer").element_bits, 64u);
@@ -4137,7 +4137,7 @@ TEST(GraphBuilderStructured, RetainsPayloadOwnerAcrossImportMoveAndExport) {
     value.set_raw_data_with_deleter(bytes->data(), bytes->size(),
                                     [bytes, &released]() { released = true; });
     model.mutable_graph()->set_name("owner");
-    model.mutable_graph()->ref_encoded_initializer().push_back(EncodedValueProto(value));
+    *model.mutable_graph()->add_extended_initializer()->mutable_encoded_value() = value;
     model.mutable_graph()->add_output(BuilderStructuredInfo("weight"));
     core::builder::GraphBuilder imported(model, SchemaLookup());
     model.Clear();
@@ -4146,7 +4146,7 @@ TEST(GraphBuilderStructured, RetainsPayloadOwnerAcrossImportMoveAndExport) {
     core::builder::GraphBuilder moved(std::move(imported));
     EXPECT_FALSE(released);
     exported = moved.ToModel();
-    EXPECT_EQ(exported.graph().encoded_initializer()[0].raw_data().size(), 16u);
+    EXPECT_EQ(exported.graph().extended_initializer()[0].encoded_value().raw_data().size(), 16u);
     EXPECT_FALSE(released);
   }
   EXPECT_FALSE(released);
@@ -4173,7 +4173,8 @@ TEST(GraphBuilderStructured, ExternalPayloadLengthIsValidatedAndRetained) {
   EXPECT_EQ(builder.Shapes().GetEncodedLayout("external").record_count, 2u);
   EXPECT_FALSE(builder.Shapes().GetEncodedLayout("external").content_verified);
   const auto graph = builder.ToGraph();
-  EXPECT_EQ(graph.encoded_initializer()[0].SerializeAsString(), value.SerializeAsString());
+  EXPECT_EQ(graph.extended_initializer()[0].encoded_value().SerializeAsString(),
+            value.SerializeAsString());
 }
 
 TEST(GraphBuilderStructured, NestedGraphExportRetainsPayloadOwner) {
@@ -4200,7 +4201,7 @@ TEST(GraphBuilderStructured, NestedGraphExportRetainsPayloadOwner) {
     exported = builder.ToGraph();
   }
   EXPECT_FALSE(released);
-  ASSERT_EQ(exported.node()[0].attribute()[0].g().encoded_initializer().size(), 1u);
+  ASSERT_EQ(exported.node()[0].attribute()[0].g().extended_initializer().size(), 1u);
   exported.Clear();
   EXPECT_TRUE(released);
 }
@@ -4271,7 +4272,7 @@ TEST(GraphBuilderStructured, DoesNotDeduplicateDifferentInlineConstantsOrLogical
   builder.MakeEncodedInitializer(different_constant);
   builder.MakeEncodedInitializer(logical);
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
-  EXPECT_EQ(builder.EncodedInitializers().size(), 3u);
+  EXPECT_EQ(builder.ExtendedInitializers().size(), 3u);
 }
 
 TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplication) {
@@ -4281,7 +4282,7 @@ TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplicat
   builder.MakeInput(BuilderStructuredInfo("input"));
   EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("input", 2)),
                core::builder::BuilderError);
-  EXPECT_TRUE(builder.EncodedInitializers().empty());
+  EXPECT_TRUE(builder.ExtendedInitializers().empty());
   builder.MakeEncodedInitializer(BuilderEncoded("input"));
   builder.MakeEncodedInitializer(BuilderEncoded("constant"));
   builder.MakeNode("Identity", {"input"}, {"output"});
@@ -4291,7 +4292,7 @@ TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplicat
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
   const auto model = builder.ToModel();
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("input"));
-  EXPECT_EQ(model.graph().encoded_initializer().size(), 2u);
+  EXPECT_EQ(model.graph().extended_initializer().size(), 2u);
   core::shapes::ShapesContext context;
   context.ComputeShapeModel(model);
   EXPECT_FALSE(context.HasEncodedValue("input"));
@@ -4346,7 +4347,7 @@ TEST(GraphBuilderStructured, DoesNotConstantFoldEncodedBytesAsLogicalTensor) {
   builder.MakeOutput("output");
   EXPECT_EQ(builder.ConstantFold(), 0u);
   EXPECT_EQ(builder.Nodes().size(), 1u);
-  EXPECT_EQ(builder.EncodedInitializers().size(), 1u);
+  EXPECT_EQ(builder.ExtendedInitializers().size(), 1u);
   EXPECT_TRUE(builder.Initializers().empty());
   EXPECT_TRUE(builder.Shapes().HasEncodedValue("output"));
 }
@@ -4371,7 +4372,7 @@ TEST(GraphBuilderStructured, AffineDeduplicationIncludesScaleNotOnlyCodes) {
   builder.MakeEncodedInitializer(second);
   builder.MakeEncodedInitializer(duplicate);
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
-  ASSERT_EQ(builder.EncodedInitializers().size(), 2u);
+  ASSERT_EQ(builder.ExtendedInitializers().size(), 2u);
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("duplicate"));
   EXPECT_EQ(builder.GetShape("half_scale").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(builder.Shapes().GetEncodedLayout("half_scale").element_bits, 8u);
@@ -4379,10 +4380,10 @@ TEST(GraphBuilderStructured, AffineDeduplicationIncludesScaleNotOnlyCodes) {
   builder.MakeOutput("half_scale");
   builder.MakeOutput("unit_scale");
   const auto exported = builder.ToModel();
-  ASSERT_EQ(exported.graph().encoded_initializer().size(), 2u);
-  EXPECT_EQ(exported.graph().encoded_initializer()[0].SerializeAsString(),
+  ASSERT_EQ(exported.graph().extended_initializer().size(), 2u);
+  EXPECT_EQ(exported.graph().extended_initializer()[0].encoded_value().SerializeAsString(),
             first.SerializeAsString());
-  EXPECT_EQ(exported.graph().encoded_initializer()[1].SerializeAsString(),
+  EXPECT_EQ(exported.graph().extended_initializer()[1].encoded_value().SerializeAsString(),
             second.SerializeAsString());
   EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
   SerializeOptions options;

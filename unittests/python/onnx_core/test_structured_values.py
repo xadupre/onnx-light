@@ -76,14 +76,17 @@ class TestStructuredValues(ExtTestCase):
             doc_string="Nested typed and constant fields.",
         )
         model = onnx.ModelProto(
-            graph=onnx.GraphProto(name="g", encoded_initializer=[encoded()]),
+            graph=onnx.GraphProto(
+                name="g",
+                extended_initializer=[onnx.ExtendedInitializerProto(encoded_value=encoded())],
+            ),
             struct_types=[declaration(), record],
         )
         restored = onnx.ModelProto()
         restored.ParseFromString(model.SerializeToString())
         self.assertEqual(restored.SerializeToString(), model.SerializeToString())
         self.assertTrue(restored.HasField("struct_types"))
-        self.assertTrue(restored.graph.HasField("encoded_initializer"))
+        self.assertTrue(restored.graph.HasField("extended_initializer"))
         self.assertEqual(restored.struct_types[1].type_id, 2**40)
         fields = restored.struct_types[1].structure.field
         self.assertEqual(fields[0].WhichOneof("content"), "type")
@@ -95,7 +98,27 @@ class TestStructuredValues(ExtTestCase):
         self.assertEqual(restored.struct_types[1].decoder.name, "decode")
         self.assertEqual(restored.struct_types[1].encoder.name, "encode")
         self.assertEqual(restored.struct_types[1].metadata_props[0].value, "example")
-        self.assertEqual(restored.graph.encoded_initializer[0].raw_data, b"\x00\xff")
+        self.assertEqual(
+            restored.graph.extended_initializer[0].encoded_value.raw_data, b"\x00\xff"
+        )
+
+    def test_extended_initializer_oneof(self):
+        value = onnx.ExtendedInitializerProto(encoded_value=encoded())
+        self.assertEqual(value.WhichOneof("value"), "encoded_value")
+        value.paged_cache = onnx.PagedCacheProto(name="cache")
+        self.assertFalse(value.HasField("encoded_value"))
+        self.assertEqual(value.WhichOneof("value"), "paged_cache")
+        graph = onnx.GraphProto(
+            extended_initializer=[onnx.ExtendedInitializerProto(encoded_value=encoded()), value]
+        )
+        restored = onnx.GraphProto()
+        restored.ParseFromString(graph.SerializeToString())
+        self.assertEqual(restored.extended_initializer[0].encoded_value.raw_data, b"\x00\xff")
+        self.assertEqual(restored.extended_initializer[1].paged_cache.name, "cache")
+        restored.extended_initializer[1].encoded_value = encoded(name="replacement")
+        self.assertFalse(restored.extended_initializer[1].HasField("paged_cache"))
+        with self.assertRaises(ValueError):
+            value.WhichOneof("unknown")
 
     def test_presence_and_oneof_replacement(self):
         value = StructTypeProto()
@@ -266,17 +289,17 @@ class TestStructuredValues(ExtTestCase):
         builder.make_struct_type(declaration())
         name = builder.make_encoded_initializer(encoded())
         self.assertEqual(name, "weights")
-        self.assertEqual(builder.encoded_initializers()[0].name, name)
+        self.assertEqual(builder.extended_initializers()[0].encoded_value.name, name)
         layout = builder.shapes.get_encoded_layout(name)
         self.assertEqual((layout.payload_bytes, layout.record_count), (2, 2))
         output = builder.op.Identity(name)
         builder.out(output)
         model = builder.to_model()
         self.assertEqual(len(model.struct_types), 1)
-        self.assertEqual(model.graph.encoded_initializer[0].raw_data, b"\x00\xff")
+        self.assertEqual(model.graph.extended_initializer[0].encoded_value.raw_data, b"\x00\xff")
         self.assertEqual(model.graph.output[0].type.struct_type.type_ref, 1)
         self.assertEqual(
-            model.graph.encoded_initializer[0].logical_type.tensor_type.elem_type,
+            model.graph.extended_initializer[0].encoded_value.logical_type.tensor_type.elem_type,
             onnx.TensorProto.DataType.FLOAT,
         )
         restored = onnx.ModelProto()
@@ -286,8 +309,8 @@ class TestStructuredValues(ExtTestCase):
             rebuilt.struct_types[0].SerializeToString(), model.struct_types[0].SerializeToString()
         )
         self.assertEqual(
-            rebuilt.graph.encoded_initializer[0].SerializeToString(),
-            model.graph.encoded_initializer[0].SerializeToString(),
+            rebuilt.graph.extended_initializer[0].encoded_value.SerializeToString(),
+            model.graph.extended_initializer[0].encoded_value.SerializeToString(),
         )
 
     def test_structured_identity_without_logical_tensor(self):
@@ -333,7 +356,7 @@ class TestStructuredValues(ExtTestCase):
         builder.out(output)
         model = builder.to_standard_model()
         self.assertEqual(len(model.struct_types), 0)
-        self.assertEqual(len(model.graph.encoded_initializer), 0)
+        self.assertEqual(len(model.graph.extended_initializer), 0)
         self.assertEqual(model.graph.output[0].type.WhichOneof("value"), "tensor_type")
         from onnx_light.onnx.checker import check_model
 
@@ -397,7 +420,7 @@ class TestStructuredValues(ExtTestCase):
         context.apply_inferred_shapes_to_model(model)
         self.assertEqual(model.graph.input[0].type.tensor_type.shape.dim[0].dim_param, "batch")
         self.assertEqual(model.graph.output[0].type.tensor_type.shape.dim[0].dim_param, "batch")
-        self.assertEqual(model.graph.encoded_initializer[0].raw_data, b"\x00\xff")
+        self.assertEqual(model.graph.extended_initializer[0].encoded_value.raw_data, b"\x00\xff")
 
 
 if __name__ == "__main__":

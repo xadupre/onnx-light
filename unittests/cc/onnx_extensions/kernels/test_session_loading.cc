@@ -650,7 +650,7 @@ TEST_F(RuntimeSessionLoading, SupportsExternalSizeAlias) {
 
 TEST_F(RuntimeSessionLoading, RejectsEncodedPayloadBeforeReadingOrDeclaring) {
   auto model = ReadModel();
-  auto *encoded = model.ref_graph().add_encoded_initializer();
+  auto *encoded = model.ref_graph().add_extended_initializer()->mutable_encoded_value();
   encoded->set_name("encoded");
   encoded->set_raw_data(std::string(4096, '\0'));
   SaveModel(model);
@@ -670,7 +670,7 @@ TEST_F(RuntimeSessionLoading, RejectsEncodedPayloadBeforeReadingOrDeclaring) {
 
 TEST_F(RuntimeSessionLoading, RejectsPagedPayloadBeforeReadingOrDeclaring) {
   auto model = ReadModel();
-  auto *cache = model.ref_graph().add_paged_cache_initializer();
+  auto *cache = model.ref_graph().add_extended_initializer()->mutable_paged_cache();
   cache->set_name("cache");
   auto *key = cache->add_blocks()->mutable_key();
   key->set_name("key");

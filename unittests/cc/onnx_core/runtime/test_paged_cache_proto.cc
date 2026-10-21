@@ -6,6 +6,8 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include <cstring>
 #include <gtest/gtest.h>
+#include <memory>
+#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -62,7 +64,7 @@ ModelProto CacheModel() {
   auto *opset = model.add_opset_import();
   opset->set_domain("");
   opset->set_version(23);
-  *model.mutable_graph()->add_paged_cache_initializer() = Cache();
+  *model.mutable_graph()->add_extended_initializer()->mutable_paged_cache() = Cache();
   auto *output = model.mutable_graph()->add_output();
   output->set_name("cache");
   output->mutable_type()->mutable_struct_type();
@@ -78,12 +80,16 @@ TEST(PagedCacheProto, ModelRoundTripPresenceEqualityAndInitializers) {
   ASSERT_TRUE(parsed.ParseFromString(model.SerializeAsString()));
   std::string difference;
   EXPECT_TRUE(model.Equals(parsed, &difference)) << difference;
-  EXPECT_TRUE(parsed.graph().paged_cache_initializer(0).blocks(0).has_start());
-  auto *block = parsed.mutable_graph()->mutable_paged_cache_initializer(0)->mutable_blocks(0);
+  EXPECT_TRUE(parsed.graph().extended_initializer(0).paged_cache().blocks(0).has_start());
+  auto *block = parsed.mutable_graph()
+                    ->mutable_extended_initializer(0)
+                    ->mutable_paged_cache()
+                    ->mutable_blocks(0);
   block->set_length(2);
   difference.clear();
   EXPECT_FALSE(model.Equals(parsed, &difference));
-  EXPECT_NE(difference.find("paged_cache_initializer[0].blocks[0].length"), std::string::npos);
+  EXPECT_NE(difference.find("extended_initializer[0].paged_cache.blocks[0].length"),
+            std::string::npos);
   PagedCacheProto empty;
   EXPECT_NO_THROW(StructTypeCatalogue().ValidatePagedCache(empty));
   auto changed = Cache();
@@ -110,9 +116,17 @@ TEST(PagedCacheProto, CopyFromReplacesExistingBlocksAndPresence) {
   cache.CopyFrom(cache);
   EXPECT_TRUE(cache.Equals(Cache()));
   PagedCacheBlockProto block = cache.blocks(0);
+  block.CopyFrom(EncodedCache().blocks(0));
+  EXPECT_TRUE(block.Equals(EncodedCache().blocks(0)));
+  block.CopyFrom(cache.blocks(0));
+  EXPECT_TRUE(block.Equals(cache.blocks(0)));
+  block.CopyFrom(block);
+  EXPECT_TRUE(block.Equals(cache.blocks(0)));
   block.CopyFrom(PagedCacheBlockProto{});
   EXPECT_FALSE(block.has_start());
+  EXPECT_FALSE(block.has_length());
   EXPECT_FALSE(block.has_key_payload());
+  EXPECT_FALSE(block.has_value_payload());
   cache.CopyFrom(PagedCacheProto{});
   EXPECT_TRUE(cache.blocks().empty());
   EXPECT_FALSE(cache.has_name());
@@ -203,7 +217,10 @@ TEST(PagedCacheProto, ImportsTypedFloat16AndBfloat16PagesWithOwnedStorage) {
     RuntimeValue value;
     {
       auto model = CacheModel();
-      auto *block = model.mutable_graph()->mutable_paged_cache_initializer(0)->mutable_blocks(0);
+      auto *block = model.mutable_graph()
+                        ->mutable_extended_initializer(0)
+                        ->mutable_paged_cache()
+                        ->mutable_blocks(0);
       for (auto *tensor : {block->mutable_key(), block->mutable_value()}) {
         tensor->clear_float_data();
         tensor->set_data_type(dtype);
@@ -211,9 +228,9 @@ TEST(PagedCacheProto, ImportsTypedFloat16AndBfloat16PagesWithOwnedStorage) {
           tensor->add_int32_data(bits);
       }
       EXPECT_NO_THROW(VerifyModel(model));
-      value = RuntimeValue::FromPagedCache(model.graph().paged_cache_initializer(0));
+      value = RuntimeValue::FromPagedCache(model.graph().extended_initializer(0).paged_cache());
       for (int count : {0, 3, 5}) {
-        auto malformed = model.graph().paged_cache_initializer(0);
+        auto malformed = model.graph().extended_initializer(0).paged_cache();
         auto *key = malformed.mutable_blocks(0)->mutable_key();
         key->clear_int32_data();
         for (int i = 0; i < count; ++i)
@@ -327,22 +344,69 @@ TEST(PagedCacheProto, SessionSeedsAndReseedsWithoutOverridingCallerValues) {
 TEST(PagedCacheProto, GraphBuilderPreservesAndPrunesInitializer) {
   auto model = CacheModel();
   core::builder::GraphBuilder builder(model);
-  ASSERT_EQ(builder.PagedCacheInitializers().size(), 1u);
+  ASSERT_EQ(builder.ExtendedInitializers().size(), 1u);
   const auto exported = builder.ToModel();
-  ASSERT_EQ(exported.graph().paged_cache_initializer_size(), 1);
-  EXPECT_TRUE(exported.graph().paged_cache_initializer(0).Equals(Cache()));
+  ASSERT_EQ(exported.graph().extended_initializer_size(), 1);
+  EXPECT_TRUE(exported.graph().extended_initializer(0).paged_cache().Equals(Cache()));
   EXPECT_THROW(builder.MakePagedCacheInitializer(Cache()), core::builder::BuilderError);
   EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
   auto unused = Cache();
   unused.set_name("unused");
   builder.MakePagedCacheInitializer(unused);
   builder.RemoveUnusedNodes();
-  EXPECT_EQ(builder.PagedCacheInitializers().size(), 1u);
+  EXPECT_EQ(builder.ExtendedInitializers().size(), 1u);
+}
+
+TEST(PagedCacheProto, GraphExportRetainsDenseAndEncodedPayloadOwners) {
+  for (bool encoded : {false, true}) {
+    SCOPED_TRACE(encoded);
+    bool released[2] = {false, false};
+    const uint8_t *payloads[2] = {nullptr, nullptr};
+    ModelProto exported;
+    {
+      auto model = CacheModel();
+      auto *cache = model.mutable_graph()->mutable_extended_initializer(0)->mutable_paged_cache();
+      if (encoded) {
+        *cache = EncodedCache();
+        model.mutable_graph()->mutable_output(0)->set_name(cache->name());
+      }
+      auto *block = cache->mutable_blocks(0);
+      for (size_t i = 0; i < 2; ++i) {
+        auto bytes = std::make_shared<std::vector<uint8_t>>(encoded ? 4 : 16, 1);
+        payloads[i] = bytes->data();
+        auto deleter = [bytes, &released, i]() { released[i] = true; };
+        if (encoded) {
+          auto *value = i == 0 ? block->mutable_encoded_key() : block->mutable_encoded_value();
+          value->set_raw_data_with_deleter(bytes->data(), bytes->size(), std::move(deleter));
+        } else {
+          auto *value = i == 0 ? block->mutable_key() : block->mutable_value();
+          value->clear_float_data();
+          value->set_raw_data_with_deleter(bytes->data(), bytes->size(), std::move(deleter));
+        }
+      }
+      core::builder::GraphBuilder builder(model);
+      model.Clear();
+      exported = builder.ToModel();
+    }
+    for (size_t i = 0; i < 2; ++i) {
+      EXPECT_FALSE(released[i]);
+      const auto &block = exported.graph().extended_initializer(0).paged_cache().blocks(0);
+      const auto &payload =
+          encoded ? (i == 0 ? block.encoded_key().raw_data() : block.encoded_value().raw_data())
+                  : (i == 0 ? block.key().raw_data() : block.value().raw_data());
+      EXPECT_EQ(payload.data(), payloads[i]);
+      ASSERT_EQ(payload.size(), encoded ? 4u : 16u);
+      EXPECT_EQ(payload[0], 1);
+    }
+    exported.Clear();
+    EXPECT_TRUE(released[0]);
+    EXPECT_TRUE(released[1]);
+  }
 }
 
 TEST(PagedCacheProto, RejectsInitializerNameCollisionsAndMismatchedDeclaredDefaults) {
   auto model = CacheModel();
-  *model.mutable_graph()->add_paged_cache_initializer() = Cache();
+  *model.mutable_graph()->add_extended_initializer()->mutable_paged_cache() = Cache();
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
   model = CacheModel();
   *model.mutable_graph()->add_initializer() = Cache().blocks(0).key();
@@ -393,7 +457,7 @@ TEST(PagedCacheProto, RejectsArrayAndBitPackingDeclarationsIncludingReferences) 
       EXPECT_NO_THROW(ValidatePersistentType(catalogue, type));
       EXPECT_THROW(catalogue.ValidatePagedCache(Cache(), true, &type), std::invalid_argument);
       EXPECT_THROW(VerifyModel(model), std::invalid_argument);
-      model.mutable_graph()->clear_paged_cache_initializer();
+      model.mutable_graph()->clear_extended_initializer();
       EXPECT_NO_THROW(VerifyModel(model));
     }
   }
@@ -407,7 +471,10 @@ TEST(PagedCacheProto, RequiresLogicalFloatDeclarationsRegardlessOfPhysicalStorag
         SCOPED_TRACE(logical);
         SCOPED_TRACE(payload);
         auto model = CacheModel();
-        auto *block = model.mutable_graph()->mutable_paged_cache_initializer(0)->mutable_blocks(0);
+        auto *block = model.mutable_graph()
+                          ->mutable_extended_initializer(0)
+                          ->mutable_paged_cache()
+                          ->mutable_blocks(0);
         if (physical != TensorProto::FLOAT) {
           for (auto *tensor : {block->mutable_key(), block->mutable_value()}) {
             tensor->set_data_type(physical);

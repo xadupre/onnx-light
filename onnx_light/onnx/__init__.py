@@ -16,6 +16,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,
     EncodedValueProto,
+    ExtendedInitializerProto,
     FileLoadMode,
     FunctionProto,
     GraphProto,

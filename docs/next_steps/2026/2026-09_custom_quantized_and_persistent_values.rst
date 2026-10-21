@@ -9,6 +9,11 @@ Custom, quantized, and persistent values
 
 **completed**
 
+The initializer collections described in this historical plan were subsequently
+unified as ``GraphProto.extended_initializer`` with an
+``ExtendedInitializerProto`` oneof. See :doc:`../../api/protos/graph_proto`
+for the current schema and its intentional extension-format compatibility break.
+
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

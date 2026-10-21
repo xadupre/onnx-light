@@ -23,6 +23,42 @@ TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::TensorProto, TensorProto>::value));
 }
 
+TEST(onnx_proto, ExtendedInitializerOneofRoundTrip) {
+  ExtendedInitializerProto encoded;
+  encoded.mutable_encoded_value()->set_name("weights");
+  encoded.mutable_encoded_value()->set_raw_data(std::string("\0\xff", 2));
+  ExtendedInitializerProto paged;
+  paged.mutable_paged_cache()->set_name("cache");
+  paged.mutable_paged_cache()->add_blocks()->set_length(1);
+  GraphProto graph;
+  graph.add_initializer()->set_name("dense");
+  graph.add_sparse_initializer()->mutable_values()->set_name("sparse");
+  *graph.add_extended_initializer() = encoded;
+  *graph.add_extended_initializer() = paged;
+  GraphProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(graph.SerializeAsString()));
+  std::string difference;
+  EXPECT_TRUE(loaded.Equals(graph, &difference)) << difference;
+  EXPECT_EQ(loaded.initializer(0).name(), "dense");
+  EXPECT_EQ(loaded.sparse_initializer(0).values().name(), "sparse");
+  EXPECT_EQ(loaded.extended_initializer(0).encoded_value().raw_data().size(), 2u);
+  EXPECT_TRUE(loaded.extended_initializer(1).has_paged_cache());
+
+  ExtendedInitializerProto switched;
+  ASSERT_TRUE(switched.ParseFromString(encoded.SerializeAsString() + paged.SerializeAsString()));
+  EXPECT_TRUE(switched.has_paged_cache());
+  EXPECT_FALSE(switched.has_encoded_value());
+  EXPECT_EQ(switched.name(), "cache");
+  switched.mutable_encoded_value()->set_name("replacement");
+  EXPECT_FALSE(switched.has_paged_cache());
+  EXPECT_EQ(switched.name(), "replacement");
+  ExtendedInitializerProto copied;
+  copied.CopyFrom(switched);
+  EXPECT_TRUE(copied.Equals(switched));
+  copied.CopyFrom(ExtendedInitializerProto{});
+  EXPECT_FALSE(copied.has_value());
+}
+
 TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   RewritingProto source;
   auto &edit = *source.add_rewrites();
@@ -32,6 +68,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   edit.add_matched_nodes(0);
   edit.add_matched_nodes(UINT64_MAX);
   edit.add_removed_initializers(2);
+  edit.add_removed_extended_initializers(1);
+  edit.add_removed_extended_initializers(UINT64_MAX);
   edit.add_added_nodes()->set_op_type("Identity");
   edit.add_added_nodes_positions(1);
   edit.add_added_initializers()->set_name("literal");
@@ -56,6 +94,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   std::string difference;
   EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
   EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
+  EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(0), 1u);
+  EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(1), UINT64_MAX);
   RewritingProto copied;
   copied.CopyFrom(loaded);
   EXPECT_TRUE(copied.Equals(source, &difference)) << difference;

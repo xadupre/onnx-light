@@ -675,9 +675,9 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
 
 bool IsNodeOnlyRewrite(const LocalRewritingProto &rewrite) {
   return !rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
-         rewrite.added_initializers().empty() && rewrite.added_initializer_positions().empty() &&
-         rewrite.value_renames().empty() && rewrite.initializer_calls().empty() &&
-         rewrite.computed_initializer_positions().empty();
+         rewrite.removed_extended_initializers().empty() && rewrite.added_initializers().empty() &&
+         rewrite.added_initializer_positions().empty() && rewrite.value_renames().empty() &&
+         rewrite.initializer_calls().empty() && rewrite.computed_initializer_positions().empty();
 }
 
 bool SameGraphPath(const LocalRewritingProto &left, const LocalRewritingProto &right) {
@@ -1367,9 +1367,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         available.insert(input.name().value());
       for (const auto &initializer : builder_.initializers_)
         available.insert(initializer.name().value());
-      for (const auto &initializer : builder_.encoded_initializers_)
-        available.insert(initializer.name().value());
-      for (const auto &initializer : builder_.paged_cache_initializers_)
+      for (const auto &initializer : builder_.extended_initializers_)
         available.insert(initializer.name().value());
       for (const auto &initializer : builder_.graph_template_.sparse_initializer())
         available.insert(initializer.values().name().value());
@@ -1455,38 +1453,38 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
                                 bool remove_unused) {
   const auto original_nodes = builder_.nodes_;
   const std::size_t first_rewrite = rewrites.size();
-  const auto initializer_names = [&]() {
+  const auto initializer_names = [](const auto &initializers) {
     std::vector<std::string> names;
-    names.reserve(builder_.initializers_.size());
-    for (const auto &initializer : builder_.initializers_)
+    names.reserve(initializers.size());
+    for (const auto &initializer : initializers)
       names.push_back(initializer.name().value());
     return names;
   };
   const auto all_initializer_names = [&]() {
-    auto names = initializer_names();
-    for (const auto &initializer : builder_.encoded_initializers_)
-      names.push_back(initializer.name().value());
-    for (const auto &initializer : builder_.paged_cache_initializers_)
+    auto names = initializer_names(builder_.initializers_);
+    for (const auto &initializer : builder_.extended_initializers_)
       names.push_back(initializer.name().value());
     return names;
   };
   const auto initializers_before = all_initializer_names();
-  const auto record_removed_initializers = [&](LocalRewritingProto &rewrite,
-                                               const std::vector<std::string> &original) {
+  const auto record_removed_initializers = [](const std::vector<std::string> &original,
+                                              const auto &initializers, auto &positions) {
     std::unordered_set<std::string> retained;
-    for (const auto &initializer : builder_.initializers_)
+    for (const auto &initializer : initializers)
       retained.insert(initializer.name().value());
     for (std::size_t i = 0; i < original.size(); ++i)
       if (retained.count(original[i]) == 0)
-        rewrite.add_removed_initializers(i);
+        positions.push_back(i);
   };
   const auto record_nodes = [&](const std::string &name, const auto &cleanup) {
     const std::size_t node_count = builder_.nodes_.size();
-    const auto original_initializers = initializer_names();
+    const auto original_initializers = initializer_names(builder_.initializers_);
+    const auto original_extended = initializer_names(builder_.extended_initializers_);
     std::unordered_map<std::string, std::string> applied_renames;
     const std::size_t removed = cleanup(applied_renames);
     const std::size_t removed_initializers =
-        original_initializers.size() - builder_.initializers_.size();
+        original_initializers.size() - builder_.initializers_.size() + original_extended.size() -
+        builder_.extended_initializers_.size();
     if (removed == 0 && removed_initializers == 0) {
       return std::size_t{0};
     }
@@ -1502,7 +1500,10 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       rewriting.add_added_nodes_positions(i);
     }
     if (removed_initializers != 0) {
-      record_removed_initializers(rewriting, original_initializers);
+      record_removed_initializers(original_initializers, builder_.initializers_,
+                                  rewriting.ref_removed_initializers());
+      record_removed_initializers(original_extended, builder_.extended_initializers_,
+                                  rewriting.ref_removed_extended_initializers());
     }
     RecordRenames(rewriting, applied_renames);
     rewrites.push_back(std::move(rewriting));
@@ -1521,7 +1522,8 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
   }
 
   const std::size_t node_count = builder_.nodes_.size();
-  const auto original_initializers = initializer_names();
+  const auto original_initializers = initializer_names(builder_.initializers_);
+  const auto original_extended = initializer_names(builder_.extended_initializers_);
   std::unordered_map<std::string, std::string> applied_renames;
   const std::size_t removed_initializers = builder_.DeduplicateInitializers(
       GraphBuilder::InitializerContentIndex{}, false, &applied_renames);
@@ -1537,7 +1539,10 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
       rewriting.add_added_nodes_positions(i);
     }
-    record_removed_initializers(rewriting, original_initializers);
+    record_removed_initializers(original_initializers, builder_.initializers_,
+                                rewriting.ref_removed_initializers());
+    record_removed_initializers(original_extended, builder_.extended_initializers_,
+                                rewriting.ref_removed_extended_initializers());
     RecordRenames(rewriting, applied_renames);
     rewrites.push_back(std::move(rewriting));
     cleaned += removed_initializers;
@@ -1647,8 +1652,9 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   };
   std::vector<AddedNode> added_nodes;
   if (rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
-      rewrite.added_nodes().empty() && rewrite.added_initializers().empty() &&
-      rewrite.value_renames().empty() && rewrite.initializer_calls().empty()) {
+      rewrite.removed_extended_initializers().empty() && rewrite.added_nodes().empty() &&
+      rewrite.added_initializers().empty() && rewrite.value_renames().empty() &&
+      rewrite.initializer_calls().empty()) {
     throw BuilderError("ApplyRewriting: an empty rewrite is not allowed.");
   }
   for (const uint64_t encoded_position : rewrite.matched_nodes()) {
@@ -1678,6 +1684,26 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     if (!removed_initializers.insert(position).second) {
       throw BuilderError("ApplyRewriting: duplicate removed initializer position " +
                          std::to_string(position) + ".");
+    }
+  }
+  std::unordered_set<std::size_t> removed_extended;
+  for (uint64_t encoded_position : rewrite.removed_extended_initializers()) {
+    const std::size_t position = CheckedPosition(encoded_position);
+    if (position >= extended_initializers_.size())
+      throw BuilderError("ApplyRewriting: removed extended initializer position is outside "
+                         "the graph.");
+    if (!removed_extended.insert(position).second)
+      throw BuilderError("ApplyRewriting: duplicate removed extended initializer position.");
+  }
+  utils::RepeatedProtoField<ExtendedInitializerProto> rebuilt_extended_initializers;
+  if (!removed_extended.empty()) {
+    rebuilt_extended_initializers.reserve(extended_initializers_.size() - removed_extended.size());
+    for (std::size_t position = 0; position < extended_initializers_.size(); ++position) {
+      if (removed_extended.count(position) == 0) {
+        rebuilt_extended_initializers.add();
+        rebuilt_extended_initializers.get(rebuilt_extended_initializers.size() - 1) =
+            extended_initializers_.shared_at(position);
+      }
     }
   }
   for (const auto &rename : rewrite.value_renames()) {
@@ -1741,9 +1767,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       for (const auto &node : (*scope)->nodes_)
         for (const auto &output : node.output())
           constants.erase(output.value());
-      for (const auto &initializer : (*scope)->encoded_initializers_)
-        constants.erase(initializer.name().value());
-      for (const auto &initializer : (*scope)->paged_cache_initializers_)
+      for (const auto &initializer : (*scope)->extended_initializers_)
         constants.erase(initializer.name().value());
       for (const auto &initializer : (*scope)->graph_template_.sparse_initializer())
         constants.erase(initializer.values().name().value());
@@ -1889,16 +1913,12 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   for (const auto &addition : added_nodes) {
     validate_node_outputs(*addition.node);
   }
-  for (const auto &initializer : encoded_initializers_) {
+  const auto &remaining_extended_initializers =
+      removed_extended.empty() ? extended_initializers_ : rebuilt_extended_initializers;
+  for (const auto &initializer : remaining_extended_initializers) {
     if (initializer_names.count(initializer.name().value()) != 0) {
       throw BuilderError(
-          "ApplyRewriting: an initializer name conflicts with an encoded initializer.");
-    }
-  }
-  for (const auto &initializer : paged_cache_initializers_) {
-    if (initializer_names.count(initializer.name().value()) != 0) {
-      throw BuilderError(
-          "ApplyRewriting: an initializer name conflicts with a paged-cache initializer.");
+          "ApplyRewriting: an initializer name conflicts with an extended initializer.");
     }
   }
 
@@ -1935,15 +1955,19 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       }
     }
   }
-  for (std::size_t position : removed_initializers) {
-    const std::string name = initializers[position].name().value();
-    affected_values.insert(name);
-    compute_.EraseValue(name);
-    if (std::none_of(inputs_.begin(), inputs_.end(),
-                     [&](const auto &input) { return input.name() == name; })) {
-      compute_.Shapes().Erase(name);
+  const auto erase_removed_values = [&](const auto &initializers, const auto &positions) {
+    for (const auto position : positions) {
+      const std::string name = initializers[position].name().value();
+      affected_values.insert(name);
+      compute_.EraseValue(name);
+      if (std::none_of(inputs_.begin(), inputs_.end(),
+                       [&](const auto &input) { return input.name() == name; })) {
+        compute_.Shapes().Erase(name);
+      }
     }
-  }
+  };
+  erase_removed_values(initializers, removed_initializers);
+  erase_removed_values(extended_initializers_, removed_extended);
   for (const auto &addition : added_initializers) {
     affected_values.insert(addition.initializer->name().value());
   }
@@ -1987,6 +2011,8 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   }
   nodes = std::move(rebuilt);
   initializers = std::move(rebuilt_initializers);
+  if (!removed_extended.empty())
+    extended_initializers_ = std::move(rebuilt_extended_initializers);
   PruneValueInfos();
   RefreshAfterRewriting(old_indices, std::move(affected_values));
 }

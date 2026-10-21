@@ -95,10 +95,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   for (const auto &initializer : graph.initializer()) {
     info.graph_initializers.insert(initializer.name());
   }
-  for (const auto &initializer : graph.encoded_initializer()) {
-    info.graph_initializers.insert(initializer.name());
-  }
-  for (const auto &initializer : graph.paged_cache_initializer()) {
+  for (const auto &initializer : graph.extended_initializer()) {
     info.graph_initializers.insert(initializer.name());
   }
   for (const auto &output : graph.output()) {

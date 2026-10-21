@@ -7,8 +7,10 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestProtoRelationsSync(unittest.TestCase):
+
+class TestProtoRelationsSync(ExtTestCase):
     """Checks the proto containment diagram against the message declarations."""
 
     ROOT = Path(__file__).resolve().parents[2]

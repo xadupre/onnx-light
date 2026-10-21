@@ -135,7 +135,7 @@ In both cases, `match` identifies the two nodes and `apply` returns one new node
 The optimizer handles graph updates and edit capture; replay does not call the
 pattern again.
 
-### The Same Rule with Gramalingam's Design
+### The Same Rule with onnxscript's Design
 
 The source and replacement are textual graphs embedded in C++. Here the rule
 is restricted to float32 inputs and ONNX opsets 14 through 21.

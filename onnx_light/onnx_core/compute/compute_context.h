@@ -248,6 +248,23 @@ public:
   /// :cpp:func:`ComputeValueAndNodeTags`.
   const std::vector<std::string> &NodeTags() const noexcept { return node_tags_; }
 
+  /// Stores exact incremental tags without copying shapes or graph definitions.
+  struct TagState {
+    std::unordered_map<std::string, std::string> values;
+    std::vector<std::string> nodes;
+    std::vector<char> custom_overrides;
+
+    bool operator==(const TagState &) const = default;
+  };
+
+  /// Captures the current value and node tags for in-memory restoration.
+  TagState CaptureTagState() const { return {value_tags_, node_tags_, node_tag_custom_override_}; }
+
+  /// Restores captured tags and refreshes affected release and memory metadata.
+  /// The offset accounts for initializer Constants materialized in exported functions.
+  void RestoreTagState(const TagState &state, const utils::RepeatedProtoField<NodeProto> &nodes,
+                       std::size_t node_offset = 0);
+
   /// Tag inferred for the node at ``node_index``.
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.

@@ -33,6 +33,8 @@ namespace detail {
 struct RewritingUndoState {
   struct ScopeDevices {
     Device device = Device::kUndefined;
+    core::compute::ComputeContext::TagState tags;
+    std::vector<std::string> initializer_names;
     std::map<std::string, ScopeDevices> subgraphs;
 
     bool operator==(const ScopeDevices &) const = default;
@@ -523,7 +525,9 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
     if (!actual.Equals(added_values[i], &difference))
       throw BuilderError("UndoRewritings: replacement definition does not match: " + difference);
   }
-  std::unordered_set<std::size_t> added(added_positions.begin(), added_positions.end());
+  std::unordered_set<std::size_t> added;
+  for (uint64_t position : added_positions)
+    added.insert(CheckedPosition(position));
   std::unordered_map<std::size_t, std::size_t> removed;
   for (std::size_t i = 0; i < removed_positions.size(); ++i) {
     const auto position = CheckedPosition(removed_positions[i]);
@@ -1416,6 +1420,7 @@ std::size_t GraphGraph::Canonicalize() {
     GraphGraph child(*subgraph, patterns_);
     removed += child.Canonicalize();
   }
+  builder_.MoveShapeAndSizeNodesImpl(false);
   computed_constants_.clear();
   Rebuild();
   return removed + local_removed;
@@ -1441,6 +1446,10 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                      const GraphBuilder &scope) -> UndoState::ScopeDevices {
       UndoState::ScopeDevices devices;
       devices.device = scope.device_;
+      devices.tags = scope.compute_.CaptureTagState();
+      if (scope.is_local_function_)
+        for (const auto &initializer : scope.initializers_)
+          devices.initializer_names.push_back(initializer.name().value());
       for (const auto &subgraph : scope.subgraphs_)
         devices.subgraphs.emplace(subgraph->name_, self(self, *subgraph));
       for (const auto &function : scope.local_functions_) {
@@ -2810,8 +2819,15 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   *model.mutable_graph() = BuildGraph();
   for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
-  for (const auto &function : local_functions_)
-    MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_functions(collect_functions, *this);
   model.ref_struct_types() = Shapes().StructTypes();
   // Recipe definitions are normalized just as they are by forward replay.
   ModelProto dependency_model;
@@ -2959,6 +2975,19 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
                                    const UndoState::ScopeDevices &devices) -> void {
     if (scope.subgraphs_.size() != devices.subgraphs.size())
       throw BuilderError("UndoRewritings: incompatible restored device scopes.");
+    std::size_t node_offset = 0;
+    if (scope.is_local_function_ && scope.nodes_.size() != devices.tags.nodes.size()) {
+      node_offset = devices.initializer_names.size();
+      if (node_offset > scope.nodes_.size())
+        throw BuilderError("UndoRewritings: incompatible restored function initializers.");
+      for (std::size_t index = 0; index < node_offset; ++index) {
+        const auto &node = scope.nodes_[index];
+        if (node.op_type() != "Constant" || RewriteDomain(node.domain().value()) != "ai.onnx" ||
+            node.output().size() != 1 || node.output(0) != devices.initializer_names[index])
+          throw BuilderError("UndoRewritings: incompatible restored function initializer.");
+      }
+    }
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

@@ -79,7 +79,7 @@ public:
   /// Rejects conflicting existing devices before modifying any builder.
   void SetTargetDevice(symbolic::Device device);
 
-  /// Establishes canonical value names before reversible optimization capture.
+  /// Establishes canonical value names and export-stable Shape/Size ordering before capture.
   std::size_t Canonicalize();
 
   /**

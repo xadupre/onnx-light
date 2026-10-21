@@ -421,6 +421,33 @@ void ComputeContext::RefreshValueTags(const utils::RepeatedProtoField<NodeProto>
                     {changed_values.begin(), changed_values.end()});
 }
 
+void ComputeContext::RestoreTagState(const TagState &state,
+                                     const utils::RepeatedProtoField<NodeProto> &nodes,
+                                     std::size_t node_offset) {
+  EXT_ENFORCE_INVALID(
+      node_offset <= nodes.size() && state.nodes.size() == nodes.size() - node_offset &&
+          state.custom_overrides.size() == state.nodes.size() &&
+          node_tags_.size() == nodes.size() && node_tag_custom_override_.size() == nodes.size(),
+      "RestoreTagState: inconsistent node coordinates.");
+  std::vector<std::string> changed;
+  for (const auto &[name, tag] : value_tags_) {
+    const auto found = state.values.find(name);
+    if (found == state.values.end() || found->second != tag)
+      changed.push_back(name);
+  }
+  for (const auto &[name, tag] : state.values)
+    if (value_tags_.count(name) == 0)
+      changed.push_back(name);
+  value_tags_ = state.values;
+  for (std::size_t index = 0; index < state.nodes.size(); ++index) {
+    node_tags_[node_offset + index] = state.nodes[index];
+    node_tag_custom_override_[node_offset + index] = state.custom_overrides[index];
+  }
+  // Empty seeds update tag-dependent bookkeeping without re-inferring captured tags.
+  PropagateNodeTags(nodes, {}, changed);
+  RefreshIncrementalMemory(nodes, shapes_);
+}
+
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
                                     bool is_initializer, bool allow_input_overwrite) {
   EXT_ENFORCE_INVALID(!allow_input_overwrite,

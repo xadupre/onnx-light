@@ -386,6 +386,61 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
 
+    def test_to_onnx_bundle_keeps_positions_after_identity_cleanup_and_shape_hoisting(self):
+        for op_type in ("Shape", "Size"):
+            with self.subTest(op_type=op_type):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node("Relu", ["x"], ["p"]),
+                            oh.make_node("Cast", ["z"], ["q"], to=TensorProto.FLOAT),
+                            oh.make_node("Identity", ["p"], ["a"]),
+                            oh.make_node(op_type, ["a"], ["s"]),
+                        ],
+                        "shape_order",
+                        [
+                            oh.make_tensor_value_info("x", TensorProto.FLOAT, ["N", 2]),
+                            oh.make_tensor_value_info("z", TensorProto.FLOAT, ["N", 2]),
+                        ],
+                        [
+                            oh.make_tensor_value_info("q", TensorProto.FLOAT, ["N", 2]),
+                            oh.make_tensor_value_info(
+                                "s", TensorProto.INT64, [2] if op_type == "Shape" else []
+                            ),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                builder = optim.GraphBuilder(model)
+                builder.register_pattern(optim.CastPattern())
+                optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+                bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+                self.assertEqual(
+                    [node.op_type for node in bundled.graph.node], ["Relu", op_type, "Cast"]
+                )
+                self.assertEqual(
+                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [2]
+                )
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / "bundle.onnx"
+                    onnx.save(bundled, path)
+                    loaded = onnx.load(path)
+                replayed = (
+                    optim.GraphBuilder(loaded).apply_rewritings("optimized").to_standard_model()
+                )
+                self.assertEqual(
+                    replayed.graph.SerializeToString(), optimized.graph.SerializeToString()
+                )
+                feeds = {
+                    "x": numpy.array([[-1, 2], [3, -4]], dtype=numpy.float32),
+                    "z": numpy.ones((2, 2), dtype=numpy.float32),
+                }
+                for actual, expected in zip(
+                    ReferenceEvaluator(replayed).run(None, feeds),
+                    ReferenceEvaluator(model).run(None, feeds),
+                ):
+                    self.assertEqualArray(actual, expected)
+
     def test_to_onnx_drops_old_plans_when_function_canonicalization_changes_reference(self):
         model = _double_neg_model()
         model.functions.append(

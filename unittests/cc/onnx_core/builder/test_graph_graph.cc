@@ -502,6 +502,53 @@ TEST(GraphGraph, InversePreservesPerScopeDevicesIncludingRestoredSubgraphs) {
   }
 }
 
+TEST(GraphGraph, InverseRestoresBranchOwnedFunctionsWithAnEmptyPlan) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  auto &branch = builder.MakeSubgraph("then_branch");
+  auto &function = branch.MakeLocalFunction("Body", "local");
+  function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeInitializer(MakeInitializer<float>("bias", {2}, {1, 2}));
+  function.MakeNode("Add", {"arg", "bias"}, {"result"});
+  function.MakeOutput("result");
+  function.set_device(core::symbolic::Device::kCPU);
+  branch.MakeNode("Body", {"x"}, {"y"}, "local");
+  branch.MakeOutput("y");
+  auto &other = builder.MakeSubgraph("else_branch");
+  other.MakeNode("Neg", {"x"}, {"y"});
+  other.MakeOutput("y");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  graph.Canonicalize();
+  const auto canonical = builder.BuildGraph().SerializeAsString();
+  const auto node = function.Nodes()[0].SerializeAsString();
+  const auto initializer = function.Initializers()[0].SerializeAsString();
+  const auto tags = function.Compute().ValueTags();
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  const auto plan = graph.Optimize(1, nullptr, options);
+  ASSERT_TRUE(plan.rewrites().empty());
+  auto restored = builder.UndoRewritings(plan);
+  EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
+  ASSERT_TRUE(restored.HasLocalFunction("Body"));
+  ASSERT_EQ(restored.LocalFunction("Body").Nodes().size(), 2u);
+  EXPECT_EQ(restored.LocalFunction("Body").Nodes()[1].SerializeAsString(), node);
+  EXPECT_EQ(restored.LocalFunction("Body").Nodes()[0].attribute(0).t().SerializeAsString(),
+            initializer);
+  EXPECT_EQ(restored.LocalFunction("Body").Compute().ValueTags(), tags);
+  EXPECT_EQ(restored.LocalFunction("Body").device(), core::symbolic::Device::kCPU);
+}
+
 TEST(GraphGraph, CanonicalizesParentSubstitutionsBeforeNestedDuplicates) {
   for (const int depth : {1, 2}) {
     SCOPED_TRACE(depth);
@@ -1484,6 +1531,20 @@ TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
     EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
     EXPECT_EQ((nested ? restored.Subgraph("then_branch") : restored).Compute().ValueTags(), tags);
     EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
+    const auto optimized_tags = scope->Compute().CaptureTagState();
+    const auto memory = scope->Compute().Memory();
+    const auto releases = scope->Compute().ReleaseAfterShapeTagged();
+    core::builder::GraphGraph no_patterns(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+    const auto empty_plan = no_patterns.Optimize(1, nullptr, options);
+    ASSERT_TRUE(empty_plan.rewrites().empty());
+    auto unchanged = builder.UndoRewritings(empty_plan);
+    const auto &unchanged_scope = nested ? unchanged.Subgraph("then_branch") : unchanged;
+    EXPECT_EQ(unchanged.BuildGraph().SerializeAsString(), optimized);
+    EXPECT_EQ(unchanged_scope.Compute().CaptureTagState(), optimized_tags);
+    EXPECT_EQ(unchanged_scope.Compute().Memory(), memory);
+    EXPECT_EQ(unchanged_scope.Compute().ReleaseAfterShapeTagged(), releases);
+    EXPECT_EQ(scope->Compute().CaptureTagState(), optimized_tags);
   }
 }
 

@@ -246,6 +246,10 @@ Ancestor substitutions are applied before cleaning descendant scopes, so
 canonicalization is idempotent even when captured values become equivalent.
 Annotations for values removed by these cleanups are pruned before capturing
 the reference, including when no reversible edits follow.
+Shape/Size nodes are moved next to their producers before capturing edit
+positions, so subsequent canonical-model export does not invalidate those
+positions. This reordering preserves incremental tags and updates affected
+lifetime and memory metadata without rebuilding graph analysis.
 Identity nodes and duplicate constants introduced by recorded replacements
 remain in place: cleaning them up would redirect references after capture and
 is outside the reversible-plan contract. Consequently, later patterns may not
@@ -267,7 +271,12 @@ graph directly rather than requiring its incrementally preserved tags to
 match fresh shape inference. Forward replay retains its strict tag validation.
 Device targets for the canonical root, subgraphs and local functions are
 captured privately and restored by undo, including scopes removed during
-optimization. None of this device or inverse history is serialized.
+optimization. Canonical value/node tags and custom node-tag override flags
+are also restored exactly, including after repeated optimization captures;
+affected shape-tagged release lists and memory profiles are refreshed.
+Function definitions are collected from every scope, including functions
+owned by branches that are hoisted into the restored model.
+None of this metadata or inverse history is serialized.
 
 .. code-block:: text
 

@@ -2708,7 +2708,12 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
-  RebuildMetadata();
+  std::vector<std::vector<std::string>> references(nodes_.size());
+  for (std::size_t index = 0; index < nodes_.size(); ++index)
+    CollectNodeReferences(nodes_[index], references[index]);
+  compute_.UpdateNodes(nodes_, order, references, {}, device_);
+  RefreshAfterMutation();
+  InvalidateRewritings();
 
   return moved + local_moved;
 }

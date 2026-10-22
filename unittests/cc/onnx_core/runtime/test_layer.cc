@@ -67,9 +67,9 @@ ShapesContext MakeShapes() {
   return ctx;
 }
 
-void RegisterAdd(RuntimeContext &rt, int &calls) {
+void RegisterAdd(RuntimeContext &rt, int &calls, const std::string &domain = "test.layer") {
   rt.RegisterCustomKernel(
-      "test.layer", "Add", [&calls](const NodeProto &node, RuntimeContext &context) {
+      domain, "Add", [&calls](const NodeProto &node, RuntimeContext &context) {
         ++calls;
         const size_t count = context.Get(node.input(0)).element_count();
         const auto a = context.Get(node.input(0)).AsFloat();
@@ -82,6 +82,80 @@ void RegisterAdd(RuntimeContext &rt, int &calls) {
 }
 
 } // namespace
+
+TEST(Layer, ExactModelLocalFunctionOverridesIntrinsicShapeRuntimeAndChecker) {
+  for (const std::string overload : {"", "special"}) {
+    ModelProto model;
+    model.set_ir_version(10);
+    for (const auto &[domain, version] :
+         std::vector<std::pair<std::string, int>>{{"", 18}, {"ai.rt", 1}}) {
+      auto *opset = model.add_opset_import();
+      opset->set_domain(domain);
+      opset->set_version(version);
+    }
+    FunctionProto *function = model.add_functions();
+    function->set_domain("ai.rt");
+    function->set_name("Layer");
+    function->set_overload(overload);
+    function->add_input("a");
+    function->add_input("w");
+    function->add_output("b");
+    auto *opset = function->add_opset_import();
+    opset->set_domain("");
+    opset->set_version(18);
+    NodeProto *add = function->add_node();
+    add->set_op_type("Add");
+    add->add_input("a");
+    add->add_input("w");
+    add->add_output("b");
+    GraphProto *graph = model.mutable_graph();
+    graph->set_name("layer_override");
+    for (const std::string name : {"X", "W"}) {
+      auto *input = graph->add_input();
+      input->set_name(name);
+      SetTensorType(*input, 2);
+    }
+    auto *output = graph->add_output();
+    output->set_name("Y");
+    SetTensorType(*output, 2);
+    NodeProto *call = graph->add_node();
+    call->set_domain("ai.rt");
+    call->set_op_type("Layer");
+    call->set_overload(overload);
+    call->add_input("X");
+    call->add_input("W");
+    call->add_output("Y");
+    EXPECT_NO_THROW(checker::check_model(model));
+    EXPECT_NO_THROW(checker::check_model(model, false, false, true));
+
+    ShapesContext shapes = MakeShapes();
+    shapes.SetLocalFunction(function);
+    shapes.SetCustomShapeInferenceFunction("", "Add",
+                                          [](ShapesContext &ctx, const NodeProto &node) {
+                                            ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                          });
+    EXPECT_NO_THROW(shapes.ComputeShapeNode(*call));
+    ASSERT_TRUE(shapes.Has("Y"));
+    EXPECT_EQ(shapes.Get("Y").Shape(), shapes.Get("X").Shape());
+
+    RuntimeContext rt;
+    int calls = 0;
+    RegisterAdd(rt, calls, "");
+    core::runtime::RegisterModelFunctions(model, rt);
+    rt.Set("X", Tensor::FromFloat("X", {2}, {1, 2}));
+    rt.Set("W", Tensor::FromFloat("W", {2}, {10, 20}));
+    core::runtime::ExecutionPlan plan(*graph);
+    RuntimeSession session(plan);
+    EXPECT_NO_THROW(session.Run(rt));
+    ASSERT_TRUE(rt.Has("Y"));
+    EXPECT_EQ(rt.Get("Y").AsFloat()[0], 11);
+    EXPECT_EQ(rt.Get("Y").AsFloat()[1], 22);
+    EXPECT_EQ(calls, 1);
+
+    call->set_overload("undefined");
+    EXPECT_THROW(checker::check_model(model), checker::ValidationError);
+  }
+}
 
 TEST(Layer, InfersActualSymbolicDescriptorsAndIsolatesFormals) {
   ShapesContext ctx = MakeShapes();

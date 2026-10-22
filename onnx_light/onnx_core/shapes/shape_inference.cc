@@ -817,6 +817,14 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
   const std::string op_type = node.op_type();
+  const std::string local_key =
+      ShapesContext::LocalFunctionKey(node.domain(), op_type, node.overload());
+  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    ExpandLocalFunctionCall(ctx, node, *func);
+    return;
+  }
   if (node.domain() == kAiRtDomain && op_type == "Layer") {
     const GraphProto &body = core::graph::ValidateLayer(node);
     ctx.CheckInputsAvailable(node);
@@ -889,14 +897,6 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
     for (const auto &[left, right] : child.LessEqualConstraints())
       ctx.AddLessEqualConstraint(left, right);
     ctx.RegisterSubgraphContext(ctx.current_node_index(), "body", std::move(child));
-    return;
-  }
-  const std::string local_key =
-      ShapesContext::LocalFunctionKey(node.domain(), op_type, node.overload());
-  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
-    ctx.CheckInputsAvailable(node);
-    ctx.CheckOutputsNotAvailable(node);
-    ExpandLocalFunctionCall(ctx, node, *func);
     return;
   }
   if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =

@@ -15,7 +15,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * inputs and preserving side outputs and lexical subgraph dependencies.
  *
  * Detection runs once per optimizer scan, at the first graph node. It considers
- * at most 32 seed groups, 32 corresponding occurrences, 64 nodes per occurrence,
+ * at most 32 seed groups, 32 emitted occurrences plus a tail probe, 64 nodes per occurrence,
  * 4096 joint extension attempts and 4096 nodes in the rewritten interval.
  * Seed families prefer greater anchor and node coverage, then more occurrences
  * (a smaller period), then region size.
@@ -28,8 +28,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Existing Layer nodes and their nested bodies are never wrapped.
  * Stochastic operators, Dropout, and opaque custom operators remain outside
  * regions. Local functions and nested graphs are checked recursively.
- * Nested overridable defaults and outputs forwarded directly from an outer
- * scope are conservatively excluded before mutation.
+ * Nested outputs forwarded directly from an outer scope are conservatively
+ * excluded unless forwarded through a locally defined Identity.
  * A matching region has at least two nodes; it may be a repeated partial
  * computation rather than an entire model-defined or transformer layer.
  * Oversized occurrence families are processed in bounded batches, shortened

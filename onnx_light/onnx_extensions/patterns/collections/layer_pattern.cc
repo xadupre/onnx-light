@@ -226,17 +226,23 @@ bool SafeGraphDeclarations(const GraphProto &graph) {
     if (!define(input.name().value()))
       return false;
   }
-  // Nested overridable defaults are conservatively excluded from extraction.
+  std::unordered_set<std::string> initializers;
+  auto define_initializer = [&](const std::string &name) {
+    if (name.empty() || !initializers.insert(name).second)
+      return false;
+    local.insert(name);
+    return true;
+  };
   for (const auto &initializer : graph.initializer()) {
-    if (!define(initializer.name().value()))
+    if (!define_initializer(initializer.name().value()))
       return false;
   }
   for (const auto &initializer : graph.sparse_initializer()) {
-    if (!define(initializer.values().name().value()))
+    if (!define_initializer(initializer.values().name().value()))
       return false;
   }
   for (const auto &initializer : graph.extended_initializer()) {
-    if (!define(initializer.name().value()))
+    if (!define_initializer(initializer.name().value()))
       return false;
   }
   for (const NodeProto &node : graph.node()) {
@@ -263,8 +269,10 @@ bool GraphSignature(const GraphProto &graph, std::string &signature, SignatureNa
       !SignaturePart(signature, std::to_string(graph.input_size())))
     return false;
   const std::string scope = "scope" + std::to_string(depth) + ":";
+  std::unordered_set<std::string> formal_inputs;
   for (std::size_t i = 0; i < graph.input().size(); ++i) {
     names[graph.input()[i].name().value()] = scope + "input" + std::to_string(i);
+    formal_inputs.insert(graph.input()[i].name().value());
     if (!SignaturePart(signature, graph.input()[i].type().SerializeAsString()))
       return false;
   }
@@ -272,8 +280,10 @@ bool GraphSignature(const GraphProto &graph, std::string &signature, SignatureNa
     return false;
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const auto &initializer = graph.initializer()[i];
-    names[initializer.name().value()] = scope + "weight" + std::to_string(i);
-    if (!SignaturePart(signature, std::to_string(initializer.data_type())) ||
+    if (formal_inputs.count(initializer.name().value()) == 0)
+      names[initializer.name().value()] = scope + "weight" + std::to_string(i);
+    if (!SignaturePart(signature, names.at(initializer.name().value())) ||
+        !SignaturePart(signature, std::to_string(initializer.data_type())) ||
         !SignaturePart(signature, std::to_string(initializer.dims_size())))
       return false;
     for (const auto dimension : initializer.dims()) {
@@ -386,6 +396,8 @@ struct NodeData {
   bool anchor = false;
 };
 
+bool KnownType(const TypeProto &type, std::size_t depth = 0);
+
 bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
                 std::map<std::string, bool> &functions, std::set<std::string> &visiting,
                 std::size_t depth, std::size_t &work);
@@ -464,9 +476,14 @@ struct Index {
   std::unordered_map<const NodeProto *, NodeData> data;
   std::unordered_map<std::string, std::vector<const NodeProto *>> users;
   std::map<std::string, Region> anchors;
+  std::unordered_map<std::string, const ValueInfoProto *> declarations;
   bool valid = true;
 
   explicit Index(GraphGraph &graph) : graph(graph) {
+    for (const auto &input : graph.Builder().Inputs())
+      declarations[input.name().value()] = &input;
+    for (const auto &output : graph.Builder().Outputs())
+      declarations[output.name().value()] = &output;
     std::map<std::tuple<std::string, std::string, std::string>, bool> anchor_cache;
     std::size_t function_work = 0, capture_work = 0, signature_work = 0, safety_work = 0;
     std::map<std::string, bool> safe_functions;
@@ -548,19 +565,36 @@ struct Index {
   }
 };
 
-bool CompatibleValue(GraphGraph &graph, const std::string &left, const std::string &right) {
+const TypeProto *DeclaredType(Index &index, const std::string &name) {
+  const auto &context = index.graph.Builder().Shapes();
+  if (context.HasType(name) && KnownType(context.GetType(name)))
+    return &context.GetType(name);
+  const auto declaration = index.declarations.find(name);
+  if (declaration != index.declarations.end() && declaration->second->has_type() &&
+      KnownType(declaration->second->type()))
+    return &declaration->second->type();
+  return nullptr;
+}
+
+bool CompatibleValue(Index &index, const std::string &left, const std::string &right) {
+  GraphGraph &graph = index.graph;
   if (left.empty() || right.empty())
     return left.empty() && right.empty();
-  const auto &context = graph.Builder().Shapes();
-  const bool left_structured =
-      context.HasType(left) && core::shapes::HasStructuredType(context.GetType(left));
+  const TypeProto *left_type = DeclaredType(index, left);
+  const TypeProto *right_type = DeclaredType(index, right);
+  const bool left_structured = left_type != nullptr && core::shapes::HasStructuredType(*left_type);
   const bool right_structured =
-      context.HasType(right) && core::shapes::HasStructuredType(context.GetType(right));
+      right_type != nullptr && core::shapes::HasStructuredType(*right_type);
   if (left_structured || right_structured)
     return left_structured && right_structured &&
-           core::shapes::SameDeclaredType(context.GetType(left), context.GetType(right));
-  if (graph.HasType(left) != graph.HasType(right) ||
-      (graph.HasType(left) && graph.GetType(left) != graph.GetType(right)) ||
+           core::shapes::SameDeclaredType(*left_type, *right_type);
+  auto dtype = [&](const std::string &name, const TypeProto *type) {
+    if (type != nullptr && type->has_tensor_type())
+      return type->tensor_type().elem_type();
+    return graph.HasType(name) ? core::symbolic::TensorTypeToDataType(graph.GetType(name))
+                               : TensorProto::DataType::UNDEFINED;
+  };
+  if (dtype(left, left_type) != dtype(right, right_type) ||
       graph.HasShape(left) != graph.HasShape(right))
     return false;
   if (!graph.HasShape(left))
@@ -585,15 +619,15 @@ bool CompatibleNode(Index &index, const NodeProto &left, const NodeProto &right)
       a.dependencies.size() != b.dependencies.size())
     return false;
   for (int i = 0; i < left.input_size(); ++i) {
-    if (!CompatibleValue(index.graph, left.input()[i].value(), right.input()[i].value()))
+    if (!CompatibleValue(index, left.input()[i].value(), right.input()[i].value()))
       return false;
   }
   for (int i = 0; i < left.output_size(); ++i) {
-    if (!CompatibleValue(index.graph, left.output()[i].value(), right.output()[i].value()))
+    if (!CompatibleValue(index, left.output()[i].value(), right.output()[i].value()))
       return false;
   }
   for (std::size_t i = 0; i < a.dependencies.size(); ++i) {
-    if (!CompatibleValue(index.graph, a.dependencies[i], b.dependencies[i]))
+    if (!CompatibleValue(index, a.dependencies[i], b.dependencies[i]))
       return false;
   }
   return true;
@@ -796,10 +830,11 @@ struct Plan {
   std::size_t first = 0;
   std::size_t last = 0;
   std::size_t anchor_roles = 0;
+  std::size_t family_occurrences = 0;
   std::tuple<uint64_t, uint64_t, uint64_t, std::size_t, std::vector<std::size_t>> score;
 };
 
-bool KnownType(const TypeProto &type, std::size_t depth = 0) {
+bool KnownType(const TypeProto &type, std::size_t depth) {
   if (depth >= kMaxScopeDepth)
     return false;
   if (type.has_tensor_type())
@@ -816,10 +851,10 @@ bool KnownType(const TypeProto &type, std::size_t depth = 0) {
   return type.has_struct_type() || type.has_opaque_type();
 }
 
-bool KnownBoundaryType(GraphGraph &graph, const std::string &name) {
-  const auto &context = graph.Builder().Shapes();
-  if (context.HasType(name) && KnownType(context.GetType(name)))
+bool KnownBoundaryType(Index &index, const std::string &name) {
+  if (DeclaredType(index, name) != nullptr)
     return true;
+  GraphGraph &graph = index.graph;
   return graph.HasType(name) && core::symbolic::TensorTypeToDataType(graph.GetType(name)) !=
                                     TensorProto::DataType::UNDEFINED;
 }
@@ -919,11 +954,11 @@ bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
   for (const Region &region : regions) {
     Boundary boundary = GetBoundary(index, region);
     for (const std::string &name : boundary.inputs) {
-      if (!KnownBoundaryType(index.graph, name))
+      if (!KnownBoundaryType(index, name))
         return false;
     }
     for (const std::string &name : boundary.outputs) {
-      if (!KnownBoundaryType(index.graph, name))
+      if (!KnownBoundaryType(index, name))
         return false;
     }
     for (const std::string &name : boundary.edges) {
@@ -1040,8 +1075,13 @@ bool Extend(Index &index, const Regions &regions, const Extension &extension, Re
   return Correspond(index, grown);
 }
 
-bool Grow(Index &index, Regions regions, Plan &best, std::size_t &attempts) {
-  bool found = MakePlan(index, regions, best);
+bool Grow(Index &index, Regions regions, std::size_t selected, Plan &best, std::size_t &attempts) {
+  auto make_plan = [&](Plan &plan) {
+    if (selected == regions.size())
+      return MakePlan(index, regions, plan);
+    return MakePlan(index, Regions(regions.begin(), regions.begin() + selected), plan);
+  };
+  bool found = make_plan(best);
   while (regions[0].size() < kMaxRegion) {
     bool extended = false;
     for (const Extension &extension : Extensions(index, regions[0])) {
@@ -1057,7 +1097,7 @@ bool Grow(Index &index, Regions regions, Plan &best, std::size_t &attempts) {
       // Adding another anchor establishes a larger seed skeleton. Boundary
       // cuts compete within that skeleton rather than against projections
       // omitting the rest of a jointly grown attention/MLP structure.
-      if (MakePlan(index, regions, plan) &&
+      if (make_plan(plan) &&
           (!found || plan.anchor_roles > best.anchor_roles ||
            (plan.anchor_roles == best.anchor_roles && plan.score < best.score))) {
         best = std::move(plan);
@@ -1093,19 +1133,28 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   auto consider = [&](Regions regions) {
     if (regions.size() < 2 || groups >= kMaxSeedGroups || attempts >= kMaxGrowthAttempts)
       return;
+    const std::size_t family_occurrences = regions.size();
+    std::size_t selected = regions.size();
     if (regions.size() > kMaxOccurrences) {
       const std::size_t count =
           regions.size() % kMaxOccurrences == 1 ? kMaxOccurrences - 1 : kMaxOccurrences;
+      Region tail = std::move(regions.back());
       regions.resize(count);
+      // The un-emitted tail probe prevents a capped family from appearing to
+      // have a longer period merely because an incomplete last repeat was cut.
+      regions.push_back(std::move(tail));
+      selected = count;
     }
     ++groups;
     Plan plan;
-    if (!Grow(index, std::move(regions), plan, attempts))
+    if (!Grow(index, std::move(regions), selected, plan, attempts))
       return;
+    plan.family_occurrences = family_occurrences;
     const auto coverage = [](const Plan &value) {
-      return std::make_tuple(value.regions.size() * value.anchor_roles,
-                             value.regions.size() * value.regions[0].size(), value.regions.size(),
-                             value.regions.size(), value.regions[0].size());
+      return std::make_tuple(value.family_occurrences * value.anchor_roles,
+                             value.family_occurrences * value.regions[0].size(),
+                             value.family_occurrences, value.regions.size(),
+                             value.regions[0].size());
     };
     // Equal coverage favors more occurrences (a smaller period) before larger
     // individual regions. Within each skeleton Grow uses boundary-cost ordering.
@@ -1195,23 +1244,15 @@ std::vector<const NodeProto *> MatchedNodes(Index &index, const Plan &plan) {
   return nodes;
 }
 
-ValueInfoProto ValueInfo(GraphGraph &graph, const std::string &name) {
+ValueInfoProto ValueInfo(Index &index, const std::string &name) {
+  GraphGraph &graph = index.graph;
   ValueInfoProto value;
-  for (const auto &input : graph.Builder().Inputs()) {
-    if (input.name().value() == name) {
-      value = input;
-      break;
-    }
-  }
-  for (const auto &output : graph.Builder().Outputs()) {
-    if (output.name().value() == name) {
-      value = output;
-      break;
-    }
-  }
+  const auto declaration = index.declarations.find(name);
+  if (declaration != index.declarations.end())
+    value = *declaration->second;
   value.set_name(name);
   const auto &context = graph.Builder().Shapes();
-  if (context.HasType(name))
+  if (context.HasType(name) && KnownType(context.GetType(name)))
     *value.mutable_type() = context.GetType(name);
   if (graph.HasShape(name)) {
     core::symbolic::SymTensorToValueInfo(graph.GetShape(name), value);
@@ -1243,9 +1284,9 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
   GraphProto body;
   body.set_name("RepeatedLayerBody_" + std::to_string(boundary.first));
   for (const std::string &name : boundary.inputs)
-    *body.add_input() = ValueInfo(index.graph, name);
+    *body.add_input() = ValueInfo(index, name);
   for (const std::string &name : boundary.outputs)
-    *body.add_output() = ValueInfo(index.graph, name);
+    *body.add_output() = ValueInfo(index, name);
   Region ordered = region;
   std::sort(ordered.begin(), ordered.end(), [&](const NodeProto *a, const NodeProto *b) {
     return index.graph.Position(*a) < index.graph.Position(*b);
@@ -1255,7 +1296,7 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
     *body.add_node() = utils::CopyWithSharedTensorStorage(index.data.at(node).materialized);
     for (const auto &output : node->output()) {
       if (!output.value().empty() && outputs.count(output.value()) == 0) {
-        ValueInfoProto info = ValueInfo(index.graph, output.value());
+        ValueInfoProto info = ValueInfo(index, output.value());
         if (info.has_type() && KnownType(info.type()))
           *body.add_value_info() = std::move(info);
       }

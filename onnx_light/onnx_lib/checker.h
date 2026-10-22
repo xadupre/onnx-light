@@ -136,6 +136,16 @@ public:
   /** Returns true when checks on operators from custom domains are enabled. */
   bool check_custom_domain() const { return check_custom_domain_; }
 
+  /** Returns the exact model-local function implementation identities. */
+  const std::unordered_map<std::string, const FunctionProto *> &get_model_functions() const {
+    return model_functions_;
+  }
+
+  /** Sets the borrowed model-local functions shared with nested checks. */
+  void set_model_functions(std::unordered_map<std::string, const FunctionProto *> functions) {
+    model_functions_ = std::move(functions);
+  }
+
   /** Enables or disables checks on operators from custom domains. */
   void set_check_custom_domain(bool value) { check_custom_domain_ = value; }
 
@@ -160,6 +170,7 @@ public:
 private:
   int ir_version_{-1};
   std::unordered_map<std::string, int> opset_imports_;
+  std::unordered_map<std::string, const FunctionProto *> model_functions_;
   const StructTypeCatalogue *struct_type_catalogue_ = nullptr;
   bool is_main_graph_ = true;
   const ISchemaRegistry *schema_registry_ = OpSchemaRegistry::Instance();

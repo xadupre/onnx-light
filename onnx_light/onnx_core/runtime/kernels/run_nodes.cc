@@ -1353,12 +1353,6 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
   if (value_store == nullptr) {
     value_store = rt.value_store_owner();
   }
-  if (domain == "ai.rt" && op_type == "Layer") {
-    const GraphProto &body = core::graph::ValidateLayer(node);
-    return std::make_unique<ModelLocalFunctionKernel>(node, body, kernel_context, opset_imports,
-                                                      std::move(value_store), immutable_inputs,
-                                                      model_functions);
-  }
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1378,6 +1372,12 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     }
   }
 
+  if (domain == "ai.rt" && op_type == "Layer") {
+    const GraphProto &body = core::graph::ValidateLayer(node);
+    return std::make_unique<ModelLocalFunctionKernel>(node, body, kernel_context, opset_imports,
+                                                      std::move(value_store), immutable_inputs,
+                                                      model_functions);
+  }
   if (domain == kDefaultOnnxDomain && op_type == "If") {
     const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
     const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");

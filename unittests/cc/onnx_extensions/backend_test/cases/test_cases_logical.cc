@@ -384,6 +384,35 @@ TEST(BackendTestCase, GreaterLessHalfCasesUseRequestedDtype) {
   }
 }
 
+TEST(BackendTestCase, OrderedComparisonHalfPrecisionVariantsHaveDistinctShapes) {
+  for (const std::string op : {"GreaterOrEqual", "LessOrEqual"}) {
+    auto cases = CollectTestCases(op);
+    const std::string prefix =
+        op == "GreaterOrEqual" ? "test_cc_greater_or_equal_" : "test_cc_less_or_equal_";
+    for (const std::string dtype : {"float16", "bfloat16"}) {
+      for (const bool two_dimensional : {false, true}) {
+        const std::string name = prefix + dtype + (two_dimensional ? "_2d" : "");
+        SCOPED_TRACE(name);
+        const TestCase *tc = FindLogicalCase(cases, name);
+        ASSERT_NE(tc, nullptr);
+        const auto &ds = tc->data_sets()[0];
+        const std::vector<int64_t> shape =
+            two_dimensional ? std::vector<int64_t>{2, 3} : std::vector<int64_t>{4};
+        ASSERT_EQ(ds.inputs.size(), 2u);
+        ASSERT_EQ(ds.outputs.size(), 1u);
+        EXPECT_EQ(ds.inputs[0].shape, shape);
+        EXPECT_EQ(ds.inputs[1].shape, shape);
+        EXPECT_EQ(ds.outputs[0].shape, shape);
+        const auto expected_dtype = dtype == "float16" ? core::runtime::DataType::FLOAT16
+                                                       : core::runtime::DataType::BFLOAT16;
+        EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(expected_dtype));
+        EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(expected_dtype));
+        EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
+      }
+    }
+  }
+}
+
 TEST(BackendTestCase, GreaterOrEqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_greater_equal*`` cases for every numeric input dtype

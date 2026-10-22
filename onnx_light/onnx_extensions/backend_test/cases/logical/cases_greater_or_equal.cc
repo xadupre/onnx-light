@@ -276,17 +276,18 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_greater_or_equal_float16", {opset}, []() -> IoData {
-      const OpsetId opset = DefaultOpset(16);
+    Expect(registry, std::move(n16), "test_cc_greater_or_equal_float16_2d", {opset},
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
 
-      const KernelContext ge_kernel_ctx{opset};
-      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
 
-      Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-      Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = ge_kernel(x, y);
-      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-    });
+             Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+             Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+             Tensor z = ge_kernel(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
   }
 
   // BFLOAT16
@@ -296,17 +297,18 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_greater_or_equal_bfloat16", {opset}, []() -> IoData {
-      const OpsetId opset = DefaultOpset(16);
+    Expect(registry, std::move(nbf), "test_cc_greater_or_equal_bfloat16_2d", {opset},
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
 
-      const KernelContext ge_kernel_ctx{opset};
-      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
 
-      Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-      Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = ge_kernel(x, y);
-      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-    });
+             Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+             Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+             Tensor z = ge_kernel(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
   }
 }
 

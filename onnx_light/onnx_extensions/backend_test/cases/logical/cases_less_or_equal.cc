@@ -276,7 +276,7 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_less_or_equal_float16", {opset}, []() -> IoData {
+    Expect(registry, std::move(n16), "test_cc_less_or_equal_float16_2d", {opset}, []() -> IoData {
       const OpsetId opset = DefaultOpset(16);
 
       const KernelContext le_kernel_ctx{opset};
@@ -296,7 +296,7 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_less_or_equal_bfloat16", {opset}, []() -> IoData {
+    Expect(registry, std::move(nbf), "test_cc_less_or_equal_bfloat16_2d", {opset}, []() -> IoData {
       const OpsetId opset = DefaultOpset(16);
 
       const KernelContext le_kernel_ctx{opset};

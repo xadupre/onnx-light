@@ -12,6 +12,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -21,6 +22,15 @@ using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
 
 namespace Test {
+
+TEST(BackendTestCase, AllCollectedCaseNamesAreUnique) {
+  const auto cases = CollectTestCases();
+  ASSERT_FALSE(cases.empty());
+  std::unordered_set<std::string> names;
+  for (const auto &tc : cases) {
+    EXPECT_TRUE(names.insert(tc.name).second) << "Duplicate backend test name: " << tc.name;
+  }
+}
 
 TEST(BackendTestCaseShapeInference, GeneratedModelsUseInteroperableIrVersion) {
   NodeProto node;

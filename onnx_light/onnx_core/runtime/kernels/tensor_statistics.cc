@@ -212,6 +212,81 @@ void Histogram(TensorStatistics &result, const std::vector<long double> &values,
       result.distribution[i] += counts[i];
 }
 
+struct RectangleAccumulator {
+  long double scale = 0;
+  long double total = 0;
+  bool has_nan = false;
+  bool positive_infinity = false;
+  bool negative_infinity = false;
+};
+
+void AccumulateRectangleValue(RectangleAccumulator &result, const RectangleAccumulator &value,
+                              long double weight) {
+  result.has_nan |= value.has_nan;
+  result.positive_infinity |= value.positive_infinity;
+  result.negative_infinity |= value.negative_infinity;
+  if (value.scale > result.scale) {
+    result.total *= result.scale / value.scale;
+    result.scale = value.scale;
+  }
+  if (value.scale > 0)
+    result.total += value.total * (value.scale / result.scale) * weight;
+}
+
+void AccumulateRectangleValue(RectangleAccumulator &result, long double value, long double weight) {
+  if (std::isnan(value)) {
+    result.has_nan = true;
+  } else if (std::isinf(value)) {
+    result.positive_infinity |= value > 0;
+    result.negative_infinity |= value < 0;
+  } else {
+    const long double scale = std::abs(value);
+    if (scale > result.scale) {
+      result.total *= result.scale / scale;
+      result.scale = scale;
+    }
+    if (scale > 0)
+      result.total += (value / scale) * (scale / result.scale) * weight;
+  }
+}
+
+double RectangleValue(const RectangleAccumulator &value) {
+  if (value.has_nan || (value.positive_infinity && value.negative_infinity))
+    return kNaN;
+  if (value.positive_infinity)
+    return std::numeric_limits<double>::infinity();
+  if (value.negative_infinity)
+    return -std::numeric_limits<double>::infinity();
+  return static_cast<double>(std::clamp(value.total, -1.0L, 1.0L) * value.scale);
+}
+
+template <typename T>
+std::vector<RectangleAccumulator> ReduceRectangle(const std::vector<T> &values, int64_t rows,
+                                                  int64_t cols, int64_t output_rows,
+                                                  int64_t output_cols, bool reduce_rows) {
+  std::vector<RectangleAccumulator> reduced(static_cast<size_t>(output_rows * output_cols));
+  const int64_t input_axis = reduce_rows ? rows : cols;
+  const int64_t output_axis = reduce_rows ? output_rows : output_cols;
+  for (int64_t y = 0; y < output_rows; ++y)
+    for (int64_t x = 0; x < output_cols; ++x) {
+      const int64_t output_coordinate = reduce_rows ? y : x;
+      const long double start =
+          static_cast<long double>(output_coordinate) * input_axis / output_axis;
+      const long double end =
+          static_cast<long double>(output_coordinate + 1) * input_axis / output_axis;
+      const int64_t input_end = std::min(input_axis, static_cast<int64_t>(std::ceil(end)));
+      for (int64_t i = static_cast<int64_t>(start); i < input_end; ++i) {
+        const long double weight = (std::min(end, static_cast<long double>(i + 1)) -
+                                    std::max(start, static_cast<long double>(i))) /
+                                   (end - start);
+        const size_t input_index = static_cast<size_t>(reduce_rows ? i * cols + x : y * cols + i);
+        AccumulateRectangleValue(reduced[static_cast<size_t>(y * output_cols + x)],
+                                 values[input_index], weight);
+      }
+    }
+  return reduced;
+}
+
 void Rectangle(TensorStatistics &result, const Tensor &tensor,
                const std::vector<long double> &values, const std::vector<int64_t> &shape) {
   if (shape.empty())
@@ -220,6 +295,19 @@ void Rectangle(TensorStatistics &result, const Tensor &tensor,
   const int64_t cols = result.count / rows;
   result.rectangle_shape = shape;
   result.rectangle_map.resize(static_cast<size_t>(shape[0] * shape[1]));
+  if (rows > shape[0] || cols > shape[1]) {
+    std::vector<RectangleAccumulator> reduced;
+    if (rows > shape[0]) {
+      reduced = ReduceRectangle(values, rows, cols, shape[0], cols, true);
+      reduced = ReduceRectangle(reduced, shape[0], cols, shape[0], shape[1], false);
+    } else {
+      reduced = ReduceRectangle(values, rows, cols, rows, shape[1], false);
+      reduced = ReduceRectangle(reduced, rows, shape[1], shape[0], shape[1], true);
+    }
+    for (size_t i = 0; i < reduced.size(); ++i)
+      result.rectangle_map[i] = RectangleValue(reduced[i]);
+    return;
+  }
   ParallelFor(shape[0] * shape[1], [&](int64_t begin, int64_t end) {
     for (int64_t index = begin; index < end; ++index) {
       const int64_t y = index / shape[1], x = index % shape[1];

@@ -196,6 +196,16 @@ TEST(TensorStatistics, AreaAverageRectangle) {
   EXPECT_EQ(stats.rectangle_map, std::vector<double>(6, 7));
 }
 
+TEST(TensorStatistics, MixedAxisRectangleResizeIsSeparable) {
+  std::vector<double> values(100000);
+  std::iota(values.begin(), values.end(), 0.0);
+  const auto stats = ComputeTensorStatistics(Tensor::FromDouble("X", {100000, 1}, values), 0, {},
+                                             false, {1, 100000});
+  ASSERT_EQ(stats.rectangle_map.size(), values.size());
+  for (double value : stats.rectangle_map)
+    EXPECT_DOUBLE_EQ(value, 49999.5);
+}
+
 TEST(TensorStatistics, RectangleScalesOnlyLocalContributors) {
   const double largest = std::numeric_limits<double>::max();
   const double smallest = std::numeric_limits<double>::min();

@@ -15,30 +15,31 @@
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace detail {
-/** Copies a complete proto's fields with an explicitly selected payload-sharing policy. */
-ONNX_LIGHT_PROTO_API void CopyProtoWithSharedPayloads(void *destination, const void *source,
-                                                      uint16_t proto_id);
+/** Copies a complete proto's fields while explicitly sharing eligible tensor storage. */
+ONNX_LIGHT_PROTO_API void CopyProtoWithSharedTensorStorage(void *destination, const void *source,
+                                                           uint16_t proto_id);
 } // namespace detail
 
-template <typename T> T CopyWithSharedPayloads(const T &source);
+template <typename T> T CopyWithSharedTensorStorage(const T &source);
 template <typename T, typename Allocator>
-std::vector<T, Allocator> CopyWithSharedPayloads(const std::vector<T, Allocator> &source);
+std::vector<T, Allocator> CopyWithSharedTensorStorage(const std::vector<T, Allocator> &source);
 template <typename Key, typename Value, typename Compare, typename Allocator>
 std::map<Key, Value, Compare, Allocator>
-CopyWithSharedPayloads(const std::map<Key, Value, Compare, Allocator> &source);
+CopyWithSharedTensorStorage(const std::map<Key, Value, Compare, Allocator> &source);
 
 /**
- * Copies message structure independently while sharing eligible payload allocations.
+ * Copies message structure independently while sharing eligible tensor storage.
  *
- * Subsequent mutable container accesses detach owned payloads. Mutable payload pointers, element
+ * Tensor storage contains raw bytes or typed tensor elements, not names, dimensions or types.
+ * Subsequent mutable container accesses detach owned storage. Mutable data pointers, element
  * references, iterators and underlying vector references obtained before this call must not be used
  * afterward; reacquire them from the appropriate copy. Later mutable accesses can invalidate
- * payload views as storage detaches. References to message and field objects remain valid.
+ * data views as storage detaches. References to message and field objects remain valid.
  * Borrowed storage with an owner remains read-only and retains its
  * owner; ownerless borrowed storage and actively exported storage are copied instead. The caller
  * must synchronize access to the source during copying, including its logically const storage.
  */
-template <typename T> T CopyWithSharedPayloads(const T &source) {
+template <typename T> T CopyWithSharedTensorStorage(const T &source) {
   if constexpr (requires { source.SharedCopy(); }) {
     return source.SharedCopy();
   } else {
@@ -47,20 +48,20 @@ template <typename T> T CopyWithSharedPayloads(const T &source) {
 }
 
 template <typename T, typename Allocator>
-std::vector<T, Allocator> CopyWithSharedPayloads(const std::vector<T, Allocator> &source) {
+std::vector<T, Allocator> CopyWithSharedTensorStorage(const std::vector<T, Allocator> &source) {
   std::vector<T, Allocator> result(source.get_allocator());
   result.reserve(source.size());
   for (const auto &value : source)
-    result.push_back(CopyWithSharedPayloads(value));
+    result.push_back(CopyWithSharedTensorStorage(value));
   return result;
 }
 
 template <typename Key, typename Value, typename Compare, typename Allocator>
 std::map<Key, Value, Compare, Allocator>
-CopyWithSharedPayloads(const std::map<Key, Value, Compare, Allocator> &source) {
+CopyWithSharedTensorStorage(const std::map<Key, Value, Compare, Allocator> &source) {
   std::map<Key, Value, Compare, Allocator> result(source.key_comp(), source.get_allocator());
   for (const auto &[key, value] : source)
-    result.emplace(key, CopyWithSharedPayloads(value));
+    result.emplace(key, CopyWithSharedTensorStorage(value));
   return result;
 }
 

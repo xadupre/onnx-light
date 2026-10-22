@@ -3417,10 +3417,10 @@ DEFINE_PROTO_EQUALS(OptionalProto)
 
 #undef DEFINE_PROTO_EQUALS
 
-void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *source,
-                                                uint16_t proto_id) {
+void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const void *source,
+                                                     uint16_t proto_id) {
   const auto copy = [](const char *, bool, bool, const auto &from, auto &to) {
-    to = utils::CopyWithSharedPayloads(from);
+    to = utils::CopyWithSharedTensorStorage(from);
     return true;
   };
 #define COPY_ONEOF(name) to.oneof_case_##name##_ = from.oneof_case_##name##_;

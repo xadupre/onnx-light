@@ -292,13 +292,15 @@ reports that the canonical reference is unchanged. Cleanup changes in nested
 graphs and functions invalidate those plans without another whole-model export
 or equality scan.
 
-Builder import/export and private undo definitions use explicit payload
+Builder import/export and private undo definitions use explicit tensor-storage
 snapshots: message structure remains independent, while unchanged owned raw
 buffers and typed tensor arrays share storage until a mutable container access
 detaches it. Nested graph attributes, local functions, recipes and removed
 initializer definitions use the same mechanism. Ordinary proto copies retain
 their existing semantics; sharing is requested with
-``utils::CopyWithSharedPayloads`` rather than enabled globally.
+``utils::CopyWithSharedTensorStorage`` rather than enabled globally.
+Here, tensor storage means the allocation containing raw bytes or typed tensor
+elements, not the tensor's name, dimensions, element type or other metadata.
 The named copy operation explicitly walks each message field and propagates to
 nested containers and messages. It uses no mutable global or ``thread_local``
 copy mode; ordinary constructors and ``CopyFrom`` never depend on an ambient

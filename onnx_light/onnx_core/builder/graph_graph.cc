@@ -117,7 +117,7 @@ void MergeFunction(utils::RepeatedProtoField<FunctionProto> &functions,
                          "' and '" + function.name().value() + "'.");
     }
   }
-  functions.push_back(utils::CopyWithSharedPayloads(function));
+  functions.push_back(utils::CopyWithSharedTensorStorage(function));
 }
 
 void MergeImport(utils::RepeatedProtoField<OperatorSetIdProto> &imports,
@@ -141,7 +141,7 @@ NodeProto CaptureInitializerCall(const NodeProto &node, const GraphBuilder &buil
                                  RewritingProto &collection) {
   FunctionProto function;
   function.set_domain("onnx.light.rewriting");
-  NodeProto body = utils::CopyWithSharedPayloads(node);
+  NodeProto body = utils::CopyWithSharedTensorStorage(node);
   body.clear_name();
   body.clr_metadata_props();
   std::unordered_map<std::string, std::string> names;
@@ -176,7 +176,7 @@ NodeProto CaptureInitializerCall(const NodeProto &node, const GraphBuilder &buil
   function.add_opset(domain, version);
   // The unnamed, canonical body allows identical recipes to share one definition.
   for (const auto &existing : collection.added_functions()) {
-    FunctionProto candidate = utils::CopyWithSharedPayloads(existing);
+    FunctionProto candidate = utils::CopyWithSharedTensorStorage(existing);
     candidate.clear_name();
     if (candidate.Equals(function)) {
       call.set_op_type(existing.name().value());
@@ -349,7 +349,7 @@ void ValidateInputDefault(const utils::RepeatedProtoField<ValueInfoProto> &input
 GraphProto GraphHeader(const GraphProto &graph) {
   GraphProto result;
   result.name_ = graph.name_;
-  result.sparse_initializer_ = utils::CopyWithSharedPayloads(graph.sparse_initializer_);
+  result.sparse_initializer_ = utils::CopyWithSharedTensorStorage(graph.sparse_initializer_);
   result.doc_string_ = graph.doc_string_;
   result.input_ = graph.input_;
   result.output_ = graph.output_;
@@ -424,7 +424,7 @@ GraphProto GraphHeaders(const GraphProto &graph) {
       if (!attribute.has_g() && attribute.graphs().empty())
         continue;
       auto &copy = *entry.add_attribute();
-      copy = utils::CopyWithSharedPayloads(attribute);
+      copy = utils::CopyWithSharedTensorStorage(attribute);
       if (attribute.has_g())
         *copy.mutable_g() = GraphHeaders(attribute.g());
       copy.clr_graphs();
@@ -480,7 +480,7 @@ Field SelectPositions(const Field &values, const Positions &positions) {
     const auto position = CheckedPosition(encoded);
     if (position >= values.size() || !seen.insert(position).second)
       throw BuilderError("Rewriting: invalid or duplicate inverse position.");
-    result.add() = utils::CopyWithSharedPayloads(values[position]);
+    result.add() = utils::CopyWithSharedTensorStorage(values[position]);
   }
   return result;
 }
@@ -499,7 +499,7 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
     throw BuilderError("UndoRewritings: incomplete inverse payload or incompatible counts.");
   const auto expected = SelectPositions(current, added_positions);
   for (std::size_t i = 0; i < expected.size(); ++i) {
-    auto actual = utils::CopyWithSharedPayloads(expected[i]);
+    auto actual = utils::CopyWithSharedTensorStorage(expected[i]);
     if (prepared != nullptr) {
       if constexpr (std::is_same_v<Field, utils::RepeatedProtoField<TensorProto>>) {
         const auto found = prepared->find(path);
@@ -527,7 +527,7 @@ Field UndoEntries(const Field &current, const Positions &added_positions, const 
   for (std::size_t position = 0; position < original_count; ++position) {
     const auto found = removed.find(position);
     if (found != removed.end()) {
-      result.add() = utils::CopyWithSharedPayloads(removed_values[found->second]);
+      result.add() = utils::CopyWithSharedTensorStorage(removed_values[found->second]);
     } else {
       while (index < current.size() && added.count(index) != 0)
         ++index;
@@ -974,7 +974,7 @@ public:
         return false;
       originals.push_back(original);
       if (inverse != nullptr)
-        removed_nodes.push_back(utils::CopyWithSharedPayloads(nodes_[original]));
+        removed_nodes.push_back(utils::CopyWithSharedTensorStorage(nodes_[original]));
       insertion_position = std::min(insertion_position, position);
     }
     std::vector<std::pair<std::size_t, const NodeProto *>> additions;
@@ -1041,7 +1041,7 @@ public:
     std::size_t position = 0;
     for (std::size_t original = 0; original < added_.size(); ++original) {
       for (const NodeProto *node : added_[original]) {
-        rewrite.ref_added_nodes().push_back(utils::CopyWithSharedPayloads(*node));
+        rewrite.ref_added_nodes().push_back(utils::CopyWithSharedTensorStorage(*node));
         rewrite.add_added_nodes_positions(position++);
       }
       if (original < removed_.size()) {
@@ -1109,7 +1109,7 @@ void CaptureInversePlan(const RewritingProto &plan, UndoState &undo, GraphProto 
     if (after.node().size() != rewrite.added_nodes().size())
       throw BuilderError("Optimize: incomplete materialized replacement definitions.");
     if (rewrite.initializer_calls().empty())
-      after.ref_initializer() = utils::CopyWithSharedPayloads(rewrite.added_initializers());
+      after.ref_initializer() = utils::CopyWithSharedTensorStorage(rewrite.added_initializers());
     graph.ref_node() = UndoEntries(
         graph.node(), rewrite.matched_nodes(), before.node(), rewrite.added_nodes_positions(),
         after.node(), graph.node().size() - before.node().size() + after.node().size());
@@ -1156,7 +1156,7 @@ std::size_t UndoNodeBatch(GraphProto &graph, const RewritingProto &plan, const U
       throw BuilderError("UndoRewritings: incompatible node-only undo capture.");
     auto &reverse = reversed.emplace_back();
     reverse.ref_matched_nodes() = rewrite.added_nodes_positions();
-    reverse.ref_added_nodes() = utils::CopyWithSharedPayloads(inverse.before.node());
+    reverse.ref_added_nodes() = utils::CopyWithSharedTensorStorage(inverse.before.node());
     reverse.ref_added_nodes_positions() = rewrite.matched_nodes();
     UndoState::Edit displaced;
     if (!batch.Append(reverse, &displaced))
@@ -1315,7 +1315,7 @@ std::size_t GraphGraph::Canonicalize() {
 
 std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
   std::size_t removed = 0;
-  const auto original_nodes = utils::CopyWithSharedPayloads(builder_.nodes_);
+  const auto original_nodes = utils::CopyWithSharedTensorStorage(builder_.nodes_);
   GraphBuilder::InitializerContentIndex inherited;
   std::vector<const EncodedValueProto *> encoded_inherited;
   std::unordered_set<std::string> inherited_names;
@@ -1438,7 +1438,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const auto original_opsets = root->opsets_;
   auto undo = std::make_shared<UndoState>();
   if (&builder_ == root && !reference_changed)
-    undo->original_rewritings = utils::CopyWithSharedPayloads(root->rewritings_);
+    undo->original_rewritings = utils::CopyWithSharedTensorStorage(root->rewritings_);
   if (&builder_ == root) {
     const auto capture_devices = [&](const auto &self,
                                      const GraphBuilder &scope) -> UndoState::ScopeDevices {
@@ -1474,7 +1474,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       self(self, *subgraph);
   };
   capture_functions(capture_functions, *root);
-  auto original_definitions = utils::CopyWithSharedPayloads(collection.added_functions());
+  auto original_definitions = utils::CopyWithSharedTensorStorage(collection.added_functions());
   const std::size_t original_functions = collection.added_functions().size();
   auto result =
       OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
@@ -1540,7 +1540,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       ProjectPreparedGraph(undo->edits[i].before, prepared, path);
       ProjectPreparedGraph(undo->edits[i].after, prepared, path);
     }
-    undo->plan = utils::CopyWithSharedPayloads(result);
+    undo->plan = utils::CopyWithSharedTensorStorage(result);
     root->rewriting_undo_ = std::move(undo);
   }
   return result;
@@ -1774,7 +1774,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       for (const auto &name : graph_path) {
         rewriting.add_graph_path(name);
       }
-      rewriting.ref_added_nodes() = utils::CopyWithSharedPayloads(replacement_nodes);
+      rewriting.ref_added_nodes() = utils::CopyWithSharedTensorStorage(replacement_nodes);
       rewriting.ref_matched_nodes().reserve(match.nodes.size());
       std::unordered_set<const NodeProto *> persisted_nodes;
       for (const NodeProto *node : match.nodes) {
@@ -1784,7 +1784,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       }
       for (std::size_t i = initializers_before; i < builder_.initializers_.size(); ++i) {
         rewriting.ref_added_initializers().push_back(
-            utils::CopyWithSharedPayloads(builder_.initializers_[i]));
+            utils::CopyWithSharedTensorStorage(builder_.initializers_[i]));
         rewriting.add_added_initializer_positions(i);
       }
       replacements.push_back(
@@ -1888,7 +1888,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       }
       for (PendingReplacement &replacement : replacements) {
         replacement.undo.after.ref_initializer() =
-            utils::CopyWithSharedPayloads(replacement.rewriting.added_initializers());
+            utils::CopyWithSharedTensorStorage(replacement.rewriting.added_initializers());
         utils::RepeatedProtoField<NodeProto> unfolded_nodes;
         for (const NodeProto &node : replacement.rewriting.added_nodes()) {
           bool folded = !node.output().empty();
@@ -1907,11 +1907,11 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               if (output.empty())
                 continue;
               rewrite.add_computed_initializer_positions(folded_positions.at(output.value()));
-              replacement.undo.after.ref_initializer().push_back(utils::CopyWithSharedPayloads(
+              replacement.undo.after.ref_initializer().push_back(utils::CopyWithSharedTensorStorage(
                   builder_.initializers_[folded_positions.at(output.value())]));
             }
           } else {
-            unfolded_nodes.push_back(utils::CopyWithSharedPayloads(node));
+            unfolded_nodes.push_back(utils::CopyWithSharedTensorStorage(node));
           }
         }
         replacement.rewriting.ref_added_nodes() = std::move(unfolded_nodes);
@@ -1970,7 +1970,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;
-        snapshot.ref_node() = utils::CopyWithSharedPayloads(replacement.rewriting.added_nodes());
+        snapshot.ref_node() =
+            utils::CopyWithSharedTensorStorage(replacement.rewriting.added_nodes());
         for (auto &node : snapshot.ref_node())
           builder_.MaterializeGraphReferences(node);
         applied.push_back(std::move(replacement.rewriting));
@@ -2011,7 +2012,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
 
 std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites,
                                 bool remove_unused, detail::RewritingUndoState &undo) {
-  const auto original_nodes = utils::CopyWithSharedPayloads(builder_.nodes_);
+  const auto original_nodes = utils::CopyWithSharedTensorStorage(builder_.nodes_);
   const std::size_t first_rewrite = rewrites.size();
   const auto initializer_names = [](const auto &initializers) {
     std::vector<std::string> names;
@@ -2053,10 +2054,10 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     for (std::size_t i = 0; i < node_count; ++i) {
       rewriting.add_matched_nodes(i);
     }
-    rewriting.ref_added_nodes() = utils::CopyWithSharedPayloads(builder_.nodes_);
+    rewriting.ref_added_nodes() = utils::CopyWithSharedTensorStorage(builder_.nodes_);
     UndoState::Edit inverse;
     auto &snapshot = inverse.after;
-    snapshot.ref_node() = utils::CopyWithSharedPayloads(rewriting.added_nodes());
+    snapshot.ref_node() = utils::CopyWithSharedTensorStorage(rewriting.added_nodes());
     for (auto &node : snapshot.ref_node())
       builder_.MaterializeGraphReferences(node);
     rewriting.ref_added_nodes_positions().reserve(builder_.nodes_.size());
@@ -2410,7 +2411,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   for (std::size_t position = 0; position < final_initializer_count; ++position) {
     if (initializers_by_position[position] != nullptr) {
       rebuilt_initializers.push_back(
-          utils::CopyWithSharedPayloads(*initializers_by_position[position]));
+          utils::CopyWithSharedTensorStorage(*initializers_by_position[position]));
       continue;
     }
     while (removed_initializers.count(original_initializer) != 0) {
@@ -2511,7 +2512,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
-      rebuilt.push_back(utils::CopyWithSharedPayloads(*nodes_by_position[position]));
+      rebuilt.push_back(utils::CopyWithSharedTensorStorage(*nodes_by_position[position]));
       NodeProto &node = rebuilt.back();
       const std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
       node.ref_attribute() = ImportAttributes(node, excluded);
@@ -2555,7 +2556,7 @@ void GraphBuilder::AddRewriting(const std::string &name, const RewritingProto &r
     throw BuilderError("AddRewriting requires a root model builder.");
   if (name.empty() || rewritings_.count(name) != 0)
     throw BuilderError("AddRewriting: empty or duplicate variant name '" + name + "'.");
-  rewritings_.emplace(name, utils::CopyWithSharedPayloads(rewrites));
+  rewritings_.emplace(name, utils::CopyWithSharedTensorStorage(rewrites));
 }
 
 GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
@@ -2698,7 +2699,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     }
     for (const auto &attribute : function.attribute_proto()) {
       NodeProto defaults;
-      defaults.ref_attribute().push_back(utils::CopyWithSharedPayloads(attribute));
+      defaults.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
       ValidateFunctionCalls(defaults, functions);
     }
   }
@@ -2863,7 +2864,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     --index;
   }
   model.ref_opset_import() = undo.original_opsets;
-  model.ref_functions() = utils::CopyWithSharedPayloads(undo.original_functions);
+  model.ref_functions() = utils::CopyWithSharedTensorStorage(undo.original_functions);
   model.ref_struct_types() = undo.original_struct_types;
   RestoreGraphHeaders(*model.mutable_graph(), undo.original_graph_headers);
   model.clr_rewritings();
@@ -2902,7 +2903,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     }
   };
   restore_devices(restore_devices, result, undo.devices);
-  result.rewritings_ = utils::CopyWithSharedPayloads(undo.original_rewritings);
+  result.rewritings_ = utils::CopyWithSharedTensorStorage(undo.original_rewritings);
   return result;
 }
 

@@ -147,8 +147,8 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
 bool SameEncodedContent(const EncodedValueProto &lhs, const EncodedValueProto &rhs) {
   // The complete layout (including constants, codecs and nominal type IDs)
   // participates in identity, not merely its byte extent or payload.
-  EncodedValueProto left = utils::CopyWithSharedPayloads(lhs);
-  EncodedValueProto right = utils::CopyWithSharedPayloads(rhs);
+  EncodedValueProto left = utils::CopyWithSharedTensorStorage(lhs);
+  EncodedValueProto right = utils::CopyWithSharedTensorStorage(rhs);
   left.clear_name();
   right.clear_name();
   return left.Equals(right);
@@ -327,12 +327,12 @@ void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &binding
         throw BuilderError("GraphBuilder: cannot inline a function with an unresolved attribute '" +
                            attribute.ref_attr_name().value() + "'.");
       }
-      clone = utils::CopyWithSharedPayloads(*found->second.attribute);
+      clone = utils::CopyWithSharedTensorStorage(*found->second.attribute);
       function_owned = !found->second.caller_scoped;
       clone.set_name(attribute.name().value());
       clone.clear_ref_attr_name();
     } else {
-      clone = utils::CopyWithSharedPayloads(attribute);
+      clone = utils::CopyWithSharedTensorStorage(attribute);
     }
     if (clone.has_g()) {
       ResolveFunctionAttributes(*clone.mutable_g(), bindings, rename, function_owned);
@@ -529,7 +529,7 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
         MakeFunctionIdentifier(function_domain, function_name, function.overload()));
   }
   ImportGraph(model.graph());
-  rewritings_ = utils::CopyWithSharedPayloads(model.rewritings());
+  rewritings_ = utils::CopyWithSharedTensorStorage(model.rewritings());
 }
 
 GraphBuilder::~GraphBuilder() = default;
@@ -919,7 +919,7 @@ bool GraphBuilder::RefreshDependentNodes(
     if (!directly_affected && affected_values.empty()) {
       continue;
     }
-    NodeProto materialized = utils::CopyWithSharedPayloads(stored);
+    NodeProto materialized = utils::CopyWithSharedTensorStorage(stored);
     MaterializeGraphReferences(materialized, /*share_initializers=*/true);
     std::vector<std::string> references;
     CollectNodeReferences(materialized, references);
@@ -1241,7 +1241,7 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   const auto declarations = StructuredDeclarations(value_infos_);
   RefreshLocalFunctions();
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
-    NodeProto node = utils::CopyWithSharedPayloads(nodes_[i]);
+    NodeProto node = utils::CopyWithSharedTensorStorage(nodes_[i]);
     MaterializeGraphReferences(node, /*share_initializers=*/true);
     const bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node) &&
                        ShapeInputsAvailable(shapes, node);
@@ -1300,7 +1300,8 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
   }
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
   // Native assignment retains borrowed payload owners without a wire round-trip.
-  *extended_initializers_.Add()->mutable_encoded_value() = utils::CopyWithSharedPayloads(value);
+  *extended_initializers_.Add()->mutable_encoded_value() =
+      utils::CopyWithSharedTensorStorage(value);
   if (!is_input) {
     compute_.Shapes().SetEncodedValue(name, value);
   }
@@ -1332,7 +1333,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   catalogue.ValidatePagedCache(value, true,
                                is_input && input->has_type() ? &input->type() : nullptr);
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
-  *extended_initializers_.Add()->mutable_paged_cache() = utils::CopyWithSharedPayloads(value);
+  *extended_initializers_.Add()->mutable_paged_cache() = utils::CopyWithSharedTensorStorage(value);
   if (!is_input) {
     TypeProto type;
     type.mutable_struct_type();
@@ -1347,7 +1348,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
 }
 
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
-  return MakeInitializerImpl(utils::CopyWithSharedPayloads(tensor));
+  return MakeInitializerImpl(utils::CopyWithSharedTensorStorage(tensor));
 }
 
 const std::string &GraphBuilder::MakeInitializerMove(TensorProto &&tensor) {
@@ -1716,7 +1717,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       imported.push_back(std::move(refs));
       continue;
     }
-    imported.push_back(utils::CopyWithSharedPayloads(attribute));
+    imported.push_back(utils::CopyWithSharedTensorStorage(attribute));
   }
   return imported;
 }
@@ -1730,7 +1731,8 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   // imported node list is immediately discarded.
   graph_template_ = GraphProto{};
   graph_template_.name_ = graph.name_;
-  graph_template_.sparse_initializer_ = utils::CopyWithSharedPayloads(graph.sparse_initializer_);
+  graph_template_.sparse_initializer_ =
+      utils::CopyWithSharedTensorStorage(graph.sparse_initializer_);
   graph_template_.doc_string_ = graph.doc_string_;
   graph_template_.quantization_annotation_ = graph.quantization_annotation_;
   graph_template_.metadata_props_ = graph.metadata_props_;
@@ -1813,7 +1815,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   function_template_.doc_string_ = function.doc_string_;
   function_template_.overload_ = function.overload_;
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
-  function_attribute_protos_ = utils::CopyWithSharedPayloads(function.attribute_proto());
+  function_attribute_protos_ = utils::CopyWithSharedTensorStorage(function.attribute_proto());
   metadata_ = function.metadata_props();
   if (function.has_doc_string()) {
     doc_string_ = function.doc_string().value();
@@ -2097,16 +2099,16 @@ std::vector<std::string> GraphBuilder::MakeNode(
   }
   NodeProto attribute_source;
   for (const AttributeProto &attribute : attributes) {
-    attribute_source.ref_attribute().push_back(utils::CopyWithSharedPayloads(attribute));
+    attribute_source.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
   }
   const std::unordered_set<std::string> excluded_inherited_names(resolved_outputs.begin(),
                                                                  resolved_outputs.end());
   const utils::RepeatedProtoField<AttributeProto> normalized_attributes =
       ImportAttributes(attribute_source, excluded_inherited_names);
   for (const AttributeProto &attribute : normalized_attributes) {
-    node.ref_attribute().push_back(utils::CopyWithSharedPayloads(attribute));
+    node.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
   }
-  NodeProto materialized = utils::CopyWithSharedPayloads(node);
+  NodeProto materialized = utils::CopyWithSharedTensorStorage(node);
   MaterializeGraphReferences(materialized);
   for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
     SeedInheritedValue(input);
@@ -2250,7 +2252,7 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
 
 void GraphBuilder::CollectNodeReferences(const NodeProto &node,
                                          std::vector<std::string> &refs) const {
-  NodeProto materialized = utils::CopyWithSharedPayloads(node);
+  NodeProto materialized = utils::CopyWithSharedTensorStorage(node);
   MaterializeGraphReferences(materialized);
   refs = core::graph::CollectNodeInputs(materialized);
 }
@@ -2824,7 +2826,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   for (const auto &attribute : function.function_attribute_protos_) {
     bindings[attribute.name().value()] = {&attribute, false};
   }
-  NodeProto materialized_call = utils::CopyWithSharedPayloads(call);
+  NodeProto materialized_call = utils::CopyWithSharedTensorStorage(call);
   MaterializeGraphReferences(materialized_call);
   for (const auto &attribute : materialized_call.attribute()) {
     bindings[attribute.name().value()] = {&attribute, true};
@@ -2837,9 +2839,9 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   materialized_body.reserve(function.nodes_.size());
   for (const NodeProto &body : function.nodes_) {
     MaterializedNode materialized;
-    materialized.node = utils::CopyWithSharedPayloads(body);
+    materialized.node = utils::CopyWithSharedTensorStorage(body);
     function.MaterializeGraphReferences(materialized.node);
-    NodeProto validated = utils::CopyWithSharedPayloads(materialized.node);
+    NodeProto validated = utils::CopyWithSharedTensorStorage(materialized.node);
     ResolveFunctionAttributes(validated, bindings, nullptr, true);
     materialized_body.push_back(std::move(materialized));
   }
@@ -2870,7 +2872,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     while (HasName(new_name)) {
       new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
     }
-    TensorProto clone = utils::CopyWithSharedPayloads(initializer);
+    TensorProto clone = utils::CopyWithSharedTensorStorage(initializer);
     clone.set_name(new_name);
     MakeInitializer(clone);
     rename.emplace(old_name, new_name);
@@ -2887,7 +2889,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
       new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
     }
     if (initializer.has_encoded_value()) {
-      EncodedValueProto clone = utils::CopyWithSharedPayloads(initializer.encoded_value());
+      EncodedValueProto clone = utils::CopyWithSharedTensorStorage(initializer.encoded_value());
       clone.set_name(new_name);
       MakeEncodedInitializer(clone);
     } else {
@@ -2919,9 +2921,9 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   };
 
   for (const MaterializedNode &materialized : materialized_body) {
-    NodeProto resolved = utils::CopyWithSharedPayloads(materialized.node);
+    NodeProto resolved = utils::CopyWithSharedTensorStorage(materialized.node);
     ResolveFunctionAttributes(resolved, bindings, &rename, true);
-    NodeProto node = utils::CopyWithSharedPayloads(resolved);
+    NodeProto node = utils::CopyWithSharedTensorStorage(resolved);
     node.ref_input().clear();
     node.ref_output().clear();
     node.ref_attribute().clear();
@@ -2932,7 +2934,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
       node.add_output(remap(std::string(resolved.output(static_cast<std::size_t>(i)))));
     }
     for (const auto &attribute : resolved.attribute()) {
-      node.ref_attribute().push_back(utils::CopyWithSharedPayloads(attribute));
+      node.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
     }
     const std::unordered_set<std::string> excluded_inherited_names(node.output().begin(),
                                                                    node.output().end());
@@ -3606,7 +3608,7 @@ void GraphBuilder::ValidateSubgraphOutput(const std::string &name) const {
 
 GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings,
                                         bool share_initializers) const {
-  GraphProto graph = utils::CopyWithSharedPayloads(graph_template_);
+  GraphProto graph = utils::CopyWithSharedTensorStorage(graph_template_);
   graph.set_name(name_);
   for (const ValueInfoProto &input : inputs_) {
     graph.add_input(input);
@@ -3616,14 +3618,14 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings,
       graph.ref_initializer().add();
       graph.ref_initializer().get(i) = initializers_.shared_at(i);
     } else {
-      graph.ref_initializer().push_back(utils::CopyWithSharedPayloads(initializers_[i]));
+      graph.ref_initializer().push_back(utils::CopyWithSharedTensorStorage(initializers_[i]));
     }
   }
   for (const auto &initializer : extended_initializers_) {
-    graph.ref_extended_initializer().push_back(utils::CopyWithSharedPayloads(initializer));
+    graph.ref_extended_initializer().push_back(utils::CopyWithSharedTensorStorage(initializer));
   }
   for (const NodeProto &node : nodes_) {
-    NodeProto materialized = utils::CopyWithSharedPayloads(node);
+    NodeProto materialized = utils::CopyWithSharedTensorStorage(node);
     MaterializeGraphReferences(materialized, share_initializers);
     graph.ref_node().push_back(std::move(materialized));
   }
@@ -4151,7 +4153,7 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
   for (const auto &function : local_functions_) {
     model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
   }
-  model.ref_rewritings() = utils::CopyWithSharedPayloads(rewritings_);
+  model.ref_rewritings() = utils::CopyWithSharedTensorStorage(rewritings_);
   return model;
 }
 
@@ -4265,7 +4267,7 @@ void GraphBuilder::PrependInitializerConstants(FunctionProto &function) const {
     auto *attribute = node.add_attribute();
     attribute->set_name("value");
     attribute->set_type(AttributeProto::TENSOR);
-    *attribute->mutable_t() = utils::CopyWithSharedPayloads(initializer);
+    *attribute->mutable_t() = utils::CopyWithSharedTensorStorage(initializer);
   }
   for (auto &node : function.ref_node())
     nodes.push_back(std::move(node));
@@ -4277,13 +4279,13 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
   if (!graph_template_.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry persistent bindings.");
   }
-  FunctionProto function = utils::CopyWithSharedPayloads(function_template_);
+  FunctionProto function = utils::CopyWithSharedTensorStorage(function_template_);
   function.set_name(name_);
   function.set_domain(domain);
   for (const auto &attribute : function_attributes_) {
     function.add_attribute(attribute);
   }
-  function.ref_attribute_proto() = utils::CopyWithSharedPayloads(function_attribute_protos_);
+  function.ref_attribute_proto() = utils::CopyWithSharedTensorStorage(function_attribute_protos_);
   function.ref_metadata_props() = metadata_;
   if (doc_string_) {
     function.set_doc_string(*doc_string_);
@@ -4308,7 +4310,7 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
     function.add_opset(entry.first, entry.second);
   }
   for (const NodeProto &node : nodes_) {
-    NodeProto materialized = utils::CopyWithSharedPayloads(node);
+    NodeProto materialized = utils::CopyWithSharedTensorStorage(node);
     MaterializeGraphReferences(materialized);
     function.ref_node().push_back(std::move(materialized));
   }

@@ -23,7 +23,7 @@ template <typename T> void CheckRawSetterAliasing() {
         T source;
         source.ref_raw_data().resize_aligned(payload.size(), aligned ? 256 : 1);
         std::memcpy(source.ref_raw_data().data(), payload.data(), payload.size());
-        auto snapshot = shared ? utils::CopyWithSharedPayloads(source) : T{};
+        auto snapshot = shared ? utils::CopyWithSharedTensorStorage(source) : T{};
         const auto *bytes = std::as_const(source).ref_raw_data().data();
         source.set_raw_data(bytes + offset, count);
         EXPECT_EQ(std::string(std::as_const(source).ref_raw_data()), payload.substr(offset, count));
@@ -43,7 +43,7 @@ TEST(SharedPayloadCopy, ProtoRawSettersPreserveAliasedLogicalBytes) {
 template <typename T>
 void CheckOneofSharedCopy(const T &source, int (T::*active_case)() const, void (T::*enter)()) {
   const auto expected = source.SerializeAsString();
-  auto copied = utils::CopyWithSharedPayloads(source);
+  auto copied = utils::CopyWithSharedTensorStorage(source);
   EXPECT_EQ((copied.*active_case)(), (source.*active_case)());
   (copied.*enter)();
   EXPECT_EQ(copied.SerializeAsString(), expected);
@@ -86,7 +86,7 @@ TEST(SharedPayloadCopy, CopiesEveryOneofDiscriminatorAndPreservesSameAlternative
   TypeProto nested;
   nested.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
       TensorProto::FLOAT);
-  auto copied = utils::CopyWithSharedPayloads(nested);
+  auto copied = utils::CopyWithSharedTensorStorage(nested);
   auto &element = copied.ref_sequence_type().ref_elem_type();
   EXPECT_EQ(copied.oneof_case_type(), nested.oneof_case_type());
   EXPECT_EQ(element.oneof_case_type(), type.oneof_case_type());
@@ -107,12 +107,12 @@ TEST(SharedPayloadCopy, OwnedBytesShareOnlyExplicitlyAndDetachBothWays) {
   copied.CopyFrom(source);
   EXPECT_NE(copied.raw_data().data(), original);
 
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   ASSERT_EQ(std::as_const(snapshot).raw_data().data(), original);
   source.ref_raw_data()[0] = 'W';
   EXPECT_EQ(std::string(snapshot.raw_data()), "weights");
   EXPECT_NE(std::as_const(source).raw_data().data(), original);
-  auto second = utils::CopyWithSharedPayloads(snapshot);
+  auto second = utils::CopyWithSharedTensorStorage(snapshot);
   snapshot.ref_raw_data().data_as_char()[1] = 'E';
   EXPECT_EQ(std::string(second.raw_data()), "weights");
   EXPECT_EQ(std::string(snapshot.raw_data()), "wEights");
@@ -141,7 +141,7 @@ TEST(SharedPayloadCopy, ByteMutatorsDoNotChangeSnapshots) {
       } else {
         buffer.assign("weights", 7);
       }
-      auto snapshot = utils::CopyWithSharedPayloads(buffer);
+      auto snapshot = utils::CopyWithSharedTensorStorage(buffer);
       ASSERT_EQ(std::as_const(buffer).data(), std::as_const(snapshot).data());
       mutate(buffer);
       EXPECT_EQ(std::string(snapshot), "weights");
@@ -157,7 +157,7 @@ TEST(SharedPayloadCopy, AlignedMutationRetainsAlignmentAndLogicalBytes) {
   utils::ByteSpan source;
   source.resize_aligned(17, 256);
   std::memset(source.data(), 9, source.size());
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto *original = std::as_const(source).data();
   ASSERT_EQ(original, std::as_const(snapshot).data());
   snapshot[0] = 4;
@@ -179,7 +179,7 @@ TEST(SharedPayloadCopy, SuccessfulAlignedResizesPreserveLogicalBytes) {
           utils::ByteSpan source;
           source.resize_aligned(payload.size(), 256);
           std::memcpy(source.data(), payload.data(), payload.size());
-          auto snapshot = shared ? utils::CopyWithSharedPayloads(source) : source;
+          auto snapshot = shared ? utils::CopyWithSharedTensorStorage(source) : source;
           source.resize_aligned(size, alignment);
           ASSERT_EQ(source.size(), size);
           EXPECT_EQ(reinterpret_cast<uintptr_t>(std::as_const(source).data()) % alignment, 0u);
@@ -211,7 +211,7 @@ TEST(SharedPayloadCopy, AllocationLimitedMutationsPreserveSnapshotsAndFailedResi
     else
       source.resize_aligned(bytes, 64);
     std::memset(source.data(), 9, bytes);
-    auto snapshot = utils::CopyWithSharedPayloads(source);
+    auto snapshot = utils::CopyWithSharedTensorStorage(source);
     const auto *original = std::as_const(source).data();
     struct rlimit previous;
     ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
@@ -254,7 +254,7 @@ TEST(SharedPayloadCopy, InvalidAlignedResizePreservesStorage) {
   utils::ByteSpan source;
   source.resize_aligned(7, 64);
   std::memcpy(source.data(), "weights", 7);
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto *original = std::as_const(source).data();
   EXPECT_THROW(source.resize_aligned(7, 3), std::invalid_argument);
   EXPECT_THROW(source.resize_aligned(std::numeric_limits<size_t>::max(), 64),
@@ -271,7 +271,7 @@ TEST(SharedPayloadCopy, BorrowedOwnerRetainsLifetimeAndReadOnlyContract) {
   std::weak_ptr<void> lifetime = owner;
   TensorProto source;
   source.ref_raw_data().assign_borrowed(owner->data(), owner->size(), owner);
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   auto ordinary = source;
   TensorProto copy_from;
   copy_from.CopyFrom(source);
@@ -295,7 +295,7 @@ TEST(SharedPayloadCopy, NullOwnerTokensAndOwnerlessBorrowedStorage) {
   const uint8_t bytes[] = {1, 2, 3};
   utils::ByteSpan borrowed;
   borrowed.assign_with_deleter(bytes, 3, [&released]() { released = true; });
-  auto retained = utils::CopyWithSharedPayloads(borrowed);
+  auto retained = utils::CopyWithSharedTensorStorage(borrowed);
   EXPECT_EQ(std::as_const(retained).data(), bytes);
   borrowed.clear();
   EXPECT_FALSE(released);
@@ -303,7 +303,7 @@ TEST(SharedPayloadCopy, NullOwnerTokensAndOwnerlessBorrowedStorage) {
   EXPECT_TRUE(released);
 
   borrowed.assign_borrowed(bytes, 3);
-  auto safe = utils::CopyWithSharedPayloads(borrowed);
+  auto safe = utils::CopyWithSharedTensorStorage(borrowed);
   EXPECT_FALSE(safe.is_borrowed());
   EXPECT_NE(std::as_const(safe).data(), bytes);
   EXPECT_EQ(std::as_const(safe)[2], 3);
@@ -314,12 +314,12 @@ TEST(SharedPayloadCopy, NullOwnerTokensAndOwnerlessBorrowedStorage) {
 
 TEST(SharedPayloadCopy, EmptyPresenceAndDefaultValues) {
   TensorProto source;
-  auto absent = utils::CopyWithSharedPayloads(source);
+  auto absent = utils::CopyWithSharedTensorStorage(source);
   EXPECT_FALSE(absent.has_raw_data());
   EXPECT_EQ(absent.float_data_size(), 0);
   source.ref_raw_data().resize(0);
   ASSERT_TRUE(source.has_raw_data());
-  auto present = utils::CopyWithSharedPayloads(source);
+  auto present = utils::CopyWithSharedTensorStorage(source);
   auto ordinary = source;
   EXPECT_TRUE(present.has_raw_data());
   EXPECT_TRUE(ordinary.has_raw_data());
@@ -368,7 +368,7 @@ TEST(SharedPayloadCopy, RepeatedMutatorsDetach) {
   for (const auto &mutate : mutations) {
     Field field;
     field = {1, 2, 3};
-    auto snapshot = utils::CopyWithSharedPayloads(field);
+    auto snapshot = utils::CopyWithSharedTensorStorage(field);
     ASSERT_EQ(std::as_const(field).data(), std::as_const(snapshot).data());
     mutate(field);
     EXPECT_EQ(snapshot.values(), (std::vector<int64_t>{1, 2, 3}));
@@ -383,7 +383,7 @@ TEST(SharedPayloadCopy, TypedPayloadsStringsAndOrdinaryCopies) {
   source.add_int64_data(4);
   source.add_uint64_data(5);
   source.add_string_data("a long owned string payload, not a short string");
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto &before = std::as_const(source);
   const auto &saved = std::as_const(snapshot);
   EXPECT_EQ(before.float_data().data(), saved.float_data().data());
@@ -407,7 +407,7 @@ TEST(SharedPayloadCopy, NestedMessagesNeverShareStructure) {
   auto *body = source.mutable_graph()->add_node()->add_attribute()->mutable_g();
   body->add_initializer()->set_raw_data("nested");
   body->add_initializer()->add_float_data(7);
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto &a = std::as_const(source).graph().node(0).attribute(0).g();
   const auto &b = std::as_const(snapshot).graph().node(0).attribute(0).g();
   EXPECT_NE(&a, &b);
@@ -416,12 +416,12 @@ TEST(SharedPayloadCopy, NestedMessagesNeverShareStructure) {
   EXPECT_EQ(a.initializer(1).float_data().data(), b.initializer(1).float_data().data());
   body->mutable_initializer(0)->ref_raw_data()[0] = 'N';
   EXPECT_EQ(std::string(b.initializer(0).raw_data()), "nested");
-  auto repeated = utils::CopyWithSharedPayloads(source.graph().node());
+  auto repeated = utils::CopyWithSharedTensorStorage(source.graph().node());
   EXPECT_NE(&repeated[0], &source.graph().node(0));
 
   utils::RepeatedField<TensorProto> messages;
   messages.add().set_raw_data("value storage");
-  auto message_snapshot = utils::CopyWithSharedPayloads(messages);
+  auto message_snapshot = utils::CopyWithSharedTensorStorage(messages);
   EXPECT_NE(std::as_const(messages).data(), std::as_const(message_snapshot).data());
   EXPECT_EQ(std::as_const(messages)[0].raw_data().data(),
             std::as_const(message_snapshot)[0].raw_data().data());
@@ -437,7 +437,7 @@ TEST(SharedPayloadCopy, ActiveExportsForceCopyAndRetainOldAllocation) {
     std::memcpy(source.data(), "weights", 7);
     auto lease = source.acquire_export_guard();
     const auto *exported = std::as_const(source).data();
-    auto snapshot = utils::CopyWithSharedPayloads(source);
+    auto snapshot = utils::CopyWithSharedTensorStorage(source);
     EXPECT_NE(std::as_const(snapshot).data(), exported);
     EXPECT_EQ(std::string(snapshot), "weights");
     source.clear();
@@ -446,7 +446,7 @@ TEST(SharedPayloadCopy, ActiveExportsForceCopyAndRetainOldAllocation) {
 
   utils::ByteSpan source;
   source.assign("weights", 7);
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto *saved = std::as_const(snapshot).data();
   auto lease = source.acquire_export_guard();
   EXPECT_EQ(std::as_const(source).data(), saved);
@@ -458,7 +458,7 @@ TEST(SharedPayloadCopy, ActiveExportsForceCopyAndRetainOldAllocation) {
   source.assign_borrowed(bytes, 2, std::make_shared<int>(1));
   lease = source.acquire_export_guard();
   EXPECT_FALSE(source.has_active_exports());
-  auto borrowed_snapshot = utils::CopyWithSharedPayloads(source);
+  auto borrowed_snapshot = utils::CopyWithSharedTensorStorage(source);
   EXPECT_TRUE(borrowed_snapshot.is_borrowed());
   EXPECT_EQ(std::as_const(borrowed_snapshot).data(), bytes);
 }
@@ -472,7 +472,7 @@ TEST(SharedPayloadCopy, CopyingDescendantGraphPreservesSourceAndSharedPayload) {
   tensor->set_raw_data("payload");
   const auto *payload = std::as_const(*tensor).ref_raw_data().data();
   const auto expected = nested->SerializeAsString();
-  graph = utils::CopyWithSharedPayloads(*nested);
+  graph = utils::CopyWithSharedTensorStorage(*nested);
   EXPECT_EQ(graph.SerializeAsString(), expected);
   EXPECT_EQ(std::as_const(graph).initializer(0).ref_raw_data().data(), payload);
 }
@@ -489,7 +489,7 @@ TEST(SharedPayloadCopy, ExplicitCopyDoesNotChangeOrdinaryCopiesEvenOnFailure) {
       throw std::runtime_error("copy failure");
     }
   };
-  EXPECT_THROW(utils::CopyWithSharedPayloads(Throwing{source}), std::runtime_error);
+  EXPECT_THROW(utils::CopyWithSharedTensorStorage(Throwing{source}), std::runtime_error);
   TensorProto ordinary(source);
   EXPECT_NE(ordinary.raw_data().data(), source.raw_data().data());
 }
@@ -538,7 +538,7 @@ TEST(SharedPayloadCopy, WritableDLPackTransferDetachesOwnedSnapshot) {
   source.set_data_type(TensorProto::UINT8);
   source.add_dims(7);
   source.set_raw_data("weights");
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   const auto *saved = std::as_const(snapshot).raw_data().data();
   auto *exported = ReleaseDLPack(source);
   EXPECT_NE(exported->dl_tensor.data, saved);
@@ -560,7 +560,7 @@ TEST(SharedPayloadCopy, ReplacementDropsExportStateButRetainsOldReadOnlyView) {
   source.clear_raw_data();
   source.set_raw_data("second");
   EXPECT_FALSE(source.raw_data().has_active_exports());
-  auto snapshot = utils::CopyWithSharedPayloads(source);
+  auto snapshot = utils::CopyWithSharedTensorStorage(source);
   EXPECT_EQ(std::as_const(source).raw_data().data(), std::as_const(snapshot).raw_data().data());
   EXPECT_EQ(std::memcmp(old_view, "first!", 6), 0);
 

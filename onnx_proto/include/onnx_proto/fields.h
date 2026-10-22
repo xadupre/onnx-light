@@ -125,7 +125,7 @@ public:
         result.shared_values_ = shared_values_;
       }
     } else {
-      result.values_ = CopyWithSharedPayloads(values());
+      result.values_ = CopyWithSharedTensorStorage(values());
     }
     return result;
   }
@@ -333,7 +333,7 @@ public:
     RepeatedProtoField result;
     result.values_.reserve(size());
     for (const auto &value : *this)
-      result.values_.push_back(std::make_shared<T>(CopyWithSharedPayloads(value)));
+      result.values_.push_back(std::make_shared<T>(CopyWithSharedTensorStorage(value)));
     return result;
   }
   /** Constructs by copying elements from a value-storage RepeatedField<T>.
@@ -614,7 +614,7 @@ public:
   inline OptionalField SharedCopy() const {
     OptionalField result;
     if (has_value())
-      result.value_.reset(new T(CopyWithSharedPayloads(**this)));
+      result.value_.reset(new T(CopyWithSharedTensorStorage(**this)));
     return result;
   }
   /** Constructs by copying another optional field. */

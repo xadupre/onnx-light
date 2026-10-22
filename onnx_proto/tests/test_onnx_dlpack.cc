@@ -109,7 +109,7 @@ TEST(TensorProtoDLPack, OwnedTransferDetachesFromExplicitSnapshots) {
     auto tensor = MakeTensor();
     tensor.ref_raw_data().resize_aligned(6, alignment);
     std::memcpy(tensor.ref_raw_data().data(), "abcdef", 6);
-    auto snapshot = utils::CopyWithSharedPayloads(tensor);
+    auto snapshot = utils::CopyWithSharedTensorStorage(tensor);
     EXPECT_EQ(Data(tensor), Data(snapshot));
     auto exported = Release(tensor);
     EXPECT_NE(exported->dl_tensor.data, Data(snapshot));

@@ -713,8 +713,13 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
               }
               if (value < minimum)
                 minimum = value;
-              if (value >= maximum)
+              if constexpr (std::is_floating_point_v<decltype(value)>) {
+                if (value > maximum ||
+                    (value == maximum && std::signbit(value) != std::signbit(maximum)))
+                  maximum = value;
+              } else if (value >= maximum) {
                 maximum = value;
+              }
             }
             tensor.SetMinMax(static_cast<double>(minimum), static_cast<double>(maximum));
           }

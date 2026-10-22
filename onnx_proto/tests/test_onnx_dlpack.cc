@@ -104,6 +104,61 @@ TEST(TensorProtoDLPack, SharedNullValuedTokenIsRetainedExactlyOnce) {
   EXPECT_EQ(released, 1);
 }
 
+TEST(TensorProtoDLPack, OwnedTransferDetachesFromExplicitSnapshots) {
+  for (size_t alignment : {size_t{1}, size_t{64}}) {
+    auto tensor = MakeTensor();
+    tensor.ref_raw_data().resize_aligned(6, alignment);
+    std::memcpy(tensor.ref_raw_data().data(), "abcdef", 6);
+    auto snapshot = utils::CopyWithSharedTensorStorage(tensor);
+    EXPECT_EQ(Data(tensor), Data(snapshot));
+    auto exported = Release(tensor);
+    EXPECT_NE(exported->dl_tensor.data, Data(snapshot));
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(exported->dl_tensor.data) % alignment, 0U);
+    static_cast<uint8_t *>(exported->dl_tensor.data)[0] = 'z';
+    EXPECT_EQ(Data(snapshot)[0], 'a');
+    ExpectDetached(tensor);
+  }
+}
+
+TEST(TensorProtoDLPack, ExportGuardsTrackReplacementAllocations) {
+  for (size_t alignment : {size_t{1}, size_t{64}}) {
+    auto tensor = MakeTensor();
+    const auto *first = Data(tensor);
+    auto first_lease = tensor.ref_raw_data().acquire_export_guard();
+    tensor.ref_raw_data().clear();
+    EXPECT_FALSE(tensor.ref_raw_data().has_active_exports());
+    tensor.ref_raw_data().resize_aligned(6, alignment);
+    std::memcpy(tensor.ref_raw_data().data(), "second", 6);
+    const auto *second = Data(tensor);
+    auto second_lease = tensor.ref_raw_data().acquire_export_guard();
+    EXPECT_NE(first_lease, second_lease);
+    EXPECT_TRUE(tensor.ref_raw_data().has_active_exports());
+    tensor.Clear();
+    EXPECT_EQ(std::memcmp(first, "abcdef", 6), 0);
+    EXPECT_EQ(std::memcmp(second, "second", 6), 0);
+  }
+}
+
+TEST(TensorProtoDLPack, RejectsOwnedMutationWhileViewsAreActive) {
+  for (size_t alignment : {size_t{1}, size_t{64}}) {
+    auto tensor = MakeTensor();
+    tensor.ref_raw_data().resize_aligned(6, alignment);
+    std::memcpy(tensor.ref_raw_data().data(), "abcdef", 6);
+    const auto *pointer = Data(tensor);
+    auto lease = tensor.ref_raw_data().acquire_export_guard();
+    EXPECT_THROW(tensor.set_raw_data("uvwxyz"), std::invalid_argument);
+    EXPECT_THROW(tensor.ref_raw_data().resize(12), std::invalid_argument);
+    EXPECT_THROW(tensor.ref_raw_data().resize_aligned(6, 64), std::invalid_argument);
+    EXPECT_THROW(tensor.ref_raw_data().push_back(0), std::invalid_argument);
+    EXPECT_THROW(tensor.ref_raw_data() = std::vector<uint8_t>(6, 0), std::invalid_argument);
+    EXPECT_EQ(Data(tensor), pointer);
+    EXPECT_EQ(std::memcmp(pointer, "abcdef", 6), 0);
+    lease.reset();
+    tensor.set_raw_data("uvwxyz");
+    EXPECT_EQ(std::memcmp(Data(tensor), "uvwxyz", 6), 0);
+  }
+}
+
 TEST(TensorProtoDLPack, OwnedCallbackOutlivesSource) {
   int released = 0;
   Managed exported(nullptr, nullptr);

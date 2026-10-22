@@ -285,9 +285,66 @@ affected shape-tagged release lists and memory profiles are refreshed.
 Function definitions are collected from every scope, including functions
 owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
-Export compares canonical graphs and function definitions only when existing
-named plans need a compatibility decision; these comparisons use native
-field equality rather than serialization.
+The initial Python model is released as soon as the working builder has imported
+it, before optimization and inverse capture. Existing named plans are retained
+in private undo history when cleanup
+reports that the canonical reference is unchanged. Cleanup changes in nested
+graphs and functions invalidate those plans without another whole-model export
+or equality scan.
+
+Builder import/export and private undo definitions use explicit tensor-storage
+snapshots: message structure remains independent, while unchanged owned raw
+buffers and typed tensor arrays share storage until a mutable container access
+detaches it. Nested graph attributes, local functions, recipes and removed
+initializer definitions use the same mechanism. Ordinary proto copies retain
+their existing semantics; sharing is requested with
+``utils::CopyWithSharedTensorStorage`` rather than enabled globally.
+Here, tensor storage means the allocation containing raw bytes or typed tensor
+elements, not the tensor's name, dimensions, element type or other metadata.
+The named copy operation explicitly walks each message field and propagates to
+nested containers and messages. It uses no mutable global or ``thread_local``
+copy mode; ordinary constructors and ``CopyFrom`` never depend on an ambient
+copy context. Comparison and copying share the same native field catalogue.
+Shared copies also preserve private oneof discriminators, including in nested
+messages, so entering an already-active alternative does not clear its value.
+Borrowed buffers with an owner retain that owner and remain read-only through
+the proto API. Ownerless borrowed buffers are copied into safe owned storage.
+As with the existing zero-copy import APIs, callers must not modify borrowed
+storage externally while it is in use.
+Mutable C++ pointers, iterators and references obtained before a snapshot
+boundary must be reacquired afterward. Active exported raw-data views use a
+copy fallback. Genuinely transformed weights receive new allocations; undo
+retains the original definitions needed for exact restoration, not additional
+copies of their unchanged bytes.
+Node deduplication hashes native attribute contents without serializing large
+``Constant`` tensors into strings. Hash hits are checked with native equality,
+including resolved inputs and attribute multiplicity; local-function weights
+use the same bounded-memory path.
+Local-function shape inference also explicitly shares tensor payloads when
+copying body nodes and binding call-site attributes.
+
+Integer, FLOAT and DOUBLE value bounds are scanned directly from typed fields or
+little-endian raw payloads without a decoded tensor-sized temporary. Payload
+counts must still match the tensor dimensions before bounds are recorded.
+Python indexing, iteration, representation and list comparison of numeric fields
+use const storage access and leave shared payload allocations intact.
+Neutral arithmetic vectors are checked directly against their payloads as well,
+including all-zero weights and weights whose first value alone is neutral.
+Typed fields take precedence over raw bytes, and vector rewrites still require
+an exact payload count and matching last-dimension broadcasting.
+Owned storage with active NumPy/DLPack views rejects mutable access, byte
+assignment, resizing and appending with an exception. Release all consumers
+before modifying that storage; clearing the tensor retains the old allocation
+for existing views.
+Failed owned-buffer resizing preserves the original bytes, logical size and
+alignment, including when detaching a shared allocation within its capacity.
+Successful aligned resizing copies the logical prefix to the new aligned address,
+not the old backing allocation's padding; conversion to plain storage preserves
+that prefix as well.
+Tensor and encoded-value raw-data setters retain aliased source storage until
+copying finishes, including aligned self-assignment and self-slices.
+Appending to a full shared buffer allocates only the grown buffer, without first
+allocating a same-sized detached copy.
 
 .. code-block:: text
 
@@ -397,8 +454,8 @@ See :ref:`l-example-plot-pattern-replay`.
    computed weight payloads. The optimizer returns ``RewritingProto`` directly;
    optionally attach descriptive metadata. Verify replay against direct
    optimization before publishing the variant.
-   Inverse replay can eventually replace the full canonical-model copy retained
-   by the export modes; this does not require undoing pre-capture cleanups.
+   Inverse replay reconstructs the cleaned reference without retaining the
+   original Python canonical model or undoing pre-capture cleanups.
 3. Export either the untouched canonical model, a bundled onnx-light model
    containing the canonical graph and rewrite map, or a standard ONNX model
    with one selected variant materialized and the extension map removed.

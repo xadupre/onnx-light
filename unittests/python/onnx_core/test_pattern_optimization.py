@@ -520,6 +520,48 @@ class TestPatternOptimization(ExtTestCase):
                 onh.to_array(plain.graph.initializer[0]).tolist(),
             )
 
+    def test_rewritten_weights_are_new_but_canonical_payloads_are_shared(self):
+        for borrowed in (False, True):
+            with self.subTest(borrowed=borrowed):
+                values = numpy.arange(6, dtype=numpy.float32).reshape(2, 3)
+                model = _transpose_weight_model()
+                if borrowed:
+                    model.graph.initializer[0]._set_raw_data_from_buffer(values)
+                original = numpy.from_dlpack(model.graph.initializer[0]).ctypes.data
+                builder = optim.GraphBuilder(model)
+                builder.register_pattern(optim.TransposeTransposePattern(priority=-1))
+                optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
+                bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
+                self.assertEqual(
+                    numpy.from_dlpack(bundled.graph.initializer[0]).ctypes.data, original
+                )
+                self.assertNotEqual(
+                    numpy.from_dlpack(optimized.graph.initializer[0]).ctypes.data, original
+                )
+                numpy.testing.assert_array_equal(
+                    onh.to_array(optimized.graph.initializer[0]), values.T
+                )
+                replayed = (
+                    optim.GraphBuilder(bundled).apply_rewritings("optimized").to_standard_model()
+                )
+                numpy.testing.assert_array_equal(
+                    onh.to_array(replayed.graph.initializer[0]), values.T
+                )
+                optimized.graph.initializer[0].raw_data = bytes(values.nbytes)
+                numpy.testing.assert_array_equal(
+                    onh.to_array(bundled.graph.initializer[0]), values
+                )
+                numpy.testing.assert_array_equal(onh.to_array(model.graph.initializer[0]), values)
+                model.graph.initializer[0].raw_data = bytes(values.nbytes)
+                numpy.testing.assert_array_equal(
+                    onh.to_array(bundled.graph.initializer[0]), values
+                )
+                del model, builder
+                gc.collect()
+                numpy.testing.assert_array_equal(
+                    onh.to_array(bundled.graph.initializer[0]), values
+                )
+
     def test_to_onnx_optimization_options_validate_before_matching(self):
         builder = optim.GraphBuilder(_double_neg_model())
         before = builder.to_onnx().SerializeToString()

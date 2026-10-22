@@ -25,6 +25,8 @@
 #include <cerrno>
 #include <charconv>
 #include <cstdlib>
+#include <limits>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -685,6 +687,10 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
       count_known = false;
       break;
     }
+    if (d.AsInt() != 0 && count > std::numeric_limits<int64_t>::max() / d.AsInt()) {
+      count_known = false;
+      break;
+    }
     count *= d.AsInt();
   }
 
@@ -692,26 +698,22 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
   // covers both integer and floating-point element types; tensors whose
   // data is absent (no typed field, no raw_data) or in an unsupported
   // dtype are left unannotated.
-  if (count_known && count > 0) {
-    if (IsIntegerTensorType(dtype)) {
-      std::vector<int64_t> values;
-      if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
-        const auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
-        tensor.SetMinMax(static_cast<double>(*min_it), static_cast<double>(*max_it));
-      }
-    } else if (dtype == TensorType::kFloat || dtype == TensorType::kDouble) {
-      std::vector<double> values;
-      if (ReadFloatingValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
-        const auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
-        tensor.SetMinMax(*min_it, *max_it);
-      }
-    }
+  bool payload_readable = false;
+  if (count_known) {
+    payload_readable = tensor_values_detail::WithNumericTensorValues(
+        tp, static_cast<uint64_t>(count), [&tensor, count](const auto &values) {
+          if (count > 0) {
+            const auto bounds = std::ranges::minmax_element(values);
+            tensor.SetMinMax(static_cast<double>(*bounds.min), static_cast<double>(*bounds.max));
+          }
+          return true;
+        });
   }
 
   // Stamp small 1-D / 0-D integer tensors with a ValueAsShape annotation
   // so that downstream ops (such as Reshape) can see the actual target
   // shape values without re-reading the proto.
-  if (IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 && count_known && count >= 0 &&
+  if (IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 && payload_readable &&
       count < kOptimValueAsShapeMaxElements) {
     std::vector<int64_t> values;
     if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {

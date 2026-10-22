@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -262,24 +264,24 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     }
     if (HasRank(graph, input1, rank) && rank == 1 &&
         (op_type == "Add" || op_type == "Mul" || op_type == "Sub" || op_type == "Div")) {
-      std::vector<double> values;
-      double common_value = 0.0;
-      if (!ReadConstDoubles(graph, input1, values) || !AllSame(values, common_value)) {
-        return NoMatch(candidate, "the constant operand is not uniform");
+      const double neutral = (op_type == "Add" || op_type == "Sub") ? 0.0 : 1.0;
+      const auto *constant = graph.GetComputedConstant(input1);
+      if (constant == nullptr || constant->dims_size() != 1 || constant->dims(0) <= 0 ||
+          !tensor_values_detail::WithNumericTensorValues(
+              *constant, static_cast<uint64_t>(constant->dims(0)), [neutral](const auto &values) {
+                return std::ranges::all_of(values, [neutral](auto value) {
+                  return static_cast<double>(value) == neutral;
+                });
+              })) {
+        return NoMatch(candidate, "the constant operand is not uniformly neutral");
       }
       if (!graph.HasShape(input0)) {
         return NoMatch(candidate, "the other operand shape is unknown");
       }
       const core::symbolic::SymShape &shape = graph.GetShape(input0).Shape();
       if (shape.Rank() == 0 || !shape[shape.Rank() - 1].IsInt() ||
-          shape[shape.Rank() - 1].AsInt() != static_cast<int64_t>(values.size())) {
+          shape[shape.Rank() - 1].AsInt() != constant->dims(0)) {
         return NoMatch(candidate, "the constant does not broadcast on the last dimension");
-      }
-      if ((op_type == "Add" || op_type == "Sub") && common_value != 0.0) {
-        return NoMatch(candidate, "the additive constant is not zero");
-      }
-      if ((op_type == "Mul" || op_type == "Div") && common_value != 1.0) {
-        return NoMatch(candidate, "the multiplicative constant is not one");
       }
       return core::builder::MatchResult{this, {&candidate}, &candidate};
     }

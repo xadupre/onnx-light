@@ -423,6 +423,7 @@ public:                                                                         
   inline int oneof_case_##name() const { return oneof_case_##name##_; }                            \
                                                                                                    \
 private:                                                                                           \
+  friend void utils::detail::CopyProtoWithSharedTensorStorage(void *, const void *, uint16_t);     \
   inline void set_oneof_case_##name(int value) { oneof_case_##name##_ = value; }                   \
   int oneof_case_##name##_ = -1;                                                                   \
                                                                                                    \
@@ -567,6 +568,8 @@ public:
  */
 template <typename Derived> class ProtoMessageAdapter : public Message {
 public:
+  /** Copies message structure independently while explicitly sharing eligible payloads. */
+  Derived SharedCopy() const;
   SerializeSizeResult SerializeSize() const;
   size_t ByteSizeLong() const;
   bool ParseFromString(const std::string &raw);

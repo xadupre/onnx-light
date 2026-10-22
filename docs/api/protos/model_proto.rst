@@ -35,16 +35,18 @@ remain the following implementation step.
 Binary-size budget
 ------------------
 
-The named-plan map adds serialization, comparison and printing code to
-``lib_onnx_proto``. Linux CI run ``39580960813`` at commit ``f0a84c8d``
-measures 1,683,544 installed bytes, 1,192,474 ``.text`` bytes and 868 defined
-dynamic symbols. CI uses these installed-size and text measurements as references
+Named-plan maps and explicit shared-payload snapshots add serialization,
+comparison, copy-on-write storage and export-lease code to ``lib_onnx_proto``.
+Linux CI run ``39752559187`` at commit ``f470c5a8`` measures 1,773,952 installed
+bytes, 1,262,138 ``.text`` bytes and 897 defined dynamic symbols.
+CI uses these installed-size and text measurements as references
 with a 5% margin (``--size-budget-margin-percent 5``), giving limits of
-1,767,721 installed bytes and 1,252,097 ``.text`` bytes. Exceeding either limit
+1,862,649 installed bytes and 1,325,244 ``.text`` bytes. Exceeding either limit
 still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The 891-symbol limit and shared-library dependency allowlist are unchanged.
+The strict symbol limit remains 897 for native snapshot and export-lease code.
+The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto
     :members:

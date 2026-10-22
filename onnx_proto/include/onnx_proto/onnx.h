@@ -574,11 +574,7 @@ inline void Clear() {
   new (this) TensorProto();
 }
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
-inline void set_raw_data(const void *data, size_t size) {
-  raw_data_.resize(size);
-  if (size > 0)
-    std::memcpy(raw_data_.data(), data, size);
-}
+inline void set_raw_data(const void *data, size_t size) { raw_data_.assign(data, size); }
 /** Sets raw_data from a std::string (protobuf bytes-field compat). */
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
 inline void clear_raw_data() { raw_data_.clear(); }
@@ -1123,11 +1119,7 @@ inline LayoutCase layout_case() const {
   return LayoutCase::LAYOUT_NOT_SET;
 }
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
-inline void set_raw_data(const void *data, size_t size) {
-  raw_data_.resize(size);
-  if (size > 0)
-    std::memcpy(raw_data_.data(), data, size);
-}
+inline void set_raw_data(const void *data, size_t size) { raw_data_.assign(data, size); }
 /** Sets raw_data from a std::string (protobuf bytes-field compat). */
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
 inline void clear_raw_data() { raw_data_.clear(); }
@@ -1435,12 +1427,13 @@ AttributeProto &set_attribute(const AttributeProto &attr);
 StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 /**
  * Builds a canonical signature that identifies the computation performed by
- * this node: its operator type, normalised domain, resolved inputs and
+ * this node: its operator type, overload, normalised domain, resolved inputs and
  * attributes. ``resolved_inputs`` lets callers substitute the node's declared
  * inputs (for example to account for earlier-dropped duplicates), so two nodes
- * computing the same value share the same signature. Attributes are serialised
- * individually and sorted so their declaration order does not affect the
- * signature; non-printable separators keep the fields unambiguous.
+ * computing the same value share the same signature. Attributes are hashed
+ * directly from native fields with bounded memory, and their hashes are sorted
+ * so declaration order does not affect the signature. A matching signature is
+ * only a candidate: callers must confirm computation equality with native fields.
  *
  * Returns the signature string.
  */

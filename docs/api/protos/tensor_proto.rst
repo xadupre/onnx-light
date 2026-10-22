@@ -92,18 +92,22 @@ be backed by a read-only memory mapping.
 
 The capsule retains the source Python proto and a separate reference to its
 raw-data owner token until the consumer releases the tensor (or an unused
-capsule is destroyed). Deleting the source variable is safe; copied borrowed
-protos share the original owner. Do not clear, resize, replace, or reparse
-**owned** source storage while a view exists, including through a containing
-model. Borrowed storage with no owner token remains the caller's lifetime
+capsule is destroyed). Owned exports also retain their exact allocation.
+Deleting or clearing the source is safe; copied borrowed protos share the
+original owner. Mutable access, byte assignment (including same-sized
+assignment), resizing and appending to **owned** source storage raise
+``ValueError`` while any exported view or unused capsule remains alive.
+Release all consumers before modifying that storage; failed mutations leave
+the tensor and its views unchanged. Live-view updates are not supported.
+Borrowed storage with no owner token remains the caller's lifetime
 responsibility. Shape metadata is snapshotted at export.
 
 Explicit destructive transfer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``tensor.release_dlpack()`` transfers the existing allocation or shared
-borrowed-storage owner to an independent, single-consumption legacy
-``dltensor`` capsule. Unlike ``__dlpack__``, it does not retain the source.
+``tensor.release_dlpack()`` transfers ``raw_data`` to an independent,
+single-consumption legacy ``dltensor`` capsule. Unlike ``__dlpack__``, it does
+not retain the source.
 The native equivalent is ``ReleaseDLPack(TensorProto&)`` in ``onnx_dlpack.h``.
 
 .. warning::
@@ -118,8 +122,21 @@ The native equivalent is ``ReleaseDLPack(TensorProto&)`` in ``onnx_dlpack.h``.
 The descriptor snapshots dimensions and dtype, and its storage survives
 source destruction or reuse. The deleter never accesses the source.
 User-provided storage callbacks must likewise be independent of the source.
-Owned and aligned-owned allocations transfer without copying; borrowed data
-requires a lifetime owner and shares exactly-once cleanup with other owners.
+Whether the data is copied depends on its storage:
+
+* **Uniquely owned storage**, including aligned storage, transfers without
+  copying its bytes.
+* **Shared owned storage** is detached by copying the entire buffer before
+  transfer, preserving other tensor copies. Builder exports can share owned
+  storage, so transferring an exported tensor can require an additional
+  allocation as large as its raw-data buffer and can fail if memory is
+  insufficient.
+* **Borrowed storage** transfers without copying its bytes, but requires a
+  lifetime owner. The capsule retains that owner and shares exactly-once cleanup
+  with other owners.
+
+The transfer still allocates a descriptor and may allocate shape metadata,
+even when no data bytes are copied.
 Validation and allocation failures leave the source unchanged, including
 failure to create the Python capsule.
 

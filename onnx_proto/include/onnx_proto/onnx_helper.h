@@ -2,13 +2,71 @@
 
 #include "onnx.h"
 
+#include <algorithm>
+#include <bit>
+#include <cstring>
 #include <filesystem>
 #include <initializer_list>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+namespace tensor_values_detail {
+
+template <typename T, typename Values, typename Consumer>
+bool WithTensorValues(const TensorProto &tensor, const Values &typed, uint64_t count,
+                      Consumer &&consume) {
+  if (!typed.empty())
+    return typed.size() == count && consume(typed);
+  const auto &raw = tensor.ref_raw_data();
+  if (!tensor.is_raw_data() || raw.size() % sizeof(T) != 0 || raw.size() / sizeof(T) != count)
+    return false;
+  auto values =
+      std::views::iota(size_t{0}, raw.size() / sizeof(T)) | std::views::transform([&raw](size_t i) {
+        uint8_t bytes[sizeof(T)];
+        std::memcpy(bytes, raw.data() + i * sizeof(T), sizeof(T));
+        if constexpr (std::endian::native == std::endian::big)
+          std::reverse(std::begin(bytes), std::end(bytes));
+        T value;
+        std::memcpy(&value, bytes, sizeof(T));
+        return value;
+      });
+  return consume(values);
+}
+
+// Checks payload counts before exposing a constant-space, read-only numeric range.
+template <typename Consumer>
+bool WithNumericTensorValues(const TensorProto &tensor, uint64_t count, Consumer &&consume) {
+  switch (tensor.data_type()) {
+  case TensorProto::FLOAT:
+    return WithTensorValues<float>(tensor, tensor.float_data(), count, consume);
+  case TensorProto::DOUBLE:
+    return WithTensorValues<double>(tensor, tensor.double_data(), count, consume);
+  case TensorProto::INT64:
+    return WithTensorValues<int64_t>(tensor, tensor.int64_data(), count, consume);
+  case TensorProto::INT32:
+    return WithTensorValues<int32_t>(tensor, tensor.int32_data(), count, consume);
+  case TensorProto::INT16:
+    return WithTensorValues<int16_t>(tensor, tensor.int32_data(), count, consume);
+  case TensorProto::INT8:
+    return WithTensorValues<int8_t>(tensor, tensor.int32_data(), count, consume);
+  case TensorProto::UINT64:
+    return WithTensorValues<uint64_t>(tensor, tensor.uint64_data(), count, consume);
+  case TensorProto::UINT32:
+    return WithTensorValues<uint32_t>(tensor, tensor.uint64_data(), count, consume);
+  case TensorProto::UINT16:
+    return WithTensorValues<uint16_t>(tensor, tensor.int32_data(), count, consume);
+  case TensorProto::UINT8:
+    return WithTensorValues<uint8_t>(tensor, tensor.int32_data(), count, consume);
+  default:
+    return false;
+  }
+}
+
+} // namespace tensor_values_detail
 
 /**
  * Returns the physical width in bits of a fixed-width ONNX element type, or 0

@@ -10,6 +10,9 @@
 #include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
+#include <map>
+#include <unordered_set>
+#include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -344,6 +347,64 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     EXPECT_EQ(builder.UndoRewritings(rewrites).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
   }
+}
+
+TEST(GraphGraph, UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndReplay) {
+  constexpr int64_t elements = 1024 * 1024;
+  TensorProto weight =
+      MakeInitializer<float>("weight", {elements}, std::vector<float>(elements, 1));
+  TensorProto unused =
+      MakeInitializer<float>("unused", {elements}, std::vector<float>(elements, 2));
+  weight.set_raw_data(std::as_const(weight).ref_float_data().data(), elements * sizeof(float));
+  weight.clr_float_data();
+  unused.set_raw_data(std::as_const(unused).ref_float_data().data(), elements * sizeof(float));
+  unused.clr_float_data();
+  const auto *weight_bytes = std::as_const(weight).ref_raw_data().data();
+  const auto *unused_bytes = std::as_const(unused).ref_raw_data().data();
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({elements}));
+  source.MakeInitializer(weight);
+  source.MakeInitializer(unused);
+  source.MakeNode("Add", {"x", "weight"}, {"y"});
+  source.MakeOutput("y");
+  source.AddRewriting("existing", RewritingProto{});
+  const ModelProto original = source.ToModel();
+  core::builder::GraphBuilder working(original, SchemaLookup());
+  const GraphProto imported = working.BuildGraph();
+  const ModelProto exported = working.ToModel();
+  core::builder::GraphGraph graph(
+      working, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  const auto plan = graph.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(plan.rewrites(0).removed_initializers().size(), 1u);
+  auto restored_builder = working.UndoRewritings(plan);
+  const ModelProto restored = restored_builder.ToModel();
+  const ModelProto optimized = working.ToModel();
+  const ModelProto replayed =
+      core::builder::GraphBuilder(restored, SchemaLookup()).ApplyRewritings(plan).ToModel();
+  EXPECT_EQ(restored.rewritings().count("existing"), 1u);
+  std::unordered_set<const uint8_t *> allocations;
+  size_t logical_bytes = 0;
+  for (const GraphProto *representation :
+       {&original.graph(), &imported, &exported.graph(), &restored.graph(), &optimized.graph(),
+        &replayed.graph()}) {
+    for (const auto &initializer : representation->initializer()) {
+      const auto *bytes = initializer.ref_raw_data().data();
+      EXPECT_EQ(bytes, initializer.name() == "weight" ? weight_bytes : unused_bytes);
+      EXPECT_EQ(initializer.ref_raw_data().size(), elements * sizeof(float));
+      allocations.insert(bytes);
+      logical_bytes += initializer.ref_raw_data().size();
+    }
+  }
+  EXPECT_EQ(allocations.size(), 2u);
+  EXPECT_EQ(logical_bytes, 10u * elements * sizeof(float));
+  EXPECT_EQ(restored.graph().SerializeAsString(), original.graph().SerializeAsString());
+  EXPECT_EQ(replayed.graph().SerializeAsString(), optimized.graph().SerializeAsString());
+  auto changed = restored_builder.ToModel();
+  changed.mutable_graph()->mutable_initializer(0)->ref_raw_data()[0] = 9;
+  EXPECT_EQ(restored.graph().initializer(0).ref_raw_data()[0], 0);
+  EXPECT_EQ(std::as_const(weight).ref_raw_data().data(), weight_bytes);
+  EXPECT_EQ(original.graph().initializer(0).ref_raw_data().data(), weight_bytes);
 }
 
 TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
@@ -717,6 +778,8 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     encoded.mutable_struct_type()->set_type_ref(101);
     encoded.set_raw_data(std::string(sizeof(float), '\0'));
     builder.MakeEncodedInitializer(encoded);
+    const auto *encoded_payload = std::as_const(encoded).raw_data().data();
+    EXPECT_EQ(builder.Shapes().GetEncodedValue("encoded").raw_data().data(), encoded_payload);
     PagedCacheProto cache;
     cache.set_name("cache");
     auto *block = cache.add_blocks();
@@ -731,6 +794,8 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     ASSERT_TRUE(builder.Shapes().HasEncodedValue("encoded"));
     ASSERT_TRUE(builder.Shapes().HasType("cache"));
     const ModelProto original = builder.ToModel();
+    EXPECT_EQ(original.graph().extended_initializer(0).encoded_value().raw_data().data(),
+              encoded_payload);
     const GraphProto canonical = builder.BuildGraph();
     core::builder::GraphGraph optimizer(builder);
     const auto plan = optimizer.Optimize();
@@ -742,8 +807,9 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
     EXPECT_EQ(replayed.ToGraph().SerializeAsString(), builder.ToGraph().SerializeAsString());
-    EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
-              canonical.SerializeAsString());
+    const auto restored = builder.UndoRewritings(loaded).BuildGraph();
+    EXPECT_EQ(restored.SerializeAsString(), canonical.SerializeAsString());
+    EXPECT_EQ(restored.extended_initializer(0).encoded_value().raw_data().data(), encoded_payload);
     for (const std::string name : {"encoded", "cache"}) {
       EXPECT_FALSE(builder.Shapes().HasEncodedValue(name));
       EXPECT_FALSE(builder.Shapes().HasType(name));
@@ -1452,6 +1518,138 @@ TEST(GraphGraph, NormalizationRebasesManyIndependentReplacements) {
     }
     auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
     EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
+  }
+}
+
+TEST(GraphGraph, ExportCaptureAndUndoShareOwnedInitializerAllocations) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({32768}));
+  TensorProto weight;
+  weight.set_name("W");
+  weight.set_data_type(TensorProto::FLOAT);
+  weight.add_dims(32768);
+  std::vector<float> values(32768, 1.f);
+  weight.set_raw_data(values.data(), values.size() * sizeof(float));
+  const auto *payload = weight.raw_data().data();
+  source.MakeInitializer(weight);
+  weight.set_name("unused");
+  weight.ref_raw_data()[0] = 42;
+  const auto *removed_payload = weight.raw_data().data();
+  source.MakeInitializer(weight);
+  source.MakeNode("Add", {"X", "W"}, {"Y"});
+  source.MakeOutput("Y");
+  auto canonical = source.ToModel();
+  core::builder::GraphBuilder working(canonical, SchemaLookup());
+  ASSERT_EQ(working.Initializers().size(), 2u);
+  EXPECT_EQ(source.Initializers()[0].raw_data().data(), payload);
+  EXPECT_EQ(canonical.graph().initializer(0).raw_data().data(), payload);
+  EXPECT_EQ(working.Initializers()[0].raw_data().data(), payload);
+  EXPECT_EQ(working.Initializers()[1].raw_data().data(), removed_payload);
+
+  core::builder::GraphGraph optimizer(
+      working, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  const auto plan = optimizer.Optimize(1, nullptr, options);
+  ASSERT_EQ(working.Initializers().size(), 1u);
+  auto restored = working.UndoRewritings(plan);
+  auto exported = restored.ToModel();
+  EXPECT_TRUE(exported.Equals(canonical));
+  ASSERT_EQ(restored.Initializers().size(), 2u);
+  EXPECT_EQ(restored.Initializers()[0].raw_data().data(), payload);
+  EXPECT_EQ(restored.Initializers()[1].raw_data().data(), removed_payload);
+  EXPECT_EQ(exported.graph().initializer(0).raw_data().data(), payload);
+  EXPECT_EQ(exported.graph().initializer(1).raw_data().data(), removed_payload);
+
+  exported.mutable_graph()->ref_initializer()[0].ref_raw_data()[0] = 17;
+  EXPECT_NE(exported.graph().initializer(0).raw_data().data(), payload);
+  EXPECT_EQ(working.Initializers()[0].raw_data()[0], 0);
+  EXPECT_EQ(source.Initializers()[0].raw_data()[0], 0);
+  EXPECT_EQ(restored.Initializers()[0].raw_data()[0], 0);
+  canonical.mutable_graph()->ref_initializer()[1].set_raw_data("changed");
+  EXPECT_EQ(restored.Initializers()[1].raw_data().data(), removed_payload);
+  EXPECT_EQ(restored.Compute().CaptureTagState(), source.Compute().CaptureTagState());
+  EXPECT_EQ(restored.Compute().Memory(), source.Compute().Memory());
+  EXPECT_EQ(restored.Compute().PeakMemory(), source.Compute().PeakMemory());
+}
+
+TEST(GraphGraph, NestedAndFunctionPayloadsRetainBorrowedOwnersThroughUndo) {
+  for (const bool function_scope : {false, true}) {
+    SCOPED_TRACE(function_scope);
+    auto owner = std::make_shared<std::vector<float>>(2, 3.f);
+    std::weak_ptr<std::vector<float>> lifetime = owner;
+    const auto *payload = reinterpret_cast<const uint8_t *>(owner->data());
+    TensorProto weight;
+    weight.set_name("W");
+    weight.set_data_type(TensorProto::FLOAT);
+    weight.add_dims(2);
+    weight.ref_raw_data().assign_borrowed(payload, 2 * sizeof(float), owner);
+    ModelProto canonical;
+    ModelProto exported;
+    {
+      core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+      source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      auto &scope = function_scope ? source.MakeLocalFunction("Body", "local")
+                                   : source.MakeSubgraph("branch");
+      if (function_scope)
+        scope.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      scope.MakeInitializer(weight);
+      scope.MakeNode("Add", {"X", "W"}, {"Y"});
+      scope.MakeOutput("Y");
+      if (function_scope) {
+        source.SetOpsetVersion("local", 1);
+        source.MakeNode("Body", {"X"}, {"Z"}, "local");
+      } else {
+        source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+        auto &other = source.MakeSubgraph("other");
+        other.MakeNode("Neg", {"X"}, {"E"});
+        other.MakeOutput("E");
+        utils::RepeatedProtoField<AttributeProto> attributes;
+        for (const std::string name : {"then_branch", "else_branch"}) {
+          auto &reference = attributes.add();
+          reference.set_name(name + "_ref");
+          reference.set_type(AttributeProto::STRING);
+          reference.set_s(name == "then_branch" ? "branch" : "other");
+        }
+        source.MakeNode("If", {"condition"}, {"Z"}, "", "", attributes);
+      }
+      source.MakeOutput("Z");
+      canonical = source.ToModel();
+      core::builder::GraphBuilder working(canonical, SchemaLookup());
+      // Import materializes function initializers as Constant nodes with their own scheduling.
+      auto imported = working.ToModel();
+      core::builder::GraphGraph optimizer(
+          working, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+      core::builder::ConstantFoldingOptions options;
+      options.enabled = false;
+      auto plan = optimizer.Optimize(1, nullptr, options);
+      exported = working.UndoRewritings(plan).ToModel();
+      const auto sort_opsets = [](auto &proto) {
+        std::map<std::string, int64_t> opsets;
+        for (const auto &opset : proto.opset_import())
+          opsets.emplace(opset.domain().value(), opset.version());
+        proto.clear_opset_import();
+        for (const auto &[domain, version] : opsets)
+          proto.add_opset(domain, version);
+      };
+      for (ModelProto *model : {&exported, &imported}) {
+        sort_opsets(*model);
+        for (auto &function : model->ref_functions())
+          sort_opsets(function);
+      }
+      std::string difference;
+      EXPECT_TRUE(exported.Equals(imported, &difference)) << difference;
+      owner.reset();
+      weight.Clear();
+    }
+    canonical.Clear();
+    EXPECT_FALSE(lifetime.expired());
+    const auto &tensor = function_scope ? exported.functions(0).node(0).attribute(0).t()
+                                        : exported.graph().node(0).attribute(0).g().initializer(0);
+    EXPECT_EQ(tensor.raw_data().data(), payload);
+    EXPECT_EQ(tensor.raw_data().size(), 2 * sizeof(float));
+    exported.Clear();
+    EXPECT_TRUE(lifetime.expired());
   }
 }
 

@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.2.0] – Unreleased
+## [0.2.1] – Unreleased
 
 ### New Features
 
@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Documentation & CI
 
 - Removed the ORT plugin roadmap after moving it to the separate `xadupre/onnx-light-ort` project ([#5499](https://github.com/xadupre/onnx-light/pull/5499)).
-- Bumped the release version to `0.2.0`.
+- Bumped the release version to `0.2.1`.
 
 ## [0.1.32] – 2026-10-15
 

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 #include <tuple>
 
@@ -758,6 +759,48 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit
     EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
                                               ShapeInferenceOptions(false, 1, false)),
                  ONNX_LIGHT_NAMESPACE::InferenceError);
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceSplitSizesSumOverflow) {
+  constexpr int64_t max_int64 = std::numeric_limits<int64_t>::max();
+  for (const int64_t version : {11, 24}) {
+    for (const bool overflow : {false, true}) {
+      SCOPED_TRACE(version);
+      SCOPED_TRACE(overflow);
+      ModelProto model;
+      OnnxParser parser(R"ONNX(
+        <ir_version: 10, opset_import: ["" : 11]>
+        graph (float[N,4] X) => (seq(float[]) Y) {
+          Y = SplitToSequence (X, split)
+        }
+      )ONNX");
+      const auto status = parser.Parse(model);
+      ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+      model.mutable_opset_import(0)->set_version(version);
+      auto *graph = model.mutable_graph();
+      graph->mutable_input(0)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(0)
+          ->set_dim_value(overflow ? max_int64 - 2 : max_int64);
+      const std::vector<int64_t> split_sizes(overflow ? 3 : 1, max_int64);
+      *graph->add_initializer() = MakeInitializer<int64_t>(
+          "split", {static_cast<int64_t>(split_sizes.size())}, split_sizes);
+      if (overflow) {
+        EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                  ShapeInferenceOptions(false, 1, false)),
+                     ONNX_LIGHT_NAMESPACE::InferenceError);
+      } else {
+        shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                     ShapeInferenceOptions(false, 1, false));
+        const auto &tensor = graph->output(0).type().sequence_type().elem_type().tensor_type();
+        ASSERT_EQ(tensor.shape().dim_size(), 2);
+        EXPECT_EQ(tensor.shape().dim(0).dim_value(), max_int64);
+        EXPECT_EQ(tensor.shape().dim(1).dim_value(), 4);
+      }
+    }
   }
 }
 

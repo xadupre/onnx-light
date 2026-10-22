@@ -167,6 +167,33 @@ public:
   }
 };
 
+class ReplaceNestedNegWithScaler : public core::builder::PatternOptimization {
+public:
+  ReplaceNestedNegWithScaler() : PatternOptimization(1, "ReplaceNestedNegWithScaler") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.name() == "nested_rewrite"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &matched) const override {
+    graph.Builder().SetOpsetVersion("ai.onnx.ml", 1);
+    auto node = MakeNode("Scaler", {matched[0]->input(0).value()}, {matched[0]->output(0).value()},
+                         "ai.onnx.ml");
+    auto &scale = node.ref_attribute().add();
+    scale.set_name("scale");
+    scale.set_type(AttributeProto::FLOATS);
+    scale.ref_floats().push_back(-1.0f);
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(std::move(node));
+    return result;
+  }
+};
+
 class SwapAddInputs : public core::builder::PatternOptimization {
 public:
   SwapAddInputs() : PatternOptimization(1, "SwapAddInputs") {}
@@ -563,51 +590,101 @@ TEST(GraphGraph, InversePreservesPerScopeDevicesIncludingRestoredSubgraphs) {
   }
 }
 
-TEST(GraphGraph, InverseRestoresBranchOwnedFunctionsWithAnEmptyPlan) {
-  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
-  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
-  auto &branch = builder.MakeSubgraph("then_branch");
-  auto &function = branch.MakeLocalFunction("Body", "local");
-  function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
-  function.MakeInitializer(MakeInitializer<float>("bias", {2}, {1, 2}));
-  function.MakeNode("Add", {"arg", "bias"}, {"result"});
-  function.MakeOutput("result");
-  function.set_device(core::symbolic::Device::kCPU);
-  branch.MakeNode("Body", {"x"}, {"y"}, "local");
-  branch.MakeOutput("y");
-  auto &other = builder.MakeSubgraph("else_branch");
-  other.MakeNode("Neg", {"x"}, {"y"});
-  other.MakeOutput("y");
-  utils::RepeatedProtoField<AttributeProto> attributes;
-  for (const auto &name : {"then_branch", "else_branch"}) {
-    auto &reference = attributes.add();
-    reference.set_name(std::string(name) + "_ref");
-    reference.set_type(AttributeProto::STRING);
-    reference.set_s(name);
+TEST(GraphGraph, InverseRestoresBranchOwnedFunctionsWithAndWithoutUnusedCleanup) {
+  for (const bool remove_branch : {false, true}) {
+    SCOPED_TRACE(remove_branch);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    builder.set_device(core::symbolic::Device::kGPU0);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+    auto &branch = builder.MakeSubgraph("then_branch");
+    branch.set_device(core::symbolic::Device::kCPU);
+    auto &function = branch.MakeLocalFunction("Body", "local");
+    function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    function.MakeInitializer(MakeInitializer<float>("bias", {2}, {1, 2}));
+    function.MakeNode("Add", {"arg", "bias"}, {"result"});
+    function.MakeOutput("result");
+    function.set_device(core::symbolic::Device::kCPU);
+    branch.MakeNode("Body", {"x"}, {"y"}, "local");
+    branch.MakeOutput("y");
+    auto &other = builder.MakeSubgraph("else_branch");
+    other.MakeNode("Neg", {"x"}, {"y"});
+    other.MakeOutput("y");
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &name : {"then_branch", "else_branch"}) {
+      auto &reference = attributes.add();
+      reference.set_name(std::string(name) + "_ref");
+      reference.set_type(AttributeProto::STRING);
+      reference.set_s(name);
+    }
+    builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+    if (remove_branch) {
+      builder.MakeNode("Abs", {"x"}, {"live"});
+      builder.MakeOutput("live");
+    } else {
+      builder.MakeOutput("selected");
+    }
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+    graph.Canonicalize();
+    const auto original_opsets = builder.Shapes().Opsets();
+    const auto canonical = builder.BuildGraph().SerializeAsString();
+    const auto node = function.Nodes()[0].SerializeAsString();
+    const auto initializer = function.Initializers()[0].SerializeAsString();
+    const auto tags = function.Compute().ValueTags();
+    const auto root_tags = builder.Compute().CaptureTagState();
+    const auto branch_tags = branch.Compute().CaptureTagState();
+    core::builder::ConstantFoldingOptions options;
+    options.enabled = false;
+    const auto plan = graph.Optimize(1, nullptr, options);
+    if (remove_branch) {
+      ASSERT_FALSE(plan.rewrites().empty());
+      EXPECT_FALSE(builder.HasSubgraph("then_branch"));
+      EXPECT_FALSE(builder.HasSubgraph("else_branch"));
+      ASSERT_EQ(builder.Nodes().size(), 1u);
+      EXPECT_EQ(builder.Nodes()[0].op_type(), "Abs");
+      EXPECT_TRUE(builder.ToModel().functions().empty());
+    } else {
+      EXPECT_TRUE(plan.rewrites().empty());
+      EXPECT_TRUE(builder.HasSubgraph("then_branch"));
+    }
+    const auto optimized = builder.BuildGraph();
+    auto restored = builder.UndoRewritings(plan);
+    EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
+    EXPECT_EQ(restored.Shapes().Opsets(), original_opsets);
+    ASSERT_TRUE(restored.HasSubgraph("then_branch"));
+    ASSERT_TRUE(restored.HasSubgraph("else_branch"));
+    ASSERT_EQ(restored.Subgraph("then_branch").Nodes().size(), 1u);
+    EXPECT_EQ(restored.Subgraph("then_branch").Nodes()[0].op_type(), "Body");
+    EXPECT_EQ(restored.Subgraph("then_branch").Nodes()[0].domain(), "local");
+    EXPECT_EQ(restored.Compute().CaptureTagState(), root_tags);
+    EXPECT_EQ(restored.Subgraph("then_branch").Compute().CaptureTagState(), branch_tags);
+    EXPECT_EQ(restored.device(), core::symbolic::Device::kGPU0);
+    EXPECT_EQ(restored.Subgraph("then_branch").device(), core::symbolic::Device::kCPU);
+    ASSERT_TRUE(restored.HasLocalFunction("Body"));
+    ASSERT_EQ(restored.LocalFunction("Body").Nodes().size(), 2u);
+    EXPECT_EQ(restored.LocalFunction("Body").Nodes()[1].SerializeAsString(), node);
+    EXPECT_EQ(restored.LocalFunction("Body").Nodes()[0].attribute(0).t().SerializeAsString(),
+              initializer);
+    EXPECT_EQ(restored.LocalFunction("Body").Compute().ValueTags(), tags);
+    EXPECT_EQ(restored.LocalFunction("Body").device(), core::symbolic::Device::kCPU);
+    const auto restored_model = restored.ToModel();
+    ASSERT_EQ(restored_model.functions().size(), 1u);
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    auto replayed = restored.ApplyRewritings(loaded);
+    EXPECT_TRUE(replayed.BuildGraph().Equals(optimized));
+    const auto replayed_model = replayed.ToModel();
+    EXPECT_NO_THROW(VerifyModel(replayed_model));
+    // Replay retains the function hoisted by undo even when its branch is removed again.
+    ASSERT_EQ(replayed_model.functions().size(), 1u);
+    EXPECT_EQ(replayed.LocalFunction("Body").Shapes().Opsets(),
+              restored.LocalFunction("Body").Shapes().Opsets());
+    auto expected_function = restored_model.functions()[0];
+    expected_function.ref_opset_import() = replayed_model.functions()[0].opset_import();
+    std::string difference;
+    EXPECT_TRUE(replayed_model.functions()[0].Equals(expected_function, &difference)) << difference;
   }
-  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
-  builder.MakeOutput("selected");
-  core::builder::GraphGraph graph(
-      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
-  graph.Canonicalize();
-  const auto canonical = builder.BuildGraph().SerializeAsString();
-  const auto node = function.Nodes()[0].SerializeAsString();
-  const auto initializer = function.Initializers()[0].SerializeAsString();
-  const auto tags = function.Compute().ValueTags();
-  core::builder::ConstantFoldingOptions options;
-  options.enabled = false;
-  const auto plan = graph.Optimize(1, nullptr, options);
-  ASSERT_TRUE(plan.rewrites().empty());
-  auto restored = builder.UndoRewritings(plan);
-  EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
-  ASSERT_TRUE(restored.HasLocalFunction("Body"));
-  ASSERT_EQ(restored.LocalFunction("Body").Nodes().size(), 2u);
-  EXPECT_EQ(restored.LocalFunction("Body").Nodes()[1].SerializeAsString(), node);
-  EXPECT_EQ(restored.LocalFunction("Body").Nodes()[0].attribute(0).t().SerializeAsString(),
-            initializer);
-  EXPECT_EQ(restored.LocalFunction("Body").Compute().ValueTags(), tags);
-  EXPECT_EQ(restored.LocalFunction("Body").device(), core::symbolic::Device::kCPU);
 }
 
 TEST(GraphGraph, CanonicalizesParentSubstitutionsBeforeNestedDuplicates) {
@@ -697,6 +774,151 @@ TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
   EXPECT_NO_THROW(moved.UndoRewritings(plan));
   moved.MakeNode("Abs", {"y"}, {"extra"});
   EXPECT_THROW(moved.UndoRewritings(plan), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, DeclarationMutationInvalidatesEmptyCaptureAfterMove) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Neg", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  const auto canonical = builder.BuildGraph();
+  const auto plan = core::builder::GraphGraph(
+                        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{})
+                        .Optimize();
+  ASSERT_TRUE(plan.rewrites().empty());
+  EXPECT_TRUE(builder.UndoRewritings(plan).BuildGraph().Equals(canonical));
+
+  core::builder::GraphBuilder moved("destination", SchemaLookup(), {{"", 28}});
+  moved = std::move(builder);
+  EXPECT_TRUE(moved.UndoRewritings(plan).BuildGraph().Equals(canonical));
+  moved.MakeOutput("x");
+  ASSERT_EQ(moved.Nodes().size(), canonical.node().size());
+  ASSERT_EQ(moved.Outputs().size(), 2u);
+  const auto mutated = moved.BuildGraph();
+  EXPECT_THROW(moved.UndoRewritings(plan), core::builder::BuilderError);
+  EXPECT_TRUE(moved.BuildGraph().Equals(mutated));
+}
+
+TEST(GraphGraph, NestedDeclarationMutationInvalidatesAncestorCapture) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Neg", {"x"}, {"y"});
+    branch.MakeOutput("y");
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  const auto plan = core::builder::GraphGraph(
+                        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{})
+                        .Optimize();
+  ASSERT_TRUE(plan.rewrites().empty());
+  EXPECT_NO_THROW(builder.UndoRewritings(plan));
+  const auto node_count = builder.Nodes().size();
+  const auto branch_node_count = builder.Subgraph("then_branch").Nodes().size();
+  builder.Subgraph("then_branch").SetOpsetVersion("nested.test", 1);
+  ASSERT_EQ(builder.Nodes().size(), node_count);
+  ASSERT_EQ(builder.Subgraph("then_branch").Nodes().size(), branch_node_count);
+  const auto mutated = builder.ToModel();
+  EXPECT_THROW(builder.UndoRewritings(plan), core::builder::BuilderError);
+  EXPECT_TRUE(builder.ToModel().Equals(mutated));
+  EXPECT_EQ(builder.Subgraph("then_branch").OpsetVersion("nested.test"), 1);
+}
+
+TEST(GraphGraph, NestedRewriteCapturesOrdinaryImportsWithoutFunctionImportConflicts) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  builder.set_device(core::symbolic::Device::kGPU0);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  auto &function = builder.MakeLocalFunction("Body", "local");
+  function.SetOpsetVersion("ai.onnx.ml", 2);
+  function.set_device(core::symbolic::Device::kCPU);
+  function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Scaler", {"arg"}, {"result"}, "ai.onnx.ml");
+  function.MakeOutput("result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    if (std::string(name) == "then_branch") {
+      branch.set_device(core::symbolic::Device::kCPU);
+      branch.MakeNode("Neg", {"x"}, {"y"}, "", "nested_rewrite");
+    } else {
+      branch.MakeNode("Body", {"x"}, {"y"}, "local");
+    }
+    branch.MakeOutput("y");
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<ReplaceNestedNegWithScaler>()});
+  optimizer.Canonicalize();
+  const auto canonical = builder.BuildGraph();
+  const auto original_opsets = builder.Shapes().Opsets();
+  const auto tags = builder.Compute().CaptureTagState();
+  const auto branch_tags = builder.Subgraph("then_branch").Compute().CaptureTagState();
+  const auto function_tags = function.Compute().CaptureTagState();
+  const auto function_body = function.BuildGraph();
+  const auto root_ml_version = builder.OpsetVersion("ai.onnx.ml");
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  const auto plan = optimizer.Optimize(1, nullptr, options);
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(plan.rewrites(0).graph_path().size(), 1u);
+  EXPECT_EQ(plan.rewrites(0).graph_path()[0], "then_branch");
+  ASSERT_EQ(plan.required_opset_imports().size(), 1u);
+  EXPECT_EQ(plan.required_opset_imports()[0].domain(), "ai.onnx.ml");
+  EXPECT_EQ(plan.required_opset_imports()[0].version(), 1);
+  EXPECT_TRUE(plan.added_functions().empty());
+  EXPECT_EQ(builder.OpsetVersion("ai.onnx.ml"), root_ml_version);
+  EXPECT_EQ(builder.Subgraph("then_branch").OpsetVersion("ai.onnx.ml"), 1);
+  EXPECT_EQ(builder.Subgraph("then_branch").Nodes()[0].op_type(), "Scaler");
+  const auto optimized = builder.BuildGraph();
+
+  auto restored = builder.UndoRewritings(plan);
+  std::string difference;
+  EXPECT_TRUE(restored.BuildGraph().Equals(canonical, &difference)) << difference;
+  EXPECT_EQ(restored.Shapes().Opsets(), original_opsets);
+  EXPECT_EQ(restored.Compute().CaptureTagState(), tags);
+  EXPECT_EQ(restored.Subgraph("then_branch").Compute().CaptureTagState(), branch_tags);
+  EXPECT_EQ(restored.LocalFunction("Body").Compute().CaptureTagState(), function_tags);
+  EXPECT_TRUE(restored.LocalFunction("Body").BuildGraph().Equals(function_body));
+  EXPECT_EQ(restored.device(), core::symbolic::Device::kGPU0);
+  EXPECT_EQ(restored.Subgraph("then_branch").device(), core::symbolic::Device::kCPU);
+  EXPECT_EQ(restored.LocalFunction("Body").device(), core::symbolic::Device::kCPU);
+  EXPECT_EQ(restored.OpsetVersion("ai.onnx.ml"), root_ml_version);
+  EXPECT_EQ(restored.LocalFunction("Body").OpsetVersion("ai.onnx.ml"), 2);
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  auto replayed = restored.ApplyRewritings(loaded);
+  EXPECT_TRUE(replayed.BuildGraph().Equals(optimized, &difference)) << difference;
+  const auto exported = replayed.ToModel();
+  EXPECT_NO_THROW(VerifyModel(exported));
+  std::map<std::string, int64_t> exported_imports;
+  for (const auto &opset : exported.opset_import())
+    exported_imports.emplace(opset.domain().value(), opset.version());
+  std::map<std::string, int64_t> expected_imports(original_opsets.begin(), original_opsets.end());
+  expected_imports.emplace("ai.onnx.ml", 1);
+  EXPECT_EQ(exported_imports, expected_imports);
+  EXPECT_EQ(replayed.LocalFunction("Body").OpsetVersion("ai.onnx.ml"), 2);
+  auto missing_import = loaded;
+  missing_import.clr_required_opset_imports();
+  EXPECT_THROW(restored.ApplyRewritings(missing_import), core::builder::BuilderError);
+  core::builder::GraphBuilder conflicting(restored.ToModel(), SchemaLookup());
+  conflicting.SetOpsetVersion("ai.onnx.ml", 3);
+  const auto before_conflict = conflicting.ToModel();
+  EXPECT_THROW(conflicting.ApplyRewritings(loaded), core::builder::BuilderError);
+  EXPECT_TRUE(conflicting.ToModel().Equals(before_conflict));
 }
 
 TEST(GraphGraph, CaptureKeepsNewIdentityAndDistinctConsumerNames) {

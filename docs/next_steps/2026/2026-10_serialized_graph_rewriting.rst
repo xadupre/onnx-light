@@ -266,6 +266,10 @@ returns a new builder at the cleaned canonical state. It requires the builder
 that performed optimization and its matching plan. Exporting and reloading an
 optimized model does not retain this history; applying a serialized forward
 plan to a fresh builder does not recreate it either.
+Structural and declaration mutations invalidate both named plans and the private
+undo capture, including when a nested builder invalidates its ancestors.
+A stale plan is rejected without changing the mutated builder. Moving an
+unchanged optimizing builder preserves its capture.
 
 Unit tests verify complete canonical/optimized graph roundtrips. Production
 capture and undo do not retain an optimized-graph validation snapshot, compare

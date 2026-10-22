@@ -641,7 +641,9 @@ public:
 
   /// Reverses a complete captured plan atomically, without undoing canonical cleanup.
   /// Uses undo information retained only by the builder that ran GraphGraph::Optimize.
-  /// Rejects missing in-memory history, changed plans and mismatching optimized graphs.
+  /// Structural and declaration mutations invalidate this history, including in nested scopes.
+  /// Moving the builder preserves its capture.
+  /// Rejects missing history, changed plans and incompatible local edits.
   GraphBuilder UndoRewritings(const RewritingProto &rewrites) const;
 
   /// Adds an independently selectable plan against this canonical model.

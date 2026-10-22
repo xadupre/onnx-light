@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
-- Extracted the native ONNX proto implementation into a standalone C++ project that supports independent static/shared builds, installation, and `find_package(onnx_proto)` ([#5348](https://github.com/xadupre/onnx-light/pull/5348)).
+- Extracted the native ONNX proto implementation into a standalone C++ project that supports independent static/shared builds, installation, and `find_package(onnx_proto CONFIG REQUIRED)` ([#5348](https://github.com/xadupre/onnx-light/pull/5348)).
 - Added `onnx_light.onnx.load_tensor` and `save_tensor` for standalone `TensorProto` files such as ONNX backend `input_0.pb` and `output_0.pb`, with binary streams and explicit or inferred protobuf/textproto formats ([#5368](https://github.com/xadupre/onnx-light/pull/5368)).
 - Added explicit and lazy session prepacking that overlaps preparation with model payload loading ([#5404](https://github.com/xadupre/onnx-light/pull/5404)).
 - Added serialized graph-rewriting plans with reusable function recipes and named model variants, plus `GraphBuilder.to_onnx` export modes for optimized or replayable bundled models ([#5408](https://github.com/xadupre/onnx-light/pull/5408), [#5412](https://github.com/xadupre/onnx-light/pull/5412), [#5452](https://github.com/xadupre/onnx-light/pull/5452), [#5464](https://github.com/xadupre/onnx-light/pull/5464)).

@@ -1058,11 +1058,11 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
       if (o.type().tensor_type().has_shape()) {
         const TensorShapeProto &old_shape = o.type().tensor_type().shape();
         TensorShapeProto *new_shape = tt->mutable_shape();
-        // Insert dim at dim_idx.
+        // Unsqueeze resolves negative axes against the output rank.
         int64_t rank = static_cast<int64_t>(old_shape.dim().size());
         int64_t insert_at;
         if (dim_idx < 0) {
-          insert_at = std::max<int64_t>(0, rank + dim_idx);
+          insert_at = std::max<int64_t>(0, rank + dim_idx + 1);
         } else {
           insert_at = std::min(dim_idx, rank);
         }

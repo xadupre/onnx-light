@@ -622,7 +622,9 @@ class TestComposeFunctions(ExtTestCase):
                     out_g2.type.tensor_type.elem_type, out_g1.type.tensor_type.elem_type
                 )
                 expected_out_shape = _get_shape(out_g1)
-                expected_out_shape.insert(dim_idx, 1)
+                expected_out_shape.insert(
+                    dim_idx if dim_idx >= 0 else len(expected_out_shape) + dim_idx + 1, 1
+                )
                 self.assertEqual(_get_shape(out_g2), expected_out_shape)
 
         for dim_idx in [0, 2, -1, -3]:
@@ -635,6 +637,71 @@ class TestComposeFunctions(ExtTestCase):
         dim_idx = 0
         compose.expand_out_dim(m2, dim_idx, inplace=True)
         _check_model(m1, m2, dim_idx)
+
+    def test_expand_out_dim_negative_index(self) -> None:
+        """Checks that positive and negative axes follow Unsqueeze semantics."""
+        for shape, cases in [
+            (
+                [2, 3],
+                [
+                    (0, [1, 2, 3]),
+                    (1, [2, 1, 3]),
+                    (2, [2, 3, 1]),
+                    (-1, [2, 3, 1]),
+                    (-2, [2, 1, 3]),
+                    (-3, [1, 2, 3]),
+                ],
+            ),
+            ([], [(0, [1]), (-1, [1])]),
+        ]:
+            for dim_idx, expected_shape in cases:
+                for graph_only in (False, True):
+                    for inplace in (False, True):
+                        with self.subTest(
+                            shape=shape, dim_idx=dim_idx, graph_only=graph_only, inplace=inplace
+                        ):
+                            model = oh.make_model(
+                                oh.make_graph(
+                                    [oh.make_node("Identity", ["X"], ["Y"])],
+                                    "agraph",
+                                    [
+                                        oh.make_tensor_value_info(
+                                            "X", onnxl.TensorProto.FLOAT, shape
+                                        )
+                                    ],
+                                    [
+                                        oh.make_tensor_value_info(
+                                            "Y", onnxl.TensorProto.FLOAT, shape
+                                        )
+                                    ],
+                                ),
+                                ir_version=8,
+                                opset_imports=[oh.make_opsetid("", 13)],
+                            )
+                            if graph_only:
+                                source = model.graph
+                                expanded = compose.expand_out_dim_graph(
+                                    source, dim_idx, inplace=inplace
+                                )
+                                expanded_model = oh.make_model(
+                                    expanded,
+                                    ir_version=8,
+                                    opset_imports=[oh.make_opsetid("", 13)],
+                                )
+                            else:
+                                source = model
+                                expanded = compose.expand_out_dim(
+                                    source, dim_idx, inplace=inplace
+                                )
+                                expanded_model = expanded
+                            self.assertEqual(
+                                _get_shape(expanded_model.graph.output[0]), expected_shape
+                            )
+                            checker.check_model(expanded_model, full_check=True)
+                            if inplace:
+                                self.assertIs(expanded, source)
+                            else:
+                                self.assertEqual(_get_shape(model.graph.output[0]), shape)
 
     def _test_overlapping_names(
         self,

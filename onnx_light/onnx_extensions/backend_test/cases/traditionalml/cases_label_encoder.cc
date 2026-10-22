@@ -155,7 +155,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     default_attr->set_i(default_value);
 
     Expect(registry, std::move(node), "test_cc_label_encoder_float_to_int64",
-           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+           {default_opset, opset}, [opset, keys, values]() -> IoData {
              const KernelContext label_encoder_ctx{opset};
              const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
@@ -199,7 +199,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     default_attr->set_i(default_value);
 
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_string_int",
-           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+           {default_opset, opset}, [opset, keys, values]() -> IoData {
              const KernelContext label_encoder_ctx{opset};
              const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
@@ -296,7 +296,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
       dt->set_raw_data(utils::ByteSpan(raw));
     }
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_tensor_mapping",
-           {default_opset, opset}, [opset, default_value, keys, values]() -> IoData {
+           {default_opset, opset}, [opset, keys, values]() -> IoData {
              const KernelContext label_encoder_ctx{opset};
              const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
@@ -351,7 +351,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
       dt->set_raw_data(utils::ByteSpan(raw));
     }
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_tensor_value_only_mapping",
-           {default_opset, opset}, [opset, default_value, keys, values]() -> IoData {
+           {default_opset, opset}, [opset, keys, values]() -> IoData {
              const KernelContext label_encoder_ctx{opset};
              const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 

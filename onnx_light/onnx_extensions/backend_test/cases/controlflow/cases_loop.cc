@@ -319,11 +319,7 @@ namespace {
 void RegisterTripCountVariants(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
 
-  const Tensor per_iter_value("", DataType::INT64, {1}, Int64Bytes(42));
-  const Tensor cond_undef; // omitted scalar BOOL cond.
-
-  auto register_case = [&registry, &opset, &per_iter_value,
-                        &cond_undef](const std::string &test_name, int64_t m_value) {
+  auto register_case = [&registry, &opset](const std::string &test_name, int64_t m_value) {
     NodeProto node = MakeLoopNode("M", "", "scan_outputs");
     Expect(registry, std::move(node), test_name, {opset}, [m_value]() -> IoData {
       const Tensor per_iter_value("", DataType::INT64, {1}, Int64Bytes(42));

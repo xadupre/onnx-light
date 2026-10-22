@@ -99,7 +99,7 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
     default_attr->set_i(default_int64);
 
     Expect(registry, std::move(node), "test_cc_category_mapper_string_to_int",
-           {default_opset, opset}, [opset, cats_strings, cats_int64s, default_int64]() -> IoData {
+           {default_opset, opset}, [opset, cats_strings, cats_int64s]() -> IoData {
              const KernelContext category_mapper_ctx{opset};
              const onnx_kernels::kernel::CategoryMapper category_mapper{category_mapper_ctx};
 

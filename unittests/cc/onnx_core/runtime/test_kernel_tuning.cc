@@ -694,6 +694,7 @@ TEST(KernelCalibration, ReportsMeasuredAndUnbracketedCrossoverBounds) {
     benchmark.parameter_name = "algorithm.tile_m";
     benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 64, false);
     benchmark.repetitions = 3;
+    benchmark.default_maximum_duration_ms = 5000;
     benchmark.reference.configure = [](int64_t) {};
     benchmark.candidate.configure = [](int64_t) {};
     benchmark.reference.run = [bracketed](std::span<const Tensor>, Tensor &output) {

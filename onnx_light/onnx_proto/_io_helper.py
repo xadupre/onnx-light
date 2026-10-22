@@ -407,8 +407,13 @@ def load(
             placement = GraphLayout(model.graph)
             placement.load()
             placement.persist()
-            for diagnostic in placement.diagnostics:
-                warnings.warn(diagnostic, RuntimeWarning, stacklevel=2)
+            pending = [placement]
+            while pending:
+                current = pending.pop()
+                for diagnostic in current.diagnostics:
+                    warnings.warn(diagnostic, RuntimeWarning, stacklevel=2)
+                for node_id in current.order:
+                    pending.extend(current.children(node_id))
         return model
     if isinstance(file_load_mode, str):
         try:

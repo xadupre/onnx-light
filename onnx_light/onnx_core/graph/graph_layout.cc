@@ -125,12 +125,8 @@ struct GraphLayout::Impl {
   std::unordered_set<std::string> initializers;
   std::unordered_set<std::string> graph_outputs;
   std::unordered_set<LayoutNodeId> reserved_ids;
-  struct OccupiedLayer {
-    std::map<double, std::set<LayoutNodeId>> positions;
-    std::multiset<double> lefts, rights, heights;
-  };
-  std::map<size_t, OccupiedLayer> occupied;
   std::map<double, std::set<LayoutNodeId>> left_edges, top_edges, right_edges, bottom_edges;
+  std::multiset<double> occupied_widths;
   std::set<std::string> external;
   std::set<std::string> external_changes;
   std::vector<std::string> diagnostics;
@@ -165,38 +161,58 @@ struct GraphLayout::Impl {
             bottom_edges.rbegin()->first - top_edges.begin()->first};
   }
 
+  std::pair<double, double> ChildMinimumSize(const State &state) const {
+    if (state.children.empty() && state.summaries.empty())
+      return {0, 0};
+    double width = 0;
+    double height = 48;
+    for (const auto &child : state.children) {
+      const auto &nested = *child->impl_;
+      const double left = nested.left_edges.empty() ? 0 : nested.left_edges.begin()->first;
+      const double top = nested.top_edges.empty() ? 0 : nested.top_edges.begin()->first;
+      const double right = nested.right_edges.empty() ? 0 : nested.right_edges.rbegin()->first;
+      const double bottom = nested.bottom_edges.empty() ? 0 : nested.bottom_edges.rbegin()->first;
+      width = std::max(width, right - left + 48);
+      height += bottom - top + 48;
+    }
+    for (const auto &summary : state.summaries) {
+      width = std::max(width, summary.right - summary.left + 48);
+      height += summary.bottom - summary.top + 48;
+    }
+    return {width, height};
+  }
+
+  void InsertOccupied(const State &state) {
+    occupied_widths.insert(state.box.width);
+    right_edges[state.box.x + state.box.width].insert(state.box.id);
+    bottom_edges[state.box.y + state.box.height].insert(state.box.id);
+    left_edges[state.box.x].insert(state.box.id);
+    top_edges[state.box.y].insert(state.box.id);
+  }
+
   void RemoveOccupied(const State &state) {
     auto remove_extent = [&](auto &index, double value) {
       auto it = index.find(value);
       if (it != index.end()) {
-        it->second.erase(state.box.id);
+        const bool removed = it->second.erase(state.box.id) != 0;
         if (it->second.empty())
           index.erase(it);
+        return removed;
       }
+      return false;
     };
     remove_extent(right_edges, state.box.x + state.box.width);
     remove_extent(bottom_edges, state.box.y + state.box.height);
-    remove_extent(left_edges, state.box.x);
+    const bool was_occupied = remove_extent(left_edges, state.box.x);
     remove_extent(top_edges, state.box.y);
-    auto layer = occupied.find(state.box.layer);
-    if (layer == occupied.end())
-      return;
-    auto &index = layer->second;
-    auto position = index.positions.find(state.box.y);
-    if (position != index.positions.end() && position->second.erase(state.box.id)) {
+    if (was_occupied) {
       auto erase_one = [](auto &values, double value) {
         auto it = values.find(value);
         if (it != values.end())
           values.erase(it);
       };
-      erase_one(index.lefts, state.box.x);
-      erase_one(index.rights, state.box.x + state.box.width);
-      erase_one(index.heights, state.box.height);
-      if (position->second.empty())
-        index.positions.erase(position);
+      erase_one(occupied_widths, state.box.width);
     }
-    if (index.positions.empty())
-      occupied.erase(layer);
   }
 
   LayoutNodeId Identify(NodeProto &node) {
@@ -412,22 +428,9 @@ struct GraphLayout::Impl {
         state.box.height = 24;
       }
     }
-    double children_height = 48;
-    for (const auto &child : state.children) {
-      const auto &nested = *child->impl_;
-      const double left = nested.left_edges.empty() ? 0 : nested.left_edges.begin()->first;
-      const double top = nested.top_edges.empty() ? 0 : nested.top_edges.begin()->first;
-      const double right = nested.right_edges.empty() ? 0 : nested.right_edges.rbegin()->first;
-      const double bottom = nested.bottom_edges.empty() ? 0 : nested.bottom_edges.rbegin()->first;
-      state.box.width = std::max(state.box.width, right - left + 48);
-      children_height += bottom - top + 48;
-    }
-    for (const auto &summary : state.summaries) {
-      state.box.width = std::max(state.box.width, summary.right - summary.left + 48);
-      children_height += summary.bottom - summary.top + 48;
-    }
-    if (!state.children.empty() || !state.summaries.empty())
-      state.box.height = std::max(state.box.height, children_height);
+    const auto [child_width, child_height] = ChildMinimumSize(state);
+    state.box.width = std::max(state.box.width, child_width);
+    state.box.height = std::max(state.box.height, child_height);
     if (state.box.width > 1e6 || state.box.height > 1e6) {
       Diagnose("Layout dimensions exceeded the supported bounds; clipped the node box.");
       state.box.width = std::min(state.box.width, 1e6);
@@ -466,21 +469,23 @@ struct GraphLayout::Impl {
     }
   }
 
+  std::vector<LayoutNodeId> HorizontalCandidates(const LayoutNode &box) const {
+    std::vector<LayoutNodeId> candidates;
+    if (occupied_widths.empty())
+      return candidates;
+    auto candidate = left_edges.lower_bound(box.x - *occupied_widths.rbegin() - 24);
+    for (; candidate != left_edges.end() && candidate->first < box.x + box.width + 24; ++candidate)
+      candidates.insert(candidates.end(), candidate->second.begin(), candidate->second.end());
+    return candidates;
+  }
+
   bool Collides(const LayoutNode &box) const {
-    for (const auto &[layer, index] : occupied) {
-      (void)layer;
-      if (*index.rights.rbegin() + 24 <= box.x || *index.lefts.begin() >= box.x + box.width + 24)
-        continue;
-      auto position = index.positions.lower_bound(box.y - *index.heights.rbegin() - 24);
-      for (; position != index.positions.end() && position->first < box.y + box.height + 24;
-           ++position)
-        for (auto other : position->second) {
-          const auto &occupied_box = states.at(other).box;
-          if (other != box.id && box.x < occupied_box.x + occupied_box.width + 24 &&
-              box.x + box.width + 24 > occupied_box.x && box.y + box.height + 24 > occupied_box.y &&
-              box.y < occupied_box.y + occupied_box.height + 24)
-            return true;
-        }
+    for (auto other : HorizontalCandidates(box)) {
+      const auto &occupied_box = states.at(other).box;
+      if (other != box.id && box.x < occupied_box.x + occupied_box.width + 24 &&
+          box.x + box.width + 24 > occupied_box.x && box.y + box.height + 24 > occupied_box.y &&
+          box.y < occupied_box.y + occupied_box.height + 24)
+        return true;
     }
     return false;
   }
@@ -570,12 +575,6 @@ struct GraphLayout::Impl {
         state.pinned = false;
         repaired_pin = true;
       }
-      const bool moved =
-          state.box.layer != layer || (!state.pinned && state.box.x != x) || seeds.count(id) ||
-          repaired_pin;
-      if (!moved)
-        return;
-      RemoveOccupied(state);
       const bool preserve_y = state.placed && state.box.layer == layer;
       state.box.layer = layer;
       if (state.box.folded) {
@@ -593,25 +592,16 @@ struct GraphLayout::Impl {
                        : (barycenter_count ? barycenter / barycenter_count : 0);
         y = std::clamp(y, -CoordinateLimit, CoordinateLimit);
         bool collision;
+        const auto candidates = HorizontalCandidates(state.box);
         do {
           collision = false;
-          for (const auto &[other_layer, index] : occupied) {
-            (void)other_layer;
-            if (*index.rights.rbegin() + 24 <= state.box.x ||
-                *index.lefts.begin() >= state.box.x + state.box.width + 24)
-              continue;
-            auto position = index.positions.lower_bound(y - *index.heights.rbegin() - 24);
-            for (; position != index.positions.end() && position->first < y + state.box.height + 24;
-                 ++position) {
-              for (auto other : position->second) {
-                const auto &box = states.at(other).box;
-                if (state.box.x < box.x + box.width + 24 &&
-                    state.box.x + state.box.width + 24 > box.x &&
-                    y + state.box.height + 24 > box.y && y < box.y + box.height + 24) {
-                  y = box.y + box.height + 24;
-                  collision = true;
-                }
-              }
+          for (auto other : candidates) {
+            const auto &box = states.at(other).box;
+            if (state.box.x < box.x + box.width + 24 &&
+                state.box.x + state.box.width + 24 > box.x && y + state.box.height + 24 > box.y &&
+                y < box.y + box.height + 24) {
+              y = box.y + box.height + 24;
+              collision = true;
             }
           }
         } while (collision && y <= CoordinateLimit);
@@ -619,15 +609,7 @@ struct GraphLayout::Impl {
           Diagnose("Layout coordinate space exhausted; clipped the node position.");
         state.box.y = std::min(y, CoordinateLimit);
       }
-      auto &index = occupied[layer];
-      index.positions[state.box.y].insert(id);
-      index.lefts.insert(state.box.x);
-      index.rights.insert(state.box.x + state.box.width);
-      index.heights.insert(state.box.height);
-      right_edges[state.box.x + state.box.width].insert(id);
-      bottom_edges[state.box.y + state.box.height].insert(id);
-      left_edges[state.box.x].insert(id);
-      top_edges[state.box.y].insert(id);
+      InsertOccupied(state);
       state.placed = true;
     };
     std::set<LayoutNodeId> placed;
@@ -681,7 +663,6 @@ void GraphLayout::Load(bool recurse) {
   impl.order.clear();
   impl.producers.clear();
   impl.consumers.clear();
-  impl.occupied.clear();
   impl.local_values.clear();
   impl.initializers.clear();
   impl.graph_outputs.clear();
@@ -690,6 +671,7 @@ void GraphLayout::Load(bool recurse) {
   impl.bottom_edges.clear();
   impl.left_edges.clear();
   impl.top_edges.clear();
+  impl.occupied_widths.clear();
   impl.external.clear();
   impl.external_changes.clear();
   impl.diagnostics.clear();
@@ -905,6 +887,14 @@ bool GraphLayout::SetSize(LayoutNodeId id, double width, double height) {
   impl.RemoveOccupied(state);
   state.box.width = width;
   state.box.height = height;
+  const auto [child_width, child_height] = impl.ChildMinimumSize(state);
+  state.box.width = std::max(state.box.width, child_width);
+  state.box.height = std::max(state.box.height, child_height);
+  if (state.box.width > 1e6 || state.box.height > 1e6) {
+    impl.Diagnose("Layout dimensions exceeded the supported bounds; clipped the node box.");
+    state.box.width = std::min(state.box.width, 1e6);
+    state.box.height = std::min(state.box.height, 1e6);
+  }
   state.fixed_size = true;
   impl.Solve({id});
   impl.Notify();

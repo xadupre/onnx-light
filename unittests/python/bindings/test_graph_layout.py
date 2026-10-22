@@ -138,6 +138,25 @@ class TestGraphLayout(unittest.TestCase):
         placement.load()
         self.assertEqual(len(placement.order), 2)
 
+    def test_textproto_reports_nested_layout_diagnostics(self):
+        model = self.model()
+        child_graph = oh.make_graph(
+            [oh.make_node("Identity", ["capture"], ["output"])], "nested", [], []
+        )
+        metadata = child_graph.metadata_props.add()
+        metadata.key = "onnx_light.layout.version"
+        metadata.value = "999"
+        branch = model.graph.node[0].attribute.add()
+        branch.name = "branch"
+        branch.type = onnx.AttributeProto.GRAPH
+        branch.g.CopyFrom(child_graph)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "nested.textproto"
+            onnx.save(model, path, format="textproto")
+            with self.assertWarnsRegex(RuntimeWarning, "Unsupported layout metadata version"):
+                onnx.load(path, layout=True)
+
     def test_metadata_diagnostics_and_unrelated_keys(self):
         model = self.model()
         entry = model.graph.metadata_props.add()

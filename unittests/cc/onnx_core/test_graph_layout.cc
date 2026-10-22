@@ -69,6 +69,29 @@ TEST(GraphLayout, LocalMutationDoesNotVisitIndependentBranches) {
   EXPECT_EQ(layout.Get(untouched.id)->y, untouched.y);
 }
 
+TEST(GraphLayout, UnchangedAffectedDescendantsRemainInCollisionAndBoundsIndexes) {
+  GraphProto graph;
+  GraphLayout layout(graph, true);
+  auto source = layout.Append(Node("source"));
+  auto first_consumer = layout.Append(Node("first", {"source"}));
+  const auto consumer_before = *layout.Get(first_consumer);
+  ASSERT_TRUE(layout.SetSize(source, 160, 100));
+  EXPECT_EQ(layout.Get(first_consumer)->x, consumer_before.x);
+  EXPECT_EQ(layout.Get(first_consumer)->y, consumer_before.y);
+  EXPECT_GE(layout.Bounds().right,
+            layout.Get(first_consumer)->x + layout.Get(first_consumer)->width);
+
+  auto second_consumer = layout.Append(Node("second", {"source"}));
+  EXPECT_FALSE(layout.Get(first_consumer)->x <
+                   layout.Get(second_consumer)->x + layout.Get(second_consumer)->width &&
+               layout.Get(first_consumer)->x + layout.Get(first_consumer)->width >
+                   layout.Get(second_consumer)->x &&
+               layout.Get(first_consumer)->y <
+                   layout.Get(second_consumer)->y + layout.Get(second_consumer)->height &&
+               layout.Get(first_consumer)->y + layout.Get(first_consumer)->height >
+                   layout.Get(second_consumer)->y);
+}
+
 TEST(GraphLayout, InsertDeleteReplacePreserveIdsAndOrder) {
   GraphProto graph;
   GraphLayout layout(graph);
@@ -485,6 +508,28 @@ TEST(GraphLayout, ExplicitDimensionsPersistAndIncrementallyUpdateConsumers) {
   EXPECT_FALSE(restored.SetSize(source, std::numeric_limits<double>::infinity(), 10));
   EXPECT_FALSE(restored.SetSize(source, 10, std::nan("")));
   EXPECT_FALSE(restored.SetSize(999999, 10, 10));
+}
+
+TEST(GraphLayout, SetSizeKeepsContainerAtChildBoundsMinimum) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("inner");
+  *graph.add_node() = container;
+  GraphLayout layout(graph, true);
+  const auto id = layout.Order()[0];
+  const auto child_bounds = layout.Children(id)[0]->Bounds();
+
+  ASSERT_TRUE(layout.SetSize(id, 160, 64));
+  const auto *box = layout.Get(id);
+  EXPECT_GE(box->width, child_bounds.right - child_bounds.left + 48);
+  EXPECT_GE(box->height, child_bounds.bottom - child_bounds.top + 96);
+  layout.Persist();
+
+  GraphLayout restored(graph, true);
+  EXPECT_EQ(restored.Get(id)->width, box->width);
+  EXPECT_EQ(restored.Get(id)->height, box->height);
 }
 
 TEST(GraphLayout, NonrecursivePersistDoesNotWriteChildMetadata) {

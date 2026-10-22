@@ -56,6 +56,7 @@ struct RewritingUndoState {
   utils::RepeatedProtoField<OperatorSetIdProto> original_opsets;
   utils::RepeatedProtoField<FunctionProto> original_functions;
   utils::RepeatedProtoField<StructTypeProto> original_struct_types;
+  ModelProto::rewritings_t original_rewritings;
   ScopeDevices devices;
   std::map<std::tuple<std::string, std::string, std::string>, ScopeDevices> function_devices;
 };
@@ -1302,6 +1303,11 @@ void GraphGraph::Rebuild() {
 }
 
 std::size_t GraphGraph::Canonicalize() {
+  bool reference_changed = false;
+  return CanonicalizeImpl(reference_changed);
+}
+
+std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
   std::size_t removed = 0;
   const auto original_nodes = builder_.nodes_;
   GraphBuilder::InitializerContentIndex inherited;
@@ -1349,7 +1355,9 @@ std::size_t GraphGraph::Canonicalize() {
     });
     local_removed += iteration;
   } while (iteration != 0);
+  const auto value_info_count = builder_.value_infos_.size();
   builder_.PruneValueInfos();
+  reference_changed |= local_removed != 0 || builder_.value_infos_.size() != value_info_count;
   if (local_removed != 0) {
     std::unordered_map<std::string, std::size_t> originals;
     for (std::size_t i = 0; i < original_nodes.size(); ++i)
@@ -1395,13 +1403,13 @@ std::size_t GraphGraph::Canonicalize() {
   }
   for (const auto &function : builder_.local_functions_) {
     GraphGraph child(*function, patterns_);
-    removed += child.Canonicalize();
+    removed += child.CanonicalizeImpl(reference_changed);
   }
   for (const auto &subgraph : builder_.subgraphs_) {
     GraphGraph child(*subgraph, patterns_);
-    removed += child.Canonicalize();
+    removed += child.CanonicalizeImpl(reference_changed);
   }
-  builder_.MoveShapeAndSizeNodesImpl(false);
+  reference_changed |= builder_.MoveShapeAndSizeNodesImpl(false) != 0;
   computed_constants_.clear();
   Rebuild();
   return removed + local_removed;
@@ -1412,7 +1420,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     bool remove_unused) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
-  Canonicalize();
+  bool reference_changed = false;
+  CanonicalizeImpl(reference_changed);
   GraphBuilder *root = &builder_;
   while (root->parent_ != nullptr)
     root = root->parent_;
@@ -1422,6 +1431,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
   auto undo = std::make_shared<UndoState>();
+  if (&builder_ == root && !reference_changed)
+    undo->original_rewritings = root->rewritings_;
   if (&builder_ == root) {
     const auto capture_devices = [&](const auto &self,
                                      const GraphBuilder &scope) -> UndoState::ScopeDevices {
@@ -2882,6 +2893,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
     }
   };
   restore_devices(restore_devices, result, undo.devices);
+  result.rewritings_ = undo.original_rewritings;
   return result;
 }
 

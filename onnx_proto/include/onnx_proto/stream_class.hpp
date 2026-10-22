@@ -236,20 +236,6 @@ void CopyProtoThroughWire(void *destination, const void *source,
               "Unable to parse proto while copying.");
 }
 
-template <typename T> void CopyProtoFrom(T &destination, const T &source) {
-  T copied;
-  CopyProtoThroughWire(
-      &copied, &source,
-      [](const void *proto, utils::BinaryWriteStream &stream, SerializeOptions &options) {
-        return static_cast<const T *>(proto)->SerializeSize(stream, options);
-      },
-      [](const void *proto, utils::BinaryWriteStream &stream, SerializeOptions &options) {
-        static_cast<const T *>(proto)->SerializeToStream(stream, options);
-      },
-      [](void *proto, utils::BinaryStream &stream, ParseOptions &options) {
-        return static_cast<T *>(proto)->ParseFromStream(stream, options);
-      });
-  destination = std::move(copied);
-}
+template <typename T> void CopyProtoFrom(T &destination, const T &source) { destination = source; }
 
 } // namespace ONNX_LIGHT_NAMESPACE

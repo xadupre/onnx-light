@@ -104,6 +104,37 @@ TEST(TensorProtoDLPack, SharedNullValuedTokenIsRetainedExactlyOnce) {
   EXPECT_EQ(released, 1);
 }
 
+TEST(TensorProtoDLPack, OwnedTransferDetachesFromOtherTensorCopies) {
+  for (size_t alignment : {size_t{1}, size_t{64}}) {
+    auto tensor = MakeTensor();
+    tensor.ref_raw_data().resize_aligned(6, alignment);
+    std::memcpy(tensor.ref_raw_data().data(), "abcdef", 6);
+    TensorProto copy;
+    copy.CopyFrom(tensor);
+    EXPECT_EQ(Data(tensor), Data(copy));
+    auto exported = Release(tensor);
+    EXPECT_NE(exported->dl_tensor.data, Data(copy));
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(exported->dl_tensor.data) % alignment, 0U);
+    static_cast<uint8_t *>(exported->dl_tensor.data)[0] = 'z';
+    EXPECT_EQ(Data(copy)[0], 'a');
+    ExpectDetached(tensor);
+  }
+}
+
+TEST(TensorProtoDLPack, ExportLeaseRetainsOwnedStorageAcrossCopyAndReplacement) {
+  auto tensor = MakeTensor();
+  TensorProto copy;
+  copy.CopyFrom(tensor);
+  const auto *pointer = Data(tensor);
+  auto lease = tensor.ref_raw_data().acquire_export_guard();
+  tensor.ref_raw_data()[0] = 'z';
+  EXPECT_NE(Data(tensor), pointer);
+  EXPECT_EQ(pointer[0], 'a');
+  copy.Clear();
+  tensor.Clear();
+  EXPECT_EQ(std::memcmp(pointer, "abcdef", 6), 0);
+}
+
 TEST(TensorProtoDLPack, OwnedCallbackOutlivesSource) {
   int released = 0;
   Managed exported(nullptr, nullptr);

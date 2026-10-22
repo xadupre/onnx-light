@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -2583,6 +2584,140 @@ TEST(onnx_proto, CopyFrom_TensorProto) {
   EXPECT_EQ(target.ref_float_data()[2], 3.0f);
   EXPECT_EQ(target.ref_raw_data().size(), 12);
   EXPECT_EQ(target.ref_doc_string(), "Source tensor documentation");
+}
+
+TEST(onnx_proto, TensorCopiesShareOwnedBytesAndDetachOnMutation) {
+  for (size_t alignment : {0u, 64u}) {
+    SCOPED_TRACE(alignment);
+    TensorProto source;
+    source.ref_raw_data().resize_aligned(4096, alignment);
+    std::memset(source.ref_raw_data().data(), 7, 4096);
+    source.set_name("source");
+    const TensorProto &original = source;
+    TensorProto copy;
+    copy.CopyFrom(source);
+    const TensorProto &copied = copy;
+    EXPECT_EQ(original.ref_raw_data().data(), copied.ref_raw_data().data());
+    EXPECT_EQ(copied.ref_raw_data().is_aligned_owned(), alignment != 0);
+    source.ref_raw_data()[0] = 9;
+    EXPECT_EQ(copied.ref_raw_data()[0], 7);
+    EXPECT_NE(original.ref_raw_data().data(), copied.ref_raw_data().data());
+    if (alignment != 0) {
+      EXPECT_EQ(reinterpret_cast<uintptr_t>(original.ref_raw_data().data()) % alignment, 0u);
+    }
+    copy.ref_raw_data()[1] = 11;
+    copy.set_name("copy");
+    EXPECT_EQ(original.ref_raw_data()[1], 7);
+    EXPECT_EQ(original.name(), "source");
+    source.Clear();
+    EXPECT_EQ(copied.ref_raw_data()[0], 7);
+    EXPECT_EQ(copied.ref_raw_data()[1], 11);
+  }
+}
+
+TEST(onnx_proto, TensorCopiesIsolateActiveExportsAndRetainAlignment) {
+  TensorProto source;
+  source.ref_raw_data().resize_aligned(128, 64);
+  std::memset(source.ref_raw_data().data(), 3, 128);
+  auto export_guard = source.ref_raw_data().acquire_export_guard();
+  const TensorProto &original = source;
+  TensorProto copy;
+  copy.CopyFrom(source);
+  const TensorProto &copied = copy;
+  EXPECT_NE(original.ref_raw_data().data(), copied.ref_raw_data().data());
+  EXPECT_TRUE(copied.ref_raw_data().is_aligned_owned());
+  EXPECT_EQ(reinterpret_cast<uintptr_t>(copied.ref_raw_data().data()) % 64, 0u);
+  source.ref_raw_data()[0] = 5;
+  EXPECT_EQ(copied.ref_raw_data()[0], 3);
+}
+
+TEST(onnx_proto, TensorCopiesShareTypedPayloadsWithValueSemantics) {
+  TensorProto source;
+  source.ref_float_data().push_back(1.0f);
+  source.ref_int32_data().push_back(2);
+  source.ref_int64_data().push_back(3);
+  source.ref_double_data().push_back(4.0);
+  source.ref_uint64_data().push_back(5);
+  source.ref_string_data().push_back("six");
+  source.ref_raw_data().set_empty();
+  TensorProto copy;
+  copy.CopyFrom(source);
+  const TensorProto &original = source;
+  const TensorProto &copied = copy;
+  EXPECT_TRUE(copy.has_raw_data());
+  EXPECT_EQ(original.ref_float_data().data(), copied.ref_float_data().data());
+  EXPECT_EQ(original.ref_int32_data().data(), copied.ref_int32_data().data());
+  EXPECT_EQ(original.ref_int64_data().data(), copied.ref_int64_data().data());
+  EXPECT_EQ(original.ref_double_data().data(), copied.ref_double_data().data());
+  EXPECT_EQ(original.ref_uint64_data().data(), copied.ref_uint64_data().data());
+  EXPECT_EQ(original.ref_string_data().data(), copied.ref_string_data().data());
+  copy.ref_float_data().Set(0, 10.0f);
+  *copy.ref_int32_data().Mutable(0) = 20;
+  source.ref_int64_data().data()[0] = 30;
+  copy.ref_double_data().mutable_values()[0] = 40.0;
+  source.ref_uint64_data().push_back(50);
+  copy.ref_string_data()[0] = "changed";
+  EXPECT_EQ(original.ref_float_data()[0], 1.0f);
+  EXPECT_EQ(original.ref_int32_data()[0], 2);
+  EXPECT_EQ(copied.ref_int64_data()[0], 3);
+  EXPECT_EQ(original.ref_double_data()[0], 4.0);
+  EXPECT_EQ(copied.ref_uint64_data().size(), 1u);
+  EXPECT_EQ(original.ref_string_data()[0], "six");
+}
+
+TEST(onnx_proto, TensorCopiesOwnUnmanagedBytesAndRetainManagedOwners) {
+  TensorProto copy;
+  {
+    const uint8_t bytes[] = {1, 2, 3};
+    TensorProto source;
+    source.ref_raw_data().assign_borrowed(bytes, sizeof(bytes));
+    copy.CopyFrom(source);
+    const TensorProto &copied = copy;
+    EXPECT_FALSE(copied.ref_raw_data().is_borrowed());
+    EXPECT_NE(copied.ref_raw_data().data(), bytes);
+  }
+  EXPECT_EQ(std::as_const(copy).ref_raw_data()[2], 3);
+  auto owner = std::make_shared<std::vector<uint8_t>>(3, 8);
+  const std::weak_ptr<std::vector<uint8_t>> lifetime = owner;
+  {
+    TensorProto source;
+    source.ref_raw_data().assign_borrowed(owner->data(), owner->size(), owner);
+    copy.CopyFrom(source);
+    EXPECT_EQ(std::as_const(copy).ref_raw_data().data(), owner->data());
+    source.Clear();
+    owner.reset();
+  }
+  EXPECT_FALSE(lifetime.expired());
+  EXPECT_EQ(std::as_const(copy).ref_raw_data()[2], 8);
+  copy.Clear();
+  EXPECT_TRUE(lifetime.expired());
+}
+
+TEST(onnx_proto, NestedModelCopiesShareOnlyTensorPayloads) {
+  ModelProto source;
+  TensorProto tensor;
+  tensor.ref_raw_data().resize(1024);
+  std::memset(tensor.ref_raw_data().data(), 7, 1024);
+  auto *attribute = source.mutable_graph()->add_node()->add_attribute();
+  attribute->mutable_g()->add_initializer()->CopyFrom(tensor);
+  source.add_functions()->add_node()->add_attribute()->mutable_t()->CopyFrom(tensor);
+  ModelProto copy;
+  copy.CopyFrom(source);
+  const auto &nested = std::as_const(copy).graph().node(0).attribute(0).g().initializer(0);
+  const auto &function = std::as_const(copy).functions(0).node(0).attribute(0).t();
+  EXPECT_EQ(nested.ref_raw_data().data(), std::as_const(tensor).ref_raw_data().data());
+  EXPECT_EQ(function.ref_raw_data().data(), nested.ref_raw_data().data());
+  copy.mutable_graph()
+      ->mutable_node(0)
+      ->mutable_attribute(0)
+      ->mutable_g()
+      ->mutable_initializer(0)
+      ->ref_raw_data()[0] = 9;
+  EXPECT_EQ(std::as_const(source).graph().node(0).attribute(0).g().initializer(0).ref_raw_data()[0],
+            7);
+  source.Clear();
+  tensor.Clear();
+  EXPECT_EQ(function.ref_raw_data()[0], 7);
 }
 
 TEST(onnx_proto, CopyFrom_ValueInfoProto) {

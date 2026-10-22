@@ -1428,7 +1428,7 @@ TEST(GraphBuilder, MakeInitializerMovePreservesOwnedAllocation) {
 
   core::builder::GraphBuilder copying("copy", SchemaLookup());
   EXPECT_EQ(copying.MakeInitializer(tensor), "weight");
-  EXPECT_NE(copying.Initializers()[0].raw_data().data(), data);
+  EXPECT_EQ(copying.Initializers()[0].raw_data().data(), data);
   EXPECT_EQ(tensor.SerializeAsString(), serialized);
 
   EXPECT_EQ(builder.MakeInitializerMove(std::move(tensor)), "weight");

@@ -285,9 +285,32 @@ affected shape-tagged release lists and memory profiles are refreshed.
 Function definitions are collected from every scope, including functions
 owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
-Export compares canonical graphs and function definitions only when existing
-named plans need a compatibility decision; these comparisons use native
-field equality rather than serialization.
+The private capture retains existing named plans only when canonicalization
+leaves their reference unchanged. Cleanup passes report reference changes,
+including changes in nested graphs and functions, pruned declarations, and
+Shape/Size reordering. Undo restores compatible plans after restoring devices
+and tags. Python releases its temporary reference model immediately after
+constructing the working builder; it neither retains a second canonical model
+during optimization nor compares complete graphs to decide plan compatibility.
+
+Tensor copies retain independent metadata and share unchanged owned raw and
+typed payloads through copy-on-write storage. Import, export, function and
+subgraph attributes, captured removed definitions, and undo use native field
+copies rather than serializing payload-bearing messages. Mutable field access
+detaches shared storage; raw buffers retain their alignment. Managed borrowed
+buffers retain their lifetime token and remain read-only, while ownerless
+borrowed buffers and buffers with active exported views are copied eagerly
+when imported as tensor values. Borrowed memory must not be modified externally
+while its read-only views are in use. A copy invalidates previously obtained
+mutable pointers, references and iterators: callers must reacquire them through
+the destination or source field API before writing.
+
+``UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndReplay`` measures
+unique live payload addresses across six graph representations. Two 4 MiB
+weights occupy two shared payload allocations (8 MiB), rather than the
+40 MiB total logical payload size of those representations. One weight is
+removed during optimization and restored by undo without allocating another
+payload; writes to an exported tensor detach without altering either builder.
 
 .. code-block:: text
 

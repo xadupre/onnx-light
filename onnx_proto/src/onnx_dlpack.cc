@@ -124,6 +124,8 @@ DLManagedTensor *ReleaseDLPack(TensorProto &tensor) {
               "release those consumers before transferring its storage.");
   CheckDLPack(!raw.is_borrowed() || raw.owner().use_count() != 0,
               "TensorProto ReleaseDLPack: borrowed raw_data requires a lifetime owner.");
+  if (!raw.is_borrowed())
+    tensor.ref_raw_data().data();
   auto owner = std::make_unique<DLPackOwner>();
   owner->metadata = std::move(metadata);
   owner->managed.dl_tensor = {raw.empty() ? nullptr : const_cast<uint8_t *>(raw.data()),

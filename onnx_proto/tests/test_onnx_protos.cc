@@ -74,9 +74,6 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   edit.add_added_nodes_positions(1);
   edit.add_added_initializers()->set_name("literal");
   edit.add_added_initializer_positions(3);
-  auto &rename = *edit.add_value_renames();
-  rename.set_key("old");
-  rename.set_value("new");
   edit.add_metadata_props()->set_key("local");
   edit.add_initializer_calls()->set_op_type("Prepare");
   edit.add_computed_initializer_positions(4);
@@ -104,6 +101,30 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   LocalRewritingProto local;
   ASSERT_TRUE(local.ParseFromString(local_bytes));
   EXPECT_TRUE(local.Equals(edit));
+}
+
+TEST(onnx_proto, RewritingProtoRejectsRetiredRenamingField) {
+  for (const auto &legacy :
+       {std::string("\x4a\x00", 2), std::string("\x4a\x0a\x0a\x03old\x12\x03new", 12)}) {
+    LocalRewritingProto local;
+    EXPECT_FALSE(local.ParseFromString(legacy));
+    utils::StringStream stream(reinterpret_cast<const uint8_t *>(legacy.data()),
+                               static_cast<int64_t>(legacy.size()));
+    ParseOptions options;
+    EXPECT_THROW(local.ParseFromStream(stream, options), std::invalid_argument);
+    const std::string plan_bytes =
+        std::string("\x0a", 1) + static_cast<char>(legacy.size()) + legacy;
+    RewritingProto plan;
+    EXPECT_FALSE(plan.ParseFromString(plan_bytes));
+    const std::string entry =
+        std::string("\x0a\x04test\x12", 7) + static_cast<char>(plan_bytes.size()) + plan_bytes;
+    const std::string model_bytes =
+        std::string("\xca\x3e", 2) + static_cast<char>(entry.size()) + entry;
+    ModelProto model;
+    EXPECT_FALSE(model.ParseFromString(model_bytes));
+  }
+  LocalRewritingProto local;
+  EXPECT_TRUE(local.ParseFromString(std::string("\x72\x00", 2)));
 }
 
 TEST(onnx_proto, ModelRewritingsRoundTripAndDeepCopy) {

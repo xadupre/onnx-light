@@ -94,7 +94,7 @@ digraph protos {
     RewritingProto -> StringStringEntryProto [label="metadata_props"];
     LocalRewritingProto -> NodeProto [label="added_nodes, initializer_calls"];
     LocalRewritingProto -> TensorProto [label="added_initializers"];
-    LocalRewritingProto -> StringStringEntryProto [label="value_renames, metadata_props"];
+    LocalRewritingProto -> StringStringEntryProto [label="metadata_props"];
 
     GraphProto -> NodeProto [label="node"];
     GraphProto -> TensorProto [label="initializer"];

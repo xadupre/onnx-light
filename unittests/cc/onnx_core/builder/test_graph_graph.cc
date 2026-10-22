@@ -454,9 +454,6 @@ TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
   EXPECT_EQ(canonical.node(1).input(0), "x");
   const auto plan = graph.Optimize();
   ASSERT_EQ(plan.rewrites().size(), 2u);
-  for (const auto &rewrite : plan.rewrites()) {
-    EXPECT_TRUE(rewrite.value_renames().empty());
-  }
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
@@ -747,7 +744,7 @@ TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
   const auto plan = graph.Optimize();
   const auto optimized = builder.BuildGraph().SerializeAsString();
   ASSERT_EQ(plan.rewrites().size(), 1u);
-  for (int kind = 0; kind < 6; ++kind) {
+  for (int kind = 0; kind < 5; ++kind) {
     SCOPED_TRACE(kind);
     auto invalid = plan;
     auto &edit = invalid.ref_rewrites()[0];
@@ -761,9 +758,6 @@ TEST(GraphGraph, InverseRejectsMalformedPlansAtomically) {
       edit.ref_added_nodes()[0].ref_input()[0] = "undefined";
     else if (kind == 4)
       edit.ref_added_nodes()[0].set_op_type("Abs");
-    else if (kind == 5) {
-      edit.add_value_renames()->set_key("x");
-    }
     EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
     EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
   }
@@ -939,7 +933,6 @@ TEST(GraphGraph, CaptureKeepsNewIdentityAndDistinctConsumerNames) {
   EXPECT_EQ(builder.Nodes()[0].op_type(), "Identity");
   EXPECT_EQ(builder.Nodes()[1].input(0), "b");
   EXPECT_EQ(builder.Nodes()[2].input(0), "a");
-  EXPECT_TRUE(plan.rewrites(0).value_renames().empty());
   EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
             canonical.SerializeAsString());
 }

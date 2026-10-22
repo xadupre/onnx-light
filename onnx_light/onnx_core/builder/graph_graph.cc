@@ -923,8 +923,8 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
 bool IsNodeOnlyRewrite(const LocalRewritingProto &rewrite) {
   return !rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
          rewrite.removed_extended_initializers().empty() && rewrite.added_initializers().empty() &&
-         rewrite.added_initializer_positions().empty() && rewrite.value_renames().empty() &&
-         rewrite.initializer_calls().empty() && rewrite.computed_initializer_positions().empty();
+         rewrite.added_initializer_positions().empty() && rewrite.initializer_calls().empty() &&
+         rewrite.computed_initializer_positions().empty();
 }
 
 bool SameGraphPath(const LocalRewritingProto &left, const LocalRewritingProto &right) {
@@ -1068,8 +1068,6 @@ void CaptureInversePlan(const RewritingProto &plan, UndoState &undo, GraphProto 
   while (index < plan.rewrites().size()) {
     const auto &rewrite = plan.rewrites(index);
     auto &inverse = undo.edits[index];
-    if (!rewrite.value_renames().empty())
-      throw BuilderError("Optimize: value renaming during capture is unsupported.");
     GraphProto &graph = *FindGraph(canonical, rewrite.graph_path());
     const auto capture_counts = [&](UndoState::Edit &edit) {
       edit.initializer_count = graph.initializer().size();
@@ -2013,7 +2011,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
 std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites,
                                 bool remove_unused, detail::RewritingUndoState &undo) {
   const auto original_nodes = utils::CopyWithSharedTensorStorage(builder_.nodes_);
-  const std::size_t first_rewrite = rewrites.size();
   const auto initializer_names = [](const auto &initializers) {
     std::vector<std::string> names;
     names.reserve(initializers.size());
@@ -2116,11 +2113,6 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
         }
       }
     }
-    for (std::size_t index = first_rewrite; index < rewrites.size(); ++index)
-      for (const auto &rename : rewrites[index].value_renames()) {
-        affected_values.insert(rename.key().value());
-        affected_values.insert(rename.value().value());
-      }
     std::unordered_set<std::string> retained_initializers;
     retained_initializers.insert(remaining_initializers.begin(), remaining_initializers.end());
     for (const auto &name : initializers_before) {
@@ -2173,7 +2165,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   auto &initializers = initializers_;
   std::unordered_set<const NodeProto *> removed;
   std::unordered_set<std::size_t> removed_initializers;
-  std::unordered_map<std::string, std::string> value_renames;
   struct AddedInitializer {
     std::size_t position;
     const TensorProto *initializer;
@@ -2186,8 +2177,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   std::vector<AddedNode> added_nodes;
   if (rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
       rewrite.removed_extended_initializers().empty() && rewrite.added_nodes().empty() &&
-      rewrite.added_initializers().empty() && rewrite.value_renames().empty() &&
-      rewrite.initializer_calls().empty()) {
+      rewrite.added_initializers().empty() && rewrite.initializer_calls().empty()) {
     throw BuilderError("ApplyRewriting: an empty rewrite is not allowed.");
   }
   for (const uint64_t encoded_position : rewrite.matched_nodes()) {
@@ -2237,14 +2227,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
         rebuilt_extended_initializers.get(rebuilt_extended_initializers.size() - 1) =
             extended_initializers_.shared_at(position);
       }
-    }
-  }
-  for (const auto &rename : rewrite.value_renames()) {
-    const std::string key = rename.key().value();
-    const std::string value = rename.value().value();
-    const auto inserted = value_renames.emplace(key, value);
-    if (!inserted.second && inserted.first->second != value) {
-      throw BuilderError("ApplyRewriting: conflicting replacements for value '" + key + "'.");
     }
   }
   if (rewrite.added_initializer_positions().size() != rewrite.added_initializers().size()) {
@@ -2456,7 +2438,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     }
   }
 
-  RewriteInitializerReferences(value_renames);
   for (const auto &addition : added_initializers) {
     // First-time defaults must respect the public-input contract.
     ValidateInputDefault(inputs_, *addition.initializer);
@@ -2504,10 +2485,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   erase_removed_values(extended_initializers_, removed_extended);
   for (const auto &addition : added_initializers) {
     affected_values.insert(addition.initializer->name().value());
-  }
-  for (const auto &[source, target] : value_renames) {
-    affected_values.insert(source);
-    affected_values.insert(target);
   }
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
@@ -2807,8 +2784,6 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   while (index != 0) {
     const auto &rewrite = rewrites.rewrites(index - 1);
     const auto &inverse = undo.edits[index - 1];
-    if (!rewrite.value_renames().empty())
-      throw BuilderError("UndoRewritings: incomplete or rename-producing edit.");
     GraphProto &graph = *FindGraph(*model.mutable_graph(), rewrite.graph_path());
     const auto begin = UndoNodeBatch(graph, rewrites, undo, index);
     if (begin != index) {

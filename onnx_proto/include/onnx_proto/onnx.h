@@ -1617,8 +1617,7 @@ FIELD_REPEATED_PROTO(NodeProto, added_nodes, 5, "Replacement nodes.")
 FIELD_REPEATED(uint64_t, added_nodes_positions, 6, "Node positions after this edit.")
 FIELD_REPEATED_PROTO(TensorProto, added_initializers, 7, "Materialized replacement initializers.")
 FIELD_REPEATED(uint64_t, added_initializer_positions, 8, "Initializer positions after this edit.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, value_renames, 9,
-                     "Old references and their replacements.")
+// Field 9 is reserved for the retired value-renaming map and must not be reused.
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 10, "Descriptive metadata.")
 FIELD_REPEATED_PROTO(NodeProto, initializer_calls, 11,
                      "Reserved for initializer preparation calls.")

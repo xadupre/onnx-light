@@ -2085,7 +2085,6 @@ SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream 
   SIZE_REPEATED_FIELD(size, options, stream, added_nodes_positions)
   SIZE_REPEATED_FIELD(size, options, stream, added_initializers)
   SIZE_REPEATED_FIELD(size, options, stream, added_initializer_positions)
-  SIZE_REPEATED_FIELD(size, options, stream, value_renames)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
   SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
@@ -2102,7 +2101,6 @@ void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, added_nodes_positions)
   WRITE_REPEATED_FIELD(options, stream, added_initializers)
   WRITE_REPEATED_FIELD(options, stream, added_initializer_positions)
-  WRITE_REPEATED_FIELD(options, stream, value_renames)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, initializer_calls)
   WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
@@ -2118,7 +2116,10 @@ bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_REPEATED_FIELD(options, stream, added_nodes_positions)
   READ_REPEATED_FIELD(options, stream, added_initializers)
   READ_REPEATED_FIELD(options, stream, added_initializer_positions)
-  READ_REPEATED_FIELD(options, stream, value_renames)
+  else if (field_number.field_number == 9) {
+    EXT_THROW_INVALID("LocalRewritingProto: retired field 9 (value_renames) is unsupported; "
+                      "regenerate the rewriting plan.");
+  }
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, initializer_calls)
   READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
@@ -2133,8 +2134,8 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(matched_nodes), NAME_EXIST_VALUE(removed_initializers),
       NAME_EXIST_VALUE(added_nodes), NAME_EXIST_VALUE(added_nodes_positions),
       NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
-      NAME_EXIST_VALUE(value_renames), NAME_EXIST_VALUE(metadata_props),
-      NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions),
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(initializer_calls),
+      NAME_EXIST_VALUE(computed_initializer_positions),
       NAME_EXIST_VALUE(removed_extended_initializers));
 }
 
@@ -2997,7 +2998,6 @@ bool VisitProtoFields(const LocalRewritingProto &left, Right &right, Visitor &&v
   VISIT_FIELD(added_nodes_positions)
   VISIT_FIELD(added_initializers)
   VISIT_FIELD(added_initializer_positions)
-  VISIT_FIELD(value_renames)
   VISIT_FIELD(metadata_props)
   VISIT_FIELD(initializer_calls)
   VISIT_FIELD(computed_initializer_positions)

@@ -112,7 +112,7 @@ Improve ``LocalRewriting`` presentation without changing the data consumed by
 * add a deterministic one-line summary containing the pattern, graph path, and
   matched/added node counts;
 * add a structured multiline representation grouping matched nodes, added
-  nodes and positions, removed initializers, value renames, and timings;
+  nodes and positions, removed initializers, and timings;
 * display the root graph consistently as ``<root>`` and nested graph paths in
   execution order;
 * expose the short form through Python ``repr()`` and the detailed form through

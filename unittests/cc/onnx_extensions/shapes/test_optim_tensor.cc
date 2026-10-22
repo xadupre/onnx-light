@@ -955,11 +955,23 @@ TEST(OnnxOptimTensorProto, FromTensorProtoDoublePopulatesMinMax) {
 }
 
 TEST(OnnxOptimTensorProto, RawFloatingBoundsMatchDecodedValues) {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  const std::vector<std::vector<double>> cases = {{-1.5, 0.0, 2.25, -3.5},
+                                                  {-inf, 0.0, 2.25, inf},
+                                                  {0.0, -0.0},
+                                                  {-0.0, 0.0},
+                                                  {nan},
+                                                  {nan, nan},
+                                                  {nan, 0.0, 2.25, -3.5},
+                                                  {0.0, nan, 2.25, -3.5},
+                                                  {0.0, 2.25, nan, -3.5},
+                                                  {0.0, 2.25, -3.5, nan}};
   for (const auto dtype : {TensorProto::FLOAT, TensorProto::DOUBLE}) {
-    for (const double first : {-1.5, std::numeric_limits<double>::quiet_NaN(),
-                               -std::numeric_limits<double>::infinity()}) {
-      TensorProto tp = MakeTensorProto("w", dtype, {4});
-      const std::vector<double> values = {first, 0.0, 2.25, -3.5};
+    SCOPED_TRACE(dtype);
+    for (const auto &values : cases) {
+      SCOPED_TRACE(::testing::PrintToString(values));
+      TensorProto tp = MakeTensorProto("w", dtype, {static_cast<int64_t>(values.size())});
       std::string bytes;
       for (double value : values) {
         uint64_t bits;
@@ -976,21 +988,35 @@ TEST(OnnxOptimTensorProto, RawFloatingBoundsMatchDecodedValues) {
           bytes.push_back(static_cast<char>((bits >> (8 * b)) & 0xff));
       }
       tp.set_raw_data(bytes);
-      std::vector<double> decoded;
-      ASSERT_TRUE(ReadFloatingValues(tp, decoded));
-      const auto [min, max] = std::minmax_element(decoded.begin(), decoded.end());
-      core::symbolic::SymTensor tensor;
-      ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
-      ASSERT_TRUE(tensor.HasMin());
-      ASSERT_TRUE(tensor.HasMax());
-      if (std::isnan(*min))
-        EXPECT_TRUE(std::isnan(tensor.Min()));
-      else
+      for (bool typed : {false, true}) {
+        SCOPED_TRACE(typed);
+        if (typed) {
+          for (double value : values) {
+            if (dtype == TensorProto::FLOAT)
+              tp.add_float_data(static_cast<float>(value));
+            else
+              tp.add_double_data(value);
+          }
+          tp.set_raw_data("ignored");
+        }
+        std::vector<double> decoded;
+        ASSERT_TRUE(ReadFloatingValues(tp, decoded));
+        core::symbolic::SymTensor tensor;
+        ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
+        if (std::any_of(decoded.begin(), decoded.end(),
+                        [](double value) { return std::isnan(value); })) {
+          EXPECT_FALSE(tensor.HasMin());
+          EXPECT_FALSE(tensor.HasMax());
+          continue;
+        }
+        const auto [min, max] = std::minmax_element(decoded.begin(), decoded.end());
+        ASSERT_TRUE(tensor.HasMin());
+        ASSERT_TRUE(tensor.HasMax());
         EXPECT_DOUBLE_EQ(tensor.Min(), *min);
-      if (std::isnan(*max))
-        EXPECT_TRUE(std::isnan(tensor.Max()));
-      else
         EXPECT_DOUBLE_EQ(tensor.Max(), *max);
+        EXPECT_EQ(std::signbit(tensor.Min()), std::signbit(*min));
+        EXPECT_EQ(std::signbit(tensor.Max()), std::signbit(*max));
+      }
     }
   }
 }

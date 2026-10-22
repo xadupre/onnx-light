@@ -111,19 +111,23 @@ template <typename T> class RepeatedField {
 public:
   /** Constructs an empty field. */
   explicit inline RepeatedField() {}
-  /** Copies values, sharing only primitive/string payloads during an explicit snapshot. */
-  inline RepeatedField(const RepeatedField &other) {
+  /** Copies values with ordinary value semantics. */
+  inline RepeatedField(const RepeatedField &other) : values_(other.values()) {}
+  /** Explicitly shares primitive/string payloads and recursively copies message metadata. */
+  inline RepeatedField SharedCopy() const {
+    RepeatedField result;
     constexpr bool payload = std::is_arithmetic_v<T> || std::is_enum_v<T> ||
                              std::is_same_v<T, utils::String> || std::is_same_v<T, std::string>;
     if constexpr (payload) {
-      if (detail::IsSharedPayloadCopy() && !other.empty()) {
-        if (!other.shared_values_)
-          other.shared_values_ = std::make_shared<std::vector<T>>(std::move(other.values_));
-        shared_values_ = other.shared_values_;
-        return;
+      if (!empty()) {
+        if (!shared_values_)
+          shared_values_ = std::make_shared<std::vector<T>>(std::move(values_));
+        result.shared_values_ = shared_values_;
       }
+    } else {
+      result.values_ = CopyWithSharedPayloads(values());
     }
-    values_ = other.values();
+    return result;
   }
   /** Transfers the payload without copying. */
   inline RepeatedField(RepeatedField &&other) noexcept = default;
@@ -270,6 +274,13 @@ private:
 class ONNX_LIGHT_PROTO_API RepeatedStringField : public RepeatedField<utils::String> {
 public:
   using RepeatedField<utils::String>::RepeatedField;
+  /** Explicitly shares the string-list allocation. */
+  inline RepeatedStringField SharedCopy() const {
+    RepeatedStringField result;
+    static_cast<RepeatedField<utils::String> &>(result) =
+        RepeatedField<utils::String>::SharedCopy();
+    return result;
+  }
 };
 
 /** Output iterator that appends to a RepeatedField via push_back.
@@ -317,6 +328,14 @@ template <typename T> class RepeatedProtoField {
 public:
   /** Constructs an empty field. */
   explicit inline RepeatedProtoField() {}
+  /** Copies each message explicitly while sharing its eligible payloads. */
+  inline RepeatedProtoField SharedCopy() const {
+    RepeatedProtoField result;
+    result.values_.reserve(size());
+    for (const auto &value : *this)
+      result.values_.push_back(std::make_shared<T>(CopyWithSharedPayloads(value)));
+    return result;
+  }
   /** Constructs by copying elements from a value-storage RepeatedField<T>.
    *  This makes onnx-light's value-based repeated fields (used for message
    *  entries such as StringStringEntryProto) usable wherever a protobuf
@@ -591,6 +610,13 @@ template <typename T> class OptionalField {
 public:
   /** Constructs an empty optional field. */
   explicit inline OptionalField() : value_(nullptr) {}
+  /** Copies a present message explicitly while sharing its eligible payloads. */
+  inline OptionalField SharedCopy() const {
+    OptionalField result;
+    if (has_value())
+      result.value_.reset(new T(CopyWithSharedPayloads(**this)));
+    return result;
+  }
   /** Constructs by copying another optional field. */
   explicit inline OptionalField(const OptionalField<T> &copy) : value_(nullptr) { *this = copy; }
   /** Constructs by moving from another optional field. */

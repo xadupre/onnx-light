@@ -2711,21 +2711,37 @@ StringStringEntryProto &ModelProto::add_metadata(const std::string &key, const s
 
 namespace {
 
-// Checks presence before accessing optional submessages and adds field names only on failure.
-#define COMPARE_FIELD(name)                                                                        \
-  if (left.has_##name() != right.has_##name()) {                                                   \
-    return comparison.Fail(#name ": presence differs");                                            \
-  }                                                                                                \
-  if (left.has_##name() && !comparison.Compare(left.ref_##name(), right.ref_##name())) {           \
-    comparison.Prefix(#name);                                                                      \
-    return false;                                                                                  \
-  }
+// Shares the field catalogue between comparison and explicit payload copying.
+#define VISIT_FIELD(name)                                                                          \
+  if (!visitor(#name, left.has_##name(), right.has_##name(), left.name##_, right.name##_))         \
+    return false;
 
 class ProtoComparison {
 public:
   explicit ProtoComparison(std::string *difference) : difference_(difference) {
     if (difference_)
       difference_->clear();
+  }
+
+  template <typename T>
+  bool operator()(const char *name, bool left_present, bool right_present, const T &left,
+                  const T &right) {
+    if (left_present != right_present)
+      return Fail(std::string(name) + ": presence differs");
+    if (!left_present)
+      return true;
+    const bool equal = [&] {
+      if constexpr (requires {
+                      left.has_value();
+                      *left;
+                    })
+        return Compare(*left, *right);
+      else
+        return Compare(left, right);
+    }();
+    if (!equal)
+      Prefix(name);
+    return equal;
   }
 
   template <typename T>
@@ -2806,534 +2822,591 @@ public:
   std::string *difference_;
 };
 
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(tensor_type)
+  VISIT_FIELD(sequence_type)
+  VISIT_FIELD(map_type)
+  VISIT_FIELD(opaque_type)
+  VISIT_FIELD(denotation)
+  VISIT_FIELD(sparse_tensor_type)
+  VISIT_FIELD(optional_type)
+  VISIT_FIELD(struct_type)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::Tensor &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(elem_type)
+  VISIT_FIELD(shape)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::SparseTensor &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(elem_type)
+  VISIT_FIELD(shape)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::Sequence &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(elem_type)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::Optional &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(elem_type)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::Map &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(key_type)
+  VISIT_FIELD(value_type)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TypeProto::Opaque &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(domain)
+  VISIT_FIELD(name)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TensorShapeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(dim)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TensorShapeProto::Dimension &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(dim_value)
+  VISIT_FIELD(dim_param)
+  VISIT_FIELD(denotation)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(array)
+  VISIT_FIELD(structure)
+  VISIT_FIELD(bit_packing)
+  VISIT_FIELD(type_ref)
+  VISIT_FIELD(decoder)
+  VISIT_FIELD(encoder)
+  VISIT_FIELD(name)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(type_id)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto::Array &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(element_type)
+  VISIT_FIELD(dimension)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto::Structure &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(field)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto::Structure::Field &left, Right &right,
+                      Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(type)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(constant)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto::BitPacking &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(component)
+  VISIT_FIELD(dimension)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StructTypeProto::BitPacking::Component &left, Right &right,
+                      Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(bit_width)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const StringStringEntryProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(key)
+  VISIT_FIELD(value)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TensorProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(dims)
+  VISIT_FIELD(data_type)
+  VISIT_FIELD(segment)
+  VISIT_FIELD(data_location)
+  VISIT_FIELD(name)
+  VISIT_FIELD(raw_data)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(external_data)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(double_data)
+  VISIT_FIELD(float_data)
+  VISIT_FIELD(int32_data)
+  VISIT_FIELD(int64_data)
+  VISIT_FIELD(uint64_data)
+  VISIT_FIELD(string_data)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TensorProto::Segment &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(begin)
+  VISIT_FIELD(end)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const SparseTensorProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(values)
+  VISIT_FIELD(indices)
+  VISIT_FIELD(dims)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const LocalRewritingProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(pattern_name)
+  VISIT_FIELD(graph_path)
+  VISIT_FIELD(matched_nodes)
+  VISIT_FIELD(removed_initializers)
+  VISIT_FIELD(removed_extended_initializers)
+  VISIT_FIELD(added_nodes)
+  VISIT_FIELD(added_nodes_positions)
+  VISIT_FIELD(added_initializers)
+  VISIT_FIELD(added_initializer_positions)
+  VISIT_FIELD(value_renames)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(initializer_calls)
+  VISIT_FIELD(computed_initializer_positions)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const RewritingProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(rewrites)
+  VISIT_FIELD(required_opset_imports)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(added_functions)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const FunctionProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(input)
+  VISIT_FIELD(output)
+  VISIT_FIELD(attribute)
+  VISIT_FIELD(attribute_proto)
+  VISIT_FIELD(node)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(opset_import)
+  VISIT_FIELD(domain)
+  VISIT_FIELD(overload)
+  VISIT_FIELD(value_info)
+  VISIT_FIELD(metadata_props)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const OperatorSetIdProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(domain)
+  VISIT_FIELD(version)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const ValueInfoProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(type)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(metadata_props)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const NodeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(input)
+  VISIT_FIELD(output)
+  VISIT_FIELD(name)
+  VISIT_FIELD(op_type)
+  VISIT_FIELD(attribute)
+  VISIT_FIELD(domain)
+  VISIT_FIELD(overload)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(device_configurations)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const AttributeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(ref_attr_name)
+  VISIT_FIELD(type)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(f)
+  VISIT_FIELD(i)
+  VISIT_FIELD(s)
+  VISIT_FIELD(t)
+  VISIT_FIELD(sparse_tensor)
+  VISIT_FIELD(g)
+  VISIT_FIELD(tp)
+  VISIT_FIELD(floats)
+  VISIT_FIELD(ints)
+  VISIT_FIELD(strings)
+  VISIT_FIELD(tensors)
+  VISIT_FIELD(sparse_tensors)
+  VISIT_FIELD(graphs)
+  VISIT_FIELD(type_protos)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const GraphProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(node)
+  VISIT_FIELD(name)
+  VISIT_FIELD(initializer)
+  VISIT_FIELD(sparse_initializer)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(input)
+  VISIT_FIELD(output)
+  VISIT_FIELD(value_info)
+  VISIT_FIELD(quantization_annotation)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(extended_initializer)
+  VISIT_FIELD(persistent_bindings)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const TensorAnnotation &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(tensor_name)
+  VISIT_FIELD(quant_parameter_tensor_names)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const PersistentBindingProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(input_name)
+  VISIT_FIELD(output_name)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const PagedCacheBlockProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(start)
+  VISIT_FIELD(length)
+  VISIT_FIELD(key)
+  VISIT_FIELD(encoded_key)
+  VISIT_FIELD(value)
+  VISIT_FIELD(encoded_value)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const PagedCacheProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(blocks)
+  VISIT_FIELD(name)
+  VISIT_FIELD(doc_string)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const ExtendedInitializerProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(encoded_value)
+  VISIT_FIELD(paged_cache)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const EncodedValueProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(affine)
+  VISIT_FIELD(struct_type)
+  VISIT_FIELD(logical_type)
+  VISIT_FIELD(raw_data)
+  VISIT_FIELD(external_data)
+  VISIT_FIELD(data_location)
+  VISIT_FIELD(name)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(parameter_ref)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const AffineLayoutProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(storage_type)
+  VISIT_FIELD(scale)
+  VISIT_FIELD(zero_point)
+  VISIT_FIELD(axis)
+  VISIT_FIELD(block_size)
+  VISIT_FIELD(signed_storage)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const NodeDeviceConfigurationProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(configuration_id)
+  VISIT_FIELD(sharding_spec)
+  VISIT_FIELD(pipeline_stage)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const ShardingSpecProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(tensor_name)
+  VISIT_FIELD(device)
+  VISIT_FIELD(index_to_device_group_map)
+  VISIT_FIELD(sharded_dim)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const IntIntListEntryProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(key)
+  VISIT_FIELD(value)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const ShardedDimProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(axis)
+  VISIT_FIELD(simple_sharding)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const SimpleShardedDimProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(dim_value)
+  VISIT_FIELD(dim_param)
+  VISIT_FIELD(num_shards)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const DeviceConfigurationProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(num_devices)
+  VISIT_FIELD(device)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const ModelProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(ir_version)
+  VISIT_FIELD(opset_import)
+  VISIT_FIELD(producer_name)
+  VISIT_FIELD(producer_version)
+  VISIT_FIELD(domain)
+  VISIT_FIELD(model_version)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(graph)
+  VISIT_FIELD(metadata_props)
+  VISIT_FIELD(functions)
+  VISIT_FIELD(configuration)
+  VISIT_FIELD(struct_types)
+  VISIT_FIELD(rewritings)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const PipelineProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(producer_name)
+  VISIT_FIELD(producer_version)
+  VISIT_FIELD(domain)
+  VISIT_FIELD(pipeline_version)
+  VISIT_FIELD(doc_string)
+  VISIT_FIELD(embedding)
+  VISIT_FIELD(prefill)
+  VISIT_FIELD(decode)
+  VISIT_FIELD(max_new_tokens)
+  VISIT_FIELD(temperature)
+  VISIT_FIELD(seed)
+  VISIT_FIELD(eos_token_id)
+  VISIT_FIELD(pad_token_id)
+  VISIT_FIELD(top_k)
+  VISIT_FIELD(top_p)
+  VISIT_FIELD(input_ids_name)
+  VISIT_FIELD(logits_name)
+  VISIT_FIELD(attention_mask_name)
+  VISIT_FIELD(position_ids_name)
+  VISIT_FIELD(metadata_props)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const SequenceProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(elem_type)
+  VISIT_FIELD(tensor_values)
+  VISIT_FIELD(sparse_tensor_values)
+  VISIT_FIELD(sequence_values)
+  VISIT_FIELD(map_values)
+  VISIT_FIELD(optional_values)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const MapProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(key_type)
+  VISIT_FIELD(keys)
+  VISIT_FIELD(string_keys)
+  VISIT_FIELD(values)
+  return true;
+}
+
+template <typename Right, typename Visitor>
+bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(name)
+  VISIT_FIELD(elem_type)
+  VISIT_FIELD(tensor_value)
+  VISIT_FIELD(sparse_tensor_value)
+  VISIT_FIELD(sequence_value)
+  VISIT_FIELD(map_value)
+  VISIT_FIELD(optional_value)
+  return true;
+}
+
+#undef VISIT_FIELD
+
 } // namespace
 
-bool TypeProto::Equals(const TypeProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(tensor_type)
-  COMPARE_FIELD(sequence_type)
-  COMPARE_FIELD(map_type)
-  COMPARE_FIELD(opaque_type)
-  COMPARE_FIELD(denotation)
-  COMPARE_FIELD(sparse_tensor_type)
-  COMPARE_FIELD(optional_type)
-  COMPARE_FIELD(struct_type)
-  return true;
-}
+#define DEFINE_PROTO_EQUALS(cls)                                                                   \
+  bool cls::Equals(const cls &right, std::string *difference) const {                              \
+    return VisitProtoFields(*this, right, ProtoComparison(difference));                            \
+  }
 
-bool TypeProto::Tensor::Equals(const TypeProto::Tensor &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(elem_type)
-  COMPARE_FIELD(shape)
-  return true;
-}
+DEFINE_PROTO_EQUALS(TypeProto)
+DEFINE_PROTO_EQUALS(TypeProto::Tensor)
+DEFINE_PROTO_EQUALS(TypeProto::SparseTensor)
+DEFINE_PROTO_EQUALS(TypeProto::Sequence)
+DEFINE_PROTO_EQUALS(TypeProto::Optional)
+DEFINE_PROTO_EQUALS(TypeProto::Map)
+DEFINE_PROTO_EQUALS(TypeProto::Opaque)
+DEFINE_PROTO_EQUALS(TensorShapeProto)
+DEFINE_PROTO_EQUALS(TensorShapeProto::Dimension)
+DEFINE_PROTO_EQUALS(StructTypeProto)
+DEFINE_PROTO_EQUALS(StructTypeProto::Array)
+DEFINE_PROTO_EQUALS(StructTypeProto::Structure)
+DEFINE_PROTO_EQUALS(StructTypeProto::Structure::Field)
+DEFINE_PROTO_EQUALS(StructTypeProto::BitPacking)
+DEFINE_PROTO_EQUALS(StructTypeProto::BitPacking::Component)
+DEFINE_PROTO_EQUALS(StringStringEntryProto)
+DEFINE_PROTO_EQUALS(TensorProto)
+DEFINE_PROTO_EQUALS(TensorProto::Segment)
+DEFINE_PROTO_EQUALS(SparseTensorProto)
+DEFINE_PROTO_EQUALS(LocalRewritingProto)
+DEFINE_PROTO_EQUALS(RewritingProto)
+DEFINE_PROTO_EQUALS(FunctionProto)
+DEFINE_PROTO_EQUALS(OperatorSetIdProto)
+DEFINE_PROTO_EQUALS(ValueInfoProto)
+DEFINE_PROTO_EQUALS(NodeProto)
+DEFINE_PROTO_EQUALS(AttributeProto)
+DEFINE_PROTO_EQUALS(GraphProto)
+DEFINE_PROTO_EQUALS(TensorAnnotation)
+DEFINE_PROTO_EQUALS(PersistentBindingProto)
+DEFINE_PROTO_EQUALS(PagedCacheBlockProto)
+DEFINE_PROTO_EQUALS(PagedCacheProto)
+DEFINE_PROTO_EQUALS(ExtendedInitializerProto)
+DEFINE_PROTO_EQUALS(EncodedValueProto)
+DEFINE_PROTO_EQUALS(AffineLayoutProto)
+DEFINE_PROTO_EQUALS(NodeDeviceConfigurationProto)
+DEFINE_PROTO_EQUALS(ShardingSpecProto)
+DEFINE_PROTO_EQUALS(IntIntListEntryProto)
+DEFINE_PROTO_EQUALS(ShardedDimProto)
+DEFINE_PROTO_EQUALS(SimpleShardedDimProto)
+DEFINE_PROTO_EQUALS(DeviceConfigurationProto)
+DEFINE_PROTO_EQUALS(ModelProto)
+DEFINE_PROTO_EQUALS(PipelineProto)
+DEFINE_PROTO_EQUALS(SequenceProto)
+DEFINE_PROTO_EQUALS(MapProto)
+DEFINE_PROTO_EQUALS(OptionalProto)
 
-bool TypeProto::SparseTensor::Equals(const TypeProto::SparseTensor &right,
-                                     std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(elem_type)
-  COMPARE_FIELD(shape)
-  return true;
-}
+#undef DEFINE_PROTO_EQUALS
 
-bool TypeProto::Sequence::Equals(const TypeProto::Sequence &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(elem_type)
-  return true;
-}
+void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *source,
+                                                uint16_t proto_id) {
+  const auto copy = [](const char *, bool, bool, const auto &from, auto &to) {
+    to = utils::CopyWithSharedPayloads(from);
+    return true;
+  };
+#define COPY_PROTO_CASE(cls, id)                                                                   \
+  case onnx_light::proto_serialization_detail::ProtoId::id:                                        \
+    VisitProtoFields(*static_cast<const cls *>(source), *static_cast<cls *>(destination), copy);   \
+    return;
 
-bool TypeProto::Optional::Equals(const TypeProto::Optional &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(elem_type)
-  return true;
+  switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
+    COPY_PROTO_CASE(TypeProto, TypeProto)
+    COPY_PROTO_CASE(TypeProto::Tensor, Tensor)
+    COPY_PROTO_CASE(TypeProto::SparseTensor, SparseTensor)
+    COPY_PROTO_CASE(TypeProto::Sequence, Sequence)
+    COPY_PROTO_CASE(TypeProto::Optional, Optional)
+    COPY_PROTO_CASE(TypeProto::Map, Map)
+    COPY_PROTO_CASE(TypeProto::Opaque, Opaque)
+    COPY_PROTO_CASE(TensorShapeProto, TensorShapeProto)
+    COPY_PROTO_CASE(TensorShapeProto::Dimension, Dimension)
+    COPY_PROTO_CASE(StructTypeProto, StructTypeProto)
+    COPY_PROTO_CASE(StructTypeProto::Array, Array)
+    COPY_PROTO_CASE(StructTypeProto::Structure, Structure)
+    COPY_PROTO_CASE(StructTypeProto::Structure::Field, Field)
+    COPY_PROTO_CASE(StructTypeProto::BitPacking, BitPacking)
+    COPY_PROTO_CASE(StructTypeProto::BitPacking::Component, Component)
+    COPY_PROTO_CASE(StringStringEntryProto, StringStringEntryProto)
+    COPY_PROTO_CASE(TensorProto, TensorProto)
+    COPY_PROTO_CASE(TensorProto::Segment, Segment)
+    COPY_PROTO_CASE(SparseTensorProto, SparseTensorProto)
+    COPY_PROTO_CASE(LocalRewritingProto, LocalRewritingProto)
+    COPY_PROTO_CASE(RewritingProto, RewritingProto)
+    COPY_PROTO_CASE(FunctionProto, FunctionProto)
+    COPY_PROTO_CASE(OperatorSetIdProto, OperatorSetIdProto)
+    COPY_PROTO_CASE(ValueInfoProto, ValueInfoProto)
+    COPY_PROTO_CASE(NodeProto, NodeProto)
+    COPY_PROTO_CASE(AttributeProto, AttributeProto)
+    COPY_PROTO_CASE(GraphProto, GraphProto)
+    COPY_PROTO_CASE(TensorAnnotation, TensorAnnotation)
+    COPY_PROTO_CASE(PersistentBindingProto, PersistentBindingProto)
+    COPY_PROTO_CASE(PagedCacheBlockProto, PagedCacheBlockProto)
+    COPY_PROTO_CASE(PagedCacheProto, PagedCacheProto)
+    COPY_PROTO_CASE(ExtendedInitializerProto, ExtendedInitializerProto)
+    COPY_PROTO_CASE(EncodedValueProto, EncodedValueProto)
+    COPY_PROTO_CASE(AffineLayoutProto, AffineLayoutProto)
+    COPY_PROTO_CASE(NodeDeviceConfigurationProto, NodeDeviceConfigurationProto)
+    COPY_PROTO_CASE(ShardingSpecProto, ShardingSpecProto)
+    COPY_PROTO_CASE(IntIntListEntryProto, IntIntListEntryProto)
+    COPY_PROTO_CASE(ShardedDimProto, ShardedDimProto)
+    COPY_PROTO_CASE(SimpleShardedDimProto, SimpleShardedDimProto)
+    COPY_PROTO_CASE(DeviceConfigurationProto, DeviceConfigurationProto)
+    COPY_PROTO_CASE(ModelProto, ModelProto)
+    COPY_PROTO_CASE(PipelineProto, PipelineProto)
+    COPY_PROTO_CASE(SequenceProto, SequenceProto)
+    COPY_PROTO_CASE(MapProto, MapProto)
+    COPY_PROTO_CASE(OptionalProto, OptionalProto)
+  default:
+    EXT_THROW("Unsupported proto type for explicit payload copying: ", proto_id, ".");
+  }
+#undef COPY_PROTO_CASE
 }
-
-bool TypeProto::Map::Equals(const TypeProto::Map &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(key_type)
-  COMPARE_FIELD(value_type)
-  return true;
-}
-
-bool TypeProto::Opaque::Equals(const TypeProto::Opaque &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(name)
-  return true;
-}
-
-bool TensorShapeProto::Equals(const TensorShapeProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(dim)
-  return true;
-}
-
-bool TensorShapeProto::Dimension::Equals(const TensorShapeProto::Dimension &right,
-                                         std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(dim_value)
-  COMPARE_FIELD(dim_param)
-  COMPARE_FIELD(denotation)
-  return true;
-}
-
-bool StructTypeProto::Equals(const StructTypeProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(array)
-  COMPARE_FIELD(structure)
-  COMPARE_FIELD(bit_packing)
-  COMPARE_FIELD(type_ref)
-  COMPARE_FIELD(decoder)
-  COMPARE_FIELD(encoder)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(type_id)
-  return true;
-}
-
-bool StructTypeProto::Array::Equals(const StructTypeProto::Array &right,
-                                    std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(element_type)
-  COMPARE_FIELD(dimension)
-  return true;
-}
-
-bool StructTypeProto::Structure::Equals(const StructTypeProto::Structure &right,
-                                        std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(field)
-  return true;
-}
-
-bool StructTypeProto::Structure::Field::Equals(const StructTypeProto::Structure::Field &right,
-                                               std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(type)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(constant)
-  return true;
-}
-
-bool StructTypeProto::BitPacking::Equals(const StructTypeProto::BitPacking &right,
-                                         std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(component)
-  COMPARE_FIELD(dimension)
-  return true;
-}
-
-bool StructTypeProto::BitPacking::Component::Equals(
-    const StructTypeProto::BitPacking::Component &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(bit_width)
-  return true;
-}
-
-bool StringStringEntryProto::Equals(const StringStringEntryProto &right,
-                                    std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(key)
-  COMPARE_FIELD(value)
-  return true;
-}
-
-bool TensorProto::Equals(const TensorProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(dims)
-  COMPARE_FIELD(data_type)
-  COMPARE_FIELD(segment)
-  COMPARE_FIELD(data_location)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(raw_data)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(external_data)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(double_data)
-  COMPARE_FIELD(float_data)
-  COMPARE_FIELD(int32_data)
-  COMPARE_FIELD(int64_data)
-  COMPARE_FIELD(uint64_data)
-  COMPARE_FIELD(string_data)
-  return true;
-}
-
-bool TensorProto::Segment::Equals(const TensorProto::Segment &right,
-                                  std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(begin)
-  COMPARE_FIELD(end)
-  return true;
-}
-
-bool SparseTensorProto::Equals(const SparseTensorProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(values)
-  COMPARE_FIELD(indices)
-  COMPARE_FIELD(dims)
-  return true;
-}
-
-bool LocalRewritingProto::Equals(const LocalRewritingProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(pattern_name)
-  COMPARE_FIELD(graph_path)
-  COMPARE_FIELD(matched_nodes)
-  COMPARE_FIELD(removed_initializers)
-  COMPARE_FIELD(removed_extended_initializers)
-  COMPARE_FIELD(added_nodes)
-  COMPARE_FIELD(added_nodes_positions)
-  COMPARE_FIELD(added_initializers)
-  COMPARE_FIELD(added_initializer_positions)
-  COMPARE_FIELD(value_renames)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(initializer_calls)
-  COMPARE_FIELD(computed_initializer_positions)
-  return true;
-}
-
-bool RewritingProto::Equals(const RewritingProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(rewrites)
-  COMPARE_FIELD(required_opset_imports)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(added_functions)
-  return true;
-}
-
-bool FunctionProto::Equals(const FunctionProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(input)
-  COMPARE_FIELD(output)
-  COMPARE_FIELD(attribute)
-  COMPARE_FIELD(attribute_proto)
-  COMPARE_FIELD(node)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(opset_import)
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(overload)
-  COMPARE_FIELD(value_info)
-  COMPARE_FIELD(metadata_props)
-  return true;
-}
-
-bool OperatorSetIdProto::Equals(const OperatorSetIdProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(version)
-  return true;
-}
-
-bool ValueInfoProto::Equals(const ValueInfoProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(type)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(metadata_props)
-  return true;
-}
-
-bool NodeProto::Equals(const NodeProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(input)
-  COMPARE_FIELD(output)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(op_type)
-  COMPARE_FIELD(attribute)
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(overload)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(device_configurations)
-  return true;
-}
-
-bool AttributeProto::Equals(const AttributeProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(ref_attr_name)
-  COMPARE_FIELD(type)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(f)
-  COMPARE_FIELD(i)
-  COMPARE_FIELD(s)
-  COMPARE_FIELD(t)
-  COMPARE_FIELD(sparse_tensor)
-  COMPARE_FIELD(g)
-  COMPARE_FIELD(tp)
-  COMPARE_FIELD(floats)
-  COMPARE_FIELD(ints)
-  COMPARE_FIELD(strings)
-  COMPARE_FIELD(tensors)
-  COMPARE_FIELD(sparse_tensors)
-  COMPARE_FIELD(graphs)
-  COMPARE_FIELD(type_protos)
-  return true;
-}
-
-bool GraphProto::Equals(const GraphProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(node)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(initializer)
-  COMPARE_FIELD(sparse_initializer)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(input)
-  COMPARE_FIELD(output)
-  COMPARE_FIELD(value_info)
-  COMPARE_FIELD(quantization_annotation)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(extended_initializer)
-  COMPARE_FIELD(persistent_bindings)
-  return true;
-}
-
-bool TensorAnnotation::Equals(const TensorAnnotation &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(tensor_name)
-  COMPARE_FIELD(quant_parameter_tensor_names)
-  return true;
-}
-
-bool PersistentBindingProto::Equals(const PersistentBindingProto &right,
-                                    std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(input_name)
-  COMPARE_FIELD(output_name)
-  return true;
-}
-
-bool PagedCacheBlockProto::Equals(const PagedCacheBlockProto &right,
-                                  std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(start)
-  COMPARE_FIELD(length)
-  COMPARE_FIELD(key)
-  COMPARE_FIELD(encoded_key)
-  COMPARE_FIELD(value)
-  COMPARE_FIELD(encoded_value)
-  return true;
-}
-
-bool PagedCacheProto::Equals(const PagedCacheProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(blocks)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(doc_string)
-  return true;
-}
-
-bool ExtendedInitializerProto::Equals(const ExtendedInitializerProto &right,
-                                      std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(encoded_value)
-  COMPARE_FIELD(paged_cache)
-  return true;
-}
-
-bool EncodedValueProto::Equals(const EncodedValueProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(affine)
-  COMPARE_FIELD(struct_type)
-  COMPARE_FIELD(logical_type)
-  COMPARE_FIELD(raw_data)
-  COMPARE_FIELD(external_data)
-  COMPARE_FIELD(data_location)
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(parameter_ref)
-  return true;
-}
-
-bool AffineLayoutProto::Equals(const AffineLayoutProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(storage_type)
-  COMPARE_FIELD(scale)
-  COMPARE_FIELD(zero_point)
-  COMPARE_FIELD(axis)
-  COMPARE_FIELD(block_size)
-  COMPARE_FIELD(signed_storage)
-  return true;
-}
-
-bool NodeDeviceConfigurationProto::Equals(const NodeDeviceConfigurationProto &right,
-                                          std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(configuration_id)
-  COMPARE_FIELD(sharding_spec)
-  COMPARE_FIELD(pipeline_stage)
-  return true;
-}
-
-bool ShardingSpecProto::Equals(const ShardingSpecProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(tensor_name)
-  COMPARE_FIELD(device)
-  COMPARE_FIELD(index_to_device_group_map)
-  COMPARE_FIELD(sharded_dim)
-  return true;
-}
-
-bool IntIntListEntryProto::Equals(const IntIntListEntryProto &right,
-                                  std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(key)
-  COMPARE_FIELD(value)
-  return true;
-}
-
-bool ShardedDimProto::Equals(const ShardedDimProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(axis)
-  COMPARE_FIELD(simple_sharding)
-  return true;
-}
-
-bool SimpleShardedDimProto::Equals(const SimpleShardedDimProto &right,
-                                   std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(dim_value)
-  COMPARE_FIELD(dim_param)
-  COMPARE_FIELD(num_shards)
-  return true;
-}
-
-bool DeviceConfigurationProto::Equals(const DeviceConfigurationProto &right,
-                                      std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(num_devices)
-  COMPARE_FIELD(device)
-  return true;
-}
-
-bool ModelProto::Equals(const ModelProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(ir_version)
-  COMPARE_FIELD(opset_import)
-  COMPARE_FIELD(producer_name)
-  COMPARE_FIELD(producer_version)
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(model_version)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(graph)
-  COMPARE_FIELD(metadata_props)
-  COMPARE_FIELD(functions)
-  COMPARE_FIELD(configuration)
-  COMPARE_FIELD(struct_types)
-  COMPARE_FIELD(rewritings);
-  return true;
-}
-
-bool PipelineProto::Equals(const PipelineProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(producer_name)
-  COMPARE_FIELD(producer_version)
-  COMPARE_FIELD(domain)
-  COMPARE_FIELD(pipeline_version)
-  COMPARE_FIELD(doc_string)
-  COMPARE_FIELD(embedding)
-  COMPARE_FIELD(prefill)
-  COMPARE_FIELD(decode)
-  COMPARE_FIELD(max_new_tokens)
-  COMPARE_FIELD(temperature)
-  COMPARE_FIELD(seed)
-  COMPARE_FIELD(eos_token_id)
-  COMPARE_FIELD(pad_token_id)
-  COMPARE_FIELD(top_k)
-  COMPARE_FIELD(top_p)
-  COMPARE_FIELD(input_ids_name)
-  COMPARE_FIELD(logits_name)
-  COMPARE_FIELD(attention_mask_name)
-  COMPARE_FIELD(position_ids_name)
-  COMPARE_FIELD(metadata_props)
-  return true;
-}
-
-bool SequenceProto::Equals(const SequenceProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(elem_type)
-  COMPARE_FIELD(tensor_values)
-  COMPARE_FIELD(sparse_tensor_values)
-  COMPARE_FIELD(sequence_values)
-  COMPARE_FIELD(map_values)
-  COMPARE_FIELD(optional_values)
-  return true;
-}
-
-bool MapProto::Equals(const MapProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(key_type)
-  COMPARE_FIELD(keys)
-  COMPARE_FIELD(string_keys)
-  COMPARE_FIELD(values)
-  return true;
-}
-
-bool OptionalProto::Equals(const OptionalProto &right, std::string *difference) const {
-  const auto &left = *this;
-  ProtoComparison comparison(difference);
-  COMPARE_FIELD(name)
-  COMPARE_FIELD(elem_type)
-  COMPARE_FIELD(tensor_value)
-  COMPARE_FIELD(sparse_tensor_value)
-  COMPARE_FIELD(sequence_value)
-  COMPARE_FIELD(map_value)
-  COMPARE_FIELD(optional_value)
-  return true;
-}
-
-#undef COMPARE_FIELD
 
 } // namespace ONNX_LIGHT_NAMESPACE

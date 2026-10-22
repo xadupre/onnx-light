@@ -32,6 +32,12 @@ template <typename ParseFn> ProtoBoolParseStatus RunProtoBoolParse(ParseFn &&par
 
 } // namespace proto_adapter_detail
 
+template <typename Derived> Derived ProtoMessageAdapter<Derived>::SharedCopy() const {
+  Derived result;
+  utils::detail::CopyProtoWithSharedPayloads(&result, &derived(), Derived::proto_id);
+  return result;
+}
+
 template <typename Derived>
 SerializeSizeResult ProtoMessageAdapter<Derived>::SerializeSize() const {
   SerializeOptions opts;

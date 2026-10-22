@@ -87,6 +87,38 @@ TEST(SharedPayloadCopy, AlignedMutationRetainsAlignmentAndLogicalBytes) {
   EXPECT_EQ(std::as_const(snapshot)[16], 9);
 }
 
+TEST(SharedPayloadCopy, SuccessfulAlignedResizesPreserveLogicalBytes) {
+  const std::string payload = "aligned payload!!";
+  for (bool shared : {false, true}) {
+    for (size_t alignment : {size_t{1}, size_t{64}, size_t{256}}) {
+      for (size_t size : {size_t{9}, payload.size(), size_t{33}}) {
+        for (size_t iteration = 0; iteration < 16; ++iteration) {
+          SCOPED_TRACE(::testing::Message()
+                       << shared << ", " << alignment << ", " << size << ", " << iteration);
+          utils::ByteSpan source;
+          source.resize_aligned(payload.size(), 256);
+          std::memcpy(source.data(), payload.data(), payload.size());
+          auto snapshot = shared ? utils::CopyWithSharedPayloads(source) : source;
+          source.resize_aligned(size, alignment);
+          ASSERT_EQ(source.size(), size);
+          EXPECT_EQ(reinterpret_cast<uintptr_t>(std::as_const(source).data()) % alignment, 0u);
+          EXPECT_EQ(std::memcmp(std::as_const(source).data(), payload.data(),
+                                std::min(size, payload.size())),
+                    0);
+          EXPECT_EQ(std::string(snapshot), payload);
+          if (alignment > 1 && size == payload.size()) {
+            if (iteration % 2 == 0)
+              source.assign(source.c_str(), source.size());
+            else
+              source.assign(std::as_const(source).data(), source.size());
+            EXPECT_EQ(std::string(source), payload);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST(SharedPayloadCopy, AllocationLimitedMutationsPreserveSnapshotsAndFailedResizeState) {
 #if defined(__linux__)
   for (const std::string operation : {"resize", "resize_aligned", "append"}) {
@@ -113,9 +145,9 @@ TEST(SharedPayloadCopy, AllocationLimitedMutationsPreserveSnapshotsAndFailedResi
       limited.rlim_cur += bytes + bytes / 2;
     ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
     if (operation == "resize_aligned")
-      EXPECT_THROW(source.resize_aligned(7, 64), std::bad_alloc);
+      EXPECT_THROW(source.resize_aligned(bytes - 1, 64), std::bad_alloc);
     else if (operation == "resize")
-      EXPECT_THROW(source.resize(7), std::bad_alloc);
+      EXPECT_THROW(source.resize(bytes - 1), std::bad_alloc);
     else
       EXPECT_NO_THROW(source.push_back(10));
     ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
@@ -350,7 +382,7 @@ TEST(SharedPayloadCopy, ActiveExportsForceCopyAndRetainOldAllocation) {
   EXPECT_EQ(std::as_const(borrowed_snapshot).data(), bytes);
 }
 
-TEST(SharedPayloadCopy, CopyFromDescendantGraphPreservesSourceAndSharedPayload) {
+TEST(SharedPayloadCopy, CopyingDescendantGraphPreservesSourceAndSharedPayload) {
   GraphProto graph;
   auto *nested = graph.add_node()->add_attribute()->mutable_g();
   nested->set_name("nested");
@@ -359,21 +391,26 @@ TEST(SharedPayloadCopy, CopyFromDescendantGraphPreservesSourceAndSharedPayload) 
   tensor->set_raw_data("payload");
   const auto *payload = std::as_const(*tensor).ref_raw_data().data();
   const auto expected = nested->SerializeAsString();
-  {
-    utils::detail::SharedPayloadCopyScope sharing;
-    graph.CopyFrom(*nested);
-  }
+  graph = utils::CopyWithSharedPayloads(*nested);
   EXPECT_EQ(graph.SerializeAsString(), expected);
   EXPECT_EQ(std::as_const(graph).initializer(0).ref_raw_data().data(), payload);
 }
 
-TEST(SharedPayloadCopy, ScopeEndsOnCopyFailure) {
+TEST(SharedPayloadCopy, ExplicitCopyDoesNotChangeOrdinaryCopiesEvenOnFailure) {
+  TensorProto source;
+  source.set_raw_data("weights");
   struct Throwing {
-    Throwing() = default;
-    Throwing(const Throwing &) { throw std::runtime_error("copy failure"); }
+    const TensorProto &source;
+    explicit Throwing(const TensorProto &source) : source(source) {}
+    Throwing(const Throwing &other) : source(other.source) {
+      TensorProto ordinary(source);
+      EXPECT_NE(ordinary.raw_data().data(), source.raw_data().data());
+      throw std::runtime_error("copy failure");
+    }
   };
-  EXPECT_THROW(utils::CopyWithSharedPayloads(Throwing{}), std::runtime_error);
-  EXPECT_FALSE(utils::detail::IsSharedPayloadCopy());
+  EXPECT_THROW(utils::CopyWithSharedPayloads(Throwing{source}), std::runtime_error);
+  TensorProto ordinary(source);
+  EXPECT_NE(ordinary.raw_data().data(), source.raw_data().data());
 }
 
 TEST(SharedPayloadCopy, ExportLeasesTrackEachAllocationAndBorrowedOwner) {

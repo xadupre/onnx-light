@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <memory>
 #include <stdint.h>
 #include <string>
@@ -13,18 +14,17 @@
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace detail {
-/** Bounds native payload sharing to one synchronous copy operation across library boundaries. */
-class ONNX_LIGHT_PROTO_API SharedPayloadCopyScope {
-public:
-  SharedPayloadCopyScope() noexcept;
-  ~SharedPayloadCopyScope();
-  SharedPayloadCopyScope(const SharedPayloadCopyScope &) = delete;
-  SharedPayloadCopyScope &operator=(const SharedPayloadCopyScope &) = delete;
-};
-
-/** Returns whether the current native copy explicitly requests shared payload storage. */
-ONNX_LIGHT_PROTO_API bool IsSharedPayloadCopy() noexcept;
+/** Copies a complete proto's fields with an explicitly selected payload-sharing policy. */
+ONNX_LIGHT_PROTO_API void CopyProtoWithSharedPayloads(void *destination, const void *source,
+                                                      uint16_t proto_id);
 } // namespace detail
+
+template <typename T> T CopyWithSharedPayloads(const T &source);
+template <typename T, typename Allocator>
+std::vector<T, Allocator> CopyWithSharedPayloads(const std::vector<T, Allocator> &source);
+template <typename Key, typename Value, typename Compare, typename Allocator>
+std::map<Key, Value, Compare, Allocator>
+CopyWithSharedPayloads(const std::map<Key, Value, Compare, Allocator> &source);
 
 /**
  * Copies message structure independently while sharing eligible payload allocations.
@@ -38,8 +38,29 @@ ONNX_LIGHT_PROTO_API bool IsSharedPayloadCopy() noexcept;
  * must synchronize access to the source during copying, including its logically const storage.
  */
 template <typename T> T CopyWithSharedPayloads(const T &source) {
-  detail::SharedPayloadCopyScope scope;
-  return T(source);
+  if constexpr (requires { source.SharedCopy(); }) {
+    return source.SharedCopy();
+  } else {
+    return T(source);
+  }
+}
+
+template <typename T, typename Allocator>
+std::vector<T, Allocator> CopyWithSharedPayloads(const std::vector<T, Allocator> &source) {
+  std::vector<T, Allocator> result(source.get_allocator());
+  result.reserve(source.size());
+  for (const auto &value : source)
+    result.push_back(CopyWithSharedPayloads(value));
+  return result;
+}
+
+template <typename Key, typename Value, typename Compare, typename Allocator>
+std::map<Key, Value, Compare, Allocator>
+CopyWithSharedPayloads(const std::map<Key, Value, Compare, Allocator> &source) {
+  std::map<Key, Value, Compare, Allocator> result(source.key_comp(), source.get_allocator());
+  for (const auto &[key, value] : source)
+    result.emplace(key, CopyWithSharedPayloads(value));
+  return result;
 }
 
 /**
@@ -273,18 +294,7 @@ public:
   inline ByteSpan(const ByteSpan &other)
       : Span(nullptr, 0), borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_),
         align_(other.align_), owner_(other.owner_) {
-    if (detail::IsSharedPayloadCopy() && other.borrowed_ &&
-        (other.owner_.use_count() == 0 || other.has_active_exports())) {
-      borrowed_ = false;
-      owner_.reset();
-      owned_.assign(other.data(), other.size());
-      if (other.data() != nullptr && other.empty())
-        resize(0);
-    } else if (detail::IsSharedPayloadCopy() && !other.borrowed_ && !other.has_active_exports()) {
-      owned_.share_from(other.owned_);
-      ptr_ = other.ptr_;
-      size_ = other.size_;
-    } else if (other.aligned_owned_) {
+    if (other.aligned_owned_) {
       // Re-allocate and re-align, then copy only the logical data bytes.
       const size_t n = other.size_;
       owned_.resize(n + align_ - 1);
@@ -302,6 +312,28 @@ public:
       ptr_ = other.ptr_;
       size_ = other.size_;
     }
+  }
+
+  /** Copies metadata and explicitly shares eligible storage without changing ordinary copies. */
+  inline ByteSpan SharedCopy() const {
+    if (has_active_exports())
+      return ByteSpan(*this);
+    ByteSpan result;
+    if (borrowed_ && owner_.use_count() == 0) {
+      result.owned_.assign(data(), size());
+      if (data() != nullptr && empty())
+        result.resize(0);
+      return result;
+    }
+    result.borrowed_ = borrowed_;
+    result.aligned_owned_ = aligned_owned_;
+    result.align_ = align_;
+    result.owner_ = owner_;
+    result.ptr_ = ptr_;
+    result.size_ = size_;
+    if (!borrowed_)
+      result.owned_.share_from(owned_);
+    return result;
   }
 
   /** Copy assignment: handles aligned-owned mode by recomputing the internal pointer. */
@@ -458,7 +490,15 @@ public:
   /** Resizes to plain owned mode, preserving the previous state if allocation fails. */
   inline void resize(size_t n) {
     check_no_active_exports();
-    if (n == 0) {
+    if (aligned_owned_) {
+      OwnedByteBuffer next;
+      next.resize(n == 0 ? 1 : n);
+      if (n > 0)
+        std::memcpy(next.data(), ptr_, std::min(n, size_));
+      else
+        next.clear();
+      owned_ = std::move(next);
+    } else if (n == 0) {
       owned_.resize(1);
       owned_.clear();
     } else {
@@ -480,21 +520,20 @@ public:
   }
 
   inline void assign(const char *data, size_t len) {
+    // Keeps an aliased source alive when resize replaces aligned or borrowed storage.
+    const auto source_owner = aligned_owned_ ? owned_.storage_owner() : owner_;
     resize(len);
     if (len > 0)
       std::memcpy(this->data(), data, len);
   }
 
-  inline void assign(const void *data, size_t len) {
-    resize(len);
-    if (len > 0)
-      std::memcpy(this->data(), data, len);
-  }
+  inline void assign(const void *data, size_t len) { assign(static_cast<const char *>(data), len); }
 
   /** Resizes the owned buffer ensuring data() is aligned to align bytes.
    *  Over-allocates by (align - 1) bytes so std::align can find a suitable start.
    *  If align <= 1 or n == 0, falls back to plain resize(n).
    *  The caller may read/write the data via data() as usual; size() returns n.
+   *  Preserves the logical prefix even when the allocation's alignment offset changes.
    *  Allocation or validation failure preserves the previous bytes and storage mode. */
   inline void resize_aligned(size_t n, size_t align) {
     check_no_active_exports();
@@ -507,12 +546,17 @@ public:
     EXT_ENFORCE_INVALID(n <= std::numeric_limits<size_t>::max() - (align - 1),
                         "ByteSpan::resize_aligned: aligned allocation size overflows.");
     // Over-allocate so std::align always finds a suitable start.
-    owned_.resize(n + align - 1);
-    void *vptr = owned_.data();
-    size_t space = owned_.size();
+    OwnedByteBuffer next;
+    next.resize(n + align - 1);
+    void *vptr = next.data();
+    size_t space = next.size();
     void *aligned = std::align(align, n, vptr, space);
     EXT_ENFORCE(aligned != nullptr, "ByteSpan::resize_aligned: failed to align ", n, " bytes to ",
                 align, ".");
+    const size_t preserved = std::min(n, size());
+    if (preserved > 0)
+      std::memcpy(aligned, static_cast<const ByteSpan &>(*this).data(), preserved);
+    owned_ = std::move(next);
     export_guard_.reset();
     ptr_ = static_cast<uint8_t *>(aligned);
     size_ = n;

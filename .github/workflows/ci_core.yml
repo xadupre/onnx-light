@@ -200,7 +200,9 @@ jobs:
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    # Partial cache misses can spend over 21 minutes building; reserve time for
+    # both native and Python tests, as in the no-onnx preflight below.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -372,10 +374,10 @@ jobs:
         # Linux CI run 39580960813 (f0a84c8d) measures 1683544 installed bytes,
         # 1192474 text bytes and 868 symbols. Installed and text references allow a 5%
         # margin; symbol and dependency limits remain strict and unchanged.
-        # Explicit payload snapshots add COW storage, a cross-library copy scope and export
+        # Explicit payload snapshots add COW storage, native field copying and export
         # leases. Linux CI run 39752559187 (f470c5a8) measures 1773952 installed bytes,
         # 1262138 text bytes and 897 symbols. Update the measured size references and allow
-        # the six new scope/lease exports; keep the 5% size margin and dependency allowlist.
+        # the snapshot/lease exports; keep the 5% size margin and dependency allowlist.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \

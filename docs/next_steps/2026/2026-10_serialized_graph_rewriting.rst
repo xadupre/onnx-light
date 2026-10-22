@@ -299,6 +299,10 @@ detaches it. Nested graph attributes, local functions, recipes and removed
 initializer definitions use the same mechanism. Ordinary proto copies retain
 their existing semantics; sharing is requested with
 ``utils::CopyWithSharedPayloads`` rather than enabled globally.
+The named copy operation explicitly walks each message field and propagates to
+nested containers and messages. It uses no mutable global or ``thread_local``
+copy mode; ordinary constructors and ``CopyFrom`` never depend on an ambient
+copy context. Comparison and copying share the same native field catalogue.
 Borrowed buffers with an owner retain that owner and remain read-only through
 the proto API. Ownerless borrowed buffers are copied into safe owned storage.
 As with the existing zero-copy import APIs, callers must not modify borrowed
@@ -324,6 +328,9 @@ before modifying that storage; clearing the tensor retains the old allocation
 for existing views.
 Failed owned-buffer resizing preserves the original bytes, logical size and
 alignment, including when detaching a shared allocation within its capacity.
+Successful aligned resizing copies the logical prefix to the new aligned address,
+not the old backing allocation's padding; conversion to plain storage preserves
+that prefix as well.
 Appending to a full shared buffer allocates only the grown buffer, without first
 allocating a same-sized detached copy.
 

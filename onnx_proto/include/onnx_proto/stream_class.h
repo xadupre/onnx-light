@@ -567,6 +567,8 @@ public:
  */
 template <typename Derived> class ProtoMessageAdapter : public Message {
 public:
+  /** Copies message structure independently while explicitly sharing eligible payloads. */
+  Derived SharedCopy() const;
   SerializeSizeResult SerializeSize() const;
   size_t ByteSizeLong() const;
   bool ParseFromString(const std::string &raw);

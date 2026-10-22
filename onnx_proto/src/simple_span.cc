@@ -2,16 +2,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
-namespace detail {
-namespace {
-thread_local size_t shared_payload_copy_depth = 0;
-}
-
-SharedPayloadCopyScope::SharedPayloadCopyScope() noexcept { ++shared_payload_copy_depth; }
-SharedPayloadCopyScope::~SharedPayloadCopyScope() { --shared_payload_copy_depth; }
-bool IsSharedPayloadCopy() noexcept { return shared_payload_copy_depth != 0; }
-} // namespace detail
-
 std::shared_ptr<void> ByteSpan::acquire_export_guard() const {
   if (borrowed_)
     return owner_;

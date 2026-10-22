@@ -45,8 +45,8 @@ with a 5% margin (``--size-budget-margin-percent 5``), giving limits of
 still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The strict symbol limit is 897, including the six new copy-scope and export-lease
-exports. The shared-library dependency allowlist is unchanged.
+The strict symbol limit remains 897 for native snapshot and export-lease code.
+The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto
     :members:

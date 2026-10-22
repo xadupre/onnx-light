@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/symbolic/sym_tensor.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <set>

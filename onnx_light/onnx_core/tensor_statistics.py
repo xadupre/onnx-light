@@ -5,7 +5,8 @@
 
 ``compute_tensor_statistics(value, *, bins=0, quantiles=[], median=False,
 rectangle_shape=[], model=None)`` accepts a NumPy array, runtime ``Tensor``,
-``TensorProto``, ``EncodedValueProto``, or ``SharedQuantizedValue`` and returns
+``TensorProto``, ``EncodedValueProto``, ``SharedQuantizedValue``, or
+``RuntimeValue`` and returns
 a :class:`TensorStatistics` instance. ``model`` optionally resolves the type
 catalogue and shared parameters of encoded values.
 

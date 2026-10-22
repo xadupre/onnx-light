@@ -49,6 +49,18 @@ class TestTensorStatistics(ExtTestCase):
                 numpy.testing.assert_array_equal(result.distribution, counts)
                 numpy.testing.assert_allclose(result.bin_edges, edges)
 
+    def test_runtime_value_wrapping_tensor(self):
+        array = numpy.arange(6, dtype=numpy.float32).reshape(2, 3)
+        tensor = runtime.tensor_from_numpy(
+            "X", onnx.TensorProto.FLOAT, list(array.shape), array.view(numpy.uint8).ravel()
+        )
+        value = runtime.RuntimeValue(tensor)
+        result = compute_tensor_statistics(value)
+        self.assertEqual(result.shape, [2, 3])
+        self.assertEqual(result.min, 0)
+        self.assertEqual(result.max, 5)
+        self.assertEqual(result.mean, 2.5)
+
     def test_histogram_thresholds(self):
         for count, bins in ((0, 0), (9, 0), (10, 10), (500, 10), (501, 50)):
             with self.subTest(count=count):

@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include <cmath>
+#include <cstring>
 #include <gtest/gtest.h>
 #include <numeric>
 #include <set>

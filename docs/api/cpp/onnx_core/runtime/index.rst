@@ -54,6 +54,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     calibration_profile_store
     parallel_for
     tensor_compare
+    tensor_statistics
     node_helpers
     temporary_buffer
     random

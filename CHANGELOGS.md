@@ -5,18 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.0] – Unreleased
 
+### New Features
+
+- Extracted the native ONNX proto implementation into a standalone C++ project that supports independent static/shared builds, installation, and `find_package(onnx_proto CONFIG REQUIRED)` ([#5348](https://github.com/xadupre/onnx-light/pull/5348)).
+- Added `onnx_light.onnx.load_tensor` and `save_tensor` for standalone `TensorProto` files such as ONNX backend `input_0.pb` and `output_0.pb`, with binary streams and explicit or inferred protobuf/textproto formats ([#5368](https://github.com/xadupre/onnx-light/pull/5368)).
+- Added explicit and lazy session prepacking that overlaps preparation with model payload loading ([#5404](https://github.com/xadupre/onnx-light/pull/5404)).
+- Added serialized graph-rewriting plans with reusable function recipes and named model variants, plus `GraphBuilder.to_onnx` export modes for optimized or replayable bundled models ([#5408](https://github.com/xadupre/onnx-light/pull/5408), [#5412](https://github.com/xadupre/onnx-light/pull/5412), [#5452](https://github.com/xadupre/onnx-light/pull/5452), [#5464](https://github.com/xadupre/onnx-light/pull/5464)).
+
 ### Breaking Changes
 
 - Made static `ValueStore` slots store-specific ([#5352](https://github.com/xadupre/onnx-light/issues/5352)). `Bind()` returns an opaque `ValueStore::Slot`, accepted by `IsReady`, `Publish`, and `Get` instead of `uint32_t`. Use `auto` or `ValueStore::Slot` for setup handles; `index()` exposes their stable numeric index only for diagnostics. `BindForRead()` validates a published slot once and returns a lightweight store-pointer/index binding for replay without ownership or readiness checks; `Gemm` uses this path. Cross-store, unbound, and previous-lifetime setup handles are rejected without adding dynamic scheduling to static replay.
 - Removed the legacy CMake target `onnx_light::lib_onnx_proto` ([#5354](https://github.com/xadupre/onnx-light/issues/5354)). Link to `onnx_proto::lib_onnx_proto` instead, whether using the standalone proto package or the full onnx-light package.
+- Replaced the separate encoded and paged-cache initializer collections with `GraphProto.extended_initializer`; files using the previous extension format must be regenerated ([#5459](https://github.com/xadupre/onnx-light/pull/5459)).
 - Fixed C++ static-preparation ownership at session construction ([#5349](https://github.com/xadupre/onnx-light/issues/5349)). Independent sessions no longer adopt the first runtime context's `ValueStore`; use `RuntimeSessionOptions::value_store` for explicit sharing. `RuntimeSession::value_store()` now returns a reference; use `value_store_owner()` for shared ownership. Const session/context owner access returns `std::shared_ptr<const ValueStore>`. Static preparation retains direct immutable reads without scheduler dispatch.
 - Replaced Python `GraphBuilder.to_onnx` string selectors with `ProtoKind` ([#5330](https://github.com/xadupre/onnx-light/pull/5330)). Import `ProtoKind` from `onnx_light.onnx_core.graph_builder`; replace `to_onnx("model")` with `to_onnx()` or `to_onnx(ProtoKind.kModel)`, `to_onnx("graph")` with `to_onnx(ProtoKind.kGraph)`, and `to_onnx("function", domain=...)` with `to_onnx(ProtoKind.kFunction, domain=...)`. String selectors are no longer accepted.
 - Removed schema-driven opset selection and automatic version advancement when adding `GraphBuilder` nodes ([#5328](https://github.com/xadupre/onnx-light/pull/5328)). C++ builders start without imports: pass an explicit map such as `GraphBuilder("g", schema_lookup, {{"", 18}, {"custom", 1}})` or call `SetOpsetVersion` before adding nodes. New Python builders with the default `opsets=None` select the latest supported standard ONNX opset, rather than deriving a version from inserted operators; use `GraphBuilder("g", opsets=18)` or a domain-to-version dictionary to pin versions. Imported models retain their declared imports, and `opsets={}` starts without imports. Adding a node in a domain without an imported version now raises an exception.
 - Made attention-pattern function registration reject a conflicting `intermediate` opset with `BuilderError`, including when the local function already exists ([#5328](https://github.com/xadupre/onnx-light/pull/5328)). These generated functions require `intermediate` opset 1; conflicting caller-selected versions are left unchanged.
 
+### Improvements
+
+- Kept `GraphBuilder` dependency order coherent during targeted mutations and rejected masked cycles before refreshing graph metadata ([#5425](https://github.com/xadupre/onnx-light/pull/5425), [#5455](https://github.com/xadupre/onnx-light/pull/5455)).
+
 ### Fixes
 
-- Added `onnx_light.onnx.load_tensor` and `save_tensor` for standalone `TensorProto` files such as ONNX backend `input_0.pb` and `output_0.pb`, with binary streams and explicit or inferred protobuf/textproto formats.
+- Validated tensor shape and payload consistency, rejected unknown tensor data types on validation fast paths, and prevented overflow in packed-payload size checks ([#5389](https://github.com/xadupre/onnx-light/pull/5389), [#5436](https://github.com/xadupre/onnx-light/pull/5436), [#5438](https://github.com/xadupre/onnx-light/pull/5438)).
+- Corrected symbolic shape arithmetic for singleton-value broadcasting ([#5385](https://github.com/xadupre/onnx-light/pull/5385)).
+- Rejected forward local-function calls instead of silently resolving them through native operator fallback ([#5426](https://github.com/xadupre/onnx-light/pull/5426)).
 - Allowed external tensor data in one existing child directory while rejecting absolute paths, parent traversal, deeper paths, and statically resolved escapes ([#5305](https://github.com/xadupre/onnx-light/pull/5305)).
 - Expanded scalar `SplitToSequence` splits into explicit lengths, including a final remainder, when rewriting to `Split`, and ignored `keepdims` when a split input is present ([#5300](https://github.com/xadupre/onnx-light/pull/5300)).
 - Preserved symbolic dimensions for open-ended `Slice` inference by treating `INT64_MAX` ends as the input extent rather than a concrete output dimension ([#5301](https://github.com/xadupre/onnx-light/pull/5301)).

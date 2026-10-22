@@ -47,6 +47,8 @@ bool enforce_short_repr_length(std::stringstream &ss, const PrintOptions &option
 
 namespace {
 
+int64_t AttributeContentHash(const AttributeProto &attribute);
+
 // Parses external-data numeric metadata (offset/size) without creating a temporary std::string.
 int64_t ParseInt64Fast(const utils::OptionalString &value) {
   int64_t out = 0;
@@ -2652,15 +2654,15 @@ std::string NodeProto::Signature(const std::vector<std::string> &resolved_inputs
     signature << input << '\x1e';
   }
   signature << '\x1f';
-  std::vector<std::string> attributes;
+  signature << overload().sv() << '\x1f';
+  std::vector<int64_t> attributes;
   attributes.reserve(static_cast<std::size_t>(attribute().size()));
   for (const auto &attr : attribute()) {
-    attributes.push_back(attr.SerializeAsString());
+    attributes.push_back(AttributeContentHash(attr));
   }
   std::sort(attributes.begin(), attributes.end());
-  for (const std::string &attr : attributes) {
-    signature << attr << '\x1d';
-  }
+  for (const int64_t hash : attributes)
+    signature.write(reinterpret_cast<const char *>(&hash), sizeof(hash));
   return signature.str();
 }
 
@@ -3291,6 +3293,75 @@ bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor
 
 #undef VISIT_FIELD
 
+class ProtoContentHasher {
+public:
+  ProtoContentHasher() { blake3_hasher_init(&hasher_); }
+
+  template <typename T>
+  bool operator()(const char *, bool present, bool, const T &value, const T &) {
+    Add(present);
+    if (present)
+      Add(value);
+    return true;
+  }
+
+  template <typename T> void Add(const T &value) {
+    if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T>) {
+      blake3_hasher_update(&hasher_, &value, sizeof(value));
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      Add(value.has_value());
+      if (value.has_value())
+        Add(*value);
+    } else if constexpr (requires { T::proto_id; }) {
+      Add(static_cast<uint16_t>(T::proto_id));
+      VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.data();
+                           value.size();
+                         }) {
+      Add(static_cast<uint64_t>(value.size()));
+      using Element = std::remove_cv_t<std::remove_pointer_t<decltype(value.data())>>;
+      if constexpr (std::is_arithmetic_v<Element> || std::is_enum_v<Element>)
+        blake3_hasher_update(&hasher_, value.data(), value.size() * sizeof(Element));
+      else
+        for (const auto &element : value)
+          Add(element);
+    } else {
+      Add(static_cast<uint64_t>(value.size()));
+      for (const auto &element : value) {
+        if constexpr (requires { typename T::mapped_type; }) {
+          Add(element.first);
+          Add(element.second);
+        } else {
+          Add(element);
+        }
+      }
+    }
+  }
+
+  int64_t Finalize() const {
+    uint8_t digest[8];
+    blake3_hasher_finalize(&hasher_, digest, sizeof(digest));
+    uint64_t value = 0;
+    for (size_t index = 0; index < sizeof(digest); ++index)
+      value |= static_cast<uint64_t>(digest[index]) << (8 * index);
+    return static_cast<int64_t>(value);
+  }
+
+private:
+  // Serial hashing avoids worker-stack allocations under the export memory budget.
+  blake3_hasher hasher_;
+};
+
+int64_t AttributeContentHash(const AttributeProto &attribute) {
+  ProtoContentHasher hasher;
+  hasher.Add(attribute);
+  return hasher.Finalize();
+}
+
 } // namespace
 
 #define DEFINE_PROTO_EQUALS(cls)                                                                   \
@@ -3352,13 +3423,18 @@ void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *s
     to = utils::CopyWithSharedPayloads(from);
     return true;
   };
-#define COPY_PROTO_CASE(cls, id)                                                                   \
-  case onnx_light::proto_serialization_detail::ProtoId::id:                                        \
-    VisitProtoFields(*static_cast<const cls *>(source), *static_cast<cls *>(destination), copy);   \
-    return;
+#define COPY_ONEOF(name) to.oneof_case_##name##_ = from.oneof_case_##name##_;
+#define COPY_PROTO_CASE(cls, id, ...)                                                              \
+  case onnx_light::proto_serialization_detail::ProtoId::id: {                                      \
+    const auto &from = *static_cast<const cls *>(source);                                          \
+    auto &to = *static_cast<cls *>(destination);                                                   \
+    VisitProtoFields(from, to, copy);                                                              \
+    __VA_ARGS__                                                                                    \
+    return;                                                                                        \
+  }
 
   switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
-    COPY_PROTO_CASE(TypeProto, TypeProto)
+    COPY_PROTO_CASE(TypeProto, TypeProto, COPY_ONEOF(type))
     COPY_PROTO_CASE(TypeProto::Tensor, Tensor)
     COPY_PROTO_CASE(TypeProto::SparseTensor, SparseTensor)
     COPY_PROTO_CASE(TypeProto::Sequence, Sequence)
@@ -3367,10 +3443,10 @@ void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *s
     COPY_PROTO_CASE(TypeProto::Opaque, Opaque)
     COPY_PROTO_CASE(TensorShapeProto, TensorShapeProto)
     COPY_PROTO_CASE(TensorShapeProto::Dimension, Dimension)
-    COPY_PROTO_CASE(StructTypeProto, StructTypeProto)
+    COPY_PROTO_CASE(StructTypeProto, StructTypeProto, COPY_ONEOF(kind))
     COPY_PROTO_CASE(StructTypeProto::Array, Array)
     COPY_PROTO_CASE(StructTypeProto::Structure, Structure)
-    COPY_PROTO_CASE(StructTypeProto::Structure::Field, Field)
+    COPY_PROTO_CASE(StructTypeProto::Structure::Field, Field, COPY_ONEOF(content))
     COPY_PROTO_CASE(StructTypeProto::BitPacking, BitPacking)
     COPY_PROTO_CASE(StructTypeProto::BitPacking::Component, Component)
     COPY_PROTO_CASE(StringStringEntryProto, StringStringEntryProto)
@@ -3387,10 +3463,11 @@ void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *s
     COPY_PROTO_CASE(GraphProto, GraphProto)
     COPY_PROTO_CASE(TensorAnnotation, TensorAnnotation)
     COPY_PROTO_CASE(PersistentBindingProto, PersistentBindingProto)
-    COPY_PROTO_CASE(PagedCacheBlockProto, PagedCacheBlockProto)
+    COPY_PROTO_CASE(PagedCacheBlockProto, PagedCacheBlockProto,
+                    COPY_ONEOF(key_payload) COPY_ONEOF(value_payload))
     COPY_PROTO_CASE(PagedCacheProto, PagedCacheProto)
-    COPY_PROTO_CASE(ExtendedInitializerProto, ExtendedInitializerProto)
-    COPY_PROTO_CASE(EncodedValueProto, EncodedValueProto)
+    COPY_PROTO_CASE(ExtendedInitializerProto, ExtendedInitializerProto, COPY_ONEOF(value))
+    COPY_PROTO_CASE(EncodedValueProto, EncodedValueProto, COPY_ONEOF(layout))
     COPY_PROTO_CASE(AffineLayoutProto, AffineLayoutProto)
     COPY_PROTO_CASE(NodeDeviceConfigurationProto, NodeDeviceConfigurationProto)
     COPY_PROTO_CASE(ShardingSpecProto, ShardingSpecProto)
@@ -3402,11 +3479,12 @@ void utils::detail::CopyProtoWithSharedPayloads(void *destination, const void *s
     COPY_PROTO_CASE(PipelineProto, PipelineProto)
     COPY_PROTO_CASE(SequenceProto, SequenceProto)
     COPY_PROTO_CASE(MapProto, MapProto)
-    COPY_PROTO_CASE(OptionalProto, OptionalProto)
+    COPY_PROTO_CASE(OptionalProto, OptionalProto, COPY_ONEOF(value))
   default:
     EXT_THROW("Unsupported proto type for explicit payload copying: ", proto_id, ".");
   }
 #undef COPY_PROTO_CASE
+#undef COPY_ONEOF
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

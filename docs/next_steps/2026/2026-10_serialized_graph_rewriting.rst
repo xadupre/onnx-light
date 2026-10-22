@@ -303,6 +303,8 @@ The named copy operation explicitly walks each message field and propagates to
 nested containers and messages. It uses no mutable global or ``thread_local``
 copy mode; ordinary constructors and ``CopyFrom`` never depend on an ambient
 copy context. Comparison and copying share the same native field catalogue.
+Shared copies also preserve private oneof discriminators, including in nested
+messages, so entering an already-active alternative does not clear its value.
 Borrowed buffers with an owner retain that owner and remain read-only through
 the proto API. Ownerless borrowed buffers are copied into safe owned storage.
 As with the existing zero-copy import APIs, callers must not modify borrowed
@@ -312,6 +314,12 @@ boundary must be reacquired afterward. Active exported raw-data views use a
 copy fallback. Genuinely transformed weights receive new allocations; undo
 retains the original definitions needed for exact restoration, not additional
 copies of their unchanged bytes.
+Node deduplication hashes native attribute contents without serializing large
+``Constant`` tensors into strings. Hash hits are checked with native equality,
+including resolved inputs and attribute multiplicity; local-function weights
+use the same bounded-memory path.
+Local-function shape inference also explicitly shares tensor payloads when
+copying body nodes and binding call-site attributes.
 
 Integer, FLOAT and DOUBLE value bounds are scanned directly from typed fields or
 little-endian raw payloads without a decoded tensor-sized temporary. Payload
@@ -331,6 +339,8 @@ alignment, including when detaching a shared allocation within its capacity.
 Successful aligned resizing copies the logical prefix to the new aligned address,
 not the old backing allocation's padding; conversion to plain storage preserves
 that prefix as well.
+Tensor and encoded-value raw-data setters retain aliased source storage until
+copying finishes, including aligned self-assignment and self-slices.
 Appending to a full shared buffer allocates only the grown buffer, without first
 allocating a same-sized detached copy.
 

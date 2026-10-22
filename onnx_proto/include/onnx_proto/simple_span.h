@@ -1,6 +1,7 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -524,7 +525,7 @@ public:
     const auto source_owner = aligned_owned_ ? owned_.storage_owner() : owner_;
     resize(len);
     if (len > 0)
-      std::memcpy(this->data(), data, len);
+      std::memmove(this->data(), data, len);
   }
 
   inline void assign(const void *data, size_t len) { assign(static_cast<const char *>(data), len); }

@@ -2495,6 +2495,30 @@ std::size_t GraphBuilder::RemoveDuplicateNodes() {
   return removed;
 }
 
+namespace {
+
+bool SameNodeComputation(const NodeProto &left, const NodeProto &right) {
+  if (left.op_type() != right.op_type() ||
+      NormaliseDomain(left.domain()) != NormaliseDomain(right.domain()) ||
+      left.overload().sv() != right.overload().sv() ||
+      left.attribute().size() != right.attribute().size())
+    return false;
+  std::vector<bool> matched(right.attribute().size(), false);
+  for (const auto &attribute : left.attribute()) {
+    size_t index = 0;
+    for (; index < right.attribute().size(); ++index)
+      if (!matched[index] && attribute.Equals(right.attribute(index))) {
+        matched[index] = true;
+        break;
+      }
+    if (index == right.attribute().size())
+      return false;
+  }
+  return true;
+}
+
+} // namespace
+
 std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     bool recursive, std::unordered_map<std::string, std::string> *applied_renames) {
   // Prune nested builders first so each scope collapses its own duplicates.
@@ -2521,10 +2545,14 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     output_names.insert(output.name().value());
   }
 
-  // Maps a node signature to the outputs of the first node that carried it (the
-  // survivor). Nodes are visited in insertion order, which is topological, so a
-  // duplicate is always seen after its survivor.
-  std::unordered_map<std::string, std::vector<std::string>> seen;
+  // Hash collisions retain separate native-equality groups, each with its first survivor.
+  // Insertion order is topological, so a duplicate is always seen after its survivor.
+  struct Candidate {
+    std::size_t position;
+    std::vector<std::string> inputs;
+    std::vector<std::string> outputs;
+  };
+  std::unordered_map<std::string, std::vector<Candidate>> seen;
   // Maps a dropped node output to the surviving output that replaces it. A
   // survivor is never itself dropped, so this mapping has no chains.
   std::unordered_map<std::string, std::string> rename;
@@ -2555,15 +2583,21 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     }
 
     // Nodes referencing subgraphs carry per-node-unique ``*_ref`` attribute
-    // names, so their signatures never collide and control flow is never merged.
+    // names, so native equality keeps distinct control-flow nodes separate.
     const std::string signature = node.Signature(resolved_inputs);
-    auto it = seen.find(signature);
-    if (it != seen.end() && !produces_output && CanReuseOutputs(node, it->second)) {
+    auto &candidates = seen[signature];
+    const auto survivor =
+        std::find_if(candidates.begin(), candidates.end(), [&](const auto &candidate) {
+          return candidate.inputs == resolved_inputs &&
+                 SameNodeComputation(node, kept[candidate.position]);
+        });
+    if (survivor != candidates.end() && !produces_output &&
+        CanReuseOutputs(node, survivor->outputs)) {
       // Drop the duplicate and rewire each of its outputs onto the survivor.
       for (std::size_t i = 0; i < node.output().size(); ++i) {
         std::string out(node.output(static_cast<std::size_t>(i)));
         if (!out.empty()) {
-          rename.emplace(std::move(out), it->second[static_cast<std::size_t>(i)]);
+          rename.emplace(std::move(out), survivor->outputs[static_cast<std::size_t>(i)]);
         }
       }
       ++local_removed;
@@ -2572,13 +2606,13 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
 
     // Keep the node; register it as the survivor for its signature only when it
     // is the first one, so later duplicates collapse onto the earliest copy.
-    if (it == seen.end()) {
+    if (survivor == candidates.end()) {
       std::vector<std::string> outputs;
       outputs.reserve(static_cast<std::size_t>(node.output().size()));
       for (std::size_t i = 0; i < node.output().size(); ++i) {
         outputs.push_back(std::string(node.output(static_cast<std::size_t>(i))));
       }
-      seen.emplace(signature, std::move(outputs));
+      candidates.push_back({kept.size(), std::move(resolved_inputs), std::move(outputs)});
     }
     kept.push_back(std::move(node));
   }

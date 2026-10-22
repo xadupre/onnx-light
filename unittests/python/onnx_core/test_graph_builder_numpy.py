@@ -372,6 +372,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
             import resource
             import sys
             import numpy
+            import onnx_light.onnx.numpy_helper as onh
             from onnx_light.onnx import TensorProto
             from onnx_light.onnx_core.graph_builder import (
                 ConstantFoldingOptions, GraphBuilder, OptimizationMode,
@@ -388,11 +389,33 @@ class TestGraphBuilderNumpy(ExtTestCase):
             arrays = [weight, numpy.full(count, 2, dtype=dtype)]
             source = GraphBuilder("sharing", opsets=18)
             tensor_type = TensorProto.INT64 if variant == "integer" else TensorProto.FLOAT
-            source.make_input("x", tensor_type, [count])
-            source.init(arrays[0], name="weight", copy=owned)
-            source.init(arrays[1], name="unused", copy=owned)
-            source.make_node("Add", ["x", "weight"], ["y"])
-            source.make_output("y")
+            if variant == "function":
+                source.set_opset_version("custom", 1)
+                function = source.make_local_function("Weighted", domain="custom")
+                function.make_input("x", tensor_type, [count])
+                for name, array in zip(("weight", "unused"), arrays):
+                    tensor = onh.from_array(array) if owned else TensorProto.from_dlpack(array)
+                    tensor.name = name
+                    function.make_initializer(tensor)
+                function.make_node("Add", ["x", "weight"], ["y"])
+                function.make_output("y")
+                source.make_input("x", tensor_type, [count])
+                source.make_node("Weighted", ["x"], ["y"], domain="custom")
+                source.make_output("y")
+            else:
+                source.make_input("x", tensor_type, [count])
+                source.init(arrays[0], name="weight", copy=owned)
+                source.init(arrays[1], name="unused", copy=owned)
+                source.make_node("Add", ["x", "weight"], ["y"])
+                source.make_output("y")
+            def payloads(model):
+                if variant == "function":
+                    function = next(f for f in model.functions if f.name == "Weighted")
+                    return [
+                        next(a.t for a in node.attribute if a.name == "value")
+                        for node in function.node if node.op_type == "Constant"
+                    ]
+                return model.graph.initializer
             options = ConstantFoldingOptions()
             options.enabled = False
             with open("/proc/self/statm") as stream:
@@ -403,24 +426,32 @@ class TestGraphBuilderNumpy(ExtTestCase):
             before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             canonical = source.to_onnx()
             pointers = [
-                numpy.from_dlpack(tensor).ctypes.data for tensor in canonical.graph.initializer
+                numpy.from_dlpack(tensor).ctypes.data for tensor in payloads(canonical)
             ]
+            assert len(pointers) == 2
             working = GraphBuilder(canonical)
             plan = GraphGraph(working, []).optimize(folding_options=options)
-            assert any(edit.removed_initializers for edit in plan.rewrites)
+            if variant != "function":
+                assert any(edit.removed_initializers for edit in plan.rewrites)
             restored = working.undo_rewritings(plan).to_model()
             bundled = source.to_onnx(optimize=OptimizationMode.kRewritings)
             optimized = source.to_onnx(optimize=OptimizationMode.kOptimize)
             for model in (restored, bundled):
                 assert [
-                    numpy.from_dlpack(tensor).ctypes.data for tensor in model.graph.initializer
+                    numpy.from_dlpack(tensor).ctypes.data for tensor in payloads(model)
                 ] == pointers
-            if variant == "zeros":
+            if variant == "function":
+                assert [
+                    numpy.from_dlpack(tensor).ctypes.data for tensor in payloads(optimized)
+                ] == pointers
+            elif variant == "zeros":
                 assert len(optimized.graph.initializer) == 0
                 assert len(optimized.graph.node) == 1
                 assert optimized.graph.node[0].op_type == "Identity"
             else:
-                result = numpy.from_dlpack(optimized.graph.initializer[0])
+                optimized_payloads = payloads(optimized)
+                assert len(optimized_payloads) == 1
+                result = numpy.from_dlpack(optimized_payloads[0])
                 assert result.ctypes.data == pointers[0]
             if not owned:
                 assert pointers == [array.ctypes.data for array in arrays]
@@ -428,7 +459,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
             print(f"{sys.argv[1]} {variant}: peak RSS growth {growth} KiB; payloads 131072 KiB")
             """)
         for storage in ("owned", "borrowed"):
-            for variant in ("ones", "integer", "zeros", "mixed"):
+            for variant in ("ones", "integer", "zeros", "mixed", "function"):
                 with self.subTest(storage=storage, variant=variant):
                     result = subprocess.run(
                         [sys.executable, "-c", code, storage, variant],

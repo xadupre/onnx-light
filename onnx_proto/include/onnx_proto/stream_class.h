@@ -423,6 +423,7 @@ public:                                                                         
   inline int oneof_case_##name() const { return oneof_case_##name##_; }                            \
                                                                                                    \
 private:                                                                                           \
+  friend void utils::detail::CopyProtoWithSharedPayloads(void *, const void *, uint16_t);          \
   inline void set_oneof_case_##name(int value) { oneof_case_##name##_ = value; }                   \
   int oneof_case_##name##_ = -1;                                                                   \
                                                                                                    \

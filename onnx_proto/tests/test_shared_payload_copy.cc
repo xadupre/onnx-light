@@ -13,6 +13,87 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
+template <typename T> void CheckRawSetterAliasing() {
+  const std::string payload = "aligned payload!!";
+  for (bool aligned : {false, true}) {
+    for (bool shared : {false, true}) {
+      for (const auto &[offset, count] :
+           {std::pair<size_t, size_t>{0, 17}, {8, 8}, {1, 16}, {17, 0}}) {
+        SCOPED_TRACE(::testing::Message() << aligned << ", " << shared << ", " << offset);
+        T source;
+        source.ref_raw_data().resize_aligned(payload.size(), aligned ? 256 : 1);
+        std::memcpy(source.ref_raw_data().data(), payload.data(), payload.size());
+        auto snapshot = shared ? utils::CopyWithSharedPayloads(source) : T{};
+        const auto *bytes = std::as_const(source).ref_raw_data().data();
+        source.set_raw_data(bytes + offset, count);
+        EXPECT_EQ(std::string(std::as_const(source).ref_raw_data()), payload.substr(offset, count));
+        if (shared) {
+          EXPECT_EQ(std::string(std::as_const(snapshot).ref_raw_data()), payload);
+        }
+      }
+    }
+  }
+}
+
+TEST(SharedPayloadCopy, ProtoRawSettersPreserveAliasedLogicalBytes) {
+  CheckRawSetterAliasing<TensorProto>();
+  CheckRawSetterAliasing<EncodedValueProto>();
+}
+
+template <typename T>
+void CheckOneofSharedCopy(const T &source, int (T::*active_case)() const, void (T::*enter)()) {
+  const auto expected = source.SerializeAsString();
+  auto copied = utils::CopyWithSharedPayloads(source);
+  EXPECT_EQ((copied.*active_case)(), (source.*active_case)());
+  (copied.*enter)();
+  EXPECT_EQ(copied.SerializeAsString(), expected);
+}
+
+TEST(SharedPayloadCopy, CopiesEveryOneofDiscriminatorAndPreservesSameAlternativeEntry) {
+  TypeProto type;
+  type.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  CheckOneofSharedCopy(type, &TypeProto::oneof_case_type, &TypeProto::enter_oneof_tensor_type);
+
+  StructTypeProto structure;
+  structure.set_type_ref(uint64_t{7});
+  CheckOneofSharedCopy(structure, &StructTypeProto::oneof_case_kind,
+                       &StructTypeProto::enter_oneof_type_ref);
+  StructTypeProto::Structure::Field field;
+  field.mutable_constant()->set_raw_data("constant");
+  CheckOneofSharedCopy(field, &StructTypeProto::Structure::Field::oneof_case_content,
+                       &StructTypeProto::Structure::Field::enter_oneof_constant);
+
+  EncodedValueProto encoded;
+  encoded.mutable_affine();
+  CheckOneofSharedCopy(encoded, &EncodedValueProto::oneof_case_layout,
+                       &EncodedValueProto::enter_oneof_affine);
+  PagedCacheBlockProto block;
+  block.mutable_key()->set_raw_data("key");
+  block.mutable_value()->set_raw_data("value");
+  CheckOneofSharedCopy(block, &PagedCacheBlockProto::oneof_case_key_payload,
+                       &PagedCacheBlockProto::enter_oneof_key);
+  CheckOneofSharedCopy(block, &PagedCacheBlockProto::oneof_case_value_payload,
+                       &PagedCacheBlockProto::enter_oneof_value);
+  ExtendedInitializerProto initializer;
+  initializer.mutable_encoded_value()->mutable_affine();
+  CheckOneofSharedCopy(initializer, &ExtendedInitializerProto::oneof_case_value,
+                       &ExtendedInitializerProto::enter_oneof_encoded_value);
+  OptionalProto optional;
+  optional.mutable_tensor_value()->set_raw_data("optional");
+  CheckOneofSharedCopy(optional, &OptionalProto::oneof_case_value,
+                       &OptionalProto::enter_oneof_tensor_value);
+
+  TypeProto nested;
+  nested.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::FLOAT);
+  auto copied = utils::CopyWithSharedPayloads(nested);
+  auto &element = copied.ref_sequence_type().ref_elem_type();
+  EXPECT_EQ(copied.oneof_case_type(), nested.oneof_case_type());
+  EXPECT_EQ(element.oneof_case_type(), type.oneof_case_type());
+  element.enter_oneof_tensor_type();
+  EXPECT_EQ(copied.SerializeAsString(), nested.SerializeAsString());
+}
+
 TEST(SharedPayloadCopy, OwnedBytesShareOnlyExplicitlyAndDetachBothWays) {
   TensorProto source;
   source.set_raw_data("weights");

@@ -2360,6 +2360,45 @@ TEST(GraphBuilder, RemoveDuplicateNodesKeepsDistinctAttributes) {
   ASSERT_EQ(builder.Nodes().size(), 3u);
 }
 
+TEST(GraphBuilder, RemoveDuplicateNodesChecksNativeInputsOnSignatureCollision) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  const std::string joined = "a\x1e"
+                             "b";
+  for (const auto &name : {std::string("a"), std::string("b"), joined})
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, MakeShape({2}));
+  const auto first = builder.MakeNode("Sum", {joined});
+  const auto second = builder.MakeNode("Sum", {"a", "b"});
+  const auto sum = builder.MakeNode("Add", {first[0], second[0]});
+  builder.MakeOutput(sum[0]);
+  ASSERT_EQ(builder.Nodes()[0].Signature({joined}), builder.Nodes()[1].Signature({"a", "b"}));
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateNodesIgnoresAttributeOrderButChecksEveryValue) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const auto make = [&](bool reverse, float maximum) {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (bool high : {reverse, !reverse}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(high ? "beta" : "alpha");
+      attribute.set_type(AttributeProto::FLOAT);
+      attribute.set_f(high ? maximum : 0.0f);
+    }
+    return builder.MakeNode("HardSigmoid", {"x"}, {}, "", "", attributes);
+  };
+  const auto first = make(false, 1.0f);
+  const auto second = make(true, 1.0f);
+  const auto third = make(false, 2.0f);
+  const auto sum = builder.MakeNode("Sum", {first[0], second[0], third[0]});
+  builder.MakeOutput(sum[0]);
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[2].input(0), builder.Nodes()[2].input(1));
+  EXPECT_NE(builder.Nodes()[2].input(0), builder.Nodes()[2].input(2));
+}
+
 TEST(GraphBuilder, RemoveDuplicateNodesKeepsGraphOutputs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

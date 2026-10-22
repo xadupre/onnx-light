@@ -65,7 +65,7 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
         const AttributeProto *replacement = it->second;
         // Copy the value of the call-site attribute, but retain the original name.
         std::string name = attr.name();
-        attr.CopyFrom(*replacement);
+        attr = utils::CopyWithSharedPayloads(*replacement);
         attr.set_name(name);
         ++attr_iter;
       } else {
@@ -161,8 +161,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
   for (const auto &fn_node : func.node()) {
-    NodeProto bound_node;
-    bound_node.CopyFrom(fn_node);
+    NodeProto bound_node = utils::CopyWithSharedPayloads(fn_node);
     BindNodeAttributes(bound_node, attr_map);
     sub_ctx.ComputeShapeNode(bound_node);
   }

@@ -13,11 +13,12 @@ bool IsSharedPayloadCopy() noexcept { return shared_payload_copy_depth != 0; }
 } // namespace detail
 
 std::shared_ptr<void> ByteSpan::acquire_export_guard() const {
+  if (borrowed_)
+    return owner_;
   auto guard = export_guard_.lock();
-  if (!guard) {
+  if (!guard || guard->first.get() != static_cast<const OwnedByteBuffer &>(owned_).data()) {
     // The lease retains owned bytes even if their ByteSpan is subsequently replaced.
-    guard = std::make_shared<std::pair<std::shared_ptr<void>, std::shared_ptr<void>>>(
-        owned_.storage_owner(), owner_);
+    guard = std::make_shared<ExportGuard>(owned_.storage_owner(), owner_);
     export_guard_ = guard;
   }
   return guard;

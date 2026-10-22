@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 #include <map>
+#include <unordered_set>
+#include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -345,6 +347,64 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     EXPECT_EQ(builder.UndoRewritings(rewrites).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
   }
+}
+
+TEST(GraphGraph, UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndReplay) {
+  constexpr int64_t elements = 1024 * 1024;
+  TensorProto weight =
+      MakeInitializer<float>("weight", {elements}, std::vector<float>(elements, 1));
+  TensorProto unused =
+      MakeInitializer<float>("unused", {elements}, std::vector<float>(elements, 2));
+  weight.set_raw_data(std::as_const(weight).ref_float_data().data(), elements * sizeof(float));
+  weight.clr_float_data();
+  unused.set_raw_data(std::as_const(unused).ref_float_data().data(), elements * sizeof(float));
+  unused.clr_float_data();
+  const auto *weight_bytes = std::as_const(weight).ref_raw_data().data();
+  const auto *unused_bytes = std::as_const(unused).ref_raw_data().data();
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({elements}));
+  source.MakeInitializer(weight);
+  source.MakeInitializer(unused);
+  source.MakeNode("Add", {"x", "weight"}, {"y"});
+  source.MakeOutput("y");
+  source.AddRewriting("existing", RewritingProto{});
+  const ModelProto original = source.ToModel();
+  core::builder::GraphBuilder working(original, SchemaLookup());
+  const GraphProto imported = working.BuildGraph();
+  const ModelProto exported = working.ToModel();
+  core::builder::GraphGraph graph(
+      working, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  const auto plan = graph.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(plan.rewrites(0).removed_initializers().size(), 1u);
+  auto restored_builder = working.UndoRewritings(plan);
+  const ModelProto restored = restored_builder.ToModel();
+  const ModelProto optimized = working.ToModel();
+  const ModelProto replayed =
+      core::builder::GraphBuilder(restored, SchemaLookup()).ApplyRewritings(plan).ToModel();
+  EXPECT_EQ(restored.rewritings().count("existing"), 1u);
+  std::unordered_set<const uint8_t *> allocations;
+  size_t logical_bytes = 0;
+  for (const GraphProto *representation :
+       {&original.graph(), &imported, &exported.graph(), &restored.graph(), &optimized.graph(),
+        &replayed.graph()}) {
+    for (const auto &initializer : representation->initializer()) {
+      const auto *bytes = initializer.ref_raw_data().data();
+      EXPECT_EQ(bytes, initializer.name() == "weight" ? weight_bytes : unused_bytes);
+      EXPECT_EQ(initializer.ref_raw_data().size(), elements * sizeof(float));
+      allocations.insert(bytes);
+      logical_bytes += initializer.ref_raw_data().size();
+    }
+  }
+  EXPECT_EQ(allocations.size(), 2u);
+  EXPECT_EQ(logical_bytes, 10u * elements * sizeof(float));
+  EXPECT_EQ(restored.graph().SerializeAsString(), original.graph().SerializeAsString());
+  EXPECT_EQ(replayed.graph().SerializeAsString(), optimized.graph().SerializeAsString());
+  auto changed = restored_builder.ToModel();
+  changed.mutable_graph()->mutable_initializer(0)->ref_raw_data()[0] = 9;
+  EXPECT_EQ(restored.graph().initializer(0).ref_raw_data()[0], 0);
+  EXPECT_EQ(std::as_const(weight).ref_raw_data().data(), weight_bytes);
+  EXPECT_EQ(original.graph().initializer(0).ref_raw_data().data(), weight_bytes);
 }
 
 TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {

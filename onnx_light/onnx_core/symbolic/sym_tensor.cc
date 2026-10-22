@@ -21,12 +21,10 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
-#include <bit>
 #include <cctype>
 #include <cerrno>
 #include <charconv>
 #include <cstdlib>
-#include <cstring>
 #include <limits>
 #include <ranges>
 #include <sstream>
@@ -633,35 +631,6 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
   return std::nullopt;
 }
 
-template <typename T, typename Values>
-void SetFloatingBounds(const TensorProto &tp, const Values &typed, int64_t count,
-                       SymTensor &tensor) {
-  if (!typed.empty()) {
-    if (typed.size() == static_cast<uint64_t>(count)) {
-      const auto [min, max] = std::minmax_element(typed.begin(), typed.end());
-      tensor.SetMinMax(static_cast<double>(*min), static_cast<double>(*max));
-    }
-    return;
-  }
-  const auto &raw = tp.ref_raw_data();
-  if (!tp.is_raw_data() || raw.size() % sizeof(T) != 0 ||
-      raw.size() / sizeof(T) != static_cast<uint64_t>(count)) {
-    return;
-  }
-  auto values =
-      std::views::iota(size_t{0}, raw.size() / sizeof(T)) | std::views::transform([&raw](size_t i) {
-        uint8_t bytes[sizeof(T)];
-        std::memcpy(bytes, raw.data() + i * sizeof(T), sizeof(T));
-        if constexpr (std::endian::native == std::endian::big)
-          std::reverse(std::begin(bytes), std::end(bytes));
-        T value;
-        std::memcpy(&value, bytes, sizeof(T));
-        return static_cast<double>(value);
-      });
-  const auto bounds = std::ranges::minmax_element(values);
-  tensor.SetMinMax(*bounds.min, *bounds.max);
-}
-
 } // namespace
 
 bool SymTensorFromValueInfo(const ValueInfoProto &vi, SymTensor &out) {
@@ -729,24 +698,22 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
   // covers both integer and floating-point element types; tensors whose
   // data is absent (no typed field, no raw_data) or in an unsupported
   // dtype are left unannotated.
-  if (count_known && count > 0) {
-    if (IsIntegerTensorType(dtype)) {
-      std::vector<int64_t> values;
-      if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
-        const auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
-        tensor.SetMinMax(static_cast<double>(*min_it), static_cast<double>(*max_it));
-      }
-    } else if (dtype == TensorType::kFloat) {
-      SetFloatingBounds<float>(tp, tp.float_data(), count, tensor);
-    } else if (dtype == TensorType::kDouble) {
-      SetFloatingBounds<double>(tp, tp.double_data(), count, tensor);
-    }
+  bool payload_readable = false;
+  if (count_known) {
+    payload_readable = tensor_values_detail::WithNumericTensorValues(
+        tp, static_cast<uint64_t>(count), [&tensor, count](const auto &values) {
+          if (count > 0) {
+            const auto bounds = std::ranges::minmax_element(values);
+            tensor.SetMinMax(static_cast<double>(*bounds.min), static_cast<double>(*bounds.max));
+          }
+          return true;
+        });
   }
 
   // Stamp small 1-D / 0-D integer tensors with a ValueAsShape annotation
   // so that downstream ops (such as Reshape) can see the actual target
   // shape values without re-reading the proto.
-  if (IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 && count_known && count >= 0 &&
+  if (IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 && payload_readable &&
       count < kOptimValueAsShapeMaxElements) {
     std::vector<int64_t> values;
     if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {

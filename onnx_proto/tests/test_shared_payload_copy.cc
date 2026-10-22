@@ -1,8 +1,15 @@
 #include "onnx.h"
 #include "onnx_dlpack.h"
+#include <fstream>
 #include <functional>
 #include <gtest/gtest.h>
+#include <limits>
 #include <utility>
+
+#if defined(__linux__)
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -78,6 +85,72 @@ TEST(SharedPayloadCopy, AlignedMutationRetainsAlignmentAndLogicalBytes) {
   EXPECT_EQ(reinterpret_cast<uintptr_t>(std::as_const(snapshot).data()) % 256, 0u);
   EXPECT_EQ(std::as_const(source)[0], 9);
   EXPECT_EQ(std::as_const(snapshot)[16], 9);
+}
+
+TEST(SharedPayloadCopy, AllocationLimitedMutationsPreserveSnapshotsAndFailedResizeState) {
+#if defined(__linux__)
+  for (const std::string operation : {"resize", "resize_aligned", "append"}) {
+    SCOPED_TRACE(operation);
+    utils::ByteSpan source;
+    constexpr size_t bytes = 64 * 1024 * 1024;
+    if (operation == "append")
+      source.resize(bytes);
+    else
+      source.resize_aligned(bytes, 64);
+    std::memset(source.data(), 9, bytes);
+    auto snapshot = utils::CopyWithSharedPayloads(source);
+    const auto *original = std::as_const(source).data();
+    struct rlimit previous;
+    ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
+    std::ifstream statm("/proc/self/statm");
+    size_t pages = 0;
+    ASSERT_TRUE(static_cast<bool>(statm >> pages));
+    const long page_size = sysconf(_SC_PAGESIZE);
+    ASSERT_GT(page_size, 0);
+    struct rlimit limited = previous;
+    limited.rlim_cur = pages * static_cast<size_t>(page_size) + 8 * 1024 * 1024;
+    if (operation == "append")
+      limited.rlim_cur += bytes + bytes / 2;
+    ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
+    if (operation == "resize_aligned")
+      EXPECT_THROW(source.resize_aligned(7, 64), std::bad_alloc);
+    else if (operation == "resize")
+      EXPECT_THROW(source.resize(7), std::bad_alloc);
+    else
+      EXPECT_NO_THROW(source.push_back(10));
+    ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
+    if (operation == "append") {
+      ASSERT_EQ(source.size(), bytes + 1);
+      EXPECT_EQ(std::as_const(source)[bytes], 10);
+      EXPECT_NE(std::as_const(source).data(), original);
+    } else {
+      ASSERT_EQ(source.size(), bytes);
+      EXPECT_TRUE(source.is_aligned_owned());
+      EXPECT_EQ(std::as_const(source).data(), original);
+      EXPECT_EQ(reinterpret_cast<uintptr_t>(original) % 64, 0u);
+    }
+    EXPECT_EQ(std::memcmp(std::as_const(source).data(), std::as_const(snapshot).data(), bytes), 0);
+    EXPECT_EQ(snapshot.size(), bytes);
+  }
+#else
+  GTEST_SKIP() << "Requires Linux address-space accounting.";
+#endif
+}
+
+TEST(SharedPayloadCopy, InvalidAlignedResizePreservesStorage) {
+  utils::ByteSpan source;
+  source.resize_aligned(7, 64);
+  std::memcpy(source.data(), "weights", 7);
+  auto snapshot = utils::CopyWithSharedPayloads(source);
+  const auto *original = std::as_const(source).data();
+  EXPECT_THROW(source.resize_aligned(7, 3), std::invalid_argument);
+  EXPECT_THROW(source.resize_aligned(std::numeric_limits<size_t>::max(), 64),
+               std::invalid_argument);
+  EXPECT_EQ(source.size(), 7u);
+  EXPECT_TRUE(source.is_aligned_owned());
+  EXPECT_EQ(std::as_const(source).data(), original);
+  EXPECT_EQ(std::string(source), "weights");
+  EXPECT_EQ(std::string(snapshot), "weights");
 }
 
 TEST(SharedPayloadCopy, BorrowedOwnerRetainsLifetimeAndReadOnlyContract) {
@@ -271,9 +344,27 @@ TEST(SharedPayloadCopy, ActiveExportsForceCopyAndRetainOldAllocation) {
   const uint8_t bytes[] = {1, 2};
   source.assign_borrowed(bytes, 2, std::make_shared<int>(1));
   lease = source.acquire_export_guard();
+  EXPECT_FALSE(source.has_active_exports());
   auto borrowed_snapshot = utils::CopyWithSharedPayloads(source);
-  EXPECT_FALSE(borrowed_snapshot.is_borrowed());
-  EXPECT_NE(std::as_const(borrowed_snapshot).data(), bytes);
+  EXPECT_TRUE(borrowed_snapshot.is_borrowed());
+  EXPECT_EQ(std::as_const(borrowed_snapshot).data(), bytes);
+}
+
+TEST(SharedPayloadCopy, CopyFromDescendantGraphPreservesSourceAndSharedPayload) {
+  GraphProto graph;
+  auto *nested = graph.add_node()->add_attribute()->mutable_g();
+  nested->set_name("nested");
+  nested->add_node()->set_op_type("Identity");
+  auto *tensor = nested->add_initializer();
+  tensor->set_raw_data("payload");
+  const auto *payload = std::as_const(*tensor).ref_raw_data().data();
+  const auto expected = nested->SerializeAsString();
+  {
+    utils::detail::SharedPayloadCopyScope sharing;
+    graph.CopyFrom(*nested);
+  }
+  EXPECT_EQ(graph.SerializeAsString(), expected);
+  EXPECT_EQ(std::as_const(graph).initializer(0).ref_raw_data().data(), payload);
 }
 
 TEST(SharedPayloadCopy, ScopeEndsOnCopyFailure) {

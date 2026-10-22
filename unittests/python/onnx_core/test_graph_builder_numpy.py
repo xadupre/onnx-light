@@ -379,9 +379,16 @@ class TestGraphBuilderNumpy(ExtTestCase):
             from onnx_light.onnx_core.optimization import GraphGraph
 
             owned = sys.argv[1] == "owned"
-            arrays = [numpy.full(2**24, value, dtype=numpy.float32) for value in (1, 2)]
+            variant = sys.argv[2]
+            dtype = numpy.int64 if variant == "integer" else numpy.float32
+            count = 64 * 2**20 // numpy.dtype(dtype).itemsize
+            weight = numpy.full(count, 0 if variant in ("zeros", "mixed") else 1, dtype=dtype)
+            if variant == "mixed":
+                weight[1:] = 1
+            arrays = [weight, numpy.full(count, 2, dtype=dtype)]
             source = GraphBuilder("sharing", opsets=18)
-            source.make_input("x", TensorProto.FLOAT, [2**24])
+            tensor_type = TensorProto.INT64 if variant == "integer" else TensorProto.FLOAT
+            source.make_input("x", tensor_type, [count])
             source.init(arrays[0], name="weight", copy=owned)
             source.init(arrays[1], name="unused", copy=owned)
             source.make_node("Add", ["x", "weight"], ["y"])
@@ -408,21 +415,28 @@ class TestGraphBuilderNumpy(ExtTestCase):
                 assert [
                     numpy.from_dlpack(tensor).ctypes.data for tensor in model.graph.initializer
                 ] == pointers
-            assert numpy.from_dlpack(optimized.graph.initializer[0]).ctypes.data == pointers[0]
+            if variant == "zeros":
+                assert len(optimized.graph.initializer) == 0
+                assert len(optimized.graph.node) == 1
+                assert optimized.graph.node[0].op_type == "Identity"
+            else:
+                result = numpy.from_dlpack(optimized.graph.initializer[0])
+                assert result.ctypes.data == pointers[0]
             if not owned:
                 assert pointers == [array.ctypes.data for array in arrays]
             growth = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before
-            print(f"{sys.argv[1]}: peak RSS growth {growth} KiB; payloads 131072 KiB")
+            print(f"{sys.argv[1]} {variant}: peak RSS growth {growth} KiB; payloads 131072 KiB")
             """)
         for storage in ("owned", "borrowed"):
-            with self.subTest(storage=storage):
-                result = subprocess.run(
-                    [sys.executable, "-c", code, storage],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for variant in ("ones", "integer", "zeros", "mixed"):
+                with self.subTest(storage=storage, variant=variant):
+                    result = subprocess.run(
+                        [sys.executable, "-c", code, storage, variant],
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

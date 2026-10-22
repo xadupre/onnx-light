@@ -715,6 +715,25 @@ class TestTensorProtoDLPack(ExtTestCase):
         tensor.raw_data = bytes(6)
         self.assertEqual(tensor.raw_data, bytes(6))
 
+    def test_exports_survive_clear_and_storage_replacement(self):
+        for borrowed in (False, True):
+            with self.subTest(borrowed=borrowed):
+                array = numpy.arange(6, dtype=numpy.uint8)
+                tensor = TensorProto.from_dlpack(array) if borrowed else onh.from_array(array)
+                first = numpy.from_dlpack(tensor)
+                tensor.Clear()
+                tensor.data_type = TensorProto.UINT8
+                tensor.dims.extend([6])
+                tensor.raw_data = b"second"
+                second = numpy.from_dlpack(tensor)
+                tensor.Clear()
+                del tensor, array
+                gc.collect()
+                numpy.testing.assert_array_equal(first, numpy.arange(6, dtype=numpy.uint8))
+                numpy.testing.assert_array_equal(
+                    second, numpy.frombuffer(b"second", dtype=numpy.uint8)
+                )
+
     def test_exact_descriptors(self):
         descriptors = {
             "FLOAT": (2, 32),

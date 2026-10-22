@@ -3,9 +3,11 @@
 #include "onnx_light_helpers.h"
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <stdint.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
@@ -210,12 +212,12 @@ public:
 
   /** Appends one byte, growing geometrically when needed. */
   inline void push_back(uint8_t v) {
-    detach();
     if (size_ == capacity_) {
       size_t next =
           capacity_ == 0 ? 1 : (capacity_ < 4096 ? capacity_ * 2 : capacity_ + capacity_ / 2);
       reserve(next);
-    }
+    } else
+      detach();
     storage_[size_++] = v;
   }
 
@@ -369,11 +371,15 @@ public:
   /** Returns the token retaining borrowed storage, or an empty token when caller-owned. */
   inline const std::shared_ptr<void> &owner() const { return owner_; }
 
-  /** Retains a lease used to detect outstanding exports of this storage. */
+  /** Retains an owned-storage export lease, or the lifetime owner of borrowed storage. */
   std::shared_ptr<void> acquire_export_guard() const;
 
   /** Returns whether consumers still hold an export lease on this storage. */
-  inline bool has_active_exports() const { return !export_guard_.expired(); }
+  inline bool has_active_exports() const {
+    auto guard = export_guard_.lock();
+    return !borrowed_ && guard &&
+           guard->first.get() == static_cast<const OwnedByteBuffer &>(owned_).data();
+  }
 
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf ``bytes`` fields (which are std::string) in consuming code. */
@@ -449,9 +455,15 @@ public:
    *  No bounds check is performed; behaviour is undefined for i >= size(). */
   inline uint8_t &operator[](size_t i) { return data()[i]; }
 
-  /** Resizes the owned buffer to n bytes and switches to plain owned mode. */
+  /** Resizes to plain owned mode, preserving the previous state if allocation fails. */
   inline void resize(size_t n) {
     check_no_active_exports();
+    if (n == 0) {
+      owned_.resize(1);
+      owned_.clear();
+    } else {
+      owned_.resize(n);
+    }
     export_guard_.reset();
     ptr_ = nullptr;
     size_ = 0;
@@ -459,12 +471,6 @@ public:
     aligned_owned_ = false;
     align_ = 0;
     owner_.reset();
-    if (n == 0) {
-      owned_.resize(1);
-      owned_.clear();
-    } else {
-      owned_.resize(n);
-    }
   }
 
   /** Represents an explicitly present empty byte sequence. */
@@ -488,20 +494,18 @@ public:
   /** Resizes the owned buffer ensuring data() is aligned to align bytes.
    *  Over-allocates by (align - 1) bytes so std::align can find a suitable start.
    *  If align <= 1 or n == 0, falls back to plain resize(n).
-   *  The caller may read/write the data via data() as usual; size() returns n. */
+   *  The caller may read/write the data via data() as usual; size() returns n.
+   *  Allocation or validation failure preserves the previous bytes and storage mode. */
   inline void resize_aligned(size_t n, size_t align) {
     check_no_active_exports();
-    export_guard_.reset();
-    ptr_ = nullptr;
-    size_ = 0;
-    borrowed_ = false;
-    aligned_owned_ = false;
-    align_ = 0;
-    owner_.reset();
     if (align <= 1 || n == 0) {
       resize(n);
       return;
     }
+    EXT_ENFORCE_INVALID((align & (align - 1)) == 0,
+                        "ByteSpan::resize_aligned: alignment must be a power of two.");
+    EXT_ENFORCE_INVALID(n <= std::numeric_limits<size_t>::max() - (align - 1),
+                        "ByteSpan::resize_aligned: aligned allocation size overflows.");
     // Over-allocate so std::align always finds a suitable start.
     owned_.resize(n + align - 1);
     void *vptr = owned_.data();
@@ -509,10 +513,13 @@ public:
     void *aligned = std::align(align, n, vptr, space);
     EXT_ENFORCE(aligned != nullptr, "ByteSpan::resize_aligned: failed to align ", n, " bytes to ",
                 align, ".");
+    export_guard_.reset();
     ptr_ = static_cast<uint8_t *>(aligned);
     size_ = n;
+    borrowed_ = false;
     aligned_owned_ = true;
     align_ = align;
+    owner_.reset();
   }
 
   /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
@@ -670,7 +677,8 @@ private:
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
-  mutable std::weak_ptr<void> export_guard_;
+  using ExportGuard = std::pair<std::shared_ptr<void>, std::shared_ptr<void>>;
+  mutable std::weak_ptr<ExportGuard> export_guard_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

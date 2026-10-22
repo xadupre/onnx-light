@@ -238,8 +238,10 @@ void CopyProtoThroughWire(void *destination, const void *source,
 
 template <typename T> void CopyProtoFrom(T &destination, const T &source) {
   if (utils::detail::IsSharedPayloadCopy()) {
-    if (&destination != &source)
-      destination = source;
+    if (&destination != &source) {
+      T copied(source);
+      destination = std::move(copied);
+    }
     return;
   }
   T copied;

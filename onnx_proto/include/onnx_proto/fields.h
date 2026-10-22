@@ -177,7 +177,7 @@ public:
    *  another mutable field access; callers must not retain them across those boundaries. */
   inline std::vector<T> &mutable_values() {
     if (shared_values_) {
-      if (shared_values_.unique())
+      if (shared_values_.use_count() == 1)
         values_ = std::move(*shared_values_);
       else
         values_ = *shared_values_;

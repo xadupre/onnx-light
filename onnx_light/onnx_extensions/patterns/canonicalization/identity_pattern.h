@@ -33,6 +33,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * The no-op node is replaced while its selected data input and first output
  * name are retained; neutral constants no longer feed that output.
+ * Vector arithmetic constants are scanned without materialising decoded copies;
+ * their payload count and last-dimension broadcasting must match exactly.
  */
 class IdentityPattern final : public core::builder::PatternOptimization {
 public:

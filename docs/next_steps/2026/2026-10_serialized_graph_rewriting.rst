@@ -285,12 +285,12 @@ affected shape-tagged release lists and memory profiles are refreshed.
 Function definitions are collected from every scope, including functions
 owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
-Export compares canonical graphs and function definitions only when existing
-named plans need a compatibility decision; these comparisons use native
-field equality rather than serialization. The initial Python model is released
-as soon as the working builder has imported it, before optimization and inverse
-capture. Only when existing named plans need preservation is the source builder
-exported again for that compatibility decision.
+The initial Python model is released as soon as the working builder has imported
+it, before optimization and inverse capture. Existing named plans are retained
+in private undo history when cleanup
+reports that the canonical reference is unchanged. Cleanup changes in nested
+graphs and functions invalidate those plans without another whole-model export
+or equality scan.
 
 Builder import/export and private undo definitions use explicit payload
 snapshots: message structure remains independent, while unchanged owned raw
@@ -309,13 +309,23 @@ copy fallback. Genuinely transformed weights receive new allocations; undo
 retains the original definitions needed for exact restoration, not additional
 copies of their unchanged bytes.
 
-FLOAT and DOUBLE value bounds are scanned directly from typed fields or
+Integer, FLOAT and DOUBLE value bounds are scanned directly from typed fields or
 little-endian raw payloads without a decoded tensor-sized temporary. Payload
 counts must still match the tensor dimensions before bounds are recorded.
+Python indexing, iteration, representation and list comparison of numeric fields
+use const storage access and leave shared payload allocations intact.
+Neutral arithmetic vectors are checked directly against their payloads as well,
+including all-zero weights and weights whose first value alone is neutral.
+Typed fields take precedence over raw bytes, and vector rewrites still require
+an exact payload count and matching last-dimension broadcasting.
 Owned storage with active NumPy/DLPack views rejects mutable access, byte
 assignment, resizing and appending with an exception. Release all consumers
 before modifying that storage; clearing the tensor retains the old allocation
 for existing views.
+Failed owned-buffer resizing preserves the original bytes, logical size and
+alignment, including when detaching a shared allocation within its capacity.
+Appending to a full shared buffer allocates only the grown buffer, without first
+allocating a same-sized detached copy.
 
 .. code-block:: text
 

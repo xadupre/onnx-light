@@ -187,6 +187,7 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
+  std::size_t CanonicalizeImpl(bool &reference_changed);
   void Rebuild();
   void RebuildSuccessors();
   std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused,

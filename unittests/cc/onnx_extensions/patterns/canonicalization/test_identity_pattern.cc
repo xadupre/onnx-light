@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <type_traits>
 
@@ -229,6 +230,51 @@ TEST(IdentityPattern, RejectsNonNeutralScalar) {
   EXPECT_EQ(match.pattern, nullptr);
   ASSERT_TRUE(match.no_match.has_value());
   EXPECT_EQ(match.no_match->reason, "the scalar constant operand is not a neutral element");
+}
+
+template <typename T> void CheckNeutralVectors() {
+  for (const std::string op_type : {"Add", "Sub", "Mul", "Div"}) {
+    SCOPED_TRACE(op_type);
+    const T neutral = (op_type == "Add" || op_type == "Sub") ? T(0) : T(1);
+    std::vector<std::vector<T>> candidates = {
+        {neutral, neutral, neutral},
+        {neutral, T(2), neutral},
+        {neutral, neutral},
+        {neutral, neutral, neutral, neutral},
+    };
+    if constexpr (std::is_floating_point_v<T>)
+      candidates.push_back({neutral, std::numeric_limits<T>::quiet_NaN(), neutral});
+    for (const auto &values : candidates) {
+      SCOPED_TRACE(values.size());
+      auto constant = MakeInitializer<T>("neutral", {3}, values);
+      constant.set_raw_data(std::string(3 * sizeof(T), '\0'));
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      builder.MakeInput("x", core::symbolic::DataTypeToTensorType(constant.data_type()), Shape());
+      builder.MakeInitializer(std::move(constant));
+      builder.MakeNode(op_type, {"x", "neutral"}, {"y"});
+      builder.MakeOutput("y");
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::IdentityPattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[0]);
+      if (values.size() == 3 && values[1] == neutral) {
+        ASSERT_EQ(match.pattern, &pattern);
+        const auto replacements = pattern.Apply(graph, match.nodes);
+        ASSERT_EQ(replacements.size(), 1u);
+        EXPECT_EQ(replacements[0].op_type().value(), "Identity");
+        EXPECT_EQ(replacements[0].input()[0].value(), "x");
+        EXPECT_EQ(replacements[0].output()[0].value(), "y");
+      } else {
+        EXPECT_EQ(match.pattern, nullptr);
+      }
+    }
+  }
+}
+
+TEST(IdentityPattern, NeutralVectorScanValidatesEveryValueAndPayloadCount) {
+  CheckNeutralVectors<float>();
+  CheckNeutralVectors<double>();
+  CheckNeutralVectors<int32_t>();
+  CheckNeutralVectors<int64_t>();
 }
 
 } // namespace

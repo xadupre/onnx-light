@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Breaking Changes
 
+- Removed `LocalRewritingProto.value_renames` from serialized rewriting plans and Python bindings; wire tag 9 remains reserved. Plans containing the retired field are explicitly rejected and must be regenerated. Canonicalization still performs internal renaming, while replay uses explicit replacement nodes. Python string-based proto parsing now reports invalid serialized data instead of silently ignoring parse failures ([#5503](https://github.com/xadupre/onnx-light/pull/5503)).
 - Made static `ValueStore` slots store-specific ([#5352](https://github.com/xadupre/onnx-light/issues/5352)). `Bind()` returns an opaque `ValueStore::Slot`, accepted by `IsReady`, `Publish`, and `Get` instead of `uint32_t`. Use `auto` or `ValueStore::Slot` for setup handles; `index()` exposes their stable numeric index only for diagnostics. `BindForRead()` validates a published slot once and returns a lightweight store-pointer/index binding for replay without ownership or readiness checks; `Gemm` uses this path. Cross-store, unbound, and previous-lifetime setup handles are rejected without adding dynamic scheduling to static replay.
 - Removed the legacy CMake target `onnx_light::lib_onnx_proto` ([#5354](https://github.com/xadupre/onnx-light/issues/5354)). Link to `onnx_proto::lib_onnx_proto` instead, whether using the standalone proto package or the full onnx-light package.
 - Replaced the separate encoded and paged-cache initializer collections with `GraphProto.extended_initializer`; files using the previous extension format must be regenerated ([#5459](https://github.com/xadupre/onnx-light/pull/5459)).
@@ -24,11 +25,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Reduced graph-rewriting memory use by explicitly sharing unchanged tensor storage across import/export, canonical snapshots, capture, undo and replay, releasing temporary canonical exports promptly, and avoiding tensor-data-sized hashing and bounds-scan buffers. Ordinary proto copies retain their existing semantics ([#5484](https://github.com/xadupre/onnx-light/pull/5484)).
 - Kept `GraphBuilder` dependency order coherent during targeted mutations and rejected masked cycles before refreshing graph metadata ([#5425](https://github.com/xadupre/onnx-light/pull/5425), [#5455](https://github.com/xadupre/onnx-light/pull/5455)).
 
 ### Fixes
 
-- Avoided null-pointer `memcpy` calls when constructing or assigning scalar runtime shapes from empty dimension vectors, fixing UBSan failures in downstream sanitizer builds.
+- Invalidated stale in-memory rewriting undo captures after root or nested builder mutations, including declaration-only changes, while preserving valid captures across moves ([#5501](https://github.com/xadupre/onnx-light/pull/5501)).
+- Refreshed newly captured outer inputs and removed stale inherited shape entries during explicit nested rewrites, including parents without a shape function ([#5503](https://github.com/xadupre/onnx-light/pull/5503)).
+- Disambiguated duplicate FLOAT16/BFLOAT16 `GreaterOrEqual` and `LessOrEqual` backend-test names with a `_2d` suffix, preserving all datasets and keeping ONNX Runtime CPU exclusions aligned with the renamed cases ([#5502](https://github.com/xadupre/onnx-light/pull/5502)).
+- Kept explicitly shared snapshots independent on mutation, preserved NumPy/DLPack export lifetimes, and fixed aliased raw-data assignment and aligned-buffer resize failure safety ([#5484](https://github.com/xadupre/onnx-light/pull/5484)).
+- Rejected invalid `GatherND` index dimensions and negative `batch_dims`, including unknown-shape fallbacks, with bounds checks before potentially overflowing additions ([#5488](https://github.com/xadupre/onnx-light/pull/5488)).
+- Checked `SplitToSequence` split-size sums for integer overflow during shape inference ([#5490](https://github.com/xadupre/onnx-light/pull/5490)).
+- Supported locale-independent, round-trip-exact floating-point printing on older macOS and iOS targets without floating-point `std::to_chars` ([#5492](https://github.com/xadupre/onnx-light/pull/5492)).
+- Aligned negative axes in output-dimension expansion with `Unsqueeze` output-rank semantics; `dim_idx=-1` now appends a trailing dimension ([#5494](https://github.com/xadupre/onnx-light/pull/5494)).
+- Avoided null-pointer `memcpy` calls when constructing or assigning scalar runtime shapes from empty dimension vectors, fixing UBSan failures in downstream sanitizer builds ([#5498](https://github.com/xadupre/onnx-light/pull/5498)).
 - Validated tensor shape and payload consistency, rejected unknown tensor data types on validation fast paths, and prevented overflow in packed-payload size checks ([#5389](https://github.com/xadupre/onnx-light/pull/5389), [#5436](https://github.com/xadupre/onnx-light/pull/5436), [#5438](https://github.com/xadupre/onnx-light/pull/5438)).
 - Corrected symbolic shape arithmetic for singleton-value broadcasting ([#5385](https://github.com/xadupre/onnx-light/pull/5385)).
 - Rejected forward local-function calls instead of silently resolving them through native operator fallback ([#5426](https://github.com/xadupre/onnx-light/pull/5426)).
@@ -38,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
+- Removed the ORT plugin roadmap after moving it to the separate `xadupre/onnx-light-ort` project ([#5499](https://github.com/xadupre/onnx-light/pull/5499)).
 - Bumped the release version to `0.2.0`.
 
 ## [0.1.32] – 2026-10-15

@@ -2001,6 +2001,8 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
       options.node_callback(ref_node()[i], *this);
     }
   }
+  if (options.graph_callback)
+    options.graph_callback(*this);
   return true;
 }
 void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {

@@ -22,6 +22,7 @@ C++ counterpart linked from its introduction.
     align_external_data_streaming
     save_model_with_shared_external_data
     save_ort_flatbuffers
+    incremental_layout
 
 .. toctree::
     :caption: Testing and benchmarking

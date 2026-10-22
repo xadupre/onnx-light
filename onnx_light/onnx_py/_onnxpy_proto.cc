@@ -300,6 +300,14 @@ struct PyNodeCallback {
   }
 };
 
+struct PyGraphCallback {
+  nb::object fn;
+  void operator()(GraphProto &graph) const {
+    nb::gil_scoped_acquire gil;
+    fn(nb::cast(&graph, nb::rv_policy::reference));
+  }
+};
+
 // Reusable ``raw_data_callback`` that keeps the default C++ allocation (tensor ownership
 // unchanged) while letting users observe parsing progress. When called it optionally forwards
 // the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
@@ -1484,6 +1492,21 @@ void AddOnnxPyProto(nb::module_ &m) {
           "has been fully parsed. The node and its parent :class:`GraphProto` are passed by "
           "reference; the node may be inspected or edited in place. Setting it to ``None`` (the "
           "default) disables the callback.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "graph_callback",
+          [](ParseOptions &options) -> nb::object {
+            const auto *callback = options.graph_callback.target<PyGraphCallback>();
+            return callback ? callback->fn : nb::none();
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none())
+              options.graph_callback = {};
+            else
+              options.graph_callback = PyGraphCallback{fn};
+          },
+          "Optional callable invoked as ``fn(graph)`` after all graph fields and node callbacks, "
+          "including for empty graphs. Nested graphs complete before their owners.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",

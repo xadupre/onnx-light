@@ -12,6 +12,7 @@ libraries depending on the other.
     expressions
     dim_sum
     graph_manipulations
+    graph_layout
     light_op_schema
     sym_tensor
     sym_sequence

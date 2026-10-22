@@ -208,7 +208,7 @@ TEST(onnx_ort_parsing, EnforcesOptionsAndLimits) {
 
 TEST(onnx_ort_parsing, AppliesCallbacksAndMaintainsDeleterLifetime) {
   const auto bytes = SerializeModelToOrtFlatbuffers(OrtInputModel(), {});
-  int raw_calls = 0, node_calls = 0, deletions = 0;
+  int raw_calls = 0, node_calls = 0, graph_calls = 0, deletions = 0;
   ParseOptions options;
   options.raw_data_callback = [&](TensorProto &tensor, GraphProto *graph) {
     ++raw_calls;
@@ -222,10 +222,16 @@ TEST(onnx_ort_parsing, AppliesCallbacksAndMaintainsDeleterLifetime) {
     EXPECT_EQ(graph.node().size(), 2u);
     node.set_name("parsed");
   };
+  options.graph_callback = [&](GraphProto &graph) {
+    ++graph_calls;
+    EXPECT_EQ(node_calls, 2);
+    EXPECT_EQ(graph.node()[0].name(), "parsed");
+  };
   {
     auto model = ReadOrt(bytes, options);
     EXPECT_EQ(raw_calls, 1);
     EXPECT_EQ(node_calls, 2);
+    EXPECT_EQ(graph_calls, 1);
     EXPECT_EQ(deletions, 0);
     EXPECT_EQ(model.graph().node()[0].name(), "parsed");
   }

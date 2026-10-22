@@ -1,4 +1,5 @@
 import os
+import warnings
 from pathlib import Path
 from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
@@ -294,6 +295,7 @@ def load(
     touch_raw_data_pages: bool = False,
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
+    layout: bool = False,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -375,6 +377,9 @@ def load(
         or ``"textproto"`` (protobuf text format). When it is not specified, it is
         inferred from the file extension (``.textproto`` selects ``"textproto"``,
         otherwise ``"protobuf"``). Text-format inputs are decoded as "utf-8".
+    :param layout: enables native incremental layout while loading. Binary graphs are
+        placed at their parse-completion hook, children first, and persisted in metadata.
+        Text graphs are placed before returning. The default leaves metadata untouched.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -395,7 +400,16 @@ def load(
         else:
             with open(f, encoding="utf-8") as handle:
                 text = handle.read()
-        return parse_from_textproto(text, ModelProto())
+        model = parse_from_textproto(text, ModelProto())
+        if layout:
+            from ..onnx_py._onnxpyprotoop import GraphLayout
+
+            placement = GraphLayout(model.graph)
+            placement.load()
+            placement.persist()
+            for diagnostic in placement.diagnostics:
+                warnings.warn(diagnostic, RuntimeWarning, stacklevel=2)
+        return model
     if isinstance(file_load_mode, str):
         try:
             file_load_mode = FileLoadMode.__members__[file_load_mode.upper()]
@@ -425,6 +439,7 @@ def load(
         or no_copy
         or touch_raw_data_pages
         or file_load_mode != FileLoadMode.AUTO
+        or layout
     ):
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
@@ -435,6 +450,10 @@ def load(
         opts.no_copy = no_copy
         opts._touch_raw_data_pages = touch_raw_data_pages
         opts.file_load_mode = file_load_mode
+        if layout:
+            from ..onnx_py._onnxpyprotoop import enable_graph_layout
+
+            enable_graph_layout(opts)
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

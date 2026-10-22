@@ -7,8 +7,10 @@
 
 #include <cmath>
 #include <limits>
+#include <locale>
 #include <sstream>
 #include <string_view>
+#include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -29,6 +31,23 @@ public:
 private:
   int category_;
   std::string saved_;
+};
+
+class CommaDecimalPoint : public std::numpunct<char> {
+protected:
+  char do_decimal_point() const override { return ','; }
+};
+
+class CppLocaleGuard {
+public:
+  explicit CppLocaleGuard(const std::locale &locale) : saved_(std::locale::global(locale)) {}
+  ~CppLocaleGuard() { std::locale::global(saved_); }
+
+  CppLocaleGuard(const CppLocaleGuard &) = delete;
+  CppLocaleGuard &operator=(const CppLocaleGuard &) = delete;
+
+private:
+  std::locale saved_;
 };
 
 // Parse a single ONNX-text-format entity and assert the parse succeeded and
@@ -972,6 +991,66 @@ TEST(onnx_defs, Printer_FloatRoundTripExact) {
   EXPECT_EQ(
       std::bit_cast<uint32_t>(reparsed_model.ref_graph().ref_node()[0].ref_attribute()[0].ref_f()),
       std::bit_cast<uint32_t>(attr->ref_f()));
+}
+
+TEST(onnx_defs, Printer_LocaleIndependentFloatingPointRoundTrip) {
+  CppLocaleGuard locale_guard(std::locale(std::locale::classic(), new CommaDecimalPoint));
+
+  const auto check_round_trip = []<typename T, typename Bits>() {
+    const T values[] = {T{0.1},
+                        std::nextafter(T{1}, T{2}),
+                        std::numeric_limits<T>::min(),
+                        std::numeric_limits<T>::max(),
+                        std::numeric_limits<T>::lowest(),
+                        std::numeric_limits<T>::denorm_min(),
+                        T{0},
+                        -T{0},
+                        std::numeric_limits<T>::infinity(),
+                        -std::numeric_limits<T>::infinity(),
+                        std::numeric_limits<T>::quiet_NaN(),
+                        -std::numeric_limits<T>::quiet_NaN()};
+    for (T value : values) {
+      TensorProto tensor;
+      tensor.set_name("value");
+      if constexpr (std::is_same_v<T, float>) {
+        tensor.set_data_type(TensorProto::DataType::FLOAT);
+        tensor.ref_float_data().push_back(value);
+      } else {
+        tensor.set_data_type(TensorProto::DataType::DOUBLE);
+        tensor.ref_double_data().push_back(value);
+      }
+
+      std::ostringstream stream;
+      stream.precision(2);
+      stream << std::scientific << tensor;
+      const std::string text = stream.str();
+      SCOPED_TRACE(text);
+      EXPECT_EQ(text.find(','), std::string::npos);
+      if (std::isnan(value)) {
+        EXPECT_NE(text.find(std::signbit(value) ? "{-nan}" : "{nan}"), std::string::npos);
+      }
+
+      TensorProto parsed;
+      ParseIt(parsed, text);
+      const auto &data = [&]() -> const auto & {
+        if constexpr (std::is_same_v<T, float>) {
+          return parsed.ref_float_data();
+        } else {
+          return parsed.ref_double_data();
+        }
+      }();
+      ASSERT_EQ(data.size(), 1u);
+      if (std::isnan(value)) {
+        EXPECT_TRUE(std::isnan(data[0]));
+        EXPECT_EQ(std::signbit(data[0]), std::signbit(value));
+      } else {
+        EXPECT_EQ(std::bit_cast<Bits>(data[0]), std::bit_cast<Bits>(value));
+      }
+    }
+  };
+
+  check_round_trip.operator()<float, uint32_t>();
+  check_round_trip.operator()<double, uint64_t>();
 }
 
 TEST(onnx_defs, Parser_NonNulTerminatedStringView) {

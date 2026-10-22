@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -32,6 +34,17 @@ static_assert(32 >= std::numeric_limits<uint64_t>::digits10 + 1,
 static_assert(32 >= std::numeric_limits<double>::max_digits10 + 8,
               "PrintNumber buffer must hold double shortest-roundtrip text");
 
+// Apple's libc++ only provides floating-point to_chars from macOS 13.3 and
+// iOS 16.3.
+#if defined(__APPLE__) && ((defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) &&              \
+                            __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 130300) ||             \
+                           (defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) &&             \
+                            __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ < 160300))
+constexpr bool kHasFloatingPointToChars = false;
+#else
+constexpr bool kHasFloatingPointToChars = true;
+#endif
+
 template <typename T> void PrintNumber(std::ostream &os, T value) {
   if constexpr (std::is_floating_point_v<T>) {
     // Normalize NaN for cross-platform consistency: MSVC's to_chars emits
@@ -42,11 +55,19 @@ template <typename T> void PrintNumber(std::ostream &os, T value) {
       return;
     }
   }
-  // 32 bytes comfortably covers every currently supported textual form; the
-  // static_asserts above document the concrete bounds we rely on today.
-  std::array<char, 32> buf{};
-  const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
-  os.write(buf.data(), res.ptr - buf.data());
+  if constexpr (std::is_floating_point_v<T> && !kHasFloatingPointToChars) {
+    // Fall back to a classic-locale stream with enough digits to round-trip.
+    std::ostringstream stream;
+    stream.imbue(std::locale::classic());
+    stream << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
+    os << stream.str();
+  } else {
+    // 32 bytes comfortably covers every currently supported textual form; the
+    // static_asserts above document the concrete bounds we rely on today.
+    std::array<char, 32> buf{};
+    const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
+    os.write(buf.data(), res.ptr - buf.data());
+  }
 }
 
 bool IsValidIdentifier(const std::string &str) {

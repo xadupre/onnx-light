@@ -166,6 +166,31 @@ void RegisterSplitToSequence(std::vector<TestCase> &registry) {
   registry.emplace_back(std::move(tc));
 }
 
+void RegisterGatherND(std::vector<TestCase> &registry) {
+  for (const int64_t version : {11, 12, 13}) {
+    for (const int64_t batch_dims : {0, 1}) {
+      if (version == 11 && batch_dims != 0) {
+        continue;
+      }
+      const std::string name = "test_cc_shape_inference_gather_nd_opset_" +
+                               std::to_string(version) + "_batch_dims_" +
+                               std::to_string(batch_dims);
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+      GraphProto &graph = InitCase(tc, name, version);
+      NodeProto &gather = AddNode(graph, "GatherND", {"data", "indices"}, {"output"});
+      if (version >= 12) {
+        AddAttribute<int64_t>(gather, "batch_dims", batch_dims);
+      }
+      AppendValueInfo(*graph.add_input(), "data", DataType::FLOAT, {"batch", 2, 2});
+      AppendValueInfo(*graph.add_input(), "indices", DataType::INT64, {"batch", 1});
+      const std::vector<DimSpec> output_shape =
+          batch_dims == 0 ? std::vector<DimSpec>{"batch", 2, 2} : std::vector<DimSpec>{"batch", 2};
+      AppendValueInfo(*graph.add_output(), "output", DataType::FLOAT, output_shape);
+      registry.emplace_back(std::move(tc));
+    }
+  }
+}
+
 void RegisterEinsumCase(std::vector<TestCase> &registry, const std::string &suffix,
                         const std::string &equation,
                         const std::vector<std::vector<DimSpec>> &input_shapes,
@@ -205,6 +230,7 @@ void RegisterOperatorEdgeShapeInferenceCases(std::vector<TestCase> &registry, Te
   RegisterUnevenSplit(registry);
   RegisterSliceBounds(registry);
   RegisterSplitToSequence(registry);
+  RegisterGatherND(registry);
   RegisterEinsum(registry);
 }
 

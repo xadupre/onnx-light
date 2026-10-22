@@ -1202,6 +1202,44 @@ TEST(onnx_shape_inference, InferShapesImpl_GatherNDRejectsNegativeBatchDims) {
   }
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_GatherNDRejectsNegativeIndicesLastDim) {
+  for (const int64_t version : {11, 12, 13}) {
+    for (const int64_t last_dim : {-1, -5}) {
+      for (const int64_t batch_dims : {0, 1}) {
+        if (version == 11 && batch_dims != 0) {
+          continue;
+        }
+        SCOPED_TRACE(version);
+        SCOPED_TRACE(last_dim);
+        SCOPED_TRACE(batch_dims);
+        ModelProto model;
+        OnnxParser parser(R"ONNX(
+          <ir_version: 10, opset_import: ["" : 13]>
+          graph (float[2,2,2] X, int64[2,1] indices) => (float[] Y) {
+            Y = GatherND (X, indices)
+          }
+        )ONNX");
+        const auto status = parser.Parse(model);
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        model.mutable_opset_import(0)->set_version(version);
+        auto *graph = model.mutable_graph();
+        graph->mutable_input(1)
+            ->mutable_type()
+            ->mutable_tensor_type()
+            ->mutable_shape()
+            ->mutable_dim(1)
+            ->set_dim_value(last_dim);
+        if (version >= 12) {
+          AddAttribute<int64_t>(*graph->mutable_node(0), "batch_dims", batch_dims);
+        }
+        EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                  ShapeInferenceOptions(false, 1, false)),
+                     ONNX_LIGHT_NAMESPACE::InferenceError);
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_GatherNDValidBatchDims) {
   for (const int64_t version : {12, 13}) {
     for (const int64_t batch_dims : {0, 1}) {

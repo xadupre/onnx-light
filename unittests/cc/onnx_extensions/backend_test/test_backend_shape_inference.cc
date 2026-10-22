@@ -213,6 +213,48 @@ void CheckValueInfoMatchesExpected(const GraphProto &graph,
 
 } // namespace
 
+TEST(BackendTestCaseShapeInference, GatherNDRejectsNegativeDimensions) {
+  auto cases = CollectTestCases("inference");
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_gather_nd_opset_") != 0) {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard unload_guard(tc);
+    for (const int64_t last_dim : {-1, -5}) {
+      SCOPED_TRACE(last_dim);
+      ModelProto model = tc.model();
+      SnapshotAndStripOutputs(model);
+      model.mutable_graph()
+          ->mutable_input(1)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(1)
+          ->set_dim_value(last_dim);
+      EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                ShapeInferenceOptions(false, 1, false)),
+                   InferenceError);
+      EXPECT_THROW(core::shapes::InferShapesModel(model), std::invalid_argument);
+    }
+    if (tc.model().opset_import(0).version() >= 12) {
+      for (const int64_t batch_dims : {-1, -5}) {
+        SCOPED_TRACE(batch_dims);
+        ModelProto model = tc.model();
+        SnapshotAndStripOutputs(model);
+        model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(batch_dims);
+        EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                  ShapeInferenceOptions(false, 1, false)),
+                     InferenceError);
+        EXPECT_THROW(core::shapes::InferShapesModel(model), std::invalid_argument);
+      }
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 5u);
+}
+
 TEST(BackendTestCaseShapeInference, TopKValidatesConstantK) {
   auto cases = CollectTestCases("TopK");
   size_t checked = 0;
@@ -386,6 +428,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersOperatorEdgeCases) {
         tc.name.find("test_cc_shape_inference_split_num_outputs_uneven") != 0 &&
         tc.name.find("test_cc_shape_inference_slice_out_of_range_") != 0 &&
         tc.name.find("test_cc_shape_inference_split_to_sequence_") != 0 &&
+        tc.name.find("test_cc_shape_inference_gather_nd_opset_") != 0 &&
         tc.name.find("test_cc_shape_inference_einsum_") != 0) {
       continue;
     }
@@ -417,7 +460,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersOperatorEdgeCases) {
     }
     ++checked;
   }
-  EXPECT_EQ(checked, 22u);
+  EXPECT_EQ(checked, 27u);
 }
 
 TEST(BackendTestCaseShapeInference, NativeSqueezeEmptyAxesInfersOutputShape) {

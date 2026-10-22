@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Avoided null-pointer `memcpy` calls when constructing or assigning scalar runtime shapes from empty dimension vectors, fixing UBSan failures in downstream sanitizer builds.
 - Validated tensor shape and payload consistency, rejected unknown tensor data types on validation fast paths, and prevented overflow in packed-payload size checks ([#5389](https://github.com/xadupre/onnx-light/pull/5389), [#5436](https://github.com/xadupre/onnx-light/pull/5436), [#5438](https://github.com/xadupre/onnx-light/pull/5438)).
 - Corrected symbolic shape arithmetic for singleton-value broadcasting ([#5385](https://github.com/xadupre/onnx-light/pull/5385)).
 - Rejected forward local-function calls instead of silently resolving them through native operator fallback ([#5426](https://github.com/xadupre/onnx-light/pull/5426)).

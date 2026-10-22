@@ -25,11 +25,47 @@ using core::runtime::FillValueInfo;
 using core::runtime::MakeOutputTensor;
 using core::runtime::PackedByteSize;
 using core::runtime::RawByteBuffer;
+using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
 
 namespace Test {
+
+TEST(SimpleTensorShape, VectorConstructionHandlesScalarsAndDimensions) {
+  for (const auto &dims : {std::vector<int64_t>{}, std::vector<int64_t>{2, 0, 3},
+                           std::vector<int64_t>(Shape::kMaxRank, 1)}) {
+    const Shape copied(dims);
+    EXPECT_EQ(static_cast<std::vector<int64_t>>(copied), dims);
+    auto moved_dims = dims;
+    const Shape moved(std::move(moved_dims));
+    EXPECT_EQ(static_cast<std::vector<int64_t>>(moved), dims);
+  }
+}
+
+TEST(SimpleTensorShape, VectorAssignmentHandlesScalarTransitions) {
+  Shape copied{2, 3};
+  Shape moved{2, 3};
+  for (const auto &dims : {std::vector<int64_t>{}, std::vector<int64_t>(Shape::kMaxRank, 1),
+                           std::vector<int64_t>{}, std::vector<int64_t>{2, 0, 3}}) {
+    copied = dims;
+    EXPECT_EQ(static_cast<std::vector<int64_t>>(copied), dims);
+    auto moved_dims = dims;
+    moved = std::move(moved_dims);
+    EXPECT_EQ(static_cast<std::vector<int64_t>>(moved), dims);
+  }
+}
+
+TEST(SimpleTensorShape, VectorRankValidationPrecedesCopyAndAssignment) {
+  const std::vector<int64_t> dims(Shape::kMaxRank + 1, 1);
+  EXPECT_THROW({ Shape shape(dims); }, std::invalid_argument);
+  EXPECT_THROW({ Shape shape{std::vector<int64_t>(dims)}; }, std::invalid_argument);
+  Shape shape{2, 3};
+  EXPECT_THROW(shape = dims, std::invalid_argument);
+  EXPECT_EQ(shape, (Shape{2, 3}));
+  EXPECT_THROW(shape = std::vector<int64_t>(dims), std::invalid_argument);
+  EXPECT_EQ(shape, (Shape{2, 3}));
+}
 
 TEST(SimpleTensorSharing, InlineStorageSurvivesSourceWithoutPayloadCopy) {
   Tensor value = Tensor::FromFloat("value", {2}, {3, 4});

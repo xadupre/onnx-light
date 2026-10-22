@@ -36,7 +36,7 @@ for a vector or scalar), then resized using fractional cell overlap. The result
 is a flat row-major ``rectangle_map`` with the requested ``rectangle_shape``.
 """
 
-from ..onnx_py._onnxpykernels import runtime
+from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
 TensorStatistics = runtime.TensorStatistics
 compute_tensor_statistics = runtime.compute_tensor_statistics

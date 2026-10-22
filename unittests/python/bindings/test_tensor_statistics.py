@@ -8,11 +8,14 @@ import ml_dtypes
 import numpy
 
 from onnx_light import onnx
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx_core.tensor_statistics import TensorStatistics, compute_tensor_statistics
-from onnx_light.onnx_py._onnxpykernels import runtime
+
+runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+tensor_statistics = import_or_skip("onnx_light.onnx_core.tensor_statistics")
+TensorStatistics = tensor_statistics.TensorStatistics
+compute_tensor_statistics = tensor_statistics.compute_tensor_statistics
 
 
 class TestTensorStatistics(ExtTestCase):

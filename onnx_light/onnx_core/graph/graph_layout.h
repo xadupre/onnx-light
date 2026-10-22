@@ -37,6 +37,10 @@ struct LayoutStats {
   size_t nodes = 0, edges = 0, scopes = 0;
 };
 
+struct LayoutBounds {
+  double left = 0, top = 0, right = 0, bottom = 0;
+};
+
 /// Maintains an incremental layout of a graph. Mutations must use this API while bound.
 class ONNX_LIGHT_CORE_API GraphLayout {
 public:
@@ -73,6 +77,7 @@ public:
   std::vector<GraphLayout *> Children(LayoutNodeId container) const;
   const std::vector<std::string> &Diagnostics() const;
   LayoutStats Stats() const;
+  LayoutBounds Bounds() const;
 
 private:
   struct Impl;

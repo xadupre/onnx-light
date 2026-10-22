@@ -39,9 +39,11 @@ TEST(GraphLayout, StreamingLateProducerAndRoutes) {
   layout.Load();
   auto consumer = layout.Append(Node("z", {"late"}));
   EXPECT_EQ(layout.Edges(consumer)[0].source, 0u);
+  EXPECT_TRUE(layout.Edges(consumer)[0].capture);
   auto producer = layout.Append(Node("late"));
   EXPECT_EQ(layout.Get(consumer)->layer, 1u);
   EXPECT_EQ(layout.Edges(consumer)[0].source, producer);
+  EXPECT_FALSE(layout.Edges(consumer)[0].capture);
   EXPECT_GT(layout.Get(consumer)->x, layout.Get(producer)->x);
   ASSERT_EQ(layout.Edges(consumer)[0].points.size(), 4u);
   EXPECT_EQ(graph.node()[0].output()[0], "z");
@@ -563,6 +565,7 @@ TEST(GraphLayout, PersistedAutomaticConstraintViolationsAndCollisionsAreRepaired
   auto source = initial.Append(Node("a"));
   auto consumer = initial.Append(Node("b", {"a"}));
   auto independent = initial.Append(Node("c"));
+  initial.SetPosition(independent, 0, 500);
   initial.SetSize(source, 900, 100);
   initial.SetPosition(source, 0, 0);
   initial.Persist();
@@ -640,7 +643,8 @@ TEST(GraphLayout, DuplicateProducerDiagnosticsBoundAndSanitizeUntrustedNames) {
 TEST(GraphLayout, StaleManualGeometryIsDiscardedButApiEditsKeepExplicitNegativePins) {
   GraphProto graph;
   GraphLayout initial(graph, true);
-  initial.Append(Node("a"));
+  auto a = initial.Append(Node("a"));
+  initial.SetPosition(a, -800, -200);
   auto b = initial.Append(Node("b", {"a"}));
   initial.SetPosition(b, -400, -200);
   initial.RewireInput(b, 0, "temporary");
@@ -649,6 +653,146 @@ TEST(GraphLayout, StaleManualGeometryIsDiscardedButApiEditsKeepExplicitNegativeP
   initial.Persist();
   graph.mutable_node(1)->mutable_input()->Set(0, "a");
   GraphLayout resumed(graph, true);
-  EXPECT_GE(resumed.Get(b)->x, 240);
+  EXPECT_GE(resumed.Get(b)->x, resumed.Get(a)->x + resumed.Get(a)->width + 80);
   EXPECT_FALSE(resumed.Diagnostics().empty());
+}
+
+TEST(GraphLayout, NegativeChildCoordinatesUseFullCachedSpanAndKeepTheirOrigins) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("left");
+  *attribute->mutable_g()->add_node() = Node("right");
+  *graph.add_node() = container;
+  GraphLayout layout(graph, true);
+  const auto parent_id = layout.Order()[0];
+  auto *child = layout.Children(parent_id)[0];
+  const auto left = child->Order()[0], right = child->Order()[1];
+  child->SetPosition(left, -500, -300);
+  child->SetPosition(right, -200, -100);
+  const auto bounds = child->Bounds();
+  EXPECT_EQ(bounds.left, -500);
+  EXPECT_EQ(bounds.top, -300);
+  EXPECT_EQ(bounds.right, -40);
+  EXPECT_EQ(bounds.bottom, -34);
+  EXPECT_EQ(layout.Get(parent_id)->width, 460 + 48);
+  EXPECT_EQ(layout.Get(parent_id)->height, 266 + 96);
+  layout.Persist();
+  GraphLayout shallow(graph, false);
+  EXPECT_TRUE(shallow.Children(parent_id).empty());
+  EXPECT_TRUE(shallow.Diagnostics().empty());
+  EXPECT_EQ(shallow.Get(parent_id)->width, 460 + 48);
+  EXPECT_EQ(shallow.Get(parent_id)->height, 266 + 96);
+  EXPECT_EQ(child->Get(left)->x, -500);
+  EXPECT_EQ(child->Get(right)->x, -200);
+  child->Erase(left);
+  EXPECT_EQ(child->Bounds().left, -200);
+  EXPECT_EQ(child->Bounds().right, -40);
+  EXPECT_EQ(layout.Get(parent_id)->width, 160 + 48);
+  EXPECT_EQ(child->Get(right)->y, -100);
+}
+
+TEST(GraphLayout, AncestorPropagationStopsWhenBoundsAndExternalCapturesAreUnchanged) {
+  GraphProto graph;
+  auto outer = Node("outer", {}, "If");
+  auto *outer_attribute = outer.add_attribute();
+  outer_attribute->set_type(AttributeProto::GRAPH);
+  auto middle = Node("middle", {}, "If");
+  auto *middle_attribute = middle.add_attribute();
+  middle_attribute->set_type(AttributeProto::GRAPH);
+  *middle_attribute->mutable_g()->add_node() = Node("inner", {"capture", "capture"});
+  *outer_attribute->mutable_g()->add_node() = middle;
+  GraphLayout layout(graph, true);
+  auto outer_id = layout.Append(outer);
+  layout.Append(Node("consumer", {"outer"}));
+  layout.Append(Node("unrelated"));
+  EXPECT_EQ(layout.Stats().nodes, 1u);
+  auto *child = layout.Children(outer_id)[0];
+  auto *grandchild = child->Children(child->Order()[0])[0];
+  auto inner = grandchild->Order()[0];
+  const auto before = layout.Bounds();
+  grandchild->RewireInput(inner, 0, "");
+  EXPECT_EQ(grandchild->Edges(inner).size(), 1u);
+  EXPECT_EQ(child->Stats().nodes, 1u);
+  EXPECT_EQ(layout.Stats().nodes, 1u);
+  EXPECT_EQ(layout.Bounds().right, before.right);
+  EXPECT_EQ(layout.Bounds().bottom, before.bottom);
+  grandchild->RewireInput(inner, 1, "different");
+  EXPECT_EQ(layout.Stats().nodes, 2u);
+  ASSERT_EQ(layout.Edges(outer_id).size(), 1u);
+  EXPECT_EQ(layout.Edges(outer_id)[0].value, "different");
+}
+
+TEST(GraphLayout, ExplicitChildCapturesDifferFromFormalInputsInitializersAndLocalValues) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  auto *child_graph = attribute->mutable_g();
+  child_graph->add_input()->set_name("formal");
+  child_graph->add_initializer()->set_name("weight");
+  *child_graph->add_node() = Node("local");
+  *child_graph->add_node() = Node("inner", {"captured", "formal", "weight", "local"});
+  *graph.add_node() = container;
+  GraphLayout layout(graph, true);
+  auto container_id = layout.Order()[0];
+  auto *child = layout.Children(container_id)[0];
+  const auto &edges = child->Edges(child->Order()[1]);
+  ASSERT_EQ(edges.size(), 4u);
+  EXPECT_TRUE(edges[0].capture);
+  EXPECT_FALSE(edges[1].capture);
+  EXPECT_FALSE(edges[2].capture);
+  EXPECT_FALSE(edges[3].capture);
+  EXPECT_TRUE(edges[2].folded);
+  ASSERT_EQ(layout.Edges(container_id).size(), 1u);
+  EXPECT_TRUE(layout.Edges(container_id)[0].capture);
+  EXPECT_EQ(layout.Edges(container_id)[0].value, "captured");
+}
+
+TEST(GraphLayout, CustomDomainConstantRetainsOrdinaryOperationLayout) {
+  GraphProto graph;
+  GraphLayout layout(graph, true);
+  auto source = layout.Append(Node("source"));
+  auto custom = Node("custom", {"source"}, "Constant");
+  custom.set_domain("example.custom");
+  auto custom_id = layout.Append(custom);
+  auto consumer = layout.Append(Node("consumer", {"custom"}));
+  EXPECT_FALSE(layout.Get(custom_id)->folded);
+  EXPECT_EQ(layout.Get(custom_id)->layer, 1u);
+  EXPECT_GT(layout.Get(custom_id)->x, layout.Get(source)->x);
+  EXPECT_FALSE(layout.Edges(consumer)[0].folded);
+  EXPECT_EQ(layout.Get(consumer)->layer, 2u);
+  auto standard = Node("standard", {}, "Constant");
+  standard.set_domain("ai.onnx");
+  auto standard_id = layout.Append(standard);
+  EXPECT_TRUE(layout.Get(standard_id)->folded);
+  auto standard_consumer = layout.Append(Node("result", {"standard"}));
+  EXPECT_TRUE(layout.Edges(standard_consumer)[0].folded);
+  EXPECT_EQ(layout.Get(standard_consumer)->layer, 0u);
+}
+
+TEST(GraphLayout, ContainerDefaultHeightIncludesAllImplicitCapturePorts) {
+  GraphProto graph;
+  auto container = Node("outer", {"condition"}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  std::vector<std::string> captures;
+  for (size_t i = 0; i < 60; ++i)
+    captures.push_back("capture" + std::to_string(i));
+  for (const auto &capture : captures)
+    attribute->mutable_g()->add_output()->set_name(capture);
+  *graph.add_node() = container;
+  GraphLayout layout(graph, true);
+  auto id = layout.Order()[0];
+  const auto &box = *layout.Get(id);
+  ASSERT_EQ(layout.Edges(id).size(), 61u);
+  EXPECT_GE(box.height, 48 + 18 * 61);
+  for (const auto &edge : layout.Edges(id)) {
+    ASSERT_FALSE(edge.points.empty());
+    EXPECT_LE(edge.points.back().y, box.y + box.height);
+  }
+  layout.Persist();
+  GraphLayout shallow(graph, false);
+  EXPECT_EQ(shallow.Get(id)->height, box.height);
 }

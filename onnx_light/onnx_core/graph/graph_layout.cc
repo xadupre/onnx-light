@@ -95,7 +95,7 @@ std::string Signature(const NodeProto &node) {
 
 struct GraphLayout::Impl {
   struct ChildSummary {
-    double right = 0, bottom = 0;
+    double left = 0, top = 0, right = 0, bottom = 0;
     std::set<std::string> external;
   };
   struct State {
@@ -130,8 +130,9 @@ struct GraphLayout::Impl {
     std::multiset<double> lefts, rights, heights;
   };
   std::map<size_t, OccupiedLayer> occupied;
-  std::map<double, std::set<LayoutNodeId>> right_edges, bottom_edges;
+  std::map<double, std::set<LayoutNodeId>> left_edges, top_edges, right_edges, bottom_edges;
   std::set<std::string> external;
+  std::set<std::string> external_changes;
   std::vector<std::string> diagnostics;
   LayoutStats stats;
   std::function<void()> changed;
@@ -150,10 +151,18 @@ struct GraphLayout::Impl {
     if (value.empty())
       return;
     const bool used = consumers.count(value) || graph_outputs.count(value);
-    if (used && !producers.count(value) && !local_values.count(value))
-      external.insert(value);
-    else
-      external.erase(value);
+    const bool changed = used && !producers.count(value) && !local_values.count(value)
+                             ? external.insert(value).second
+                             : external.erase(value) != 0;
+    if (changed && !external_changes.insert(value).second)
+      external_changes.erase(value);
+  }
+
+  std::pair<double, double> Span() const {
+    if (left_edges.empty())
+      return {0, 0};
+    return {right_edges.rbegin()->first - left_edges.begin()->first,
+            bottom_edges.rbegin()->first - top_edges.begin()->first};
   }
 
   void RemoveOccupied(const State &state) {
@@ -167,6 +176,8 @@ struct GraphLayout::Impl {
     };
     remove_extent(right_edges, state.box.x + state.box.width);
     remove_extent(bottom_edges, state.box.y + state.box.height);
+    remove_extent(left_edges, state.box.x);
+    remove_extent(top_edges, state.box.y);
     auto layer = occupied.find(state.box.layer);
     if (layer == occupied.end())
       return;
@@ -275,10 +286,16 @@ struct GraphLayout::Impl {
                 entry.value().size() <= SummaryLimit ? std::string(entry.value()) : "";
             std::istringstream stream(text);
             stream.imbue(std::locale::classic());
-            bool valid = static_cast<bool>(stream >> summary.right >> summary.bottom >> count);
+            std::string format;
+            bool valid = static_cast<bool>(stream >> format >> summary.left >> summary.top >>
+                                           summary.right >> summary.bottom >> count) &&
+                         format == "2";
             valid = valid && std::isfinite(summary.right) && std::isfinite(summary.bottom) &&
+                    ValidCoordinate(summary.left) && ValidCoordinate(summary.top) &&
                     std::abs(summary.right) <= CoordinateLimit + 1e6 &&
-                    std::abs(summary.bottom) <= CoordinateLimit + 1e6 && count <= 65536;
+                    std::abs(summary.bottom) <= CoordinateLimit + 1e6 &&
+                    summary.right >= summary.left && summary.bottom >= summary.top &&
+                    count <= 65536;
             for (size_t i = 0; valid && i < count; ++i) {
               std::string value;
               valid = static_cast<bool>(stream >> std::quoted(value)) && !value.empty();
@@ -300,10 +317,13 @@ struct GraphLayout::Impl {
         auto child = std::make_unique<GraphLayout>(child_graph);
         child->impl_->depth = depth + 1;
         child->impl_->changed = [this, id]() {
+          const auto previous_span = Span();
+          external_changes.clear();
           stats = {};
           Refresh(id);
           Solve({id});
-          Notify();
+          if (Span() != previous_span || !external_changes.empty())
+            Notify();
         };
         child->Load();
         state.children.push_back(std::move(child));
@@ -381,10 +401,12 @@ struct GraphLayout::Impl {
       }
       UpdateExternal(output);
     }
-    state.box.folded = state.proto->op_type() == "Constant";
+    state.box.folded = state.proto->op_type() == "Constant" &&
+                       (state.proto->domain().empty() || state.proto->domain() == "ai.onnx");
     if (!state.fixed_size) {
       state.box.width = std::clamp(80.0 + 8.0 * state.proto->op_type().size(), 160.0, 480.0);
-      state.box.height = 48.0 + 18.0 * std::max(state.box.inputs.size(), state.box.outputs.size());
+      state.box.height =
+          48.0 + 18.0 * std::max(state.dependencies.size(), state.box.outputs.size());
       if (state.box.folded) {
         state.box.width = 64;
         state.box.height = 24;
@@ -393,14 +415,16 @@ struct GraphLayout::Impl {
     double children_height = 48;
     for (const auto &child : state.children) {
       const auto &nested = *child->impl_;
+      const double left = nested.left_edges.empty() ? 0 : nested.left_edges.begin()->first;
+      const double top = nested.top_edges.empty() ? 0 : nested.top_edges.begin()->first;
       const double right = nested.right_edges.empty() ? 0 : nested.right_edges.rbegin()->first;
       const double bottom = nested.bottom_edges.empty() ? 0 : nested.bottom_edges.rbegin()->first;
-      state.box.width = std::max(state.box.width, right + 48);
-      children_height += std::max(0.0, bottom) + 48;
+      state.box.width = std::max(state.box.width, right - left + 48);
+      children_height += bottom - top + 48;
     }
     for (const auto &summary : state.summaries) {
-      state.box.width = std::max(state.box.width, summary.right + 48);
-      children_height += std::max(0.0, summary.bottom) + 48;
+      state.box.width = std::max(state.box.width, summary.right - summary.left + 48);
+      children_height += summary.bottom - summary.top + 48;
     }
     if (!state.children.empty() || !state.summaries.empty())
       state.box.height = std::max(state.box.height, children_height);
@@ -422,7 +446,7 @@ struct GraphLayout::Impl {
       edge.target = id;
       edge.target_port = port;
       edge.value = value;
-      edge.capture = port >= state.box.inputs.size();
+      edge.capture = port >= state.box.inputs.size() || external.count(value);
       edge.folded = initializers.count(value);
       LayoutPoint end{state.box.x, state.box.y + 24 + 18.0 * port};
       auto producer = producers.find(value);
@@ -461,6 +485,23 @@ struct GraphLayout::Impl {
     return false;
   }
 
+  std::pair<bool, double> RequiredX(const State &state) const {
+    bool required = false;
+    double x = 0;
+    for (const auto &input : state.dependencies) {
+      auto producer = producers.find(input);
+      if (producer == producers.end() || producer->second.id == state.box.id)
+        continue;
+      const auto &source = states.at(producer->second.id).box;
+      if (!source.folded) {
+        const double next = source.x + source.width + 80;
+        x = required ? std::max(x, next) : next;
+        required = true;
+      }
+    }
+    return {required, x};
+  }
+
   void Solve(const std::set<LayoutNodeId> &seeds) {
     std::deque<LayoutNodeId> queue(seeds.begin(), seeds.end());
     std::set<LayoutNodeId> affected;
@@ -480,6 +521,7 @@ struct GraphLayout::Impl {
     std::unordered_map<LayoutNodeId, size_t> pending;
     std::unordered_map<LayoutNodeId, std::set<LayoutNodeId>> dependents;
     for (auto id : affected) {
+      RemoveOccupied(states.at(id));
       std::set<LayoutNodeId> sources;
       for (const auto &input : states.at(id).dependencies) {
         auto producer = producers.find(input);
@@ -497,6 +539,7 @@ struct GraphLayout::Impl {
       ++stats.nodes;
       size_t layer = 0;
       double x = 0;
+      bool has_predecessor = false;
       double barycenter = 0;
       size_t barycenter_count = 0;
       for (size_t port = 0; port < state.dependencies.size(); ++port) {
@@ -506,7 +549,9 @@ struct GraphLayout::Impl {
           const auto &source = states.at(producer->second.id).box;
           if (!source.folded) {
             layer = std::max(layer, source.layer + 1);
-            x = std::max(x, source.x + source.width + 80);
+            const double next = source.x + source.width + 80;
+            x = has_predecessor ? std::max(x, next) : next;
+            has_predecessor = true;
             barycenter += source.y + 18.0 * producer->second.port - 18.0 * port;
             ++barycenter_count;
           }
@@ -514,12 +559,20 @@ struct GraphLayout::Impl {
           Diagnose("Self-referencing layout dependency.");
       }
       layer = std::min(layer, states.size());
-      if (state.pinned && state.persisted_automatic && (state.box.x < x || Collides(state.box))) {
-        Diagnose("Persisted automatic position violated layout constraints; repaired it.");
+      if (!has_predecessor && state.placed && state.box.layer == layer)
+        x = state.box.x;
+      bool repaired_pin = false;
+      if (state.pinned && !state.box.folded &&
+          ((has_predecessor && state.box.x < x) || Collides(state.box))) {
+        Diagnose("Pinned position violated layout constraints; repaired the affected node.");
+        if (!has_predecessor || state.box.x >= x)
+          x = state.box.x;
         state.pinned = false;
+        repaired_pin = true;
       }
       const bool moved =
-          state.box.layer != layer || (!state.pinned && state.box.x != x) || seeds.count(id);
+          state.box.layer != layer || (!state.pinned && state.box.x != x) || seeds.count(id) ||
+          repaired_pin;
       if (!moved)
         return;
       RemoveOccupied(state);
@@ -535,8 +588,9 @@ struct GraphLayout::Impl {
       }
       if (!state.pinned) {
         state.box.x = std::min(x, CoordinateLimit);
-        double y =
-            preserve_y ? state.box.y : (barycenter_count ? barycenter / barycenter_count : 0);
+        double y = preserve_y || repaired_pin
+                       ? state.box.y
+                       : (barycenter_count ? barycenter / barycenter_count : 0);
         y = std::clamp(y, -CoordinateLimit, CoordinateLimit);
         bool collision;
         do {
@@ -572,6 +626,8 @@ struct GraphLayout::Impl {
       index.heights.insert(state.box.height);
       right_edges[state.box.x + state.box.width].insert(id);
       bottom_edges[state.box.y + state.box.height].insert(id);
+      left_edges[state.box.x].insert(id);
+      top_edges[state.box.y].insert(id);
       state.placed = true;
     };
     std::set<LayoutNodeId> placed;
@@ -632,7 +688,10 @@ void GraphLayout::Load(bool recurse) {
   impl.reserved_ids.clear();
   impl.right_edges.clear();
   impl.bottom_edges.clear();
+  impl.left_edges.clear();
+  impl.top_edges.clear();
   impl.external.clear();
+  impl.external_changes.clear();
   impl.diagnostics.clear();
   impl.stats = {};
   const auto next = Metadata(impl.graph, NextIdKey);
@@ -699,7 +758,9 @@ void GraphLayout::Persist(bool recurse) {
   SetMetadata(impl_->graph, NextIdKey, std::to_string(impl_->next_id));
   std::ostringstream summary;
   summary.imbue(std::locale::classic());
-  summary << std::setprecision(17)
+  summary << std::setprecision(17) << "2 "
+          << (impl_->left_edges.empty() ? 0 : impl_->left_edges.begin()->first) << ' '
+          << (impl_->top_edges.empty() ? 0 : impl_->top_edges.begin()->first) << ' '
           << (impl_->right_edges.empty() ? 0 : impl_->right_edges.rbegin()->first) << ' '
           << (impl_->bottom_edges.empty() ? 0 : impl_->bottom_edges.rbegin()->first) << ' '
           << impl_->external.size();
@@ -810,6 +871,19 @@ bool GraphLayout::SetPosition(LayoutNodeId id, double x, double y) {
   auto &impl = *impl_;
   if (!impl.states.count(id) || !ValidCoordinate(x) || !ValidCoordinate(y))
     return false;
+  const auto &current = impl.states.at(id).box;
+  LayoutNode proposed;
+  proposed.id = id;
+  proposed.width = current.width;
+  proposed.height = current.height;
+  proposed.folded = current.folded;
+  proposed.x = x;
+  proposed.y = y;
+  const auto [required, minimum_x] = impl.RequiredX(impl.states.at(id));
+  if (!proposed.folded && ((required && x < minimum_x) || impl.Collides(proposed))) {
+    impl.Diagnose("Rejected a pinned position that violated layout constraints.");
+    return false;
+  }
   impl.stats = {};
   auto &state = impl.states.at(id);
   impl.RemoveOccupied(state);
@@ -857,5 +931,15 @@ std::vector<GraphLayout *> GraphLayout::Children(LayoutNodeId container) const {
 }
 const std::vector<std::string> &GraphLayout::Diagnostics() const { return impl_->diagnostics; }
 LayoutStats GraphLayout::Stats() const { return impl_->stats; }
+LayoutBounds GraphLayout::Bounds() const {
+  LayoutBounds bounds;
+  if (!impl_->left_edges.empty()) {
+    bounds.left = impl_->left_edges.begin()->first;
+    bounds.top = impl_->top_edges.begin()->first;
+    bounds.right = impl_->right_edges.rbegin()->first;
+    bounds.bottom = impl_->bottom_edges.rbegin()->first;
+  }
+  return bounds;
+}
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

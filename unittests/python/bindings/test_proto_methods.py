@@ -98,7 +98,7 @@ class TestProtoMethods(ExtTestCase):
                 assert source.float_data[-1] == 1.0
             """)
         # Uses the same package as pytest rather than shadowing an installed wheel.
-        code = f"import sys\nsys.path = {sys.path!r}\n" + code
+        code = f"import sys\nsys.path = {[str(path) for path in sys.path]!r}\n" + code
         result = subprocess.run(
             [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
         )

@@ -625,6 +625,30 @@ TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLeng
   EXPECT_FALSE(dims[1].has_dim_value());
   EXPECT_EQ(dims[2].ref_dim_value(), 3);
   EXPECT_EQ(dims[3].ref_dim_value(), 2);
+
+  // Rank-two real signals are used by ONNX Runtime exports such as Kokoro.
+  ModelProto rank_two_model = model;
+  auto &rank_two_graph = rank_two_model.ref_graph();
+  auto &signal_dims =
+      rank_two_graph.ref_input()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  signal_dims.RemoveLast();
+  for (const bool dynamic_length : {true, false}) {
+    if (!dynamic_length) {
+      signal_dims[1].set_dim_value(10);
+    }
+    rank_two_graph.ref_output()[0].ref_type().ref_tensor_type().clear_shape();
+    shape_inference::InferShapes(rank_two_model);
+    const auto &rank_two_dims =
+        rank_two_graph.ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+    ASSERT_EQ(rank_two_dims.size(), 4);
+    EXPECT_EQ(rank_two_dims[0].ref_dim_param(), "batch");
+    EXPECT_EQ(rank_two_dims[1].has_dim_value(), !dynamic_length);
+    if (!dynamic_length) {
+      EXPECT_EQ(rank_two_dims[1].ref_dim_value(), 3);
+    }
+    EXPECT_EQ(rank_two_dims[2].ref_dim_value(), 3);
+    EXPECT_EQ(rank_two_dims[3].ref_dim_value(), 2);
+  }
 }
 
 namespace {

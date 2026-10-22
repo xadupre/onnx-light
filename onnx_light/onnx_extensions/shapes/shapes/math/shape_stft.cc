@@ -48,8 +48,10 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   const SymTensor &signal = ctx.Get(node.input(0));
   const TensorType dtype = signal.Dtype();
   const SymShape &in_shape = signal.Shape();
-  EXT_ENFORCE_INVALID(in_shape.Rank() == 3, "ComputeShapeSTFT: signal must have rank 3.");
-  if (in_shape[2].IsInt()) {
+  // ONNX Runtime also accepts real signals without the trailing singleton dimension.
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 2 || in_shape.Rank() == 3,
+                      "ComputeShapeSTFT: signal must have rank 2 or 3.");
+  if (in_shape.Rank() == 3 && in_shape[2].IsInt()) {
     EXT_ENFORCE_INVALID(in_shape[2].AsInt() == 1 || in_shape[2].AsInt() == 2,
                         "ComputeShapeSTFT: signal's last dimension must have size 1 or 2.");
   }
@@ -59,7 +61,8 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(onesided_value == 0 || onesided_value == 1,
                       "ComputeShapeSTFT: onesided must be 0 or 1.");
   const bool onesided = onesided_value == 1;
-  EXT_ENFORCE_INVALID(!onesided || !in_shape[2].IsInt() || in_shape[2].AsInt() == 1,
+  EXT_ENFORCE_INVALID(!onesided || in_shape.Rank() == 2 || !in_shape[2].IsInt() ||
+                          in_shape[2].AsInt() == 1,
                       "ComputeShapeSTFT: one-sided STFT requires real input.");
 
   // Try to read frame_step as a known constant.

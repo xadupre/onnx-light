@@ -2627,6 +2627,8 @@ TEST(onnx_proto, TensorCopiesIsolateActiveExportsAndRetainAlignment) {
   EXPECT_NE(original.ref_raw_data().data(), copied.ref_raw_data().data());
   EXPECT_TRUE(copied.ref_raw_data().is_aligned_owned());
   EXPECT_EQ(reinterpret_cast<uintptr_t>(copied.ref_raw_data().data()) % 64, 0u);
+  EXPECT_THROW(source.ref_raw_data()[0] = 5, std::invalid_argument);
+  export_guard.reset();
   source.ref_raw_data()[0] = 5;
   EXPECT_EQ(copied.ref_raw_data()[0], 3);
 }
@@ -2718,6 +2720,25 @@ TEST(onnx_proto, NestedModelCopiesShareOnlyTensorPayloads) {
   source.Clear();
   tensor.Clear();
   EXPECT_EQ(function.ref_raw_data()[0], 7);
+}
+
+TEST(onnx_proto, CopyFromDescendantGraphPreservesSourceAndSharedPayload) {
+  GraphProto graph;
+  auto *nested = graph.add_node()->add_attribute()->mutable_g();
+  nested->set_name("nested");
+  nested->add_node()->set_op_type("Identity");
+  auto *tensor = nested->add_initializer();
+  tensor->set_raw_data("payload");
+  const auto *payload = std::as_const(*tensor).ref_raw_data().data();
+  std::string expected;
+  nested->SerializeToString(expected);
+
+  graph.CopyFrom(*nested);
+
+  std::string actual;
+  graph.SerializeToString(actual);
+  EXPECT_EQ(actual, expected);
+  EXPECT_EQ(std::as_const(graph).initializer(0).ref_raw_data().data(), payload);
 }
 
 TEST(onnx_proto, CopyFrom_ValueInfoProto) {

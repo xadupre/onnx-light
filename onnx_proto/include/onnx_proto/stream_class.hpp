@@ -236,6 +236,9 @@ void CopyProtoThroughWire(void *destination, const void *source,
               "Unable to parse proto while copying.");
 }
 
-template <typename T> void CopyProtoFrom(T &destination, const T &source) { destination = source; }
+template <typename T> void CopyProtoFrom(T &destination, const T &source) {
+  T copy(source);
+  destination = std::move(copy);
+}
 
 } // namespace ONNX_LIGHT_NAMESPACE

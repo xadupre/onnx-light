@@ -2318,7 +2318,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             result.CopyFrom(self);
             return result;
           },
-          "Copies tensor metadata and shares managed borrowed raw_data; copies other payloads.")
+          "Copies tensor metadata and shares managed payloads with copy-on-write for owned "
+          "storage; eagerly copies ownerless borrowed buffers and owned buffers with active views.")
       .def(
           "__dlpack__",
           [](nb::handle self, nb::object stream, std::optional<std::pair<int, int>> /*max_version*/,
@@ -2340,7 +2341,9 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns a zero-copy CPU DLPack capsule over dense raw_data, retaining the proto and "
           "its borrowed owner. Requires native little-endian, element-aligned whole-byte data. "
           "Does not load, convert, or copy payloads. Consumers must not write to the buffer. "
-          "Do not clear, resize, replace, or reparse owned source storage while a view exists. "
+          "Mutable access, byte assignment and resizing of owned storage raise ValueError "
+          "while a view exists; release all views before writing. Clearing the tensor "
+          "retains the original allocation for existing views. "
           "Always returns a legacy capsule, including when max_version is supplied.")
       .def("release_dlpack", &ReleaseTensorProtoDLPack,
            R"pbdoc(Transfers raw_data without copying to a single-consumption CPU DLPack capsule.

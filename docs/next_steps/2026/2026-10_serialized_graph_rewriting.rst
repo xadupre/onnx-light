@@ -305,6 +305,14 @@ while its read-only views are in use. A copy invalidates previously obtained
 mutable pointers, references and iterators: callers must reacquire them through
 the destination or source field API before writing.
 
+Owned raw storage with active NumPy/DLPack views rejects mutable access,
+assignment of bytes, resizing and appending with an exception. Release all views
+before modifying that storage. Clearing the tensor or replacing the complete
+proto remains safe: each exported view retains its original allocation, and
+later exports retain the replacement allocation independently. This deliberately
+leaves live-view mutation semantics unsupported rather than silently changing
+existing views into snapshots on assignment.
+
 ``UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndReplay`` measures
 unique live payload addresses across six graph representations. Two 4 MiB
 weights occupy two shared payload allocations (8 MiB), rather than the

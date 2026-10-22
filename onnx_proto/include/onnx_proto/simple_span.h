@@ -269,6 +269,7 @@ public:
 
   /** Assigns owned data by copying from a std::vector<uint8_t>; clears all special modes. */
   inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
+    check_no_active_exports();
     owned_ = v;
     if (v.empty()) {
       owned_.resize(1);
@@ -318,7 +319,11 @@ public:
   std::shared_ptr<void> acquire_export_guard() const;
 
   /** Returns whether consumers still hold an export lease on this storage. */
-  inline bool has_active_exports() const { return !export_guard_.expired(); }
+  inline bool has_active_exports() const {
+    auto guard = export_guard_.lock();
+    return !borrowed_ && guard &&
+           static_cast<const OwnedByteBuffer &>(*guard).data() == owned_.data();
+  }
 
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf ``bytes`` fields (which are std::string) in consuming code. */
@@ -379,6 +384,7 @@ public:
   inline uint8_t *data() {
     EXT_ENFORCE(!borrowed_, "ByteSpan: mutable data() called on a borrowed (zero-copy) buffer; "
                             "use const data() or assign owned data first.");
+    check_no_active_exports();
     if (aligned_owned_ && owned_.is_shared()) {
       ByteSpan copy;
       copy.resize_aligned(size_, align_);
@@ -401,6 +407,7 @@ public:
 
   /** Resizes the owned buffer to n bytes and switches to plain owned mode. */
   inline void resize(size_t n) {
+    check_no_active_exports();
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -438,6 +445,7 @@ public:
    *  If align <= 1 or n == 0, falls back to plain resize(n).
    *  The caller may read/write the data via data() as usual; size() returns n. */
   inline void resize_aligned(size_t n, size_t align) {
+    check_no_active_exports();
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -520,6 +528,7 @@ public:
 
   /** Appends a single byte; switches to owned mode (copying any borrowed/aligned data first). */
   inline void push_back(uint8_t v) {
+    check_no_active_exports();
     if (borrowed_) {
       owned_.assign(ptr_, ptr_ + size_);
       ptr_ = nullptr;
@@ -576,6 +585,11 @@ public:
   }
 
 private:
+  inline void check_no_active_exports() const {
+    EXT_ENFORCE_INVALID(!has_active_exports(),
+                        "ByteSpan: cannot modify owned storage with active exported views.");
+  }
+
   OwnedByteBuffer owned_;
   bool borrowed_ = false;
   bool aligned_owned_ = false;
@@ -583,7 +597,7 @@ private:
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
-  mutable std::weak_ptr<void> export_guard_;
+  mutable std::weak_ptr<OwnedByteBuffer> export_guard_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

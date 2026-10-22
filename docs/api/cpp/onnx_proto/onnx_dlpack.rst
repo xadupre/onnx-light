@@ -17,8 +17,10 @@ installed header, not Python, nanobind, or a DLPack runtime.
 The caller hands the descriptor to one consumer or calls its ``deleter`` once.
 Consumers must treat storage as read-only. Borrowed storage requires a shared
 lifetime owner. Validation/allocation failure leaves the source intact.
-Existing aliases retain their original lifetime restrictions; a prior
-non-destructive view does not keep transferred owned storage alive.
+Owned storage with active non-destructive export leases cannot be transferred
+or mutated; release those consumers first. A lease retains its exact allocation
+even if the source is cleared. Transferring storage shared by another proto
+detaches it before handing it to the consumer.
 
 .. code-block:: cpp
 

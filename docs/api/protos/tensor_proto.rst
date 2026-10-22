@@ -54,7 +54,8 @@ array may be deleted immediately; the producer's managed tensor retains storage.
 ``copy.copy(tensor)``, ``TensorProto.CopyFrom``, repeated tensor insertion, and
 GraphBuilder's ``make_initializer`` / ``make_initializer_move`` preserve the
 borrowed owner, as do the builder's returned graph and model. ``CopyFrom`` and
-``copy.copy`` still copy owned payloads and ownerless borrowed buffers.
+``copy.copy`` share owned payloads with copy-on-write and eagerly copy ownerless
+borrowed buffers or owned buffers with active exported views.
 Serialization creates independent bytes; reparsing those
 bytes does not retain the DLPack owner. Treat shared storage as read-only while
 the tensor, builder, or model is in use, including through the original array.
@@ -92,11 +93,18 @@ be backed by a read-only memory mapping.
 
 The capsule retains the source Python proto and a separate reference to its
 raw-data owner token until the consumer releases the tensor (or an unused
-capsule is destroyed). Deleting the source variable is safe; copied borrowed
-protos share the original owner. Do not clear, resize, replace, or reparse
-**owned** source storage while a view exists, including through a containing
-model. Borrowed storage with no owner token remains the caller's lifetime
-responsibility. Shape metadata is snapshotted at export.
+capsule is destroyed). Owned exports also retain their exact allocation.
+Deleting or clearing the source is safe; later exports retain replacement
+allocations independently. Copied owned protos share storage until mutation,
+except that copying a proto with active views eagerly copies its payload.
+Copied borrowed protos share the original owner.
+
+Mutable access, byte assignment (even with the same size), resizing and
+appending to **owned** source storage raise ``ValueError`` while any exported
+view or unused capsule remains alive. Release all consumers before modifying
+that storage; failed mutations leave the tensor and views unchanged. Live-view
+updates are not supported. Borrowed storage with no owner token remains the
+caller's lifetime responsibility. Shape metadata is snapshotted at export.
 
 Explicit destructive transfer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

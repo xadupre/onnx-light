@@ -63,7 +63,8 @@ struct Shape {
   Shape(const std::vector<int64_t> &v) : dims_{}, size_(v.size()) {
     EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
                         kMaxRank, ".");
-    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    if (!v.empty())
+      std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
   }
 
   /// Constructs from a moved ``std::vector<int64_t>`` (copies all dimensions).
@@ -71,7 +72,8 @@ struct Shape {
   Shape(std::vector<int64_t> &&v) : dims_{}, size_(v.size()) {
     EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
                         kMaxRank, ".");
-    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    if (!v.empty())
+      std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
   }
 
   Shape(const Shape &) noexcept = default;
@@ -97,7 +99,8 @@ struct Shape {
     EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
                         kMaxRank, ".");
     size_ = v.size();
-    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    if (!v.empty())
+      std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
     return *this;
   }
 
@@ -107,7 +110,8 @@ struct Shape {
     EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
                         kMaxRank, ".");
     size_ = v.size();
-    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    if (!v.empty())
+      std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
     return *this;
   }
 

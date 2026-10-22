@@ -174,6 +174,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_relu_int64$",
     # ORT CPU does not register these bfloat16 kernels.
     r"^test_cc_(abs|add|ceil|div|elu|equal|erf|exp|floor|gelu_default|greater|greater_or_equal|isnan|less|less_or_equal|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
+    r"^test_cc_(greater_or_equal|less_or_equal)_bfloat16_2d$",
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",

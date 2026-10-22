@@ -7,7 +7,9 @@
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include <cmath>
 #include <cstring>
 #include <set>
@@ -134,30 +136,25 @@ double Quantile(const std::vector<long double> &sorted, double q) {
   return static_cast<double>((1 - weight) * sorted[lower] + weight * sorted[upper]);
 }
 
-long double FiniteScale(const std::vector<long double> &values) {
-  long double scale = 0;
-  for (long double value : values)
-    if (std::isfinite(value))
-      scale = std::max(scale, std::abs(value));
-  return scale == 0 ? 1 : scale;
-}
-
 double Mean(const std::vector<long double> &values, long double scale) {
-  long double total = 0;
-  bool positive_infinity = false, negative_infinity = false;
-  for (long double value : values) {
-    if (std::isinf(value)) {
-      positive_infinity |= value > 0;
-      negative_infinity |= value < 0;
-    } else {
-      total += value / scale;
+  const int64_t count = static_cast<int64_t>(values.size());
+  const int64_t blocks = 1 + (count - 1) / kParallelForGrainSize;
+  std::vector<long double> partials(static_cast<size_t>(blocks));
+  ParallelFor(blocks, 2, [&](int64_t begin, int64_t end) {
+    for (int64_t block = begin; block < end; ++block) {
+      const int64_t first = block * kParallelForGrainSize;
+      const int64_t last = first + std::min(kParallelForGrainSize, count - first);
+      long double total = 0;
+      for (int64_t i = first; i < last; ++i)
+        total += values[static_cast<size_t>(i)] / scale;
+      partials[static_cast<size_t>(block)] = total;
     }
-  }
-  if (positive_infinity && negative_infinity)
-    return kNaN;
-  if (positive_infinity || negative_infinity)
-    return positive_infinity ? std::numeric_limits<double>::infinity()
-                             : -std::numeric_limits<double>::infinity();
+  });
+  long double total = 0;
+  for (long double partial : partials)
+    total += partial;
+  if (!std::isfinite(total))
+    return static_cast<double>(total);
   // Accumulates bounded terms, then clamps rounding excursions before restoring the scale.
   // This does not rely on long double having a larger exponent range than double.
   return static_cast<double>(std::clamp(total / values.size(), -1.0L, 1.0L) * scale);
@@ -186,16 +183,33 @@ void Histogram(TensorStatistics &result, const std::vector<long double> &values,
     const long double weight = static_cast<long double>(i) / bins;
     result.bin_edges.push_back(static_cast<double>(std::lerp(low, high, weight)));
   }
-  for (long double value : values) {
-    if (!std::isfinite(value))
-      continue;
-    // Search the exported edges so rounded edges and histogram counts agree exactly.
-    const double rounded = static_cast<double>(value);
-    auto edge = std::upper_bound(result.bin_edges.begin(), result.bin_edges.end(), rounded);
-    size_t index =
-        edge == result.bin_edges.begin() ? 0 : size_t(edge - result.bin_edges.begin() - 1);
-    ++result.distribution[std::min(index, result.distribution.size() - 1)];
-  }
+  // Caps private histogram storage independently of the tensor size and worker count.
+  const int64_t blocks = std::min(1 + (result.count - 1) / kParallelForGrainSize,
+                                  std::max(int64_t{1}, int64_t{65536} / bins));
+  std::vector<std::vector<int64_t>> partials(static_cast<size_t>(blocks - 1));
+  for (auto &counts : partials)
+    counts.resize(static_cast<size_t>(bins), 0);
+  ParallelFor(blocks, 2, [&](int64_t begin, int64_t end) {
+    for (int64_t block = begin; block < end; ++block) {
+      auto &counts = block == 0 ? result.distribution : partials[static_cast<size_t>(block - 1)];
+      const int64_t first = block * (result.count / blocks);
+      const int64_t last = block == blocks - 1 ? result.count : first + result.count / blocks;
+      for (int64_t i = first; i < last; ++i) {
+        const long double value = values[static_cast<size_t>(i)];
+        if (!std::isfinite(value))
+          continue;
+        // Search the exported edges so rounded edges and histogram counts agree exactly.
+        const double rounded = static_cast<double>(value);
+        auto edge = std::upper_bound(result.bin_edges.begin(), result.bin_edges.end(), rounded);
+        size_t index =
+            edge == result.bin_edges.begin() ? 0 : size_t(edge - result.bin_edges.begin() - 1);
+        ++counts[std::min(index, counts.size() - 1)];
+      }
+    }
+  });
+  for (const auto &counts : partials)
+    for (size_t i = 0; i < counts.size(); ++i)
+      result.distribution[i] += counts[i];
 }
 
 void Rectangle(TensorStatistics &result, const Tensor &tensor,
@@ -206,10 +220,11 @@ void Rectangle(TensorStatistics &result, const Tensor &tensor,
   const int64_t cols = result.count / rows;
   result.rectangle_shape = shape;
   result.rectangle_map.resize(static_cast<size_t>(shape[0] * shape[1]));
-  for (int64_t y = 0; y < shape[0]; ++y) {
-    const long double top = static_cast<long double>(y) * rows / shape[0];
-    const long double bottom = static_cast<long double>(y + 1) * rows / shape[0];
-    for (int64_t x = 0; x < shape[1]; ++x) {
+  ParallelFor(shape[0] * shape[1], [&](int64_t begin, int64_t end) {
+    for (int64_t index = begin; index < end; ++index) {
+      const int64_t y = index / shape[1], x = index % shape[1];
+      const long double top = static_cast<long double>(y) * rows / shape[0];
+      const long double bottom = static_cast<long double>(y + 1) * rows / shape[0];
       const long double left = static_cast<long double>(x) * cols / shape[1];
       const long double right = static_cast<long double>(x + 1) * cols / shape[1];
       long double total = 0;
@@ -239,34 +254,13 @@ void Rectangle(TensorStatistics &result, const Tensor &tensor,
       result.rectangle_map[static_cast<size_t>(y * shape[1] + x)] = static_cast<double>(
           std::isfinite(total) ? std::clamp(total, -1.0L, 1.0L) * scale : total);
     }
-  }
+  });
 }
 
 void EncodedMetadata(TensorStatistics &result, const EncodedValueProto &value) {
   // DequantizeTensor validates logical dtype and shape before we reach this point.
   result.dtype = value.logical_type().tensor_type().elem_type();
   result.size_bytes = value.raw_data().size();
-}
-
-bool IsInteger(int32_t dtype) {
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::INT8:
-  case DataType::INT16:
-  case DataType::INT32:
-  case DataType::INT64:
-  case DataType::UINT8:
-  case DataType::UINT16:
-  case DataType::UINT32:
-  case DataType::UINT64:
-  case DataType::INT2:
-  case DataType::UINT2:
-  case DataType::INT4:
-  case DataType::UINT4:
-  case DataType::BOOL:
-    return true;
-  default:
-    return false;
-  }
 }
 
 TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
@@ -295,18 +289,41 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
     result.distinct_count = 0;
   if (result.count == 0)
     return result;
-  std::vector<long double> values;
-  values.reserve(static_cast<size_t>(result.count));
+  std::vector<long double> values(static_cast<size_t>(result.count));
+  struct Summary {
+    long double low = std::numeric_limits<long double>::infinity(), high = -low;
+    long double scale = 0;
+    bool has_nan = false;
+  };
+  const int64_t blocks = 1 + (result.count - 1) / kParallelForGrainSize;
+  std::vector<Summary> summaries(static_cast<size_t>(blocks));
+  ParallelFor(blocks, 2, [&](int64_t begin, int64_t end) {
+    for (int64_t block = begin; block < end; ++block) {
+      Summary &summary = summaries[static_cast<size_t>(block)];
+      const int64_t first = block * kParallelForGrainSize;
+      const int64_t last = first + std::min(kParallelForGrainSize, result.count - first);
+      for (int64_t i = first; i < last; ++i) {
+        const long double value = ReadNumber(tensor, i);
+        values[static_cast<size_t>(i)] = value;
+        summary.has_nan |= std::isnan(value);
+        summary.low = std::min(summary.low, value);
+        summary.high = std::max(summary.high, value);
+        if (std::isfinite(value))
+          summary.scale = std::max(summary.scale, std::abs(value));
+      }
+    }
+  });
   bool has_nan = false;
+  long double scale = 0;
   long double low = std::numeric_limits<long double>::infinity(), high = -low;
-  for (int64_t i = 0; i < result.count; ++i) {
-    const long double value = ReadNumber(tensor, i);
-    values.push_back(value);
-    has_nan |= std::isnan(value);
-    low = std::min(low, value);
-    high = std::max(high, value);
+  for (const auto &summary : summaries) {
+    has_nan |= summary.has_nan;
+    low = std::min(low, summary.low);
+    high = std::max(high, summary.high);
+    scale = std::max(scale, summary.scale);
   }
-  const long double scale = FiniteScale(values);
+  if (scale == 0)
+    scale = 1;
   if (!has_nan) {
     result.min = static_cast<double>(low);
     result.max = static_cast<double>(high);
@@ -331,8 +348,12 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape) {
-  return ComputeStatistics(tensor, bins, quantiles, median, rectangle_shape,
-                           IsInteger(tensor.data_type));
+  const auto type = static_cast<TensorProto::DataType>(tensor.data_type);
+  const bool report_distinct =
+      symbolic::IsIntegerTensorType(symbolic::DataTypeToTensorType(type)) ||
+      type == TensorProto::BOOL || type == TensorProto::INT2 || type == TensorProto::UINT2 ||
+      type == TensorProto::INT4 || type == TensorProto::UINT4;
+  return ComputeStatistics(tensor, bins, quantiles, median, rectangle_shape, report_distinct);
 }
 
 TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins,

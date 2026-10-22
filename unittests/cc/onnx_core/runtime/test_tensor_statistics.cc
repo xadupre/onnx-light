@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include <cmath>
 #include <gtest/gtest.h>
 #include <numeric>
@@ -50,6 +51,91 @@ TEST(TensorStatistics, CustomHistogramAndConstant) {
   EXPECT_DOUBLE_EQ(stats.bin_edges.front(), 1.5);
   EXPECT_DOUBLE_EQ(stats.bin_edges.back(), 2.5);
   EXPECT_EQ(stats.distribution[5], 10);
+}
+
+TEST(TensorStatistics, ParallelStatisticsMatchSerialExecutor) {
+  const int64_t count = 100003;
+  std::vector<double> values(static_cast<size_t>(count));
+  for (int64_t i = 0; i < count; ++i)
+    values[static_cast<size_t>(i)] = static_cast<double>(i % 4);
+  const auto tensor = Tensor::FromDouble("X", {count}, values);
+  CpuExecutorRegistry registry(2);
+  TensorStatistics serial;
+  for (int32_t threads : {1, 3}) {
+    SCOPED_TRACE(threads);
+    CpuExecutionPolicy policy;
+    policy.num_threads = threads;
+    policy.affinity_policy = CpuAffinityPolicy::kNone;
+    const auto executor = registry.Acquire(policy);
+    executor->EnableCounters();
+    CpuExecutorScope scope(executor.get());
+    const auto stats = ComputeTensorStatistics(tensor, 4, {0, 0.25, 0.5, 1}, true, {1, count});
+    EXPECT_DOUBLE_EQ(stats.min, 0);
+    EXPECT_DOUBLE_EQ(stats.max, 3);
+    EXPECT_NEAR(stats.mean, 150003.0 / count, 1e-15);
+    EXPECT_EQ(stats.distribution, std::vector<int64_t>({25001, 25001, 25001, 25000}));
+    EXPECT_EQ(stats.rectangle_map, values);
+    if (threads == 1) {
+      serial = stats;
+    } else {
+      EXPECT_EQ(stats.mean, serial.mean);
+      EXPECT_EQ(stats.bin_edges, serial.bin_edges);
+      EXPECT_EQ(stats.quantiles, serial.quantiles);
+      EXPECT_EQ(stats.median, serial.median);
+      const auto counters = executor->counters();
+      EXPECT_GT(counters.dispatches,
+                counters.limited_inline_dispatches + counters.nested_inline_dispatches);
+    }
+    const auto many_bins = ComputeTensorStatistics(tensor, 65537);
+    EXPECT_EQ(
+        std::accumulate(many_bins.distribution.begin(), many_bins.distribution.end(), int64_t{0}),
+        count);
+  }
+}
+
+TEST(TensorStatistics, ParallelChunkBoundariesPreserveNonfiniteAndPackedValues) {
+  const int64_t count = 65539;
+  CpuExecutionPolicy policy;
+  policy.num_threads = 3;
+  policy.affinity_policy = CpuAffinityPolicy::kNone;
+  CpuExecutorRegistry registry(1);
+  const auto executor = registry.Acquire(policy);
+  CpuExecutorScope scope(executor.get());
+  const double inf = std::numeric_limits<double>::infinity();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  for (double exceptional : {inf, -inf, nan}) {
+    std::vector<double> values(static_cast<size_t>(count), 1);
+    values[32768] = exceptional;
+    values.back() = exceptional;
+    const auto stats = ComputeTensorStatistics(Tensor::FromDouble("X", {count}, values), 4, {0.5},
+                                               true, {1, count});
+    EXPECT_EQ(std::accumulate(stats.distribution.begin(), stats.distribution.end(), int64_t{0}),
+              count - 2);
+    if (std::isnan(exceptional)) {
+      EXPECT_TRUE(std::isnan(stats.min));
+      EXPECT_TRUE(std::isnan(stats.max));
+      EXPECT_TRUE(std::isnan(stats.mean));
+      EXPECT_TRUE(std::isnan(*stats.median));
+      EXPECT_TRUE(std::isnan(stats.quantiles[0]));
+      EXPECT_TRUE(std::isnan(stats.rectangle_map.back()));
+    } else {
+      EXPECT_EQ(stats.mean, exceptional);
+      EXPECT_EQ(stats.rectangle_map.back(), exceptional);
+    }
+  }
+  std::vector<double> values(static_cast<size_t>(count), 0);
+  values[0] = inf;
+  values.back() = -inf;
+  const auto mixed = ComputeTensorStatistics(Tensor::FromDouble("X", {count}, values));
+  EXPECT_TRUE(std::isnan(mixed.mean));
+  for (DataType dtype : {DataType::INT2, DataType::UINT2, DataType::INT4, DataType::UINT4}) {
+    const auto tensor =
+        MakeSubByteTensor(dtype, {count}, std::vector<int8_t>(static_cast<size_t>(count), 1),
+                          dtype == DataType::INT2 || dtype == DataType::UINT2 ? 2 : 4);
+    const auto stats = ComputeTensorStatistics(tensor);
+    EXPECT_EQ(stats.distinct_count, 1);
+    EXPECT_EQ(stats.mean, 1);
+  }
 }
 
 TEST(TensorStatistics, ExactIntegerDistinctAndUnalignedStorage) {
@@ -216,7 +302,7 @@ TEST(TensorStatistics, ExtremeFiniteValues) {
   stats = ComputeTensorStatistics(Tensor::FromDouble("X", {10}, std::vector<double>(10, largest)));
   EXPECT_TRUE(std::isfinite(stats.mean));
   EXPECT_EQ(std::accumulate(stats.distribution.begin(), stats.distribution.end(), int64_t{0}), 10);
-  for (int64_t count : {3, 100, 501}) {
+  for (int64_t count : {3, 100, 501, 65539}) {
     for (double value : {largest, -largest}) {
       stats = ComputeTensorStatistics(
           Tensor::FromDouble("X", {count}, std::vector<double>(static_cast<size_t>(count), value)),

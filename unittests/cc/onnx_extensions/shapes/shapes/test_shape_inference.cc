@@ -51,6 +51,95 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
             core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, InfersSparseInitializerShape) {
+  for (const auto dtype : {TensorProto::FLOAT, TensorProto::INT64}) {
+    for (const int64_t nnz : {0, 2}) {
+      SCOPED_TRACE(static_cast<int>(dtype));
+      SCOPED_TRACE(nnz);
+      ModelProto model;
+      model.set_ir_version(10);
+      model.add_opset("", 18);
+      auto *graph = model.mutable_graph();
+      auto *sparse = graph->add_sparse_initializer();
+      sparse->add_dims(2);
+      sparse->add_dims(3);
+      auto *values = sparse->mutable_values();
+      values->set_name("sparse");
+      values->set_data_type(dtype);
+      values->add_dims(nnz);
+      auto *indices = sparse->mutable_indices();
+      indices->set_data_type(TensorProto::INT64);
+      indices->add_dims(nnz);
+      for (int64_t i = 0; i < nnz; ++i) {
+        indices->add_int64_data(i * 3);
+        if (dtype == TensorProto::FLOAT) {
+          values->add_float_data(1.0f);
+        } else {
+          values->add_int64_data(1);
+        }
+      }
+      graph->add_node(
+          MakeNode(dtype == TensorProto::FLOAT ? "Softmax" : "Identity", {"sparse"}, {"Y"}));
+      graph->add_output()->set_name("Y");
+
+      core::shapes::ShapesContext ctx;
+      ASSERT_NO_THROW(ctx.ComputeShapeModel(model));
+      const core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+      ASSERT_TRUE(ctx.Has("sparse"));
+      EXPECT_EQ(ctx.Get("sparse").Shape(), expected);
+      EXPECT_FALSE(ctx.Get("sparse").HasValueAsShape());
+      ASSERT_TRUE(ctx.Has("Y"));
+      EXPECT_EQ(ctx.Get("Y").Shape(), expected);
+      EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::DataTypeToTensorType(dtype));
+      ctx.ApplyInferredShapesToModel(model);
+      EXPECT_TRUE(model.graph().value_info().empty());
+      const auto &output_shape = model.graph().output(0).type().tensor_type().shape();
+      ASSERT_EQ(output_shape.dim_size(), 2);
+      EXPECT_EQ(output_shape.dim(0).dim_value(), 2);
+      EXPECT_EQ(output_shape.dim(1).dim_value(), 3);
+
+      core::shapes::ShapesContext parent;
+      parent.Set("sparse", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                                     {core::symbolic::SymDim(9)}));
+      auto child = parent.MakeChildContext(model.graph());
+      ASSERT_NO_THROW(child.ComputeShapeGraph(model.graph()));
+      EXPECT_EQ(child.Get("sparse").Shape(), expected);
+      EXPECT_EQ(child.Get("Y").Shape(), expected);
+    }
+  }
+}
+
+TEST(OnnxOptimShapeInference, UnsqueezeUsesAxesAttributeBeforeOpset13) {
+  for (const int opset : {11, 13}) {
+    SCOPED_TRACE(opset);
+    core::shapes::ShapesContext ctx;
+    ctx.SetOpsetVersion("", opset);
+    ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                           {core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+    NodeProto node = MakeNode("Unsqueeze", {"x"}, {"y"});
+    auto *axes = node.add_attribute();
+    axes->set_name("axes");
+    axes->set_type(AttributeProto::INTS);
+    axes->add_ints(0);
+    axes->add_ints(-1);
+    if (opset == 13) {
+      EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+      continue;
+    }
+    ASSERT_NO_THROW(ctx.ComputeShapeNode(node));
+    EXPECT_EQ(ctx.Get("y").Shape(),
+              (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
+                                        core::symbolic::SymDim(3), core::symbolic::SymDim(1)}));
+    ctx.Erase("y");
+    axes->ref_ints()[1] = 0;
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+    axes->ref_ints()[1] = 4;
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+    node.clear_attribute();
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+}
+
 TEST(OnnxOptimShapeInference, PropagatesSequenceAtUnknownRankThroughAbsAndIdentity) {
   ModelProto model;
   model.set_ir_version(10);

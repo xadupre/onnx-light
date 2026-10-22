@@ -35,11 +35,29 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t out
 
 void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Unsqueeze", "ComputeShapeUnsqueeze");
-  EXT_ENFORCE_INVALID(node.input_size() >= 2,
-                      "ComputeShapeUnsqueeze: Unsqueeze requires two inputs (data, axes).");
+  const int opset = ctx.OpsetVersion(node.domain());
+  const bool legacy = opset > 0 && opset < 13;
+  EXT_ENFORCE_INVALID(node.input_size() >= (legacy ? 1 : 2),
+                      "ComputeShapeUnsqueeze: Unsqueeze requires data and axes.");
 
   const SymTensor &data = ctx.Get(node.input(0));
-  const SymTensor &axes_tensor = ctx.Get(node.input(1));
+  SymTensor attribute_axes;
+  if (legacy) {
+    const AttributeProto *axes_attr = nullptr;
+    for (const auto &attr : node.attribute()) {
+      if (attr.name() == "axes") {
+        axes_attr = &attr;
+      }
+    }
+    EXT_ENFORCE_INVALID(axes_attr != nullptr && axes_attr->type() == AttributeProto::INTS,
+                        "ComputeShapeUnsqueeze: axes attribute is required before opset 13.");
+    SymShape axes;
+    for (const int64_t axis : axes_attr->ints()) {
+      axes.PushBack(SymDim(axis));
+    }
+    attribute_axes.SetValueAsShape(std::move(axes));
+  }
+  const SymTensor &axes_tensor = legacy ? attribute_axes : ctx.Get(node.input(1));
   const int64_t input_rank = static_cast<int64_t>(data.Shape().Rank());
 
   SymShape out_shape;

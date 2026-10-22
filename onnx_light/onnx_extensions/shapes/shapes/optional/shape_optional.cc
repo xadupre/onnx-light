@@ -14,34 +14,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::optional {
 
 namespace {
 
-// Reads a TypeProto's tensor element type and shape into an
-// ``SymTensor`` descriptor. The TypeProto must wrap a tensor type
-// (sequence / map / sparse types are rejected since ``SymTensor``
-// does not model them).
-SymTensor OptimTensorFromTensorTypeProto(const TypeProto &tp) {
-  EXT_ENFORCE_INVALID(tp.has_tensor_type(),
-                      "ComputeShapeOptional: the 'type' attribute must wrap a tensor type; "
-                      "sequence, map and sparse element types are not supported.");
-  const TypeProto::Tensor &tt = tp.tensor_type();
-  const TensorType dtype = DataTypeToTensorType(tt.elem_type());
-  SymShape shape;
-  if (tt.has_shape()) {
-    const TensorShapeProto &sp = tt.shape();
-    for (int i = 0; i < static_cast<int>(sp.dim().size()); ++i) {
-      const TensorShapeProto::Dimension &d = sp.dim()[i];
-      if (d.has_dim_value()) {
-        shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));
-      } else if (d.has_dim_param()) {
-        shape.PushBack(SymDim(std::string(d.dim_param().data(), d.dim_param().size())));
-      } else {
-        // Unknown dim: use a fresh symbolic placeholder.
-        shape.PushBack(SymDim(std::string("?")));
-      }
-    }
-  }
-  return SymTensor(nullptr, dtype, std::move(shape));
-}
-
 // Returns a pointer to the first attribute named ``name`` on ``node``,
 // or ``nullptr`` if no such attribute exists.
 const AttributeProto *FindOptionalAttribute(const NodeProto &node, const char *name) {
@@ -71,8 +43,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
     const std::string input_name = node.input(0);
     EXT_ENFORCE_INVALID(!(input_name.empty()),
                         "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
-    const SymTensor &in = ctx.Get(input_name);
-    ctx.Set(node.output(0), SymTensor(nullptr, in.Dtype(), SymShape(in.Shape().Dims())));
+    ctx.CopyValueFrom(node.output(0), ctx, input_name);
     return;
   }
 
@@ -84,17 +55,16 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
   const TypeProto &tp = type_attr->tp();
   // The ``type`` attribute may either be a bare tensor type (older
   // models / shorthand) or an optional-of-tensor type (the typical
-  // shape). Both are accepted; sequence-of-tensor and sparse types
-  // are rejected.
+  // shape). Sequence-of-tensor elements are also supported.
   const TypeProto *elem_tp = &tp;
   if (tp.has_optional_type()) {
     elem_tp = &tp.optional_type().elem_type();
-  } else
-    EXT_ENFORCE_INVALID(
-        !tp.has_sequence_type() && !tp.has_sparse_tensor_type() && !tp.has_map_type(),
-        "ComputeShapeOptional: the 'type' attribute must wrap a tensor or an "
-        "optional-of-tensor type; sequence, map and sparse types are not supported.");
-  ctx.Set(node.output(0), OptimTensorFromTensorTypeProto(*elem_tp));
+  }
+  EXT_ENFORCE_INVALID(
+      elem_tp->has_tensor_type() ||
+          (elem_tp->has_sequence_type() && elem_tp->sequence_type().elem_type().has_tensor_type()),
+      "ComputeShapeOptional: the 'type' attribute must describe a tensor or sequence of tensors.");
+  ctx.SetType(node.output(0), *elem_tp);
 }
 
 void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {
@@ -126,6 +96,11 @@ void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {
     return;
   }
 
+  if (!ctx.Has(input_name) && ctx.HasType(input_name)) {
+    const TypeProto &type = ctx.GetType(input_name);
+    ctx.SetType(node.output(0), type.has_optional_type() ? type.optional_type().elem_type() : type);
+    return;
+  }
   const SymTensor &in = ctx.Get(input_name);
   ctx.Set(node.output(0), SymTensor(nullptr, in.Dtype(), SymShape(in.Shape().Dims())));
 }

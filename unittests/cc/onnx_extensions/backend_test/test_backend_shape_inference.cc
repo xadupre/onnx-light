@@ -481,6 +481,25 @@ TEST(BackendTestCaseShapeInference, NativeSqueezeEmptyAxesInfersOutputShape) {
   FAIL() << "missing test_cc_squeeze_all_singleton_rank_five";
 }
 
+TEST(BackendTestCaseShapeInference, AllCollectedCasesRunNativeShapeInference) {
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  ASSERT_FALSE(cases.empty());
+
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
+    SCOPED_TRACE(tc.name);
+    core::shapes::ShapesContext ctx;
+    EXPECT_NO_THROW({
+      ctx.ComputeShapeModel(tc.model());
+      for (const auto &output : tc.model().graph().output()) {
+        EXPECT_TRUE(ctx.Has(output.name()) || ctx.HasType(output.name()) ||
+                    ctx.HasSequence(output.name()))
+            << "Missing inferred output: " << output.name();
+      }
+    });
+  }
+}
+
 TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
   std::vector<TestCase> cases = CollectTestCases();
   ASSERT_FALSE(cases.empty());

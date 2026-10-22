@@ -1047,6 +1047,19 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
       Set(name, std::move(tensor));
     }
   }
+  for (const auto &init : graph.sparse_initializer()) {
+    const std::string name = init.values().name();
+    const TensorType dtype = DataTypeToTensorType(init.values().data_type());
+    if (name.empty() || Has(name) || dtype == TensorType::kUndefined) {
+      continue;
+    }
+    // Sparse values describe only nonzero entries, not the logical tensor's shape or data.
+    SymShape shape;
+    for (const int64_t dim : init.dims()) {
+      shape.PushBack(SymDim(dim));
+    }
+    Set(name, SymTensor(nullptr, dtype, std::move(shape)));
+  }
   // Then seed graph inputs (skipping those already known via the
   // initializers or via outer-scope entries carried in ``*this``).
   current_node_index_ = -1;
@@ -1202,6 +1215,9 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   }
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     seeded.insert(graph.initializer()[i].name());
+  }
+  for (const auto &init : graph.sparse_initializer()) {
+    seeded.insert(init.values().name());
   }
   for (const auto &init : graph.extended_initializer()) {
     seeded.insert(init.name());

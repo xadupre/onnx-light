@@ -134,6 +134,12 @@ TEST(OnnxOptimShapeOptional, NoInputWithSequenceTypeAttribute) {
   ASSERT_TRUE(ctx.HasSequence("y"));
   EXPECT_EQ(ctx.GetSequence("y").ElemDtype(), core::symbolic::TensorType::kFloat);
   EXPECT_FALSE(ctx.GetSequence("y").Length().IsInt());
+  ModelProto model;
+  model.mutable_graph()->add_output()->set_name("y");
+  ctx.ApplyInferredShapesToModel(model);
+  const auto &type = model.graph().output(0).type();
+  ASSERT_TRUE(type.has_optional_type());
+  EXPECT_TRUE(type.optional_type().elem_type().has_sequence_type());
 }
 
 TEST(OnnxOptimShapeOptional, WithSequenceInputPreservesElementShapes) {

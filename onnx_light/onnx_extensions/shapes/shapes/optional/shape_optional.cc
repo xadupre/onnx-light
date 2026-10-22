@@ -43,7 +43,16 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
     const std::string input_name = node.input(0);
     EXT_ENFORCE_INVALID(!(input_name.empty()),
                         "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
-    ctx.CopyValueFrom(node.output(0), ctx, input_name);
+    if (ctx.HasSequence(input_name)) {
+      ctx.SetSequence(node.output(0), SymSequence(ctx.GetSequence(input_name)));
+    } else if (!ctx.Has(input_name) && ctx.HasType(input_name)) {
+      TypeProto type;
+      type.mutable_optional_type()->ref_elem_type() = ctx.GetType(input_name);
+      ctx.SetType(node.output(0), type);
+    } else {
+      const SymTensor &in = ctx.Get(input_name);
+      ctx.Set(node.output(0), SymTensor(nullptr, in.Dtype(), SymShape(in.Shape().Dims())));
+    }
     return;
   }
 
@@ -64,7 +73,9 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
       elem_tp->has_tensor_type() ||
           (elem_tp->has_sequence_type() && elem_tp->sequence_type().elem_type().has_tensor_type()),
       "ComputeShapeOptional: the 'type' attribute must describe a tensor or sequence of tensors.");
-  ctx.SetType(node.output(0), *elem_tp);
+  TypeProto type;
+  type.mutable_optional_type()->ref_elem_type() = *elem_tp;
+  ctx.SetType(node.output(0), type);
 }
 
 void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {

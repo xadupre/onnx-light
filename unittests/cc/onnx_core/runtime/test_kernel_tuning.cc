@@ -698,13 +698,13 @@ TEST(KernelCalibration, ReportsMeasuredAndUnbracketedCrossoverBounds) {
     benchmark.candidate.configure = [](int64_t) {};
     benchmark.reference.run = [bracketed](std::span<const Tensor>, Tensor &output) {
       if (!bracketed || output.element_count() > 16) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
       }
       std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
     };
     benchmark.candidate.run = [bracketed](std::span<const Tensor>, Tensor &output) {
       if (bracketed && output.element_count() == 16) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
       }
       std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
     };

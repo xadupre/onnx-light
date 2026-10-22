@@ -29,6 +29,7 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node) {
   const int64_t q = static_cast<int64_t>(idx_shape.Rank());
 
   const int64_t batch_dims = GetAttributeOr<int64_t>(node, "batch_dims", 0);
+  EXT_ENFORCE_INVALID(batch_dims >= 0, "ComputeShapeGatherND: batch_dims must not be negative.");
 
   SymShape out_shape;
   if (q < 1) {
@@ -43,13 +44,17 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node) {
   }
   // Trailing dims come from data after batch_dims + indices_shape[-1].
   const SymDim &k_last_dim = idx_shape[static_cast<std::size_t>(q - 1)];
-  if (k_last_dim.IsInt() && r > 0) {
+  if (k_last_dim.IsInt()) {
     const int64_t k_last = k_last_dim.AsInt();
-    const int64_t start = batch_dims + k_last;
-    EXT_ENFORCE_INVALID(!(start > r),
-                        "ComputeShapeGatherND: indices last dim + batch_dims exceeds data rank.");
-    for (int64_t i = start; i < r; ++i) {
-      out_shape.PushBack(data_shape[static_cast<std::size_t>(i)]);
+    EXT_ENFORCE_INVALID(k_last >= 0,
+                        "ComputeShapeGatherND: indices last dim must not be negative.");
+    if (r > 0) {
+      EXT_ENFORCE_INVALID(batch_dims <= r && k_last <= r - batch_dims,
+                          "ComputeShapeGatherND: indices last dim + batch_dims exceeds data rank.");
+      const int64_t start = batch_dims + k_last;
+      for (int64_t i = start; i < r; ++i) {
+        out_shape.PushBack(data_shape[static_cast<std::size_t>(i)]);
+      }
     }
   }
   ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));

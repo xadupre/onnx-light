@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -37,6 +38,80 @@ NodeProto MakeConcatNode(const std::vector<std::string> &inputs,
 }
 
 } // namespace
+
+TEST(OnnxOptimShapesTensorGatherND, RejectsInvalidDimensions) {
+  for (const auto &[batch_dims, last_dim] :
+       std::vector<std::pair<int64_t, int64_t>>{{-1, 1},
+                                                {-5, 1},
+                                                {0, -1},
+                                                {1, -1},
+                                                {0, -5},
+                                                {0, 4},
+                                                {4, 0},
+                                                {1, std::numeric_limits<int64_t>::max()},
+                                                {std::numeric_limits<int64_t>::max(), 1}}) {
+    SCOPED_TRACE(batch_dims);
+    SCOPED_TRACE(last_dim);
+    NodeProto node;
+    node.set_op_type("GatherND");
+    node.add_input("X");
+    node.add_input("indices");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "batch_dims", batch_dims);
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {2, 2, 2}));
+    ctx.Set("indices", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                                 {2, core::symbolic::SymDim(last_dim)}));
+    EXPECT_THROW(onnx_shapes::shapes::tensor::ComputeShapeGatherND(ctx, node),
+                 std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapesTensorGatherND, ValidDimensions) {
+  for (const int64_t batch_dims : {0, 1}) {
+    for (const int64_t last_dim : {0, 1, 2}) {
+      SCOPED_TRACE(batch_dims);
+      SCOPED_TRACE(last_dim);
+      NodeProto node;
+      node.set_op_type("GatherND");
+      node.add_input("X");
+      node.add_input("indices");
+      node.add_output("Y");
+      AddAttribute<int64_t>(node, "batch_dims", batch_dims);
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {2, 2, 2}));
+      ctx.Set("indices", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                                   {2, core::symbolic::SymDim(last_dim)}));
+      onnx_shapes::shapes::tensor::ComputeShapeGatherND(ctx, node);
+      const auto &shape = ctx.Get("Y").Shape();
+      ASSERT_EQ(shape.Rank(), static_cast<size_t>(4 - batch_dims - last_dim));
+      for (size_t i = 0; i < shape.Rank(); ++i) {
+        EXPECT_EQ(shape[i].AsInt(), 2);
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorGatherND, RejectsNegativeValuesWithUnknownShapes) {
+  for (const auto &[batch_dims, indices_shape] :
+       std::vector<std::pair<int64_t, core::symbolic::SymShape>>{
+           {-1, {}}, {-1, {2, "k"}}, {0, {2, -1}}}) {
+    SCOPED_TRACE(batch_dims);
+    NodeProto node;
+    node.set_op_type("GatherND");
+    node.add_input("X");
+    node.add_input("indices");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "batch_dims", batch_dims);
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+    ctx.Set("indices",
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, indices_shape));
+    EXPECT_THROW(onnx_shapes::shapes::tensor::ComputeShapeGatherND(ctx, node),
+                 std::invalid_argument);
+  }
+}
 
 TEST(OnnxOptimShapesTensorResize, UnknownParametersDoNotPreserveResizedInputDimensions) {
   for (bool use_sizes : {false, true}) {

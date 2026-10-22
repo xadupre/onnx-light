@@ -1032,7 +1032,7 @@ TEST(PatternOptimization, OptimizerDoesNotReinferUnaffectedShapes) {
   EXPECT_EQ(builder.GetShape("unchanged"), builder.GetShape("X"));
 }
 
-TEST(PatternOptimization, PreservesExistingTagsWhenRenamingToInputs) {
+TEST(PatternOptimization, PreservesExistingTagsWhenReplacingInputConsumers) {
   for (bool declared_tag : {false, true}) {
     SCOPED_TRACE(declared_tag);
     core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
@@ -1054,9 +1054,9 @@ TEST(PatternOptimization, PreservesExistingTagsWhenRenamingToInputs) {
     RewritingProto plan;
     auto &rewrite = *plan.add_rewrites();
     rewrite.add_matched_nodes(0);
-    auto &rename = *rewrite.add_value_renames();
-    rename.set_key("p");
-    rename.set_value("X");
+    rewrite.add_matched_nodes(1);
+    rewrite.ref_added_nodes().push_back(MakeNode("Neg", {"X"}, {"Y"}));
+    rewrite.add_added_nodes_positions(0);
     const auto result = source.ApplyRewritings(plan);
     EXPECT_EQ(result.Nodes()[0].input(0), "X");
     for (const std::string name : {"X", "Y", "Z"}) {
@@ -1131,7 +1131,7 @@ TEST(PatternOptimization, PreservesOutputOnlyTagsWhenFoldingToInitializers) {
   EXPECT_EQ(result.BuildGraph().output(0).name(), "p");
 }
 
-TEST(PatternOptimization, RefreshesRenamedCapturesWithoutAParentShapeFunction) {
+TEST(PatternOptimization, RefreshesReplacedCapturesWithoutAParentShapeFunction) {
   auto original = PreparationModel();
   original.mutable_graph()->clr_node();
   original.mutable_graph()->clr_output();
@@ -1142,11 +1142,13 @@ TEST(PatternOptimization, RefreshesRenamedCapturesWithoutAParentShapeFunction) {
   AddSubgraphReference(source, "body", "body", "result");
   source.MakeOutput("result");
   RewritingProto plan;
+  auto &nested = *plan.add_rewrites();
+  nested.add_graph_path("body");
+  nested.add_matched_nodes(0);
+  nested.ref_added_nodes().push_back(MakeNode("Identity", {"b"}, {"out"}));
+  nested.add_added_nodes_positions(0);
   auto &rewrite = *plan.add_rewrites();
   rewrite.add_removed_initializers(0);
-  auto &rename = *rewrite.add_value_renames();
-  rename.set_key("a");
-  rename.set_value("b");
   auto result = source.ApplyRewritings(plan);
   auto &updated = result.Subgraph("body");
   EXPECT_EQ(updated.Nodes()[0].input(0), "b");
@@ -1985,9 +1987,6 @@ TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
       RewritingProto plan;
       auto &edit = *plan.add_rewrites();
       edit.add_removed_initializers(0);
-      auto &rename = *edit.add_value_renames();
-      rename.set_key("seed");
-      rename.set_value("p");
       if (computed) {
         plan.ref_added_functions().push_back(PreparationAdd());
         auto &opset = *plan.add_required_opset_imports();
@@ -2021,12 +2020,12 @@ TEST(PatternOptimization, ReplayAllowsFreshInitializerWithRewrittenReferences) {
   source.MakeOutput("y");
   RewritingProto plan;
   auto &edit = *plan.add_rewrites();
+  edit.add_matched_nodes(0);
+  edit.ref_added_nodes().push_back(MakeNode("Identity", {"fresh"}, {"y"}));
+  edit.add_added_nodes_positions(0);
   edit.add_removed_initializers(0);
   edit.ref_added_initializers().push_back(MakeInitializer<float>("fresh", {2}, {3.0f, 4.0f}));
   edit.add_added_initializer_positions(0);
-  auto &rename = *edit.add_value_renames();
-  rename.set_key("p");
-  rename.set_value("fresh");
   const auto result = source.ApplyRewritings(plan);
   ASSERT_EQ(result.Initializers().size(), 1u);
   EXPECT_EQ(result.Initializers()[0].name(), "fresh");
@@ -2365,7 +2364,6 @@ TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {
 
   ASSERT_EQ(rewrites.size(), 1u);
   EXPECT_EQ(rewrites[0].pattern_name(), "RemoveUnusedNodes");
-  EXPECT_TRUE(rewrites[0].value_renames().empty());
 
   const GraphProto optimized = builder.BuildGraph();
   const GraphProto replayed =

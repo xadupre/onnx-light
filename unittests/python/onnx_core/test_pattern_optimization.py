@@ -818,8 +818,6 @@ class TestPatternOptimization(ExtTestCase):
         edit.added_nodes_positions.extend([0])
         edit.added_initializers.append(oh.make_tensor("literal", TensorProto.FLOAT, [1], [2]))
         edit.added_initializer_positions.extend([1])
-        rename = edit.value_renames.add()
-        rename.key, rename.value = "old", "new"
         edit.metadata_props.add().key = "local"
         edit.initializer_calls.append(oh.make_node("Prepare", ["weight"], ["prepared"]))
         edit.computed_initializer_positions.extend([2])
@@ -832,8 +830,24 @@ class TestPatternOptimization(ExtTestCase):
         local = optim.LocalRewritingProto()
         local.ParseFromString(edit.SerializeToString())
         self.assertEqual(list(local.matched_nodes), [0, 2**64 - 1])
-        self.assertEqual(local.value_renames[0].key, "old")
-        self.assertEqual(local.value_renames[0].value, "new")
+
+    def test_rewriting_proto_rejects_retired_renaming_field(self):
+        legacy = b"\x4a\x0a\x0a\x03old\x12\x03new"
+        plan_bytes = b"\x0a" + bytes([len(legacy)]) + legacy
+        entry = b"\x0a\x04test\x12" + bytes([len(plan_bytes)]) + plan_bytes
+        model_bytes = b"\xca\x3e" + bytes([len(entry)]) + entry
+        for cls, data in (
+            (optim.LocalRewritingProto, legacy),
+            (optim.RewritingProto, plan_bytes),
+            (ModelProto, model_bytes),
+        ):
+            with (
+                self.subTest(proto=cls.__name__),
+                self.assertRaisesRegex(ValueError, "retired field 9"),
+            ):
+                cls().ParseFromString(data)
+        with self.assertRaisesRegex(RuntimeError, "invalid serialized proto data"):
+            optim.LocalRewritingProto().ParseFromString(legacy.decode("ascii"))
 
     def test_inverse_restores_empty_initializer_and_output_annotations(self):
         model = oh.make_model(
@@ -886,7 +900,6 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         plan = graph.optimize()
-        self.assertTrue(all(not edit.value_renames for edit in plan.rewrites))
         optimized = builder.build_graph().SerializeToString()
         self.assertEqual(
             builder.undo_rewritings(plan).build_graph().SerializeToString(), canonical

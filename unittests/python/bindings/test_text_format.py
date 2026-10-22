@@ -47,6 +47,18 @@ def _rich_model() -> onnxl.ModelProto:
 class TestTextFormat(ExtTestCase):
     """Tests for the pure-Python textproto parser and serializer."""
 
+    def test_rejects_retired_rewriting_renames(self):
+        legacy = 'value_renames { key: "old" value: "new" }'
+        for proto, text in (
+            (onnxl.LocalRewritingProto(), legacy),
+            (onnxl.RewritingProto(), f"rewrites {{ {legacy} }}"),
+        ):
+            with (
+                self.subTest(proto=type(proto).__name__),
+                self.assertRaisesRegex(ValueError, "value_renames is retired"),
+            ):
+                parse_from_textproto(text, proto)
+
     def test_serialize_returns_text(self):
         """Tests that serializing a model returns readable textproto."""
         model = _rich_model()

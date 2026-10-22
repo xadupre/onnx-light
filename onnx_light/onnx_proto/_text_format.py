@@ -228,7 +228,6 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("added_nodes_positions", _INT, True),
             ("added_initializers", _msg(TensorProto), True),
             ("added_initializer_positions", _INT, True),
-            ("value_renames", _msg(string_entry), True),
             ("metadata_props", _msg(string_entry), True),
             ("initializer_calls", _msg(NodeProto), True),
             ("computed_initializer_positions", _INT, True),
@@ -611,6 +610,10 @@ class _Reader:
             if token.kind != "name":
                 raise ValueError(f"Expected a field name but found {token.text!r}.")
             self._advance()
+            if isinstance(obj, LocalRewritingProto) and token.text == "value_renames":
+                raise ValueError(
+                    "LocalRewritingProto.value_renames is retired; regenerate the rewriting plan."
+                )
             spec = fields.get(token.text)
             self._consume_field(obj, token.text, spec)
 

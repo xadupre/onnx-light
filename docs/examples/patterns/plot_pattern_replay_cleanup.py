@@ -62,7 +62,6 @@ assert [value.name for value in canonical.graph.initializer] == ["weight"]
 optimized_graph = builder.build_graph()
 
 assert rewrites.rewrites
-assert all(not rewrite.value_renames for rewrite in rewrites.rewrites)
 assert not {"RemoveIdentityNodes", "RemoveDuplicateNodes", "RemoveDuplicateInitializers"} & {
     rewrite.pattern_name for rewrite in rewrites.rewrites
 }

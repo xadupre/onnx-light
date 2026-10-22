@@ -424,7 +424,6 @@ copy:
       utils::RepeatedProtoField<TensorProto> added_initializers;
       std::vector<std::size_t> added_initializer_positions;
       std::vector<std::size_t> removed_initializers;
-      std::vector<std::pair<std::string, std::string>> value_renames;
       std::size_t iteration = 0;                  // ordered rewrite batch
 
       std::string ToString() const;
@@ -473,14 +472,13 @@ that already exist in C++:
 * ``RemoveUnusedNodes`` for the values a rewrite made dead.
 * ``RemoveDuplicateInitializers`` for constants with identical contents.
 
-Every effective cleanup pass appends a ``LocalRewriting`` under its stable
-operation name. Since duplicate and identity removal may rewire many consumers,
-the cleanup record replaces the complete node field before and after that pass.
-Initializer deduplication similarly records the removed initializer positions
-and the surviving initializer field. Identity, node deduplication and
-initializer deduplication also persist their value renames so replay updates
-consumers and values captured by nested subgraphs. These records form separate
-ordered batches, so the returned sequence alone reconstructs the final graph.
+Identity removal, node deduplication and initializer deduplication run before
+capture, including updates to references captured by nested subgraphs. They
+establish the canonical graph and are not recorded as reversible edits.
+Unused-node and initializer cleanup during optimization records removed
+positions under its stable operation name. Captured replacements explicitly
+carry their updated node inputs and preserve boundary names; no serialized
+value-renaming map is needed.
 
 If any pattern matched, or any cleanup pass removed a node, the loop continues.
 When no pattern matches at the current priority, the driver raises the priority

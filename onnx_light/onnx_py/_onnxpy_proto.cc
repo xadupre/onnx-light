@@ -633,9 +633,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "ParseFromString",
           [](cls &self, const std::string &raw, nb::object options) {
             if (nb::isinstance<ParseOptions &>(options)) {
-              self.ParseFromString(raw, nb::cast<ParseOptions &>(options));
+              EXT_ENFORCE(self.ParseFromString(raw, nb::cast<ParseOptions &>(options)),
+                          "ParseFromString: invalid serialized proto data.");
             } else {
-              self.ParseFromString(raw);
+              EXT_ENFORCE(self.ParseFromString(raw),
+                          "ParseFromString: invalid serialized proto data.");
             }
           },
           nb::arg("data"), nb::arg("options") = nb::none(),
@@ -3294,7 +3296,6 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(LocalRewritingProto, added_nodes_positions)
       .PYFIELD(LocalRewritingProto, added_initializers)
       .PYFIELD(LocalRewritingProto, added_initializer_positions)
-      .PYFIELD(LocalRewritingProto, value_renames)
       .PYFIELD(LocalRewritingProto, metadata_props)
       .PYFIELD(LocalRewritingProto, initializer_calls)
       .PYFIELD(LocalRewritingProto, computed_initializer_positions);

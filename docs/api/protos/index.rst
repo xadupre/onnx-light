@@ -157,7 +157,7 @@ canonical graph. Loading a model never selects or executes a variant:
    ├── rewrites → LocalRewritingProto
    │   ├── added_nodes, initializer_calls → NodeProto (↑)
    │   ├── added_initializers → TensorProto (↑)
-   │   └── value_renames, metadata_props → StringStringEntryProto
+   │   └── metadata_props → StringStringEntryProto
    ├── required_opset_imports → OperatorSetIdProto
    ├── added_functions → FunctionProto (↑)
    └── metadata_props → StringStringEntryProto

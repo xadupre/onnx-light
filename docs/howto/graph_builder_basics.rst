@@ -316,4 +316,4 @@ one :class:`~onnx_light.onnx.LocalRewritingProto` replaces it with
 
 ``report`` aggregates attempts, matches, rejections, and timings by pattern.
 The returned ``RewritingProto`` contains ordered ``LocalRewritingProto`` records of the matched and
-added nodes, their positions, initializer changes, and value renames.
+added nodes, their positions, and initializer changes.

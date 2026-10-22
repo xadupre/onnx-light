@@ -127,7 +127,8 @@ protobuf compiler or ``libprotobuf``. Step 3 added the
      repeated uint64 added_nodes_positions = 6;
      repeated TensorProto added_initializers = 7;
      repeated uint64 added_initializer_positions = 8;
-     repeated StringStringEntryProto value_renames = 9;
+     reserved 9;
+     reserved "value_renames";
      repeated StringStringEntryProto metadata_props = 10;
      repeated NodeProto initializer_calls = 11;
      repeated uint64 computed_initializer_positions = 12;
@@ -227,9 +228,11 @@ necessarily allocating a second buffer during preparation. Reuse a view only
 when supported by the tensor representation and consumer. Materialized plain
 ONNX export may intentionally store computed weights instead.
 
-``LocalRewritingProto.value_renames`` remains a legacy forward-replay field:
-``key`` is the old reference and ``value`` its replacement. Reversible plans
-must leave it empty. Removing ``b = Identity(a)`` redirects consumers of ``b``
+``LocalRewritingProto`` has no value-renaming field. Field number 9 and the
+former name ``value_renames`` are reserved and must not be reused. Binary plans
+containing that field and text plans using that name are explicitly rejected;
+regenerate these plans instead of silently dropping their renaming effects.
+Removing ``b = Identity(a)`` redirects consumers of ``b``
 to ``a`` but does not identify which consumers already used ``a``. Inverting
 that substitution is deliberately outside the reversible-plan contract.
 
@@ -392,9 +395,9 @@ Each PR depends on the preceding one.
      - Capture initializer recipes and shared function definitions directly
        in the protos. Extend existing replay for one-time constant preparation
        and model-level function/import additions; preserve payload ownership.
-     - Serialized and in-memory replay agree; cover nested graphs, cleanup,
-       initializers, renames, multi-batch edits and invalid plans. A transposed-weight
-       recipe stores no duplicate payload; verify results, source removal
+     - Serialized and in-memory replay agree; cover nested graphs, canonical
+       cleanup, initializers, multi-batch edits and invalid plans. A
+       transposed-weight recipe stores no duplicate payload; verify results, source removal
        ordering and function conflicts. Retained initializer payloads are reused,
        not deep-copied for every edit, including node-only edits.
    * - 3. Model envelope (implemented)

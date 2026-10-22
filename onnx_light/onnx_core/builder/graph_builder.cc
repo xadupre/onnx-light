@@ -1017,9 +1017,14 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (const auto &initializer : graph_template_.sparse_initializer()) {
     available.insert(initializer.values().name().value());
   }
+  const auto old_count = compute_.Size();
   std::vector<std::vector<std::string>> references(nodes_.size());
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     CollectNodeReferences(nodes_[index], references[index]);
+    if (old_indices[index] == old_count) {
+      for (const auto &name : references[index])
+        SeedInheritedValue(name);
+    }
   }
   for (const auto &initializer : initializers_) {
     const std::string name = initializer.name().value();
@@ -1031,7 +1036,6 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
                               /*allow_input_overwrite=*/false);
     }
   }
-  const auto old_count = compute_.Size();
   std::vector<bool> added(nodes_.size());
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     added[index] = old_indices[index] == old_count;
@@ -1116,9 +1120,13 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (const auto &child : subgraphs_) {
     std::unordered_set<std::string> captures;
     child->CollectImplicitInputs(captures);
+    const auto &child_shapes = child->Shapes();
     std::unordered_set<std::string> changed_captures;
     for (const auto &name : affected_values) {
-      if (captures.count(name) != 0) {
+      if (captures.count(name) != 0 ||
+          (child->inherited_names_.count(name) != 0 &&
+           (child_shapes.Has(name) || child_shapes.HasType(name) ||
+            child_shapes.HasSequence(name) || child_shapes.HasEncodedValue(name)))) {
         changed_captures.insert(name);
       }
     }

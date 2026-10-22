@@ -56,6 +56,8 @@ GraphBuilder's ``make_initializer`` / ``make_initializer_move`` preserve the
 borrowed owner, as do the builder's returned graph and model. ``CopyFrom`` and
 ``copy.copy`` share owned payloads with copy-on-write and eagerly copy ownerless
 borrowed buffers or owned buffers with active exported views.
+Reading numeric repeated fields by indexing, iteration, representation, or list
+comparison preserves shared storage; modifying these fields detaches their storage.
 Serialization creates independent bytes; reparsing those
 bytes does not retain the DLPack owner. Treat shared storage as read-only while
 the tensor, builder, or model is in use, including through the original array.

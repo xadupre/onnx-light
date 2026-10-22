@@ -1,5 +1,8 @@
 # Tests for the convenience methods added to proto classes
 # (see onnx_light/onnx_proto/_proto_methods.py).
+import subprocess
+import sys
+import textwrap
 import unittest
 
 import numpy as np
@@ -23,6 +26,74 @@ from onnx_light.onnx_lib import (
 
 
 class TestProtoMethods(ExtTestCase):
+    def test_numeric_field_reads_and_mutations(self):
+        for name in (
+            "dims",
+            "int32_data",
+            "int64_data",
+            "uint64_data",
+            "float_data",
+            "double_data",
+        ):
+            with self.subTest(field=name):
+                source = TensorProto()
+                getattr(source, name).extend([1, 2, 3])
+                copied = TensorProto()
+                copied.CopyFrom(source)
+                values = getattr(copied, name)
+                self.assertEqual(values[0], 1)
+                self.assertEqual(values[-1], 3)
+                self.assertEqual(list(values), [1, 2, 3])
+                self.assertEqual(values, [1, 2, 3])
+                expected = [1.0, 2.0, 3.0] if name in ("float_data", "double_data") else [1, 2, 3]
+                self.assertEqual(repr(values), repr(expected))
+                values.append(4)
+                self.assertEqual(getattr(source, name), [1, 2, 3])
+                self.assertEqual(values, [1, 2, 3, 4])
+
+    @unittest.skipUnless(sys.platform == "linux", "Requires Linux address-space accounting.")
+    def test_numeric_field_reads_preserve_shared_storage(self):
+        code = textwrap.dedent("""
+            import os
+            import resource
+            import unittest
+            from onnx_light.onnx import TensorProto
+
+            expected = [0.0] * (2**22 + 1)
+            for operation in ("index", "iteration", "repr", "equality"):
+                source = TensorProto()
+                source.float_data.extend(expected)
+                copied = TensorProto()
+                copied.CopyFrom(source)
+                values = copied.float_data
+                if operation == "index":
+                    assert values[0] == 0.0
+                elif operation == "iteration":
+                    assert next(iter(values)) == 0.0
+                elif operation == "repr":
+                    text = repr(values)
+                    assert text.startswith("[0.0, ") and text.endswith(", 0.0]")
+                    del text
+                else:
+                    assert values == expected
+                with open("/proc/self/statm") as stream:
+                    virtual_size = int(stream.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+                limits = resource.getrlimit(resource.RLIMIT_AS)
+                resource.setrlimit(resource.RLIMIT_AS, (virtual_size + 8 * 2**20, limits[1]))
+                # A shared vector must detach on append; a read must not have detached it first.
+                with unittest.TestCase().assertRaises(MemoryError, msg=operation):
+                    source.float_data.append(1.0)
+                resource.setrlimit(resource.RLIMIT_AS, limits)
+                source.float_data.append(1.0)
+                assert len(values) == len(expected)
+                assert values[-1] == 0.0
+                assert source.float_data[-1] == 1.0
+            """)
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_node_set_attribute_scalar(self):
         node = NodeProto()
         node.op_type = "Conv"

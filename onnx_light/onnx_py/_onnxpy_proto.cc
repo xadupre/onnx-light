@@ -886,6 +886,21 @@ std::string proto_repr_with_short_line(cls &self,
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
+  using ReadField = std::conditional_t<std::is_arithmetic_v<T>, const utils::RepeatedField<T>,
+                                       utils::RepeatedField<T>>;
+  using ReadElement = std::conditional_t<std::is_arithmetic_v<T>, T, T &>;
+  static constexpr auto read_policy = [] {
+    if constexpr (std::is_arithmetic_v<T>)
+      return nb::rv_policy::copy;
+    else
+      return nb::rv_policy::reference;
+  }();
+  static constexpr auto iterator_policy = [] {
+    if constexpr (std::is_arithmetic_v<T>)
+      return nb::rv_policy::copy;
+    else
+      return nb::rv_policy::automatic_reference;
+  }();
   nbcls.def(nb::init<>())
       .def(
           "__init__",
@@ -909,24 +924,24 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
       .def("__len__", &utils::RepeatedField<T>::size, "Returns the number of elements.")
       .def(
           "__repr__",
-          [](utils::RepeatedField<T> &self) -> std::string {
+          [](ReadField &self) -> std::string {
             nb::list values;
             for (auto &it : self) {
-              values.append(nb::cast(it, nb::rv_policy::reference));
+              values.append(nb::cast(it, read_policy));
             }
             return nb::cast<std::string>(nb::repr(values));
           },
           "Returns a python-like representation for the list of values.")
       .def(
           "__getitem__",
-          [](utils::RepeatedField<T> &self, int index) -> T & {
+          [](ReadField &self, int index) -> ReadElement {
             if (index < 0)
               index += static_cast<int>(self.size());
             EXT_ENFORCE(index >= 0 && index < static_cast<int>(self.size()), "index=", index,
                         " out of boundary");
             return self[index];
           },
-          nb::rv_policy::reference, nb::arg("index"), "Returns the element at position index.")
+          read_policy, nb::arg("index"), "Returns the element at position index.")
       .def(
           "__delitem__",
           [](utils::RepeatedField<T> &self, nb::slice slice) {
@@ -937,15 +952,15 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
           "Removes elements.")
       .def(
           "__iter__",
-          [](utils::RepeatedField<T> &self) -> nb::object {
-            auto iterator = nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator",
-                                              self.begin(), self.end());
+          [](ReadField &self) -> nb::object {
+            auto iterator = nb::make_iterator<iterator_policy>(
+                nb::type<utils::RepeatedField<T>>(), "iterator", self.begin(), self.end());
             return nb::cast(iterator);
           },
           "Iterates over the elements.")
       .def(
           "__eq__",
-          [](utils::RepeatedField<T> &self, nb::list &obj) -> bool {
+          [](ReadField &self, nb::list &obj) -> bool {
             // Compare the size first to avoid materializing the container when
             // the lengths already differ.
             if (self.size() != obj.size())
@@ -955,7 +970,7 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
             // :class:`String` or numbers) compare as expected.
             nb::list values;
             for (auto &it : self) {
-              values.append(nb::cast(it, nb::rv_policy::reference));
+              values.append(nb::cast(it, read_policy));
             }
             return values.equal(obj);
           },

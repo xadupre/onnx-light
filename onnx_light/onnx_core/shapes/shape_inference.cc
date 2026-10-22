@@ -16,6 +16,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/graph/layer.h"
 #include "onnx_core/shapes/dispatch_table.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
@@ -816,6 +817,80 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
   const std::string op_type = node.op_type();
+  if (node.domain() == kAiRtDomain && op_type == "Layer") {
+    const GraphProto &body = core::graph::ValidateLayer(node);
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    ShapesContext child = ctx.MakeChildContext();
+    std::unordered_map<std::string, SymDim> dimensions;
+    auto check_descriptor = [&](ShapesContext &context, const std::string &name,
+                                const ValueInfoProto &formal) {
+      if (!formal.has_type() || formal.type().value_case() == TypeProto::VALUE_NOT_SET)
+        return;
+      const TypeProto &type = formal.type();
+      if (type.has_tensor_type() && context.Has(name)) {
+        const auto &declared = type.tensor_type();
+        const auto &actual = context.Get(name);
+        EXT_ENFORCE_INVALID(declared.elem_type() == TensorProto::UNDEFINED ||
+                                declared.elem_type() == TensorTypeToDataType(actual.Dtype()),
+                            "Layer: incompatible boundary tensor dtype for '", formal.name(), "'.");
+        if (declared.has_shape()) {
+          EXT_ENFORCE_INVALID(
+              static_cast<std::size_t>(declared.shape().dim_size()) == actual.Shape().Rank(),
+              "Layer: incompatible boundary tensor rank for '", formal.name(), "'.");
+          for (int d = 0; d < declared.shape().dim_size(); ++d) {
+            const auto &dim = declared.shape().dim(d);
+            const auto &actual_dim = actual.Shape()[d];
+            EXT_ENFORCE_INVALID(!dim.has_dim_value() || !actual_dim.IsInt() ||
+                                    dim.dim_value() == actual_dim.AsInt(),
+                                "Layer: incompatible boundary tensor dimension for '",
+                                formal.name(), "'.");
+            if (dim.has_dim_value() && actual_dim.IsExpr())
+              context.AddConstraint(actual_dim.AsExpr(), std::to_string(dim.dim_value()));
+            if (dim.has_dim_param() && !dim.dim_param().empty()) {
+              const auto [found, inserted] = dimensions.emplace(dim.dim_param(), actual_dim);
+              if (!inserted) {
+                const auto &previous = found->second;
+                EXT_ENFORCE_INVALID(!previous.IsInt() || !actual_dim.IsInt() ||
+                                        previous.AsInt() == actual_dim.AsInt(),
+                                    "Layer: inconsistent symbolic boundary tensor dimension.");
+                if (previous != actual_dim)
+                  context.AddConstraint(previous.IsInt() ? std::to_string(previous.AsInt())
+                                                         : previous.AsExpr(),
+                                        actual_dim.IsInt() ? std::to_string(actual_dim.AsInt())
+                                                           : actual_dim.AsExpr());
+              }
+            }
+          }
+        }
+      } else if (context.HasType(name)) {
+        EXT_ENFORCE_INVALID(SameDeclaredType(type, context.GetType(name)),
+                            "Layer: incompatible boundary value type for '", formal.name(), "'.");
+      } else if (type.has_sequence_type() && context.HasSequence(name)) {
+        // Sequence descriptors are carried unchanged across the explicit boundary.
+      } else {
+        EXT_THROW_INVALID("Layer: incompatible boundary value kind for '", formal.name(), "'.");
+      }
+    };
+    for (int i = 0; i < node.input_size(); ++i) {
+      check_descriptor(ctx, node.input(i), body.input(i));
+      child.CopyValueFrom(body.input(i).name(), ctx, node.input(i));
+    }
+    child.ComputeShapeGraph(body);
+    for (int i = 0; i < node.output_size(); ++i) {
+      const std::string name = body.output(i).name();
+      EXT_ENFORCE_INVALID(child.Has(name) || child.HasType(name) || child.HasSequence(name),
+                          "Layer: no inferred descriptor for body output '", name, "'.");
+      check_descriptor(child, name, body.output(i));
+      ctx.CopyValueFrom(node.output(i), child, name);
+    }
+    for (const auto &[left, right] : child.Constraints())
+      ctx.AddConstraint(left, right);
+    for (const auto &[left, right] : child.LessEqualConstraints())
+      ctx.AddLessEqualConstraint(left, right);
+    ctx.RegisterSubgraphContext(ctx.current_node_index(), "body", std::move(child));
+    return;
+  }
   const std::string local_key =
       ShapesContext::LocalFunctionKey(node.domain(), op_type, node.overload());
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
@@ -932,8 +1007,9 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   } restore_owner{constraint_owner_, std::move(constraint_owner_)};
   constraint_owner_ = ConstraintOwner(node);
   const bool preserving =
-      (node.domain().empty() || node.domain() == kOnnxDomain) &&
-      (node.op_type() == "Identity" || node.op_type() == "If" || node.op_type() == "Loop");
+      ((node.domain().empty() || node.domain() == kOnnxDomain) &&
+       (node.op_type() == "Identity" || node.op_type() == "If" || node.op_type() == "Loop")) ||
+      (node.domain() == kAiRtDomain && node.op_type() == "Layer");
   const bool local_function =
       GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type(), node.overload())) != nullptr;
   const bool custom_inference =

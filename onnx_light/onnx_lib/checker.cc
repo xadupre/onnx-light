@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "onnx_core/graph/layer.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/path.h"
@@ -849,6 +850,16 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
     }
   }
   auto domain_version = dit->second;
+  const bool is_layer = node.domain() == "ai.rt" && node.op_type() == "Layer";
+  if (is_layer) {
+    if (domain_version != 1)
+      fail_check("Layer supports only ai.rt opset 1.");
+    try {
+      core::graph::ValidateLayer(node);
+    } catch (const std::invalid_argument &error) {
+      fail_check(error.what());
+    }
+  }
 
   // for ops referencing local functions, there is no schema to verify it.
   // will add a check to verify consistency between these ops and local functions.
@@ -860,6 +871,8 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
 
     check_attribute(attr, ctx, lex_ctx);
   }
+  if (is_layer)
+    return;
 
   // This issue will be caught by check_graph instead
   if (check_is_experimental_op(node)) {

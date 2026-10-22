@@ -1544,6 +1544,22 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   return result;
 }
 
+bool GraphGraph::IsInsideOperatorBody(const std::string &domain, const std::string &op_type) const {
+  for (const GraphGraph *scope = this; scope->parent_graph_ != nullptr;
+       scope = scope->parent_graph_) {
+    const auto &parent = *scope->parent_graph_;
+    if (scope->parent_position_limit_ >= parent.builder_.Nodes().size())
+      continue;
+    const auto &node = parent.builder_.Nodes()[scope->parent_position_limit_];
+    if (node.domain().value() != domain || node.op_type().value() != op_type)
+      continue;
+    const auto children = parent.builder_.ReferencedSubgraphs(node);
+    if (std::find(children.begin(), children.end(), &scope->builder_) != children.end())
+      return true;
+  }
+  return false;
+}
+
 RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,

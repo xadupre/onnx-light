@@ -138,6 +138,9 @@ public:
   /// enclosing scope.
   bool IsUsedBySubgraph(const std::string &name) const;
 
+  /// Returns whether an enclosing operator body has the exact domain and operator type.
+  bool IsInsideOperatorBody(const std::string &domain, const std::string &op_type) const;
+
   /// Returns the position of ``node`` in :cpp:func:`GraphBuilder::Nodes`.
   /// Throws :cpp:class:`BuilderError` when ``node`` is not part of the index.
   std::size_t Position(const NodeProto &node) const;

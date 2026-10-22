@@ -110,8 +110,9 @@ TEST(PatternRegistry, RecursiveOptimizationInheritsOnlyUndefinedDevices) {
 }
 
 TEST(PatternRegistry, RejectsDuplicateName) {
-  core::builder::RegisterPattern("test.DuplicatePattern",
-                                 []() { return std::make_unique<CustomPattern>(); });
+  core::builder::RegisterPattern("test.DuplicatePattern", []() {
+    return std::make_unique<CustomPattern>("test.DuplicatePattern");
+  });
   EXPECT_THROW(core::builder::RegisterPattern("test.DuplicatePattern",
                                               []() { return std::make_unique<CustomPattern>(); }),
                core::builder::PatternRegistrationError);
@@ -126,6 +127,20 @@ TEST(PatternRegistry, RejectsInvalidRegistration) {
   EXPECT_THROW(core::builder::CreateRegisteredPattern(""), core::builder::PatternRegistrationError);
   EXPECT_THROW(core::builder::CreateRegisteredPattern("test.UnknownPattern"),
                core::builder::PatternRegistrationError);
+}
+
+TEST(PatternRegistry, ExplicitOnlyPatternsAreExcludedFromDefaults) {
+  core::builder::RegisterPattern(
+      "test.ExplicitOnly", []() { return std::make_unique<CustomPattern>("test.ExplicitOnly"); },
+      false);
+  const auto names = core::builder::RegisteredPatternNames();
+  EXPECT_NE(std::find(names.begin(), names.end(), "test.ExplicitOnly"), names.end());
+  const auto defaults = core::builder::RegisteredPatternNames(false);
+  EXPECT_EQ(std::find(defaults.begin(), defaults.end(), "test.ExplicitOnly"), defaults.end());
+  for (const auto &pattern : core::builder::CreateRegisteredPatterns())
+    EXPECT_NE(pattern->Name(), "test.ExplicitOnly");
+  EXPECT_EQ(core::builder::CreateRegisteredPattern("test.ExplicitOnly")->Name(),
+            "test.ExplicitOnly");
 }
 
 } // namespace Test

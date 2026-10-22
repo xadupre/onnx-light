@@ -16,6 +16,7 @@ namespace {
 struct PatternRegistration {
   std::string name;
   PatternFactory factory;
+  bool enabled_by_default;
 };
 
 struct PatternRegistry {
@@ -42,7 +43,7 @@ void PatternOptimization::SetRegisteredName(const std::string &name) {
   name_ = name;
 }
 
-void RegisterPattern(const std::string &name, PatternFactory factory) {
+void RegisterPattern(const std::string &name, PatternFactory factory, bool enabled_by_default) {
   if (name.empty()) {
     throw PatternRegistrationError("RegisterPattern: pattern name cannot be empty.");
   }
@@ -57,17 +58,19 @@ void RegisterPattern(const std::string &name, PatternFactory factory) {
                                    "' is already registered.");
   }
   const std::size_t index = registry.registrations.size();
-  registry.registrations.push_back(PatternRegistration{name, std::move(factory)});
+  registry.registrations.push_back(
+      PatternRegistration{name, std::move(factory), enabled_by_default});
   registry.indices.insert({name, index});
 }
 
-std::vector<std::string> RegisteredPatternNames() {
+std::vector<std::string> RegisteredPatternNames(bool include_opt_in) {
   PatternRegistry &registry = MutablePatternRegistry();
   std::lock_guard<std::mutex> lock(registry.mutex);
   std::vector<std::string> names;
   names.reserve(registry.registrations.size());
   for (const PatternRegistration &registration : registry.registrations) {
-    names.push_back(registration.name);
+    if (include_opt_in || registration.enabled_by_default)
+      names.push_back(registration.name);
   }
   return names;
 }
@@ -84,6 +87,8 @@ CreateRegisteredPatterns(std::optional<symbolic::Device> device) {
   std::vector<std::unique_ptr<PatternOptimization>> patterns;
   patterns.reserve(registrations.size());
   for (const PatternRegistration &registration : registrations) {
+    if (!registration.enabled_by_default)
+      continue;
     std::unique_ptr<PatternOptimization> pattern = registration.factory();
     if (pattern == nullptr) {
       throw PatternRegistrationError("CreateRegisteredPatterns: factory for '" + registration.name +

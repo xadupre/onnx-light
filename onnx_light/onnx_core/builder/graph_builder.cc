@@ -1950,7 +1950,7 @@ bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
   const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
   const auto &table = core::shapes::DispatchTable();
-  return table.find(key) != table.end() ||
+  return (domain == "ai.rt" && node.op_type() == "Layer") || table.find(key) != table.end() ||
          compute_.Shapes().HasLocalFunction(
              ShapesContext::LocalFunctionKey(domain, node.op_type(), node.overload()));
 }

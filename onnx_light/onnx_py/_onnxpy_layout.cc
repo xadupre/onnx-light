@@ -67,7 +67,8 @@ void AddOnnxPyLayout(nb::module_ &m) {
   nb::class_<LayoutStats>(m, "LayoutStats")
       .def_ro("nodes", &LayoutStats::nodes)
       .def_ro("edges", &LayoutStats::edges)
-      .def_ro("scopes", &LayoutStats::scopes);
+      .def_ro("scopes", &LayoutStats::scopes)
+      .def_ro("collision_index_visits", &LayoutStats::collision_index_visits);
   nb::class_<PyGraphLayout>(m, "GraphLayout",
                             "Maintains graph-scoped incremental positions; edits use this object.")
       .def(nb::init<nb::object>(), nb::arg("graph"))

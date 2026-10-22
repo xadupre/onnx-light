@@ -125,11 +125,13 @@ struct GraphLayout::Impl {
   std::unordered_set<std::string> initializers;
   std::unordered_set<std::string> graph_outputs;
   std::unordered_set<LayoutNodeId> reserved_ids;
-  struct OccupiedLayer {
-    std::map<double, std::set<LayoutNodeId>> positions;
-    std::multiset<double> lefts, rights, heights;
+  struct HorizontalNode {
+    double left, right, top, bottom, max_right, min_top, max_bottom;
+    LayoutNodeId id;
+    uint64_t priority;
+    std::unique_ptr<HorizontalNode> lower, upper;
   };
-  std::map<size_t, OccupiedLayer> occupied;
+  std::unique_ptr<HorizontalNode> horizontal;
   std::map<double, std::set<LayoutNodeId>> left_edges, top_edges, right_edges, bottom_edges;
   std::set<std::string> external;
   std::set<std::string> external_changes;
@@ -165,6 +167,109 @@ struct GraphLayout::Impl {
             bottom_edges.rbegin()->first - top_edges.begin()->first};
   }
 
+  static uint64_t Priority(LayoutNodeId id) {
+    uint64_t value = id + 0x9e3779b97f4a7c15ULL;
+    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+    return value ^ (value >> 31);
+  }
+
+  static bool KeyLess(double left, LayoutNodeId id, const HorizontalNode &node) {
+    return left < node.left || (left == node.left && id < node.id);
+  }
+
+  static void UpdateHorizontal(HorizontalNode &node) {
+    node.max_right = node.right;
+    node.min_top = node.top;
+    node.max_bottom = node.bottom;
+    if (node.lower) {
+      node.max_right = std::max(node.max_right, node.lower->max_right);
+      node.min_top = std::min(node.min_top, node.lower->min_top);
+      node.max_bottom = std::max(node.max_bottom, node.lower->max_bottom);
+    }
+    if (node.upper) {
+      node.max_right = std::max(node.max_right, node.upper->max_right);
+      node.min_top = std::min(node.min_top, node.upper->min_top);
+      node.max_bottom = std::max(node.max_bottom, node.upper->max_bottom);
+    }
+  }
+
+  static void RotateHorizontalRight(std::unique_ptr<HorizontalNode> &root) {
+    auto pivot = std::move(root->lower);
+    root->lower = std::move(pivot->upper);
+    UpdateHorizontal(*root);
+    pivot->upper = std::move(root);
+    UpdateHorizontal(*pivot);
+    root = std::move(pivot);
+  }
+
+  static void RotateHorizontalLeft(std::unique_ptr<HorizontalNode> &root) {
+    auto pivot = std::move(root->upper);
+    root->upper = std::move(pivot->lower);
+    UpdateHorizontal(*root);
+    pivot->lower = std::move(root);
+    UpdateHorizontal(*pivot);
+    root = std::move(pivot);
+  }
+
+  void InsertHorizontal(std::unique_ptr<HorizontalNode> &root, double left, double right,
+                        double top, double bottom, LayoutNodeId id) {
+    if (!root) {
+      root = std::make_unique<HorizontalNode>(HorizontalNode{
+          left, right, top, bottom, right, top, bottom, id, Priority(id), nullptr, nullptr});
+      return;
+    }
+    if (KeyLess(left, id, *root)) {
+      InsertHorizontal(root->lower, left, right, top, bottom, id);
+      if (root->lower->priority > root->priority)
+        RotateHorizontalRight(root);
+    } else {
+      InsertHorizontal(root->upper, left, right, top, bottom, id);
+      if (root->upper->priority > root->priority)
+        RotateHorizontalLeft(root);
+    }
+    UpdateHorizontal(*root);
+  }
+
+  void EraseHorizontal(std::unique_ptr<HorizontalNode> &root, double left, LayoutNodeId id) {
+    if (!root)
+      return;
+    if (root->left == left && root->id == id) {
+      if (!root->lower)
+        root = std::move(root->upper);
+      else if (!root->upper)
+        root = std::move(root->lower);
+      else if (root->lower->priority > root->upper->priority) {
+        RotateHorizontalRight(root);
+        EraseHorizontal(root->upper, left, id);
+      } else {
+        RotateHorizontalLeft(root);
+        EraseHorizontal(root->lower, left, id);
+      }
+    } else if (KeyLess(left, id, *root)) {
+      EraseHorizontal(root->lower, left, id);
+    } else {
+      EraseHorizontal(root->upper, left, id);
+    }
+    if (root)
+      UpdateHorizontal(*root);
+  }
+
+  template <typename Callback>
+  bool QueryHorizontal(const HorizontalNode *node, double left, double right, double top,
+                       double bottom, Callback &&callback) {
+    if (!node || node->max_right <= left || node->min_top >= bottom || node->max_bottom <= top)
+      return false;
+    if (node->lower && QueryHorizontal(node->lower.get(), left, right, top, bottom, callback))
+      return true;
+    ++stats.collision_index_visits;
+    if (node->left < right && node->right > left && node->top < bottom && node->bottom > top &&
+        callback(node->id))
+      return true;
+    return node->left < right &&
+           QueryHorizontal(node->upper.get(), left, right, top, bottom, callback);
+  }
+
   void RemoveOccupied(const State &state) {
     auto remove_extent = [&](auto &index, double value) {
       auto it = index.find(value);
@@ -178,25 +283,17 @@ struct GraphLayout::Impl {
     remove_extent(bottom_edges, state.box.y + state.box.height);
     remove_extent(left_edges, state.box.x);
     remove_extent(top_edges, state.box.y);
-    auto layer = occupied.find(state.box.layer);
-    if (layer == occupied.end())
-      return;
-    auto &index = layer->second;
-    auto position = index.positions.find(state.box.y);
-    if (position != index.positions.end() && position->second.erase(state.box.id)) {
-      auto erase_one = [](auto &values, double value) {
-        auto it = values.find(value);
-        if (it != values.end())
-          values.erase(it);
-      };
-      erase_one(index.lefts, state.box.x);
-      erase_one(index.rights, state.box.x + state.box.width);
-      erase_one(index.heights, state.box.height);
-      if (position->second.empty())
-        index.positions.erase(position);
-    }
-    if (index.positions.empty())
-      occupied.erase(layer);
+    EraseHorizontal(horizontal, state.box.x - 24, state.box.id);
+  }
+
+  void IndexOccupied(const State &state) {
+    const auto &box = state.box;
+    right_edges[box.x + box.width].insert(box.id);
+    bottom_edges[box.y + box.height].insert(box.id);
+    left_edges[box.x].insert(box.id);
+    top_edges[box.y].insert(box.id);
+    InsertHorizontal(horizontal, box.x - 24, box.x + box.width + 24, box.y - 24,
+                     box.y + box.height + 24, box.id);
   }
 
   LayoutNodeId Identify(NodeProto &node) {
@@ -412,6 +509,10 @@ struct GraphLayout::Impl {
         state.box.height = 24;
       }
     }
+    FitChildBounds(state);
+  }
+
+  void FitChildBounds(State &state) {
     double children_height = 48;
     for (const auto &child : state.children) {
       const auto &nested = *child->impl_;
@@ -466,23 +567,9 @@ struct GraphLayout::Impl {
     }
   }
 
-  bool Collides(const LayoutNode &box) const {
-    for (const auto &[layer, index] : occupied) {
-      (void)layer;
-      if (*index.rights.rbegin() + 24 <= box.x || *index.lefts.begin() >= box.x + box.width + 24)
-        continue;
-      auto position = index.positions.lower_bound(box.y - *index.heights.rbegin() - 24);
-      for (; position != index.positions.end() && position->first < box.y + box.height + 24;
-           ++position)
-        for (auto other : position->second) {
-          const auto &occupied_box = states.at(other).box;
-          if (other != box.id && box.x < occupied_box.x + occupied_box.width + 24 &&
-              box.x + box.width + 24 > occupied_box.x && box.y + box.height + 24 > occupied_box.y &&
-              box.y < occupied_box.y + occupied_box.height + 24)
-            return true;
-        }
-    }
-    return false;
+  bool Collides(const LayoutNode &box) {
+    return QueryHorizontal(horizontal.get(), box.x, box.x + box.width, box.y, box.y + box.height,
+                           [&](LayoutNodeId other) { return other != box.id; });
   }
 
   std::pair<bool, double> RequiredX(const State &state) const {
@@ -570,11 +657,6 @@ struct GraphLayout::Impl {
         state.pinned = false;
         repaired_pin = true;
       }
-      const bool moved =
-          state.box.layer != layer || (!state.pinned && state.box.x != x) || seeds.count(id) ||
-          repaired_pin;
-      if (!moved)
-        return;
       RemoveOccupied(state);
       const bool preserve_y = state.placed && state.box.layer == layer;
       state.box.layer = layer;
@@ -595,39 +677,19 @@ struct GraphLayout::Impl {
         bool collision;
         do {
           collision = false;
-          for (const auto &[other_layer, index] : occupied) {
-            (void)other_layer;
-            if (*index.rights.rbegin() + 24 <= state.box.x ||
-                *index.lefts.begin() >= state.box.x + state.box.width + 24)
-              continue;
-            auto position = index.positions.lower_bound(y - *index.heights.rbegin() - 24);
-            for (; position != index.positions.end() && position->first < y + state.box.height + 24;
-                 ++position) {
-              for (auto other : position->second) {
-                const auto &box = states.at(other).box;
-                if (state.box.x < box.x + box.width + 24 &&
-                    state.box.x + state.box.width + 24 > box.x &&
-                    y + state.box.height + 24 > box.y && y < box.y + box.height + 24) {
-                  y = box.y + box.height + 24;
-                  collision = true;
-                }
-              }
-            }
-          }
+          QueryHorizontal(horizontal.get(), state.box.x, state.box.x + state.box.width, y,
+                          y + state.box.height, [&](LayoutNodeId other) {
+                            const auto &box = states.at(other).box;
+                            y = box.y + box.height + 24;
+                            collision = true;
+                            return true;
+                          });
         } while (collision && y <= CoordinateLimit);
         if (y > CoordinateLimit)
           Diagnose("Layout coordinate space exhausted; clipped the node position.");
         state.box.y = std::min(y, CoordinateLimit);
       }
-      auto &index = occupied[layer];
-      index.positions[state.box.y].insert(id);
-      index.lefts.insert(state.box.x);
-      index.rights.insert(state.box.x + state.box.width);
-      index.heights.insert(state.box.height);
-      right_edges[state.box.x + state.box.width].insert(id);
-      bottom_edges[state.box.y + state.box.height].insert(id);
-      left_edges[state.box.x].insert(id);
-      top_edges[state.box.y].insert(id);
+      IndexOccupied(state);
       state.placed = true;
     };
     std::set<LayoutNodeId> placed;
@@ -681,7 +743,7 @@ void GraphLayout::Load(bool recurse) {
   impl.order.clear();
   impl.producers.clear();
   impl.consumers.clear();
-  impl.occupied.clear();
+  impl.horizontal.reset();
   impl.local_values.clear();
   impl.initializers.clear();
   impl.graph_outputs.clear();
@@ -906,6 +968,7 @@ bool GraphLayout::SetSize(LayoutNodeId id, double width, double height) {
   state.box.width = width;
   state.box.height = height;
   state.fixed_size = true;
+  impl.FitChildBounds(state);
   impl.Solve({id});
   impl.Notify();
   return true;

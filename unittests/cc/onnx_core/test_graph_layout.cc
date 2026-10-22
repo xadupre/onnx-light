@@ -69,6 +69,51 @@ TEST(GraphLayout, LocalMutationDoesNotVisitIndependentBranches) {
   EXPECT_EQ(layout.Get(untouched.id)->y, untouched.y);
 }
 
+TEST(GraphLayout, ReindexesUnchangedAffectedDescendants) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("a");
+  *attribute->mutable_g()->add_node() = Node("b", {"a"});
+  *attribute->mutable_g()->add_node() = Node("c");
+  *graph.add_node() = container;
+
+  GraphLayout layout(graph, true);
+  const auto parent = layout.Order()[0];
+  auto *child = layout.Children(parent)[0];
+  const auto a = child->Order()[0];
+  const auto b = child->Order()[1];
+  const auto c = child->Order()[2];
+  const auto before = *child->Get(b);
+  const auto parent_width = layout.Get(parent)->width;
+
+  ASSERT_TRUE(child->SetSize(a, child->Get(a)->width, 200));
+  EXPECT_EQ(child->Get(b)->layer, before.layer);
+  EXPECT_EQ(child->Get(b)->x, before.x);
+  EXPECT_EQ(child->Bounds().right, before.x + before.width);
+  EXPECT_EQ(layout.Get(parent)->width, parent_width);
+  EXPECT_FALSE(child->SetPosition(c, before.x, before.y));
+
+  layout.Persist();
+  GraphLayout shallow(graph, false);
+  EXPECT_EQ(shallow.Get(parent)->width, parent_width);
+}
+
+TEST(GraphLayout, CollisionQueriesStayLocalForLongChains) {
+  GraphProto graph;
+  GraphLayout layout(graph);
+  layout.Load();
+  std::string input;
+  for (size_t i = 0; i < 512; ++i) {
+    const auto output = "chain_" + std::to_string(i);
+    layout.Append(
+        Node(output, input.empty() ? std::vector<std::string>{} : std::vector<std::string>{input}));
+    input = output;
+  }
+  EXPECT_LT(layout.Stats().collision_index_visits, 40u);
+}
+
 TEST(GraphLayout, InsertDeleteReplacePreserveIdsAndOrder) {
   GraphProto graph;
   GraphLayout layout(graph);
@@ -528,6 +573,30 @@ TEST(GraphLayout, PersistedPinnedContainerTracksChildGrowthAndShrinkWithoutMovin
   EXPECT_EQ(restored.Get(id)->width, initial_width);
   EXPECT_EQ(restored.Get(id)->x, -200);
   EXPECT_EQ(restored.Get(id)->y, -300);
+}
+
+TEST(GraphLayout, SetSizePreservesChildBoundMinimums) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "If");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("left");
+  *attribute->mutable_g()->add_node() = Node("right");
+  *graph.add_node() = container;
+  GraphLayout layout(graph, true);
+  const auto id = layout.Order()[0];
+  auto *child = layout.Children(id)[0];
+  ASSERT_TRUE(child->SetPosition(child->Order()[1], 400, 200));
+  const auto child_bounds = child->Bounds();
+
+  ASSERT_TRUE(layout.SetSize(id, 160, 64));
+  EXPECT_GE(layout.Get(id)->width, child_bounds.right - child_bounds.left + 48);
+  EXPECT_GE(layout.Get(id)->height, child_bounds.bottom - child_bounds.top + 96);
+
+  layout.Persist();
+  GraphLayout shallow(graph, false);
+  EXPECT_EQ(shallow.Get(id)->width, layout.Get(id)->width);
+  EXPECT_EQ(shallow.Get(id)->height, layout.Get(id)->height);
 }
 
 TEST(GraphLayout, OversizedMetadataIsRejectedBeforeAllocatingParserCopies) {

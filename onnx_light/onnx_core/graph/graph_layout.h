@@ -34,7 +34,7 @@ struct LayoutEdge {
 };
 
 struct LayoutStats {
-  size_t nodes = 0, edges = 0, scopes = 0;
+  size_t nodes = 0, edges = 0, scopes = 0, collision_index_visits = 0;
 };
 
 struct LayoutBounds {

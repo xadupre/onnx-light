@@ -1105,10 +1105,10 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
     const auto coverage = [](const Plan &value) {
       return std::make_tuple(value.regions.size() * value.anchor_roles,
                              value.regions.size() * value.regions[0].size(), value.regions.size(),
-                             value.regions[0].size());
+                             value.regions.size(), value.regions[0].size());
     };
-    // Seed families compete on anchor coverage, then node coverage and region
-    // size. Within each anchor skeleton Grow uses the boundary-cost ordering.
+    // Equal coverage favors more occurrences (a smaller period) before larger
+    // individual regions. Within each skeleton Grow uses boundary-cost ordering.
     if (!found || coverage(plan) > coverage(best) ||
         (coverage(plan) == coverage(best) && plan.score < best.score)) {
       best = std::move(plan);

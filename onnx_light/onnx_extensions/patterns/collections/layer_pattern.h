@@ -17,7 +17,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Detection runs once per optimizer scan, at the first graph node. It considers
  * at most 32 seed groups, 32 corresponding occurrences, 64 nodes per occurrence,
  * 4096 joint extension attempts and 4096 nodes in the rewritten interval.
- * Seed families prefer greater anchor coverage, node coverage and region size.
+ * Seed families prefer greater anchor and node coverage, then more occurrences
+ * (a smaller period), then region size.
  * Within each grown anchor skeleton, cuts are ranked by crossing-edge
  * multiplicity, unknown-size edges, saturating
  * known byte size, decreasing region size and original topological order.

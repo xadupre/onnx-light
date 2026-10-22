@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Allowed external tensor data in one existing child directory while rejecting absolute paths, parent traversal, deeper paths, and statically resolved escapes ([#5305](https://github.com/xadupre/onnx-light/pull/5305)).
 - Expanded scalar `SplitToSequence` splits into explicit lengths, including a final remainder, when rewriting to `Split`, and ignored `keepdims` when a split input is present ([#5300](https://github.com/xadupre/onnx-light/pull/5300)).
 - Preserved symbolic dimensions for open-ended `Slice` inference by treating `INT64_MAX` ends as the input extent rather than a concrete output dimension ([#5301](https://github.com/xadupre/onnx-light/pull/5301)).
+- Omitted symbolic value bounds for floating-point tensors containing NaNs, avoiding platform-dependent extrema while retaining infinity and signed-zero behavior in constant-space scans ([#5505](https://github.com/xadupre/onnx-light/issues/5505)).
 
 ### Documentation & CI
 

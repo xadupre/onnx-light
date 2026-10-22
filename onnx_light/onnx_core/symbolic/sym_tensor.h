@@ -706,8 +706,9 @@ inline constexpr int64_t kOptimValueAsShapeMaxElements = static_cast<int64_t>(kM
  *   - the ``min``/``max`` value bounds derived from the actual content.
  *     Both integer (INT8/16/32/64, UINT8/16/32/64) and floating-point
  *     (FLOAT, DOUBLE) element types are supported. The bounds are skipped
- *     for empty tensors and for tensors whose payload cannot be decoded
- *     (no typed field and no ``raw_data``, unsupported dtype, etc.);
+ *     for empty tensors, floating-point tensors containing any NaN, and
+ *     tensors whose payload cannot be decoded (no typed field and no
+ *     ``raw_data``, unsupported dtype, etc.). Infinities are retained;
  *   - the :cpp:func:`SymTensor::ValueAsShape` annotation when the
  *     element type is integer, the rank is at most one, and the element
  *     count is strictly less than :cpp:var:`kOptimValueAsShapeMaxElements`

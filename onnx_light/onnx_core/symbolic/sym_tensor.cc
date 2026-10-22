@@ -24,12 +24,13 @@
 #include <cctype>
 #include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
-#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 #if defined(__APPLE__)
 #include <locale.h>
@@ -703,8 +704,19 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
     payload_readable = tensor_values_detail::WithNumericTensorValues(
         tp, static_cast<uint64_t>(count), [&tensor, count](const auto &values) {
           if (count > 0) {
-            const auto bounds = std::ranges::minmax_element(values);
-            tensor.SetMinMax(static_cast<double>(*bounds.min), static_cast<double>(*bounds.max));
+            auto minimum = *values.begin();
+            auto maximum = minimum;
+            for (const auto value : values) {
+              if constexpr (std::is_floating_point_v<decltype(value)>) {
+                if (std::isnan(value))
+                  return true;
+              }
+              if (value < minimum)
+                minimum = value;
+              if (value >= maximum)
+                maximum = value;
+            }
+            tensor.SetMinMax(static_cast<double>(minimum), static_cast<double>(maximum));
           }
           return true;
         });

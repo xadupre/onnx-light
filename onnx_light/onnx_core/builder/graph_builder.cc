@@ -825,8 +825,10 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::InvalidateRewritings() {
-  for (GraphBuilder *builder = this; builder != nullptr; builder = builder->parent_)
+  for (GraphBuilder *builder = this; builder != nullptr; builder = builder->parent_) {
     builder->rewritings_.clear();
+    builder->rewriting_undo_.reset();
+  }
 }
 
 void GraphBuilder::RefreshAncestors() {

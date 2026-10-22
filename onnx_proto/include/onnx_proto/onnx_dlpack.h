@@ -37,13 +37,17 @@ ONNX_LIGHT_PROTO_API DLDataType DLPackDataTypeFromOnnx(int32_t data_type,
 ONNX_LIGHT_PROTO_API DLPackMetadata ValidateDLPack(const TensorProto &tensor);
 
 /**
- * Transfers raw_data without copying into an independently owned legacy DLPack descriptor.
+ * Transfers raw_data into an independently owned legacy DLPack descriptor.
  * The caller transfers the descriptor to one consumer or calls result->deleter(result) once.
  * Shape and dtype are snapshotted; neither the descriptor nor its deleter accesses the source.
- * Owned/aligned-owned storage is moved; borrowed storage must have a shared lifetime token
- * (including null-valued tokens with a control block). Shared owners retain exactly-once
- * cleanup. Consumers must treat the payload as read-only, even though the legacy ABI has no
- * read-only flag. Transfer of owned storage with active export leases is rejected;
+ * Uniquely owned storage, including aligned storage, is moved without copying its bytes.
+ * Shared owned storage is detached by copying the entire buffer before transfer, preserving
+ * other tensor copies. This requires an additional buffer-sized allocation and can fail.
+ * Borrowed storage is transferred without copying its bytes and must have a shared lifetime
+ * token (including null-valued tokens with a control block). The descriptor retains that token;
+ * shared owners retain exactly-once cleanup. Consumers must treat the data as read-only,
+ * even though the legacy ABI has no read-only flag. Transfer of owned storage with active
+ * export leases is rejected;
  * release those consumers first. Borrowed exports retain their shared lifetime owner.
  *
  * Validation and allocations complete before detachment: failure leaves the source intact.

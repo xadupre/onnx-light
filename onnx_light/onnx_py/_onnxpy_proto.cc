@@ -2360,7 +2360,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "retains the original allocation for existing views. "
           "Always returns a legacy capsule, including when max_version is supplied.")
       .def("release_dlpack", &ReleaseTensorProtoDLPack,
-           R"pbdoc(Transfers raw_data without copying to a single-consumption CPU DLPack capsule.
+           R"pbdoc(Transfers raw_data to a single-consumption CPU DLPack capsule.
 
 .. warning::
 
@@ -2370,9 +2370,13 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
 
 The descriptor snapshots shape/type and owns storage independently of the source, so it
 survives source destruction or reuse. Its deleter never accesses the source. User-supplied
-storage callbacks must likewise not reference a destroyed source. Borrowed data requires
-a lifetime owner. Validation/allocation failure leaves the source unchanged. The same
-dtype, shape, alignment and endian restrictions as ``__dlpack__`` apply. Consumers must
+storage callbacks must likewise not reference a destroyed source.
+Uniquely owned storage, including aligned storage, transfers without copying its bytes.
+Shared owned storage requires a full buffer copy before transfer to preserve other tensor
+copies; the additional buffer-sized allocation can fail. Borrowed storage transfers without
+copying its bytes and requires a lifetime owner, which the capsule retains.
+Validation and allocation failures leave the source unchanged. The same dtype, shape,
+alignment and endian restrictions as ``__dlpack__`` apply. Consumers must
 not write to the buffer. Owned storage with active ``__dlpack__`` consumers cannot
 be transferred: release those consumers first. Borrowed exports retain their shared owner.
 The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")

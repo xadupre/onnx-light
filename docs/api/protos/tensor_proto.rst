@@ -105,9 +105,9 @@ responsibility. Shape metadata is snapshotted at export.
 Explicit destructive transfer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``tensor.release_dlpack()`` transfers the existing allocation or shared
-borrowed-storage owner to an independent, single-consumption legacy
-``dltensor`` capsule. Unlike ``__dlpack__``, it does not retain the source.
+``tensor.release_dlpack()`` transfers ``raw_data`` to an independent,
+single-consumption legacy ``dltensor`` capsule. Unlike ``__dlpack__``, it does
+not retain the source.
 The native equivalent is ``ReleaseDLPack(TensorProto&)`` in ``onnx_dlpack.h``.
 
 .. warning::
@@ -122,8 +122,21 @@ The native equivalent is ``ReleaseDLPack(TensorProto&)`` in ``onnx_dlpack.h``.
 The descriptor snapshots dimensions and dtype, and its storage survives
 source destruction or reuse. The deleter never accesses the source.
 User-provided storage callbacks must likewise be independent of the source.
-Owned and aligned-owned allocations transfer without copying; borrowed data
-requires a lifetime owner and shares exactly-once cleanup with other owners.
+Whether the data is copied depends on its storage:
+
+* **Uniquely owned storage**, including aligned storage, transfers without
+  copying its bytes.
+* **Shared owned storage** is detached by copying the entire buffer before
+  transfer, preserving other tensor copies. Builder exports can share owned
+  storage, so transferring an exported tensor can require an additional
+  allocation as large as its raw-data buffer and can fail if memory is
+  insufficient.
+* **Borrowed storage** transfers without copying its bytes, but requires a
+  lifetime owner. The capsule retains that owner and shares exactly-once cleanup
+  with other owners.
+
+The transfer still allocates a descriptor and may allocate shape metadata,
+even when no data bytes are copied.
 Validation and allocation failures leave the source unchanged, including
 failure to create the Python capsule.
 

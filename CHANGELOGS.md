@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.1] – Unreleased
 
+### Documentation & CI
+
+- Bumped the release version to `0.2.1`.
+
+## [0.2.0] – 2026-10-22
+
 ### New Features
 
 - Extracted the native ONNX proto implementation into a standalone C++ project that supports independent static/shared builds, installation, and `find_package(onnx_proto CONFIG REQUIRED)` ([#5348](https://github.com/xadupre/onnx-light/pull/5348)).
@@ -39,7 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Documentation & CI
 
 - Removed the ORT plugin roadmap after moving it to the separate `xadupre/onnx-light-ort` project ([#5499](https://github.com/xadupre/onnx-light/pull/5499)).
-- Bumped the release version to `0.2.1`.
+- Bumped the release version to `0.2.0`.
 
 ## [0.1.32] – 2026-10-15
 

@@ -12,7 +12,7 @@ import numpy
 
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import FileLoadMode, GraphProto, ModelProto, ParseOptions, TensorProto
-from onnx_light.onnx.numpy_helper import from_array
+import onnx_light.onnx.numpy_helper as onh
 
 
 class DLDevice(ctypes.Structure):
@@ -100,7 +100,7 @@ class TestTensorProtoDLPack(ExtTestCase):
             for shape in ((), (2, 3), (0,), (2, 0, 3)):
                 with self.subTest(dtype=dtype, shape=shape):
                     array = numpy.ones(shape, dtype=dtype)
-                    expected = from_array(array, name="weights").SerializeToString()
+                    expected = onh.from_array(array, name="weights").SerializeToString()
                     address = array.ctypes.data
                     source = weakref.ref(array)
                     tensor = TensorProto.from_dlpack(array, name="weights")
@@ -176,7 +176,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertEqual(len(released), 1)
 
     def test_copy_from_owned_still_copies(self):
-        tensor = from_array(numpy.arange(8, dtype=numpy.uint8))
+        tensor = onh.from_array(numpy.arange(8, dtype=numpy.uint8))
         copied = TensorProto()
         copied.CopyFrom(tensor)
         self.assertNotEqual(
@@ -455,7 +455,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 options = ParseOptions()
                 options.alignment = alignment
                 tensor = TensorProto()
-                tensor.ParseFromString(from_array(expected).SerializeToString(), options)
+                tensor.ParseFromString(onh.from_array(expected).SerializeToString(), options)
                 tensor.name = "initializer"
                 tensor.doc_string = "preserved"
                 graph = GraphProto()
@@ -522,7 +522,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertEqual(len(released), 1)
 
     def test_release_rejects_active_owned_views(self):
-        tensor = from_array(numpy.arange(6, dtype=numpy.uint8))
+        tensor = onh.from_array(numpy.arange(6, dtype=numpy.uint8))
         view = numpy.from_dlpack(tensor)
         capsule = tensor.__dlpack__()
         before = tensor.SerializeToString()
@@ -688,19 +688,32 @@ class TestTensorProtoDLPack(ExtTestCase):
         ):
             with self.subTest(dtype=dtype):
                 expected = numpy.arange(6).astype(dtype).reshape(2, 3)
-                tensor = from_array(expected)
+                tensor = onh.from_array(expected)
                 self.assertEqual(tensor.__dlpack_device__(), (1, 0))
                 view = numpy.from_dlpack(tensor)
                 other = numpy.from_dlpack(tensor)
                 self.assertTrue(numpy.shares_memory(view, other))
                 self.assertFalse(view.flags.writeable)
                 self.assertEqual(view.dtype, expected.dtype)
-                # A same-sized assignment reuses the proto's owned raw_data buffer.
-                tensor.raw_data = numpy.zeros_like(expected).tobytes()
-                numpy.testing.assert_array_equal(view, numpy.zeros_like(expected))
-                del tensor, other
+                with self.assertRaisesRegex(ValueError, "active exported views"):
+                    tensor.raw_data = numpy.zeros_like(expected).tobytes()
+                self.assertEqual(tensor.raw_data, expected.tobytes())
+                numpy.testing.assert_array_equal(view, expected)
+                del other
                 gc.collect()
-                numpy.testing.assert_array_equal(view, numpy.zeros_like(expected))
+                with self.assertRaisesRegex(ValueError, "active exported views"):
+                    tensor.raw_data = numpy.zeros_like(expected).tobytes()
+                del tensor
+                gc.collect()
+                numpy.testing.assert_array_equal(view, expected)
+
+    def test_owned_assignment_after_export_release(self):
+        tensor = onh.from_array(numpy.arange(6, dtype=numpy.uint8))
+        view = numpy.from_dlpack(tensor)
+        del view
+        gc.collect()
+        tensor.raw_data = bytes(6)
+        self.assertEqual(tensor.raw_data, bytes(6))
 
     def test_exact_descriptors(self):
         descriptors = {
@@ -908,7 +921,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         options = ParseOptions()
         options.alignment = 64
         tensor = TensorProto()
-        tensor.ParseFromString(from_array(expected).SerializeToString(), options)
+        tensor.ParseFromString(onh.from_array(expected).SerializeToString(), options)
         view = numpy.from_dlpack(tensor)
         self.assertEqual(view.ctypes.data % 64, 0)
         tensor.dims.clear()
@@ -936,7 +949,7 @@ class TestTensorProtoDLPack(ExtTestCase):
             with open(path, "wb") as stream:
                 stream.write(
                     ModelProto(
-                        graph=GraphProto(initializer=[from_array(expected)])
+                        graph=GraphProto(initializer=[onh.from_array(expected)])
                     ).SerializeToString()
                 )
             options = ParseOptions()

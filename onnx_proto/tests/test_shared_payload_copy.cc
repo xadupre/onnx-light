@@ -290,16 +290,26 @@ TEST(SharedPayloadCopy, ExportLeasesTrackEachAllocationAndBorrowedOwner) {
   source.assign("original", 8);
   auto first = source.acquire_export_guard();
   const auto *original = std::as_const(source).data();
+  EXPECT_THROW(source.assign("replacement", 11), std::invalid_argument);
+  source.clear();
   source.assign("replacement", 11);
   auto second = source.acquire_export_guard();
   EXPECT_NE(first, second);
   const auto *replacement = std::as_const(source).data();
-  source[0] = 'R';
+  EXPECT_THROW(source[0] = 'R', std::invalid_argument);
+  EXPECT_THROW(source.resize(2), std::invalid_argument);
+  EXPECT_THROW(source.resize_aligned(11, 64), std::invalid_argument);
+  EXPECT_THROW(source.push_back(0), std::invalid_argument);
+  EXPECT_THROW(source = std::vector<uint8_t>{1}, std::invalid_argument);
+  EXPECT_THROW(source.attach_deleter([] {}), std::invalid_argument);
   auto third = source.acquire_export_guard();
-  EXPECT_NE(second, third);
+  EXPECT_EQ(second, third);
+  EXPECT_EQ(std::memcmp(replacement, "replacement", 11), 0);
+  second.reset();
+  third.reset();
+  source[0] = 'R';
   source.clear();
   EXPECT_EQ(std::memcmp(original, "original", 8), 0);
-  EXPECT_EQ(std::memcmp(replacement, "replacement", 11), 0);
 
   auto owner = std::make_shared<std::vector<uint8_t>>(std::initializer_list<uint8_t>{1, 2});
   std::weak_ptr<void> lifetime = owner;
@@ -337,6 +347,8 @@ TEST(SharedPayloadCopy, ReplacementDropsExportStateButRetainsOldReadOnlyView) {
   auto old_lease = source.raw_data().acquire_export_guard();
   const auto *old_view = std::as_const(source).raw_data().data();
 
+  EXPECT_THROW(source.set_raw_data("second"), std::invalid_argument);
+  source.clear_raw_data();
   source.set_raw_data("second");
   EXPECT_FALSE(source.raw_data().has_active_exports());
   auto snapshot = utils::CopyWithSharedPayloads(source);

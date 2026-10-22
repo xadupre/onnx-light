@@ -3,10 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_proto/onnx_helper.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <gtest/gtest.h>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -946,6 +951,78 @@ TEST(OnnxOptimTensorProto, FromTensorProtoDoublePopulatesMinMax) {
   ASSERT_TRUE(t.HasMax());
   EXPECT_DOUBLE_EQ(t.Min(), -2.5);
   EXPECT_DOUBLE_EQ(t.Max(), 7.0);
+}
+
+TEST(OnnxOptimTensorProto, RawFloatingBoundsMatchDecodedValues) {
+  for (const auto dtype : {TensorProto::FLOAT, TensorProto::DOUBLE}) {
+    for (const double first : {-1.5, std::numeric_limits<double>::quiet_NaN(),
+                               -std::numeric_limits<double>::infinity()}) {
+      TensorProto tp = MakeTensorProto("w", dtype, {4});
+      const std::vector<double> values = {first, 0.0, 2.25, -3.5};
+      std::string bytes;
+      for (double value : values) {
+        uint64_t bits;
+        if (dtype == TensorProto::FLOAT) {
+          const float converted = static_cast<float>(value);
+          uint32_t narrow;
+          std::memcpy(&narrow, &converted, sizeof(narrow));
+          bits = narrow;
+        } else {
+          std::memcpy(&bits, &value, sizeof(bits));
+        }
+        const size_t width = dtype == TensorProto::FLOAT ? 4 : 8;
+        for (size_t b = 0; b < width; ++b)
+          bytes.push_back(static_cast<char>((bits >> (8 * b)) & 0xff));
+      }
+      tp.set_raw_data(bytes);
+      std::vector<double> decoded;
+      ASSERT_TRUE(ReadFloatingValues(tp, decoded));
+      const auto [min, max] = std::minmax_element(decoded.begin(), decoded.end());
+      core::symbolic::SymTensor tensor;
+      ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
+      ASSERT_TRUE(tensor.HasMin());
+      ASSERT_TRUE(tensor.HasMax());
+      if (std::isnan(*min))
+        EXPECT_TRUE(std::isnan(tensor.Min()));
+      else
+        EXPECT_DOUBLE_EQ(tensor.Min(), *min);
+      if (std::isnan(*max))
+        EXPECT_TRUE(std::isnan(tensor.Max()));
+      else
+        EXPECT_DOUBLE_EQ(tensor.Max(), *max);
+    }
+  }
+}
+
+TEST(OnnxOptimTensorProto, FloatingBoundsValidateCountsAndPreferTypedFields) {
+  for (const auto dtype : {TensorProto::FLOAT, TensorProto::DOUBLE}) {
+    const size_t width = dtype == TensorProto::FLOAT ? 4 : 8;
+    for (size_t bytes : {width - 1, width, width * 2 + 1, width * 3}) {
+      TensorProto tp = MakeTensorProto("w", dtype, {2});
+      tp.set_raw_data(std::string(bytes, '\0'));
+      core::symbolic::SymTensor tensor;
+      ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
+      EXPECT_FALSE(tensor.HasMin());
+      EXPECT_FALSE(tensor.HasMax());
+    }
+    TensorProto tp = MakeTensorProto("w", dtype, {2});
+    tp.set_raw_data(std::string(width * 2, '\0'));
+    if (dtype == TensorProto::FLOAT) {
+      tp.add_float_data(-2);
+      tp.add_float_data(3);
+    } else {
+      tp.add_double_data(-2);
+      tp.add_double_data(3);
+    }
+    core::symbolic::SymTensor tensor;
+    ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
+    EXPECT_DOUBLE_EQ(tensor.Min(), -2);
+    EXPECT_DOUBLE_EQ(tensor.Max(), 3);
+    tp.add_dims(2);
+    ASSERT_TRUE(core::symbolic::SymTensorFromTensorProto(tp, tensor));
+    EXPECT_FALSE(tensor.HasMin());
+    EXPECT_FALSE(tensor.HasMax());
+  }
 }
 
 TEST(OnnxOptimTensorProto, FromTensorProtoIntegerPopulatesMinMaxAndValueAsShape) {

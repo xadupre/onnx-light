@@ -262,6 +262,12 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     }
     if (HasRank(graph, input1, rank) && rank == 1 &&
         (op_type == "Add" || op_type == "Mul" || op_type == "Sub" || op_type == "Div")) {
+      const double neutral = (op_type == "Add" || op_type == "Sub") ? 0.0 : 1.0;
+      double leading = 0.0;
+      const auto *constant = graph.GetComputedConstant(input1);
+      if (constant == nullptr || !ReadScalarAsDouble(*constant, leading) || leading != neutral) {
+        return NoMatch(candidate, "the constant operand does not start with a neutral element");
+      }
       std::vector<double> values;
       double common_value = 0.0;
       if (!ReadConstDoubles(graph, input1, values) || !AllSame(values, common_value)) {

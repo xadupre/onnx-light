@@ -10,6 +10,7 @@
 #include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
+#include <map>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -717,7 +718,7 @@ TEST(GraphGraph, CleanupInvalidatesUnusedEncodedAndPagedInitializers) {
     encoded.mutable_struct_type()->set_type_ref(101);
     encoded.set_raw_data(std::string(sizeof(float), '\0'));
     builder.MakeEncodedInitializer(encoded);
-    const auto *encoded_payload = encoded.raw_data().data();
+    const auto *encoded_payload = std::as_const(encoded).raw_data().data();
     EXPECT_EQ(builder.Shapes().GetEncodedValue("encoded").raw_data().data(), encoded_payload);
     PagedCacheProto cache;
     cache.set_name("cache");
@@ -1555,13 +1556,29 @@ TEST(GraphGraph, NestedAndFunctionPayloadsRetainBorrowedOwnersThroughUndo) {
       source.MakeOutput("Z");
       canonical = source.ToModel();
       core::builder::GraphBuilder working(canonical, SchemaLookup());
+      // Import materializes function initializers as Constant nodes with their own scheduling.
+      auto imported = working.ToModel();
       core::builder::GraphGraph optimizer(
           working, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
       core::builder::ConstantFoldingOptions options;
       options.enabled = false;
       auto plan = optimizer.Optimize(1, nullptr, options);
       exported = working.UndoRewritings(plan).ToModel();
-      EXPECT_TRUE(exported.Equals(canonical));
+      const auto sort_opsets = [](auto &proto) {
+        std::map<std::string, int64_t> opsets;
+        for (const auto &opset : proto.opset_import())
+          opsets.emplace(opset.domain().value(), opset.version());
+        proto.clear_opset_import();
+        for (const auto &[domain, version] : opsets)
+          proto.add_opset(domain, version);
+      };
+      for (ModelProto *model : {&exported, &imported}) {
+        sort_opsets(*model);
+        for (auto &function : model->ref_functions())
+          sort_opsets(function);
+      }
+      std::string difference;
+      EXPECT_TRUE(exported.Equals(imported, &difference)) << difference;
       owner.reset();
       weight.Clear();
     }

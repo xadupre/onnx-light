@@ -92,10 +92,14 @@ be backed by a read-only memory mapping.
 
 The capsule retains the source Python proto and a separate reference to its
 raw-data owner token until the consumer releases the tensor (or an unused
-capsule is destroyed). Deleting the source variable is safe; copied borrowed
-protos share the original owner. Do not clear, resize, replace, or reparse
-**owned** source storage while a view exists, including through a containing
-model. Borrowed storage with no owner token remains the caller's lifetime
+capsule is destroyed). Owned exports also retain their exact allocation.
+Deleting or clearing the source is safe; copied borrowed protos share the
+original owner. Mutable access, byte assignment (including same-sized
+assignment), resizing and appending to **owned** source storage raise
+``ValueError`` while any exported view or unused capsule remains alive.
+Release all consumers before modifying that storage; failed mutations leave
+the tensor and its views unchanged. Live-view updates are not supported.
+Borrowed storage with no owner token remains the caller's lifetime
 responsibility. Shape metadata is snapshotted at export.
 
 Explicit destructive transfer

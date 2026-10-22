@@ -347,6 +347,7 @@ public:
 
   /** Assigns owned data by copying from a std::vector<uint8_t>; clears all special modes. */
   inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
+    check_no_active_exports();
     export_guard_.reset();
     owned_ = v;
     if (v.empty()) {
@@ -434,6 +435,7 @@ public:
   inline uint8_t *data() {
     EXT_ENFORCE(!borrowed_, "ByteSpan: mutable data() called on a borrowed (zero-copy) buffer; "
                             "use const data() or assign owned data first.");
+    check_no_active_exports();
     detach_owned();
     if (aligned_owned_)
       return const_cast<uint8_t *>(ptr_);
@@ -449,6 +451,7 @@ public:
 
   /** Resizes the owned buffer to n bytes and switches to plain owned mode. */
   inline void resize(size_t n) {
+    check_no_active_exports();
     export_guard_.reset();
     ptr_ = nullptr;
     size_ = 0;
@@ -487,6 +490,7 @@ public:
    *  If align <= 1 or n == 0, falls back to plain resize(n).
    *  The caller may read/write the data via data() as usual; size() returns n. */
   inline void resize_aligned(size_t n, size_t align) {
+    check_no_active_exports();
     export_guard_.reset();
     ptr_ = nullptr;
     size_ = 0;
@@ -554,6 +558,7 @@ public:
    *  register cleanup for data that has already been parsed (for example a tensor's raw_data
    *  relocated by a parse callback).  Any previously stored owner token is replaced. */
   template <typename Deleter> inline void attach_deleter(Deleter &&deleter) {
+    check_no_active_exports();
     export_guard_.reset();
     owner_ = std::shared_ptr<void>(static_cast<void *>(nullptr),
                                    [d = std::forward<Deleter>(deleter)](void *) { d(); });
@@ -573,6 +578,7 @@ public:
 
   /** Appends a single byte; switches to owned mode (copying any borrowed/aligned data first). */
   inline void push_back(uint8_t v) {
+    check_no_active_exports();
     export_guard_.reset();
     if (borrowed_) {
       owned_.assign(ptr_, ptr_ + size_);
@@ -630,6 +636,11 @@ public:
   }
 
 private:
+  inline void check_no_active_exports() const {
+    EXT_ENFORCE_INVALID(borrowed_ || !has_active_exports(),
+                        "ByteSpan: cannot modify owned storage with active exported views.");
+  }
+
   /** Preserves logical bytes and alignment when detaching an owned allocation. */
   inline void detach_owned() const {
     if (!owned_.is_shared())

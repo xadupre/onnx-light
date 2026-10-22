@@ -309,6 +309,14 @@ copy fallback. Genuinely transformed weights receive new allocations; undo
 retains the original definitions needed for exact restoration, not additional
 copies of their unchanged bytes.
 
+FLOAT and DOUBLE value bounds are scanned directly from typed fields or
+little-endian raw payloads without a decoded tensor-sized temporary. Payload
+counts must still match the tensor dimensions before bounds are recorded.
+Owned storage with active NumPy/DLPack views rejects mutable access, byte
+assignment, resizing and appending with an exception. Release all consumers
+before modifying that storage; clearing the tensor retains the old allocation
+for existing views.
+
 .. code-block:: text
 
    Initial graph

@@ -94,6 +94,16 @@ TEST(TensorStatistics, ParallelStatisticsMatchSerialExecutor) {
   }
 }
 
+TEST(TensorStatistics, MixedAxisRectangleResize) {
+  const int64_t count = 100000;
+  const auto tensor =
+      Tensor::FromDouble("X", {count, 1}, std::vector<double>(static_cast<size_t>(count), 2.5));
+  const auto stats = ComputeTensorStatistics(tensor, 0, {}, false, {1, count});
+  EXPECT_EQ(stats.rectangle_map.size(), static_cast<size_t>(count));
+  for (double value : stats.rectangle_map)
+    EXPECT_NEAR(value, 2.5, 1e-12);
+}
+
 TEST(TensorStatistics, ParallelChunkBoundariesPreserveNonfiniteAndPackedValues) {
   const int64_t count = 65539;
   CpuExecutionPolicy policy;

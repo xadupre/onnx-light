@@ -241,7 +241,7 @@ def expand_out_dim_graph(graph: GraphProto, dim_idx: int, inplace: bool = False)
     Arguments:
         graph: The graph to modify.
         dim_idx: Index at which the new dimension is inserted. Negative values
-            count from the back of the existing dimension list.
+            count from the back of the output dimensions; -1 appends a dimension.
         inplace: If True, mutates *graph* in place; otherwise a copy is made.
 
     Returns:
@@ -260,7 +260,7 @@ def expand_out_dim(model: ModelProto, dim_idx: int, inplace: bool = False) -> Mo
     Arguments:
         model: The model to modify.
         dim_idx: Index at which the new dimension is inserted. Negative values
-            count from the back of the existing dimension list.
+            count from the back of the output dimensions; -1 appends a dimension.
         inplace: If True, mutates *model* in place; otherwise a copy is made.
 
     Returns:

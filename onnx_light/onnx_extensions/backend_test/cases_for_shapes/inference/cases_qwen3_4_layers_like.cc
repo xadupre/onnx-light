@@ -20,6 +20,16 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
+// These shape-only cases omit weight payloads, so they use synthetic external
+// references rather than non-empty tensors with missing inline data.
+void AddQwenWeight(GraphProto &graph, const char *name, const std::vector<int64_t> &dims) {
+  auto &tensor = AddInitializer<uint16_t>(graph, name, dims, {});
+  tensor.set_data_location(TensorProto::EXTERNAL);
+  auto *location = tensor.add_external_data();
+  location->set_key("location");
+  location->set_value("#shape-inference-only");
+}
+
 void MakeQwenCacheInputsExclusive(GraphProto &graph) {
   constexpr const char *past_shape = "past_key_values_key_0::Shape2:3";
   constexpr const char *total_shape =
@@ -412,17 +422,16 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
         const std::string gate_proj = weight_prefix + "_mlp_gate_proj_weight::T10";
         const std::string up_proj = weight_prefix + "_mlp_up_proj_weight::T10";
         const std::string down_proj = weight_prefix + "_mlp_down_proj_weight::T10";
-        AddInitializer<uint16_t>(*graph, q_proj.c_str(), {INT64_C(1024), INT64_C(2048)}, {});
-        AddInitializer<uint16_t>(*graph, k_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, v_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, o_proj.c_str(), {INT64_C(2048), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, gate_proj.c_str(), {INT64_C(1024), INT64_C(3072)}, {});
-        AddInitializer<uint16_t>(*graph, up_proj.c_str(), {INT64_C(1024), INT64_C(3072)}, {});
-        AddInitializer<uint16_t>(*graph, down_proj.c_str(), {INT64_C(3072), INT64_C(1024)}, {});
+        AddQwenWeight(*graph, q_proj.c_str(), {INT64_C(1024), INT64_C(2048)});
+        AddQwenWeight(*graph, k_proj.c_str(), {INT64_C(1024), INT64_C(1024)});
+        AddQwenWeight(*graph, v_proj.c_str(), {INT64_C(1024), INT64_C(1024)});
+        AddQwenWeight(*graph, o_proj.c_str(), {INT64_C(2048), INT64_C(1024)});
+        AddQwenWeight(*graph, gate_proj.c_str(), {INT64_C(1024), INT64_C(3072)});
+        AddQwenWeight(*graph, up_proj.c_str(), {INT64_C(1024), INT64_C(3072)});
+        AddQwenWeight(*graph, down_proj.c_str(), {INT64_C(3072), INT64_C(1024)});
       }
 
-      AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(32000)},
-                               {});
+      AddQwenWeight(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(32000)});
       AddInitializer<float>(
           *graph, "to_322", {INT64_C(1), INT64_C(1), INT64_C(64)},
           {1.0f,           0.80566406f,    0.64941406f,    0.5234375f,     0.42163086f,
@@ -451,12 +460,12 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
                                  std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
         AddInitializer<uint16_t>(*graph, k_norm.c_str(), {INT64_C(128)},
                                  std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-        AddInitializer<uint16_t>(*graph, input_ln.c_str(), {INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, post_ln.c_str(), {INT64_C(1024)}, {});
+        AddQwenWeight(*graph, input_ln.c_str(), {INT64_C(1024)});
+        AddQwenWeight(*graph, post_ln.c_str(), {INT64_C(1024)});
       }
 
-      AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)}, {});
-      AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)}, {});
+      AddQwenWeight(*graph, "model.norm.weight", {INT64_C(1024)});
+      AddQwenWeight(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)});
 
       // ---- RoPE tables + causal mask (shared across the transformer layers) ----
       // This section is identical to the inlined case: it derives the RoPE
@@ -1053,17 +1062,16 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
         const std::string gate_proj = weight_prefix + "_mlp_gate_proj_weight::T10";
         const std::string up_proj = weight_prefix + "_mlp_up_proj_weight::T10";
         const std::string down_proj = weight_prefix + "_mlp_down_proj_weight::T10";
-        AddInitializer<uint16_t>(*graph, q_proj.c_str(), {INT64_C(1024), INT64_C(2048)}, {});
-        AddInitializer<uint16_t>(*graph, k_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, v_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, o_proj.c_str(), {INT64_C(2048), INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, gate_proj.c_str(), {INT64_C(1024), INT64_C(3072)}, {});
-        AddInitializer<uint16_t>(*graph, up_proj.c_str(), {INT64_C(1024), INT64_C(3072)}, {});
-        AddInitializer<uint16_t>(*graph, down_proj.c_str(), {INT64_C(3072), INT64_C(1024)}, {});
+        AddQwenWeight(*graph, q_proj.c_str(), {INT64_C(1024), INT64_C(2048)});
+        AddQwenWeight(*graph, k_proj.c_str(), {INT64_C(1024), INT64_C(1024)});
+        AddQwenWeight(*graph, v_proj.c_str(), {INT64_C(1024), INT64_C(1024)});
+        AddQwenWeight(*graph, o_proj.c_str(), {INT64_C(2048), INT64_C(1024)});
+        AddQwenWeight(*graph, gate_proj.c_str(), {INT64_C(1024), INT64_C(3072)});
+        AddQwenWeight(*graph, up_proj.c_str(), {INT64_C(1024), INT64_C(3072)});
+        AddQwenWeight(*graph, down_proj.c_str(), {INT64_C(3072), INT64_C(1024)});
       }
 
-      AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(32000)},
-                               {});
+      AddQwenWeight(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(32000)});
       AddInitializer<float>(
           *graph, "to_322", {INT64_C(1), INT64_C(1), INT64_C(64)},
           {1.0f,           0.80566406f,    0.64941406f,    0.5234375f,     0.42163086f,
@@ -1103,12 +1111,12 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
         // All-same FP16 initializer (value=0x3C00).
         AddInitializer<uint16_t>(*graph, k_norm.c_str(), {INT64_C(128)},
                                  std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-        AddInitializer<uint16_t>(*graph, input_ln.c_str(), {INT64_C(1024)}, {});
-        AddInitializer<uint16_t>(*graph, post_ln.c_str(), {INT64_C(1024)}, {});
+        AddQwenWeight(*graph, input_ln.c_str(), {INT64_C(1024)});
+        AddQwenWeight(*graph, post_ln.c_str(), {INT64_C(1024)});
       }
 
-      AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)}, {});
-      AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)}, {});
+      AddQwenWeight(*graph, "model.norm.weight", {INT64_C(1024)});
+      AddQwenWeight(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)});
 
       // Golden shape-inference / in-place-reuse metadata, attached to each node as
       // it is created and verified by BigModelsInplaceInfo.

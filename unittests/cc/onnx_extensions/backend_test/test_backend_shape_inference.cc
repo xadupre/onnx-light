@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/value_tags.h"
@@ -11,6 +12,7 @@
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_verify.h"
 #include "test_case_utils.h"
 
 #include <gtest/gtest.h>
@@ -2604,6 +2606,52 @@ ModelProto DeepCopyModel(const ModelProto &src, const std::string &tc_name) {
 }
 
 } // namespace
+
+TEST(BackendTestCaseShapeInference, Qwen3ModelsVerifyAfterShapeAndMetadataRefresh) {
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_big_qwen3_4_layers_like") != 0)
+      continue;
+    TestCaseUnloadGuard unload_guard(tc);
+    SCOPED_TRACE(tc.name);
+    ASSERT_NO_THROW(VerifyModel(tc.model()));
+    ModelProto model = DeepCopyModel(tc.model(), tc.name);
+    ASSERT_NO_THROW(VerifyModel(model));
+
+    size_t external_weights = 0;
+    checker::CheckerContext checker_ctx;
+    for (const auto &tensor : model.graph().initializer()) {
+      ASSERT_NO_THROW(checker::check_tensor(tensor, checker_ctx));
+      if (tensor.data_location() == TensorProto::EXTERNAL) {
+        EXPECT_TRUE(tensor.raw_data().empty());
+        EXPECT_TRUE(tensor.int32_data().empty());
+        ++external_weights;
+      }
+      if (tensor.name() == "model.layers.0.self_attn.q_norm.weight") {
+        EXPECT_NE(tensor.data_location(), TensorProto::EXTERNAL);
+        EXPECT_EQ(tensor.int32_data_size(), 128);
+      }
+    }
+    EXPECT_EQ(external_weights, 39u);
+
+    SnapshotAndStripOutputs(model);
+    SnapshotAndStripValueInfo(model);
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model));
+    ASSERT_NO_THROW(VerifyModel(model));
+
+    auto &graph = *model.mutable_graph();
+    core::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(model));
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(graph));
+    ASSERT_NO_THROW(core::compute::WriteConstantInfoToMetadata(model));
+    ASSERT_NO_THROW(core::compute::WriteInPlaceReuseToMetadata(graph, ctx));
+    ASSERT_NO_THROW(core::compute::WritePeakMemoryToMetadata(graph, ctx));
+    ASSERT_NO_THROW(VerifyModel(model));
+    ++checked;
+  }
+  EXPECT_EQ(checked, 4u);
+}
 
 TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
   std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);

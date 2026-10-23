@@ -144,7 +144,7 @@ ONNX_API void convPoolShapeInference(InferenceContext &ctx, bool use_dilation,
         int64_t total_pad = residual == 0 ? checkedSubtract(effective_kernel_shape[i], stride)
                                           : checkedSubtract(effective_kernel_shape[i], residual);
         total_pad = std::max<int64_t>(total_pad, 0);
-        int64_t half_pad_small = total_pad >> 1;
+        int64_t half_pad_small = total_pad / 2;
         int64_t half_pad_big = checkedSubtract(total_pad, half_pad_small);
         if (auto_pad_attr->s() == "SAME_UPPER") {
           pads[i] = half_pad_small;
@@ -1037,7 +1037,7 @@ ONNX_API void convTransposeShapeInference(InferenceContext &ctx) {
       for (int i = 0; i < input_dims_size; ++i) {
         int64_t total_pad = checkedSubtract(effective_kernel_shape[i], strides[i]);
         total_pad = std::max<int64_t>(total_pad, 0);
-        int64_t half_pad_small = total_pad >> 1;
+        int64_t half_pad_small = total_pad / 2;
         int64_t half_pad_big = checkedSubtract(total_pad, half_pad_small);
         if (auto_pad_attr->s() == "SAME_UPPER") {
           pads[i] = half_pad_small;

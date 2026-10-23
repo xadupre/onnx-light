@@ -864,7 +864,7 @@ public:
   public:
     // Export to cpp custom register macro.
     // DO NOT decorate the constructor as "explicit" because that breaks the macro
-    // ONNX_OPERATOR_SCHEMA_UNIQ. NOLINTNEXTLINE(google-explicit-constructor)
+    // ONNX_OPERATOR_SCHEMA_UNIQ. NOLINTNEXTLINE(*constructor)
     OpSchemaRegisterOnce( // NOSONAR
         OpSchema op_schema, int opset_version_to_load = 0, bool fail_duplicate_schema = true) {
       OpSchemaRegisterNoExcept(std::move(op_schema), opset_version_to_load, fail_duplicate_schema);
@@ -1045,6 +1045,8 @@ size_t ReplaceAll(std::string &s, const char *from, const char *to);
       op_schema_register_once##name##Counter [[maybe_unused]] =                                    \
           ONNX_LIGHT_NAMESPACE::OpSchema(#name, __FILE__, __LINE__)
 
+// Keep these exported APIs returning std::string for compatibility.
+// NOLINTBEGIN(modernize-use-string-view)
 ONNX_API inline std::string GenerateOptionalArgumentsDoc() {
   return "This operator has **optional** inputs/outputs. "
          "See [the doc](IR.md) for more details about the representation of "
@@ -1058,6 +1060,8 @@ ONNX_API inline std::string GenerateBroadcastingDocMul() {
   return "This operator supports **multidirectional (i.e., Numpy-style) broadcasting**;"
          " for more details please check [the doc](Broadcasting.md).";
 }
+
+// NOLINTEND(modernize-use-string-view)
 
 ONNX_API inline std::string GenerateBroadcastingDocUni(const char *from, const char *to) {
   std::string ret = "This operator supports **unidirectional broadcasting** (";

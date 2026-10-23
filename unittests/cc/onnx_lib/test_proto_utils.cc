@@ -1,6 +1,7 @@
 #include "onnx_lib/common/proto_utils.h"
 #include "onnx_lib/common/string_utils.h"
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -60,4 +61,17 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
 
   const std::string debug = ONNX_LIGHT_NAMESPACE::ProtoDebugString(attr);
   EXPECT_FALSE(debug.empty());
+}
+
+TEST(onnx_compatibility, ProtoUtilsRejectsOversizedBuffers) {
+  ModelProto model;
+  model.mutable_graph()->set_name("keep");
+  const char buffer = '\0';
+  const size_t first_invalid_size =
+      static_cast<size_t>(std::numeric_limits<std::int32_t>::max()) + 1;
+  for (const size_t length : {first_invalid_size, std::numeric_limits<size_t>::max()}) {
+    SCOPED_TRACE(length);
+    EXPECT_FALSE(ParseProtoFromBytes(&model, &buffer, length));
+    EXPECT_EQ(model.graph().name(), "keep");
+  }
 }

@@ -9,6 +9,8 @@
 #pragma once
 
 #include "onnx_pb.h"
+#include <cstdint>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -55,7 +57,7 @@ template <typename Proto> inline std::string ProtoDebugString(const Proto &proto
  */
 template <typename Proto>
 inline bool ParseProtoFromBytes(Proto *proto, const char *buffer, size_t length) {
-  constexpr size_t total_bytes_limit = (2048ULL << 20) - 1;
+  constexpr size_t total_bytes_limit = std::numeric_limits<std::int32_t>::max();
   if (proto == nullptr || (buffer == nullptr && length > 0) || length > total_bytes_limit) {
     return false;
   }

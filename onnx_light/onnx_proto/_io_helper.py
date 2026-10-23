@@ -3,6 +3,7 @@ import warnings
 from pathlib import Path
 from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
+    AttributeProto,
     FileLoadMode,
     GraphLayout,
     ModelProto,
@@ -404,17 +405,25 @@ def load(
                 text = handle.read()
         model = parse_from_textproto(text, ModelProto())
         if layout:
-            layouts = [GraphLayout(model.graph)]
-            layouts.extend(GraphLayout(function) for function in model.functions)
-            for placement in layouts:
-                placement.load()
-                placement.persist()
-            while layouts:
-                current = layouts.pop()
-                for diagnostic in current.diagnostics:
+            scopes = [(scope, False) for scope in reversed([model.graph, *model.functions])]
+            while scopes:
+                scope, ready = scopes.pop()
+                if not ready:
+                    scopes.append((scope, True))
+                    for node in reversed(scope.node):
+                        for attribute in reversed(node.attribute):
+                            if attribute.type == AttributeProto.GRAPH and attribute.HasField("g"):
+                                scopes.append((attribute.g, False))
+                            elif attribute.type == AttributeProto.GRAPHS:
+                                scopes.extend(
+                                    (child, False) for child in reversed(attribute.graphs)
+                                )
+                    continue
+                placement = GraphLayout(scope)
+                placement.load(recursive=False)
+                placement.persist(recursive=False)
+                for diagnostic in placement.diagnostics:
                     warnings.warn(diagnostic, RuntimeWarning, stacklevel=2)
-                for node_id in current.order:
-                    layouts.extend(current.children(node_id))
         return model
     if isinstance(file_load_mode, str):
         try:

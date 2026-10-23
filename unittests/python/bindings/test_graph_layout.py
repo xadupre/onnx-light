@@ -197,6 +197,43 @@ class TestGraphLayout(unittest.TestCase):
             with self.assertWarnsRegex(RuntimeWarning, "Unsupported layout metadata version"):
                 onnx.load(path, layout=True)
 
+    def test_textproto_matches_child_first_binary_layout(self):
+        model = self.model()
+        model.functions.append(self.function())
+        for scope in (model.graph, model.functions[0]):
+            for multiple in (False, True):
+                branch = scope.node[0].attribute.add()
+                branch.name = "branches" if multiple else "branch"
+                branch.type = (
+                    onnx.AttributeProto.GRAPHS if multiple else onnx.AttributeProto.GRAPH
+                )
+                child = branch.graphs.add() if multiple else branch.g
+                child.CopyFrom(self.model().graph)
+                nested = child.node[0].attribute.add()
+                nested.name = "nested"
+                nested.type = onnx.AttributeProto.GRAPH
+                nested.g.CopyFrom(self.model().graph)
+                version = nested.g.metadata_props.add()
+                version.key = "onnx_light.layout.version"
+                version.value = "1" if multiple else "999"
+                if multiple:
+                    position = nested.g.node[0].metadata_props.add()
+                    position.key = "onnx_light.layout.position"
+                    position.value = "invalid"
+        with tempfile.TemporaryDirectory() as directory:
+            text_path = Path(directory) / "model.textproto"
+            onnx.save(model, text_path)
+            with self.assertWarns(RuntimeWarning) as text_warnings:
+                text_model = onnx.load(text_path, layout=True)
+            with self.assertWarns(RuntimeWarning) as binary_warnings:
+                binary_model = onnx.load(model.SerializeToString(), layout=True)
+        self.assertEqual(
+            [str(w.message) for w in text_warnings.warnings],
+            [str(w.message) for w in binary_warnings.warnings],
+        )
+        self.assertEqual(len(text_warnings.warnings), 4)
+        self.assertEqual(text_model.SerializeToString(), binary_model.SerializeToString())
+
     def test_metadata_diagnostics_and_unrelated_keys(self):
         model = self.model()
         entry = model.graph.metadata_props.add()

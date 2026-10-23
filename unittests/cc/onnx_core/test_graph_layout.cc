@@ -879,6 +879,47 @@ TEST(GraphLayout, NonrecursiveLoadRejectsUnboundedChildSummaryAndFallsBack) {
   }
 }
 
+TEST(GraphLayout, NonrecursiveLoadUsesValidSummaryAfterInvalidDuplicate) {
+  for (bool multiple : {false, true}) {
+    GraphProto graph;
+    auto *node = graph.add_node();
+    *node = Node("outer", {}, "Container");
+    auto *attribute = node->add_attribute();
+    attribute->set_type(multiple ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+    auto *child = multiple ? attribute->add_graphs() : attribute->mutable_g();
+    *child->add_node() = Node("inner", {"capture"});
+    GraphLayout(*child, true).Persist(false);
+    std::string valid;
+    for (auto &entry : *child->mutable_metadata_props()) {
+      if (entry.key() == GraphLayout::ScopeKey) {
+        valid = entry.value();
+        entry.set_value("invalid");
+        break;
+      }
+    }
+    ASSERT_FALSE(valid.empty());
+    Meta(*child, GraphLayout::ScopeKey, valid);
+    GraphLayout layout(graph);
+    layout.Load(false);
+    const auto id = layout.Order()[0];
+    EXPECT_TRUE(layout.Children(id).empty());
+    EXPECT_EQ(layout.Diagnostics().size(), 1u);
+    ASSERT_EQ(layout.Edges(id).size(), 1u);
+    EXPECT_EQ(layout.Edges(id)[0].value, "capture");
+    layout.Persist(false);
+    child->mutable_metadata_props(child->metadata_props().size() - 1)
+        ->set_value("2 0 0 900 100 1 \"capture\"");
+    GraphLayout restored(graph);
+    restored.Load(false);
+    EXPECT_TRUE(restored.Children(id).empty());
+    EXPECT_GE(restored.Get(id)->width, 900);
+    EXPECT_TRUE(std::any_of(restored.Diagnostics().begin(), restored.Diagnostics().end(),
+                            [](const auto &message) {
+                              return message.find("Stale layout signature") != std::string::npos;
+                            }));
+  }
+}
+
 TEST(GraphLayout, SignatureIgnoresOversizedChildSummariesButTracksBoundedChanges) {
   for (bool multiple : {false, true}) {
     for (const auto &version : {"1", "999"}) {

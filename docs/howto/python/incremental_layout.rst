@@ -34,8 +34,9 @@ after its node callbacks and all metadata fields, with children before parents.
 This ordering matters because ONNX may serialize graph metadata after its nodes.
 Local function bodies in ``model.functions`` receive their own layout, including
 their nested graph attributes. There is no separate post-model layout pass.
-Textproto loading attaches layout
-before returning the parsed model.
+Textproto loading uses an iterative child-first traversal, loading and persisting
+each scope nonrecursively before returning the parsed model. Diagnostics are
+emitted as each scope is processed, without retaining a tree of live layouts.
 
 Low-level Python callers can call ``onnx.enable_graph_layout(options)`` on their
 ``ParseOptions``. This chains existing graph and function callbacks rather than
@@ -173,6 +174,10 @@ nonnegative decimal integers and are validated against the actual dependency
 constraints. Signatures are change detectors, not cryptographic authentication.
 Child scope summaries larger than 1 MiB are ignored when computing signatures,
 matching the summary parser's size limit; their raw bytes are not hashed.
+If duplicate scope summaries exist, nonrecursive loading skips malformed entries
+until a valid summary is found, diagnosing rejected entries. Node signatures
+track all bounded summaries so changes to a later usable entry invalidate stale
+container geometry.
 
 Missing placement state is computed locally, reserving valid saved rectangles
 so missing or stale geometry does not displace unrelated saved nodes.

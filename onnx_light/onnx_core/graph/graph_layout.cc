@@ -95,8 +95,16 @@ std::string Signature(const NodeProto &node) {
     hash *= 1099511628211ULL;
   };
   auto append_summary = [&](const GraphProto &graph) {
-    const auto summary = Metadata(graph, GraphLayout::ScopeKey);
-    append(summary.size() <= SummaryLimit ? summary : std::string_view{});
+    bool found = false;
+    for (const auto &entry : graph.metadata_props()) {
+      if (entry.key() == GraphLayout::ScopeKey) {
+        const std::string_view summary(entry.value().data(), entry.value().size());
+        append(summary.size() <= SummaryLimit ? summary : std::string_view{});
+        found = true;
+      }
+    }
+    if (!found)
+      append({});
   };
   append(node.op_type());
   append(node.domain());
@@ -493,8 +501,7 @@ struct GraphLayout::Impl {
               state.summaries.push_back(std::move(summary));
               return;
             }
-            Diagnose("Invalid child layout summary; loaded the child scope directly.");
-            break;
+            Diagnose("Invalid child layout summary; ignored metadata entry.");
           }
         }
         if (depth >= DepthLimit) {
@@ -935,11 +942,12 @@ void GraphLayout::Persist(bool recurse) {
     summary_size += value.size() * 2 + 3;
     summary << ' ' << std::quoted(value);
   }
-  if (!bounded || summary.str().size() > SummaryLimit) {
+  const std::string summary_text = summary.str();
+  if (!bounded || summary_text.size() > SummaryLimit) {
     impl_->Diagnose("Layout capture summary exceeded the metadata size limit.");
     impl_->SetScopeMetadata(ScopeKey, "");
   } else {
-    impl_->SetScopeMetadata(ScopeKey, summary.str());
+    impl_->SetScopeMetadata(ScopeKey, summary_text);
   }
   for (auto &[id, state] : impl_->states) {
     SetMetadata(*state.proto, IdKey, std::to_string(id));

@@ -91,6 +91,20 @@ struct LayoutBounds {
 /**
  * Maintains incremental positions, routes and child layouts for a live graph or function.
  *
+ * Layout algorithm:
+ * - Assigns stable scope-local IDs and indexes value producers, consumers and outer captures.
+ * - Loads child scopes or validated persisted summaries; fits container boxes to child bounds.
+ * - Validates saved geometry and signatures; infers missing sizes from labels and ports.
+ * - Expands edit seeds through their consumers and solves only that affected dependency closure.
+ * - Processes ready nodes in dependency order, assigning ranks and placing consumers to the right
+ *   of non-folded producers; cycles receive a diagnostic and a single fallback placement pass.
+ * - Retains existing positions when constraints permit; otherwise uses producer-port barycenters
+ *   for vertical placement and shifts boxes downward to clear collisions.
+ * - Queries an augmented AVL spatial index for collisions; folded Constant boxes occupy no space.
+ * - Rebuilds affected orthogonal routes in input-port order, including implicit capture ports.
+ * - Propagates child mutations through owning containers and their affected consumers.
+ * - Persists IDs, geometry, positioning modes, ranks, signatures and bounded scope summaries.
+ *
  * The caller owns the proto and must keep it alive for the layout's lifetime. Single-argument
  * constructors only bind it; Load initializes indexes and reuses validated persisted geometry.
  * Subsequent semantic edits must use this API. Direct proto edits require Load before further use.

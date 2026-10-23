@@ -186,6 +186,34 @@ TEST(OnnxOptimShapeOptional, WithSequenceInputPreservesElementShapes) {
             TensorProto::FLOAT);
 }
 
+TEST(OnnxOptimShapeOptional, RejectsSequenceDtypeMismatchBeforeReplacingValue) {
+  core::shapes::ShapesContext ctx;
+  TypeProto type;
+  auto *tensor = type.mutable_optional_type()
+                     ->mutable_elem_type()
+                     ->mutable_sequence_type()
+                     ->mutable_elem_type()
+                     ->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  const core::symbolic::SymSequence sequence(core::symbolic::TensorType::kFloat,
+                                             core::symbolic::SymDim(2));
+  ctx.SetSequenceWithType("x", core::symbolic::SymSequence(sequence), type);
+  tensor->set_elem_type(TensorProto::INT64);
+
+  EXPECT_THROW(ctx.SetSequenceWithType("x", core::symbolic::SymSequence(sequence), type),
+               std::invalid_argument);
+
+  EXPECT_EQ(ctx.GetSequence("x"), sequence);
+  EXPECT_EQ(ctx.GetType("x")
+                .optional_type()
+                .elem_type()
+                .sequence_type()
+                .elem_type()
+                .tensor_type()
+                .elem_type(),
+            TensorProto::FLOAT);
+}
+
 TEST(OnnxOptimShapeOptional, NoInputMapTypeAttributeThrows) {
   NodeProto node = MakeOptionalNode(/*with_input=*/false);
   auto *attr = node.add_attribute();

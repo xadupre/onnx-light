@@ -131,6 +131,9 @@ TEST(OnnxOptimShapeInference, UnsqueezeUsesAxesAttributeBeforeOpset13) {
               (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
                                         core::symbolic::SymDim(3), core::symbolic::SymDim(1)}));
     ctx.Erase("y");
+    NodeProto extra_input = node;
+    extra_input.add_input("x");
+    EXPECT_THROW(ctx.ComputeShapeNode(extra_input), std::invalid_argument);
     axes->ref_ints()[1] = 0;
     EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
     axes->ref_ints()[1] = 4;

@@ -267,6 +267,12 @@ void ShapesContext::SetSequenceWithType(const std::string &name, SymSequence &&s
                           descriptor_type->sequence_type().elem_type().has_tensor_type(),
                       "SetSequenceWithType: type for '", name,
                       "' must describe a sequence of tensors.");
+  EXT_ENFORCE_INVALID(
+      !sequence.HasElemDtype() ||
+          sequence.ElemDtype() ==
+              DataTypeToTensorType(
+                  descriptor_type->sequence_type().elem_type().tensor_type().elem_type()),
+      "SetSequenceWithType: element dtype for '", name, "' does not match the declared type.");
   SetType(name, type);
   sequences_[name] = std::move(sequence);
 }

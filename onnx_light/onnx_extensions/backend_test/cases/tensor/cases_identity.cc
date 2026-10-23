@@ -222,6 +222,11 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
 
     FillValueInfo(x, *graph->add_input());
     FillValueInfo(stacked, *graph->add_output());
+    const auto sequence_type = SequenceTypeSpec(TensorTypeSpec(TensorProto::FLOAT, {5}));
+    for (const auto *value : {"seq", "seq_out"})
+      AppendValueInfo(*graph->add_value_info(), value, sequence_type);
+    for (const auto *value : {"opt", "opt_out"})
+      AppendValueInfo(*graph->add_value_info(), value, OptionalTypeSpec(sequence_type));
 
     DataSet ds;
     ds.inputs.push_back(x);

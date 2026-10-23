@@ -37,8 +37,9 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Unsqueeze", "ComputeShapeUnsqueeze");
   const int opset = ctx.OpsetVersion(node.domain());
   const bool legacy = opset > 0 && opset < 13;
-  EXT_ENFORCE_INVALID(node.input_size() >= (legacy ? 1 : 2),
-                      "ComputeShapeUnsqueeze: Unsqueeze requires data and axes.");
+  EXT_ENFORCE_INVALID(legacy ? node.input_size() == 1 : node.input_size() >= 2,
+                      "ComputeShapeUnsqueeze: Unsqueeze requires exactly one input before "
+                      "opset 13, and data and axes inputs otherwise.");
 
   const SymTensor &data = ctx.Get(node.input(0));
   SymTensor attribute_axes;

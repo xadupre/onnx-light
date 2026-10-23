@@ -466,7 +466,7 @@ public:
 
   /// Inserts or replaces a sequence descriptor together with its declared
   /// type. The type must describe a sequence of tensors, optionally wrapped
-  /// in one or more optional types.
+  /// in one or more optional types, and match any known descriptor element dtype.
   void SetSequenceWithType(const std::string &name, SymSequence &&sequence, const TypeProto &type);
 
   /// Returns ``true`` when a sequence-typed entry exists for ``name``.

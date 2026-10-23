@@ -87,6 +87,56 @@ ModelProto make_sparse_test_model() {
   return model;
 }
 
+FunctionProto *add_struct_codec(ModelProto &model, size_t scope, bool encoder) {
+  StructTypeProto *type = nullptr;
+  switch (scope) {
+  case 0:
+    type = model.add_struct_types();
+    type->set_type_id(1);
+    break;
+  case 1:
+    type = model.ref_graph()
+               .add_extended_initializer()
+               ->mutable_encoded_value()
+               ->mutable_struct_type();
+    break;
+  case 2:
+    type = model.ref_graph().add_input()->mutable_type()->mutable_struct_type();
+    break;
+  case 3:
+    type = model.ref_graph().add_output()->mutable_type()->mutable_struct_type();
+    break;
+  case 4:
+    type = model.ref_graph().add_value_info()->mutable_type()->mutable_struct_type();
+    break;
+  case 5:
+    type = model.add_functions()->add_value_info()->mutable_type()->mutable_struct_type();
+    break;
+  case 6:
+    type = model.ref_graph().ref_node()[0].add_attribute()->mutable_tp()->mutable_struct_type();
+    break;
+  default:
+    type =
+        model.ref_graph().ref_node()[0].add_attribute()->add_type_protos()->mutable_struct_type();
+    break;
+  }
+  // Exercises nested inline declarations and container types in every scope.
+  type = type->mutable_array()
+             ->mutable_element_type()
+             ->mutable_sequence_type()
+             ->mutable_elem_type()
+             ->mutable_optional_type()
+             ->mutable_elem_type()
+             ->mutable_map_type()
+             ->mutable_value_type()
+             ->mutable_struct_type()
+             ->mutable_structure()
+             ->add_field()
+             ->mutable_type()
+             ->mutable_struct_type();
+  return encoder ? type->mutable_encoder() : type->mutable_decoder();
+}
+
 class EncryptedExternalTest : public ::testing::Test {
 protected:
   std::filesystem::path directory;
@@ -426,6 +476,19 @@ TEST_F(EncryptedExternalTest, PacksAndSplitsWithoutChangingInput) {
             3);
 }
 
+TEST_F(EncryptedExternalTest, RoundTripsNonAsciiModelBasename) {
+  path = (directory / std::filesystem::path(u8"mod\u00e8le.onnxc")).string();
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  const auto location = entry(stored.ref_graph().ref_initializer()[0], "location");
+  EXPECT_TRUE(std::filesystem::exists(
+      directory / std::filesystem::path(std::u8string(location.begin(), location.end()))));
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
+}
+
 TEST_F(EncryptedExternalTest, ExportsBorrowedRawDataWithoutMutatingInput) {
   ModelProto original = make_test_model();
   std::string serialized;
@@ -530,6 +593,86 @@ TEST_F(EncryptedExternalTest, RejectsExternalEncodedInitializersBeforeWriting) {
                  std::runtime_error);
     EXPECT_TRUE(std::filesystem::is_empty(directory));
   }
+}
+
+TEST_F(EncryptedExternalTest, RejectsExternalStructCodecTensorsBeforeWriting) {
+  for (size_t scope = 0; scope < 8; ++scope) {
+    for (bool encoder : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "scope=" << scope << ", encoder=" << encoder);
+      for (bool loaded : {false, true}) {
+        ModelProto model = make_test_model();
+        auto *codec = add_struct_codec(model, scope, encoder);
+        auto *attribute = codec->add_node()->add_attribute();
+        attribute->set_type(AttributeProto::TENSOR);
+        auto *tensor = attribute->mutable_t();
+        if (loaded)
+          *tensor = model.graph().initializer()[0];
+        tensor->set_data_location(TensorProto::EXTERNAL);
+        set_entry(*tensor, "location", "plaintext.weights");
+        EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0),
+                     std::runtime_error);
+        EXPECT_TRUE(std::filesystem::is_empty(directory));
+      }
+    }
+  }
+}
+
+TEST_F(EncryptedExternalTest, RejectsExternalStructCodecDefaultsAndNestedPayloadsBeforeWriting) {
+  for (size_t scope = 0; scope < 6; ++scope) {
+    ModelProto model = make_test_model();
+    auto *codec = model.add_struct_types()->mutable_decoder();
+    auto *attribute = codec->add_attribute_proto();
+    if (scope == 0) {
+      attribute->set_type(AttributeProto::SPARSE_TENSORS);
+      auto *indices = attribute->add_sparse_tensors()->mutable_indices();
+      indices->set_data_location(TensorProto::EXTERNAL);
+      set_entry(*indices, "location", "plaintext.weights");
+    } else {
+      attribute->set_type(AttributeProto::GRAPHS);
+      auto *graph = attribute->add_graphs();
+      if (scope == 1) {
+        auto *tensor = graph->add_initializer();
+        tensor->set_data_location(TensorProto::EXTERNAL);
+        set_entry(*tensor, "location", "plaintext.weights");
+      } else if (scope == 2) {
+        auto *value = graph->add_extended_initializer()->mutable_encoded_value();
+        value->set_data_location(TensorProto::EXTERNAL);
+      } else if (scope == 3) {
+        auto *tensor = graph->add_sparse_initializer()->mutable_values();
+        tensor->set_data_location(TensorProto::EXTERNAL);
+        set_entry(*tensor, "location", "plaintext.weights");
+      } else if (scope == 4) {
+        auto *tensor =
+            graph->add_extended_initializer()->mutable_paged_cache()->add_blocks()->mutable_key();
+        tensor->set_data_location(TensorProto::EXTERNAL);
+        set_entry(*tensor, "location", "plaintext.weights");
+      } else {
+        auto *tensor = graph->add_extended_initializer()
+                           ->mutable_encoded_value()
+                           ->mutable_affine()
+                           ->mutable_scale();
+        tensor->set_data_location(TensorProto::EXTERNAL);
+        set_entry(*tensor, "location", "plaintext.weights");
+      }
+    }
+    EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0),
+                 std::runtime_error);
+    EXPECT_TRUE(std::filesystem::is_empty(directory));
+  }
+}
+
+TEST_F(EncryptedExternalTest, PreservesEmbeddedStructCodecTensors) {
+  ModelProto model = make_test_model();
+  for (bool encoder : {false, true}) {
+    auto *codec = add_struct_codec(model, encoder ? 1 : 0, encoder);
+    auto *attribute = codec->add_node()->add_attribute();
+    attribute->set_type(AttributeProto::TENSOR);
+    *attribute->mutable_t() = model.graph().initializer()[0];
+  }
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
 }
 
 TEST_F(EncryptedExternalTest, HonorsAlignmentAndCallbacksForEmbeddedAndExternalTensors) {

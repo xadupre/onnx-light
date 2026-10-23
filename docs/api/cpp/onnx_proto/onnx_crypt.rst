@@ -35,6 +35,12 @@ The default cap is 1 GiB; supported caps range from 53 to ``INT_MAX + 52`` bytes
 External tensors must already have their plaintext data loaded in memory before
 export (for plain input, use ``LoadExternalDataForModel``). Export leaves the
 input model unchanged and never creates plaintext temporary weight files.
+External encoded initializers and external tensor references in struct
+declarations or their encoder/decoder functions are currently unsupported:
+export rejects them before writing any files, including references in inline
+declarations, nested codec graphs and function defaults. Load those codec
+tensors into embedded storage first; embedded struct/codec tensors remain
+inside the encrypted model rather than being sharded.
 Generated shards are siblings of the model, with unique names of the form
 ``<model-name>.weights.<random-128-bit-hex>.<index>.onnxc``.
 Copy the model and its referenced shards together; unrelated/old shards are not

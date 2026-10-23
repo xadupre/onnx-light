@@ -475,57 +475,169 @@ bool parse_external_integer(const std::string &value, int64_t &result) {
   return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
 }
 
-void reject_external_encoded_initializers(const GraphProto &graph);
+void reject_unsupported_external_data(const GraphProto &graph, bool codec = false);
+void reject_unsupported_external_data(const FunctionProto &function, bool codec = false);
+void reject_external_struct_data(const TypeProto &type);
 
-void reject_external_encoded_initializers(const AttributeProto &attribute) {
+void reject_external_codec_tensor(const TensorProto &tensor) {
+  if ((tensor.has_data_location() &&
+       tensor.data_location() == TensorProto::DataLocation::EXTERNAL) ||
+      !tensor.external_data().empty())
+    throw std::runtime_error("External tensor data in struct declarations/codecs is unsupported "
+                             "for encrypted storage: " +
+                             std::string(tensor.name()));
+}
+
+void reject_external_codec_tensor(const SparseTensorProto &tensor) {
+  if (tensor.has_values())
+    reject_external_codec_tensor(tensor.values());
+  if (tensor.has_indices())
+    reject_external_codec_tensor(tensor.indices());
+}
+
+void reject_external_struct_data(const StructTypeProto &type) {
+  if (type.has_decoder())
+    reject_unsupported_external_data(type.decoder(), true);
+  if (type.has_encoder())
+    reject_unsupported_external_data(type.encoder(), true);
+  if (type.has_array() && type.array().has_element_type())
+    reject_external_struct_data(type.array().element_type());
+  if (type.has_structure()) {
+    for (const auto &field : type.structure().field()) {
+      if (field.has_type())
+        reject_external_struct_data(field.type());
+      if (field.has_constant())
+        reject_external_codec_tensor(field.constant());
+    }
+  }
+}
+
+void reject_external_struct_data(const TypeProto &type) {
+  if (type.has_struct_type())
+    reject_external_struct_data(type.struct_type());
+  if (type.has_sequence_type() && type.sequence_type().has_elem_type())
+    reject_external_struct_data(type.sequence_type().elem_type());
+  if (type.has_optional_type() && type.optional_type().has_elem_type())
+    reject_external_struct_data(type.optional_type().elem_type());
+  if (type.has_map_type() && type.map_type().has_value_type())
+    reject_external_struct_data(type.map_type().value_type());
+}
+
+void reject_external_struct_data(const EncodedValueProto &value) {
+  if (value.has_struct_type())
+    reject_external_struct_data(value.struct_type());
+  if (value.has_logical_type())
+    reject_external_struct_data(value.logical_type());
+}
+
+void reject_external_encoded_value(const EncodedValueProto &value, bool codec) {
+  if ((value.has_data_location() && value.data_location() == TensorProto::DataLocation::EXTERNAL) ||
+      !value.external_data().empty())
+    throw std::runtime_error("External encoded initializer payloads are unsupported for "
+                             "encrypted export: " +
+                             std::string(value.name()));
+  if (codec && value.has_affine()) {
+    if (value.affine().has_scale())
+      reject_external_codec_tensor(value.affine().scale());
+    if (value.affine().has_zero_point())
+      reject_external_codec_tensor(value.affine().zero_point());
+  }
+  reject_external_struct_data(value);
+}
+
+void reject_external_struct_data(const utils::RepeatedProtoField<ValueInfoProto> &values) {
+  for (const auto &value : values)
+    if (value.has_type())
+      reject_external_struct_data(value.type());
+}
+
+void reject_unsupported_external_data(const AttributeProto &attribute, bool codec) {
+  if (codec) {
+    if (attribute.has_t())
+      reject_external_codec_tensor(attribute.t());
+    for (const auto &tensor : attribute.tensors())
+      reject_external_codec_tensor(tensor);
+    if (attribute.has_sparse_tensor())
+      reject_external_codec_tensor(attribute.sparse_tensor());
+    for (const auto &tensor : attribute.sparse_tensors())
+      reject_external_codec_tensor(tensor);
+  }
+  if (attribute.has_tp())
+    reject_external_struct_data(attribute.tp());
+  for (const auto &type : attribute.type_protos())
+    reject_external_struct_data(type);
   if (attribute.has_g())
-    reject_external_encoded_initializers(attribute.g());
+    reject_unsupported_external_data(attribute.g(), codec);
   for (const auto &graph : attribute.graphs())
-    reject_external_encoded_initializers(graph);
+    reject_unsupported_external_data(graph, codec);
 }
 
-void reject_external_encoded_initializers(const NodeProto &node) {
+void reject_unsupported_external_data(const NodeProto &node, bool codec = false) {
   for (const auto &attribute : node.attribute())
-    reject_external_encoded_initializers(attribute);
+    reject_unsupported_external_data(attribute, codec);
 }
 
-void reject_external_encoded_initializers(const FunctionProto &function) {
+void reject_unsupported_external_data(const FunctionProto &function, bool codec) {
+  reject_external_struct_data(function.value_info());
   for (const auto &node : function.node())
-    reject_external_encoded_initializers(node);
+    reject_unsupported_external_data(node, codec);
   for (const auto &attribute : function.attribute_proto())
-    reject_external_encoded_initializers(attribute);
+    reject_unsupported_external_data(attribute, codec);
 }
 
-void reject_external_encoded_initializers(const GraphProto &graph) {
+void reject_unsupported_external_data(const GraphProto &graph, bool codec) {
+  if (codec) {
+    for (const auto &tensor : graph.initializer())
+      reject_external_codec_tensor(tensor);
+    for (const auto &tensor : graph.sparse_initializer())
+      reject_external_codec_tensor(tensor);
+  }
+  reject_external_struct_data(graph.input());
+  reject_external_struct_data(graph.output());
+  reject_external_struct_data(graph.value_info());
   for (const auto &initializer : graph.extended_initializer()) {
-    if (initializer.has_encoded_value()) {
-      const EncodedValueProto &value = initializer.encoded_value();
-      if ((value.has_data_location() &&
-           value.data_location() == TensorProto::DataLocation::EXTERNAL) ||
-          !value.external_data().empty())
-        throw std::runtime_error("External encoded initializer payloads are unsupported for "
-                                 "encrypted export: " +
-                                 std::string(value.name()));
+    if (initializer.has_encoded_value())
+      reject_external_encoded_value(initializer.encoded_value(), codec);
+    if (initializer.has_paged_cache()) {
+      for (const auto &block : initializer.paged_cache().blocks()) {
+        if (codec) {
+          if (block.has_key())
+            reject_external_codec_tensor(block.key());
+          if (block.has_value())
+            reject_external_codec_tensor(block.value());
+          if (block.has_encoded_key())
+            reject_external_encoded_value(block.encoded_key(), true);
+          if (block.has_encoded_value())
+            reject_external_encoded_value(block.encoded_value(), true);
+        } else {
+          if (block.has_encoded_key())
+            reject_external_struct_data(block.encoded_key());
+          if (block.has_encoded_value())
+            reject_external_struct_data(block.encoded_value());
+        }
+      }
     }
   }
   for (const auto &node : graph.node())
-    reject_external_encoded_initializers(node);
+    reject_unsupported_external_data(node, codec);
 }
 
-void reject_external_encoded_initializers(const ModelProto &model) {
+void reject_unsupported_external_data(const ModelProto &model) {
+  for (const auto &type : model.struct_types())
+    reject_external_struct_data(type);
   if (model.has_graph())
-    reject_external_encoded_initializers(model.graph());
+    reject_unsupported_external_data(model.graph());
   for (const auto &function : model.functions())
-    reject_external_encoded_initializers(function);
+    reject_unsupported_external_data(function);
   for (const auto &entry : model.rewritings()) {
     const RewritingProto &rewriting = entry.second;
     for (const auto &function : rewriting.added_functions())
-      reject_external_encoded_initializers(function);
+      reject_unsupported_external_data(function);
     for (const auto &rewrite : rewriting.rewrites()) {
       for (const auto &node : rewrite.added_nodes())
-        reject_external_encoded_initializers(node);
+        reject_unsupported_external_data(node);
       for (const auto &node : rewrite.initializer_calls())
-        reject_external_encoded_initializers(node);
+        reject_unsupported_external_data(node);
     }
   }
 }
@@ -537,7 +649,7 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
                                         size_t size_threshold) {
   validate_external_limits(key, max_external_file_size);
   const size_t capacity = max_external_file_size - GCM_HEADER_SIZE;
-  reject_external_encoded_initializers(model);
+  reject_unsupported_external_data(model);
   ModelProto copy = model;
   IteratorTensorProto check(&copy);
   while (check.next()) {
@@ -570,7 +682,9 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
     const std::string location = prefix + std::to_string(index++) + ".onnxc";
     const std::string blob = encrypt_to_blob_gcm(plain, key);
     const std::string digest = encrypted_digest(blob);
-    write_encrypted_file(path.parent_path() / location, blob);
+    write_encrypted_file(path.parent_path() /
+                             std::filesystem::path(std::u8string(location.begin(), location.end())),
+                         blob);
     for (TensorProto *tensor : tensors) {
       add_external_entry(*tensor, "location", location);
       add_external_entry(*tensor, "onnx_light.encryption", "ONNXCRY3");

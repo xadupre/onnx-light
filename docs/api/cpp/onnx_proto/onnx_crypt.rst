@@ -24,6 +24,9 @@ The new export API always uses AES-256-GCM (ONNXCRY3) for **every** file,
 with an independent random salt and nonce and the same nonempty password.
 It packs eligible ``raw_data`` tensors in traversal order, without splitting
 tensors; typed tensor fields and tensors below the threshold stay embedded.
+This includes sparse initializer values/indices and sparse tensor attributes
+in nested graphs and functions. Borrowed input buffers are read without
+requiring mutable access.
 The maximum external-file size includes the 52-byte encryption envelope.
 If an eligible tensor alone exceeds the remaining payload capacity of an empty
 shard, export throws **before writing any files**. Increase the limit to save it.
@@ -68,6 +71,12 @@ loader. It applies ``max_tensor_size_bytes`` to tensor slices and verifies the
 complete shard before exposing any of its plaintext. On failure, a model may
 be partially populated; discard it. Decrypted buffers are owned in memory, not
 memory-mapped from disk, even with ``no_copy`` enabled.
+The loader groups references by location and releases each decrypted shard
+after populating its tensors, rather than retaining all shards in memory.
+Resolved tensor buffers honor ``ParseOptions.alignment``. The
+``raw_data_callback`` runs once for each resolved tensor with its owning graph
+(or ``nullptr`` for function-level tensors), and its returned cleanup callable
+is attached to the tensor buffer, just as for embedded tensors.
 
 These multi-file APIs require updated onnx-light readers; they are not standard
 plain ONNX external-data files. Existing single-file ONNXCRY1/2/3 APIs and plain

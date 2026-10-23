@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <string>
 
@@ -40,6 +41,49 @@ ModelProto make_test_model() {
   *node->add_input() = "W";
   *node->add_output() = "Y";
 
+  return model;
+}
+
+ModelProto make_sparse_test_model() {
+  ModelProto model = make_test_model();
+  size_t index = 0;
+  const auto populate = [&](SparseTensorProto *sparse) {
+    auto &values = sparse->ref_values();
+    values.set_name("sparse_" + std::to_string(index++));
+    values.set_data_type(TensorProto::DataType::FLOAT);
+    values.ref_dims().push_back(1);
+    const float value = 2;
+    values.ref_raw_data().resize(sizeof(value));
+    std::memcpy(values.ref_raw_data().data(), &value, sizeof(value));
+    auto &indices = sparse->ref_indices();
+    indices.set_data_type(TensorProto::DataType::INT64);
+    indices.ref_dims().push_back(1);
+    const int64_t position = 0;
+    indices.ref_raw_data().resize(sizeof(position));
+    std::memcpy(indices.ref_raw_data().data(), &position, sizeof(position));
+    sparse->ref_dims().push_back(4);
+  };
+  populate(model.ref_graph().add_sparse_initializer());
+  auto &node = model.ref_graph().ref_node()[0];
+  auto *attribute = node.add_attribute();
+  attribute->set_name("sparse");
+  attribute->set_type(AttributeProto::AttributeType::SPARSE_TENSOR);
+  populate(attribute->add_sparse_tensor());
+  attribute = node.add_attribute();
+  attribute->set_name("sparse_list");
+  attribute->set_type(AttributeProto::AttributeType::SPARSE_TENSORS);
+  populate(attribute->add_sparse_tensors());
+  populate(attribute->add_sparse_tensors());
+  attribute = node.add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::AttributeType::GRAPH);
+  populate(attribute->add_g()->add_sparse_initializer());
+  auto *function = model.add_functions();
+  function->set_name("SparseDefault");
+  attribute = function->add_attribute_proto();
+  attribute->set_name("default_sparse");
+  attribute->set_type(AttributeProto::AttributeType::SPARSE_TENSOR);
+  populate(attribute->add_sparse_tensor());
   return model;
 }
 
@@ -370,8 +414,9 @@ TEST_F(EncryptedExternalTest, PacksAndSplitsWithoutChangingInput) {
   for (const auto &file : std::filesystem::directory_iterator(directory)) {
     const std::string bytes = read(file.path());
     EXPECT_EQ(bytes.substr(0, 8), "ONNXCRY3");
-    if (file.path() != std::filesystem::path(path))
+    if (file.path() != std::filesystem::path(path)) {
       EXPECT_LE(bytes.size(), 84u);
+    }
   }
   ModelProto loaded;
   LoadEncryptedModel(loaded, path, "secret");
@@ -379,6 +424,138 @@ TEST_F(EncryptedExternalTest, PacksAndSplitsWithoutChangingInput) {
   EXPECT_EQ(std::distance(std::filesystem::directory_iterator(directory),
                           std::filesystem::directory_iterator{}),
             3);
+}
+
+TEST_F(EncryptedExternalTest, ExportsBorrowedRawDataWithoutMutatingInput) {
+  ModelProto original = make_test_model();
+  std::string serialized;
+  original.SerializeToString(serialized);
+  ParseOptions options;
+  options.no_copy = true;
+  ModelProto borrowed;
+  ASSERT_TRUE(borrowed.ParseFromString(serialized, options));
+  ASSERT_TRUE(borrowed.graph().initializer()[0].raw_data().is_borrowed());
+  SaveEncryptedModelWithExternalData(borrowed, path, "secret", 68, 0);
+  EXPECT_TRUE(borrowed.graph().initializer()[0].raw_data().is_borrowed());
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(original, loaded);
+}
+
+TEST_F(EncryptedExternalTest, LoadsInterleavedShardReferencesAndRejectsConflictingDigests) {
+  ModelProto model = make_test_model();
+  for (const auto &name : {"W2", "W3"}) {
+    TensorProto tensor = model.graph().initializer()[0];
+    tensor.set_name(name);
+    *model.ref_graph().add_initializer() = tensor;
+  }
+  SaveEncryptedModelWithExternalData(model, path, "secret", 84, 0);
+  ModelProto stored = metadata();
+  auto &initializers = stored.ref_graph().ref_initializer();
+  initializers.SwapElements(1, 2);
+  model.ref_graph().ref_initializer().SwapElements(1, 2);
+  ASSERT_EQ(entry(initializers[0], "location"), entry(initializers[2], "location"));
+  ASSERT_NE(entry(initializers[0], "location"), entry(initializers[1], "location"));
+  LoadEncryptedExternalDataForModel(stored, directory.string(), "secret");
+  expect_same(model, stored);
+
+  stored = metadata();
+  set_entry(stored.ref_graph().ref_initializer()[1], "onnx_light.encrypted_sha256",
+            std::string(64, '0'));
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),
+               std::runtime_error);
+  EXPECT_FALSE(stored.graph().initializer()[0].has_raw_data());
+}
+
+TEST_F(EncryptedExternalTest, EncryptsSparseValuesAndIndicesAcrossScopes) {
+  ModelProto model = make_sparse_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  IteratorTensorProto iterator(&stored);
+  size_t count = 0;
+  while (iterator.next()) {
+    EXPECT_FALSE(iterator->has_raw_data());
+    EXPECT_EQ(entry(*iterator, "onnx_light.encryption"), "ONNXCRY3");
+    ++count;
+  }
+  ASSERT_EQ(count, 13u);
+  EXPECT_THROW(LoadExternalDataForModel(stored, directory.string()), std::runtime_error);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
+}
+
+TEST_F(EncryptedExternalTest, ValidatesEverySparsePayloadBeforeWriting) {
+  for (size_t index = 0; index < 13; ++index) {
+    for (bool unloaded : {false, true}) {
+      ModelProto model = make_sparse_test_model();
+      IteratorTensorProto iterator(&model);
+      for (size_t i = 0; i <= index; ++i)
+        ASSERT_TRUE(iterator.next());
+      if (unloaded) {
+        iterator->clear_raw_data();
+        iterator->set_data_location(TensorProto::DataLocation::EXTERNAL);
+        set_entry(*iterator, "location", "missing.weights");
+      } else {
+        iterator->ref_raw_data().resize(17);
+      }
+      EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0),
+                   std::runtime_error);
+      EXPECT_TRUE(std::filesystem::is_empty(directory));
+    }
+  }
+}
+
+TEST_F(EncryptedExternalTest, HonorsAlignmentAndCallbacksForEmbeddedAndExternalTensors) {
+  ModelProto model = make_test_model();
+  TensorProto small = model.graph().initializer()[0];
+  small.set_name("inline");
+  small.ref_dims()[0] = 1;
+  small.ref_raw_data().resize(4);
+  *model.ref_graph().add_initializer() = small;
+  auto *attribute = model.ref_graph().ref_node()[0].add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::AttributeType::GRAPH);
+  *attribute->add_g()->add_initializer() = model.graph().initializer()[0];
+  attribute->ref_g().ref_initializer()[0].set_name("nested");
+  auto *function = model.add_functions();
+  function->set_name("DefaultTensor");
+  attribute = function->add_attribute_proto();
+  attribute->set_name("default_value");
+  attribute->set_type(AttributeProto::AttributeType::TENSOR);
+  *attribute->add_t() = model.graph().initializer()[0];
+  attribute->ref_t().set_name("default");
+  SaveEncryptedModelWithExternalData(model, path, "secret", 84, 8);
+  std::map<std::string, GraphProto *> graphs;
+  std::map<std::string, int> callbacks, cleanups;
+  ParseOptions options;
+  options.alignment = 4096;
+  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *graph) {
+    const std::string name(tensor.name());
+    ++callbacks[name];
+    graphs[name] = graph;
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(tensor.raw_data().data()) % options.alignment, 0u);
+    return [&, name]() { ++cleanups[name]; };
+  };
+  {
+    ModelProto loaded;
+    LoadEncryptedModel(loaded, path, "secret", options);
+    expect_same(model, loaded);
+    EXPECT_EQ(graphs.at("W"), &loaded.ref_graph());
+    EXPECT_EQ(graphs.at("inline"), &loaded.ref_graph());
+    EXPECT_EQ(graphs.at("nested"), &loaded.ref_graph().ref_node()[0].ref_attribute()[0].ref_g());
+    EXPECT_EQ(graphs.at("default"), nullptr);
+    for (const auto &name : {"W", "inline", "nested", "default"}) {
+      EXPECT_EQ(callbacks[name], 1);
+      EXPECT_EQ(cleanups[name], 0);
+    }
+  }
+  for (const auto &name : {"W", "inline", "nested", "default"})
+    EXPECT_EQ(cleanups[name], 1);
+  options.alignment = 3;
+  ModelProto stored = metadata();
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
 }
 
 TEST_F(EncryptedExternalTest, ThresholdAndEmptyModelRemainEmbedded) {
@@ -450,7 +627,7 @@ TEST_F(EncryptedExternalTest, RejectsValidShardSubstitutionAndResourceLimitBypas
   opts.max_tensor_size_bytes = 15;
   EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", opts),
                std::runtime_error);
-  for (const std::string &offset : {"-1", "1", "9223372036854775808", "0junk"}) {
+  for (const std::string offset : {"-1", "1", "9223372036854775808", "0junk"}) {
     stored = metadata();
     set_entry(stored.ref_graph().ref_initializer()[0], "offset", offset);
     EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),
@@ -471,7 +648,7 @@ TEST_F(EncryptedExternalTest, RejectsUnsafePathsAndPlainLoaders) {
   utils::TwoFilesStream stream(model_path.string(), (directory / location).string());
   ParseOptions opts;
   EXPECT_THROW(model.ParseFromStream(stream, opts), std::runtime_error);
-  for (const std::string &unsafe : {"../escape", "/absolute", "sub/../../escape"}) {
+  for (const std::string unsafe : {"../escape", "/absolute", "sub/../../escape"}) {
     stored = metadata();
     set_entry(stored.ref_graph().ref_initializer()[0], "location", unsafe);
     EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),

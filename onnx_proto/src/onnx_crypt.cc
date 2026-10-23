@@ -534,7 +534,8 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
     tensor.clr_external_data();
     add_external_entry(tensor, "offset", std::to_string(plain.size()));
     add_external_entry(tensor, "length", std::to_string(size));
-    plain.append(reinterpret_cast<const char *>(tensor.raw_data().data()), size);
+    const auto &raw_data = tensor.raw_data();
+    plain.append(reinterpret_cast<const char *>(raw_data.data()), size);
     tensor.clear_raw_data();
     tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
     tensors.push_back(&tensor);
@@ -547,9 +548,16 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
                                        const std::string &key, const ParseOptions &opts,
                                        size_t max_external_file_size) {
   validate_external_limits(key, max_external_file_size);
+  onnx_light_helpers::ValidateAlignmentOption(opts.alignment, "ParseOptions.alignment");
+  struct TensorReference {
+    TensorProto *tensor;
+    GraphProto *graph;
+    uint64_t offset;
+    uint64_t length;
+  };
   struct Shard {
     std::string digest;
-    std::vector<uint8_t> plain;
+    std::vector<TensorReference> tensors;
   };
   std::map<std::string, Shard> shards;
   IteratorTensorProto iterator(&model);
@@ -575,8 +583,17 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
         (opts.max_tensor_size_bytes > 0 && length > opts.max_tensor_size_bytes))
       throw std::runtime_error("Invalid encrypted external-data metadata or tensor size limit.");
     const std::string &location = entries["location"];
-    auto found = shards.find(location);
-    if (found == shards.end()) {
+    auto &shard = shards[location];
+    if (shard.tensors.empty())
+      shard.digest = entries["onnx_light.encrypted_sha256"];
+    else if (shard.digest != entries["onnx_light.encrypted_sha256"])
+      throw std::runtime_error("Encrypted external tensor digest is inconsistent.");
+    shard.tensors.push_back(TensorReference{
+        &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
+  }
+  for (const auto &[location, shard] : shards) {
+    std::vector<uint8_t> plain;
+    {
       auto file = utils::detail::OpenExternalDataFile(base_dir, location);
       const int64_t size = utils::detail::ExternalDataFileSize(*file);
       if (size < static_cast<int64_t>(GCM_HEADER_SIZE) ||
@@ -585,25 +602,33 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
       std::string blob(static_cast<size_t>(size), '\0');
       utils::detail::ReadExternalDataFile(*file, blob.data(), size, 0);
       const std::string digest = encrypted_digest(blob);
-      if (digest != entries["onnx_light.encrypted_sha256"] ||
+      if (digest != shard.digest ||
           blob.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
         throw std::runtime_error(
             "Encrypted external file authentication failed (digest or format).");
-      auto plain =
+      plain =
           decrypt_from_blob_gcm(reinterpret_cast<const uint8_t *>(blob.data()), blob.size(), key);
-      found = shards.emplace(location, Shard{digest, std::move(plain)}).first;
     }
-    const Shard &shard = found->second;
-    if (shard.digest != entries["onnx_light.encrypted_sha256"] ||
-        static_cast<uint64_t>(offset) > shard.plain.size() ||
-        static_cast<uint64_t>(length) > shard.plain.size() - static_cast<size_t>(offset))
-      throw std::runtime_error("Encrypted external tensor digest or range is invalid.");
-    tensor.ref_raw_data().resize(static_cast<size_t>(length));
-    if (length > 0)
-      std::memcpy(tensor.ref_raw_data().data(), shard.plain.data() + offset,
-                  static_cast<size_t>(length));
-    tensor.clr_external_data();
-    tensor.set_data_location(TensorProto::DataLocation::DEFAULT);
+    for (const auto &reference : shard.tensors) {
+      if (reference.offset > plain.size() || reference.length > plain.size() - reference.offset)
+        throw std::runtime_error("Encrypted external tensor range is invalid.");
+      const size_t offset = static_cast<size_t>(reference.offset);
+      const size_t length = static_cast<size_t>(reference.length);
+      TensorProto &tensor = *reference.tensor;
+      if (opts.alignment > 1)
+        tensor.ref_raw_data().resize_aligned(length, static_cast<size_t>(opts.alignment));
+      else
+        tensor.ref_raw_data().resize(length);
+      if (length > 0)
+        std::memcpy(tensor.ref_raw_data().data(), plain.data() + offset, length);
+      tensor.clr_external_data();
+      tensor.set_data_location(TensorProto::DataLocation::DEFAULT);
+      if (opts.raw_data_callback && tensor.has_raw_data()) {
+        auto deleter = opts.raw_data_callback(tensor, reference.graph);
+        if (deleter)
+          tensor.ref_raw_data().attach_deleter(std::move(deleter));
+      }
+    }
   }
 }
 

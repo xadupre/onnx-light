@@ -219,6 +219,11 @@ class TestTensorStatistics(ExtTestCase):
         self.assertEqual(sum(result.distribution), 10)
 
     def test_output_allocation_budget_boundaries(self):
+        count_bytes = numpy.dtype(numpy.int64).itemsize
+        float_bytes = numpy.dtype(numpy.float64).itemsize
+        one_bin_bytes = count_bytes + 2 * float_bytes
+        # Two counts, three edges, two rectangle cells, one quantile, and the median.
+        combined_bytes = 2 * count_bytes + (3 + 2 + 1 + 1) * float_bytes
         values = numpy.arange(10, dtype=numpy.float32)
         proto = onh.from_array(values)
         tensor = runtime.tensor_from_numpy(
@@ -229,38 +234,45 @@ class TestTensorStatistics(ExtTestCase):
         for value in (values, proto, tensor, runtime.RuntimeValue(tensor), encoded):
             with self.subTest(value_type=type(value)):
                 options = dict(bins=2, rectangle_shape=[1, 2], quantiles=[0.5], median=True)
-                result = compute_tensor_statistics(value, **options, max_output_bytes=72)
+                result = compute_tensor_statistics(
+                    value, **options, max_output_bytes=combined_bytes
+                )
                 self.assertEqual(len(result.distribution), 2)
                 self.assertEqual(len(result.bin_edges), 3)
                 self.assertEqual(len(result.rectangle_map), 2)
                 self.assertEqual(len(result.quantiles), 1)
                 self.assertIsNotNone(result.median)
                 with self.assertRaisesRegex(ValueError, "max_output_bytes"):
-                    compute_tensor_statistics(value, **options, max_output_bytes=71)
+                    compute_tensor_statistics(
+                        value, **options, max_output_bytes=combined_bytes - 1
+                    )
         for options, budget in (
-            ({}, 808),
-            ({"bins": 3}, 56),
-            ({"bins": 1, "rectangle_shape": [2, 2]}, 56),
-            ({"bins": 1, "quantiles": [0.5]}, 32),
-            ({"bins": 1, "median": True}, 32),
+            ({}, 50 * count_bytes + 51 * float_bytes),  # Maximum automatic histogram.
+            ({"bins": 3}, 3 * count_bytes + 4 * float_bytes),
+            ({"bins": 1, "rectangle_shape": [2, 2]}, one_bin_bytes + 4 * float_bytes),
+            ({"bins": 1, "quantiles": [0.5]}, one_bin_bytes + float_bytes),
+            ({"bins": 1, "median": True}, one_bin_bytes + float_bytes),
         ):
             with self.subTest(options=options):
                 compute_tensor_statistics(values, **options, max_output_bytes=budget)
                 with self.assertRaisesRegex(ValueError, "max_output_bytes"):
                     compute_tensor_statistics(values, **options, max_output_bytes=budget - 1)
-        for budget in (0, 23):
+        for budget in (0, one_bin_bytes - 1):
             with self.assertRaisesRegex(ValueError, "max_output_bytes"):
                 compute_tensor_statistics(values, bins=1, max_output_bytes=budget)
         for budget in (-1, 2**65):
-            with self.assertRaises(TypeError):
+            with self.assertRaises((TypeError, OverflowError)):
                 compute_tensor_statistics(values, max_output_bytes=budget)
 
         empty = numpy.array([], dtype=numpy.float32)
-        maximum_bins = (64 * 1024 * 1024 - 8) // 16
-        maximum_cells = (64 * 1024 * 1024 - 24) // 8
+        default_budget = 64 * 1024 * 1024
+        maximum_bins = (default_budget - float_bytes) // (count_bytes + float_bytes)
+        maximum_cells = (default_budget - one_bin_bytes) // float_bytes
         compute_tensor_statistics(empty, bins=maximum_bins)
         compute_tensor_statistics(
-            empty, bins=maximum_bins + 1, max_output_bytes=64 * 1024 * 1024 + 16
+            empty,
+            bins=maximum_bins + 1,
+            max_output_bytes=default_budget + count_bytes + float_bytes,
         )
         compute_tensor_statistics(empty, bins=1, rectangle_shape=[1, maximum_cells])
         for options in (

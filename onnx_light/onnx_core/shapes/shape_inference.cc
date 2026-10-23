@@ -239,7 +239,7 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
     return false;
   }
   if (vi.has_type() && vi.type().value_case() != TypeProto::VALUE_NOT_SET &&
-      !vi.type().has_tensor_type() && !vi.type().has_map_type()) {
+      !vi.type().has_tensor_type()) {
     ctx.SetType(name, vi.type());
     return true;
   }
@@ -248,20 +248,7 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
     ctx.Set(name, std::move(tensor));
     return true;
   }
-  if (!vi.has_type() || !vi.type().has_map_type()) {
-    return false;
-  }
-  const TypeProto &value_type = vi.type().map_type().value_type();
-  if (!value_type.has_tensor_type()) {
-    return false;
-  }
-  const TensorType dtype = DataTypeToTensorType(value_type.tensor_type().elem_type());
-  // Map-typed inputs are tracked as placeholder tensors so generic input
-  // availability checks succeed and traditional-ML shape functions can still
-  // inspect the map value dtype when needed. The rank stays unknown because the
-  // map cardinality is a runtime property, not a static tensor shape.
-  ctx.Set(name, SymTensor(nullptr, dtype, SymShape{}));
-  return true;
+  return false;
 }
 
 bool TrySeedAnnotatedOutputsForUnknownCustomOp(

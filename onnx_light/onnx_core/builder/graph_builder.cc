@@ -1163,6 +1163,9 @@ GraphBuilder::LayerBodyForMemory(const NodeProto &node) const {
     for (const auto &initializer : body.extended_initializers_)
       view.initializer_names.push_back(initializer.name());
     view.nested_body = [&body](const NodeProto &inner) { return body.LayerBodyForMemory(inner); };
+    view.node_inputs = [&body](std::size_t index) -> const std::vector<std::string> & {
+      return body.compute_.NodeReferences(index);
+    };
     return view;
   }
   throw BuilderError("GraphBuilder: missing Layer body reference for memory estimation.");

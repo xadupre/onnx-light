@@ -1980,8 +1980,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           builder_.CollectNodeReferences(builder_.nodes_[index], references[index]);
         builder_.compute_.UpdateNodes(builder_.nodes_, old_indices, references, {},
                                       builder_.device_);
-        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes(),
-                                                   builder_.device_);
+        builder_.compute_.RefreshIncrementalMemory(
+            builder_.nodes_, builder_.Shapes(), builder_.device_,
+            [this](const NodeProto &node) { return builder_.LayerBodyForMemory(node); });
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;

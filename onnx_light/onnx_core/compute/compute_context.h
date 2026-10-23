@@ -169,6 +169,7 @@ public:
     const utils::RepeatedProtoField<ValueInfoProto> *outputs = nullptr;
     std::vector<std::string> initializer_names;
     std::function<LayerBodyView(const NodeProto &)> nested_body;
+    std::function<const std::vector<std::string> &(std::size_t)> node_inputs;
   };
 
   /// Resolves a builder-owned Layer body without copying or exporting its graph.
@@ -473,6 +474,11 @@ public:
   /// the analysed graph, in ``graph.node()`` order). Zero before
   /// :cpp:func:`ComputeInPlaceReuseGraph` has been called.
   std::size_t Size() const noexcept { return reuse_.size(); }
+
+  /// Returns cached explicit and lexical inputs for a builder-owned node.
+  const std::vector<std::string> &NodeReferences(std::size_t node_index) const {
+    return incr_node_references_.at(node_index);
+  }
 
   /// ``true`` when no reuse has been computed yet.
   bool Empty() const noexcept { return reuse_.empty(); }

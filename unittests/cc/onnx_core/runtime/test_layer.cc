@@ -428,6 +428,22 @@ TEST(Layer, ForwardsMapsAcrossCollidingBodyNames) {
     value->mutable_shape();
   }
 
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("ai.rt", 1);
+  auto *graph = model.mutable_graph();
+  *graph->add_node() = node;
+  *graph->add_input() = body->input(0);
+  graph->mutable_input(0)->set_name("caller_map");
+  *graph->add_output() = body->output(0);
+  graph->mutable_output(0)->set_name("result_map");
+  ShapesContext shapes;
+  EXPECT_NO_THROW(shapes.ComputeShapeModel(model));
+  ASSERT_TRUE(shapes.HasType("caller_map"));
+  ASSERT_TRUE(shapes.HasType("result_map"));
+  EXPECT_EQ(shapes.GetType("result_map").SerializeAsString(),
+            body->output(0).type().SerializeAsString());
+
   RuntimeContext rt;
   rt.PutMap("caller_map", core::runtime::Map("caller_map", Tensor::FromInt64("", {1}, {7}),
                                              Tensor::FromFloat("", {1}, {13})));

@@ -162,6 +162,8 @@ requirements, with boundary inputs and outputs counted only by the enclosing
 graph. Kernel workspace estimates include the body kernels.
 Incremental updates inspect live builder-owned body fields without exporting
 or rebuilding the enclosing graph, including after a nested body mutation.
+Body lifetimes include values captured only by nested graph attributes; rewrite
+batch reordering preserves these activation and workspace estimates.
 
 Matching and cut policy
 ~~~~~~~~~~~~~~~~~~~~~~~~

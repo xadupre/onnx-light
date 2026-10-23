@@ -187,7 +187,9 @@ EstimateLayerBodyMemory(const NodeProto &node, std::size_t node_index, const Sha
     add_initializer(name);
   for (std::size_t index = 0; index < view.nodes->size(); ++index) {
     const NodeProto &inner = (*view.nodes)[index];
-    for (const std::string &input : inner.input())
+    const auto inputs =
+        view.node_inputs ? view.node_inputs(index) : core::graph::CollectNodeInputs(inner);
+    for (const std::string &input : inputs)
       if (!input.empty())
         last_uses[input] = static_cast<int64_t>(index);
     for (const std::string &output : inner.output()) {

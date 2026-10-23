@@ -364,6 +364,61 @@ TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
             139392);
 }
 
+TEST(RepeatedLayerPattern, KeepsCaptureOnlyIntermediatesLiveThroughNestedBranches) {
+  core::builder::GraphBuilder body("body", LayerSchemaLookup(), {{"", 28}});
+  body.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
+  body.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  body.MakeNode("Neg", {"x"}, {"a"});
+  body.MakeNode("Abs", {"x"}, {"b"});
+  utils::RepeatedProtoField<AttributeProto> branches;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &attribute = branches.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+    auto *graph = attribute.mutable_g();
+    graph->set_name(name);
+    auto *add = graph->add_node();
+    add->set_op_type("Add");
+    add->add_input("a");
+    add->add_input("b");
+    add->add_output(name + "_result");
+    auto *output = graph->add_output();
+    output->set_name(name + "_result");
+    auto *type = output->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(1024);
+  }
+  body.MakeNode("If", {"condition"}, {"body_result"}, "", "", branches);
+  body.MakeOutput("body_result");
+
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
+  builder.MakeInput("caller_condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &attribute = attributes.add();
+  attribute.set_name("body");
+  attribute.set_type(AttributeProto::GRAPH);
+  *attribute.mutable_g() = body.BuildGraph();
+  builder.MakeNode("Layer", {"caller_x", "caller_condition"}, {"result"}, "ai.rt", "", attributes);
+  builder.MakeOutput("result");
+
+  auto internal_bytes = [](const core::compute::ComputeContext &context) {
+    return std::get<int64_t>(
+        std::get<core::compute::TaggedMemory>(
+            context.NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
+            .at(""));
+  };
+  EXPECT_EQ(internal_bytes(builder.Compute()), 8192);
+  ModelProto model;
+  model.add_opset("", 28);
+  model.add_opset("ai.rt", 1);
+  *model.mutable_graph() = builder.BuildGraph();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
+  EXPECT_EQ(internal_bytes(context), 8192);
+}
+
 TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGraphOutputs) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));

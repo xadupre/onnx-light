@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/shapes/shapes/optional/shape_optional.h"
 
+#include <algorithm>
 #include <string>
 
 #include "onnx_core/shapes/shape_check.h"
@@ -26,6 +27,27 @@ const AttributeProto *FindOptionalAttribute(const NodeProto &node, const char *n
   return nullptr;
 }
 
+TypeProto SequenceTypeFromDescriptor(const SymSequence &sequence) {
+  TypeProto type;
+  TypeProto::Tensor *tensor =
+      type.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  tensor->set_elem_type(static_cast<int>(TensorTypeToDataType(sequence.ElemDtype())));
+  if (sequence.HasElemShapes() && !sequence.ElemShapes().empty() &&
+      std::all_of(sequence.ElemShapes().begin(), sequence.ElemShapes().end(),
+                  [&](const SymShape &shape) { return shape == sequence.ElemShapes().front(); })) {
+    TensorShapeProto *shape = tensor->add_shape();
+    for (const SymDim &dimension : sequence.ElemShapes().front().Dims()) {
+      auto *dim = shape->add_dim();
+      if (dimension.IsInt()) {
+        dim->set_dim_value(dimension.AsInt());
+      } else if (dimension.IsExpr()) {
+        dim->set_dim_param(dimension.AsExpr());
+      }
+    }
+  }
+  return type;
+}
+
 } // namespace
 
 void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
@@ -44,7 +66,16 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
     EXT_ENFORCE_INVALID(!(input_name.empty()),
                         "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
     if (ctx.HasSequence(input_name)) {
-      ctx.SetSequence(node.output(0), SymSequence(ctx.GetSequence(input_name)));
+      const SymSequence sequence(ctx.GetSequence(input_name));
+      if (ctx.HasType(input_name) || sequence.HasElemDtype()) {
+        const TypeProto input_type = ctx.HasType(input_name) ? ctx.GetType(input_name)
+                                                             : SequenceTypeFromDescriptor(sequence);
+        TypeProto optional_type;
+        optional_type.mutable_optional_type()->ref_elem_type() = input_type;
+        ctx.SetSequenceWithType(node.output(0), SymSequence(sequence), optional_type);
+      } else {
+        ctx.SetSequence(node.output(0), SymSequence(sequence));
+      }
     } else if (!ctx.Has(input_name) && ctx.HasType(input_name)) {
       TypeProto type;
       type.mutable_optional_type()->ref_elem_type() = ctx.GetType(input_name);
@@ -98,11 +129,16 @@ void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {
   // optional<sequence> and since opset 18 for bare sequences).
   if (ctx.HasSequence(input_name)) {
     const SymSequence &seq = ctx.GetSequence(input_name);
-    if (seq.HasElemShapes()) {
-      ctx.SetSequence(node.output(0),
-                      SymSequence(seq.ElemDtype(), std::vector<SymShape>(seq.ElemShapes())));
+    SymSequence output_sequence =
+        seq.HasElemShapes() ? SymSequence(seq.ElemDtype(), std::vector<SymShape>(seq.ElemShapes()))
+                            : SymSequence(seq.ElemDtype(), SymDim(seq.Length()));
+    if (ctx.HasType(input_name)) {
+      const TypeProto &input_type = ctx.GetType(input_name);
+      const TypeProto &output_type =
+          input_type.has_optional_type() ? input_type.optional_type().elem_type() : input_type;
+      ctx.SetSequenceWithType(node.output(0), std::move(output_sequence), output_type);
     } else {
-      ctx.SetSequence(node.output(0), SymSequence(seq.ElemDtype(), SymDim(seq.Length())));
+      ctx.SetSequence(node.output(0), std::move(output_sequence));
     }
     return;
   }

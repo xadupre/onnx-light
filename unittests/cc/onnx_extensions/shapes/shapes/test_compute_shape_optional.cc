@@ -148,12 +148,42 @@ TEST(OnnxOptimShapeOptional, WithSequenceInputPreservesElementShapes) {
       core::symbolic::TensorType::kFloat,
       std::vector<core::symbolic::SymShape>{{core::symbolic::SymDim(2)},
                                             {core::symbolic::SymDim(3)}});
-  ctx.SetSequence("x", core::symbolic::SymSequence(sequence));
+  TypeProto sequence_type;
+  sequence_type.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::FLOAT);
+  ctx.SetSequenceWithType("x", core::symbolic::SymSequence(sequence), sequence_type);
 
   ctx.ComputeShapeNode(MakeOptionalNode(/*with_input=*/true));
 
   ASSERT_TRUE(ctx.HasSequence("y"));
   EXPECT_EQ(ctx.GetSequence("y"), sequence);
+  ASSERT_TRUE(ctx.HasType("y"));
+  ASSERT_TRUE(ctx.GetType("y").has_optional_type());
+  ASSERT_TRUE(ctx.GetType("y").optional_type().elem_type().has_sequence_type());
+
+  NodeProto get_element;
+  get_element.set_op_type("OptionalGetElement");
+  get_element.add_input("y");
+  get_element.add_output("z");
+  ctx.ComputeShapeNode(get_element);
+
+  ASSERT_TRUE(ctx.HasSequence("z"));
+  EXPECT_EQ(ctx.GetSequence("z"), sequence);
+
+  ModelProto model;
+  model.mutable_graph()->add_output()->set_name("y");
+  model.mutable_graph()->add_value_info()->set_name("z");
+  ctx.ApplyInferredShapesToModel(model);
+  const TypeProto &output_type = model.graph().output(0).type();
+  ASSERT_TRUE(output_type.has_optional_type());
+  ASSERT_TRUE(output_type.optional_type().elem_type().has_sequence_type());
+  EXPECT_EQ(
+      output_type.optional_type().elem_type().sequence_type().elem_type().tensor_type().elem_type(),
+      TensorProto::FLOAT);
+  const TypeProto &intermediate_type = model.graph().value_info(0).type();
+  ASSERT_TRUE(intermediate_type.has_sequence_type());
+  EXPECT_EQ(intermediate_type.sequence_type().elem_type().tensor_type().elem_type(),
+            TensorProto::FLOAT);
 }
 
 TEST(OnnxOptimShapeOptional, NoInputMapTypeAttributeThrows) {

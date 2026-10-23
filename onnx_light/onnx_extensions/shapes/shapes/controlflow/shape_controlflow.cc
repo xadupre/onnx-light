@@ -137,6 +137,17 @@ SymSequence MergeSequences(const SymSequence &left, const SymSequence &right,
                      left.Length() == right.Length() ? left.Length() : SymDim(length_name));
 }
 
+void SetMergedSequence(ShapesContext &ctx, const std::string &name, SymSequence sequence,
+                       const ShapesContext &left_ctx, const std::string &left_name,
+                       const ShapesContext &right_ctx, const std::string &right_name) {
+  if (left_ctx.HasType(left_name) && right_ctx.HasType(right_name) &&
+      core::shapes::SameDeclaredType(left_ctx.GetType(left_name), right_ctx.GetType(right_name))) {
+    ctx.SetSequenceWithType(name, std::move(sequence), left_ctx.GetType(left_name));
+  } else {
+    ctx.SetSequence(name, std::move(sequence));
+  }
+}
+
 } // namespace
 
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
@@ -179,9 +190,23 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
     if (then_ctx.HasSequence(then_name) || else_ctx.HasSequence(else_name)) {
       EXT_ENFORCE_INVALID(then_ctx.HasSequence(then_name) && else_ctx.HasSequence(else_name),
                           "ComputeShapeIf: both branches must return sequences.");
-      ctx.SetSequence(out_name, MergeSequences(then_ctx.GetSequence(then_name),
-                                               else_ctx.GetSequence(else_name),
-                                               "If_" + out_name + "_length"));
+      SetMergedSequence(ctx, out_name,
+                        MergeSequences(then_ctx.GetSequence(then_name),
+                                       else_ctx.GetSequence(else_name),
+                                       "If_" + out_name + "_length"),
+                        then_ctx, then_name, else_ctx, else_name);
+      continue;
+    }
+    const bool then_type_only =
+        then_ctx.HasType(then_name) && !then_ctx.Has(then_name) && !then_ctx.HasSequence(then_name);
+    const bool else_type_only =
+        else_ctx.HasType(else_name) && !else_ctx.Has(else_name) && !else_ctx.HasSequence(else_name);
+    if (then_type_only || else_type_only) {
+      EXT_ENFORCE_INVALID(then_type_only && else_type_only &&
+                              core::shapes::SameDeclaredType(then_ctx.GetType(then_name),
+                                                             else_ctx.GetType(else_name)),
+                          "ComputeShapeIf: type-only outputs must have matching types.");
+      ctx.SetType(out_name, then_ctx.GetType(then_name));
       continue;
     }
     const SymTensor &then_t = GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
@@ -305,9 +330,22 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (ctx.HasSequence(initial_name) || local.HasSequence(body_name)) {
       EXT_ENFORCE_INVALID(ctx.HasSequence(initial_name) && local.HasSequence(body_name),
                           "ComputeShapeLoop: a carried sequence must remain a sequence.");
-      ctx.SetSequence(node_out,
-                      MergeSequences(ctx.GetSequence(initial_name), local.GetSequence(body_name),
-                                     "Loop_" + node_out + "_length"));
+      SetMergedSequence(ctx, node_out,
+                        MergeSequences(ctx.GetSequence(initial_name), local.GetSequence(body_name),
+                                       "Loop_" + node_out + "_length"),
+                        ctx, initial_name, local, body_name);
+      continue;
+    }
+    const bool initial_type_only =
+        ctx.HasType(initial_name) && !ctx.Has(initial_name) && !ctx.HasSequence(initial_name);
+    const bool body_type_only =
+        local.HasType(body_name) && !local.Has(body_name) && !local.HasSequence(body_name);
+    if (initial_type_only || body_type_only) {
+      EXT_ENFORCE_INVALID(
+          initial_type_only && body_type_only &&
+              core::shapes::SameDeclaredType(ctx.GetType(initial_name), local.GetType(body_name)),
+          "ComputeShapeLoop: type-only carried values must keep the same type.");
+      ctx.SetType(node_out, ctx.GetType(initial_name));
       continue;
     }
     const SymTensor &v_initial = ctx.Get(node.input(2 + i));

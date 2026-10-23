@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/graph/layer.h"
+#include "onnx_core/graph/layer_validation.h"
 
 #include <string>
 #include <unordered_set>

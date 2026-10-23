@@ -144,8 +144,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
                                int verbose, std::shared_ptr<ValueStore> value_store,
                                std::unordered_set<std::string> immutable_inputs,
-                               const FunctionMap *model_functions,
-                               std::unordered_set<std::string> bound_immutable_inputs)
+                               const FunctionMap *model_functions)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
       inherited_model_functions_(model_functions),
       value_store_(SessionValueStore(std::move(value_store))),
@@ -153,14 +152,6 @@ RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inhe
   SetDeclaredShapes(graph);
   SetInitializers(graph);
   inherited_immutable_inputs_ = std::move(immutable_inputs);
-  for (const ValueInfoProto &input : graph.input())
-    inherited_immutable_inputs_.erase(input.name());
-  for (const TensorProto &initializer : graph.initializer())
-    inherited_immutable_inputs_.erase(initializer.name());
-  for (const NodeProto &node : graph.node())
-    for (const std::string &output : node.output())
-      inherited_immutable_inputs_.erase(output);
-  inherited_immutable_inputs_.insert(bound_immutable_inputs.begin(), bound_immutable_inputs.end());
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)

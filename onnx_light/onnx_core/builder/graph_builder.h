@@ -218,7 +218,8 @@ public:
   /// the default ONNX domain). A positive version must be selected before
   /// adding a node in that domain; schemas never select a version implicitly.
   /// Updates existing subgraphs and dependent metadata immediately, without
-  /// changing the independent imports of local functions.
+  /// changing the independent imports of local functions. A new domain used
+  /// inside a subgraph is also imported by its enclosing model or function.
   void SetOpsetVersion(const std::string &domain, int version);
 
   /// Returns the opset version recorded for ``domain`` or

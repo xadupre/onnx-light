@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "onnx_core/graph/layer.h"
+#include "onnx_core/graph/layer_validation.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_lib/checker.h"
@@ -473,6 +473,19 @@ TEST(Layer, ForwardsMapsAcrossCollidingBodyNames) {
     EXPECT_EQ(rt.GetMap("body_map").values.AsFloat()[0], 5);
     EXPECT_EQ(rt.GetMap("caller_map").values.AsFloat()[0], 13);
   }
+  for (bool input : {true, false}) {
+    SCOPED_TRACE(input);
+    NodeProto invalid = node;
+    auto *formal = input ? Body(invalid).mutable_input(0) : Body(invalid).mutable_output(0);
+    formal->clear_type();
+    formal->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    formal->mutable_type()->mutable_tensor_type()->mutable_shape();
+    ShapesContext context;
+    context.SetType("caller_map", body->input(0).type());
+    EXPECT_THROW(context.ComputeShapeNode(invalid), std::invalid_argument);
+    EXPECT_FALSE(context.HasType("result_map"));
+    EXPECT_THROW(core::runtime::RunNode(invalid, rt), std::invalid_argument);
+  }
 }
 
 TEST(Layer, RejectsRuntimeValueDescriptorMismatchesAtBothBoundaries) {
@@ -556,6 +569,60 @@ TEST(Layer, PreservesImmutableWeightFormalsForBodyPreparations) {
 
   EXPECT_TRUE(state->eligible);
   EXPECT_TRUE(state->executed);
+}
+
+TEST(Layer, ControlFlowBindingsDoNotInheritShadowedConstantNames) {
+  auto state = std::make_shared<LayerPreparationState>();
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  auto *weight = graph.add_initializer();
+  weight->set_name("B");
+  weight->set_data_type(TensorProto::FLOAT);
+  weight->add_dims(1);
+  weight->add_float_data(2);
+  auto *trip = graph.add_initializer();
+  trip->set_name("trip");
+  trip->set_data_type(TensorProto::INT64);
+  trip->add_int64_data(1);
+  auto *condition = graph.add_initializer();
+  condition->set_name("condition");
+  condition->set_data_type(TensorProto::BOOL);
+  condition->add_int32_data(1);
+  auto *loop = graph.add_node();
+  loop->set_op_type("Loop");
+  for (const auto &input : {"trip", "condition", "X"})
+    loop->add_input(input);
+  loop->add_output("Y");
+  auto *attribute = loop->add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  auto *body = attribute->mutable_g();
+  for (const auto &input : {"iteration", "local_condition", "B"})
+    body->add_input()->set_name(input);
+  for (const auto &output : {"local_condition", "result"})
+    body->add_output()->set_name(output);
+  auto *inner = body->add_node();
+  inner->set_domain("test.layer");
+  inner->set_op_type("Prepared");
+  inner->add_input("B");
+  inner->add_input("B");
+  inner->add_output("result");
+  RuntimeContext rt;
+  ASSERT_TRUE(rt.RegisterKernelFn(
+      "test.layer", "Prepared", core::symbolic::Device::kUndefined,
+      [state](const NodeProto &node, RuntimeContext &, const core::runtime::KernelContext &) {
+        return std::make_unique<LayerPreparationKernel>(node, state);
+      }));
+  LayerTestSession session(graph);
+  for (float value : {1.0f, 3.0f}) {
+    rt.Put("X", Tensor::FromFloat("X", {1}, {value}), core::runtime::RuntimeEventKind::kInput);
+    session.Run(rt);
+    EXPECT_EQ(rt.Get("Y").AsFloat()[0], value);
+    EXPECT_EQ(rt.Get("B").AsFloat()[0], 2);
+    EXPECT_FALSE(state->eligible);
+    EXPECT_FALSE(state->executed);
+  }
 }
 
 TEST(Layer, RejectsMissingMalformedBodyAndBoundaryArity) {

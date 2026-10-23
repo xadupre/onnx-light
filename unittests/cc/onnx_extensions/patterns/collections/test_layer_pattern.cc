@@ -8,8 +8,10 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
+#include "onnx_lib/checker.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <algorithm>
 #include <map>
@@ -104,7 +106,7 @@ void ExpectClosedGraph(const GraphProto &graph, std::set<std::string> available 
     EXPECT_TRUE(available.count(output.name().value())) << output.name().value();
 }
 
-std::size_t ExpectLayerContracts(const GraphProto &graph) {
+std::size_t ExpectLayerContracts(const GraphProto &graph, std::set<std::string> available = {}) {
   std::size_t count = 0;
   for (const auto &node : graph.node()) {
     if (!IsLayer(node))
@@ -131,7 +133,7 @@ std::size_t ExpectLayerContracts(const GraphProto &graph) {
       EXPECT_FALSE(IsLayer(inner));
     ExpectClosedGraph(*body);
   }
-  ExpectClosedGraph(graph);
+  ExpectClosedGraph(graph, std::move(available));
   return count;
 }
 
@@ -255,6 +257,145 @@ TEST(RepeatedLayerPattern, DynamicMatMulLayersKeepDistinctWeightsExternalAndAreI
   EXPECT_EQ(external_weights, (std::set<std::string>{"w0", "w1", "w2"}));
   EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
   EXPECT_TRUE(after.Equals(builder.BuildGraph()));
+}
+
+TEST(RepeatedLayerPattern, NestedExtractionExportsRequiredImportAndPreservesReplayUndo) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  AddLayerWeight(builder, "w0", 4, 4, 0.5f);
+  AddLayerWeight(builder, "w1", 4, 4, 1.5f);
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    if (std::string(name) == "then_branch") {
+      AddMatMulLayer(branch, "x", "w0", "h0");
+      AddMatMulLayer(branch, "h0", "w1", "h1");
+      branch.MakeOutput("h1");
+    } else {
+      branch.MakeNode("Relu", {"x"}, {"other"});
+      branch.MakeOutput("other");
+    }
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  optimizer.Canonicalize();
+  const auto original = builder.BuildGraph();
+  const auto original_version = builder.OpsetVersion("ai.rt");
+  const auto plan = optimizer.Optimize();
+  EXPECT_GE(ExpectLayerContracts(builder.Subgraph("then_branch").BuildGraph(), {"x", "w0", "w1"}),
+            2u);
+  EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
+  const auto optimized = builder.ToModel();
+  const auto optimized_graph = builder.BuildGraph();
+  EXPECT_NO_THROW(VerifyModel(optimized));
+  EXPECT_NO_THROW(checker::check_model(optimized));
+  bool recorded = false;
+  for (const auto &opset : plan.required_opset_imports())
+    recorded |= opset.domain() == "ai.rt" && opset.version() == 1;
+  EXPECT_TRUE(recorded);
+  auto restored = builder.UndoRewritings(plan);
+  EXPECT_EQ(restored.OpsetVersion("ai.rt"), original_version);
+  std::string difference;
+  EXPECT_TRUE(restored.BuildGraph().Equals(original, &difference)) << difference;
+  auto replayed = restored.ApplyRewritings(plan);
+  EXPECT_TRUE(replayed.BuildGraph().Equals(optimized_graph, &difference)) << difference;
+  EXPECT_EQ(replayed.OpsetVersion("ai.rt"), 1);
+  EXPECT_NO_THROW(VerifyModel(replayed.ToModel()));
+  EXPECT_NO_THROW(checker::check_model(replayed.ToModel()));
+}
+
+TEST(RepeatedLayerPattern, PreservesMapBoundaryDescriptorsWithTensorPlaceholders) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local", 1}});
+  ValueInfoProto map;
+  map.set_name("map");
+  auto *map_type = map.mutable_type()->mutable_map_type();
+  map_type->set_key_type(TensorProto::INT64);
+  map_type->mutable_value_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  map_type->mutable_value_type()->mutable_tensor_type()->mutable_shape();
+  builder.MakeInput(map);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  auto &function = builder.MakeLocalFunction("WithMap", "local");
+  function.MakeInput(map);
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  function.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  function.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  function.MakeOutput("mm");
+  function.MakeOutput(map);
+  for (int i = 0; i < 2; ++i) {
+    const std::string prefix = "h" + std::to_string(i);
+    AddLayerWeight(builder, prefix + "_w", 4, 4, static_cast<float>(i + 1));
+    builder.MakeNode("WithMap", {"map", "x", prefix + "_w"}, {prefix + "_mm", prefix + "_map"},
+                     "local", prefix + "_call");
+    builder.MakeNode("Relu", {prefix + "_mm"}, {prefix}, "", prefix + "_relu");
+    builder.MakeOutput(prefix);
+    ValueInfoProto output = map;
+    output.set_name(prefix + "_map");
+    builder.MakeOutput(output);
+  }
+  OptimizeLayers(builder);
+  const auto graph = builder.BuildGraph();
+  ASSERT_GE(ExpectLayerContracts(graph), 2u);
+  size_t maps = 0;
+  for (const auto &node : graph.node()) {
+    if (!IsLayer(node))
+      continue;
+    const auto *body = LayerBody(node);
+    for (std::size_t i = 0; i < body->input().size(); ++i)
+      if (node.input(i) == "map") {
+        EXPECT_TRUE(body->input(i).type().has_map_type());
+        ++maps;
+      }
+    for (const auto &output : body->output())
+      if (output.name().value().ends_with("_map")) {
+        EXPECT_TRUE(output.type().has_map_type());
+        ++maps;
+      }
+  }
+  EXPECT_EQ(maps, 4u);
+}
+
+TEST(RepeatedLayerPattern, KeepsUnsupportedOptionalBoundariesOutsideLayers) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int i = 0; i < 2; ++i) {
+    const std::string prefix = "h" + std::to_string(i);
+    AddLayerWeight(builder, prefix + "_w", 4, 4, static_cast<float>(i + 1));
+    AddMatMulLayer(builder, "x", prefix + "_w", prefix);
+    builder.MakeNode("Optional", {prefix}, {prefix + "_optional"}, "", prefix + "_optional");
+    ValueInfoProto output;
+    output.set_name(prefix + "_optional");
+    auto *tensor =
+        output.mutable_type()->mutable_optional_type()->mutable_elem_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    tensor->mutable_shape()->add_dim()->set_dim_value(2);
+    tensor->mutable_shape()->add_dim()->set_dim_value(4);
+    builder.MakeOutput(output);
+  }
+  OptimizeLayers(builder);
+  const auto graph = builder.BuildGraph();
+  EXPECT_GE(ExpectLayerContracts(graph), 2u);
+  size_t optional = 0;
+  for (const auto &node : graph.node()) {
+    optional += node.op_type() == "Optional" ? 1 : 0;
+    if (!IsLayer(node))
+      continue;
+    const auto *body = LayerBody(node);
+    for (const auto &formal : body->input())
+      EXPECT_FALSE(formal.type().has_optional_type());
+    for (const auto &formal : body->output())
+      EXPECT_FALSE(formal.type().has_optional_type());
+  }
+  EXPECT_EQ(optional, 2u);
+  for (const auto &output : graph.output())
+    EXPECT_TRUE(output.type().has_optional_type());
 }
 
 TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders) {

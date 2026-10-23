@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_core/graph/layer.h"
+#include "onnx_core/graph/layer_validation.h"
 #include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -30,6 +30,20 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
+
+std::unordered_set<std::string>
+CapturedImmutableInputs(const GraphProto &graph,
+                        const std::unordered_set<std::string> &immutable_inputs) {
+  auto captured = immutable_inputs;
+  for (const auto &input : graph.input())
+    captured.erase(input.name());
+  for (const auto &initializer : graph.initializer())
+    captured.erase(initializer.name());
+  for (const auto &node : graph.node())
+    for (const auto &output : node.output())
+      captured.erase(output);
+  return captured;
+}
 
 int64_t ParseInt64Scalar(const Tensor &t, const std::string &where) {
   EXT_ENFORCE_INVALID(!(t.data_type != DataType::INT64 || t.element_count() != 1),
@@ -350,10 +364,9 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
                                  std::shared_ptr<ValueStore> value_store,
                                  std::unordered_set<std::string> immutable_inputs,
-                                 const FunctionMap *model_functions,
-                                 std::unordered_set<std::string> bound_immutable_inputs)
+                                 const FunctionMap *model_functions)
     : RuntimeSession(graph, opset_imports, 0, std::move(value_store), std::move(immutable_inputs),
-                     model_functions, std::move(bound_immutable_inputs)) {
+                     model_functions) {
   SetNestedExecution();
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
@@ -1310,9 +1323,9 @@ public:
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (layer_body_) {
       if (!layer_session_)
-        layer_session_ = std::make_unique<SubgraphSession>(
-            *layer_body_, inherited_opset_imports_, value_store_, std::unordered_set<std::string>{},
-            model_functions_, immutable_inputs_);
+        layer_session_ =
+            std::make_unique<SubgraphSession>(*layer_body_, inherited_opset_imports_, value_store_,
+                                              immutable_inputs_, model_functions_);
       layer_session_->Run(rt);
     } else {
       if (!session_) {
@@ -1530,10 +1543,12 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     // kernel initialization) and hand them to the kernel so every subsequent
     // invocation of this node reuses them instead of re-resolving the
     // selected branch's kernels from scratch.
-    auto then_session = std::make_shared<SubgraphSession>(then_branch, opset_imports, value_store,
-                                                          immutable_inputs, model_functions);
-    auto else_session = std::make_shared<SubgraphSession>(else_branch, opset_imports, value_store,
-                                                          immutable_inputs, model_functions);
+    auto then_session = std::make_shared<SubgraphSession>(
+        then_branch, opset_imports, value_store,
+        CapturedImmutableInputs(then_branch, immutable_inputs), model_functions);
+    auto else_session = std::make_shared<SubgraphSession>(
+        else_branch, opset_imports, value_store,
+        CapturedImmutableInputs(else_branch, immutable_inputs), model_functions);
     return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session),
                                       kernel_context);
   }
@@ -1542,19 +1557,22 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
     auto body_session = std::make_shared<SubgraphSession>(
-        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
+        body, opset_imports, std::move(value_store),
+        CapturedImmutableInputs(body, immutable_inputs), model_functions);
     return std::make_unique<LoopKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(
-        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
+        body, opset_imports, std::move(value_store),
+        CapturedImmutableInputs(body, immutable_inputs), model_functions);
     return std::make_unique<ScanKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(
-        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
+        body, opset_imports, std::move(value_store),
+        CapturedImmutableInputs(body, immutable_inputs), model_functions);
     return std::make_unique<SequenceMapKernel>(node, std::move(body_session), kernel_context);
   }
 

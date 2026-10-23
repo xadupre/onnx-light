@@ -447,12 +447,12 @@ protected:
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
+  /// Immutable input names refer to this graph's scope, after caller binding and shadow filtering.
   explicit RuntimeSession(const GraphProto &graph,
                           const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
                           std::shared_ptr<ValueStore> value_store = nullptr,
                           std::unordered_set<std::string> immutable_inputs = {},
-                          const FunctionMap *model_functions = nullptr,
-                          std::unordered_set<std::string> bound_immutable_inputs = {});
+                          const FunctionMap *model_functions = nullptr);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and

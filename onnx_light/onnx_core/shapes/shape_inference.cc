@@ -16,7 +16,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_core/graph/layer.h"
+#include "onnx_core/graph/layer_validation.h"
 #include "onnx_core/shapes/dispatch_table.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
@@ -829,6 +829,13 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
         return;
       const TypeProto &type = formal.type();
       if (type.has_tensor_type() && context.Has(name)) {
+        bool tensor_kind = !context.HasType(name) || context.GetType(name).has_tensor_type();
+        if (!tensor_kind && context.HasEncodedValue(name)) {
+          const auto &encoded = context.GetEncodedValue(name);
+          tensor_kind = encoded.has_logical_type() && encoded.logical_type().has_tensor_type();
+        }
+        EXT_ENFORCE_INVALID(tensor_kind, "Layer: incompatible boundary value kind for '",
+                            formal.name(), "'.");
         const auto &declared = type.tensor_type();
         const auto &actual = context.Get(name);
         EXT_ENFORCE_INVALID(declared.elem_type() == TensorProto::UNDEFINED ||

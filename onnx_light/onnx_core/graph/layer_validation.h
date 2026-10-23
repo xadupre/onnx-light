@@ -5,7 +5,7 @@
 #pragma once
 
 /**
- * @file layer.h
+ * @file layer_validation.h
  * @brief Validates explicit graph boundaries for ai.rt::Layer.
  */
 

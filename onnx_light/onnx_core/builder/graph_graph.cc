@@ -2504,12 +2504,23 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   for (const auto &addition : added_initializers) {
     affected_values.insert(addition.initializer->name().value());
   }
+  std::unordered_set<std::string> retired_outputs;
+  for (const NodeProto *node : removed)
+    for (const auto &output : node->output())
+      if (!output.empty())
+        retired_outputs.insert(output.value());
+  for (const NodeProto *node : nodes_by_position)
+    if (node != nullptr)
+      for (const auto &output : node->output())
+        retired_outputs.erase(output.value());
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
       rebuilt.push_back(utils::CopyWithSharedTensorStorage(*nodes_by_position[position]));
       NodeProto &node = rebuilt.back();
-      const std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
+      std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
+      if (NodeCarriesSubgraph(node))
+        excluded.insert(retired_outputs.begin(), retired_outputs.end());
       node.ref_attribute() = ImportAttributes(node, excluded);
       old_indices.push_back(nodes.size());
       for (const auto &output : node.output()) {

@@ -13,5 +13,5 @@ including :cpp:func:`onnx_light::core::graph::CollectExternalInputs`,
 Layer boundary validation
 -------------------------
 
-.. doxygenfile:: onnx_core/graph/layer.h
+.. doxygenfile:: onnx_core/graph/layer_validation.h
    :project: onnx-light

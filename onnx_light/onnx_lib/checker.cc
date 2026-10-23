@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "onnx_core/graph/layer.h"
+#include "onnx_core/graph/layer_validation.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/path.h"

@@ -585,6 +585,14 @@ void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
     throw BuilderError("GraphBuilder: opset versions must be positive.");
   }
   const std::string key = NormaliseDomain(domain);
+  GraphBuilder *owner = this;
+  while (owner->parent_ != nullptr && !owner->is_local_function_)
+    owner = owner->parent_;
+  if (owner != this && owner->OpsetVersion(key) == kUnknownOpsetVersion) {
+    owner->SetOpsetVersion(key, version);
+    if (OpsetVersion(key) == version)
+      return;
+  }
   const bool changed = OpsetVersion(key) != version;
   if (changed)
     InvalidateRewritings();

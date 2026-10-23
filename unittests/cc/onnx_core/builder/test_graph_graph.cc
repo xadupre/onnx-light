@@ -877,7 +877,7 @@ TEST(GraphGraph, NestedRewriteCapturesOrdinaryImportsWithoutFunctionImportConfli
   EXPECT_EQ(plan.required_opset_imports()[0].domain(), "ai.onnx.ml");
   EXPECT_EQ(plan.required_opset_imports()[0].version(), 1);
   EXPECT_TRUE(plan.added_functions().empty());
-  EXPECT_EQ(builder.OpsetVersion("ai.onnx.ml"), root_ml_version);
+  EXPECT_EQ(builder.OpsetVersion("ai.onnx.ml"), 1);
   EXPECT_EQ(builder.Subgraph("then_branch").OpsetVersion("ai.onnx.ml"), 1);
   EXPECT_EQ(builder.Subgraph("then_branch").Nodes()[0].op_type(), "Scaler");
   const auto optimized = builder.BuildGraph();

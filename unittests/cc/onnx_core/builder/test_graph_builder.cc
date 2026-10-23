@@ -301,6 +301,17 @@ TEST(GraphBuilder, SetOpsetVersionUpdatesExistingNestedBuildersWithoutChangingFu
   EXPECT_EQ(function_body.Shapes().OpsetVersion(""), 16);
   EXPECT_EQ(builder.OpsetVersion(""), 17);
   EXPECT_EQ(nested_function.OpsetVersion(""), 18);
+
+  nested.SetOpsetVersion("nested.new", 1);
+  for (auto *scope : {&builder, &body, &nested})
+    EXPECT_EQ(scope->OpsetVersion("nested.new"), 1);
+  for (auto *scope : {&function, &function_body, &nested_function})
+    EXPECT_EQ(scope->OpsetVersion("nested.new"), core::shapes::kUnknownOpsetVersion);
+  function_body.SetOpsetVersion("nested.new", 2);
+  EXPECT_EQ(function.OpsetVersion("nested.new"), 2);
+  EXPECT_EQ(function_body.OpsetVersion("nested.new"), 2);
+  EXPECT_EQ(builder.OpsetVersion("nested.new"), 1);
+  EXPECT_EQ(nested_function.OpsetVersion("nested.new"), core::shapes::kUnknownOpsetVersion);
 }
 
 TEST(GraphBuilder, SetOpsetVersionRefreshesOnlyAffectedNestedConsumers) {

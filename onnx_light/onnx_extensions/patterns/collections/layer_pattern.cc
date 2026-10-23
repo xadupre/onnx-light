@@ -851,9 +851,19 @@ bool KnownType(const TypeProto &type, std::size_t depth) {
   return type.has_struct_type() || type.has_opaque_type();
 }
 
-bool KnownBoundaryType(Index &index, const std::string &name) {
-  if (DeclaredType(index, name) != nullptr)
+bool SupportedBoundaryType(const TypeProto &type) {
+  if (type.has_tensor_type() || type.has_struct_type())
     return true;
+  if (type.has_sequence_type())
+    return SupportedBoundaryType(type.sequence_type().elem_type());
+  if (type.has_map_type())
+    return type.map_type().value_type().has_tensor_type();
+  return false;
+}
+
+bool KnownBoundaryType(Index &index, const std::string &name) {
+  if (const auto *type = DeclaredType(index, name))
+    return SupportedBoundaryType(*type);
   GraphGraph &graph = index.graph;
   return graph.HasType(name) && core::symbolic::TensorTypeToDataType(graph.GetType(name)) !=
                                     TensorProto::DataType::UNDEFINED;
@@ -1260,7 +1270,7 @@ ValueInfoProto ValueInfo(Index &index, const std::string &name) {
   const auto &context = graph.Builder().Shapes();
   if (context.HasType(name) && KnownType(context.GetType(name)))
     *value.mutable_type() = context.GetType(name);
-  if (graph.HasShape(name)) {
+  if (graph.HasShape(name) && (!value.has_type() || value.type().has_tensor_type())) {
     core::symbolic::SymTensorToValueInfo(graph.GetShape(name), value);
   } else if (!value.has_type() && graph.HasType(name)) {
     value.mutable_type()->mutable_tensor_type()->set_elem_type(
@@ -1283,6 +1293,71 @@ ValueInfoProto ValueInfo(Index &index, const std::string &name) {
     metadata->set_value(tag->second);
   }
   return value;
+}
+
+void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
+  const auto visit = [](const auto &self, GraphProto &scope, const auto &action) -> void {
+    action(scope);
+    for (auto &node : scope.ref_node())
+      for (auto &attribute : node.ref_attribute()) {
+        if (attribute.has_g())
+          self(self, attribute.ref_g(), action);
+        for (auto &nested : attribute.ref_graphs())
+          self(self, nested, action);
+      }
+  };
+  std::unordered_set<std::string> used;
+  visit(visit, body, [&](const GraphProto &scope) {
+    for (const auto &input : scope.input())
+      used.insert(input.name());
+    for (const auto &output : scope.output())
+      used.insert(output.name());
+    for (const auto &info : scope.value_info())
+      used.insert(info.name());
+    for (const auto &initializer : scope.initializer())
+      used.insert(initializer.name());
+    for (const auto &initializer : scope.sparse_initializer())
+      used.insert(initializer.values().name());
+    for (const auto &initializer : scope.extended_initializer()) {
+      if (initializer.has_encoded_value())
+        used.insert(initializer.encoded_value().name());
+      if (initializer.has_paged_cache())
+        used.insert(initializer.paged_cache().name());
+    }
+    for (const auto &node : scope.node()) {
+      used.insert(node.input().begin(), node.input().end());
+      used.insert(node.output().begin(), node.output().end());
+    }
+  });
+  // Graph attributes obey lexical SSA even though Layer binds its inputs positionally.
+  std::unordered_map<std::string, std::string> names;
+  for (std::size_t i = 0; i < body.input().size(); ++i) {
+    const std::string base = body.name().value() + "_input_" + std::to_string(i);
+    std::string name = base;
+    for (std::size_t suffix = 0; used.contains(name) || graph.Builder().HasName(name); ++suffix)
+      name = base + "_" + std::to_string(suffix);
+    used.insert(name);
+    names.emplace(body.input(i).name().value(), std::move(name));
+  }
+  visit(visit, body, [&](GraphProto &scope) {
+    const auto rename_value = [&](auto &value) {
+      const auto found = names.find(value.name().value());
+      if (found != names.end())
+        value.set_name(found->second);
+    };
+    for (auto &input : scope.ref_input())
+      rename_value(input);
+    for (auto &output : scope.ref_output())
+      rename_value(output);
+    for (auto &info : scope.ref_value_info())
+      rename_value(info);
+    for (auto &node : scope.ref_node())
+      for (auto &input : node.ref_input()) {
+        const auto found = names.find(input.value());
+        if (found != names.end())
+          input = found->second;
+      }
+  });
 }
 
 NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary,
@@ -1308,6 +1383,7 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
       }
     }
   }
+  RenameLayerInputs(body, index.graph);
   const std::string name =
       "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
   NodeProto layer = MakeNode("Layer", boundary.inputs, boundary.outputs, "ai.rt", name.c_str());

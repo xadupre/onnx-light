@@ -108,8 +108,17 @@ explicitly:
     model = builder.to_onnx()
 
 In C++, pass ``onnx_patterns::CreatePattern("RepeatedLayer")`` in the explicit
-pattern vector. ``standard_pattern_names(include_opt_in=True)`` lists optional
-patterns without enabling them.
+pattern vector.
+
+Python enumeration excludes opt-in patterns by default: this applies to
+``standard_pattern_names()`` and both low-level
+``registered_pattern_names()`` bindings (``_onnxpypatterns`` and
+``_onnxpycore.builder``). Pass ``include_opt_in=True`` to any of these functions
+to list all available patterns. Callers relying on the previous low-level
+default must now pass this argument explicitly. Listing never enables a pattern
+or changes the process-global registry; ``registered_pattern_names()`` in
+``onnx_core.optimization`` lists only that registry's active entries.
+The C++ ``RegisteredPatternNames()`` enumeration default remains unchanged.
 
 For example, two corresponding regions become two separate bodies, with their
 own parameters passed explicitly::

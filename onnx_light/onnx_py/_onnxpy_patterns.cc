@@ -496,7 +496,9 @@ NB_MODULE(_onnxpypatterns, m) {
         onnx_patterns::RegisterPatterns();
         return core::builder::RegisteredPatternNames(include_opt_in);
       },
-      nb::arg("include_opt_in") = true, "Returns the registered standard ONNX pattern names.");
+      nb::arg("include_opt_in") = false,
+      "Returns registered standard ONNX pattern names, excluding opt-in patterns unless requested. "
+      "Listing patterns does not enable them.");
   m.def("create_pattern", &CreatePattern, nb::arg("name"), nb::arg("priority") = nb::none(),
         "Creates a standard ONNX pattern by its registered name.");
 }

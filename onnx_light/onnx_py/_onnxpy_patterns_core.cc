@@ -275,8 +275,9 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           nb::arg("name"), nb::rv_policy::reference_internal);
 
   builder_mod.def("registered_pattern_names", &RegisteredPatternNames,
-                  nb::arg("include_opt_in") = true,
-                  "Returns registered C++ pattern names in evaluation order.");
+                  nb::arg("include_opt_in") = false,
+                  "Returns registered C++ pattern names in evaluation order, excluding opt-in "
+                  "patterns unless requested. Listing patterns does not enable them.");
   builder_mod.def(
       "apply_rewritings",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {

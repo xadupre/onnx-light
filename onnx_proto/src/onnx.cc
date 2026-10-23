@@ -755,7 +755,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   if (has_data_location() && ref_data_location() == DataLocation::EXTERNAL &&
       stream.ExternalWeights()) {
     for (const auto &entry : ref_external_data())
-      EXT_ENFORCE(entry.key() != "onnx_light.encryption",
+      EXT_ENFORCE(entry.key() != utils::detail::kExternalDataEncryptionKey,
                   "Encrypted external weights require LoadEncryptedExternalDataForModel.");
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     offset_t offset = -1; // two_stream.second_tell();
@@ -904,7 +904,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
 }
 void TensorProto::LoadExternalData(const std::string &base_dir) {
   for (const auto &entry : ref_external_data())
-    EXT_ENFORCE(entry.key() != "onnx_light.encryption",
+    EXT_ENFORCE(entry.key() != utils::detail::kExternalDataEncryptionKey,
                 "Encrypted external weights require LoadEncryptedExternalDataForModel.");
   EXT_ENFORCE(has_data_location() && ref_data_location() == DataLocation::EXTERNAL,
               "TensorProto::LoadExternalData requires data_location == EXTERNAL, name='",

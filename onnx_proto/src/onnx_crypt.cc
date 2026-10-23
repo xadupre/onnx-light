@@ -15,6 +15,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 // ChaCha20-Poly1305 is only available when OpenSSL is built with ChaCha support.
@@ -29,6 +30,13 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 namespace {
+
+using utils::detail::kExternalDataDigestKey;
+using utils::detail::kExternalDataEncryptionFormat;
+using utils::detail::kExternalDataEncryptionKey;
+using utils::detail::kExternalDataLengthKey;
+using utils::detail::kExternalDataLocationKey;
+using utils::detail::kExternalDataOffsetKey;
 
 // File format constants.
 static constexpr std::array<char, 8> MAGIC_AES{'O', 'N', 'N', 'X', 'C', 'R', 'Y', '1'};
@@ -475,6 +483,10 @@ bool parse_external_integer(const std::string &value, int64_t &result) {
   return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
 }
 
+std::string external_tensor_context(const TensorProto &tensor, const std::string &location) {
+  return "tensor '" + std::string(tensor.name()) + "', location '" + location + "'";
+}
+
 void reject_unsupported_external_data(const GraphProto &graph, bool codec = false);
 void reject_unsupported_external_data(const FunctionProto &function, bool codec = false);
 void reject_external_struct_data(const TypeProto &type);
@@ -650,7 +662,7 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
   validate_external_limits(key, max_external_file_size);
   const size_t capacity = max_external_file_size - GCM_HEADER_SIZE;
   reject_unsupported_external_data(model);
-  ModelProto copy = model;
+  ModelProto copy = utils::CopyWithSharedTensorStorage(model);
   IteratorTensorProto check(&copy);
   while (check.next()) {
     TensorProto &tensor = *check;
@@ -686,9 +698,9 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
                              std::filesystem::path(std::u8string(location.begin(), location.end())),
                          blob);
     for (TensorProto *tensor : tensors) {
-      add_external_entry(*tensor, "location", location);
-      add_external_entry(*tensor, "onnx_light.encryption", "ONNXCRY3");
-      add_external_entry(*tensor, "onnx_light.encrypted_sha256", digest);
+      add_external_entry(*tensor, kExternalDataLocationKey, location);
+      add_external_entry(*tensor, kExternalDataEncryptionKey, kExternalDataEncryptionFormat);
+      add_external_entry(*tensor, kExternalDataDigestKey, digest);
     }
     tensors.clear();
     plain.clear();
@@ -702,8 +714,8 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
     if (size > capacity - plain.size())
       flush();
     tensor.clr_external_data();
-    add_external_entry(tensor, "offset", std::to_string(plain.size()));
-    add_external_entry(tensor, "length", std::to_string(size));
+    add_external_entry(tensor, kExternalDataOffsetKey, std::to_string(plain.size()));
+    add_external_entry(tensor, kExternalDataLengthKey, std::to_string(size));
     const auto &raw_data = tensor.raw_data();
     plain.append(reinterpret_cast<const char *>(raw_data.data()), size);
     tensor.clear_raw_data();
@@ -734,30 +746,52 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
   while (iterator.next()) {
     TensorProto &tensor = *iterator;
     bool marked = false;
-    for (const auto &entry : tensor.external_data())
-      marked |= entry.key() == "onnx_light.encryption";
+    std::string location;
+    for (const auto &entry : tensor.external_data()) {
+      marked |= entry.key() == kExternalDataEncryptionKey;
+      if (entry.key() == kExternalDataLocationKey && location.empty())
+        location = entry.value();
+    }
     if (!marked)
       continue;
     std::map<std::string, std::string> entries;
     for (const auto &entry : tensor.external_data()) {
       if (!entries.emplace(std::string(entry.key()), std::string(entry.value())).second)
-        throw std::runtime_error("Duplicate encrypted external-data metadata.");
+        throw std::runtime_error("Duplicate encrypted external-data key '" +
+                                 std::string(entry.key()) + "' for " +
+                                 external_tensor_context(tensor, location));
     }
+    const auto invalid = [&](const std::string &field) {
+      return std::runtime_error("Invalid encrypted external-data " + field + " for " +
+                                external_tensor_context(tensor, location));
+    };
+    const auto required = [&](const char *field) -> const std::string & {
+      const auto found = entries.find(field);
+      if (found == entries.end())
+        throw invalid(std::string("missing field '") + field + "'");
+      return found->second;
+    };
     int64_t offset = -1, length = -1;
-    if (tensor.data_location() != TensorProto::DataLocation::EXTERNAL ||
-        entries["onnx_light.encryption"] != "ONNXCRY3" ||
-        !IsSafeExternalDataLocation(entries["location"]) ||
-        entries["onnx_light.encrypted_sha256"].size() != 64 ||
-        !parse_external_integer(entries["offset"], offset) || offset < 0 ||
-        !parse_external_integer(entries["length"], length) || length < 0 ||
-        (opts.max_tensor_size_bytes > 0 && length > opts.max_tensor_size_bytes))
-      throw std::runtime_error("Invalid encrypted external-data metadata or tensor size limit.");
-    const std::string &location = entries["location"];
+    if (tensor.data_location() != TensorProto::DataLocation::EXTERNAL)
+      throw invalid("data_location");
+    if (required(kExternalDataEncryptionKey) != kExternalDataEncryptionFormat)
+      throw invalid(kExternalDataEncryptionKey);
+    if (!IsSafeExternalDataLocation(required(kExternalDataLocationKey)))
+      throw invalid(kExternalDataLocationKey);
+    const std::string &digest = required(kExternalDataDigestKey);
+    if (digest.size() != 64)
+      throw invalid(kExternalDataDigestKey);
+    if (!parse_external_integer(required(kExternalDataOffsetKey), offset) || offset < 0)
+      throw invalid(kExternalDataOffsetKey);
+    if (!parse_external_integer(required(kExternalDataLengthKey), length) || length < 0)
+      throw invalid(kExternalDataLengthKey);
+    if (opts.max_tensor_size_bytes > 0 && length > opts.max_tensor_size_bytes)
+      throw invalid("length exceeding max_tensor_size_bytes");
     auto &shard = shards[location];
     if (shard.tensors.empty())
-      shard.digest = entries["onnx_light.encrypted_sha256"];
-    else if (shard.digest != entries["onnx_light.encrypted_sha256"])
-      throw std::runtime_error("Encrypted external tensor digest is inconsistent.");
+      shard.digest = digest;
+    else if (shard.digest != digest)
+      throw invalid("inconsistent onnx_light.encrypted_sha256");
     shard.tensors.push_back(TensorReference{
         &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
   }
@@ -768,20 +802,23 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
       const int64_t size = utils::detail::ExternalDataFileSize(*file);
       if (size < static_cast<int64_t>(GCM_HEADER_SIZE) ||
           static_cast<uint64_t>(size) > max_external_file_size)
-        throw std::runtime_error("Encrypted external file exceeds size limit or is truncated.");
+        throw std::runtime_error("Encrypted external file exceeds size limit or is truncated for " +
+                                 external_tensor_context(*shard.tensors.front().tensor, location));
       std::string blob(static_cast<size_t>(size), '\0');
       utils::detail::ReadExternalDataFile(*file, blob.data(), size, 0);
       const std::string digest = encrypted_digest(blob);
       if (digest != shard.digest ||
           blob.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
         throw std::runtime_error(
-            "Encrypted external file authentication failed (digest or format).");
+            "Encrypted external file authentication failed (digest or format) for " +
+            external_tensor_context(*shard.tensors.front().tensor, location));
       plain =
           decrypt_from_blob_gcm(reinterpret_cast<const uint8_t *>(blob.data()), blob.size(), key);
     }
     for (const auto &reference : shard.tensors) {
       if (reference.offset > plain.size() || reference.length > plain.size() - reference.offset)
-        throw std::runtime_error("Encrypted external tensor range is invalid.");
+        throw std::runtime_error("Encrypted external tensor offset/length range is invalid for " +
+                                 external_tensor_context(*reference.tensor, location));
       const size_t offset = static_cast<size_t>(reference.offset);
       const size_t length = static_cast<size_t>(reference.length);
       TensorProto &tensor = *reference.tensor;
@@ -843,7 +880,7 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
   IteratorTensorProto iterator(&model);
   while (iterator.next())
     for (const auto &entry : iterator->external_data())
-      encrypted_external |= entry.key() == "onnx_light.encryption";
+      encrypted_external |= entry.key() == kExternalDataEncryptionKey;
   if (encrypted_external) {
     if (file_buf.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
       throw std::runtime_error("Encrypted external weights require an ONNXCRY3 model.");

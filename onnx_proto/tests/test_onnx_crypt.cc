@@ -2,12 +2,21 @@
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <chrono>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+#if defined(__linux__)
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
 
 #ifdef ONNX_LIGHT_HAS_OPENSSL
 
@@ -503,6 +512,87 @@ TEST_F(EncryptedExternalTest, ExportsBorrowedRawDataWithoutMutatingInput) {
   ModelProto loaded;
   LoadEncryptedModel(loaded, path, "secret");
   expect_same(original, loaded);
+}
+
+TEST_F(EncryptedExternalTest, ExportsShardsWithoutDuplicatingOwnedPayloads) {
+#if defined(__linux__)
+  ModelProto model = make_test_model();
+  constexpr size_t bytes = 1024 * 1024;
+  for (size_t i = 0; i < 32; ++i) {
+    auto *tensor = model.ref_graph().add_initializer();
+    tensor->set_name("weight_" + std::to_string(i));
+    tensor->set_data_type(TensorProto::UINT8);
+    tensor->add_dims(bytes);
+    tensor->ref_raw_data().resize(bytes);
+    std::memset(tensor->ref_raw_data().data(), static_cast<int>(i), bytes);
+  }
+  const auto *original = model.graph().initializer()[1].raw_data().data();
+  struct rlimit previous;
+  ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
+  std::ifstream statm("/proc/self/statm");
+  size_t pages = 0;
+  ASSERT_TRUE(static_cast<bool>(statm >> pages));
+  const long page_size = sysconf(_SC_PAGESIZE);
+  ASSERT_GT(page_size, 0);
+  struct rlimit limited = previous;
+  limited.rlim_cur = pages * static_cast<size_t>(page_size) + 16 * bytes;
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
+  EXPECT_NO_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", bytes + 52, 0));
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
+  EXPECT_EQ(model.graph().initializer()[1].raw_data().data(), original);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  ASSERT_EQ(loaded.graph().initializer().size(), model.graph().initializer().size());
+  for (size_t i = 0; i < model.graph().initializer().size(); ++i) {
+    const auto &expected = model.graph().initializer()[i];
+    EXPECT_FALSE(expected.has_external_data());
+    EXPECT_EQ(loaded.graph().initializer()[i].raw_data(), expected.raw_data());
+  }
+#else
+  GTEST_SKIP() << "Requires Linux address-space accounting.";
+#endif
+}
+
+TEST_F(EncryptedExternalTest, MetadataErrorsIdentifyTensorLocationAndField) {
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  for (const std::string field :
+       {"offset", "length", "onnx_light.encryption", "onnx_light.encrypted_sha256", "location",
+        "duplicate", "missing", "range"}) {
+    SCOPED_TRACE(field);
+    ModelProto stored = metadata();
+    auto &tensor = stored.ref_graph().ref_initializer()[0];
+    std::string expected_field = field;
+    if (field == "duplicate") {
+      auto *duplicate = tensor.add_external_data();
+      duplicate->set_key("offset");
+      duplicate->set_value("0");
+      expected_field = "offset";
+    } else if (field == "missing") {
+      auto &entries = tensor.ref_external_data();
+      for (auto it = entries.begin(); it != entries.end();)
+        if (it->key() == "length")
+          it = entries.erase(it);
+        else
+          ++it;
+      expected_field = "length";
+    } else if (field == "range") {
+      set_entry(tensor, "offset", "1");
+      expected_field = "offset/length";
+    } else {
+      set_entry(tensor, field, field == "location" ? "../unsafe" : "invalid");
+    }
+    const auto location = entry(tensor, "location");
+    try {
+      LoadEncryptedExternalDataForModel(stored, directory.string(), "secret");
+      FAIL() << "Invalid metadata was accepted";
+    } catch (const std::runtime_error &error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("tensor 'W'"), std::string::npos);
+      EXPECT_NE(message.find(location), std::string::npos);
+      EXPECT_NE(message.find(expected_field), std::string::npos);
+    }
+  }
 }
 
 TEST_F(EncryptedExternalTest, LoadsInterleavedShardReferencesAndRejectsConflictingDigests) {

@@ -8,6 +8,13 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils::detail {
 
+inline constexpr char kExternalDataLocationKey[] = "location";
+inline constexpr char kExternalDataOffsetKey[] = "offset";
+inline constexpr char kExternalDataLengthKey[] = "length";
+inline constexpr char kExternalDataEncryptionKey[] = "onnx_light.encryption";
+inline constexpr char kExternalDataDigestKey[] = "onnx_light.encrypted_sha256";
+inline constexpr char kExternalDataEncryptionFormat[] = "ONNXCRY3";
+
 // Exported only for the checker in lib_onnx_lib; this header is not installed.
 ONNX_LIGHT_PROTO_API std::shared_ptr<int> OpenExternalDataFile(const std::string &base_dir,
                                                                const std::string &relative_path,

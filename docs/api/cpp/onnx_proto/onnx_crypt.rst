@@ -35,6 +35,12 @@ The default cap is 1 GiB; supported caps range from 53 to ``INT_MAX + 52`` bytes
 External tensors must already have their plaintext data loaded in memory before
 export (for plain input, use ``LoadExternalDataForModel``). Export leaves the
 input model unchanged and never creates plaintext temporary weight files.
+The working copy duplicates metadata, not safely shareable tensor storage:
+it uses the existing copy-on-write snapshot mechanism. Ownerless borrowed
+buffers and buffers with active exports still require copies. Packing and
+encryption allocate additional per-shard buffers; export is not zero-copy.
+Callers must synchronize access to the source model and reacquire existing
+storage views after export, as with other shared-storage snapshots.
 External encoded initializers and external tensor references in struct
 declarations or their encoder/decoder functions are currently unsupported:
 export rejects them before writing any files, including references in inline
@@ -64,6 +70,8 @@ a protobuf message as its plaintext.
 relative to the model directory, then embeds their bytes and removes their
 external-data metadata. Missing files, wrong passwords, altered/truncated or
 substituted shards, unsafe paths/links and invalid ranges raise errors.
+Metadata validation errors identify the tensor, shard location when available,
+and offending field; shard size, digest and range errors also include context.
 Plain native external-data readers reject marked encrypted weights rather than
 using ciphertext as tensor bytes. Unmarked plain external references retain
 their existing behavior.

@@ -84,6 +84,9 @@ ONNX_LIGHT_PROTO_API void SaveEncryptedModel(ModelProto &model, const std::strin
  * existing external tensors must have their plaintext raw_data loaded first.
  * Struct declaration/codec tensors stay embedded; external references in those
  * scopes and external encoded initializers are rejected before writing files.
+ * Metadata is copied, while safe tensor storage is shared with copy-on-write;
+ * ownerless borrowed buffers and actively exported buffers are copied.
+ * The caller must synchronize source access and reacquire existing storage views afterward.
  * No plaintext files are written. Shards have unique generated relative names.
  * max_external_file_size includes the 52-byte ONNXCRY3 envelope and must be
  * between 53 and INT_MAX + 52 bytes. Tensors are never split: an eligible tensor

@@ -1168,6 +1168,8 @@ GraphBuilder::LayerBodyForMemory(const NodeProto &node) const {
     view.outputs = &body.outputs_;
     for (const auto &initializer : body.initializers_)
       view.initializer_names.push_back(initializer.name());
+    for (const auto &initializer : body.graph_template_.sparse_initializer())
+      view.initializer_names.push_back(initializer.values().name());
     for (const auto &initializer : body.extended_initializers_)
       view.initializer_names.push_back(initializer.name());
     view.nested_body = [&body](const NodeProto &inner) { return body.LayerBodyForMemory(inner); };

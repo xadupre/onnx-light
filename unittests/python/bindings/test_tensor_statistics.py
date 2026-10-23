@@ -19,6 +19,10 @@ compute_tensor_statistics = tensor_statistics.compute_tensor_statistics
 
 
 class TestTensorStatistics(ExtTestCase):
+    def test_runtime_value_is_canonical_shared_quantized_value_alias(self):
+        self.assertEqual(runtime.RuntimeValue.__name__, "RuntimeValue")
+        self.assertIs(runtime.SharedQuantizedValue, runtime.RuntimeValue)
+
     def test_numpy_tensor_and_proto(self):
         array = numpy.arange(24, dtype=numpy.float32).reshape(4, 6)
         proto = onh.from_array(array)

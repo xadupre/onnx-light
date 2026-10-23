@@ -165,6 +165,13 @@ TEST(TensorStatistics, ExactIntegerDistinctAndUnalignedStorage) {
   EXPECT_EQ(ComputeTensorStatistics(borrowed).distinct_count, 2);
 }
 
+TEST(TensorStatistics, LargeIntegerDistinctCount) {
+  std::vector<int32_t> values(100000);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<int32_t>(i % 257);
+  EXPECT_EQ(ComputeTensorStatistics(Tensor::FromInt32("X", {100000}, values)).distinct_count, 257);
+}
+
 TEST(TensorStatistics, IntegerBooleanAndEmptyDistinctCounts) {
   for (const auto &tensor : {
            Tensor::FromInt8("X", {3}, {0, 1, 1}),
@@ -438,4 +445,11 @@ TEST(TensorStatistics, EncodedCatalogueLastOverload) {
   EXPECT_EQ(stats.quantiles, expected.quantiles);
   EXPECT_EQ(stats.median, expected.median);
   EXPECT_EQ(stats.rectangle_map, expected.rectangle_map);
+}
+
+TEST(TensorStatistics, EncodedStatisticsRequireLogicalTensorType) {
+  EncodedValueProto encoded;
+  EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);
+  encoded.mutable_logical_type()->mutable_sequence_type();
+  EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);
 }

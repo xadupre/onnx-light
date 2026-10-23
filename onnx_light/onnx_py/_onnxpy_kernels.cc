@@ -1154,6 +1154,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           EXT_ENFORCE_INVALID(
               runtime_value.kind == RuntimeValue::Kind::kEncoded,
               "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
+          EXT_ENFORCE_INVALID(runtime_value.encoded,
+                              "Encoded RuntimeValue has no encoded payload.");
         }
         if (nb::isinstance<EncodedValueProto>(value) || nb::isinstance<RuntimeValue>(value)) {
           const size_t size_bytes =
@@ -1372,7 +1374,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an encoded runtime value into a Tensor.");
-  nb::class_<RuntimeValue>(rt_mod, "SharedQuantizedValue")
+  nb::class_<RuntimeValue>(rt_mod, "RuntimeValue")
       .def(nb::init<Tensor>())
       .def_prop_ro("encoded",
                    [](const RuntimeValue &value) {
@@ -1387,7 +1389,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         const auto &raw = value.Encoded().raw_data();
         return nb::bytes(raw.data(), raw.size());
       });
-  rt_mod.attr("RuntimeValue") = rt_mod.attr("SharedQuantizedValue");
+  rt_mod.attr("SharedQuantizedValue") = rt_mod.attr("RuntimeValue");
   rt_mod.def(
       "materialize_quantized_value",
       [](nb::handle value, const ModelProto *model) {

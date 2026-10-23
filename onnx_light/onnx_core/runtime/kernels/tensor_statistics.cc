@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -103,26 +102,30 @@ long double ReadNumber(const Tensor &tensor, int64_t index) {
   }
 }
 
+template <typename T> int64_t DistinctCountFromRaw(const Tensor &tensor, size_t count) {
+  std::vector<T> distinct;
+  distinct.reserve(count);
+  for (size_t i = 0; i < count; ++i)
+    distinct.push_back(Load<T>(tensor.bytes(), static_cast<int64_t>(i)));
+  std::sort(distinct.begin(), distinct.end());
+  return static_cast<int64_t>(std::unique(distinct.begin(), distinct.end()) - distinct.begin());
+}
+
 int64_t DistinctCount(const Tensor &tensor, const std::vector<long double> &values, bool has_nan) {
   // Integer keys must not pass through floating-point conversion, including on platforms where
   // long double has only double precision. memcpy also permits unaligned borrowed tensor storage.
-  if (tensor.data_type == TensorProto::INT64) {
-    std::set<int64_t> distinct;
-    for (size_t i = 0; i < values.size(); ++i)
-      distinct.insert(Load<int64_t>(tensor.bytes(), static_cast<int64_t>(i)));
-    return static_cast<int64_t>(distinct.size());
-  }
-  if (tensor.data_type == TensorProto::UINT64) {
-    std::set<uint64_t> distinct;
-    for (size_t i = 0; i < values.size(); ++i)
-      distinct.insert(Load<uint64_t>(tensor.bytes(), static_cast<int64_t>(i)));
-    return static_cast<int64_t>(distinct.size());
-  }
-  std::set<long double> distinct;
+  if (tensor.data_type == TensorProto::INT64)
+    return DistinctCountFromRaw<int64_t>(tensor, values.size());
+  if (tensor.data_type == TensorProto::UINT64)
+    return DistinctCountFromRaw<uint64_t>(tensor, values.size());
+  std::vector<long double> sorted;
+  sorted.reserve(values.size());
   for (long double value : values)
     if (!std::isnan(value))
-      distinct.insert(value);
-  return static_cast<int64_t>(distinct.size()) + (has_nan ? 1 : 0);
+      sorted.push_back(value);
+  std::sort(sorted.begin(), sorted.end());
+  return static_cast<int64_t>(std::unique(sorted.begin(), sorted.end()) - sorted.begin()) +
+         (has_nan ? 1 : 0);
 }
 
 double Quantile(const std::vector<long double> &sorted, double q) {
@@ -346,10 +349,15 @@ void Rectangle(TensorStatistics &result, const Tensor &tensor,
   });
 }
 
-void EncodedMetadata(TensorStatistics &result, const EncodedValueProto &value) {
-  // DequantizeTensor validates logical dtype and shape before we reach this point.
-  result.dtype = value.logical_type().tensor_type().elem_type();
-  result.size_bytes = value.raw_data().size();
+struct EncodedTensorMetadata {
+  int32_t dtype;
+  size_t size_bytes;
+};
+
+EncodedTensorMetadata EncodedMetadata(const EncodedValueProto &value) {
+  EXT_ENFORCE_INVALID(value.has_logical_type() && value.logical_type().has_tensor_type(),
+                      "Tensor statistics requires an encoded logical tensor type.");
+  return {value.logical_type().tensor_type().elem_type(), value.raw_data().size()};
 }
 
 TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
@@ -453,9 +461,11 @@ TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins
     return ComputeTensorStatistics(value.tensor, bins, quantiles, median, rectangle_shape);
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded && value.encoded,
                       "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
+  const auto metadata = EncodedMetadata(value.Encoded());
   auto result =
       ComputeStatistics(DequantizeTensor(value), bins, quantiles, median, rectangle_shape, true);
-  EncodedMetadata(result, value.Encoded());
+  result.dtype = metadata.dtype;
+  result.size_bytes = metadata.size_bytes;
   return result;
 }
 
@@ -464,9 +474,11 @@ TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t
                                          const std::vector<int64_t> &rectangle_shape,
                                          const StructTypeCatalogue &catalogue) {
   ValidateOptions(bins, quantiles, rectangle_shape);
+  const auto metadata = EncodedMetadata(value);
   auto result = ComputeStatistics(DequantizeTensor(value, catalogue), bins, quantiles, median,
                                   rectangle_shape, true);
-  EncodedMetadata(result, value);
+  result.dtype = metadata.dtype;
+  result.size_bytes = metadata.size_bytes;
   return result;
 }
 

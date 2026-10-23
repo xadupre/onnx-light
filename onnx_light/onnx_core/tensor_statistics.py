@@ -22,7 +22,7 @@ boundaries. No histogram is computed for fewer than 10 elements. By default,
 there are 50 bins for more than 500 elements and 10 otherwise; a positive
 ``bins`` overrides this choice. Bins are left-inclusive and right-exclusive,
 except for the final bin, which includes the maximum.
-Only finite values enter the histogram; no finite values produces no histogram.
+Only finite values enter the histogram; no finite values produce no histogram.
 
 ``quantiles`` requests probabilities in [0, 1] and returns values in the same
 order, using linear interpolation. ``median=True`` requests the median

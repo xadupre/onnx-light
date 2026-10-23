@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/runtime_value.h"
 #include <limits>
 #include <optional>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -40,6 +41,8 @@ struct TensorStatistics {
  * 50 bins for count > 500 and 10 otherwise. Constant finite data uses [value-0.5,value+0.5]
  * where representable; extreme constants can have repeated edges. Bins are left-closed and
  * right-open except the final bin, which includes the maximum.
+ * Uses arithmetic bin estimates when they agree with the exported edges, otherwise searches
+ * those edges to preserve exact boundary handling.
  *
  * Resizes an optional rectangle using fractional-overlap area averages. Rank >= 2 becomes
  * [first_dimension, product_of_remaining_dimensions]; scalars and vectors become [1,count].

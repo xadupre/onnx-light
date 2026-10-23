@@ -54,6 +54,54 @@ TEST(TensorStatistics, CustomHistogramAndConstant) {
   EXPECT_EQ(stats.distribution[5], 10);
 }
 
+TEST(TensorStatistics, HistogramMatchesRoundedBoundaryNeighbors) {
+  const std::vector<double> values{0,
+                                   1,
+                                   std::nextafter(0.3, 0.0),
+                                   0.3,
+                                   std::nextafter(0.3, 1.0),
+                                   std::nextafter(0.6, 0.0),
+                                   0.6,
+                                   std::nextafter(0.6, 1.0),
+                                   std::nextafter(0.9, 0.0),
+                                   0.9,
+                                   std::nextafter(0.9, 1.0)};
+  const auto stats = ComputeTensorStatistics(
+      Tensor::FromDouble("X", {static_cast<int64_t>(values.size())}, values), 10);
+  EXPECT_EQ(stats.distribution, std::vector<int64_t>({1, 0, 1, 2, 0, 1, 2, 0, 1, 3}));
+}
+
+TEST(TensorStatistics, HistogramHandlesCollapsedEdgesAndExtremeWidths) {
+  const double largest = std::numeric_limits<double>::max();
+  const double smallest = std::numeric_limits<double>::denorm_min();
+  const std::vector<std::vector<double>> ranges{{1e16, std::nextafter(1e16, largest)},
+                                                {0, smallest},
+                                                {-largest, largest},
+                                                {largest, largest}};
+  for (const auto &range : ranges) {
+    SCOPED_TRACE(range[0]);
+    SCOPED_TRACE(range[1]);
+    std::vector<double> values(12);
+    for (size_t i = 0; i < values.size(); ++i)
+      values[i] = range[i % 2];
+    for (int64_t bins : {3, 10, 257}) {
+      SCOPED_TRACE(bins);
+      const auto stats = ComputeTensorStatistics(Tensor::FromDouble("X", {12}, values), bins);
+      std::vector<int64_t> expected(static_cast<size_t>(bins));
+      for (double value : values)
+        for (size_t bin = 0; bin < expected.size(); ++bin)
+          if (value >= stats.bin_edges[bin] &&
+              (value < stats.bin_edges[bin + 1] ||
+               (bin == expected.size() - 1 && value <= stats.bin_edges.back()))) {
+            ++expected[bin];
+            break;
+          }
+      EXPECT_EQ(stats.distribution, expected);
+      EXPECT_EQ(std::accumulate(expected.begin(), expected.end(), int64_t{0}), 12);
+    }
+  }
+}
+
 TEST(TensorStatistics, ParallelStatisticsMatchSerialExecutor) {
   const int64_t count = 100003;
   std::vector<double> values(static_cast<size_t>(count));

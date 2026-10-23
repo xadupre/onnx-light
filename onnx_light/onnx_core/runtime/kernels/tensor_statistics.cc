@@ -192,6 +192,8 @@ void Histogram(TensorStatistics &result, const Tensor &tensor, int64_t bins) {
     const long double weight = static_cast<long double>(i) / bins;
     result.bin_edges.push_back(static_cast<double>(std::lerp(low, high, weight)));
   }
+  const double bin_width = (result.bin_edges.back() - result.bin_edges.front()) / bins;
+  const bool arithmetic_bins = std::isfinite(bin_width) && bin_width > 0;
   // Caps private histogram storage independently of the tensor size and worker count.
   const int64_t blocks = std::min(1 + (result.count - 1) / kParallelForGrainSize,
                                   std::max(int64_t{1}, int64_t{65536} / bins));
@@ -207,12 +209,28 @@ void Histogram(TensorStatistics &result, const Tensor &tensor, int64_t bins) {
         const long double value = ReadNumber(tensor, i);
         if (!std::isfinite(value))
           continue;
-        // Search the exported edges so rounded edges and histogram counts agree exactly.
         const double rounded = static_cast<double>(value);
-        auto edge = std::upper_bound(result.bin_edges.begin(), result.bin_edges.end(), rounded);
-        size_t index =
-            edge == result.bin_edges.begin() ? 0 : size_t(edge - result.bin_edges.begin() - 1);
-        ++counts[std::min(index, counts.size() - 1)];
+        size_t index = counts.size() - 1;
+        if (rounded < result.bin_edges.back()) {
+          bool found = false;
+          if (arithmetic_bins) {
+            const double estimate = (rounded - result.bin_edges.front()) / bin_width;
+            if (std::isfinite(estimate) && estimate >= 0 &&
+                estimate < static_cast<double>(counts.size())) {
+              index = static_cast<size_t>(estimate);
+              found = index < counts.size() && rounded >= result.bin_edges[index] &&
+                      rounded < result.bin_edges[index + 1];
+            }
+          }
+          // Rounded or repeated edges can disagree with the arithmetic estimate.
+          if (!found) {
+            auto edge = std::upper_bound(result.bin_edges.begin(), result.bin_edges.end(), rounded);
+            index =
+                edge == result.bin_edges.begin() ? 0 : size_t(edge - result.bin_edges.begin() - 1);
+            index = std::min(index, counts.size() - 1);
+          }
+        }
+        ++counts[index];
       }
     }
   });

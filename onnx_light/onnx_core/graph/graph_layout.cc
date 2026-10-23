@@ -349,6 +349,13 @@ struct GraphLayout::Impl {
                      box.y - NodePadding, box.y + box.height + NodePadding, box.id);
   }
 
+  void RequireAvailableId() {
+    while (next_id <= IdLimit && (states.count(next_id) || reserved_ids.count(next_id)))
+      ++next_id;
+    if (next_id > IdLimit)
+      throw std::overflow_error("Layout node id space exhausted.");
+  }
+
   LayoutNodeId Identify(NodeProto &node) {
     const auto text = Metadata(node, GraphLayout::IdKey);
     LayoutNodeId id = 0;
@@ -364,10 +371,7 @@ struct GraphLayout::Impl {
       }
     }
     if (!id) {
-      while (states.count(next_id) || reserved_ids.count(next_id))
-        ++next_id;
-      if (next_id > IdLimit)
-        throw std::overflow_error("Layout node id space exhausted.");
+      RequireAvailableId();
       id = next_id++;
     }
     // Choosing small fresh ids also handles stale, maximal persisted ids.
@@ -823,7 +827,7 @@ void GraphLayout::Load(bool recurse) {
     const auto bounded = next.substr(0, 17);
     const auto parsed = std::from_chars(bounded.data(), bounded.data() + bounded.size(), next_id);
     if (next.size() <= 16 && parsed.ec == std::errc() &&
-        parsed.ptr == bounded.data() + bounded.size() && next_id && next_id <= IdLimit)
+        parsed.ptr == bounded.data() + bounded.size() && next_id && next_id <= IdLimit + 1)
       impl.next_id = next_id;
     else
       impl.Diagnose("Invalid persisted next layout id; chose a fresh allocation point.");
@@ -913,6 +917,7 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   auto &impl = *impl_;
   if (index > impl.order.size())
     throw std::out_of_range("Layout insertion index is out of range.");
+  impl.RequireAvailableId();
   impl.stats = {};
   auto &nodes = impl.Nodes();
   nodes.push_back(node);

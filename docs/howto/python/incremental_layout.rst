@@ -157,7 +157,10 @@ strings, not whitespace-delimited tensor names.
 The graph/function key ``onnx_light.layout.next_id`` persists the monotonic ID allocator;
 node keys ``onnx_light.layout.rank`` and ``onnx_light.layout.signature`` persist
 the dependency rank and a semantic signature used to reject stale geometry.
-IDs are positive decimal integers, limited to ``2**53 - 1``. Ranks are
+IDs are positive decimal integers, limited to ``2**53 - 1``. The next-ID key
+also accepts ``2**53`` as an exhausted-allocator sentinel, preserved across
+reloads even after the final node is erased. Further insertion throws
+``std::overflow_error`` without changing the node list. Ranks are
 nonnegative decimal integers and are validated against the actual dependency
 constraints. Signatures are change detectors, not cryptographic authentication.
 

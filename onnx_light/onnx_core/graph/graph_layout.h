@@ -117,7 +117,7 @@ public:
   static constexpr const char *FixedSizeKey = "onnx_light.layout.fixed_size";
   /// Names the persisted node dependency rank.
   static constexpr const char *RankKey = "onnx_light.layout.rank";
-  /// Names the scope's monotonic next-ID allocation point.
+  /// Names the scope's monotonic next-ID allocation point; 2^53 marks exhaustion.
   static constexpr const char *NextIdKey = "onnx_light.layout.next_id";
   /// Names the non-cryptographic semantic signature used to detect stale node geometry.
   static constexpr const char *SignatureKey = "onnx_light.layout.signature";

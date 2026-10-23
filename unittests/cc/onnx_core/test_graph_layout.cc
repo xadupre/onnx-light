@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <string>
+#include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::graph;
@@ -288,7 +289,7 @@ TEST(GraphLayout, AppendAndInsertDiscardIncomingNodeLayoutState) {
 }
 
 TEST(GraphLayout, ReloadResetsAllocatorWhenNextIdIsMissingOrInvalid) {
-  for (const std::string next : {"", "invalid", "0", "9007199254740992"}) {
+  for (const std::string next : {"", "invalid", "0", "9007199254740993"}) {
     SCOPED_TRACE(next);
     GraphProto graph;
     Meta(graph, GraphLayout::NextIdKey, "100");
@@ -305,6 +306,40 @@ TEST(GraphLayout, ReloadResetsAllocatorWhenNextIdIsMissingOrInvalid) {
     EXPECT_EQ(layout.Order(), (std::vector<LayoutNodeId>{1}));
     EXPECT_EQ(layout.Append(Node("later")), 2u);
   }
+}
+
+TEST(GraphLayout, ExhaustedAllocatorSurvivesPersistenceAndErasure) {
+  auto check = [](auto &scope) {
+    Meta(scope, GraphLayout::NextIdKey, "9007199254740991");
+    GraphLayout layout(scope, true);
+    const auto last = layout.Append(Node("last"));
+    ASSERT_EQ(last, 9007199254740991ULL);
+    layout.Persist();
+
+    using Scope = std::decay_t<decltype(scope)>;
+    Scope restored;
+    ASSERT_TRUE(restored.ParseFromString(scope.SerializeAsString()));
+    GraphLayout resumed(restored, true);
+    const auto saved = restored.SerializeAsString();
+    EXPECT_THROW(resumed.Append(Node("overflow")), std::overflow_error);
+    EXPECT_THROW(resumed.Insert(0, Node("overflow")), std::overflow_error);
+    EXPECT_EQ(restored.SerializeAsString(), saved);
+    EXPECT_EQ(resumed.Order(), (std::vector<LayoutNodeId>{last}));
+
+    ASSERT_TRUE(resumed.Erase(last));
+    resumed.Persist();
+    Scope empty;
+    ASSERT_TRUE(empty.ParseFromString(restored.SerializeAsString()));
+    GraphLayout exhausted(empty, true);
+    EXPECT_TRUE(exhausted.Diagnostics().empty());
+    EXPECT_THROW(exhausted.Append(Node("reused")), std::overflow_error);
+    EXPECT_TRUE(empty.node().empty());
+    EXPECT_TRUE(exhausted.Order().empty());
+  };
+  GraphProto graph;
+  check(graph);
+  FunctionProto function;
+  check(function);
 }
 
 TEST(GraphLayout, EraseRejectsMissingProtoNodeBeforeUpdatingIndexes) {

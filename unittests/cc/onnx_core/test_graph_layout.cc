@@ -242,6 +242,51 @@ TEST(GraphLayout, StableIdsDoNotDependOnNodeNames) {
   EXPECT_EQ(reloaded.Order(), (std::vector<LayoutNodeId>{ids[1], ids[0]}));
 }
 
+TEST(GraphLayout, AppendAndInsertDiscardIncomingNodeLayoutState) {
+  GraphProto source;
+  auto node = Node("copied");
+  Meta(node, GraphLayout::IdKey, "500");
+  Meta(node, "custom", "preserved");
+  *source.add_node() = node;
+  GraphLayout original(source, true);
+  ASSERT_TRUE(original.SetSize(500, 500, 300));
+  ASSERT_TRUE(original.SetPosition(500, 5000, 6000));
+  original.Persist();
+  const auto serialized = source.SerializeAsString();
+
+  auto check = [&](auto &scope, bool insert) {
+    GraphLayout layout(scope, true);
+    layout.Append(Node("existing"));
+    layout.Persist();
+    layout.Load();
+    const auto id = insert ? layout.Insert(0, source.node(0)) : layout.Append(source.node(0));
+    const auto index = insert ? 0 : 1;
+    const auto *box = layout.Get(id);
+    ASSERT_NE(box, nullptr);
+    EXPECT_NE(id, 500u);
+    EXPECT_LT(box->x, 5000);
+    EXPECT_LT(box->y, 6000);
+    EXPECT_LT(box->width, 500);
+    EXPECT_LT(box->height, 300);
+    EXPECT_EQ(MetaValue(scope.node(index), "custom"), "preserved");
+    for (const auto *key :
+         {GraphLayout::PositionKey, GraphLayout::AutomaticKey, GraphLayout::FixedSizeKey,
+          GraphLayout::RankKey, GraphLayout::SignatureKey})
+      EXPECT_TRUE(MetaValue(scope.node(index), key).empty()) << key;
+    layout.Persist();
+    EXPECT_EQ(MetaValue(scope.node(index), GraphLayout::AutomaticKey), "1");
+    EXPECT_EQ(MetaValue(scope.node(index), GraphLayout::FixedSizeKey), "0");
+    EXPECT_EQ(source.SerializeAsString(), serialized);
+  };
+  for (bool insert : {false, true}) {
+    SCOPED_TRACE(insert);
+    GraphProto graph;
+    check(graph, insert);
+    FunctionProto function;
+    check(function, insert);
+  }
+}
+
 TEST(GraphLayout, ReloadResetsAllocatorWhenNextIdIsMissingOrInvalid) {
   for (const std::string next : {"", "invalid", "0", "9007199254740992"}) {
     SCOPED_TRACE(next);

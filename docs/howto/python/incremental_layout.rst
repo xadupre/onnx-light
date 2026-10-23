@@ -66,6 +66,9 @@ Call ``load()`` once, then perform
 edits through ``append``, ``insert``, ``erase``, ``replace``, ``rewire_input``,
 ``set_size`` and ``set_position``. Replacement keeps the original layout ID;
 insertion and deletion affect the requested semantic node-list positions.
+``append`` and ``insert`` discard incoming node IDs, positions, sizing flags,
+ranks and signatures, assigning fresh layout state in the destination scope.
+They preserve unrelated node metadata and layout metadata inside child graphs.
 Direct modifications to the bound proto bypass the layout indexes; use a new
 layout object and ``load()`` after such modifications. Call ``persist()`` before
 saving subsequent edits; after child edits, call it on the root layout so the

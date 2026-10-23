@@ -118,14 +118,16 @@ void AddOnnxPyLayout(nb::module_ &m) {
           "append",
           [](PyGraphLayout &self, const NodeProto &node) { return self.Get().Append(node); },
           nb::arg("node"),
-          "Appends a node copy, updates affected consumers, and returns its stable scope-local ID.")
+          "Appends a node copy with fresh layout state, updates affected consumers, and returns "
+          "its new stable scope-local ID.")
       .def(
           "insert",
           [](PyGraphLayout &self, size_t index, const NodeProto &node) {
             return self.Get().Insert(index, node);
           },
           nb::arg("index"), nb::arg("node"),
-          "Inserts a node copy at a semantic list index and returns its stable ID. Raises "
+          "Inserts a node copy with fresh layout state at a semantic list index and returns its "
+          "new stable ID. Raises "
           "IndexError "
           "when index exceeds the node count; never reorders existing semantic nodes.")
       .def(

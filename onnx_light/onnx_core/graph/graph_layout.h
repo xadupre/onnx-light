@@ -146,9 +146,9 @@ public:
   void Load(bool recurse = true);
   /// Writes layout metadata, preserving unrelated keys; optionally persists bound children too.
   void Persist(bool recurse = true);
-  /// Appends a node copy, updates affected consumers and returns its scope-local stable ID.
+  /// Appends a node copy with fresh layout state, updates consumers and returns its new local ID.
   LayoutNodeId Append(const NodeProto &node);
-  /// Inserts a node copy at a semantic list index; throws std::out_of_range if index > size.
+  /// Inserts a node copy with fresh layout state; throws std::out_of_range if index > size.
   LayoutNodeId Insert(size_t index, const NodeProto &node);
   /// Removes the node and its children, updating consumers; returns false for an unknown ID.
   bool Erase(LayoutNodeId id);

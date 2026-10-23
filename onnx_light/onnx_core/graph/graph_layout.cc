@@ -918,6 +918,15 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   nodes.push_back(node);
   for (size_t i = nodes.size() - 1; i > index; --i)
     std::swap(nodes.get(i), nodes.get(i - 1));
+  auto &metadata = *nodes[index].mutable_metadata_props();
+  for (auto it = metadata.begin(); it != metadata.end();) {
+    const auto &key = it->key();
+    if (key == IdKey || key == PositionKey || key == AutomaticKey || key == FixedSizeKey ||
+        key == RankKey || key == SignatureKey)
+      it = metadata.erase(it);
+    else
+      ++it;
+  }
   auto id = impl.Add(nodes[index]);
   impl.order.insert(impl.order.begin() + static_cast<ptrdiff_t>(index), id);
   impl.Solve({id});

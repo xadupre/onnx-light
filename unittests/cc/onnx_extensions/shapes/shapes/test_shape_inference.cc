@@ -157,6 +157,71 @@ TEST(OnnxOptimShapeInference, STFTRejectsOneSidedComplexSignal) {
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapeInference, STFTInfersRankTwoRealSignal) {
+  for (const int64_t onesided : {0, 1}) {
+    for (const bool dynamic_length : {false, true}) {
+      for (const bool with_window : {false, true}) {
+        NodeProto node =
+            MakeNode("STFT",
+                     with_window ? std::vector<std::string>{"signal", "frame_step", "window"}
+                                 : std::vector<std::string>{"signal", "frame_step"},
+                     {"output"});
+        auto *attribute = node.add_attribute();
+        attribute->set_name("onesided");
+        attribute->set_type(AttributeProto::INT);
+        attribute->set_i(onesided);
+        core::shapes::ShapesContext ctx;
+        int64_t frame_step = 2;
+        ctx.Set("signal",
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          {core::symbolic::SymDim("batch"),
+                                           dynamic_length ? core::symbolic::SymDim("signal_length")
+                                                          : core::symbolic::SymDim(10)}));
+        ctx.Set("frame_step",
+                core::symbolic::SymTensor(&frame_step, core::symbolic::TensorType::kInt64, {}));
+        ctx.Set("window", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                                    {core::symbolic::SymDim(5)}));
+
+        ctx.ComputeShapeNode(node);
+
+        EXPECT_EQ(ctx.Get("output").Dtype(), core::symbolic::TensorType::kFloat);
+        const auto &shape = ctx.Get("output").Shape();
+        ASSERT_EQ(shape.Rank(), 4);
+        EXPECT_EQ(shape[0], core::symbolic::SymDim("batch"));
+        EXPECT_EQ(shape[3], core::symbolic::SymDim(2));
+        if (with_window && dynamic_length) {
+          EXPECT_FALSE(shape[1].IsInt());
+        } else {
+          EXPECT_EQ(shape[1], core::symbolic::SymDim(with_window ? 3 : 1));
+        }
+        if (!with_window && dynamic_length) {
+          EXPECT_FALSE(shape[2].IsInt());
+        } else {
+          const int64_t length = with_window ? 5 : 10;
+          EXPECT_EQ(shape[2], core::symbolic::SymDim(onesided ? length / 2 + 1 : length));
+        }
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapeInference, STFTRejectsInvalidSignalShapes) {
+  for (const auto &shape :
+       {core::symbolic::SymShape{}, core::symbolic::SymShape{core::symbolic::SymDim(10)},
+        core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(10),
+                                 core::symbolic::SymDim(3)},
+        core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(10),
+                                 core::symbolic::SymDim(1), core::symbolic::SymDim(1)}}) {
+    NodeProto node = MakeNode("STFT", {"signal", "frame_step"}, {"output"});
+    core::shapes::ShapesContext ctx;
+    ctx.Set("signal",
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+    ctx.Set("frame_step",
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   core::shapes::ShapesContext ctx;

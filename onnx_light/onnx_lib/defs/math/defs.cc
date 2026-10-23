@@ -2371,13 +2371,14 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
 
           auto &input_shape = getInputShape(ctx, 0);
-          if (input_shape.dim_size() != 3) {
-            fail_shape_inference("Input 0 (signal) must have rank 3.");
+          if (input_shape.dim_size() != 2 && input_shape.dim_size() != 3) {
+            fail_shape_inference("Input 0 (signal) must have rank 2 or 3.");
           }
 
-          const auto &complex_dim = input_shape.dim(2);
-          if (complex_dim.has_dim_value() && complex_dim.dim_value() != 1 &&
-              complex_dim.dim_value() != 2) {
+          // ONNX Runtime also accepts real signals without the trailing singleton dimension.
+          const auto *complex_dim = input_shape.dim_size() == 3 ? &input_shape.dim(2) : nullptr;
+          if (complex_dim != nullptr && complex_dim->has_dim_value() &&
+              complex_dim->dim_value() != 1 && complex_dim->dim_value() != 2) {
             fail_shape_inference(
                 "The last dimension of signal must have size 1 (real) or 2 (complex).");
           }
@@ -2386,7 +2387,8 @@ ONNX_OPERATOR_SET_SCHEMA(
           if (onesided != 0 && onesided != 1) {
             fail_shape_inference("Attribute onesided must be 0 or 1.");
           }
-          if (onesided == 1 && complex_dim.has_dim_value() && complex_dim.dim_value() != 1) {
+          if (onesided == 1 && complex_dim != nullptr && complex_dim->has_dim_value() &&
+              complex_dim->dim_value() != 1) {
             fail_shape_inference(
                 "One-sided STFT requires real input (signal's last dimension must be 1).");
           }

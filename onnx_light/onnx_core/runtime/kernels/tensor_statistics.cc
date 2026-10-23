@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_lib/common/safe_math.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -27,13 +28,13 @@ void ValidateTensorStatisticsOptions(int64_t bins, const std::vector<double> &qu
   for (double q : quantiles)
     EXT_ENFORCE_INVALID(std::isfinite(q) && q >= 0 && q <= 1,
                         "Tensor statistics quantiles must be finite and in [0,1].");
+  int64_t rectangle_cells = 0;
   if (!rectangle.empty()) {
     EXT_ENFORCE_INVALID(rectangle.size() == 2 && rectangle[0] > 0 && rectangle[1] > 0,
                         "Tensor statistics rectangle must contain positive [height,width].");
-    EXT_ENFORCE_INVALID(rectangle[0] <= std::numeric_limits<int64_t>::max() / rectangle[1],
+    EXT_ENFORCE_INVALID(!checked_mul_overflow(rectangle[0], rectangle[1], &rectangle_cells),
                         "Tensor statistics rectangle size overflows.");
-    EXT_ENFORCE_INVALID(static_cast<uint64_t>(rectangle[0] * rectangle[1]) <=
-                            std::vector<double>().max_size(),
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(rectangle_cells) <= std::vector<double>().max_size(),
                         "Tensor statistics rectangle allocation overflows.");
   }
   size_t remaining = max_output_bytes;
@@ -47,7 +48,7 @@ void ValidateTensorStatisticsOptions(int64_t bins, const std::vector<double> &qu
   charge(histogram_bins, sizeof(int64_t), "bins");
   charge(histogram_bins + 1, sizeof(double), "bins");
   if (!rectangle.empty())
-    charge(static_cast<uint64_t>(rectangle[0] * rectangle[1]), sizeof(double), "rectangle_shape");
+    charge(static_cast<uint64_t>(rectangle_cells), sizeof(double), "rectangle_shape");
   charge(quantiles.size(), sizeof(double), "quantiles");
   charge(median ? 1 : 0, sizeof(double), "median");
 }

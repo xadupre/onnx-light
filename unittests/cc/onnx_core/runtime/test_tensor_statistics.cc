@@ -415,6 +415,55 @@ TEST(TensorStatistics, OutputAllocationBudgetBoundaries) {
                std::invalid_argument);
 }
 
+TEST(TensorStatistics, RectangleCellCountValidation) {
+  const size_t maximum_budget = std::numeric_limits<size_t>::max();
+  const int64_t maximum_dimension = std::numeric_limits<int64_t>::max();
+  for (const auto &shape : std::vector<std::vector<int64_t>>{{1},
+                                                             {1, 2, 3},
+                                                             {0, 1},
+                                                             {1, 0},
+                                                             {-1, 1},
+                                                             {1, -1},
+                                                             {-1, -1},
+                                                             {maximum_dimension, 2},
+                                                             {2, maximum_dimension},
+                                                             {maximum_dimension, maximum_dimension},
+                                                             {maximum_dimension, 1}}) {
+    SCOPED_TRACE(shape.front());
+    EXPECT_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, maximum_budget),
+                 std::invalid_argument);
+  }
+  const int64_t large_cell_count = static_cast<int64_t>(std::vector<double>().max_size() / 2);
+  EXPECT_NO_THROW(
+      ValidateTensorStatisticsOptions(1, {}, false, {1, large_cell_count}, maximum_budget));
+  const size_t exact_budget = sizeof(int64_t) + 2 * sizeof(double) + 6 * sizeof(double);
+  for (const auto &shape : std::vector<std::vector<int64_t>>{{2, 3}, {3, 2}}) {
+    SCOPED_TRACE(shape.front());
+    EXPECT_NO_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, exact_budget));
+    EXPECT_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, exact_budget - 1),
+                 std::invalid_argument);
+  }
+}
+
+TEST(TensorStatistics, RejectsRectangleOverflowBeforeReadingOrDecodingInput) {
+  const auto check = [](const auto &value) {
+    try {
+      ComputeTensorStatistics(value, 1, {}, false, {std::numeric_limits<int64_t>::max(), 2});
+      FAIL() << "Expected rectangle overflow rejection";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("rectangle size overflows"), std::string::npos);
+    }
+  };
+  const Tensor malformed;
+  const EncodedValueProto undecodable;
+  RuntimeValue encoded;
+  encoded.kind = RuntimeValue::Kind::kEncoded;
+  check(malformed);
+  check(RuntimeValue(malformed));
+  check(encoded);
+  check(undecodable);
+}
+
 TEST(TensorStatistics, RejectsOutputBudgetBeforeReadingOrDecodingInput) {
   const auto check = [](const auto &value, int64_t bins, const std::vector<int64_t> &shape) {
     try {

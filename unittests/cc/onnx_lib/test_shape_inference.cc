@@ -1,9 +1,11 @@
 #include "onnx.h"
 #include "onnx_lib/common/file_utils.h"
+#include "onnx_lib/common/string_utils.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx_helper.h"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -577,6 +579,165 @@ TEST(onnx_shape_inference, OptionalOpsInferIr14SequenceTypesAtOpset28) {
   ASSERT_TRUE(inferred_element.has_tensor_type());
   EXPECT_EQ(inferred_element.ref_tensor_type().ref_elem_type(), TensorProto::FLOAT6E2M3);
   ASSERT_EQ(inferred_element.ref_tensor_type().ref_shape().ref_dim().size(), 2u);
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_DFTOnesidedLengths) {
+  for (const int64_t version : {17, 20}) {
+    for (const int64_t length :
+         {int64_t{1}, int64_t{5}, int64_t{6}, std::numeric_limits<int64_t>::max()}) {
+      for (const bool explicit_length : {false, true}) {
+        SCOPED_TRACE(MakeString("version=", version, ", length=", length,
+                                ", explicit_length=", explicit_length));
+        ModelProto model;
+        model.set_ir_version(IR_VERSION);
+        model.add_opset_import()->set_version(version);
+        auto *graph = model.mutable_graph();
+        graph->set_name("dft_graph");
+        auto *input = graph->add_input();
+        input->set_name("X");
+        auto *input_type = input->mutable_type()->mutable_tensor_type();
+        input_type->set_elem_type(TensorProto::FLOAT);
+        auto *input_shape = input_type->mutable_shape();
+        input_shape->add_dim()->set_dim_value(2);
+        input_shape->add_dim()->set_dim_value(explicit_length ? 8 : length);
+        input_shape->add_dim()->set_dim_value(1);
+        auto *output = graph->add_output();
+        output->set_name("Y");
+        auto *node = graph->add_node();
+        node->set_op_type("DFT");
+        *node->add_input() = "X";
+        if (explicit_length) {
+          auto *dft_length = graph->add_initializer();
+          dft_length->set_name("dft_length");
+          dft_length->set_data_type(TensorProto::INT64);
+          dft_length->add_int64_data(length);
+          *node->add_input() = "dft_length";
+        }
+        *node->add_output() = "Y";
+        auto *onesided = node->add_attribute();
+        onesided->set_name("onesided");
+        onesided->set_type(AttributeProto::INT);
+        onesided->set_i(1);
+
+        shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                     ShapeInferenceOptions(false, 1, false));
+
+        const auto &shape = graph->output(0).type().tensor_type().shape();
+        ASSERT_EQ(shape.dim_size(), 3);
+        EXPECT_EQ(shape.dim(0).dim_value(), 2);
+        EXPECT_EQ(shape.dim(1).dim_value(), length / 2 + 1);
+        EXPECT_EQ(shape.dim(2).dim_value(), 2);
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_MelWeightMatrixLengths) {
+  for (const int64_t length :
+       {int64_t{1}, int64_t{5}, int64_t{6}, std::numeric_limits<int64_t>::max()}) {
+    SCOPED_TRACE(length);
+    ModelProto model;
+    const auto status = OnnxParser::Parse(model, R"ONNX(
+      <ir_version: 8, opset_import: [ "" : 17 ]>
+      mel_graph () => (float[] Y)
+      <int64 num_mel_bins = {4}, int64 dft_length = {1}, int64 sample_rate = {16000},
+       float lower = {0}, float upper = {8000}>
+      {
+        Y = MelWeightMatrix(num_mel_bins, dft_length, sample_rate, lower, upper)
+      }
+    )ONNX");
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_graph()->mutable_initializer(1)->ref_int64_data()[0] = length;
+
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(false, 1, false));
+
+    const auto &shape = model.graph().output(0).type().tensor_type().shape();
+    ASSERT_EQ(shape.dim_size(), 2);
+    EXPECT_EQ(shape.dim(0).dim_value(), length / 2 + 1);
+    EXPECT_EQ(shape.dim(1).dim_value(), 4);
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_MatMulMovedShape) {
+  for (const int64_t version : {9, 13}) {
+    SCOPED_TRACE(version);
+    ModelProto model;
+    const auto status = OnnxParser::Parse(model, R"ONNX(
+      <ir_version: 8, opset_import: [ "" : 13 ]>
+      matmul_graph (float[2,1,3,4] A, float[1,5,4,6] B) => (float[] Y) {
+        Y = MatMul(A, B)
+      }
+    )ONNX");
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_opset_import(0)->set_version(version);
+
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(false, 1, false));
+
+    const auto &shape = model.graph().output(0).type().tensor_type().shape();
+    ASSERT_EQ(shape.dim_size(), 4);
+    EXPECT_EQ(shape.dim(0).dim_value(), 2);
+    EXPECT_EQ(shape.dim(1).dim_value(), 5);
+    EXPECT_EQ(shape.dim(2).dim_value(), 3);
+    EXPECT_EQ(shape.dim(3).dim_value(), 6);
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_ConvSamePadding) {
+  for (const int64_t version : {1, 11, 22}) {
+    for (const char *op_type : {"Conv", "ConvTranspose"}) {
+      for (const char *auto_pad : {"SAME_UPPER", "SAME_LOWER"}) {
+        for (const int64_t kernel_size : {1, 2, 3}) {
+          for (const int64_t stride : {1, 2, 4}) {
+            SCOPED_TRACE(MakeString("version=", version, ", op=", op_type, ", pad=", auto_pad,
+                                    ", kernel=", kernel_size, ", stride=", stride));
+            ModelProto model;
+            model.set_ir_version(IR_VERSION);
+            model.add_opset_import()->set_version(version);
+            auto *graph = model.mutable_graph();
+            graph->set_name("conv_graph");
+            for (const char *name : {"X", "W"}) {
+              auto *input = graph->add_input();
+              input->set_name(name);
+              auto *tensor = input->mutable_type()->mutable_tensor_type();
+              tensor->set_elem_type(TensorProto::FLOAT);
+              auto *shape = tensor->mutable_shape();
+              shape->add_dim()->set_dim_value(1);
+              shape->add_dim()->set_dim_value(1);
+              shape->add_dim()->set_dim_value(std::string(name) == "X" ? 7 : kernel_size);
+            }
+            graph->add_output()->set_name("Y");
+            auto *node = graph->add_node();
+            node->set_op_type(op_type);
+            *node->add_input() = "X";
+            *node->add_input() = "W";
+            *node->add_output() = "Y";
+            auto *pad = node->add_attribute();
+            pad->set_name("auto_pad");
+            pad->set_type(AttributeProto::STRING);
+            pad->set_s(auto_pad);
+            auto *strides = node->add_attribute();
+            strides->set_name("strides");
+            strides->set_type(AttributeProto::INTS);
+            strides->add_ints(stride);
+
+            shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                         ShapeInferenceOptions(false, 1, false));
+
+            const auto &shape = graph->output(0).type().tensor_type().shape();
+            ASSERT_EQ(shape.dim_size(), 3);
+            EXPECT_EQ(shape.dim(0).dim_value(), 1);
+            EXPECT_EQ(shape.dim(1).dim_value(), 1);
+            const int64_t expected = std::string(op_type) == "Conv"
+                                         ? (7 + stride - 1) / stride
+                                         : (7 - 1) * stride + std::min(kernel_size, stride);
+            EXPECT_EQ(shape.dim(2).dim_value(), expected);
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLength) {

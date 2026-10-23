@@ -213,16 +213,16 @@ enum BuiltinSymbol : std::uint8_t {
  */
 struct Symbol {
   Symbol() = default;
-  // NOLINTNEXTLINE(google-explicit-constructor, runtime/explicit)
   /// Creates a symbol from a builtin symbol value.
+  // NOLINTNEXTLINE(*constructor, runtime/explicit)
   /*implicit*/ Symbol(BuiltinSymbol value) : value(value) {}
   /// Creates a symbol by interning the corresponding string value.
   explicit Symbol(const std::string &s);
   /// Creates a symbol from a raw symbol identifier.
   explicit Symbol(uint32_t value) : value(value) {}
 
-  // NOLINTNEXTLINE(google-explicit-constructor)
   /// Returns the symbol identifier as an integer.
+  // NOLINTNEXTLINE(*constructor)
   operator uint32_t() const { return value; }
   /// Returns the string representation of this symbol.
   const char *toString() const;

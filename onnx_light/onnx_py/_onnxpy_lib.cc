@@ -30,7 +30,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 void AddOnnxPyLib(nb::module_ &m);
 
+// NOLINTBEGIN(cppcoreguidelines-pro-type-cstyle-cast, bugprone-signed-bitwise)
 NB_MODULE(_onnxpyprotolib, m) {
+  // NOLINTEND(cppcoreguidelines-pro-type-cstyle-cast, bugprone-signed-bitwise)
   m.doc() = "onnx lib bindings (defs/parser/checker/inliner/shape/version_converter) from "
             "python without protobuf but using the same format";
   AddOnnxPyLib(m);

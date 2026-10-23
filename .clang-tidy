@@ -55,6 +55,7 @@ Checks: >-
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
   readability-*,
+  -readability-trailing-comma,
   -readability-braces-around-statements,
   -readability-suspicious-call-argument,
   -readability-container-contains,

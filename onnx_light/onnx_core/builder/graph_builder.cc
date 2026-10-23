@@ -1141,7 +1141,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
 }
 
 void GraphBuilder::RefreshAfterMutation() {
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_);
   RefreshAncestors();
 }
 
@@ -2147,7 +2147,7 @@ std::vector<std::string> GraphBuilder::MakeNode(
   if (compute_.Size() != nodes_.size()) {
     throw BuilderError("GraphBuilder: incremental metadata is not aligned with the node list.");
   }
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_);
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their

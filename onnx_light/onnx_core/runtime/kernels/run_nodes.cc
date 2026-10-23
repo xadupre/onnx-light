@@ -124,7 +124,7 @@ public:
       rt_.PutSequence(name, std::move(sequence));
     saved_sequences_.clear();
     for (auto &[name, map] : saved_maps_)
-      rt_.maps().emplace(std::move(name), std::move(map));
+      rt_.PutMap(name, std::move(map));
     saved_maps_.clear();
     for (auto &[name, shape] : saved_shapes_)
       rt_.shapes().emplace(std::move(name), std::move(shape));
@@ -201,6 +201,11 @@ public:
     rt_.PutValue(name, value.BorrowView(), RuntimeEventKind::kInput);
   }
 
+  void Bind(const std::string &name, const Map &map) {
+    Shadow(name);
+    rt_.PutMap(name, Map(name, map.keys.BorrowView(), map.values.BorrowView()));
+  }
+
 private:
   RuntimeContext &rt_;
   std::unordered_set<std::string> names_;
@@ -225,6 +230,14 @@ Sequence TakeSequence(RuntimeContext &rt, const std::string &name) {
                       "' was not produced.");
   Sequence result = std::move(it->second);
   rt.sequences().erase(it);
+  return result;
+}
+
+Map TakeMap(RuntimeContext &rt, const std::string &name) {
+  auto it = rt.maps().find(name);
+  EXT_ENFORCE_INVALID(it != rt.maps().end(), "RunNode: map output '", name, "' was not produced.");
+  Map result = std::move(it->second);
+  rt.maps().erase(it);
   return result;
 }
 
@@ -337,9 +350,10 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
                                  std::shared_ptr<ValueStore> value_store,
                                  std::unordered_set<std::string> immutable_inputs,
-                                 const FunctionMap *model_functions)
+                                 const FunctionMap *model_functions,
+                                 std::unordered_set<std::string> bound_immutable_inputs)
     : RuntimeSession(graph, opset_imports, 0, std::move(value_store), std::move(immutable_inputs),
-                     model_functions) {
+                     model_functions, std::move(bound_immutable_inputs)) {
   SetNestedExecution();
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
@@ -1117,9 +1131,99 @@ public:
                                 element.type().tensor_type().elem_type() == sequence.elem_type,
                             "Layer: incompatible sequence element dtype.");
     };
+    auto check_map = [&](const Map &map, const ValueInfoProto &formal) {
+      if (!formal.has_type() || formal.type().value_case() == TypeProto::VALUE_NOT_SET)
+        return;
+      EXT_ENFORCE_INVALID(formal.type().has_map_type(),
+                          "Layer: map supplied for a non-map formal.");
+      const auto &type = formal.type().map_type();
+      EXT_ENFORCE_INVALID(type.key_type() == map.key_type && type.value_type().has_tensor_type() &&
+                              type.value_type().tensor_type().elem_type() == map.value_type,
+                          "Layer: incompatible boundary map types.");
+      EXT_ENFORCE_INVALID(map.keys.shape.size() == 1 && map.values.shape.size() == 1 &&
+                              map.keys.shape[0] == map.values.shape[0] &&
+                              map.keys.data_type == map.key_type &&
+                              map.values.data_type == map.value_type,
+                          "Layer: malformed boundary map storage.");
+      ValueInfoProto values;
+      *values.mutable_type() = type.value_type();
+      check_tensor(map.values, values);
+    };
+    auto check_runtime_value = [&](const auto &self, const RuntimeValue &value,
+                                   const TypeProto &type, size_t depth = 0) -> void {
+      EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                          "Layer: maximum structured boundary depth exceeded.");
+      if (type.value_case() == TypeProto::VALUE_NOT_SET)
+        return;
+      if (value.kind == RuntimeValue::Kind::kSequence) {
+        EXT_ENFORCE_INVALID(type.has_sequence_type() && type.sequence_type().has_elem_type(),
+                            "Layer: sequence value supplied for a non-sequence formal.");
+        for (const RuntimeValue &element : value.elements)
+          self(self, element, type.sequence_type().elem_type(), depth + 1);
+        return;
+      }
+      if (value.kind == RuntimeValue::Kind::kTensor) {
+        ValueInfoProto formal;
+        *formal.mutable_type() = type;
+        check_tensor(value.tensor, formal);
+        return;
+      }
+      if (value.kind == RuntimeValue::Kind::kEncoded) {
+        const EncodedValueProto &encoded = value.Encoded();
+        const StructTypeCatalogue &catalogue = rt.struct_type_catalogue();
+        catalogue.ValidateEncodedValue(encoded);
+        if (type.has_tensor_type() && encoded.has_logical_type() &&
+            encoded.logical_type().has_tensor_type() &&
+            (type.tensor_type().elem_type() == DataType::UNDEFINED ||
+             encoded.logical_type().tensor_type().elem_type() == type.tensor_type().elem_type()) &&
+            encoded.logical_type().tensor_type().has_shape()) {
+          Tensor descriptor;
+          descriptor.data_type = encoded.logical_type().tensor_type().elem_type();
+          for (const auto &dimension : encoded.logical_type().tensor_type().shape().dim()) {
+            EXT_ENFORCE_INVALID(dimension.has_dim_value() && dimension.dim_value() >= 0,
+                                "Layer: encoded runtime value has a non-concrete shape.");
+            descriptor.shape.push_back(dimension.dim_value());
+          }
+          ValueInfoProto formal;
+          *formal.mutable_type() = type;
+          check_tensor(descriptor, formal);
+          return;
+        }
+        EXT_ENFORCE_INVALID(type.has_struct_type() && encoded.has_struct_type(),
+                            "Layer: encoded runtime value is incompatible with its formal.");
+        const StructTypeProto &declared = catalogue.Resolve(type.struct_type());
+        const StructTypeProto &actual = catalogue.Resolve(encoded.struct_type());
+        EXT_ENFORCE_INVALID(CompatiblePersistentStructTypes(catalogue, actual, declared),
+                            "Layer: encoded structured runtime value has an incompatible type.");
+        return;
+      }
+      EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct && type.has_struct_type(),
+                          "Layer: structured runtime value is incompatible with its formal.");
+      const StructTypeCatalogue &catalogue = rt.struct_type_catalogue();
+      if (value.HasPagedCacheStructure()) {
+        catalogue.ValidatePagedCache(value.ToPagedCache("", catalogue), true, &type);
+        return;
+      }
+      const StructTypeProto &declared = catalogue.Resolve(type.struct_type());
+      EXT_ENFORCE_INVALID(declared.has_structure(),
+                          "Layer: structured runtime values require named fields.");
+      size_t expected = 0;
+      for (const auto &field : declared.structure().field()) {
+        if (!field.has_type())
+          continue;
+        ++expected;
+        const auto found = value.fields.find(field.name());
+        EXT_ENFORCE_INVALID(found != value.fields.end(), "Layer: missing structured field '",
+                            field.name(), "'.");
+        self(self, found->second, field.type(), depth + 1);
+      }
+      EXT_ENFORCE_INVALID(value.fields.size() == expected,
+                          "Layer: structured runtime value has unexpected fields.");
+    };
     std::vector<std::pair<std::string, Tensor>> tensor_bindings;
     std::vector<std::pair<std::string, RuntimeValue>> value_bindings;
     std::vector<std::pair<std::string, Sequence>> sequence_bindings;
+    std::vector<std::pair<std::string, Map>> map_bindings;
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
@@ -1128,6 +1232,8 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
+        if (layer_body_)
+          check_runtime_value(check_runtime_value, value->second, layer_body_->input(i).type());
         value_bindings.emplace_back(param_name, value->second.BorrowView());
         continue;
       }
@@ -1139,6 +1245,15 @@ public:
           views.push_back(tensor.BorrowView());
         sequence_bindings.emplace_back(
             param_name, Sequence(param_name, sequence->second.elem_type, std::move(views)));
+        continue;
+      }
+      auto map = rt.maps().find(caller_name);
+      if (layer_body_ && map != rt.maps().end()) {
+        check_map(map->second, layer_body_->input(i));
+        Map view(param_name, map->second.keys.BorrowView(), map->second.values.BorrowView());
+        view.key_type = map->second.key_type;
+        view.value_type = map->second.value_type;
+        map_bindings.emplace_back(param_name, std::move(view));
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -1186,13 +1301,15 @@ public:
       bindings.Bind(name, value);
     for (auto &[name, sequence] : sequence_bindings)
       bindings.Bind(name, std::move(sequence));
+    for (const auto &[name, map] : map_bindings)
+      bindings.Bind(name, map);
 
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (layer_body_) {
       if (!layer_session_)
-        layer_session_ =
-            std::make_unique<SubgraphSession>(*layer_body_, inherited_opset_imports_, value_store_,
-                                              immutable_inputs_, model_functions_);
+        layer_session_ = std::make_unique<SubgraphSession>(
+            *layer_body_, inherited_opset_imports_, value_store_, std::unordered_set<std::string>{},
+            model_functions_, immutable_inputs_);
       layer_session_->Run(rt);
     } else {
       if (!session_) {
@@ -1209,6 +1326,7 @@ public:
     std::vector<std::pair<std::string, Tensor>> output_tensors;
     std::vector<std::pair<std::string, RuntimeValue>> output_values;
     std::vector<std::pair<std::string, Sequence>> output_sequences;
+    std::vector<std::pair<std::string, Map>> output_maps;
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
@@ -1218,6 +1336,8 @@ public:
       }
       auto value = rt.values().find(param_name);
       if (value != rt.values().end()) {
+        if (layer_body_)
+          check_runtime_value(check_runtime_value, value->second, layer_body_->output(i).type());
         RuntimeValue result = TakeRuntimeValue(rt, param_name);
         if (layer_body_)
           result = std::move(result).Retain(rt.struct_type_catalogue());
@@ -1234,6 +1354,17 @@ public:
         output_sequences.emplace_back(caller_name, std::move(result));
         continue;
       }
+      if (layer_body_ && rt.HasMap(param_name)) {
+        Map result = TakeMap(rt, param_name);
+        check_map(result, layer_body_->output(i));
+        if (result.keys.is_borrowed())
+          result.keys = result.keys.ToOwned();
+        if (result.values.is_borrowed())
+          result.values = result.values.ToOwned();
+        result.name = caller_name;
+        output_maps.emplace_back(caller_name, std::move(result));
+        continue;
+      }
       Tensor result = TakeTensor(rt, param_name, "RunNode: model-local function output");
       if (layer_body_)
         check_tensor(result, layer_body_->output(i));
@@ -1248,6 +1379,10 @@ public:
     }
     for (auto &[name, result] : output_sequences) {
       rt.PutSequence(name, std::move(result));
+      bindings.Keep(name);
+    }
+    for (auto &[name, result] : output_maps) {
+      rt.PutMap(name, std::move(result));
       bindings.Keep(name);
     }
     for (auto &[name, result] : output_tensors) {
@@ -1373,7 +1508,13 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
   }
 
   if (domain == "ai.rt" && op_type == "Layer") {
-    const GraphProto &body = core::graph::ValidateLayer(node);
+    const core::graph::LayerFunctionLookupFn has_local_function = [&](const NodeProto &call) {
+      const std::string key = FunctionLookupKey(call.domain(), call.op_type(), call.overload());
+      if (model_functions != nullptr && model_functions->contains(key))
+        return true;
+      return rt.functions().contains(key);
+    };
+    const GraphProto &body = core::graph::ValidateLayer(node, has_local_function);
     return std::make_unique<ModelLocalFunctionKernel>(node, body, kernel_context, opset_imports,
                                                       std::move(value_store), immutable_inputs,
                                                       model_functions);

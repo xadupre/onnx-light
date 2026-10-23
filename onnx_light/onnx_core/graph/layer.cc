@@ -13,8 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 namespace {
 
-void ValidateLayerGraph(const GraphProto &graph,
-                        const std::unordered_set<std::string> &outer = {}) {
+void ValidateLayerGraph(const GraphProto &graph, const std::unordered_set<std::string> &outer,
+                        const LayerFunctionLookupFn &has_local_function) {
   std::unordered_set<std::string> local;
   auto define = [&](const std::string &name) {
     EXT_ENFORCE_INVALID(!name.empty() && local.insert(name).second,
@@ -50,8 +50,9 @@ void ValidateLayerGraph(const GraphProto &graph,
     for (const auto &input : node.input())
       if (!input.empty())
         require(input);
-    if (node.domain() == "ai.rt" && node.op_type() == "Layer") {
-      ValidateLayer(node);
+    if (node.domain() == "ai.rt" && node.op_type() == "Layer" &&
+        (!has_local_function || !has_local_function(node))) {
+      ValidateLayer(node, has_local_function);
     } else {
       for (const auto &attr : node.attribute()) {
         if (!attr.has_g() && attr.graphs().empty())
@@ -59,9 +60,9 @@ void ValidateLayerGraph(const GraphProto &graph,
         std::unordered_set<std::string> visible = outer;
         visible.insert(local.begin(), local.end());
         if (attr.has_g())
-          ValidateLayerGraph(attr.g(), visible);
+          ValidateLayerGraph(attr.g(), visible, has_local_function);
         for (const auto &nested : attr.graphs())
-          ValidateLayerGraph(nested, visible);
+          ValidateLayerGraph(nested, visible, has_local_function);
       }
     }
     for (const auto &output : node.output())
@@ -80,7 +81,8 @@ void ValidateLayerGraph(const GraphProto &graph,
 
 } // namespace
 
-const GraphProto &ValidateLayer(const NodeProto &node) {
+const GraphProto &ValidateLayer(const NodeProto &node,
+                                const LayerFunctionLookupFn &has_local_function) {
   const GraphProto *body = nullptr;
   for (const auto &attr : node.attribute()) {
     EXT_ENFORCE_INVALID(attr.name() == "body" && body == nullptr &&
@@ -100,7 +102,7 @@ const GraphProto &ValidateLayer(const NodeProto &node) {
   for (const auto &output : node.output())
     EXT_ENFORCE_INVALID(!output.empty() && outputs.insert(output).second,
                         "Layer: positional outputs must not be omitted or duplicated.");
-  ValidateLayerGraph(*body);
+  ValidateLayerGraph(*body, {}, has_local_function);
   return *body;
 }
 

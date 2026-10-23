@@ -451,7 +451,8 @@ protected:
                           const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
                           std::shared_ptr<ValueStore> value_store = nullptr,
                           std::unordered_set<std::string> immutable_inputs = {},
-                          const FunctionMap *model_functions = nullptr);
+                          const FunctionMap *model_functions = nullptr,
+                          std::unordered_set<std::string> bound_immutable_inputs = {});
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and

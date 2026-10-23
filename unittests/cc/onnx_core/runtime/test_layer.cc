@@ -68,18 +68,58 @@ ShapesContext MakeShapes() {
 }
 
 void RegisterAdd(RuntimeContext &rt, int &calls, const std::string &domain = "test.layer") {
-  rt.RegisterCustomKernel(
-      domain, "Add", [&calls](const NodeProto &node, RuntimeContext &context) {
-        ++calls;
-        const size_t count = context.Get(node.input(0)).element_count();
-        const auto a = context.Get(node.input(0)).AsFloat();
-        const auto w = context.Get(node.input(1)).AsFloat();
-        std::vector<float> result(count);
-        for (size_t i = 0; i < count; ++i)
-          result[i] = a[i] + w[i];
-        context.Set(node.output(0), Tensor::FromFloat(node.output(0), {int64_t(count)}, result));
-      });
+  rt.RegisterCustomKernel(domain, "Add", [&calls](const NodeProto &node, RuntimeContext &context) {
+    ++calls;
+    const size_t count = context.Get(node.input(0)).element_count();
+    const auto a = context.Get(node.input(0)).AsFloat();
+    const auto w = context.Get(node.input(1)).AsFloat();
+    std::vector<float> result(count);
+    for (size_t i = 0; i < count; ++i)
+      result[i] = a[i] + w[i];
+    context.Set(node.output(0), Tensor::FromFloat(node.output(0), {int64_t(count)}, result));
+  });
 }
+
+struct LayerPreparationState {
+  bool eligible = false;
+  bool executed = false;
+};
+
+class LayerTestSession final : public core::runtime::RuntimeSession {
+public:
+  explicit LayerTestSession(const GraphProto &graph) : RuntimeSession(graph) {}
+};
+
+class LayerPreparationKernel final : public core::runtime::KernelBase {
+public:
+  LayerPreparationKernel(const NodeProto &node, std::shared_ptr<LayerPreparationState> state)
+      : KernelBase(core::runtime::KernelContext{}), state_(std::move(state)) {
+    set_node(node);
+  }
+
+  bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const override {
+    state_->eligible = immutable_inputs.contains(node_->input(1));
+    return state_->eligible;
+  }
+
+  void DeclarePreparations(const std::unordered_set<std::string> &,
+                           std::vector<core::runtime::KernelPreparation> &preparations) override {
+    core::runtime::KernelPreparation preparation;
+    preparation.info.source_inputs = {node_->input(1)};
+    preparation.estimate_memory = [](const RuntimeContext &) {
+      return core::runtime::KernelPreparationMemory{};
+    };
+    preparation.execute = [state = state_](RuntimeContext &) { state->executed = true; };
+    preparations.push_back(std::move(preparation));
+  }
+
+  void Run(RuntimeContext &rt) override {
+    rt.Put(node_->output(0), rt.Get(node_->input(0)).BorrowView());
+  }
+
+private:
+  std::shared_ptr<LayerPreparationState> state_;
+};
 
 } // namespace
 
@@ -131,9 +171,9 @@ TEST(Layer, ExactModelLocalFunctionOverridesIntrinsicShapeRuntimeAndChecker) {
     ShapesContext shapes = MakeShapes();
     shapes.SetLocalFunction(function);
     shapes.SetCustomShapeInferenceFunction("", "Add",
-                                          [](ShapesContext &ctx, const NodeProto &node) {
-                                            ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
-                                          });
+                                           [](ShapesContext &ctx, const NodeProto &node) {
+                                             ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                           });
     EXPECT_NO_THROW(shapes.ComputeShapeNode(*call));
     ASSERT_TRUE(shapes.Has("Y"));
     EXPECT_EQ(shapes.Get("Y").Shape(), shapes.Get("X").Shape());
@@ -155,6 +195,65 @@ TEST(Layer, ExactModelLocalFunctionOverridesIntrinsicShapeRuntimeAndChecker) {
     call->set_overload("undefined");
     EXPECT_THROW(checker::check_model(model), checker::ValidationError);
   }
+}
+
+TEST(Layer, RecursiveValidationResolvesExactLocalLayerOverload) {
+  ModelProto model;
+  model.set_ir_version(10);
+  for (const auto &[domain, version] :
+       std::vector<std::pair<std::string, int>>{{"", 18}, {"ai.rt", 1}}) {
+    auto *opset = model.add_opset_import();
+    opset->set_domain(domain);
+    opset->set_version(version);
+  }
+  FunctionProto *function = model.add_functions();
+  function->set_domain("ai.rt");
+  function->set_name("Layer");
+  function->set_overload("special");
+  function->add_input("a");
+  function->add_input("w");
+  function->add_output("b");
+  auto *function_opset = function->add_opset_import();
+  function_opset->set_domain("");
+  function_opset->set_version(18);
+  NodeProto *add = function->add_node();
+  add->set_op_type("Add");
+  add->add_input("a");
+  add->add_input("w");
+  add->add_output("b");
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("nested_layer_override");
+  for (const std::string name : {"X", "W"}) {
+    auto *input = graph->add_input();
+    input->set_name(name);
+    SetTensorType(*input, 2);
+  }
+  auto *output = graph->add_output();
+  output->set_name("Y");
+  SetTensorType(*output, 2);
+  NodeProto *call = graph->add_node();
+  call->set_domain("ai.rt");
+  call->set_op_type("Layer");
+  call->add_input("X");
+  call->add_input("W");
+  call->add_output("Y");
+  auto *attribute = call->add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  GraphProto *body = attribute->mutable_g();
+  body->add_input()->set_name("a");
+  body->add_input()->set_name("w");
+  body->add_output()->set_name("b");
+  NodeProto *nested = body->add_node();
+  nested->set_domain("ai.rt");
+  nested->set_op_type("Layer");
+  nested->set_overload("special");
+  nested->add_input("a");
+  nested->add_input("w");
+  nested->add_output("b");
+
+  EXPECT_NO_THROW(checker::check_model(model));
 }
 
 TEST(Layer, InfersActualSymbolicDescriptorsAndIsolatesFormals) {
@@ -281,6 +380,110 @@ TEST(Layer, ForwardsHeterogeneousTensorAndSequenceValues) {
   ASSERT_TRUE(rt.HasSequence("Z"));
   EXPECT_EQ(rt.GetSequence("Z").values[0].AsFloat()[0], 23);
   EXPECT_FALSE(rt.GetSequence("Z").values[0].is_borrowed());
+}
+
+TEST(Layer, ForwardsMapsAcrossCollidingBodyNames) {
+  NodeProto node;
+  node.set_domain("ai.rt");
+  node.set_op_type("Layer");
+  node.add_input("caller_map");
+  node.add_output("result_map");
+  auto *attribute = node.add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  GraphProto *body = attribute->mutable_g();
+  body->add_input()->set_name("body_map");
+  body->add_output()->set_name("body_map");
+
+  RuntimeContext rt;
+  rt.PutMap("caller_map", core::runtime::Map("caller_map", Tensor::FromInt64("", {1}, {7}),
+                                             Tensor::FromFloat("", {1}, {13})));
+  rt.PutMap("body_map", core::runtime::Map("body_map", Tensor::FromInt64("", {1}, {3}),
+                                           Tensor::FromFloat("", {1}, {5})));
+  core::runtime::RunNode(node, rt);
+
+  EXPECT_EQ(rt.GetMap("result_map").keys.AsInt64()[0], 7);
+  EXPECT_EQ(rt.GetMap("result_map").values.AsFloat()[0], 13);
+  EXPECT_FALSE(rt.GetMap("result_map").keys.is_borrowed());
+  EXPECT_FALSE(rt.GetMap("result_map").values.is_borrowed());
+  EXPECT_EQ(rt.GetMap("body_map").keys.AsInt64()[0], 3);
+  EXPECT_EQ(rt.GetMap("body_map").values.AsFloat()[0], 5);
+}
+
+TEST(Layer, RejectsRuntimeValueDescriptorMismatchesAtBothBoundaries) {
+  NodeProto node = MakeLayer();
+  Body(node).clear_node();
+  *Body(node).mutable_output(0) = Body(node).input(0);
+  RuntimeContext input_context;
+  input_context.PutValue("X", core::runtime::RuntimeValue(std::vector<core::runtime::RuntimeValue>{
+                                  core::runtime::RuntimeValue(Tensor::FromFloat("", {1}, {1}))}));
+  input_context.Set("W", Tensor::FromFloat("W", {1}, {2}));
+  ValueInfoProto *input_type = Body(node).mutable_input(0);
+  auto *sequence = input_type->mutable_type()->mutable_sequence_type();
+  sequence->mutable_elem_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  EXPECT_THROW(core::runtime::RunNode(node, input_context), std::invalid_argument);
+
+  node = MakeLayer();
+  Body(node).clear_node();
+  *Body(node).mutable_output(0) = Body(node).input(0);
+  ValueInfoProto *sequence_input = Body(node).mutable_input(0);
+  sequence_input->mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::FLOAT);
+  ValueInfoProto *output_type = Body(node).mutable_output(0);
+  output_type->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  RuntimeContext output_context;
+  output_context.PutValue("X", core::runtime::RuntimeValue(std::vector<core::runtime::RuntimeValue>{
+                                   core::runtime::RuntimeValue(Tensor::FromFloat("", {1}, {1}))}));
+  output_context.Set("W", Tensor::FromFloat("W", {1}, {2}));
+  EXPECT_THROW(core::runtime::RunNode(node, output_context), std::invalid_argument);
+}
+
+TEST(Layer, PreservesImmutableWeightFormalsForBodyPreparations) {
+  auto state = std::make_shared<LayerPreparationState>();
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  TensorProto *weight = graph.add_initializer();
+  weight->set_name("B");
+  weight->set_data_type(TensorProto::FLOAT);
+  weight->add_dims(1);
+  weight->add_dims(1);
+  weight->add_float_data(2);
+  NodeProto *layer = graph.add_node();
+  layer->set_domain("ai.rt");
+  layer->set_op_type("Layer");
+  layer->add_input("X");
+  layer->add_input("B");
+  layer->add_output("Y");
+  auto *attribute = layer->add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  GraphProto *body = attribute->mutable_g();
+  body->add_input()->set_name("x");
+  body->add_input()->set_name("w");
+  body->add_output()->set_name("y");
+  NodeProto *inner = body->add_node();
+  inner->set_domain("test.layer");
+  inner->set_op_type("Prepared");
+  inner->add_input("x");
+  inner->add_input("w");
+  inner->add_output("y");
+
+  RuntimeContext rt;
+  ASSERT_TRUE(rt.RegisterKernelFn("test.layer", "Prepared", core::symbolic::Device::kUndefined,
+                                  [state](const NodeProto &node, core::runtime::RuntimeContext &,
+                                          const core::runtime::KernelContext &) {
+                                    return std::make_unique<LayerPreparationKernel>(node, state);
+                                  }));
+  LayerTestSession session(graph);
+  rt.Set("X", Tensor::FromFloat("X", {1, 1}, {1}));
+  session.Run(rt);
+
+  EXPECT_TRUE(state->eligible);
+  EXPECT_TRUE(state->executed);
 }
 
 TEST(Layer, RejectsMissingMalformedBodyAndBoundaryArity) {

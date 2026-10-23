@@ -102,6 +102,138 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   return profile;
 }
 
+struct LayerBodyMemoryEstimate {
+  expressions::DimType internal_peak = int64_t{0};
+  int64_t workspace_peak = 0;
+};
+
+LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size_t node_index,
+                                                const ShapesContext &ctx, Device device) {
+  if (node.domain() != "ai.rt" || node.op_type() != "Layer" ||
+      !ctx.HasSubgraphContext(static_cast<int64_t>(node_index), "body"))
+    return {};
+  const GraphProto *body = nullptr;
+  for (const AttributeProto &attribute : node.attribute())
+    if (attribute.name() == "body" && attribute.has_g()) {
+      body = &attribute.g();
+      break;
+    }
+  if (body == nullptr)
+    return {};
+
+  const ShapesContext &body_shapes =
+      ctx.GetSubgraphContext(static_cast<int64_t>(node_index), "body");
+  if (body->node().empty())
+    return {};
+  std::vector<int64_t> workspace(body->node().size(), 0);
+  std::vector<expressions::DimType> nested_internal(body->node().size(), int64_t{0});
+  for (std::size_t index = 0; index < body->node().size(); ++index) {
+    const NodeProto &inner = body->node()[index];
+    std::vector<SymShape> input_shapes;
+    input_shapes.reserve(inner.input().size());
+    for (const std::string &input : inner.input()) {
+      if (!input.empty() && body_shapes.Has(input))
+        input_shapes.push_back(body_shapes.Get(input).Shape());
+      else
+        input_shapes.emplace_back();
+    }
+    workspace[index] =
+        shapes::ComputePeakMemory(inner.domain(), inner.op_type(), device, input_shapes);
+    const LayerBodyMemoryEstimate nested =
+        EstimateLayerBodyMemory(inner, index, body_shapes, device);
+    workspace[index] = std::max(workspace[index], nested.workspace_peak);
+    nested_internal[index] = nested.internal_peak;
+  }
+
+  std::unordered_map<std::string, std::optional<expressions::DimType>> byte_sizes;
+  auto &expression_cache = body_shapes.ExpressionCache();
+  auto byte_size = [&](const std::string &name) -> std::optional<expressions::DimType> {
+    if (!body_shapes.Has(name))
+      return std::nullopt;
+    return GetCachedByteSizeExpr(body_shapes, name, byte_sizes, &expression_cache);
+  };
+  std::unordered_set<std::string> formal_inputs;
+  std::unordered_set<std::string> boundary_outputs;
+  for (const ValueInfoProto &input : body->input())
+    formal_inputs.insert(input.name());
+  for (const ValueInfoProto &output : body->output())
+    boundary_outputs.insert(output.name());
+
+  std::unordered_map<std::string, int64_t> producers;
+  std::unordered_map<std::string, int64_t> last_uses;
+  const int64_t past_last_node = static_cast<int64_t>(body->node().size());
+  auto add_initializer = [&](const std::string &name) {
+    producers[name] = -1;
+    last_uses[name] = past_last_node;
+  };
+  for (const TensorProto &initializer : body->initializer()) {
+    add_initializer(initializer.name());
+  }
+  for (const SparseTensorProto &initializer : body->sparse_initializer()) {
+    add_initializer(initializer.values().name());
+  }
+  for (const auto &initializer : body->extended_initializer()) {
+    add_initializer(initializer.name());
+  }
+  for (std::size_t index = 0; index < body->node().size(); ++index) {
+    const NodeProto &inner = body->node()[index];
+    for (const std::string &input : inner.input())
+      if (!input.empty())
+        last_uses[input] = static_cast<int64_t>(index);
+    for (const std::string &output : inner.output()) {
+      if (!output.empty()) {
+        producers[output] = static_cast<int64_t>(index);
+        last_uses[output] = static_cast<int64_t>(index);
+      }
+    }
+  }
+
+  const std::size_t node_count = body->node().size();
+  std::vector<expressions::DimSum> allocations_starting(node_count);
+  std::vector<expressions::DimSum> allocations_ending(node_count);
+  for (const auto &[name, producer] : producers) {
+    if (formal_inputs.count(name) != 0 || boundary_outputs.count(name) != 0)
+      continue;
+    const auto last_use = last_uses.find(name);
+    if (last_use == last_uses.end() || last_use->second < producer)
+      continue;
+    const auto bytes = byte_size(name);
+    if (!bytes.has_value())
+      continue;
+    const std::size_t start = static_cast<std::size_t>(std::max<int64_t>(producer, 0));
+    allocations_starting[start].Add(*bytes);
+    if (last_use->second < static_cast<int64_t>(node_count))
+      allocations_ending[static_cast<std::size_t>(last_use->second)].Add(*bytes);
+  }
+
+  LayerBodyMemoryEstimate estimate;
+  expressions::DimType live = int64_t{0};
+  for (std::size_t index = 0; index < node_count; ++index) {
+    live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
+                                &expression_cache);
+    const expressions::DimType peak =
+        expressions::dim_add(live, nested_internal[index], &expression_cache);
+    estimate.internal_peak = expressions::dim_max(estimate.internal_peak, peak, &expression_cache);
+    live = expressions::dim_sub(live, allocations_ending[index].Build(&expression_cache),
+                                &expression_cache);
+    estimate.workspace_peak = std::max(estimate.workspace_peak, workspace[index]);
+  }
+  return estimate;
+}
+
+void AddLayerBodyMemory(NodeMemoryProfile &profile, const LayerBodyMemoryEstimate &estimate,
+                        expressions::SimplifiedExpressionCache *cache) {
+  const expressions::DimType &additional = estimate.internal_peak;
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = expressions::dim_add(
+      NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey), additional, cache);
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::dim_add(
+      NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), additional, cache);
+  TaggedMemory &intermediates = NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey);
+  intermediates[""] = expressions::dim_add(
+      intermediates.contains("") ? intermediates.at("") : expressions::DimType{int64_t{0}},
+      additional, cache);
+}
+
 } // namespace
 
 // ── ComputeContext method implementations ────────────────────────────────────
@@ -773,7 +905,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     RefreshNodeReuse(nodes, index, ctx);
     AppendNodePeakMemory(nodes[index], index, device);
   }
-  RefreshIncrementalMemory(nodes, ctx);
+  RefreshIncrementalMemory(nodes, ctx, device);
 }
 
 void ComputeContext::EraseValue(const std::string &name) {
@@ -1003,7 +1135,7 @@ void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodePr
 }
 
 void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                              const ShapesContext &ctx) {
+                                              const ShapesContext &ctx, Device device) {
   if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1)) {
     return;
   }
@@ -1120,6 +1252,21 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
+    const LayerBodyMemoryEstimate body_memory = EstimateLayerBodyMemory(node, index, ctx, device);
+    AddLayerBodyMemory(profile, body_memory, &expression_cache);
+    std::vector<SymShape> input_shapes;
+    input_shapes.reserve(node.input().size());
+    for (const std::string &input : node.input()) {
+      if (!input.empty() && ctx.Has(input))
+        input_shapes.push_back(ctx.Get(input).Shape());
+      else
+        input_shapes.emplace_back();
+    }
+    if (peak_memory_.size() <= index)
+      peak_memory_.resize(index + 1, 0);
+    peak_memory_[index] =
+        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    peak_memory_[index] = std::max(peak_memory_[index], body_memory.workspace_peak);
     memory_[index] = std::move(profile);
 
     if (index < release_after_.size()) {
@@ -1154,6 +1301,9 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
   }
   peak_memory_[node_index] =
       shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+  const LayerBodyMemoryEstimate body_memory =
+      EstimateLayerBodyMemory(node, node_index, shapes_, device);
+  peak_memory_[node_index] = std::max(peak_memory_[node_index], body_memory.workspace_peak);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(
@@ -1314,6 +1464,9 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
+    const LayerBodyMemoryEstimate body_memory =
+        EstimateLayerBodyMemory(node, static_cast<std::size_t>(i), ctx, Device::kUndefined);
+    AddLayerBodyMemory(profile, body_memory, &expression_cache);
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
@@ -1533,6 +1686,8 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
     }
     peak_memory_[static_cast<std::size_t>(i)] =
         shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    const LayerBodyMemoryEstimate body_memory = EstimateLayerBodyMemory(node, i, shapes_, device);
+    peak_memory_[i] = std::max(peak_memory_[i], body_memory.workspace_peak);
   }
   return peak_memory_;
 }

@@ -852,13 +852,14 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   auto domain_version = dit->second;
   const bool is_local_function =
       ctx.get_model_functions().find(GetCalleeId(node)) != ctx.get_model_functions().end();
-  const bool is_layer =
-      node.domain() == "ai.rt" && node.op_type() == "Layer" && !is_local_function;
+  const bool is_layer = node.domain() == "ai.rt" && node.op_type() == "Layer" && !is_local_function;
   if (is_layer) {
     if (domain_version != 1)
       fail_check("Layer supports only ai.rt opset 1.");
     try {
-      core::graph::ValidateLayer(node);
+      core::graph::ValidateLayer(node, [&ctx](const NodeProto &call) {
+        return ctx.get_model_functions().find(GetCalleeId(call)) != ctx.get_model_functions().end();
+      });
     } catch (const std::invalid_argument &error) {
       fail_check(error.what());
     }

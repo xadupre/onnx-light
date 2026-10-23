@@ -826,7 +826,12 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
     return;
   }
   if (node.domain() == kAiRtDomain && op_type == "Layer") {
-    const GraphProto &body = core::graph::ValidateLayer(node);
+    const core::graph::LayerFunctionLookupFn has_local_function = [&ctx](const NodeProto &call) {
+      const std::string key =
+          ShapesContext::LocalFunctionKey(call.domain(), call.op_type(), call.overload());
+      return ctx.GetLocalFunction(key) != nullptr;
+    };
+    const GraphProto &body = core::graph::ValidateLayer(node, has_local_function);
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);
     ShapesContext child = ctx.MakeChildContext();

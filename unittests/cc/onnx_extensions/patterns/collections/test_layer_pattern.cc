@@ -297,6 +297,61 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
   }
 }
 
+TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  constexpr int count = 1800;
+  std::string last;
+  for (int index = 1; index <= count; ++index) {
+    const std::string suffix = std::to_string(index);
+    const std::string input = "x" + suffix;
+    const std::string weight = "w" + suffix;
+    const std::string output = "h" + suffix;
+    builder.MakeInput(input, core::symbolic::TensorType::kFloat, LayerShape({1, index}));
+    AddLayerWeight(builder, weight, index, 0);
+    builder.MakeNode("MatMul", {input, weight}, {output + "_mm"}, "", output + "_matmul");
+    builder.MakeNode("Relu", {output + "_mm"}, {output}, "", output + "_relu");
+    last = output;
+  }
+  builder.MakeOutput(last);
+
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+}
+
+TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
+  constexpr int64_t width = 16;
+  constexpr int64_t expanded_width = 1024;
+  core::builder::GraphBuilder body("body", LayerSchemaLookup(), {{"", 28}});
+  body.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+  body.MakeInput("w1", core::symbolic::TensorType::kFloat, LayerShape({width, expanded_width}));
+  body.MakeInput("w2", core::symbolic::TensorType::kFloat, LayerShape({expanded_width, width}));
+  body.MakeNode("MatMul", {"x", "w1"}, {"hidden"});
+  body.MakeNode("MatMul", {"hidden", "w2"}, {"body_result"});
+  body.MakeOutput("body_result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+  builder.MakeInput("w1", core::symbolic::TensorType::kFloat, LayerShape({width, expanded_width}));
+  builder.MakeInput("w2", core::symbolic::TensorType::kFloat, LayerShape({expanded_width, width}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  AttributeProto &attribute = attributes.add();
+  attribute.set_name("body");
+  attribute.set_type(AttributeProto::GRAPH);
+  *attribute.mutable_g() = body.BuildGraph();
+  builder.MakeNode("Layer", {"x", "w1", "w2"}, {"result"}, "ai.rt", "large_layer", attributes);
+  builder.MakeOutput("result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+
+  const auto &profile = builder.Compute().NodeMemory(0);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                profile.at(core::compute::kNodeMemoryAlreadyAllocatedBytesKey))),
+            135232);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                profile.at(core::compute::kNodeMemoryOutputAllocationBytesKey))),
+            64);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                profile.at(core::compute::kNodeMemoryTotalBytesKey))),
+            135296);
+}
+
 TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGraphOutputs) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));

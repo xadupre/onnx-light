@@ -1121,6 +1121,9 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
     return false;
   Region anchors;
   for (const NodeProto *node : bucket->second) {
+    if (attempts >= kMaxGrowthAttempts)
+      return false;
+    ++attempts;
     if (CompatibleNode(index, candidate, *node)) {
       if (index.graph.Position(*node) < index.graph.Position(candidate))
         return false;
@@ -1219,6 +1222,9 @@ bool FindPlan(Index &index, Plan &best) {
     Region &previous = representatives[entry.signature];
     bool represented = false;
     for (const NodeProto *other : previous) {
+      if (attempts >= kMaxGrowthAttempts)
+        return false;
+      ++attempts;
       if (CompatibleNode(index, node, *other)) {
         represented = true;
         break;

@@ -4,7 +4,8 @@
 """Computes descriptive tensor statistics using the C++ runtime.
 
 ``compute_tensor_statistics(value, *, bins=0, quantiles=(), median=False,
-rectangle_shape=(), model=None)`` accepts a NumPy array, runtime ``Tensor``,
+rectangle_shape=(), model=None, max_output_bytes=67108864)`` accepts a NumPy array,
+runtime ``Tensor``,
 ``TensorProto``, ``EncodedValueProto``, ``SharedQuantizedValue``, or
 ``RuntimeValue`` and returns
 a :class:`TensorStatistics` instance. ``model`` optionally resolves the type
@@ -38,6 +39,17 @@ statistics and no histogram or rectangle map.
 The tensor is reshaped to ``[shape[0], product(shape[1:])]`` (or ``[1, count]``
 for a vector or scalar), then resized using fractional cell overlap. The result
 is a flat row-major ``rectangle_map`` with the requested ``rectangle_shape``.
+
+``max_output_bytes`` sets a per-call allocation budget, defaulting to 64 MiB,
+for the combined option-driven numeric output payloads: ``8*bins + 8*(bins+1)``
+histogram bytes, ``8*height*width`` rectangle bytes, 8 bytes per requested
+quantile, and 8 bytes when requesting the median. ``bins=0`` charges 50 bins
+(808 bytes), the largest automatic histogram. The budget can be explicitly
+raised or lowered. All requests are charged even if the input would produce
+no histogram or rectangle; oversized options raise an error before output
+allocation or input conversion/dequantization, including for empty tensors.
+This is not a total-memory limit: input storage, decoding, input-dependent
+workspaces, container capacity/metadata and Python result copies are excluded.
 """
 
 from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]

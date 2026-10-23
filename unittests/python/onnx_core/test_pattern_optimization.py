@@ -21,6 +21,7 @@ from onnx_light.onnx import ModelProto, TensorProto
 from onnx_light.onnx.external_data_helper import load_external_data_for_model
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_op import GetAllOnnxOpSchemasWithHistory
+from onnx_light.onnx_py import _onnxpycore, _onnxpypatterns
 from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions, OptimizationMode, ProtoKind
 from onnx_light.onnx_core.shape_inference import Device
 
@@ -82,6 +83,40 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestPatternSelection(ExtTestCase):
+    def test_pattern_listing_defaults_and_explicit_opt_in(self):
+        optim.reset_registered_patterns()
+        active_names = optim.registered_pattern_names()
+        default_names = optim.standard_pattern_names()
+        all_names = optim.standard_pattern_names(include_opt_in=True)
+        for list_names in (
+            _onnxpypatterns.registered_pattern_names,
+            _onnxpycore.builder.registered_pattern_names,
+            optim.standard_pattern_names,
+        ):
+            with self.subTest(list_names=list_names):
+                self.assertEqual(list_names(), default_names)
+                self.assertEqual(list_names(include_opt_in=False), default_names)
+                self.assertIn("Cast", default_names)
+                self.assertNotIn("RepeatedLayer", default_names)
+                self.assertEqual(list_names(include_opt_in=True), all_names)
+                self.assertIn("RepeatedLayer", all_names)
+                self.assertEqual(
+                    [name for name in all_names if name in default_names], default_names
+                )
+                self.assertEqual(list_names(), default_names)
+                self.assertEqual(optim.registered_pattern_names(), active_names)
+                self.assertNotIn(
+                    "RepeatedLayer", [pattern.name for pattern in optim.standard_patterns()]
+                )
+                for graph_type in (optim.GraphGraph, _onnxpycore.builder.GraphGraph):
+                    graph = graph_type(self.builder)
+                    self.assertNotIn(
+                        "RepeatedLayer", [pattern.name for pattern in graph.patterns]
+                    )
+                self.assertIsInstance(
+                    optim.standard_patterns(["RepeatedLayer"])[0], optim.RepeatedLayerPattern
+                )
+
     def test_repeated_layer_is_explicit_only(self):
         optim.reset_registered_patterns()
         self.assertNotIn("RepeatedLayer", optim.standard_pattern_names())

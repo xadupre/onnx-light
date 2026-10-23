@@ -44,6 +44,51 @@ def import_source(module_file_path, module_name):
 
 
 class TestDocumentationExamples(ExtTestCase):
+    def test_tensor_statistics_results(self):
+        import runpy
+        import matplotlib.pyplot as plt
+        import numpy
+        from onnx_light.onnx_core.quantization import dequantize_tensor_proto
+        import onnx_light.onnx.numpy_helper as onh
+
+        example = os.path.join(ROOT, "docs", "examples", "runtime", "plot_tensor_statistics.py")
+        namespace = runpy.run_path(example)
+        self.addCleanup(plt.close, namespace["fig"])
+        tensors = namespace["tensors"]
+        statistics = namespace["statistics"]
+        self.assertEqual(list(statistics), ["float32", "int32", "INT8", "INT4", "INT3", "NF4"])
+        for name, stats in statistics.items():
+            with self.subTest(name=name):
+                value = tensors[name]
+                if name in ("INT8", "INT4", "INT3", "NF4"):
+                    expected = onh.to_array(dequantize_tensor_proto(value))
+                    self.assertEqual(stats.size_bytes, len(value.raw_data))
+                else:
+                    expected = value
+                    self.assertEqual(stats.size_bytes, expected.nbytes)
+                self.assertEqual(stats.shape, [8, 16])
+                self.assertEqual(stats.count, expected.size)
+                self.assertEqual(stats.min, expected.min())
+                self.assertEqual(stats.max, expected.max())
+                self.assertAlmostEqual(stats.mean, expected.astype(numpy.float64).mean())
+                self.assertAlmostEqual(stats.median, numpy.median(expected))
+                numpy.testing.assert_allclose(
+                    stats.quantiles, numpy.quantile(expected, [0.25, 0.75])
+                )
+                self.assertEqual(
+                    stats.distinct_count,
+                    None if name == "float32" else len(numpy.unique(expected)),
+                )
+                counts, edges = numpy.histogram(expected, bins=16)
+                numpy.testing.assert_array_equal(stats.distribution, counts)
+                numpy.testing.assert_allclose(stats.bin_edges, edges)
+                self.assertEqual(stats.rectangle_shape, [4, 8])
+                numpy.testing.assert_allclose(
+                    numpy.array(stats.rectangle_map).reshape(4, 8),
+                    expected.reshape(4, 2, 8, 2).mean(axis=(1, 3)),
+                    atol=1e-7,
+                )
+
     def test_parallel_for_profiling_tuning_results(self):
         example = os.path.join(
             ROOT, "docs", "examples", "tuning", "plot_parallel_for_profiling.py"

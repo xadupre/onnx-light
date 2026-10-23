@@ -429,9 +429,11 @@ TEST(TensorStatistics, RejectsOutputBudgetBeforeReadingOrDecodingInput) {
   EncodedValueProto undecodable;
   RuntimeValue encoded;
   encoded.kind = RuntimeValue::Kind::kEncoded;
+  // Exceed the output budget without hitting 32-bit vector capacity limits first.
+  constexpr int64_t oversized_count = kTensorStatisticsMaxOutputBytes / sizeof(double) + 1;
   for (const auto &options :
-       {std::make_pair(int64_t{1} << 30, std::vector<int64_t>{}),
-        std::make_pair(int64_t{1}, std::vector<int64_t>{1, int64_t{1} << 30})}) {
+       {std::make_pair(oversized_count, std::vector<int64_t>{}),
+        std::make_pair(int64_t{1}, std::vector<int64_t>{1, oversized_count})}) {
     check(empty, options.first, options.second);
     check(malformed, options.first, options.second);
     check(RuntimeValue(empty), options.first, options.second);

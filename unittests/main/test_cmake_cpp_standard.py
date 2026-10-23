@@ -1,10 +1,9 @@
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCMakeCppStandard(ExtTestCase):
+class TestCMakeCppStandard(unittest.TestCase):
     def test_project_cmake_uses_cpp20(self):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -46,6 +45,7 @@ class TestCMakeCppStandard(ExtTestCase):
             msg="GCC/Clang builds must add -Werror when ONNX_LIGHT_WERROR is ON.",
         )
         self.assertIn("function(onnx_light_disable_werror)", content)
+        self.assertNotIn("-Wno-error=unused-lambda-capture", content)
         proto_tests = (root / "onnx_proto/tests/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("onnx_light_disable_werror(gtest gtest_main)", proto_tests)
         proto_content = (root / "onnx_proto/CMakeLists.txt").read_text(encoding="utf-8")

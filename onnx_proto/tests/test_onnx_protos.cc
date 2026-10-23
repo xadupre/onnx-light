@@ -900,7 +900,7 @@ TEST(onnx_proto, TensorProtoContentHashParallelRawData) {
   // multi-threaded BLAKE3 tree join. The digest must be deterministic and
   // independent of the number of threads used.
   const std::size_t size = 4 * 1024 * 1024; // 4 MiB
-  auto make = [size](uint8_t seed) {
+  auto make = [](uint8_t seed) {
     TensorProto tp;
     tp.set_data_type(TensorProto::DataType::UINT8);
     tp.add_dims(static_cast<uint64_t>(size));

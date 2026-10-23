@@ -1036,11 +1036,11 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     const float default_scale = 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
     Tensor Y = ComputeFlexAttentionExpected(
         Q, K, V, default_scale,
-        [kBias](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
+        [](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
     Expect(registry, std::move(node), "test_cc_flexattention_score_mod", {default_opset, opset},
-           [default_scale, kBias]() -> IoData {
+           [default_scale]() -> IoData {
              Tensor Q = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, 1.0f, -1.0f});
              Tensor K = Tensor::FromFloat("", {1, 2, 2, 2},
@@ -1049,7 +1049,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                           {1.0f, 2.0f, 3.0f, 4.0f, -1.0f, 0.0f, 0.0f, 1.0f});
              Tensor Y = ComputeFlexAttentionExpected(
                  Q, K, V, default_scale,
-                 [kBias](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
+                 [](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
 
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
@@ -1106,11 +1106,11 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     const float default_scale = 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
     Tensor Y = ComputeFlexAttentionExpected(
         Q, K, V, default_scale,
-        [kCap](float s, int64_t, int64_t, int64_t, int64_t) { return std::tanh(s / kCap) * kCap; });
+        [](float s, int64_t, int64_t, int64_t, int64_t) { return std::tanh(s / kCap) * kCap; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
     Expect(registry, std::move(node), "test_cc_flexattention_soft_cap", {default_opset, opset},
-           [default_scale, kCap]() -> IoData {
+           [default_scale]() -> IoData {
              Tensor Q = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, 1.0f, -1.0f});
              Tensor K = Tensor::FromFloat("", {1, 2, 2, 2},
@@ -1118,7 +1118,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
              Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {1.0f, 2.0f, 3.0f, 4.0f, -1.0f, 0.0f, 0.0f, 1.0f});
              Tensor Y = ComputeFlexAttentionExpected(
-                 Q, K, V, default_scale, [kCap](float s, int64_t, int64_t, int64_t, int64_t) {
+                 Q, K, V, default_scale, [](float s, int64_t, int64_t, int64_t, int64_t) {
                    return std::tanh(s / kCap) * kCap;
                  });
 

@@ -739,6 +739,37 @@ TEST(GraphLayout, NonrecursiveLoadRejectsUnboundedChildSummaryAndFallsBack) {
   }
 }
 
+TEST(GraphLayout, SignatureIgnoresOversizedChildSummariesButTracksBoundedChanges) {
+  for (bool multiple : {false, true}) {
+    for (const auto &version : {"1", "999"}) {
+      GraphProto graph;
+      auto *node = graph.add_node();
+      *node = Node("outer", {}, "If");
+      auto *attribute = node->add_attribute();
+      attribute->set_type(multiple ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+      auto *child = multiple ? attribute->add_graphs() : attribute->mutable_g();
+      *child->add_node() = Node("inner");
+      Meta(*child, GraphLayout::VersionKey, version);
+      Meta(*child, GraphLayout::ScopeKey, std::string(1024 * 1024 + 1, 'a'));
+      auto *summary = child->mutable_metadata_props(1);
+      GraphLayout layout(graph, false);
+      layout.Persist(false);
+      const auto signature = MetaValue(*node, GraphLayout::SignatureKey);
+      ASSERT_FALSE(signature.empty());
+      summary->set_value(std::string(1024 * 1024 + 1, 'b'));
+      layout.Persist(false);
+      EXPECT_EQ(MetaValue(*node, GraphLayout::SignatureKey), signature);
+      summary->set_value("2 0 0 0 0 0");
+      layout.Persist(false);
+      const auto bounded_signature = MetaValue(*node, GraphLayout::SignatureKey);
+      EXPECT_NE(bounded_signature, signature);
+      summary->set_value("2 0 0 10 10 0");
+      layout.Persist(false);
+      EXPECT_NE(MetaValue(*node, GraphLayout::SignatureKey), bounded_signature);
+    }
+  }
+}
+
 TEST(GraphLayout, LoadingConstructorSupportsChildFirstAndEmptyGraphs) {
   GraphProto graph;
   auto *container = graph.add_node();
@@ -794,12 +825,18 @@ TEST(GraphLayout, NonrecursivePersistDoesNotWriteChildMetadata) {
   attribute->set_type(AttributeProto::GRAPH);
   *attribute->mutable_g()->add_node() = Node("inner");
   GraphLayout layout(graph, true);
+  const auto id = layout.Order()[0];
+  auto *child = layout.Children(id)[0];
   layout.Persist(false);
+  EXPECT_EQ(layout.Children(id)[0], child);
   bool version_written = false;
   for (const auto &entry : attribute->g().metadata_props())
     version_written |= entry.key() == GraphLayout::VersionKey;
   EXPECT_FALSE(version_written);
   layout.Persist(true);
+  EXPECT_EQ(layout.Children(id)[0], child);
+  const auto appended = child->Append(Node("next", {"inner"}));
+  EXPECT_NE(child->Get(appended), nullptr);
   for (const auto &entry : attribute->g().metadata_props())
     version_written |= entry.key() == GraphLayout::VersionKey;
   EXPECT_TRUE(version_written);

@@ -114,6 +114,8 @@ Python child handles keep their root graph alive. After ``load``, ``replace``
 or ``erase`` on any handle, reacquire child handles with ``children()``; stale
 handles raise an exception rather than accessing freed native state. Geometry
 and edge queries return snapshots that remain safe after subsequent edits.
+``persist()`` only writes metadata and never rebuilds child layouts, so existing
+child handles remain valid for both recursive and nonrecursive persistence.
 
 Incremental guarantees and costs
 -------------------------------
@@ -165,6 +167,8 @@ reloads even after the final node is erased. Further insertion throws
 ``std::overflow_error`` without changing the node list. Ranks are
 nonnegative decimal integers and are validated against the actual dependency
 constraints. Signatures are change detectors, not cryptographic authentication.
+Child scope summaries larger than 1 MiB are ignored when computing signatures,
+matching the summary parser's size limit; their raw bytes are not hashed.
 
 Missing placement state is computed locally. Invalid or duplicate IDs are
 reassigned, stale geometry is repaired, and malformed or unsupported-version

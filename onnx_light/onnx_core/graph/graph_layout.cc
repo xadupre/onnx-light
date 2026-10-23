@@ -81,6 +81,10 @@ std::string Signature(const NodeProto &node) {
     hash ^= 255;
     hash *= 1099511628211ULL;
   };
+  auto append_summary = [&](const GraphProto &graph) {
+    const auto summary = Metadata(graph, GraphLayout::ScopeKey);
+    append(summary.size() <= SummaryLimit ? summary : std::string_view{});
+  };
   append(node.op_type());
   append(node.domain());
   append(std::to_string(node.input().size()));
@@ -92,13 +96,13 @@ std::string Signature(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (attribute.type() == AttributeProto::GRAPH && attribute.has_g()) {
       append(attribute.name());
-      append(Metadata(attribute.g(), GraphLayout::ScopeKey));
+      append_summary(attribute.g());
       append(std::to_string(attribute.g().node().size()));
     } else if (attribute.type() == AttributeProto::GRAPHS) {
       append(attribute.name());
       append(std::to_string(attribute.graphs().size()));
       for (const auto &graph : attribute.graphs()) {
-        append(Metadata(graph, GraphLayout::ScopeKey));
+        append_summary(graph);
         append(std::to_string(graph.node().size()));
       }
     }

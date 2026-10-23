@@ -113,7 +113,8 @@ void AddOnnxPyLayout(nb::module_ &m) {
           "persist", [](PyGraphLayout &self, bool recursive) { self.Get().Persist(recursive); },
           nb::arg("recursive") = true,
           "Writes namespaced metadata without changing unrelated keys. Persists bound children "
-          "when recursive=True; call on the root after child edits before serializing.")
+          "when recursive=True, without invalidating child handles; call on the root after child "
+          "edits before serializing.")
       .def(
           "append",
           [](PyGraphLayout &self, const NodeProto &node) { return self.Get().Append(node); },
@@ -232,10 +233,13 @@ void AddOnnxPyLayout(nb::module_ &m) {
             GraphLayout layout(proto);
             layout.Load(false);
             layout.Persist(false);
-            for (const auto &diagnostic : layout.Diagnostics()) {
+            const auto &diagnostics = layout.Diagnostics();
+            if (!diagnostics.empty()) {
               nb::gil_scoped_acquire gil;
-              if (PyErr_WarnEx(PyExc_RuntimeWarning, diagnostic.c_str(), 1) < 0)
-                throw nb::python_error();
+              for (const auto &diagnostic : diagnostics) {
+                if (PyErr_WarnEx(PyExc_RuntimeWarning, diagnostic.c_str(), 1) < 0)
+                  throw nb::python_error();
+              }
             }
           };
         };

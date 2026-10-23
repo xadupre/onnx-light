@@ -144,7 +144,7 @@ public:
    * problems are reported through Diagnostics. Exhausting the ID range throws std::overflow_error.
    */
   void Load(bool recurse = true);
-  /// Writes layout metadata, preserving unrelated keys; optionally persists bound children too.
+  /// Writes layout metadata without invalidating child pointers; optionally persists children too.
   void Persist(bool recurse = true);
   /// Appends a node copy with fresh layout state, updates consumers and returns its new local ID.
   LayoutNodeId Append(const NodeProto &node);

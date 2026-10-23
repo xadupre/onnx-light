@@ -114,6 +114,12 @@ class TestGraphLayout(unittest.TestCase):
         self.assertEqual([len(child.order) for child in children], [2, 2, 0])
         for child in children:
             self.assertEqual(child.diagnostics, [])
+        for recursive in (False, True):
+            placement.persist(recursive=recursive)
+            for child, size in zip(children, (2, 2, 0)):
+                child.persist(recursive=recursive)
+                self.assertEqual(len(child.order), size)
+            self.assertTrue(children[0].set_size(children[0].order[0], 400, 100))
         placement.replace(placement.order[0], oh.make_node("Identity", ["X"], ["A"]))
         with self.assertRaisesRegex(RuntimeError, "invalidated"):
             _ = children[0].order

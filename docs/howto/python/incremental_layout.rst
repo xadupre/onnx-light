@@ -122,6 +122,8 @@ The engine maintains producer/consumer indexes, dependency layers, geometry and
 occupied layer intervals. A work queue propagates changed constraints through
 the affected dependency region. Vertical placement uses port alignment and local
 collision resolution. Routes are refreshed for affected endpoints only.
+The spatial interval index uses AVL balancing, so persisted IDs and coordinates
+cannot force linear tree depth during insertion, deletion, queries or destruction.
 Unrelated components retain their coordinates; ordinary edits do not globally
 compact, renumber, translate, or optimize the layout.
 

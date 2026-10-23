@@ -142,7 +142,7 @@ struct GraphLayout::Impl {
   struct HorizontalNode {
     double left, right, top, bottom, max_right, min_top, max_bottom;
     LayoutNodeId id;
-    uint64_t priority;
+    int height = 1;
     std::unique_ptr<HorizontalNode> lower, upper;
   };
   std::unique_ptr<HorizontalNode> horizontal;
@@ -220,11 +220,8 @@ struct GraphLayout::Impl {
             bottom_edges.rbegin()->first - top_edges.begin()->first};
   }
 
-  static uint64_t Priority(LayoutNodeId id) {
-    uint64_t value = id + 0x9e3779b97f4a7c15ULL;
-    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
-    return value ^ (value >> 31);
+  static int HorizontalHeight(const std::unique_ptr<HorizontalNode> &node) {
+    return node ? node->height : 0;
   }
 
   static bool KeyLess(double left, LayoutNodeId id, const HorizontalNode &node) {
@@ -232,6 +229,7 @@ struct GraphLayout::Impl {
   }
 
   static void UpdateHorizontal(HorizontalNode &node) {
+    node.height = 1 + std::max(HorizontalHeight(node.lower), HorizontalHeight(node.upper));
     node.max_right = node.right;
     node.min_top = node.top;
     node.max_bottom = node.bottom;
@@ -265,47 +263,64 @@ struct GraphLayout::Impl {
     root = std::move(pivot);
   }
 
+  static void BalanceHorizontal(std::unique_ptr<HorizontalNode> &root) {
+    if (!root)
+      return;
+    UpdateHorizontal(*root);
+    const int balance = HorizontalHeight(root->lower) - HorizontalHeight(root->upper);
+    if (balance > 1) {
+      if (HorizontalHeight(root->lower->lower) < HorizontalHeight(root->lower->upper))
+        RotateHorizontalLeft(root->lower);
+      RotateHorizontalRight(root);
+    } else if (balance < -1) {
+      if (HorizontalHeight(root->upper->upper) < HorizontalHeight(root->upper->lower))
+        RotateHorizontalRight(root->upper);
+      RotateHorizontalLeft(root);
+    }
+  }
+
   void InsertHorizontal(std::unique_ptr<HorizontalNode> &root, double left, double right,
                         double top, double bottom, LayoutNodeId id) {
     if (!root) {
-      root = std::make_unique<HorizontalNode>(HorizontalNode{
-          left, right, top, bottom, right, top, bottom, id, Priority(id), nullptr, nullptr});
+      root = std::make_unique<HorizontalNode>(
+          HorizontalNode{left, right, top, bottom, right, top, bottom, id, 1, nullptr, nullptr});
       return;
     }
     if (KeyLess(left, id, *root)) {
       InsertHorizontal(root->lower, left, right, top, bottom, id);
-      if (root->lower->priority > root->priority)
-        RotateHorizontalRight(root);
     } else {
       InsertHorizontal(root->upper, left, right, top, bottom, id);
-      if (root->upper->priority > root->priority)
-        RotateHorizontalLeft(root);
     }
-    UpdateHorizontal(*root);
+    BalanceHorizontal(root);
   }
 
   void EraseHorizontal(std::unique_ptr<HorizontalNode> &root, double left, LayoutNodeId id) {
     if (!root)
       return;
     if (root->left == left && root->id == id) {
-      if (!root->lower)
-        root = std::move(root->upper);
-      else if (!root->upper)
-        root = std::move(root->lower);
-      else if (root->lower->priority > root->upper->priority) {
-        RotateHorizontalRight(root);
-        EraseHorizontal(root->upper, left, id);
+      if (!root->lower) {
+        auto upper = std::move(root->upper);
+        root = std::move(upper);
+      } else if (!root->upper) {
+        auto lower = std::move(root->lower);
+        root = std::move(lower);
       } else {
-        RotateHorizontalLeft(root);
-        EraseHorizontal(root->lower, left, id);
+        const HorizontalNode *successor = root->upper.get();
+        while (successor->lower)
+          successor = successor->lower.get();
+        root->left = successor->left;
+        root->right = successor->right;
+        root->top = successor->top;
+        root->bottom = successor->bottom;
+        root->id = successor->id;
+        EraseHorizontal(root->upper, root->left, root->id);
       }
     } else if (KeyLess(left, id, *root)) {
       EraseHorizontal(root->lower, left, id);
     } else {
       EraseHorizontal(root->upper, left, id);
     }
-    if (root)
-      UpdateHorizontal(*root);
+    BalanceHorizontal(root);
   }
 
   template <typename Callback>

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "onnx_core/graph/graph_layout.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
 #include <string>
@@ -199,6 +201,59 @@ TEST(GraphLayout, CollisionQueriesStayLocalForLongChains) {
     input = output;
   }
   EXPECT_LT(layout.Stats().collision_index_visits, 40u);
+}
+
+TEST(GraphLayout, PersistedPriorityOrderedPositionsKeepSpatialQueriesBounded) {
+  constexpr size_t count = 600;
+  auto legacy_priority = [](LayoutNodeId id) {
+    uint64_t value = id + 0x9e3779b97f4a7c15ULL;
+    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+    return value ^ (value >> 31);
+  };
+  for (bool reverse : {false, true}) {
+    SCOPED_TRACE(reverse);
+    GraphProto graph;
+    for (size_t index = 0; index < count; ++index)
+      *graph.add_node() = Node("value_" + std::to_string(index));
+    std::vector<LayoutNodeId> ids;
+    {
+      GraphLayout initial(graph, true);
+      ids = initial.Order();
+      std::sort(ids.begin(), ids.end(), [&](LayoutNodeId left, LayoutNodeId right) {
+        return legacy_priority(left) < legacy_priority(right);
+      });
+      if (reverse)
+        std::reverse(ids.begin(), ids.end());
+      for (size_t index = 0; index < ids.size(); ++index)
+        ASSERT_TRUE(initial.SetPosition(ids[index], 1000.0 * (index + 1), 0));
+      initial.Persist();
+    }
+
+    GraphProto restored;
+    ASSERT_TRUE(restored.ParseFromString(graph.SerializeAsString()));
+    GraphLayout layout(restored, true);
+    EXPECT_TRUE(layout.Diagnostics().empty());
+    EXPECT_LT(layout.Stats().collision_index_visits, count * 32);
+    for (size_t index = 0; index < ids.size(); ++index)
+      EXPECT_EQ(layout.Get(ids[index])->x, 1000.0 * (index + 1));
+
+    const double gap = 1000.0 * (count / 2) + 500;
+    ASSERT_TRUE(layout.SetPosition(ids.front(), gap, 0));
+    EXPECT_LT(layout.Stats().collision_index_visits, 64u);
+    ASSERT_TRUE(layout.SetSize(ids.front(), 400, 100));
+    EXPECT_LT(layout.Stats().collision_index_visits, 64u);
+    for (size_t index = 0; index < ids.size(); index += 2)
+      ASSERT_TRUE(layout.Erase(ids[index]));
+    ASSERT_TRUE(layout.SetPosition(ids.back(), gap, 0));
+    EXPECT_LT(layout.Stats().collision_index_visits, 64u);
+    const auto appended = layout.Append(Node("appended"));
+    EXPECT_GT(appended, count);
+    layout.Persist();
+    layout.Load();
+    EXPECT_EQ(layout.Order().size(), count / 2 + 1);
+    EXPECT_EQ(layout.Get(ids.back())->x, gap);
+  }
 }
 
 TEST(GraphLayout, InsertDeleteReplacePreserveIdsAndOrder) {

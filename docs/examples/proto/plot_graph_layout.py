@@ -56,12 +56,20 @@ layout.load()
 # ``LayoutEdge.points``; the final point is the target input port.
 
 
-def draw_layout(ax, graph: onnx.GraphProto, placement: onnx.GraphLayout, title: str):
+def draw_layout(
+    ax, graph: onnx.GraphProto | onnx.FunctionProto, placement: onnx.GraphLayout, title: str
+):
     """Draws native node positions and routed tensor edges on an axes."""
     for node_id, node in zip(placement.order, graph.node):
+        box = placement.get(node_id)
+        if box.folded:
+            continue
         for edge in placement.edges(node_id):
             xs = [point.x for point in edge.points]
             ys = [point.y for point in edge.points]
+            if edge.folded:
+                ax.text(xs[-1] - 4, ys[-1], edge.value, ha="right", va="center", fontsize=8)
+                continue
             ax.plot(xs, ys, color="0.45", linewidth=1, zorder=1)
             ax.annotate(
                 "",
@@ -71,7 +79,6 @@ def draw_layout(ax, graph: onnx.GraphProto, placement: onnx.GraphLayout, title: 
             )
             if edge.source == 0:
                 ax.text(xs[0] - 4, ys[0], edge.value, ha="right", va="center", fontsize=8)
-        box = placement.get(node_id)
         ax.add_patch(
             Rectangle(
                 (box.x, box.y),
@@ -151,4 +158,29 @@ for node_id in layout.order:
         after.height,
     )
 print("Stable IDs and all node rectangles survived the ONNX round trip.")
+
+# %%
+# Lay out a local function body
+# -----------------------------
+#
+# The same API binds directly to a ``FunctionProto``. Function inputs are local
+# source endpoints, and IDs are independent of those in the main graph.
+# ``onnx.load(..., layout=True)`` also places every local function in a model.
+
+function = oh.make_function(
+    "demo",
+    "Activation",
+    ["X"],
+    ["Y"],
+    [
+        oh.make_node("Relu", ["X"], ["positive"], name="function activation"),
+        oh.make_node("Neg", ["positive"], ["Y"], name="function output"),
+    ],
+    opset_imports=[oh.make_opsetid("", 18)],
+)
+function_layout = onnx.GraphLayout(function)
+function_layout.load()
+function_layout.persist()
+function_figure, function_axes = plt.subplots(figsize=(10, 3), layout="constrained")
+draw_layout(function_axes, function, function_layout, "Native FunctionProto layout")
 plt.show()

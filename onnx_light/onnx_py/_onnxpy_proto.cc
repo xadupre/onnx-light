@@ -300,11 +300,11 @@ struct PyNodeCallback {
   }
 };
 
-struct PyGraphCallback {
+template <class Proto> struct PyProtoCallback {
   nb::object fn;
-  void operator()(GraphProto &graph) const {
+  void operator()(Proto &proto) const {
     nb::gil_scoped_acquire gil;
-    fn(nb::cast(&graph, nb::rv_policy::reference));
+    fn(nb::cast(&proto, nb::rv_policy::reference));
   }
 };
 
@@ -1498,7 +1498,7 @@ void AddOnnxPyProto(nb::module_ &m) {
           [](ParseOptions &options) -> nb::object {
             if (!options.graph_callback)
               return nb::none();
-            if (const auto *callback = options.graph_callback.target<PyGraphCallback>())
+            if (const auto *callback = options.graph_callback.target<PyProtoCallback<GraphProto>>())
               return callback->fn;
             return nb::cpp_function(
                 [callback = options.graph_callback](GraphProto &graph) { callback(graph); },
@@ -1508,10 +1508,34 @@ void AddOnnxPyProto(nb::module_ &m) {
             if (fn.is_none())
               options.graph_callback = {};
             else
-              options.graph_callback = PyGraphCallback{fn};
+              options.graph_callback = PyProtoCallback<GraphProto>{fn};
           },
-          "Optional callable invoked as ``fn(graph)`` after all graph fields and node callbacks, "
-          "including for empty graphs. Nested graphs complete before their owners.",
+          "Holds an optional callable invoked as ``fn(graph)`` after all graph fields and node "
+          "callbacks, including for empty graphs. Nested graphs complete before their owners. "
+          "The graph argument is borrowed; retain its proto owner if keeping the reference. "
+          "Setting None disables the callback.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "function_callback",
+          [](ParseOptions &options) -> nb::object {
+            if (!options.function_callback)
+              return nb::none();
+            if (const auto *callback =
+                    options.function_callback.target<PyProtoCallback<FunctionProto>>())
+              return callback->fn;
+            return nb::cpp_function([callback = options.function_callback](
+                                        FunctionProto &function) { callback(function); },
+                                    nb::arg("function"));
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none())
+              options.function_callback = {};
+            else
+              options.function_callback = PyProtoCallback<FunctionProto>{fn};
+          },
+          "Holds an optional callable invoked as ``fn(function)`` after all function fields and "
+          "nested graphs, including for empty functions. The function argument is borrowed; "
+          "retain its proto owner if keeping the reference. Setting None disables the callback.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",

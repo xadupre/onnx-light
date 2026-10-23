@@ -33,6 +33,92 @@ std::string MetaValue(const NodeProto &node, const char *key) {
 }
 } // namespace
 
+TEST(GraphLayout, FunctionBodyMutationsAndRoundTrip) {
+  FunctionProto function;
+  function.set_name("Activation");
+  function.add_input("X");
+  function.add_output("Y");
+  *function.add_node() = Node("A", {"X"});
+  *function.add_node() = Node("Y", {"A"}, "Relu");
+  *function.add_node() = Node("unused", {"X"});
+  GraphLayout layout(function, true);
+  const auto first = layout.Order()[0], second = layout.Order()[1];
+  const auto independent = *layout.Get(layout.Order()[2]);
+  EXPECT_FALSE(layout.Edges(first)[0].capture);
+  ASSERT_TRUE(layout.SetSize(first, 400, 100));
+  EXPECT_GT(layout.Get(second)->x, 400);
+  EXPECT_EQ(layout.Get(independent.id)->x, independent.x);
+  EXPECT_EQ(layout.Get(independent.id)->y, independent.y);
+  EXPECT_EQ(layout.Stats().nodes, 2u);
+  auto inserted = layout.Insert(0, Node("prefix", {"X"}));
+  ASSERT_TRUE(layout.Replace(first, Node("A", {"prefix"}, "Neg")));
+  EXPECT_EQ(layout.Edges(first)[0].source, inserted);
+  ASSERT_TRUE(layout.RewireInput(first, 0, "X"));
+  ASSERT_TRUE(layout.Erase(inserted));
+  const auto appended = layout.Append(Node("inspection", {"Y"}));
+  EXPECT_EQ(layout.Edges(appended)[0].source, second);
+  EXPECT_EQ(function.node(0).op_type(), "Neg");
+  EXPECT_EQ(function.node(3).output(0), "inspection");
+  ASSERT_TRUE(layout.SetPosition(first, -500, -100));
+  layout.Persist();
+  FunctionProto restored;
+  ASSERT_TRUE(restored.ParseFromString(function.SerializeAsString()));
+  GraphLayout resumed(restored, true);
+  EXPECT_EQ(resumed.Order(), layout.Order());
+  for (auto id : layout.Order()) {
+    EXPECT_EQ(resumed.Get(id)->x, layout.Get(id)->x);
+    EXPECT_EQ(resumed.Get(id)->y, layout.Get(id)->y);
+    EXPECT_EQ(resumed.Get(id)->width, layout.Get(id)->width);
+    EXPECT_EQ(resumed.Get(id)->height, layout.Get(id)->height);
+  }
+}
+
+TEST(GraphLayout, FunctionSubgraphsCaptureFormalsAndPropagateLocalEdits) {
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  *function.add_node() = Node("capture", {"X"});
+  auto container = Node("Y", {}, "Container");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  auto *graph = attribute->mutable_g();
+  graph->add_output()->set_name("inner");
+  *graph->add_node() = Node("inner", {"capture", "X"}, "Add");
+  *function.add_node() = container;
+  GraphLayout layout(function, true);
+  const auto producer = layout.Order()[0], parent = layout.Order()[1];
+  ASSERT_EQ(layout.Edges(parent).size(), 2u);
+  EXPECT_EQ(layout.Edges(parent)[1].source, producer);
+  auto *child = layout.Children(parent)[0];
+  EXPECT_TRUE(child->Edges(child->Order()[0])[0].capture);
+  ASSERT_TRUE(child->SetSize(child->Order()[0], 500, 100));
+  EXPECT_GE(layout.Get(parent)->width, 500);
+  layout.Persist();
+  GraphLayout shallow(function, false);
+  EXPECT_TRUE(shallow.Children(parent).empty());
+  EXPECT_EQ(shallow.Get(parent)->width, layout.Get(parent)->width);
+  EXPECT_EQ(shallow.Get(parent)->height, layout.Get(parent)->height);
+}
+
+TEST(GraphLayout, MissingFixedSizeMetadataRecomputesDimensions) {
+  GraphProto graph;
+  *graph.add_node() = Node("Y", {"X"});
+  GraphLayout initial(graph, true);
+  const auto id = initial.Order()[0];
+  const auto automatic = *initial.Get(id);
+  ASSERT_TRUE(initial.SetSize(id, 1000, 900));
+  initial.Persist();
+  auto &metadata = *graph.mutable_node(0)->mutable_metadata_props();
+  for (auto it = metadata.begin(); it != metadata.end();)
+    if (it->key() == GraphLayout::FixedSizeKey)
+      it = metadata.erase(it);
+    else
+      ++it;
+  GraphLayout resumed(graph, true);
+  EXPECT_EQ(resumed.Get(id)->width, automatic.width);
+  EXPECT_EQ(resumed.Get(id)->height, automatic.height);
+}
+
 TEST(GraphLayout, StreamingLateProducerAndRoutes) {
   GraphProto graph;
   GraphLayout layout(graph);
@@ -730,7 +816,8 @@ TEST(GraphLayout, StaleSignaturesInvalidateGeometryWhenSemanticPortsChange) {
 
 TEST(GraphLayout, DuplicateProducerDiagnosticsBoundAndSanitizeUntrustedNames) {
   GraphProto graph;
-  const std::string output = "\x1b\n" + std::string(2 * 1024 * 1024, 'X');
+  std::string output = "\x1b\n";
+  output.append(2 * 1024 * 1024, 'X');
   *graph.add_node() = Node(output);
   *graph.add_node() = Node(output);
   GraphLayout layout(graph, true);

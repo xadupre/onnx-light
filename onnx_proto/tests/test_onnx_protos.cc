@@ -7679,6 +7679,48 @@ TEST(onnx_proto, ParseOptions_GraphCallback_PropagatesExceptions) {
   EXPECT_FALSE(loaded.ParseFromString(bytes, options));
 }
 
+TEST(onnx_proto, ParseOptions_FunctionCallback_ChildFirstAndCompleteMetadata) {
+  FunctionProto function;
+  function.set_name("function");
+  auto *attribute = function.add_node()->add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  attribute->mutable_g()->set_name("child");
+  function.add_metadata_props()->set_key("parsed_after_nodes");
+  std::vector<std::string> visits;
+  ParseOptions options;
+  options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+  options.function_callback = [&](FunctionProto &scope) {
+    visits.push_back(scope.name());
+    if (scope.name() == "function") {
+      EXPECT_EQ(scope.metadata_props(0).key(), "parsed_after_nodes");
+    }
+    scope.add_metadata_props()->set_key("callback");
+  };
+  FunctionProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(function.SerializeAsString(), options));
+  EXPECT_EQ(visits, (std::vector<std::string>{"child", "function"}));
+  EXPECT_EQ(loaded.metadata_props(1).key(), "callback");
+  FunctionProto empty;
+  FunctionProto loaded_empty;
+  ASSERT_TRUE(loaded_empty.ParseFromString(empty.SerializeAsString(), options));
+  EXPECT_EQ(visits.back(), "");
+  EXPECT_EQ(loaded_empty.metadata_props(0).key(), "callback");
+}
+
+TEST(onnx_proto, ParseOptions_FunctionCallback_PropagatesExceptions) {
+  FunctionProto function;
+  ParseOptions options;
+  options.function_callback = [](FunctionProto &) {
+    throw std::runtime_error("function callback");
+  };
+  FunctionProto loaded;
+  const std::string bytes = function.SerializeAsString();
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(bytes.data()),
+                             static_cast<int64_t>(bytes.size()));
+  EXPECT_THROW(loaded.ParseFromStream(stream, options), std::runtime_error);
+  EXPECT_FALSE(loaded.ParseFromString(bytes, options));
+}
+
 TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
   ModelProto model = MakeModelWithSubgraph();
   std::string serialized;

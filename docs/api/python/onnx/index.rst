@@ -9,6 +9,7 @@ onnx_light.onnx
     compose
     defs
     external_data_helper
+    graph_layout
     helper
     inliner
     mapping

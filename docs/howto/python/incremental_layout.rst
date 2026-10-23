@@ -28,15 +28,18 @@ Loading and editing
 
 ``layout=False`` is the default: loading neither computes positions nor modifies
 layout or unrelated metadata. With ``layout=True``, binary loading installs
-``ParseOptions.graph_callback``. The callback runs as each graph finishes parsing,
+``ParseOptions.graph_callback`` and ``ParseOptions.function_callback``.
+The callbacks run as each graph or function finishes parsing,
 after its node callbacks and all metadata fields, with children before parents.
 This ordering matters because ONNX may serialize graph metadata after its nodes.
-There is no separate post-model layout pass. Textproto loading attaches layout
+Local function bodies in ``model.functions`` receive their own layout, including
+their nested graph attributes. There is no separate post-model layout pass.
+Textproto loading attaches layout
 before returning the parsed model.
 
 Low-level Python callers can call ``onnx.enable_graph_layout(options)`` on their
-``ParseOptions``. This chains an existing graph callback rather than replacing
-it. C++ callers can use the same hook directly:
+``ParseOptions``. This chains existing graph and function callbacks rather than
+replacing them. C++ callers can use the same hooks directly:
 
 .. code-block:: cpp
 
@@ -47,10 +50,19 @@ it. C++ callers can use the same hook directly:
       layout.Load(false);
       layout.Persist(false);
     };
+    options.function_callback = [](FunctionProto &function) {
+      core::graph::GraphLayout layout(function, false);
+      layout.Persist(false);
+    };
     ModelProto model;
     model.ParseFromFile("model.onnx", options);
 
-``GraphLayout`` binds to a live ``GraphProto``. Call ``load()`` once, then perform
+``GraphLayout`` binds directly to a live ``GraphProto`` or ``FunctionProto``,
+without converting or copying function bodies. For example,
+``onnx.GraphLayout(model.functions[0])`` edits that function's actual nodes and
+metadata. Function formal inputs are local source endpoints, not outer captures;
+graph and function scopes have independent ID spaces.
+Call ``load()`` once, then perform
 edits through ``append``, ``insert``, ``erase``, ``replace``, ``rewire_input``,
 ``set_size`` and ``set_position``. Replacement keeps the original layout ID;
 insertion and deletion affect the requested semantic node-list positions.
@@ -62,7 +74,7 @@ normalize layout.
 
 ``order`` contains stable IDs in semantic node-list order, ``get(id)`` returns
 dimensions and coordinates, and ``edges(consumer)`` returns ordered port routes.
-Graph-scoped IDs are not node names or list indices. Rewrites preserving node
+Scope-local IDs are not node names or list indices. Rewrites preserving node
 metadata retain identity; rewrites constructing new nodes should use
 ``replace`` to explicitly transfer identity. A rewrite dropping layout metadata
 cannot preserve an unknown placement.
@@ -78,6 +90,11 @@ target ports even when their source value is the same.
 
 Initializers are folded into consumer input ports instead of creating one huge
 initializer column. ``Constant`` nodes have a compact folded presentation.
+Folded nodes are virtual content intended for rendering inline at consumer input
+ports, not independent rectangles. Their IDs and semantic order remain public,
+but their coordinates may overlap; their boxes do not occupy space or contribute
+to layout bounds. Renderers should skip folded boxes and render folded edges as
+port content rather than drawing their ordinary routes.
 Graph inputs and captures are source endpoints, not invented operator nodes.
 Graph outputs retain their tensor names and refer to existing value endpoints.
 Layout does not add proxy nodes or tensors to the model.
@@ -129,11 +146,12 @@ Unrelated metadata keys and values are preserved.
 The node keys ``onnx_light.layout.automatic`` and
 ``onnx_light.layout.fixed_size`` use ``"0"``/``"1"`` values to distinguish
 automatic placement from manual positions, and inferred dimensions from
-explicit dimensions. ``onnx_light.layout.scope`` stores a bounded graph-local
+explicit dimensions. An absent ``fixed_size`` key selects inferred dimensions.
+``onnx_light.layout.scope`` stores a bounded scope-local
 geometry/capture summary so a parent finishing its parse can use child state
 without rebuilding every child layout. Capture names use quoted, escaped
 strings, not whitespace-delimited tensor names.
-The graph key ``onnx_light.layout.next_id`` persists the monotonic ID allocator;
+The graph/function key ``onnx_light.layout.next_id`` persists the monotonic ID allocator;
 node keys ``onnx_light.layout.rank`` and ``onnx_light.layout.signature`` persist
 the dependency rank and a semantic signature used to reject stale geometry.
 IDs are positive decimal integers, limited to ``2**53 - 1``. Ranks are

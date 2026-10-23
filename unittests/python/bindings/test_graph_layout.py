@@ -9,6 +9,17 @@ from onnx_light.onnx.checker import check_model
 
 class TestGraphLayout(unittest.TestCase):
     @staticmethod
+    def function():
+        return oh.make_function(
+            "local",
+            "Activation",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Identity", ["X"], ["A"]), oh.make_node("Relu", ["A"], ["Y"])],
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+
+    @staticmethod
     def model():
         return oh.make_model(
             oh.make_graph(
@@ -214,6 +225,71 @@ class TestGraphLayout(unittest.TestCase):
         resumed.load()
         self.assertEqual(resumed.order[1], survivor)
         self.assertEqual((resumed.get(survivor).x, resumed.get(survivor).y), (second.x, second.y))
+
+    def test_function_bodies_loaded_in_binary_and_textproto(self):
+        model = self.model()
+        model.functions.append(self.function())
+        model.graph.node[0].op_type = "Activation"
+        model.graph.node[0].domain = "local"
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        original = model.SerializeToString()
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix in (".onnx", ".textproto"):
+                with self.subTest(suffix=suffix):
+                    path = Path(directory) / f"model{suffix}"
+                    onnx.save(model, path)
+                    self.assertEqual(onnx.load(path).SerializeToString(), original)
+                    loaded = onnx.load(path, layout=True)
+                    check_model(loaded)
+                    function = loaded.functions[0]
+                    self.assertTrue(
+                        any(p.key == "onnx_light.layout.version" for p in function.metadata_props)
+                    )
+                    placement = onnx.GraphLayout(function)
+                    del loaded, function
+                    placement.load()
+                    first, second = placement.order
+                    self.assertFalse(placement.edges(first)[0].capture)
+                    self.assertEqual(placement.edges(second)[0].source, first)
+                    self.assertTrue(placement.set_size(first, 400, 100))
+                    self.assertGreater(placement.get(second).x, 400)
+                    placement.persist()
+        with self.assertRaisesRegex(TypeError, "GraphProto or FunctionProto"):
+            onnx.GraphLayout(model)
+
+    def test_function_callback_and_standalone_round_trip(self):
+        function = self.function()
+        visits = []
+        options = onnx.ParseOptions()
+        self.assertIsNone(options.function_callback)
+
+        def callback(scope):
+            visits.append(scope.name)
+            self.assertEqual(len(scope.node), 2)
+
+        options.function_callback = callback
+        self.assertIs(options.function_callback, callback)
+        onnx.enable_graph_layout(options)
+        layout_callback = options.function_callback
+        options.function_callback = None
+        layout_callback(function)
+        self.assertEqual(visits, ["Activation"])
+        options.function_callback = layout_callback
+        restored = onnx.FunctionProto()
+        restored.ParseFromString(function.SerializeToString(), options)
+        self.assertEqual(visits, ["Activation", "Activation"])
+        placement = onnx.GraphLayout(restored)
+        placement.load()
+        first, second = placement.order
+        self.assertTrue(placement.set_position(first, -500, -200))
+        placement.persist()
+        resumed = onnx.FunctionProto()
+        resumed.ParseFromString(restored.SerializeToString(), options)
+        reloaded = onnx.GraphLayout(resumed)
+        reloaded.load()
+        self.assertEqual(reloaded.order, placement.order)
+        self.assertEqual((reloaded.get(first).x, reloaded.get(first).y), (-500, -200))
+        self.assertEqual(reloaded.edges(second)[0].source, first)
 
 
 if __name__ == "__main__":

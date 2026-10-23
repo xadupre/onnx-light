@@ -4,10 +4,12 @@ from pathlib import Path
 from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
     FileLoadMode,
+    GraphLayout,
     ModelProto,
     ParseOptions,
     SerializeOptions,
     TensorProto,
+    enable_graph_layout,
 )
 
 # Serialization formats understood by :func:`load` and :func:`save`. ``"protobuf"``
@@ -377,9 +379,9 @@ def load(
         or ``"textproto"`` (protobuf text format). When it is not specified, it is
         inferred from the file extension (``.textproto`` selects ``"textproto"``,
         otherwise ``"protobuf"``). Text-format inputs are decoded as "utf-8".
-    :param layout: enables native incremental layout while loading. Binary graphs are
-        placed at their parse-completion hook, children first, and persisted in metadata.
-        Text graphs are placed before returning. The default leaves metadata untouched.
+    :param layout: enables native incremental layout while loading. Binary graph and function
+        bodies are placed at their parse-completion hooks, children first, and persisted in
+        metadata. Text scopes are placed before returning. The default leaves metadata untouched.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -402,12 +404,11 @@ def load(
                 text = handle.read()
         model = parse_from_textproto(text, ModelProto())
         if layout:
-            from ..onnx_py._onnxpyprotoop import GraphLayout
-
-            placement = GraphLayout(model.graph)
-            placement.load()
-            placement.persist()
-            layouts = [placement]
+            layouts = [GraphLayout(model.graph)]
+            layouts.extend(GraphLayout(function) for function in model.functions)
+            for placement in layouts:
+                placement.load()
+                placement.persist()
             while layouts:
                 current = layouts.pop()
                 for diagnostic in current.diagnostics:
@@ -456,8 +457,6 @@ def load(
         opts._touch_raw_data_pages = touch_raw_data_pages
         opts.file_load_mode = file_load_mode
         if layout:
-            from ..onnx_py._onnxpyprotoop import enable_graph_layout
-
             enable_graph_layout(opts)
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)

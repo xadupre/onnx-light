@@ -17,6 +17,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
 namespace {
@@ -24,6 +25,19 @@ constexpr double CoordinateLimit = 1e9;
 constexpr size_t DepthLimit = 64;
 constexpr LayoutNodeId IdLimit = 9007199254740991ULL;
 constexpr size_t SummaryLimit = 1024 * 1024;
+constexpr double NodePadding = 24;
+constexpr double LayerGap = 80;
+constexpr double PortPitch = 18;
+constexpr double HeaderHeight = 48;
+constexpr double ContainerPadding = 48;
+constexpr double LabelBaseWidth = 80;
+constexpr double CharacterWidth = 8;
+constexpr double MinNodeWidth = 160;
+constexpr double MaxNodeWidth = 480;
+constexpr double FoldedNodeWidth = 64;
+constexpr double FoldedNodeHeight = 24;
+constexpr double ExternalEdgeLength = 32;
+constexpr double DimensionLimit = 1e6;
 
 template <class Proto> std::string_view Metadata(const Proto &proto, const char *key) {
   for (const auto &entry : proto.metadata_props())
@@ -110,7 +124,7 @@ struct GraphLayout::Impl {
     std::vector<ChildSummary> summaries;
     std::vector<LayoutEdge> edges;
   };
-  GraphProto &graph;
+  std::variant<GraphProto *, FunctionProto *> scope;
   size_t depth = 0;
   LayoutNodeId next_id = 1;
   std::unordered_map<LayoutNodeId, State> states;
@@ -142,7 +156,46 @@ struct GraphLayout::Impl {
   bool trusted_positions = false;
   bool recursive = true;
 
-  explicit Impl(GraphProto &g) : graph(g) {}
+  explicit Impl(GraphProto &graph) : scope(&graph) {}
+  explicit Impl(FunctionProto &function) : scope(&function) {}
+
+  auto &Nodes() {
+    return std::visit([](auto *proto) -> auto & { return *proto->mutable_node(); }, scope);
+  }
+
+  std::string_view ScopeMetadata(const char *key) const {
+    return std::visit([&](const auto *proto) { return Metadata(*proto, key); }, scope);
+  }
+
+  void SetScopeMetadata(const char *key, const std::string &value) {
+    std::visit([&](auto *proto) { SetMetadata(*proto, key, value); }, scope);
+  }
+
+  void IndexScopeValues(const GraphProto &graph) {
+    for (const auto &input : graph.input())
+      local_values.insert(input.name());
+    for (const auto &output : graph.output())
+      graph_outputs.insert(output.name());
+    for (const auto &tensor : graph.initializer()) {
+      local_values.insert(tensor.name());
+      initializers.insert(tensor.name());
+    }
+    for (const auto &tensor : graph.sparse_initializer()) {
+      local_values.insert(tensor.values().name());
+      initializers.insert(tensor.values().name());
+    }
+    for (const auto &tensor : graph.extended_initializer()) {
+      local_values.insert(tensor.name());
+      initializers.insert(tensor.name());
+    }
+  }
+
+  void IndexScopeValues(const FunctionProto &function) {
+    for (const auto &input : function.input())
+      local_values.insert(input);
+    for (const auto &output : function.output())
+      graph_outputs.insert(output);
+  }
 
   void Diagnose(const std::string &message) {
     if (diagnostics.size() < 256)
@@ -283,7 +336,7 @@ struct GraphLayout::Impl {
     remove_extent(bottom_edges, state.box.y + state.box.height);
     remove_extent(left_edges, state.box.x);
     remove_extent(top_edges, state.box.y);
-    EraseHorizontal(horizontal, state.box.x - 24, state.box.id);
+    EraseHorizontal(horizontal, state.box.x - NodePadding, state.box.id);
   }
 
   void IndexOccupied(const State &state) {
@@ -292,8 +345,8 @@ struct GraphLayout::Impl {
     bottom_edges[box.y + box.height].insert(box.id);
     left_edges[box.x].insert(box.id);
     top_edges[box.y].insert(box.id);
-    InsertHorizontal(horizontal, box.x - 24, box.x + box.width + 24, box.y - 24,
-                     box.y + box.height + 24, box.id);
+    InsertHorizontal(horizontal, box.x - NodePadding, box.x + box.width + NodePadding,
+                     box.y - NodePadding, box.y + box.height + NodePadding, box.id);
   }
 
   LayoutNodeId Identify(NodeProto &node) {
@@ -336,7 +389,8 @@ struct GraphLayout::Impl {
     stream.imbue(std::locale::classic());
     if (!(stream >> x >> y >> width >> height) || !(stream >> std::ws).eof() ||
         !ValidCoordinate(x) || !ValidCoordinate(y) || !std::isfinite(width) ||
-        !std::isfinite(height) || width < 1 || height < 1 || width > 1e6 || height > 1e6) {
+        !std::isfinite(height) || width < 1 || height < 1 || width > DimensionLimit ||
+        height > DimensionLimit) {
       Diagnose("Invalid layout position; computed a replacement.");
       return;
     }
@@ -350,7 +404,7 @@ struct GraphLayout::Impl {
     if (!automatic.empty() && automatic != "0" && automatic != "1")
       Diagnose("Invalid layout positioning mode; preserved the position as pinned.");
     const auto fixed = Metadata(*state.proto, GraphLayout::FixedSizeKey);
-    state.fixed_size = fixed.empty() || fixed == "1";
+    state.fixed_size = fixed == "1";
     if (!fixed.empty() && fixed != "0" && fixed != "1")
       Diagnose("Invalid layout sizing mode; used automatic dimensions.");
     const auto rank = Metadata(*state.proto, GraphLayout::RankKey);
@@ -359,7 +413,7 @@ struct GraphLayout::Impl {
       const auto bounded = rank.substr(0, 17);
       const auto result = std::from_chars(bounded.data(), bounded.data() + bounded.size(), layer);
       if (rank.size() > 16 || result.ec != std::errc() ||
-          result.ptr != bounded.data() + bounded.size() || layer > graph.node().size()) {
+          result.ptr != bounded.data() + bounded.size() || layer > Nodes().size()) {
         Diagnose("Invalid persisted layout rank; recomputed the rank.");
       } else {
         state.box.layer = layer;
@@ -389,8 +443,8 @@ struct GraphLayout::Impl {
                          format == "2";
             valid = valid && std::isfinite(summary.right) && std::isfinite(summary.bottom) &&
                     ValidCoordinate(summary.left) && ValidCoordinate(summary.top) &&
-                    std::abs(summary.right) <= CoordinateLimit + 1e6 &&
-                    std::abs(summary.bottom) <= CoordinateLimit + 1e6 &&
+                    std::abs(summary.right) <= CoordinateLimit + DimensionLimit &&
+                    std::abs(summary.bottom) <= CoordinateLimit + DimensionLimit &&
                     summary.right >= summary.left && summary.bottom >= summary.top &&
                     count <= 65536;
             for (size_t i = 0; valid && i < count; ++i) {
@@ -501,38 +555,39 @@ struct GraphLayout::Impl {
     state.box.folded = state.proto->op_type() == "Constant" &&
                        (state.proto->domain().empty() || state.proto->domain() == "ai.onnx");
     if (!state.fixed_size) {
-      state.box.width = std::clamp(80.0 + 8.0 * state.proto->op_type().size(), 160.0, 480.0);
+      state.box.width = std::clamp(LabelBaseWidth + CharacterWidth * state.proto->op_type().size(),
+                                   MinNodeWidth, MaxNodeWidth);
       state.box.height =
-          48.0 + 18.0 * std::max(state.dependencies.size(), state.box.outputs.size());
+          HeaderHeight + PortPitch * std::max(state.dependencies.size(), state.box.outputs.size());
       if (state.box.folded) {
-        state.box.width = 64;
-        state.box.height = 24;
+        state.box.width = FoldedNodeWidth;
+        state.box.height = FoldedNodeHeight;
       }
     }
     FitChildBounds(state);
   }
 
   void FitChildBounds(State &state) {
-    double children_height = 48;
+    double children_height = ContainerPadding;
     for (const auto &child : state.children) {
       const auto &nested = *child->impl_;
       const double left = nested.left_edges.empty() ? 0 : nested.left_edges.begin()->first;
       const double top = nested.top_edges.empty() ? 0 : nested.top_edges.begin()->first;
       const double right = nested.right_edges.empty() ? 0 : nested.right_edges.rbegin()->first;
       const double bottom = nested.bottom_edges.empty() ? 0 : nested.bottom_edges.rbegin()->first;
-      state.box.width = std::max(state.box.width, right - left + 48);
-      children_height += bottom - top + 48;
+      state.box.width = std::max(state.box.width, right - left + ContainerPadding);
+      children_height += bottom - top + ContainerPadding;
     }
     for (const auto &summary : state.summaries) {
-      state.box.width = std::max(state.box.width, summary.right - summary.left + 48);
-      children_height += summary.bottom - summary.top + 48;
+      state.box.width = std::max(state.box.width, summary.right - summary.left + ContainerPadding);
+      children_height += summary.bottom - summary.top + ContainerPadding;
     }
     if (!state.children.empty() || !state.summaries.empty())
       state.box.height = std::max(state.box.height, children_height);
-    if (state.box.width > 1e6 || state.box.height > 1e6) {
+    if (state.box.width > DimensionLimit || state.box.height > DimensionLimit) {
       Diagnose("Layout dimensions exceeded the supported bounds; clipped the node box.");
-      state.box.width = std::min(state.box.width, 1e6);
-      state.box.height = std::min(state.box.height, 1e6);
+      state.box.width = std::min(state.box.width, DimensionLimit);
+      state.box.height = std::min(state.box.height, DimensionLimit);
     }
   }
 
@@ -549,18 +604,19 @@ struct GraphLayout::Impl {
       edge.value = value;
       edge.capture = port >= state.box.inputs.size() || external.count(value);
       edge.folded = initializers.count(value);
-      LayoutPoint end{state.box.x, state.box.y + 24 + 18.0 * port};
+      LayoutPoint end{state.box.x, state.box.y + NodePadding + PortPitch * port};
       auto producer = producers.find(value);
       if (producer != producers.end()) {
         edge.source = producer->second.id;
         edge.source_port = producer->second.port;
         const auto &source = states.at(edge.source).box;
         edge.folded = source.folded;
-        LayoutPoint start{source.x + source.width, source.y + 24 + 18.0 * edge.source_port};
+        LayoutPoint start{source.x + source.width,
+                          source.y + NodePadding + PortPitch * edge.source_port};
         const double middle = (start.x + end.x) / 2;
         edge.points = {start, {middle, start.y}, {middle, end.y}, end};
       } else {
-        edge.points = {{end.x - 32, end.y}, end};
+        edge.points = {{end.x - ExternalEdgeLength, end.y}, end};
       }
       state.edges.push_back(std::move(edge));
       ++stats.edges;
@@ -581,7 +637,7 @@ struct GraphLayout::Impl {
         continue;
       const auto &source = states.at(producer->second.id).box;
       if (!source.folded) {
-        const double next = source.x + source.width + 80;
+        const double next = source.x + source.width + LayerGap;
         x = required ? std::max(x, next) : next;
         required = true;
       }
@@ -636,10 +692,10 @@ struct GraphLayout::Impl {
           const auto &source = states.at(producer->second.id).box;
           if (!source.folded) {
             layer = std::max(layer, source.layer + 1);
-            const double next = source.x + source.width + 80;
+            const double next = source.x + source.width + LayerGap;
             x = has_predecessor ? std::max(x, next) : next;
             has_predecessor = true;
-            barycenter += source.y + 18.0 * producer->second.port - 18.0 * port;
+            barycenter += source.y + PortPitch * producer->second.port - PortPitch * port;
             ++barycenter_count;
           }
         } else if (producer != producers.end())
@@ -680,7 +736,7 @@ struct GraphLayout::Impl {
           QueryHorizontal(horizontal.get(), state.box.x, state.box.x + state.box.width, y,
                           y + state.box.height, [&](LayoutNodeId other) {
                             const auto &box = states.at(other).box;
-                            y = box.y + box.height + 24;
+                            y = box.y + box.height + NodePadding;
                             collision = true;
                             return true;
                           });
@@ -733,6 +789,10 @@ struct GraphLayout::Impl {
 
 GraphLayout::GraphLayout(GraphProto &graph) : impl_(std::make_unique<Impl>(graph)) {}
 GraphLayout::GraphLayout(GraphProto &graph, bool recurse) : GraphLayout(graph) { Load(recurse); }
+GraphLayout::GraphLayout(FunctionProto &function) : impl_(std::make_unique<Impl>(function)) {}
+GraphLayout::GraphLayout(FunctionProto &function, bool recurse) : GraphLayout(function) {
+  Load(recurse);
+}
 GraphLayout::~GraphLayout() = default;
 
 void GraphLayout::Load(bool recurse) {
@@ -757,7 +817,7 @@ void GraphLayout::Load(bool recurse) {
   impl.diagnostics.clear();
   impl.stats = {};
   impl.next_id = 1;
-  const auto next = Metadata(impl.graph, NextIdKey);
+  const auto next = impl.ScopeMetadata(NextIdKey);
   if (!next.empty()) {
     LayoutNodeId next_id = 0;
     const auto bounded = next.substr(0, 17);
@@ -768,27 +828,12 @@ void GraphLayout::Load(bool recurse) {
     else
       impl.Diagnose("Invalid persisted next layout id; chose a fresh allocation point.");
   }
-  const auto version = Metadata(impl.graph, VersionKey);
+  const auto version = impl.ScopeMetadata(VersionKey);
   impl.trusted_positions = version == "1";
   if (!version.empty() && version != "1")
     impl.Diagnose("Unsupported layout metadata version; recomputed geometry.");
-  for (const auto &input : impl.graph.input())
-    impl.local_values.insert(input.name());
-  for (const auto &output : impl.graph.output())
-    impl.graph_outputs.insert(output.name());
-  for (const auto &tensor : impl.graph.initializer()) {
-    impl.local_values.insert(tensor.name());
-    impl.initializers.insert(tensor.name());
-  }
-  for (const auto &tensor : impl.graph.sparse_initializer()) {
-    impl.local_values.insert(tensor.values().name());
-    impl.initializers.insert(tensor.values().name());
-  }
-  for (const auto &tensor : impl.graph.extended_initializer()) {
-    impl.local_values.insert(tensor.name());
-    impl.initializers.insert(tensor.name());
-  }
-  for (const auto &node : impl.graph.node()) {
+  std::visit([&](const auto *proto) { impl.IndexScopeValues(*proto); }, impl.scope);
+  for (const auto &node : impl.Nodes()) {
     const auto text = Metadata(node, IdKey);
     LayoutNodeId id = 0;
     if (text.size() <= 16) {
@@ -799,13 +844,13 @@ void GraphLayout::Load(bool recurse) {
     }
   }
   std::set<LayoutNodeId> seeds;
-  for (auto &node : *impl.graph.mutable_node()) {
+  for (auto &node : impl.Nodes()) {
     auto id = impl.Add(node);
     impl.order.push_back(id);
     seeds.insert(id);
   }
-  for (const auto &output : impl.graph.output())
-    impl.UpdateExternal(output.name());
+  for (const auto &output : impl.graph_outputs)
+    impl.UpdateExternal(output);
   impl.Solve(seeds);
   // Restores the exact saved frame first; subsequent edits can move automatic nodes.
   for (auto &[id, state] : impl.states) {
@@ -817,8 +862,8 @@ void GraphLayout::Load(bool recurse) {
 }
 
 void GraphLayout::Persist(bool recurse) {
-  SetMetadata(impl_->graph, VersionKey, "1");
-  SetMetadata(impl_->graph, NextIdKey, std::to_string(impl_->next_id));
+  impl_->SetScopeMetadata(VersionKey, "1");
+  impl_->SetScopeMetadata(NextIdKey, std::to_string(impl_->next_id));
   std::ostringstream summary;
   summary.imbue(std::locale::classic());
   summary << std::setprecision(17) << "2 "
@@ -839,9 +884,9 @@ void GraphLayout::Persist(bool recurse) {
   }
   if (!bounded || summary.str().size() > SummaryLimit) {
     impl_->Diagnose("Layout capture summary exceeded the metadata size limit.");
-    SetMetadata(impl_->graph, ScopeKey, "");
+    impl_->SetScopeMetadata(ScopeKey, "");
   } else {
-    SetMetadata(impl_->graph, ScopeKey, summary.str());
+    impl_->SetScopeMetadata(ScopeKey, summary.str());
   }
   for (auto &[id, state] : impl_->states) {
     SetMetadata(*state.proto, IdKey, std::to_string(id));
@@ -869,7 +914,7 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   if (index > impl.order.size())
     throw std::out_of_range("Layout insertion index is out of range.");
   impl.stats = {};
-  auto &nodes = *impl.graph.mutable_node();
+  auto &nodes = impl.Nodes();
   nodes.push_back(node);
   for (size_t i = nodes.size() - 1; i > index; --i)
     std::swap(nodes.get(i), nodes.get(i - 1));
@@ -887,8 +932,7 @@ bool GraphLayout::Erase(LayoutNodeId id) {
   if (!impl.states.count(id))
     return false;
   const auto it = std::find(impl.order.begin(), impl.order.end(), id);
-  if (it == impl.order.end() ||
-      static_cast<size_t>(it - impl.order.begin()) >= impl.graph.node().size())
+  if (it == impl.order.end() || static_cast<size_t>(it - impl.order.begin()) >= impl.Nodes().size())
     throw std::logic_error(
         "Layout node order is inconsistent; call Load() after direct graph edits.");
   const auto index = it - impl.order.begin();
@@ -897,7 +941,7 @@ bool GraphLayout::Erase(LayoutNodeId id) {
   impl.Unindex(id, affected);
   impl.RemoveOccupied(impl.states.at(id));
   impl.states.erase(id);
-  impl.graph.mutable_node()->erase(impl.graph.mutable_node()->begin() + index);
+  impl.Nodes().erase(impl.Nodes().begin() + index);
   impl.order.erase(it);
   impl.Solve(affected);
   impl.Notify();
@@ -965,7 +1009,7 @@ bool GraphLayout::SetPosition(LayoutNodeId id, double x, double y) {
 bool GraphLayout::SetSize(LayoutNodeId id, double width, double height) {
   auto &impl = *impl_;
   if (!impl.states.count(id) || !std::isfinite(width) || !std::isfinite(height) || width < 1 ||
-      height < 1 || width > 1e6 || height > 1e6)
+      height < 1 || width > DimensionLimit || height > DimensionLimit)
     return false;
   impl.stats = {};
   auto &state = impl.states.at(id);

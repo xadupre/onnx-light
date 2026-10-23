@@ -2064,6 +2064,8 @@ bool FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, value_info)      //
   READ_REPEATED_FIELD(options, stream, metadata_props)  //
   READ_END(options, stream, FunctionProto)              //  // NOLINT
+  if (options.function_callback)
+    options.function_callback(*this);
   return true;
 }
 void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {

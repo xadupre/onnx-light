@@ -23,6 +23,7 @@
 #include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
+#include "onnx_extensions/patterns/collections/layer_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
@@ -75,6 +76,10 @@ NB_MODULE(_onnxpypatterns, m) {
   onnx_patterns::RegisterPatterns();
 
   m.doc() = "Concrete ONNX graph-rewriting patterns.";
+
+  BindPattern<onnx_patterns::RepeatedLayerPattern>(
+      m, "RepeatedLayerPattern",
+      "Encapsulates structurally repeated regions as explicit ai.rt::Layer bodies (opt-in).");
 
   nb::class_<onnx_patterns::CastPattern, core::builder::PatternOptimization>(
       m, "CastPattern",
@@ -487,11 +492,11 @@ NB_MODULE(_onnxpypatterns, m) {
 
   m.def(
       "registered_pattern_names",
-      []() {
+      [](bool include_opt_in) {
         onnx_patterns::RegisterPatterns();
-        return core::builder::RegisteredPatternNames();
+        return core::builder::RegisteredPatternNames(include_opt_in);
       },
-      "Returns the registered standard ONNX pattern names.");
+      nb::arg("include_opt_in") = true, "Returns the registered standard ONNX pattern names.");
   m.def("create_pattern", &CreatePattern, nb::arg("name"), nb::arg("priority") = nb::none(),
         "Creates a standard ONNX pattern by its registered name.");
 }

@@ -275,6 +275,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           nb::arg("name"), nb::rv_policy::reference_internal);
 
   builder_mod.def("registered_pattern_names", &RegisteredPatternNames,
+                  nb::arg("include_opt_in") = true,
                   "Returns registered C++ pattern names in evaluation order.");
   builder_mod.def(
       "apply_rewritings",

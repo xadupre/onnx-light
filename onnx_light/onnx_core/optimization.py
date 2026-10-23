@@ -18,6 +18,7 @@ from .graph_builder import (
 from .shape_inference import Device
 
 PatternOptimization: TypeAlias = _C.PatternOptimization
+RepeatedLayerPattern: TypeAlias = _patterns.RepeatedLayerPattern
 MatchResult: TypeAlias = _C.MatchResult
 OptimizationReport: TypeAlias = _C.OptimizationReport
 
@@ -150,9 +151,9 @@ ShapeTransposePattern: TypeAlias = _patterns.ShapeTransposePattern
 UnsqueezeShapePattern: TypeAlias = _patterns.UnsqueezeShapePattern
 
 
-def standard_pattern_names() -> list[str]:
-    """Returns the standard ONNX pattern names."""
-    return _patterns.registered_pattern_names()
+def standard_pattern_names(*, include_opt_in: bool = False) -> list[str]:
+    """Returns standard pattern names, excluding opt-in patterns unless requested."""
+    return _patterns.registered_pattern_names(include_opt_in=include_opt_in)
 
 
 def standard_patterns(names: Iterable[str] | None = None) -> list[PatternOptimization]:
@@ -459,6 +460,7 @@ __all__ = [
     "ReduceReshapePattern",
     "ReduceSumNormalizePattern",
     "ReluClipFusionPattern",
+    "RepeatedLayerPattern",
     "Reshape2Of3Pattern",
     "ReshapeMatMulReshapePattern",
     "ReshapePattern",

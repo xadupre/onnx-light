@@ -215,6 +215,9 @@ public:
    * @param value_store Static preparation owner inherited explicitly from
    *                    the parent session or active context. Omitting it creates
    *                    an independent store; it is not adopted on the first run.
+   * @param immutable_inputs Immutable names in the subgraph's scope. Callers remove
+   *                         shadowed outer names before passing captured constants;
+   *                         Layer maps its immutable arguments directly to formal names.
    */
   SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
                   std::shared_ptr<ValueStore> value_store = nullptr,

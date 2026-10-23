@@ -80,7 +80,9 @@ See :mod:`onnx_light.onnx_core.optimization` for the selector and migration deta
 
 In C++, ``GraphGraph(builder)`` likewise selects only device-independent
 registered patterns. ``CreateRegisteredPatterns(device)`` returns independent
-and matching-device patterns; the no-argument factory returns all patterns.
+and matching-device patterns enabled by default; the no-argument factory returns
+all default-enabled patterns. Explicit-only patterns are available through
+``CreateRegisteredPattern(name)``.
 When using a filtered factory result in C++, call ``optimizer.SetTargetDevice(device)``
 before optimizing to set a common target and check for conflicts in subgraphs.
 
@@ -89,6 +91,172 @@ Patterns can be written in C++ or in Python; both share the
 interface, a ``match`` step that returns a
 :class:`~onnx_light.onnx_core.optimization.MatchResult` and an ``apply``
 step that produces the replacement nodes.
+
+Opt-in repeated layers
+-----------------------
+
+``RepeatedLayer`` discovers repeated connected regions from dataflow, not node
+names or a prescribed transformer architecture. It is **excluded** from both
+the C++ default factory and Python's default/global pattern set. Enable it
+explicitly:
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.optimization import GraphGraph, RepeatedLayerPattern
+
+    GraphGraph(builder, patterns=[RepeatedLayerPattern()]).optimize()
+    model = builder.to_onnx()
+
+In C++, pass ``onnx_patterns::CreatePattern("RepeatedLayer")`` in the explicit
+pattern vector. ``standard_pattern_names(include_opt_in=True)`` lists optional
+patterns without enabling them.
+
+For example, two corresponding regions become two separate bodies, with their
+own parameters passed explicitly::
+
+    Before:  x, w0 → MatMul → Relu → h;  h, w1 → MatMul → Relu → y
+    After:   x, w0 → Layer(body0) → h;   h, w1 → Layer(body1) → y
+
+This is encapsulation, not weight tying: ``w0`` and ``w1`` need not be equal.
+Models must be consumed by a Layer-aware onnx-light runtime, not an unextended
+third-party ONNX runtime.
+
+Layer operator contract
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ai.rt::Layer`` uses custom runtime domain ``ai.rt``, **opset 1**, and exactly
+one required GRAPH attribute, ``body``. Its variadic inputs and outputs bind
+positionally to the body's formal graph inputs and outputs. Outputs must be
+nonempty and unique; omitted positional inputs are not permitted. Body formal
+names may differ from the wrapper names in hand-written models.
+
+The body is a closed lexical scope at its boundary. Every dependency on a
+surrounding graph, including a dependency used only inside a nested graph
+attribute, must be supplied as a wrapper input and a body formal input.
+Nested control-flow graphs may capture values declared within this closed body;
+they may not reach past it. Validation rejects missing dependencies and
+inconsistent boundary arities rather than implicitly capturing an outer value.
+Local functions and operators retain their original domain/overload and use the
+enclosing model's opset imports and function definitions.
+Hand-written bodies may declare initializer defaults for formal inputs, but
+every formal still requires an explicit caller input, which overrides its
+default.
+
+The extractor keeps all surrounding initializers and constant producers outside
+the bodies and passes their values explicitly. Shared large weights are not
+copied into multiple bodies. Initializers already owned by a nested graph stay
+there. Original nodes, attributes, internal port wiring and fan-out are retained.
+Every internal value needed by an outside consumer, nested capture or graph
+output becomes a wrapper output, with the original outer name. Boundary values
+are deduplicated in first-use order (inputs) and topological producer/output-port
+order (outputs); repeated internal uses retain their original ports. Tensor
+descriptors are copied to the body interface.
+
+Shape inference binds actual input descriptors before inferring the body and
+publishes the body results positionally. Native execution dispatches the body
+through the existing nested execution machinery. Extraction uses the existing
+targeted builder mutation path, updating affected shapes and lifetime/memory
+metadata rather than rebuilding the graph for each occurrence.
+Layer memory profiles include live body-internal tensors and nested Layer
+requirements, with boundary inputs and outputs counted only by the enclosing
+graph. Kernel workspace estimates include the body kernels.
+Incremental updates inspect live builder-owned body fields without exporting
+or rebuilding the enclosing graph, including after a nested body mutation.
+Body lifetimes include values captured only by nested graph attributes; rewrite
+batch reordering preserves these activation and workspace estimates.
+
+Matching and cut policy
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Supported primitive anchors are ``MatMul`` and ``Attention`` in the standard
+ONNX domain (``""`` or ``ai.onnx``), ``com.microsoft::GroupQueryAttention`` and
+``ai.rt::PagedAttention``, without an overload. A model-local function is also an
+anchor when bounded recursive inspection of its exact domain/name/overload
+definition reaches one of those identities. A suggestive operator name alone
+does not qualify.
+
+Matching preserves operator domain, type, overload, input/output arity, optional
+port presence, attributes, internal producer/output-port relationships and
+external-value alias classes. Attributes constrain semantics conservatively:
+different explicit attributes are not silently considered equivalent, even if
+one spells a schema default. Element types and ranks must agree when known;
+incompatible known parameter dimensions and final activation dimensions are
+rejected. Leading activation dimensions may vary, permitting different batches
+and sequence lengths. Symbolic dimension names and parameter tensor values need
+not agree. Each body retains its own original nodes and descriptors.
+Nested GRAPH attributes are compared with scope-aware structural signatures,
+ignoring graph, node and value names while retaining formal roles, captures and
+aliasing. Tensor-valued operator attributes constrain their literal contents.
+
+Corresponding regions grow together through predecessor/output and
+successor/input port roles. A seed must grow to at least two nodes and have at
+least two disjoint occurrences. Shared predecessors, ambiguous fan-out and
+overlapping occurrences are not guessed into a match. Side branches may remain
+outside a region provided their dependencies and outputs remain explicit.
+Already extracted ``Layer`` nodes, and graphs nested within their bodies, are
+not candidates.
+Stochastic operators, Dropout and opaque custom computation outside the supported
+attention identities are excluded;
+local-function and nested-graph safety inspection must also succeed. Scheduling
+preserves the relative order of remaining stochastic/opaque calls.
+One-hop neighbor identities and connecting ports distinguish different roles
+of otherwise identical anchors. Seed-family selection and structural
+eligibility are separate from cut cost: a low-edge projection fragment must not
+preempt a repeated region containing its matching attention/MatMul roles.
+Within a family, cuts retain the largest jointly matched anchor-role skeleton
+reached by expansion before comparing edge count and tensor size.
+Equal-coverage families prefer the smaller repetition period rather than
+combining adjacent repeated layers. The cut comparison below chooses boundaries
+within an eligible family. Bounded anchor strides provide a fallback for
+indistinguishable local neighborhoods.
+
+Every accepted growth cut is compared lexicographically by:
+
+1. Total **crossing dataflow edge count**, including repeated uses by different
+   input ports, lexical captures and graph-output uses.
+2. Number of crossing edges with unknown tensor size.
+3. Sum of known crossing tensor sizes in bytes, with saturating arithmetic.
+4. Larger corresponding regions, then original topological node positions.
+
+Thus one fewer edge wins even if it carries a larger tensor. At equal edge
+count, known sizes are preferred to unknown sizes; unknown rank, symbolic
+dimensions, unavailable element types and unsupported storage types do not
+count as zero-byte tensors. Known empty tensors can have zero size.
+Sizes are charged per crossing edge, **not** per distinct wrapper argument.
+Several cut edges using the same value still require just one positional
+wrapper input or output.
+
+The contracted dependency graph includes untouched nodes interleaved with the
+regions and dependencies used only in nested graphs. A deterministic
+topological schedule preserves these nodes and rejects a contraction that would
+introduce a cycle, including paths that leave a region and re-enter it.
+
+This is a bounded, conservative heuristic, **not** a globally optimal cut or a
+guarantee to recover a model author's intended transformer block. Exploration
+limits can leave valid repeated computations unwrapped. It does not search all
+partitions, commute inputs, compare algebraic equivalence or equate different
+local-function definitions.
+
+Per detection scan, the implementation indexes operator signatures and value
+uses once, caches function-anchor classification by exact operator identity, and
+bounds exploration to 32 seed groups and a shared budget of 4096 compatibility
+comparisons and extension attempts, including representative and anchor-bucket
+comparisons. Region search
+uses at most 32 occurrences, 64 nodes per occurrence, 128 ports per operator,
+256 neighboring extension choices and anchor strides up to 8. A replacement
+interval contains at most 4096 original nodes. Recursive scope/function
+inspection is limited to depth 16 and 4096 visited operations; oversized
+attribute signatures are rejected at 64 KiB. These limits deliberately trade
+recall for bounded work on large models.
+Occurrence batches leave at least two remaining matches instead of stranding
+a singleton at the 32-occurrence limit (for example, 33 matches use 31 then 2).
+
+Indexing costs scale with graph nodes, edges and inspected attribute payloads.
+Each bounded extension checks corresponding region topology and metadata; a
+candidate contraction also schedules its bounded interval. The index is local
+to a scan, not a cache of mutable graph state. Further successful optimization
+iterations may perform additional scans, so this is not a claim that the entire
+optimization is a single linear-time pass.
 
 Custom pattern example
 ----------------------

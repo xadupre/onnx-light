@@ -1544,6 +1544,22 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   return result;
 }
 
+bool GraphGraph::IsInsideOperatorBody(const std::string &domain, const std::string &op_type) const {
+  for (const GraphGraph *scope = this; scope->parent_graph_ != nullptr;
+       scope = scope->parent_graph_) {
+    const auto &parent = *scope->parent_graph_;
+    if (scope->parent_position_limit_ >= parent.builder_.Nodes().size())
+      continue;
+    const auto &node = parent.builder_.Nodes()[scope->parent_position_limit_];
+    if (node.domain().value() != domain || node.op_type().value() != op_type)
+      continue;
+    const auto children = parent.builder_.ReferencedSubgraphs(node);
+    if (std::find(children.begin(), children.end(), &scope->builder_) != children.end())
+      return true;
+  }
+  return false;
+}
+
 RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,
@@ -1964,7 +1980,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           builder_.CollectNodeReferences(builder_.nodes_[index], references[index]);
         builder_.compute_.UpdateNodes(builder_.nodes_, old_indices, references, {},
                                       builder_.device_);
-        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes());
+        builder_.compute_.RefreshIncrementalMemory(
+            builder_.nodes_, builder_.Shapes(), builder_.device_,
+            [this](const NodeProto &node) { return builder_.LayerBodyForMemory(node); });
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;
@@ -2486,12 +2504,23 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   for (const auto &addition : added_initializers) {
     affected_values.insert(addition.initializer->name().value());
   }
+  std::unordered_set<std::string> retired_outputs;
+  for (const NodeProto *node : removed)
+    for (const auto &output : node->output())
+      if (!output.empty())
+        retired_outputs.insert(output.value());
+  for (const NodeProto *node : nodes_by_position)
+    if (node != nullptr)
+      for (const auto &output : node->output())
+        retired_outputs.erase(output.value());
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
       rebuilt.push_back(utils::CopyWithSharedTensorStorage(*nodes_by_position[position]));
       NodeProto &node = rebuilt.back();
-      const std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
+      std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
+      if (NodeCarriesSubgraph(node))
+        excluded.insert(retired_outputs.begin(), retired_outputs.end());
       node.ref_attribute() = ImportAttributes(node, excluded);
       old_indices.push_back(nodes.size());
       for (const auto &output : node.output()) {
@@ -2860,7 +2889,9 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
           throw BuilderError("UndoRewritings: incompatible restored function initializer.");
       }
     }
-    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
+    scope.compute_.RestoreTagState(
+        devices.tags, scope.nodes_, node_offset,
+        [&scope](const NodeProto &node) { return scope.LayerBodyForMemory(node); });
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

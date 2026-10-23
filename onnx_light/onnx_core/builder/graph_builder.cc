@@ -585,6 +585,14 @@ void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
     throw BuilderError("GraphBuilder: opset versions must be positive.");
   }
   const std::string key = NormaliseDomain(domain);
+  GraphBuilder *owner = this;
+  while (owner->parent_ != nullptr && !owner->is_local_function_)
+    owner = owner->parent_;
+  if (owner != this && owner->OpsetVersion(key) == kUnknownOpsetVersion) {
+    owner->SetOpsetVersion(key, version);
+    if (OpsetVersion(key) == version)
+      return;
+  }
   const bool changed = OpsetVersion(key) != version;
   if (changed)
     InvalidateRewritings();
@@ -979,7 +987,8 @@ bool GraphBuilder::RefreshDependentNodes(
       }
     }
   }
-  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_);
+  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_,
+                        [this](const NodeProto &node) { return LayerBodyForMemory(node); });
   if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
       !affected_values.empty()) {
     if (is_local_function_) {
@@ -1141,8 +1150,33 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
 }
 
 void GraphBuilder::RefreshAfterMutation() {
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
+  compute_.RefreshIncrementalMemory(
+      nodes_, compute_.Shapes(), device_,
+      [this](const NodeProto &node) { return LayerBodyForMemory(node); });
   RefreshAncestors();
+}
+
+compute::ComputeContext::LayerBodyView
+GraphBuilder::LayerBodyForMemory(const NodeProto &node) const {
+  for (const auto &attribute : node.attribute()) {
+    if (attribute.name() != "body_ref" || !attribute.has_s())
+      continue;
+    const GraphBuilder &body = Subgraph(attribute.s());
+    compute::ComputeContext::LayerBodyView view;
+    view.nodes = &body.nodes_;
+    view.inputs = &body.inputs_;
+    view.outputs = &body.outputs_;
+    for (const auto &initializer : body.initializers_)
+      view.initializer_names.push_back(initializer.name());
+    for (const auto &initializer : body.extended_initializers_)
+      view.initializer_names.push_back(initializer.name());
+    view.nested_body = [&body](const NodeProto &inner) { return body.LayerBodyForMemory(inner); };
+    view.node_inputs = [&body](std::size_t index) -> const std::vector<std::string> & {
+      return body.compute_.NodeReferences(index);
+    };
+    return view;
+  }
+  throw BuilderError("GraphBuilder: missing Layer body reference for memory estimation.");
 }
 
 void GraphBuilder::RebuildMetadata() {
@@ -1950,7 +1984,7 @@ bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
   const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
   const auto &table = core::shapes::DispatchTable();
-  return table.find(key) != table.end() ||
+  return (domain == "ai.rt" && node.op_type() == "Layer") || table.find(key) != table.end() ||
          compute_.Shapes().HasLocalFunction(
              ShapesContext::LocalFunctionKey(domain, node.op_type(), node.overload()));
 }
@@ -2147,7 +2181,9 @@ std::vector<std::string> GraphBuilder::MakeNode(
   if (compute_.Size() != nodes_.size()) {
     throw BuilderError("GraphBuilder: incremental metadata is not aligned with the node list.");
   }
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
+  compute_.RefreshIncrementalMemory(
+      nodes_, compute_.Shapes(), device_,
+      [this](const NodeProto &node) { return LayerBodyForMemory(node); });
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their

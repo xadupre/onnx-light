@@ -152,13 +152,6 @@ RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inhe
   SetDeclaredShapes(graph);
   SetInitializers(graph);
   inherited_immutable_inputs_ = std::move(immutable_inputs);
-  for (const ValueInfoProto &input : graph.input())
-    inherited_immutable_inputs_.erase(input.name());
-  for (const TensorProto &initializer : graph.initializer())
-    inherited_immutable_inputs_.erase(initializer.name());
-  for (const NodeProto &node : graph.node())
-    for (const std::string &output : node.output())
-      inherited_immutable_inputs_.erase(output);
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)

@@ -9,3 +9,9 @@ including :cpp:func:`onnx_light::core::graph::CollectExternalInputs`,
 
 .. doxygenfile:: onnx_core/graph/graph_manipulations.h
    :project: onnx-light
+
+Layer boundary validation
+-------------------------
+
+.. doxygenfile:: onnx_core/graph/layer_validation.h
+   :project: onnx-light

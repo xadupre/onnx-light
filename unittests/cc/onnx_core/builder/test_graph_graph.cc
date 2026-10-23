@@ -5,12 +5,15 @@
 #include "onnx_core/builder/graph_graph.h"
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
 #include <map>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -874,7 +877,7 @@ TEST(GraphGraph, NestedRewriteCapturesOrdinaryImportsWithoutFunctionImportConfli
   EXPECT_EQ(plan.required_opset_imports()[0].domain(), "ai.onnx.ml");
   EXPECT_EQ(plan.required_opset_imports()[0].version(), 1);
   EXPECT_TRUE(plan.added_functions().empty());
-  EXPECT_EQ(builder.OpsetVersion("ai.onnx.ml"), root_ml_version);
+  EXPECT_EQ(builder.OpsetVersion("ai.onnx.ml"), 1);
   EXPECT_EQ(builder.Subgraph("then_branch").OpsetVersion("ai.onnx.ml"), 1);
   EXPECT_EQ(builder.Subgraph("then_branch").Nodes()[0].op_type(), "Scaler");
   const auto optimized = builder.BuildGraph();
@@ -1625,6 +1628,59 @@ TEST(GraphGraph, DisjointRewritesRebaseCoordinatesAfterDependencyOrdering) {
   auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
   EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
   EXPECT_EQ(replayed.Compute().Memory(), builder.Compute().Memory());
+}
+
+TEST(GraphGraph, ReorderedRewriteBatchPreservesLayerBodyMemoryAndWorkspace) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::shapes::RegisterComputeShapeFn(
+      "layer_review", "ExpansionProbe",
+      [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({2, 1024})));
+      });
+  core::shapes::RegisterComputePeakMemoryFn(
+      "layer_review", "ExpansionProbe", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return int64_t{1234};
+      });
+  const std::unordered_map<std::string, int> opsets{{"", 28}, {"ai.rt", 1}, {"layer_review", 1}};
+  core::builder::GraphBuilder body("body", SchemaLookup(), opsets);
+  body.MakeInput("u", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  body.MakeInput("w1", core::symbolic::TensorType::kFloat, MakeShape({3, 1024}));
+  body.MakeInput("w2", core::symbolic::TensorType::kFloat, MakeShape({1024, 3}));
+  body.MakeNode("ExpansionProbe", {"u", "w1"}, {"hidden"}, "layer_review");
+  body.MakeNode("MatMul", {"hidden", "w2"}, {"body_result"});
+  body.MakeOutput("body_result");
+
+  core::builder::GraphBuilder builder("g", SchemaLookup(), opsets);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("W1", core::symbolic::TensorType::kFloat, MakeShape({3, 1024}));
+  builder.MakeInput("W2", core::symbolic::TensorType::kFloat, MakeShape({1024, 3}));
+  builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
+  builder.MakeNode("Abs", {"p"}, {"Y"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &attribute = attributes.add();
+  attribute.set_name("body");
+  attribute.set_type(AttributeProto::GRAPH);
+  *attribute.mutable_g() = body.BuildGraph();
+  builder.MakeNode("Layer", {"X", "W1", "W2"}, {"Z"}, "ai.rt", "", attributes);
+  builder.MakeOutput("Y");
+  builder.set_device(core::symbolic::Device::kCPU);
+  EXPECT_EQ(builder.Compute().PeakMemory().at(2), 1234);
+
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<ReverseReplacementOrder>("Z")});
+  core::builder::ConstantFoldingOptions options;
+  options.enabled = false;
+  ASSERT_FALSE(optimizer.Optimize(1, nullptr, options).rewrites().empty());
+  ASSERT_EQ(builder.Nodes()[0].op_type(), "Layer");
+  const auto &profile = builder.Compute().NodeMemory(0);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                profile.at(core::compute::kNodeMemoryTotalBytesKey))),
+            32816);
+  EXPECT_EQ(builder.Compute().PeakMemory().at(0), 1234);
 }
 
 TEST(GraphGraph, ReplayBatchDoesNotHideAnInvalidIntermediateDependency) {

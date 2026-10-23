@@ -30,17 +30,20 @@ public:
  *
  * Registration order determines the order returned by
  * :cpp:func:`CreateRegisteredPatterns`. Names must be non-empty and unique.
+ * ``enabled_by_default=false`` makes the pattern available only by explicit lookup.
  */
-void RegisterPattern(const std::string &name, PatternFactory factory);
+void RegisterPattern(const std::string &name, PatternFactory factory,
+                     bool enabled_by_default = true);
 
-/// Returns the registered pattern names in registration order.
-std::vector<std::string> RegisteredPatternNames();
+/// Returns names in registration order, optionally excluding explicit-only patterns.
+std::vector<std::string> RegisteredPatternNames(bool include_opt_in = true);
 
 /**
  * Creates registered patterns, optionally filtering by target device.
  *
- * Without a filter, includes every pattern. With a filter, includes device-independent
+ * Includes only patterns enabled by default. With a filter, includes device-independent
  * patterns and those targeting that exact device. kUndefined selects only independent ones.
+ * Opt-in patterns remain available through CreateRegisteredPattern.
  */
 std::vector<std::unique_ptr<PatternOptimization>>
 CreateRegisteredPatterns(std::optional<symbolic::Device> device = std::nullopt);

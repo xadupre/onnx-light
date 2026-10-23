@@ -82,6 +82,16 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestPatternSelection(ExtTestCase):
+    def test_repeated_layer_is_explicit_only(self):
+        optim.reset_registered_patterns()
+        self.assertNotIn("RepeatedLayer", optim.standard_pattern_names())
+        self.assertNotIn("RepeatedLayer", optim.registered_pattern_names())
+        self.assertIn("RepeatedLayer", optim.standard_pattern_names(include_opt_in=True))
+        self.assertNotIn("RepeatedLayer", [pattern.name for pattern in optim.standard_patterns()])
+        self.assertIsInstance(
+            optim.standard_patterns(["RepeatedLayer"])[0], optim.RepeatedLayerPattern
+        )
+
     def setUp(self):
         super().setUp()
         original = optim.registered_patterns()

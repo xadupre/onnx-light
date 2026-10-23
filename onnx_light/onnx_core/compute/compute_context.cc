@@ -234,6 +234,8 @@ EstimateLayerBodyMemory(const NodeProto &node, std::size_t node_index, const Sha
 void AddLayerBodyMemory(NodeMemoryProfile &profile, const LayerBodyMemoryEstimate &estimate,
                         expressions::SimplifiedExpressionCache *cache) {
   const expressions::DimType &additional = estimate.internal_peak;
+  if (expressions::is_zero_dim(additional))
+    return;
   NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = expressions::dim_add(
       NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey), additional, cache);
   NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::dim_add(

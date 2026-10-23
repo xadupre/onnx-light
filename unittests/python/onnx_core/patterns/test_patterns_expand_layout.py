@@ -351,11 +351,15 @@ class TestExpandLayoutPatterns(ExtTestCase):
                 initializers = [_initializer("shape", [3, 1, 1], np.int64)]
                 if case == "dynamic_axes":
                     inputs.append(oh.make_tensor_value_info("axes", TensorProto.INT64, [1]))
-                else:
+                elif case != "old_opset":
                     initializers.append(_initializer("axes", [1], np.int64))
                 nodes = [
                     oh.make_node("Expand", ["X", "shape"], ["expanded"]),
-                    oh.make_node("Unsqueeze", ["expanded", "axes"], ["Y"]),
+                    (
+                        oh.make_node("Unsqueeze", ["expanded"], ["Y"], axes=[1])
+                        if case == "old_opset"
+                        else oh.make_node("Unsqueeze", ["expanded", "axes"], ["Y"])
+                    ),
                 ]
                 outputs = [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)]
                 if case == "shared_expand":

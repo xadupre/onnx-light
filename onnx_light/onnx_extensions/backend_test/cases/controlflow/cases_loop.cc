@@ -965,6 +965,13 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
     n->add_output("opt_seq");
   }
 
+  const auto element_type = TensorTypeSpec(TensorProto::FLOAT, {1});
+  const auto sequence_type = SequenceTypeSpec(element_type);
+  AppendValueInfo(*graph->add_value_info(), "init_elem", element_type);
+  AppendValueInfo(*graph->add_value_info(), "init_seq", sequence_type);
+  AppendValueInfo(*graph->add_value_info(), "opt_seq", OptionalTypeSpec(sequence_type));
+  AppendValueInfo(*graph->add_value_info(), "seq_res", sequence_type);
+
   // Node 4: seq_res = Loop(trip_count, cond, opt_seq)
   {
     NodeProto *n = graph->add_node();

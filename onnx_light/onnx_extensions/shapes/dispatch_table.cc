@@ -990,7 +990,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
        }},
       {"ai.onnx:Unsqueeze",
        [](ShapesContext &ctx, const NodeProto &node) {
-         RequireInputs(node, 2);
+         const int opset = ctx.OpsetVersion(node.domain());
+         RequireInputs(node, opset > 0 && opset < 13 ? 1 : 2);
          tensor::ComputeShapeUnsqueeze(ctx, node);
        }},
       {"ai.onnx:Upsample",

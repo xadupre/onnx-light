@@ -66,22 +66,20 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 namespace optional {
 
 /**
- * Computes the output :cpp:class:`SymTensor` of an ``Optional`` node
+ * Computes the output descriptor of an ``Optional`` node
  * and stores it in ``ctx``.
  *
  * ``Optional`` (since opset 15) wraps a value into an optional-type
  * output. The wrapped element type is determined either by the input
  * value (when an input is provided) or by the ``type`` ``TypeProto``
- * attribute (when no input is provided). Since :cpp:class:`SymTensor`
- * does not model optional or sequence types, this implementation only
- * supports the **tensor-element** path: the output descriptor mirrors
- * the dtype and shape of the wrapped tensor.
+ * attribute (when no input is provided). The output descriptor mirrors
+ * the wrapped tensor or sequence; unknown tensor ranks remain unknown.
  *
  * Supported cases:
  *
  *   - ``node`` has one input: the output dtype and shape are copied
  *     from the input descriptor stored in ``ctx``.
- *   - ``node`` has no input and the ``type`` attribute wraps a tensor
+ *   - ``node`` has no input and the ``type`` attribute wraps a tensor or sequence
  *     type (either directly or as the ``elem_type`` of an
  *     ``optional_type``): the output dtype and shape are taken from
  *     the attribute.
@@ -95,10 +93,10 @@ namespace optional {
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not
  *         ``"Optional"``, if ``node`` has no output or more than one
- *         input, if the ``type`` attribute wraps a sequence or
- *         non-tensor element type, or if neither an input nor a valid
+ *         input, if the ``type`` attribute wraps an unsupported
+ *         element type, or if neither an input nor a valid
  *         ``type`` attribute is provided.
- * @throws std::out_of_range     if the input name is missing from
+ * @throws std::invalid_argument if the input name is missing from
  *         ``ctx``.
  */
 void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node);
@@ -115,6 +113,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node);
  *
  *   - if the input name is bound to an :cpp:class:`SymSequence` in
  *     ``ctx``, the output is registered as the same sequence;
+ *   - an unknown-rank tensor retains its element type without acquiring a shape;
  *   - otherwise the input must be bound to an :cpp:class:`SymTensor`
  *     and the output is registered as a tensor with the same dtype and
  *     shape.

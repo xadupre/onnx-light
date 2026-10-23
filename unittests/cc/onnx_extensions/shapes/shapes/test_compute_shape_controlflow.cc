@@ -65,6 +65,38 @@ NodeProto MakeIfNode(const std::string &cond, const std::vector<std::string> &ou
   return node;
 }
 
+TypeProto MakeSequenceType(TensorProto::DataType dtype, const std::vector<int64_t> &shape) {
+  TypeProto type;
+  TypeProto::Tensor *tensor =
+      type.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  tensor->set_elem_type(static_cast<int>(dtype));
+  TensorShapeProto *tensor_shape = tensor->add_shape();
+  for (const int64_t dim : shape) {
+    tensor_shape->add_dim()->set_dim_value(dim);
+  }
+  return type;
+}
+
+TypeProto MakeUnknownRankOptionalTensorType() {
+  TypeProto type;
+  type.mutable_optional_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::FLOAT);
+  return type;
+}
+
+GraphProto MakeEmptyOptionalBranch(const std::string &output_name) {
+  GraphProto graph;
+  NodeProto *optional = graph.add_node();
+  optional->set_op_type("Optional");
+  optional->add_output(output_name);
+  AttributeProto *type = optional->add_attribute();
+  type->set_name("type");
+  type->set_type(AttributeProto::TYPE_PROTO);
+  *type->add_tp() = MakeUnknownRankOptionalTensorType();
+  graph.add_output()->set_name(output_name);
+  return graph;
+}
+
 } // namespace
 
 TEST(OnnxOptimShapeIf, IdenticalBranchesSameDtypeAndShape) {
@@ -85,6 +117,87 @@ TEST(OnnxOptimShapeIf, IdenticalBranchesSameDtypeAndShape) {
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapeIf, MergesSequenceOutputs) {
+  const auto then_branch = MakeUnaryBranch("Identity", "a", "then_out");
+  const auto else_branch = MakeUnaryBranch("Identity", "b", "else_out");
+  const auto node = MakeIfNode("cond", {"y"}, then_branch, else_branch);
+  for (const int64_t length : {2, 3}) {
+    SCOPED_TRACE(length);
+    core::shapes::ShapesContext ctx;
+    ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+    ctx.SetSequence("a", core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                     core::symbolic::SymDim(2)));
+    ctx.SetSequence("b", core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                     core::symbolic::SymDim(length)));
+    ASSERT_NO_THROW(ctx.ComputeShapeNode(node));
+    ASSERT_TRUE(ctx.HasSequence("y"));
+    EXPECT_EQ(ctx.GetSequence("y").ElemDtype(), core::symbolic::TensorType::kFloat);
+    EXPECT_EQ(ctx.GetSequence("y").Length().IsInt(), length == 2);
+    if (length == 2) {
+      EXPECT_EQ(ctx.GetSequence("y").Length().AsInt(), 2);
+    }
+    ctx.Erase("y");
+    ctx.SetSequence("b", core::symbolic::SymSequence(core::symbolic::TensorType::kInt64,
+                                                     core::symbolic::SymDim(length)));
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapeIf, PreservesSequenceTypeOnMerge) {
+  const auto then_branch = MakeUnaryBranch("Identity", "a", "then_out");
+  const auto else_branch = MakeUnaryBranch("Identity", "b", "else_out");
+  const auto node = MakeIfNode("cond", {"y"}, then_branch, else_branch);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  TypeProto type;
+  type.mutable_optional_type()->ref_elem_type() = MakeSequenceType(TensorProto::FLOAT, {2, 3});
+  core::shapes::ShapesContext ctx;
+  ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.SetSequenceWithType("a",
+                          core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                      std::vector<core::symbolic::SymShape>{shape}),
+                          type);
+  ctx.SetSequenceWithType("b",
+                          core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                      std::vector<core::symbolic::SymShape>{shape}),
+                          type);
+
+  ctx.ComputeShapeNode(node);
+
+  ASSERT_TRUE(ctx.HasType("y"));
+  EXPECT_EQ(ctx.GetType("y").SerializeAsString(), type.SerializeAsString());
+  ASSERT_TRUE(ctx.GetType("y").has_optional_type());
+  ASSERT_TRUE(ctx.GetSequence("y").HasElemShapes());
+  EXPECT_EQ(ctx.GetSequence("y").ElemShapes(), (std::vector<core::symbolic::SymShape>{shape}));
+}
+
+TEST(OnnxOptimShapeIf, MergesUnknownRankOptionalTensors) {
+  const NodeProto node = MakeIfNode("cond", {"y"}, MakeEmptyOptionalBranch("then_out"),
+                                    MakeEmptyOptionalBranch("else_out"));
+  ModelProto model;
+  ValueInfoProto *condition = model.mutable_graph()->add_input();
+  condition->set_name("cond");
+  condition->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::BOOL);
+  condition->mutable_type()->mutable_tensor_type()->add_shape();
+  *model.mutable_graph()->add_node() = node;
+  model.mutable_graph()->add_output()->set_name("y");
+  core::shapes::ShapesContext ctx;
+
+  ASSERT_NO_THROW(ctx.ComputeShapeModel(model));
+
+  EXPECT_FALSE(ctx.Has("y"));
+  ASSERT_TRUE(ctx.HasType("y"));
+  ASSERT_TRUE(ctx.GetType("y").has_optional_type());
+  const TypeProto &element = ctx.GetType("y").optional_type().elem_type();
+  ASSERT_TRUE(element.has_tensor_type());
+  EXPECT_EQ(element.tensor_type().elem_type(), TensorProto::FLOAT);
+  EXPECT_FALSE(element.tensor_type().has_shape());
+
+  ctx.ApplyInferredShapesToModel(model);
+  const TypeProto &output_type = model.graph().output(0).type();
+  ASSERT_TRUE(output_type.has_optional_type());
+  EXPECT_FALSE(output_type.optional_type().elem_type().tensor_type().has_shape());
 }
 
 TEST(OnnxOptimShapeIf, BranchesAgreeOnConstantTensor) {
@@ -464,6 +577,122 @@ TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
   EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_trip");
   EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
   EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeLoop, MergesCarriedSequenceLength) {
+  for (const bool insert : {false, true}) {
+    SCOPED_TRACE(insert);
+    GraphProto body;
+    for (const char *name : {"iter", "cond_in", "v_in"}) {
+      body.add_input()->set_name(name);
+    }
+    *body.add_node() = MakeBodyNode("Identity", {"cond_in"}, "cond_out");
+    *body.add_node() = insert ? MakeBodyNode("SequenceInsert", {"v_in", "x"}, "v_out")
+                              : MakeBodyNode("Identity", {"v_in"}, "v_out");
+    body.add_output()->set_name("cond_out");
+    body.add_output()->set_name("v_out");
+    const auto node = MakeLoopNode({"", "", "v_init"}, {"v_final"}, body);
+    core::shapes::ShapesContext ctx;
+    const core::symbolic::SymShape shape{core::symbolic::SymDim(2)};
+    ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+    ctx.SetSequence("v_init",
+                    core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                std::vector<core::symbolic::SymShape>{shape}));
+
+    ASSERT_NO_THROW(ctx.ComputeShapeNode(node));
+
+    ASSERT_TRUE(ctx.HasSequence("v_final"));
+    const auto &sequence = ctx.GetSequence("v_final");
+    EXPECT_EQ(sequence.ElemDtype(), core::symbolic::TensorType::kFloat);
+    EXPECT_EQ(sequence.Length().IsInt(), !insert);
+    EXPECT_EQ(sequence.HasElemShapes(), !insert);
+    if (!insert) {
+      EXPECT_EQ(sequence.Length().AsInt(), 1);
+      EXPECT_EQ(sequence.ElemShapes()[0], shape);
+    }
+  }
+}
+
+TEST(OnnxOptimShapeLoop, PreservesSequenceTypeForDownstreamInference) {
+  GraphProto body;
+  for (const char *name : {"iter", "cond_in", "v_in"}) {
+    body.add_input()->set_name(name);
+  }
+  *body.add_node() = MakeBodyNode("Identity", {"cond_in"}, "cond_out");
+  *body.add_node() = MakeBodyNode("Identity", {"v_in"}, "v_out");
+  body.add_output()->set_name("cond_out");
+  body.add_output()->set_name("v_out");
+  const NodeProto loop = MakeLoopNode({"", "", "v_init"}, {"v_final"}, body);
+  TypeProto sequence_type;
+  sequence_type.mutable_optional_type()->ref_elem_type() =
+      MakeSequenceType(TensorProto::FLOAT, {2, 3});
+  core::shapes::ShapesContext ctx;
+  ctx.SetSequenceWithType("v_init",
+                          core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                                      core::symbolic::SymDim("sequence_length")),
+                          sequence_type);
+
+  ctx.ComputeShapeNode(loop);
+
+  ASSERT_TRUE(ctx.HasSequence("v_final"));
+  EXPECT_FALSE(ctx.GetSequence("v_final").HasElemShapes());
+  ASSERT_TRUE(ctx.HasType("v_final"));
+  EXPECT_EQ(ctx.GetType("v_final").SerializeAsString(), sequence_type.SerializeAsString());
+
+  NodeProto get_element;
+  get_element.set_op_type("OptionalGetElement");
+  get_element.add_input("v_final");
+  get_element.add_output("sequence");
+  ctx.ComputeShapeNode(get_element);
+
+  ctx.SetOpsetVersion("", 18);
+  ctx.Set("index", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
+  ctx.ComputeShapeNode(MakeBodyNode("SequenceAt", {"sequence", "index"}, "selected"));
+  NodeProto unsqueeze;
+  unsqueeze.set_op_type("Unsqueeze");
+  unsqueeze.add_input("selected");
+  unsqueeze.add_input("axes");
+  unsqueeze.add_output("expanded");
+  core::symbolic::SymTensor axes(nullptr, core::symbolic::TensorType::kInt64,
+                                 {core::symbolic::SymDim(1)});
+  axes.SetValueAsShape({core::symbolic::SymDim(int64_t{0})});
+  ctx.Set("axes", std::move(axes));
+  ctx.ComputeShapeNode(unsqueeze);
+
+  ASSERT_TRUE(ctx.Has("expanded"));
+  EXPECT_EQ(ctx.Get("expanded").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
+                                      core::symbolic::SymDim(3)}));
+}
+
+TEST(OnnxOptimShapeLoop, CarriesUnknownRankOptionalTensor) {
+  GraphProto body;
+  for (const char *name : {"iter", "cond_in", "v_in"}) {
+    body.add_input()->set_name(name);
+  }
+  *body.add_node() = MakeBodyNode("Identity", {"cond_in"}, "cond_out");
+  *body.add_node() = MakeBodyNode("Identity", {"v_in"}, "v_out");
+  body.add_output()->set_name("cond_out");
+  body.add_output()->set_name("v_out");
+  const NodeProto loop = MakeLoopNode({"", "", "v_init"}, {"v_final"}, body);
+  const TypeProto type = MakeUnknownRankOptionalTensorType();
+  ModelProto model;
+  ValueInfoProto *initial = model.mutable_graph()->add_input();
+  initial->set_name("v_init");
+  *initial->mutable_type() = type;
+  *model.mutable_graph()->add_node() = loop;
+  model.mutable_graph()->add_output()->set_name("v_final");
+  core::shapes::ShapesContext ctx;
+
+  ASSERT_NO_THROW(ctx.ComputeShapeModel(model));
+
+  EXPECT_FALSE(ctx.Has("v_final"));
+  ASSERT_TRUE(ctx.HasType("v_final"));
+  EXPECT_EQ(ctx.GetType("v_final").SerializeAsString(), type.SerializeAsString());
+  EXPECT_FALSE(ctx.GetType("v_final").optional_type().elem_type().tensor_type().has_shape());
+
+  ctx.ApplyInferredShapesToModel(model);
+  EXPECT_EQ(model.graph().output(0).type().SerializeAsString(), type.SerializeAsString());
 }
 
 TEST(OnnxOptimShapeLoop, RetainsBodySubgraphContext) {

@@ -296,7 +296,8 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node);
  * stores it in ``ctx``.
  *
  * ``Unsqueeze`` inserts dimensions of size 1 at the indices given by the
- * required ``axes`` input.
+ * required ``axes`` input. Before opset 13 it accepts exactly one data input
+ * and reads the required ``axes`` attribute instead.
  */
 void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
 

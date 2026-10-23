@@ -257,6 +257,26 @@ void ShapesContext::SetType(const std::string &name, const TypeProto &type) {
   types_[name] = std::move(owned);
 }
 
+void ShapesContext::SetSequenceWithType(const std::string &name, SymSequence &&sequence,
+                                        const TypeProto &type) {
+  const TypeProto *descriptor_type = &type;
+  while (descriptor_type->has_optional_type()) {
+    descriptor_type = &descriptor_type->optional_type().elem_type();
+  }
+  EXT_ENFORCE_INVALID(descriptor_type->has_sequence_type() &&
+                          descriptor_type->sequence_type().elem_type().has_tensor_type(),
+                      "SetSequenceWithType: type for '", name,
+                      "' must describe a sequence of tensors.");
+  EXT_ENFORCE_INVALID(
+      !sequence.HasElemDtype() ||
+          sequence.ElemDtype() ==
+              DataTypeToTensorType(
+                  descriptor_type->sequence_type().elem_type().tensor_type().elem_type()),
+      "SetSequenceWithType: element dtype for '", name, "' does not match the declared type.");
+  SetType(name, type);
+  sequences_[name] = std::move(sequence);
+}
+
 void ShapesContext::SetEncodedValue(const std::string &name, const EncodedValueProto &value) {
   StructTypeCatalogue catalogue;
   if (struct_types_model_) {
@@ -305,8 +325,7 @@ void ShapesContext::CopyValueFrom(const std::string &name, const ShapesContext &
   } else if (source.HasType(source_name)) {
     if (source.HasSequence(source_name)) {
       SymSequence sequence(source.GetSequence(source_name));
-      SetType(name, source.GetType(source_name));
-      sequences_[name] = std::move(sequence);
+      SetSequenceWithType(name, std::move(sequence), source.GetType(source_name));
     } else if (source.Has(source_name)) {
       SymTensor tensor(source.Get(source_name));
       SetType(name, source.GetType(source_name));

@@ -126,6 +126,28 @@ SymTensor MergeBranchOutputs(ShapesContext &ctx, const SymTensor &then_t, const 
   return SymTensor(nullptr, dtype, std::move(merged));
 }
 
+SymSequence MergeSequences(const SymSequence &left, const SymSequence &right,
+                           const std::string &length_name) {
+  EXT_ENFORCE_INVALID(left.ElemDtype() == right.ElemDtype(),
+                      "Control-flow sequences must have matching element types.");
+  if (left == right) {
+    return left;
+  }
+  return SymSequence(left.ElemDtype(),
+                     left.Length() == right.Length() ? left.Length() : SymDim(length_name));
+}
+
+void SetMergedSequence(ShapesContext &ctx, const std::string &name, SymSequence sequence,
+                       const ShapesContext &left_ctx, const std::string &left_name,
+                       const ShapesContext &right_ctx, const std::string &right_name) {
+  if (left_ctx.HasType(left_name) && right_ctx.HasType(right_name) &&
+      core::shapes::SameDeclaredType(left_ctx.GetType(left_name), right_ctx.GetType(right_name))) {
+    ctx.SetSequenceWithType(name, std::move(sequence), left_ctx.GetType(left_name));
+  } else {
+    ctx.SetSequence(name, std::move(sequence));
+  }
+}
+
 } // namespace
 
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
@@ -163,6 +185,28 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
         (then_ctx.HasType(then_name) &&
          core::shapes::HasStructuredType(then_ctx.GetType(then_name)))) {
       ctx.CopyValueFrom(out_name, then_ctx, then_name);
+      continue;
+    }
+    if (then_ctx.HasSequence(then_name) || else_ctx.HasSequence(else_name)) {
+      EXT_ENFORCE_INVALID(then_ctx.HasSequence(then_name) && else_ctx.HasSequence(else_name),
+                          "ComputeShapeIf: both branches must return sequences.");
+      SetMergedSequence(ctx, out_name,
+                        MergeSequences(then_ctx.GetSequence(then_name),
+                                       else_ctx.GetSequence(else_name),
+                                       "If_" + out_name + "_length"),
+                        then_ctx, then_name, else_ctx, else_name);
+      continue;
+    }
+    const bool then_type_only =
+        then_ctx.HasType(then_name) && !then_ctx.Has(then_name) && !then_ctx.HasSequence(then_name);
+    const bool else_type_only =
+        else_ctx.HasType(else_name) && !else_ctx.Has(else_name) && !else_ctx.HasSequence(else_name);
+    if (then_type_only || else_type_only) {
+      EXT_ENFORCE_INVALID(then_type_only && else_type_only &&
+                              core::shapes::SameDeclaredType(then_ctx.GetType(then_name),
+                                                             else_ctx.GetType(else_name)),
+                          "ComputeShapeIf: type-only outputs must have matching types.");
+      ctx.SetType(out_name, then_ctx.GetType(then_name));
       continue;
     }
     const SymTensor &then_t = GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
@@ -241,7 +285,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
                         std::to_string(i), " has an empty name.");
-    EXT_ENFORCE_INVALID(ctx.Has(v_initial_name) || ctx.HasType(v_initial_name),
+    EXT_ENFORCE_INVALID(ctx.Has(v_initial_name) || ctx.HasType(v_initial_name) ||
+                            ctx.HasSequence(v_initial_name),
                         "ComputeShapeLoop: 'v_initial' input '", v_initial_name,
                         "' is missing from the inferred context.");
     local.CopyValueFrom(body.input()[2 + i].name(), ctx, v_initial_name);
@@ -259,9 +304,9 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // Validate that every body output is known in the local context.
   for (int i = 0; i < static_cast<int>(body.output().size()); ++i) {
     const std::string body_out = body.output()[i].name();
-    EXT_ENFORCE_INVALID(local.Has(body_out) || local.HasType(body_out),
-                        "ComputeShapeLoop: body output '", body_out,
-                        "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(
+        local.Has(body_out) || local.HasType(body_out) || local.HasSequence(body_out),
+        "ComputeShapeLoop: body output '", body_out, "' is missing from the inferred context.");
   }
 
   // N loop-carried outputs: dtype is taken from ``v_out`` and validated
@@ -280,6 +325,27 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (ctx.HasEncodedValue(initial_name) ||
         (ctx.HasType(initial_name) && core::shapes::HasStructuredType(ctx.GetType(initial_name)))) {
       ctx.CopyValueFrom(node_out, local, body_name);
+      continue;
+    }
+    if (ctx.HasSequence(initial_name) || local.HasSequence(body_name)) {
+      EXT_ENFORCE_INVALID(ctx.HasSequence(initial_name) && local.HasSequence(body_name),
+                          "ComputeShapeLoop: a carried sequence must remain a sequence.");
+      SetMergedSequence(ctx, node_out,
+                        MergeSequences(ctx.GetSequence(initial_name), local.GetSequence(body_name),
+                                       "Loop_" + node_out + "_length"),
+                        ctx, initial_name, local, body_name);
+      continue;
+    }
+    const bool initial_type_only =
+        ctx.HasType(initial_name) && !ctx.Has(initial_name) && !ctx.HasSequence(initial_name);
+    const bool body_type_only =
+        local.HasType(body_name) && !local.Has(body_name) && !local.HasSequence(body_name);
+    if (initial_type_only || body_type_only) {
+      EXT_ENFORCE_INVALID(
+          initial_type_only && body_type_only &&
+              core::shapes::SameDeclaredType(ctx.GetType(initial_name), local.GetType(body_name)),
+          "ComputeShapeLoop: type-only carried values must keep the same type.");
+      ctx.SetType(node_out, ctx.GetType(initial_name));
       continue;
     }
     const SymTensor &v_initial = ctx.Get(node.input(2 + i));

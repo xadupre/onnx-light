@@ -563,9 +563,10 @@ TEST(SwapExpandUnsqueezePattern, RejectsOpsetBelow13) {
   builder.SetOpsetVersion("", 11);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
-  AddInt64Initializer(builder, "axes", {1});
   builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
-  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"out"});
+  NodeProto unsqueeze = MakeNode("Unsqueeze", {"xe"}, {"out"});
+  AddAttribute<std::vector<int64_t>>(unsqueeze, "axes", {1});
+  builder.MakeNode("Unsqueeze", {"xe"}, {"out"}, "", "", unsqueeze.attribute());
   builder.MakeOutput("out");
 
   core::builder::GraphGraph graph(builder);

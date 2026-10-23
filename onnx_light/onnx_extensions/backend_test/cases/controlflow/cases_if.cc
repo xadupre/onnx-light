@@ -476,6 +476,10 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
       tt->add_shape()->add_dim()->set_dim_value(5);
     }
 
+    const auto sequence_type = SequenceTypeSpec(TensorTypeSpec(TensorProto::FLOAT, {5}));
+    AppendValueInfo(*graph->add_value_info(), "opt_res", OptionalTypeSpec(sequence_type));
+    AppendValueInfo(*graph->add_value_info(), "seq_out", sequence_type);
+
     // If(cond) → opt_res
     {
       NodeProto *n = graph->add_node();

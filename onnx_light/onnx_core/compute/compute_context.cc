@@ -107,8 +107,9 @@ struct LayerBodyMemoryEstimate {
   int64_t workspace_peak = 0;
 };
 
-LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size_t node_index,
-                                                const ShapesContext &ctx, Device device) {
+LayerBodyMemoryEstimate
+EstimateLayerBodyMemory(const NodeProto &node, std::size_t node_index, const ShapesContext &ctx,
+                        Device device, const ComputeContext::LayerBodyLookupFn &layer_body = {}) {
   if (node.domain() != "ai.rt" || node.op_type() != "Layer" ||
       !ctx.HasSubgraphContext(static_cast<int64_t>(node_index), "body"))
     return {};
@@ -118,17 +119,33 @@ LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size
       body = &attribute.g();
       break;
     }
-  if (body == nullptr)
+  ComputeContext::LayerBodyView view;
+  if (body != nullptr) {
+    view.nodes = &body->node();
+    view.inputs = &body->input();
+    view.outputs = &body->output();
+    for (const auto &initializer : body->initializer())
+      view.initializer_names.push_back(initializer.name());
+    for (const auto &initializer : body->sparse_initializer())
+      view.initializer_names.push_back(initializer.values().name());
+    for (const auto &initializer : body->extended_initializer())
+      view.initializer_names.push_back(initializer.name());
+  } else if (layer_body) {
+    view = layer_body(node);
+  }
+  if (view.nodes == nullptr)
     return {};
+  EXT_ENFORCE_INVALID(view.inputs != nullptr && view.outputs != nullptr,
+                      "Layer memory estimation requires body inputs and outputs.");
 
   const ShapesContext &body_shapes =
       ctx.GetSubgraphContext(static_cast<int64_t>(node_index), "body");
-  if (body->node().empty())
+  if (view.nodes->empty())
     return {};
-  std::vector<int64_t> workspace(body->node().size(), 0);
-  std::vector<expressions::DimType> nested_internal(body->node().size(), int64_t{0});
-  for (std::size_t index = 0; index < body->node().size(); ++index) {
-    const NodeProto &inner = body->node()[index];
+  std::vector<int64_t> workspace(view.nodes->size(), 0);
+  std::vector<expressions::DimType> nested_internal(view.nodes->size(), int64_t{0});
+  for (std::size_t index = 0; index < view.nodes->size(); ++index) {
+    const NodeProto &inner = (*view.nodes)[index];
     std::vector<SymShape> input_shapes;
     input_shapes.reserve(inner.input().size());
     for (const std::string &input : inner.input()) {
@@ -140,7 +157,7 @@ LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size
     workspace[index] =
         shapes::ComputePeakMemory(inner.domain(), inner.op_type(), device, input_shapes);
     const LayerBodyMemoryEstimate nested =
-        EstimateLayerBodyMemory(inner, index, body_shapes, device);
+        EstimateLayerBodyMemory(inner, index, body_shapes, device, view.nested_body);
     workspace[index] = std::max(workspace[index], nested.workspace_peak);
     nested_internal[index] = nested.internal_peak;
   }
@@ -154,29 +171,22 @@ LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size
   };
   std::unordered_set<std::string> formal_inputs;
   std::unordered_set<std::string> boundary_outputs;
-  for (const ValueInfoProto &input : body->input())
+  for (const ValueInfoProto &input : *view.inputs)
     formal_inputs.insert(input.name());
-  for (const ValueInfoProto &output : body->output())
+  for (const ValueInfoProto &output : *view.outputs)
     boundary_outputs.insert(output.name());
 
   std::unordered_map<std::string, int64_t> producers;
   std::unordered_map<std::string, int64_t> last_uses;
-  const int64_t past_last_node = static_cast<int64_t>(body->node().size());
+  const int64_t past_last_node = static_cast<int64_t>(view.nodes->size());
   auto add_initializer = [&](const std::string &name) {
     producers[name] = -1;
     last_uses[name] = past_last_node;
   };
-  for (const TensorProto &initializer : body->initializer()) {
-    add_initializer(initializer.name());
-  }
-  for (const SparseTensorProto &initializer : body->sparse_initializer()) {
-    add_initializer(initializer.values().name());
-  }
-  for (const auto &initializer : body->extended_initializer()) {
-    add_initializer(initializer.name());
-  }
-  for (std::size_t index = 0; index < body->node().size(); ++index) {
-    const NodeProto &inner = body->node()[index];
+  for (const std::string &name : view.initializer_names)
+    add_initializer(name);
+  for (std::size_t index = 0; index < view.nodes->size(); ++index) {
+    const NodeProto &inner = (*view.nodes)[index];
     for (const std::string &input : inner.input())
       if (!input.empty())
         last_uses[input] = static_cast<int64_t>(index);
@@ -188,7 +198,7 @@ LayerBodyMemoryEstimate EstimateLayerBodyMemory(const NodeProto &node, std::size
     }
   }
 
-  const std::size_t node_count = body->node().size();
+  const std::size_t node_count = view.nodes->size();
   std::vector<expressions::DimSum> allocations_starting(node_count);
   std::vector<expressions::DimSum> allocations_ending(node_count);
   for (const auto &[name, producer] : producers) {
@@ -555,7 +565,7 @@ void ComputeContext::RefreshValueTags(const utils::RepeatedProtoField<NodeProto>
 
 void ComputeContext::RestoreTagState(const TagState &state,
                                      const utils::RepeatedProtoField<NodeProto> &nodes,
-                                     std::size_t node_offset) {
+                                     std::size_t node_offset, const LayerBodyLookupFn &layer_body) {
   EXT_ENFORCE_INVALID(
       node_offset <= nodes.size() && state.nodes.size() == nodes.size() - node_offset &&
           state.custom_overrides.size() == state.nodes.size() &&
@@ -577,7 +587,7 @@ void ComputeContext::RestoreTagState(const TagState &state,
   }
   // Empty seeds update tag-dependent bookkeeping without re-inferring captured tags.
   PropagateNodeTags(nodes, {}, changed);
-  RefreshIncrementalMemory(nodes, shapes_);
+  RefreshIncrementalMemory(nodes, shapes_, Device::kUndefined, layer_body);
 }
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
@@ -761,18 +771,20 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
 
 void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes,
                                  std::size_t node_index, const ShapesContext &ctx,
-                                 const std::vector<std::string> &references, Device device) {
+                                 const std::vector<std::string> &references, Device device,
+                                 const LayerBodyLookupFn &layer_body) {
   EXT_ENFORCE_INVALID(node_index < nodes.size() && node_index < incr_node_references_.size(),
                       "RefreshNode: node index is out of bounds.");
   const auto &outputs = nodes[node_index].output();
-  RefreshNodes(nodes, {{node_index, references}}, ctx, {outputs.begin(), outputs.end()}, device);
+  RefreshNodes(nodes, {{node_index, references}}, ctx, {outputs.begin(), outputs.end()}, device,
+               layer_body);
 }
 
 void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                                   const std::map<std::size_t, std::vector<std::string>> &references,
                                   const ShapesContext &ctx,
                                   const std::unordered_set<std::string> &changed_values,
-                                  Device device) {
+                                  Device device, const LayerBodyLookupFn &layer_body) {
   std::size_t refresh_from = nodes.size();
   std::unordered_set<std::string> changed_references;
   for (const auto &[index, current] : references) {
@@ -905,7 +917,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     RefreshNodeReuse(nodes, index, ctx);
     AppendNodePeakMemory(nodes[index], index, device);
   }
-  RefreshIncrementalMemory(nodes, ctx, device);
+  RefreshIncrementalMemory(nodes, ctx, device, layer_body);
 }
 
 void ComputeContext::EraseValue(const std::string &name) {
@@ -1135,7 +1147,8 @@ void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodePr
 }
 
 void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                              const ShapesContext &ctx, Device device) {
+                                              const ShapesContext &ctx, Device device,
+                                              const LayerBodyLookupFn &layer_body) {
   if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1)) {
     return;
   }
@@ -1252,21 +1265,24 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
-    const LayerBodyMemoryEstimate body_memory = EstimateLayerBodyMemory(node, index, ctx, device);
+    const LayerBodyMemoryEstimate body_memory =
+        EstimateLayerBodyMemory(node, index, ctx, device, layer_body);
     AddLayerBodyMemory(profile, body_memory, &expression_cache);
-    std::vector<SymShape> input_shapes;
-    input_shapes.reserve(node.input().size());
-    for (const std::string &input : node.input()) {
-      if (!input.empty() && ctx.Has(input))
-        input_shapes.push_back(ctx.Get(input).Shape());
-      else
-        input_shapes.emplace_back();
+    if (node.domain() == "ai.rt" && node.op_type() == "Layer") {
+      std::vector<SymShape> input_shapes;
+      input_shapes.reserve(node.input().size());
+      for (const std::string &input : node.input()) {
+        if (!input.empty() && ctx.Has(input))
+          input_shapes.push_back(ctx.Get(input).Shape());
+        else
+          input_shapes.emplace_back();
+      }
+      if (peak_memory_.size() <= index)
+        peak_memory_.resize(index + 1, 0);
+      peak_memory_[index] =
+          shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+      peak_memory_[index] = std::max(peak_memory_[index], body_memory.workspace_peak);
     }
-    if (peak_memory_.size() <= index)
-      peak_memory_.resize(index + 1, 0);
-    peak_memory_[index] =
-        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-    peak_memory_[index] = std::max(peak_memory_[index], body_memory.workspace_peak);
     memory_[index] = std::move(profile);
 
     if (index < release_after_.size()) {

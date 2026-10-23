@@ -1147,7 +1147,10 @@ public:
                           "Layer: malformed boundary map storage.");
       ValueInfoProto values;
       *values.mutable_type() = type.value_type();
-      check_tensor(map.values, values);
+      // Each map entry is scalar; the 1-D tensor holds all entries.
+      Tensor scalar;
+      scalar.data_type = map.value_type;
+      check_tensor(scalar, values);
     };
     auto check_runtime_value = [&](const auto &self, const RuntimeValue &value,
                                    const TypeProto &type, size_t depth = 0) -> void {

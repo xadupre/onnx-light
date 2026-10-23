@@ -162,6 +162,18 @@ constexpr const char *kNodeMemoryOutputsKey = "outputs";
  */
 class ComputeContext {
 public:
+  /// Borrows the live fields needed to estimate a Layer body's internal memory.
+  struct LayerBodyView {
+    const utils::RepeatedProtoField<NodeProto> *nodes = nullptr;
+    const utils::RepeatedProtoField<ValueInfoProto> *inputs = nullptr;
+    const utils::RepeatedProtoField<ValueInfoProto> *outputs = nullptr;
+    std::vector<std::string> initializer_names;
+    std::function<LayerBodyView(const NodeProto &)> nested_body;
+  };
+
+  /// Resolves a builder-owned Layer body without copying or exporting its graph.
+  using LayerBodyLookupFn = std::function<LayerBodyView(const NodeProto &)>;
+
   /// Callback signature for custom value-tag behavior.
   /// Receives ``(ctx, node, node_index)`` where ``ctx`` can be mutated through
   /// :cpp:func:`TrySetValueTag` / :cpp:func:`SetNodeTag`.
@@ -263,7 +275,7 @@ public:
   /// Restores captured tags and refreshes affected release and memory metadata.
   /// The offset accounts for initializer Constants materialized in exported functions.
   void RestoreTagState(const TagState &state, const utils::RepeatedProtoField<NodeProto> &nodes,
-                       std::size_t node_offset = 0);
+                       std::size_t node_offset = 0, const LayerBodyLookupFn &layer_body = {});
 
   /// Tag inferred for the node at ``node_index``.
   ///
@@ -423,7 +435,7 @@ public:
   /// shapes changed, updating only lifetimes and profiles affected by it.
   void RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                    const ShapesContext &ctx, const std::vector<std::string> &references,
-                   Device device);
+                   Device device, const LayerBodyLookupFn &layer_body = {});
 
   /// Refreshes changed node references and descriptors as one batch. Preserves
   /// unchanged lifetimes, invalidates byte sizes for ``changed_values``, and
@@ -431,7 +443,7 @@ public:
   void RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                     const std::map<std::size_t, std::vector<std::string>> &references,
                     const ShapesContext &ctx, const std::unordered_set<std::string> &changed_values,
-                    Device device);
+                    Device device, const LayerBodyLookupFn &layer_body = {});
 
   /// Reindexes retained annotations after node replacement. An index equal to
   /// the old node count denotes a new node. Refreshes only affected lifetimes,
@@ -447,8 +459,10 @@ public:
 
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
+  /// Uses ``layer_body`` only for Layer bodies stored as graph references.
   void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                const ShapesContext &ctx, Device device = Device::kUndefined);
+                                const ShapesContext &ctx, Device device = Device::kUndefined,
+                                const LayerBodyLookupFn &layer_body = {});
 
   /// Appends the peak-memory estimate for a newly appended node, using the
   /// shapes already inferred into the owned :cpp:class:`ShapesContext`.

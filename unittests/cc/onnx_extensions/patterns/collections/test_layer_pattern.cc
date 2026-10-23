@@ -299,22 +299,25 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
 
 TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
-  constexpr int count = 1800;
+  constexpr int count = 128;
   std::string last;
   for (int index = 1; index <= count; ++index) {
+    // The final compatible pair must remain unvisited after the shared budget is exhausted.
+    const int width = index == count ? count - 1 : index;
     const std::string suffix = std::to_string(index);
     const std::string input = "x" + suffix;
     const std::string weight = "w" + suffix;
     const std::string output = "h" + suffix;
-    builder.MakeInput(input, core::symbolic::TensorType::kFloat, LayerShape({1, index}));
-    AddLayerWeight(builder, weight, index, 0);
+    builder.MakeInput(input, core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+    AddLayerWeight(builder, weight, width, 0);
     builder.MakeNode("MatMul", {input, weight}, {output + "_mm"}, "", output + "_matmul");
     builder.MakeNode("Relu", {output + "_mm"}, {output}, "", output + "_relu");
     last = output;
   }
   builder.MakeOutput(last);
 
-  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  OptimizeLayers(builder);
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 0u);
 }
 
 TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
@@ -329,15 +332,18 @@ TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
   body.MakeOutput("body_result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
 
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-  builder.MakeInput("w1", core::symbolic::TensorType::kFloat, LayerShape({width, expanded_width}));
-  builder.MakeInput("w2", core::symbolic::TensorType::kFloat, LayerShape({expanded_width, width}));
+  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+  builder.MakeInput("caller_w1", core::symbolic::TensorType::kFloat,
+                    LayerShape({width, expanded_width}));
+  builder.MakeInput("caller_w2", core::symbolic::TensorType::kFloat,
+                    LayerShape({expanded_width, width}));
   utils::RepeatedProtoField<AttributeProto> attributes;
   AttributeProto &attribute = attributes.add();
   attribute.set_name("body");
   attribute.set_type(AttributeProto::GRAPH);
   *attribute.mutable_g() = body.BuildGraph();
-  builder.MakeNode("Layer", {"x", "w1", "w2"}, {"result"}, "ai.rt", "large_layer", attributes);
+  builder.MakeNode("Layer", {"caller_x", "caller_w1", "caller_w2"}, {"result"}, "ai.rt",
+                   "large_layer", attributes);
   builder.MakeOutput("result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
 
   const auto &profile = builder.Compute().NodeMemory(0);
@@ -350,6 +356,12 @@ TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
   EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
                 profile.at(core::compute::kNodeMemoryTotalBytesKey))),
             135296);
+
+  ASSERT_EQ(builder.Subgraphs().size(), 1u);
+  builder.Subgraphs().front()->MakeNode("Add", {"hidden", "hidden"}, {"body_extra"});
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey))),
+            139392);
 }
 
 TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGraphOutputs) {

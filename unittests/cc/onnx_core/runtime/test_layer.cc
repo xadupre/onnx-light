@@ -242,6 +242,7 @@ TEST(Layer, RecursiveValidationResolvesExactLocalLayerOverload) {
   attribute->set_name("body");
   attribute->set_type(AttributeProto::GRAPH);
   GraphProto *body = attribute->mutable_g();
+  body->set_name("nested_layer_body");
   body->add_input()->set_name("a");
   body->add_input()->set_name("w");
   body->add_output()->set_name("b");
@@ -254,6 +255,31 @@ TEST(Layer, RecursiveValidationResolvesExactLocalLayerOverload) {
   nested->add_output("b");
 
   EXPECT_NO_THROW(checker::check_model(model));
+  ShapesContext shapes = MakeShapes();
+  shapes.SetLocalFunction(function);
+  shapes.SetCustomShapeInferenceFunction("", "Add", [](ShapesContext &ctx, const NodeProto &node) {
+    ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+  });
+  EXPECT_NO_THROW(shapes.ComputeShapeNode(*call));
+  ASSERT_TRUE(shapes.Has("Y"));
+  EXPECT_EQ(shapes.Get("Y").Shape(), shapes.Get("X").Shape());
+
+  RuntimeContext rt;
+  int calls = 0;
+  RegisterAdd(rt, calls, "");
+  core::runtime::RegisterModelFunctions(model, rt);
+  rt.Set("X", Tensor::FromFloat("X", {2}, {1, 2}));
+  rt.Set("W", Tensor::FromFloat("W", {2}, {10, 20}));
+  core::runtime::ExecutionPlan plan(*graph);
+  RuntimeSession session(plan);
+  EXPECT_NO_THROW(session.Run(rt));
+  ASSERT_TRUE(rt.Has("Y"));
+  EXPECT_EQ(rt.Get("Y").AsFloat()[0], 11);
+  EXPECT_EQ(rt.Get("Y").AsFloat()[1], 22);
+  EXPECT_EQ(calls, 1);
+
+  nested->set_overload("undefined");
+  EXPECT_THROW(checker::check_model(model), checker::ValidationError);
 }
 
 TEST(Layer, InfersActualSymbolicDescriptorsAndIsolatesFormals) {
@@ -394,6 +420,13 @@ TEST(Layer, ForwardsMapsAcrossCollidingBodyNames) {
   GraphProto *body = attribute->mutable_g();
   body->add_input()->set_name("body_map");
   body->add_output()->set_name("body_map");
+  for (ValueInfoProto *formal : {body->mutable_input(0), body->mutable_output(0)}) {
+    auto *map = formal->mutable_type()->mutable_map_type();
+    map->set_key_type(TensorProto::INT64);
+    auto *value = map->mutable_value_type()->mutable_tensor_type();
+    value->set_elem_type(TensorProto::FLOAT);
+    value->mutable_shape();
+  }
 
   RuntimeContext rt;
   rt.PutMap("caller_map", core::runtime::Map("caller_map", Tensor::FromInt64("", {1}, {7}),
@@ -408,6 +441,22 @@ TEST(Layer, ForwardsMapsAcrossCollidingBodyNames) {
   EXPECT_FALSE(rt.GetMap("result_map").values.is_borrowed());
   EXPECT_EQ(rt.GetMap("body_map").keys.AsInt64()[0], 3);
   EXPECT_EQ(rt.GetMap("body_map").values.AsFloat()[0], 5);
+
+  for (bool input : {true, false}) {
+    SCOPED_TRACE(input);
+    NodeProto invalid = node;
+    GraphProto &invalid_body = Body(invalid);
+    ValueInfoProto *formal = input ? invalid_body.mutable_input(0) : invalid_body.mutable_output(0);
+    formal->mutable_type()
+        ->mutable_map_type()
+        ->mutable_value_type()
+        ->mutable_tensor_type()
+        ->set_elem_type(TensorProto::DOUBLE);
+    EXPECT_THROW(core::runtime::RunNode(invalid, rt), std::invalid_argument);
+    EXPECT_EQ(rt.GetMap("body_map").keys.AsInt64()[0], 3);
+    EXPECT_EQ(rt.GetMap("body_map").values.AsFloat()[0], 5);
+    EXPECT_EQ(rt.GetMap("caller_map").values.AsFloat()[0], 13);
+  }
 }
 
 TEST(Layer, RejectsRuntimeValueDescriptorMismatchesAtBothBoundaries) {
@@ -418,9 +467,8 @@ TEST(Layer, RejectsRuntimeValueDescriptorMismatchesAtBothBoundaries) {
   input_context.PutValue("X", core::runtime::RuntimeValue(std::vector<core::runtime::RuntimeValue>{
                                   core::runtime::RuntimeValue(Tensor::FromFloat("", {1}, {1}))}));
   input_context.Set("W", Tensor::FromFloat("W", {1}, {2}));
-  ValueInfoProto *input_type = Body(node).mutable_input(0);
-  auto *sequence = input_type->mutable_type()->mutable_sequence_type();
-  sequence->mutable_elem_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  Body(node).mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::FLOAT);
   EXPECT_THROW(core::runtime::RunNode(node, input_context), std::invalid_argument);
 
   node = MakeLayer();
@@ -439,6 +487,14 @@ TEST(Layer, RejectsRuntimeValueDescriptorMismatchesAtBothBoundaries) {
                                    core::runtime::RuntimeValue(Tensor::FromFloat("", {1}, {1}))}));
   output_context.Set("W", Tensor::FromFloat("W", {1}, {2}));
   EXPECT_THROW(core::runtime::RunNode(node, output_context), std::invalid_argument);
+  *Body(node).mutable_output(0)->mutable_type() = Body(node).input(0).type();
+  EXPECT_NO_THROW(core::runtime::RunNode(node, output_context));
+  const auto &result = output_context.values().at("Y");
+  ASSERT_EQ(result.kind, core::runtime::RuntimeValue::Kind::kSequence);
+  ASSERT_EQ(result.elements.size(), 1u);
+  EXPECT_NE(result.elements[0].tensor.borrowed_owner().use_count(), 0);
+  output_context.Remove("X");
+  EXPECT_EQ(result.elements[0].tensor.AsFloat()[0], 1);
 }
 
 TEST(Layer, PreservesImmutableWeightFormalsForBodyPreparations) {

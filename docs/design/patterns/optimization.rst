@@ -157,6 +157,11 @@ publishes the body results positionally. Native execution dispatches the body
 through the existing nested execution machinery. Extraction uses the existing
 targeted builder mutation path, updating affected shapes and lifetime/memory
 metadata rather than rebuilding the graph for each occurrence.
+Layer memory profiles include live body-internal tensors and nested Layer
+requirements, with boundary inputs and outputs counted only by the enclosing
+graph. Kernel workspace estimates include the body kernels.
+Incremental updates inspect live builder-owned body fields without exporting
+or rebuilding the enclosing graph, including after a nested body mutation.
 
 Matching and cut policy
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -232,7 +237,9 @@ local-function definitions.
 
 Per detection scan, the implementation indexes operator signatures and value
 uses once, caches function-anchor classification by exact operator identity, and
-bounds exploration to 32 seed groups and 4096 extension attempts. Region search
+bounds exploration to 32 seed groups and a shared budget of 4096 compatibility
+comparisons and extension attempts, including representative and anchor-bucket
+comparisons. Region search
 uses at most 32 occurrences, 64 nodes per occurrence, 128 ports per operator,
 256 neighboring extension choices and anchor strides up to 8. A replacement
 interval contains at most 4096 original nodes. Recursive scope/function

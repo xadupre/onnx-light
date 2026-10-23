@@ -831,6 +831,7 @@ private:
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RefreshAfterMutation();
+  compute::ComputeContext::LayerBodyView LayerBodyForMemory(const NodeProto &node) const;
   void RefreshAncestors();
   void RefreshLocalFunctionDefinition(GraphBuilder &function);
   void RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent = true);

@@ -1,5 +1,5 @@
 onnx_light.onnx_core.tensor_statistics
-=====================================
+======================================
 
 .. automodule:: onnx_light.onnx_core.tensor_statistics
     :members:

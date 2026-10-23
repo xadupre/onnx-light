@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
+import io
+import pydoc
+import tempfile
 import unittest
+from pathlib import Path
 
 import ml_dtypes
 import numpy
@@ -19,6 +24,112 @@ compute_tensor_statistics = tensor_statistics.compute_tensor_statistics
 
 
 class TestTensorStatistics(ExtTestCase):
+    def test_rendered_function_reference(self):
+        sphinx = import_or_skip("sphinx.application")
+        reference = (
+            Path(__file__).resolve().parents[3]
+            / "docs/api/python/onnx_core/tensor_statistics.rst"
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "index.rst").write_text(
+                reference.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            warnings = io.StringIO()
+            app = sphinx.Sphinx(
+                srcdir=root,
+                confdir=None,
+                outdir=root / "html",
+                doctreedir=root / "doctrees",
+                buildername="html",
+                confoverrides={"extensions": ["sphinx.ext.autodoc", "sphinx.ext.napoleon"]},
+                status=io.StringIO(),
+                warning=warnings,
+                warningiserror=True,
+            )
+            app.build()
+            self.assertEqual(app.statuscode, 0, warnings.getvalue())
+            html = (root / "html/index.html").read_text(encoding="utf-8")
+            self.assertIn(
+                'id="onnx_light.onnx_core.tensor_statistics.compute_tensor_statistics"', html
+            )
+            for text in (
+                "Computes descriptive statistics and optional summaries in C++.",
+                "Parameters",
+                "Returns",
+                "Raises",
+                "SharedQuantizedValue",
+                "fractional cell overlap",
+                "Empty tensors",
+            ):
+                self.assertIn(text, html)
+
+    def test_function_help_and_signature(self):
+        signature = inspect.signature(compute_tensor_statistics)
+        self.assertEqual(
+            list(signature.parameters),
+            ["value", "bins", "quantiles", "median", "rectangle_shape", "model"],
+        )
+        self.assertEqual(
+            signature.parameters["value"].kind, inspect.Parameter.POSITIONAL_OR_KEYWORD
+        )
+        for name, default in (
+            ("bins", 0),
+            ("quantiles", ()),
+            ("median", False),
+            ("rectangle_shape", ()),
+            ("model", None),
+        ):
+            parameter = signature.parameters[name]
+            self.assertEqual(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
+            self.assertEqual(parameter.default, default)
+        for parameter in signature.parameters.values():
+            self.assertIsNot(parameter.annotation, inspect.Parameter.empty)
+        self.assertIs(signature.return_annotation, TensorStatistics)
+        help_text = pydoc.render_doc(compute_tensor_statistics, renderer=pydoc.plaintext)
+        for text in (
+            "Args:",
+            "Returns:",
+            "Raises:",
+            "Notes:",
+            "SharedQuantizedValue",
+            "TypeError",
+            "ValueError",
+            "fractional cell overlap",
+            "Only finite",
+            "Empty tensors",
+        ):
+            self.assertIn(text, help_text)
+
+    def test_native_call_compatibility(self):
+        values = numpy.arange(24, dtype=numpy.int32).reshape(4, 6)
+        for options in (
+            {},
+            dict(bins=3, quantiles=[0, 0.25, 1], median=True, rectangle_shape=[2, 3]),
+        ):
+            with self.subTest(options=options):
+                expected = runtime.compute_tensor_statistics(values, **options)
+                result = compute_tensor_statistics(value=values, **options)
+                for name in (
+                    "min",
+                    "max",
+                    "mean",
+                    "dtype",
+                    "shape",
+                    "count",
+                    "size_bytes",
+                    "distinct_count",
+                    "distribution",
+                    "bin_edges",
+                    "quantiles",
+                    "median",
+                    "rectangle_map",
+                    "rectangle_shape",
+                ):
+                    self.assertEqual(getattr(result, name), getattr(expected, name))
+        with self.assertRaises(TypeError):
+            compute_tensor_statistics(values, 3)
+
     def test_runtime_value_is_canonical_shared_quantized_value_alias(self):
         self.assertEqual(runtime.RuntimeValue.__name__, "RuntimeValue")
         self.assertIs(runtime.SharedQuantizedValue, runtime.RuntimeValue)

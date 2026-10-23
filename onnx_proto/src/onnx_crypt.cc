@@ -475,6 +475,61 @@ bool parse_external_integer(const std::string &value, int64_t &result) {
   return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
 }
 
+void reject_external_encoded_initializers(const GraphProto &graph);
+
+void reject_external_encoded_initializers(const AttributeProto &attribute) {
+  if (attribute.has_g())
+    reject_external_encoded_initializers(attribute.g());
+  for (const auto &graph : attribute.graphs())
+    reject_external_encoded_initializers(graph);
+}
+
+void reject_external_encoded_initializers(const NodeProto &node) {
+  for (const auto &attribute : node.attribute())
+    reject_external_encoded_initializers(attribute);
+}
+
+void reject_external_encoded_initializers(const FunctionProto &function) {
+  for (const auto &node : function.node())
+    reject_external_encoded_initializers(node);
+  for (const auto &attribute : function.attribute_proto())
+    reject_external_encoded_initializers(attribute);
+}
+
+void reject_external_encoded_initializers(const GraphProto &graph) {
+  for (const auto &initializer : graph.extended_initializer()) {
+    if (initializer.has_encoded_value()) {
+      const EncodedValueProto &value = initializer.encoded_value();
+      if ((value.has_data_location() &&
+           value.data_location() == TensorProto::DataLocation::EXTERNAL) ||
+          !value.external_data().empty())
+        throw std::runtime_error("External encoded initializer payloads are unsupported for "
+                                 "encrypted export: " +
+                                 std::string(value.name()));
+    }
+  }
+  for (const auto &node : graph.node())
+    reject_external_encoded_initializers(node);
+}
+
+void reject_external_encoded_initializers(const ModelProto &model) {
+  if (model.has_graph())
+    reject_external_encoded_initializers(model.graph());
+  for (const auto &function : model.functions())
+    reject_external_encoded_initializers(function);
+  for (const auto &entry : model.rewritings()) {
+    const RewritingProto &rewriting = entry.second;
+    for (const auto &function : rewriting.added_functions())
+      reject_external_encoded_initializers(function);
+    for (const auto &rewrite : rewriting.rewrites()) {
+      for (const auto &node : rewrite.added_nodes())
+        reject_external_encoded_initializers(node);
+      for (const auto &node : rewrite.initializer_calls())
+        reject_external_encoded_initializers(node);
+    }
+  }
+}
+
 } // namespace
 
 void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &file_path,
@@ -482,6 +537,7 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
                                         size_t size_threshold) {
   validate_external_limits(key, max_external_file_size);
   const size_t capacity = max_external_file_size - GCM_HEADER_SIZE;
+  reject_external_encoded_initializers(model);
   ModelProto copy = model;
   IteratorTensorProto check(&copy);
   while (check.next()) {

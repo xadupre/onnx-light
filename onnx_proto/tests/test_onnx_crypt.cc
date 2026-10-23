@@ -506,6 +506,32 @@ TEST_F(EncryptedExternalTest, ValidatesEverySparsePayloadBeforeWriting) {
   }
 }
 
+TEST_F(EncryptedExternalTest, RejectsExternalEncodedInitializersBeforeWriting) {
+  for (bool nested : {false, true}) {
+    ModelProto model = make_test_model();
+    GraphProto *graph = &model.ref_graph();
+    if (nested) {
+      auto *attribute = model.ref_graph().ref_node()[0].add_attribute();
+      attribute->set_name("body");
+      attribute->set_type(AttributeProto::AttributeType::GRAPH);
+      graph = attribute->add_g();
+    }
+    auto *value = graph->add_extended_initializer()->mutable_encoded_value();
+    value->set_name("external_encoded");
+    value->set_data_location(TensorProto::DataLocation::EXTERNAL);
+    auto *location = value->add_external_data();
+    location->set_key("location");
+    location->set_value("weights.data");
+    auto *length = value->add_external_data();
+    length->set_key("length");
+    length->set_value("1");
+
+    EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0),
+                 std::runtime_error);
+    EXPECT_TRUE(std::filesystem::is_empty(directory));
+  }
+}
+
 TEST_F(EncryptedExternalTest, HonorsAlignmentAndCallbacksForEmbeddedAndExternalTensors) {
   ModelProto model = make_test_model();
   TensorProto small = model.graph().initializer()[0];

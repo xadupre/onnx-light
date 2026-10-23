@@ -11,6 +11,25 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+/** Default per-call budget for option-driven numeric output payloads (64 MiB). */
+inline constexpr size_t kTensorStatisticsMaxOutputBytes = 64 * 1024 * 1024;
+
+/**
+ * Validates options before allocating outputs or decoding input.
+ *
+ * Charges bins*sizeof(int64_t) + (bins+1)*sizeof(double) for the histogram (50 bins
+ * when bins=0), rectangle_height*rectangle_width*sizeof(double), one double per
+ * requested quantile, and one double for the median when requested. Charges all
+ * requested outputs even when empty, small or nonfinite inputs would omit them.
+ * Rejects a combined payload exceeding max_output_bytes; callers may explicitly
+ * raise or lower the default 64 MiB budget. This is not a total-memory limit:
+ * input storage, decoding, input-dependent workspaces, vector capacity/metadata
+ * and binding copies are excluded.
+ */
+void ValidateTensorStatisticsOptions(int64_t bins, const std::vector<double> &quantiles,
+                                     bool median, const std::vector<int64_t> &rectangle_shape,
+                                     size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
+
 /** Holds numeric tensor statistics and original storage metadata. */
 struct TensorStatistics {
   int32_t dtype = TensorProto::UNDEFINED;
@@ -53,11 +72,13 @@ struct TensorStatistics {
  * distinct_count=0 for integer/boolean tensors, no histogram or rectangle, one NaN per requested
  * quantile, and NaN median
  * only when requested. Rectangle metadata is empty when no map is produced.
+ * Applies ValidateTensorStatisticsOptions and its output budget before reading input.
  */
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins = 0,
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
-                                         const std::vector<int64_t> &rectangle_shape = {});
+                                         const std::vector<int64_t> &rectangle_shape = {},
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
 
 /**
  * Computes tensor or encoded RuntimeValue statistics, rejecting structures and sequences.
@@ -67,20 +88,24 @@ TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins = 0,
  * count as one distinct value). Their dtype/shape describe the original logical tensor type,
  * since encoded heterogeneous struct storage has no single tensor dtype/shape. size_bytes is the
  * original encoded raw payload size, excluding schemas and separately shared parameters.
+ * Applies the same output budget before dequantizing input.
  */
 TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins = 0,
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
-                                         const std::vector<int64_t> &rectangle_shape = {});
+                                         const std::vector<int64_t> &rectangle_shape = {},
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
 
 /**
  * Computes encoded statistics, resolving named storage types through catalogue.
  * Shared parameter references must first be materialized or use the RuntimeValue overload.
+ * Applies the same output budget before dequantizing input.
  */
 TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t bins = 0,
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
-                                         const StructTypeCatalogue &catalogue = {});
+                                         const StructTypeCatalogue &catalogue = {},
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

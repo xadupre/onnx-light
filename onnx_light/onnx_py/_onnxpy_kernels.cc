@@ -1145,12 +1145,15 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def(
       "compute_tensor_statistics",
       [](nb::handle value, int64_t bins, const std::vector<double> &quantiles, bool median,
-         const std::vector<int64_t> &rectangle_shape, const ModelProto *model) {
+         const std::vector<int64_t> &rectangle_shape, const ModelProto *model,
+         size_t max_output_bytes) {
+        core::runtime::ValidateTensorStatisticsOptions(bins, quantiles, median, rectangle_shape,
+                                                       max_output_bytes);
         if (nb::isinstance<RuntimeValue>(value)) {
           const auto &runtime_value = nb::cast<const RuntimeValue &>(value);
           if (runtime_value.kind == RuntimeValue::Kind::kTensor)
             return core::runtime::ComputeTensorStatistics(runtime_value, bins, quantiles, median,
-                                                          rectangle_shape);
+                                                          rectangle_shape, max_output_bytes);
           EXT_ENFORCE_INVALID(
               runtime_value.kind == RuntimeValue::Kind::kEncoded,
               "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
@@ -1165,8 +1168,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           auto result = WithQuantizedValue(
               value, model,
               [&](const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
-                return core::runtime::ComputeTensorStatistics(encoded, bins, quantiles, median,
-                                                              rectangle_shape, catalogue);
+                return core::runtime::ComputeTensorStatistics(
+                    encoded, bins, quantiles, median, rectangle_shape, catalogue, max_output_bytes);
               });
           result.size_bytes = size_bytes;
           return result;
@@ -1174,17 +1177,20 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         if (nb::isinstance<TensorProto>(value))
           return core::runtime::ComputeTensorStatistics(
               core::runtime::TensorFromProto(nb::cast<const TensorProto &>(value)), bins, quantiles,
-              median, rectangle_shape);
+              median, rectangle_shape, max_output_bytes);
         if (nb::isinstance<Tensor>(value))
           return core::runtime::ComputeTensorStatistics(nb::cast<const Tensor &>(value), bins,
-                                                        quantiles, median, rectangle_shape);
+                                                        quantiles, median, rectangle_shape,
+                                                        max_output_bytes);
         std::vector<nb::object> owners;
         return core::runtime::ComputeTensorStatistics(TensorFromNumpy("", value, owners), bins,
-                                                      quantiles, median, rectangle_shape);
+                                                      quantiles, median, rectangle_shape,
+                                                      max_output_bytes);
       },
       nb::arg("value"), nb::kw_only(), nb::arg("bins") = 0,
       nb::arg("quantiles") = std::vector<double>{}, nb::arg("median") = false,
       nb::arg("rectangle_shape") = std::vector<int64_t>{}, nb::arg("model").none() = nullptr,
+      nb::arg("max_output_bytes") = core::runtime::kTensorStatisticsMaxOutputBytes,
       "Computes tensor statistics in C++; see onnx_light.onnx_core.tensor_statistics.");
 
   nb::enum_<core::runtime::QuantizationMethod>(rt_mod, "QuantizationMethod")

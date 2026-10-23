@@ -366,6 +366,83 @@ TEST(TensorStatistics, EmptyAndInvalidOptions) {
     EXPECT_THROW(ComputeTensorStatistics(empty, 0, {}, false, shape), std::invalid_argument);
 }
 
+TEST(TensorStatistics, OutputAllocationBudgetBoundaries) {
+  const auto tensor = Tensor::FromFloat("X", {10}, std::vector<float>(10, 2));
+  const auto encoded = QuantizeTensor(tensor, MakeQuantizationPlan(QuantizationFormat::kInt8, 10));
+  // Two bins (40 bytes), two rectangle cells (16), one quantile (8), and median (8).
+  for (const auto &value : {RuntimeValue(tensor), encoded}) {
+    const auto stats = ComputeTensorStatistics(value, 2, {0.5}, true, {1, 2}, 72);
+    EXPECT_EQ(stats.distribution.size(), 2u);
+    EXPECT_EQ(stats.bin_edges.size(), 3u);
+    EXPECT_EQ(stats.rectangle_map.size(), 2u);
+    EXPECT_EQ(stats.quantiles.size(), 1u);
+    EXPECT_TRUE(stats.median.has_value());
+    EXPECT_THROW(ComputeTensorStatistics(value, 2, {0.5}, true, {1, 2}, 71), std::invalid_argument);
+  }
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 2, {0.5}, true, {1, 2}, 72));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 2, {0.5}, true, {1, 2}, 71), std::invalid_argument);
+  EXPECT_NO_THROW(ComputeTensorStatistics(encoded.Encoded(), 2, {0.5}, true, {1, 2}, {}, 72));
+  EXPECT_THROW(ComputeTensorStatistics(encoded.Encoded(), 2, {0.5}, true, {1, 2}, {}, 71),
+               std::invalid_argument);
+
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 0, {}, false, {}, 808));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 0, {}, false, {}, 807), std::invalid_argument);
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {}, 0), std::invalid_argument);
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 3, {}, false, {}, 56));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 3, {}, false, {}, 55), std::invalid_argument);
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {2, 2}, 56));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {2, 2}, 55), std::invalid_argument);
+
+  const auto empty = Tensor::FromFloat("X", {0}, {});
+  const int64_t maximum_bins =
+      (kTensorStatisticsMaxOutputBytes - sizeof(double)) / (sizeof(int64_t) + sizeof(double));
+  const int64_t maximum_cells = (kTensorStatisticsMaxOutputBytes - 24) / sizeof(double);
+  EXPECT_NO_THROW(ComputeTensorStatistics(empty, maximum_bins));
+  EXPECT_THROW(ComputeTensorStatistics(empty, maximum_bins + 1), std::invalid_argument);
+  EXPECT_NO_THROW(ComputeTensorStatistics(empty, maximum_bins + 1, {}, false, {},
+                                          kTensorStatisticsMaxOutputBytes + 16));
+  EXPECT_NO_THROW(ComputeTensorStatistics(empty, 1, {}, false, {1, maximum_cells}));
+  EXPECT_THROW(ComputeTensorStatistics(empty, 1, {}, false, {1, maximum_cells + 1}),
+               std::invalid_argument);
+  EXPECT_NO_THROW(ValidateTensorStatisticsOptions(maximum_bins, {}, false, {1, maximum_cells},
+                                                  std::numeric_limits<size_t>::max()));
+  EXPECT_THROW(ValidateTensorStatisticsOptions(std::numeric_limits<int64_t>::max(), {}, false, {},
+                                               std::numeric_limits<size_t>::max()),
+               std::invalid_argument);
+  EXPECT_THROW(ValidateTensorStatisticsOptions(1, {}, false,
+                                               {std::numeric_limits<int64_t>::max(), 2},
+                                               std::numeric_limits<size_t>::max()),
+               std::invalid_argument);
+}
+
+TEST(TensorStatistics, RejectsOutputBudgetBeforeReadingOrDecodingInput) {
+  const auto check = [](const auto &value, int64_t bins, const std::vector<int64_t> &shape) {
+    try {
+      ComputeTensorStatistics(value, bins, {}, false, shape);
+      FAIL() << "Expected allocation budget rejection";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("max_output_bytes"), std::string::npos);
+    }
+  };
+  const auto empty = Tensor::FromFloat("X", {0}, {});
+  Tensor malformed;
+  EncodedValueProto undecodable;
+  RuntimeValue encoded;
+  encoded.kind = RuntimeValue::Kind::kEncoded;
+  // Exceed the output budget without hitting 32-bit vector capacity limits first.
+  constexpr int64_t oversized_count = kTensorStatisticsMaxOutputBytes / sizeof(double) + 1;
+  for (const auto &options :
+       {std::make_pair(oversized_count, std::vector<int64_t>{}),
+        std::make_pair(int64_t{1}, std::vector<int64_t>{1, oversized_count})}) {
+    check(empty, options.first, options.second);
+    check(malformed, options.first, options.second);
+    check(RuntimeValue(empty), options.first, options.second);
+    check(RuntimeValue(malformed), options.first, options.second);
+    check(encoded, options.first, options.second);
+    check(undecodable, options.first, options.second);
+  }
+}
+
 TEST(TensorStatistics, MalformedAndUnsupportedTensors) {
   auto tensor = Tensor::FromFloat("X", {1}, {2});
   tensor.shape = {2};

@@ -16,12 +16,10 @@
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
-namespace {
 
-constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
-
-void ValidateOptions(int64_t bins, const std::vector<double> &quantiles,
-                     const std::vector<int64_t> &rectangle) {
+void ValidateTensorStatisticsOptions(int64_t bins, const std::vector<double> &quantiles,
+                                     bool median, const std::vector<int64_t> &rectangle,
+                                     size_t max_output_bytes) {
   EXT_ENFORCE_INVALID(bins >= 0, "Tensor statistics bins must be non-negative.");
   EXT_ENFORCE_INVALID(static_cast<uint64_t>(bins) < std::vector<double>().max_size() &&
                           static_cast<uint64_t>(bins) <= std::vector<int64_t>().max_size(),
@@ -38,7 +36,25 @@ void ValidateOptions(int64_t bins, const std::vector<double> &quantiles,
                             std::vector<double>().max_size(),
                         "Tensor statistics rectangle allocation overflows.");
   }
+  size_t remaining = max_output_bytes;
+  const auto charge = [&](uint64_t count, size_t item_size, const char *option) {
+    EXT_ENFORCE_INVALID(count <= remaining / item_size, "Tensor statistics ", option,
+                        " exceeds max_output_bytes allocation budget (", max_output_bytes,
+                        " bytes).");
+    remaining -= static_cast<size_t>(count) * item_size;
+  };
+  const uint64_t histogram_bins = bins == 0 ? 50 : static_cast<uint64_t>(bins);
+  charge(histogram_bins, sizeof(int64_t), "bins");
+  charge(histogram_bins + 1, sizeof(double), "bins");
+  if (!rectangle.empty())
+    charge(static_cast<uint64_t>(rectangle[0] * rectangle[1]), sizeof(double), "rectangle_shape");
+  charge(quantiles.size(), sizeof(double), "quantiles");
+  charge(median ? 1 : 0, sizeof(double), "median");
 }
+
+namespace {
+
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
 template <typename T> T Load(const uint8_t *data, int64_t index) {
   T result;
@@ -481,8 +497,9 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
 
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
-                                         const std::vector<int64_t> &rectangle_shape) {
-  ValidateOptions(bins, quantiles, rectangle_shape);
+                                         const std::vector<int64_t> &rectangle_shape,
+                                         size_t max_output_bytes) {
+  ValidateTensorStatisticsOptions(bins, quantiles, median, rectangle_shape, max_output_bytes);
   const auto type = static_cast<TensorProto::DataType>(tensor.data_type);
   const bool report_distinct =
       symbolic::IsIntegerTensorType(symbolic::DataTypeToTensorType(type)) ||
@@ -493,10 +510,12 @@ TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
 
 TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
-                                         const std::vector<int64_t> &rectangle_shape) {
+                                         const std::vector<int64_t> &rectangle_shape,
+                                         size_t max_output_bytes) {
   if (value.kind == RuntimeValue::Kind::kTensor)
-    return ComputeTensorStatistics(value.tensor, bins, quantiles, median, rectangle_shape);
-  ValidateOptions(bins, quantiles, rectangle_shape);
+    return ComputeTensorStatistics(value.tensor, bins, quantiles, median, rectangle_shape,
+                                   max_output_bytes);
+  ValidateTensorStatisticsOptions(bins, quantiles, median, rectangle_shape, max_output_bytes);
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded && value.encoded,
                       "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
   const auto metadata = EncodedMetadata(value.Encoded());
@@ -510,8 +529,9 @@ TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins
 TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape,
-                                         const StructTypeCatalogue &catalogue) {
-  ValidateOptions(bins, quantiles, rectangle_shape);
+                                         const StructTypeCatalogue &catalogue,
+                                         size_t max_output_bytes) {
+  ValidateTensorStatisticsOptions(bins, quantiles, median, rectangle_shape, max_output_bytes);
   const auto metadata = EncodedMetadata(value);
   auto result = ComputeStatistics(DequantizeTensor(value, catalogue), bins, quantiles, median,
                                   rectangle_shape, true);

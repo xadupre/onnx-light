@@ -29,6 +29,7 @@ def compute_tensor_statistics(
     median: bool = False,
     rectangle_shape: Sequence[int] = (),
     model: ModelProto | None = None,
+    max_output_bytes: int = 64 * 1024 * 1024,
 ) -> TensorStatistics:
     """Computes descriptive statistics and optional summaries in C++.
 
@@ -55,6 +56,12 @@ def compute_tensor_statistics(
         model: Optional ``ModelProto``, default None. Resolves the type catalogue
             and shared parameters of encoded values. A shared ``RuntimeValue``
             can also carry its own parameter ownership.
+        max_output_bytes: Per-call allocation budget, default 64 MiB, for the
+            combined option-driven numeric output payloads: ``8*bins + 8*(bins+1)``
+            histogram bytes, ``8*height*width`` rectangle bytes, 8 bytes per
+            quantile, and 8 bytes for the median. ``bins=0`` charges 50 bins
+            (808 bytes), the largest automatic histogram. The budget can be
+            raised or lowered explicitly.
 
     Returns:
         TensorStatistics: Statistics with ``min``, ``max``, ``mean``, ONNX
@@ -82,7 +89,8 @@ def compute_tensor_statistics(
             shared parameters cannot be resolved, ``bins`` is negative or too
             large, a quantile is nonfinite or outside [0, 1], or
             ``rectangle_shape`` is neither empty nor two positive dimensions
-            with a representable output size.
+            with a representable output size, or the combined requested payload
+            exceeds ``max_output_bytes``.
 
     Notes:
         NaNs propagate to the minimum, maximum, mean, and requested quantiles
@@ -92,6 +100,12 @@ def compute_tensor_statistics(
         quantile and the median if requested), no histogram or rectangle map,
         and a zero distinct count when applicable. Options are validated even
         for empty tensors.
+
+        All requested outputs are charged even when no histogram or rectangle
+        would be produced. Oversized options are rejected before output allocation
+        or input conversion/dequantization. This is not a total-memory limit:
+        input storage, decoding, input-dependent workspaces, container
+        capacity/metadata, and Python result copies are excluded.
 
         For unencoded tensors, basic reductions and histograms read the tensor
         directly; only order statistics and rectangle maps materialize a full
@@ -107,6 +121,7 @@ def compute_tensor_statistics(
         median=median,
         rectangle_shape=rectangle_shape,
         model=model,
+        max_output_bytes=max_output_bytes,
     )
 
 

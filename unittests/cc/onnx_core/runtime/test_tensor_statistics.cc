@@ -429,7 +429,7 @@ TEST(TensorStatistics, RectangleCellCountValidation) {
                                                              {2, maximum_dimension},
                                                              {maximum_dimension, maximum_dimension},
                                                              {maximum_dimension, 1}}) {
-    SCOPED_TRACE(shape);
+    SCOPED_TRACE(shape.front());
     EXPECT_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, maximum_budget),
                  std::invalid_argument);
   }
@@ -438,7 +438,7 @@ TEST(TensorStatistics, RectangleCellCountValidation) {
       ValidateTensorStatisticsOptions(1, {}, false, {1, large_cell_count}, maximum_budget));
   const size_t exact_budget = sizeof(int64_t) + 2 * sizeof(double) + 6 * sizeof(double);
   for (const auto &shape : std::vector<std::vector<int64_t>>{{2, 3}, {3, 2}}) {
-    SCOPED_TRACE(shape);
+    SCOPED_TRACE(shape.front());
     EXPECT_NO_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, exact_budget));
     EXPECT_THROW(ValidateTensorStatisticsOptions(1, {}, false, shape, exact_budget - 1),
                  std::invalid_argument);

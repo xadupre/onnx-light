@@ -10,6 +10,7 @@ onnx_light.onnx_core
     optimization
     quantization
     shape_inference
+    tensor_statistics
 
 .. automodule:: onnx_light.onnx_core
     :members:

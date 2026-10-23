@@ -14,6 +14,7 @@
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/random.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/tensor_statistics.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
@@ -1125,6 +1126,67 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.attr("Shape") =
       nb::module_::import_("onnx_light.onnx_py._onnxpycore").attr("shape_inference").attr("Shape");
 
+  nb::class_<core::runtime::TensorStatistics>(rt_mod, "TensorStatistics",
+                                              "Describes a numeric or quantized tensor.")
+      .def_ro("dtype", &core::runtime::TensorStatistics::dtype)
+      .def_ro("shape", &core::runtime::TensorStatistics::shape)
+      .def_ro("size_bytes", &core::runtime::TensorStatistics::size_bytes)
+      .def_ro("count", &core::runtime::TensorStatistics::count)
+      .def_ro("min", &core::runtime::TensorStatistics::min)
+      .def_ro("max", &core::runtime::TensorStatistics::max)
+      .def_ro("mean", &core::runtime::TensorStatistics::mean)
+      .def_ro("distinct_count", &core::runtime::TensorStatistics::distinct_count)
+      .def_ro("distribution", &core::runtime::TensorStatistics::distribution)
+      .def_ro("bin_edges", &core::runtime::TensorStatistics::bin_edges)
+      .def_ro("quantiles", &core::runtime::TensorStatistics::quantiles)
+      .def_ro("median", &core::runtime::TensorStatistics::median)
+      .def_ro("rectangle_map", &core::runtime::TensorStatistics::rectangle_map)
+      .def_ro("rectangle_shape", &core::runtime::TensorStatistics::rectangle_shape);
+  rt_mod.def(
+      "compute_tensor_statistics",
+      [](nb::handle value, int64_t bins, const std::vector<double> &quantiles, bool median,
+         const std::vector<int64_t> &rectangle_shape, const ModelProto *model) {
+        if (nb::isinstance<RuntimeValue>(value)) {
+          const auto &runtime_value = nb::cast<const RuntimeValue &>(value);
+          if (runtime_value.kind == RuntimeValue::Kind::kTensor)
+            return core::runtime::ComputeTensorStatistics(runtime_value, bins, quantiles, median,
+                                                          rectangle_shape);
+          EXT_ENFORCE_INVALID(
+              runtime_value.kind == RuntimeValue::Kind::kEncoded,
+              "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
+          EXT_ENFORCE_INVALID(runtime_value.encoded,
+                              "Encoded RuntimeValue has no encoded payload.");
+        }
+        if (nb::isinstance<EncodedValueProto>(value) || nb::isinstance<RuntimeValue>(value)) {
+          const size_t size_bytes =
+              nb::isinstance<RuntimeValue>(value)
+                  ? nb::cast<const RuntimeValue &>(value).Encoded().raw_data().size()
+                  : nb::cast<const EncodedValueProto &>(value).raw_data().size();
+          auto result = WithQuantizedValue(
+              value, model,
+              [&](const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+                return core::runtime::ComputeTensorStatistics(encoded, bins, quantiles, median,
+                                                              rectangle_shape, catalogue);
+              });
+          result.size_bytes = size_bytes;
+          return result;
+        }
+        if (nb::isinstance<TensorProto>(value))
+          return core::runtime::ComputeTensorStatistics(
+              core::runtime::TensorFromProto(nb::cast<const TensorProto &>(value)), bins, quantiles,
+              median, rectangle_shape);
+        if (nb::isinstance<Tensor>(value))
+          return core::runtime::ComputeTensorStatistics(nb::cast<const Tensor &>(value), bins,
+                                                        quantiles, median, rectangle_shape);
+        std::vector<nb::object> owners;
+        return core::runtime::ComputeTensorStatistics(TensorFromNumpy("", value, owners), bins,
+                                                      quantiles, median, rectangle_shape);
+      },
+      nb::arg("value"), nb::kw_only(), nb::arg("bins") = 0,
+      nb::arg("quantiles") = std::vector<double>{}, nb::arg("median") = false,
+      nb::arg("rectangle_shape") = std::vector<int64_t>{}, nb::arg("model").none() = nullptr,
+      "Computes tensor statistics in C++; see onnx_light.onnx_core.tensor_statistics.");
+
   nb::enum_<core::runtime::QuantizationMethod>(rt_mod, "QuantizationMethod")
       .value("AFFINE", core::runtime::QuantizationMethod::kAffine)
       .value("CODEBOOK", core::runtime::QuantizationMethod::kCodebook)
@@ -1312,7 +1374,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an encoded runtime value into a Tensor.");
-  nb::class_<RuntimeValue>(rt_mod, "SharedQuantizedValue")
+  nb::class_<RuntimeValue>(rt_mod, "RuntimeValue")
+      .def(nb::init<Tensor>())
       .def_prop_ro("encoded",
                    [](const RuntimeValue &value) {
                      EncodedValueProto result;
@@ -1326,6 +1389,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         const auto &raw = value.Encoded().raw_data();
         return nb::bytes(raw.data(), raw.size());
       });
+  rt_mod.attr("SharedQuantizedValue") = rt_mod.attr("RuntimeValue");
   rt_mod.def(
       "materialize_quantized_value",
       [](nb::handle value, const ModelProto *model) {

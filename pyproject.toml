@@ -27,7 +27,7 @@ style = [
 ]
 typing = [
     "mypy==2.4.0",
-    "pyrefly==1.3.2",
+    "pyrefly==1.4.0",
 ]
 dev = [
     "onnx>=1.21.0",

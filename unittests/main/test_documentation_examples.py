@@ -56,11 +56,11 @@ class TestDocumentationExamples(ExtTestCase):
         self.addCleanup(plt.close, namespace["fig"])
         tensors = namespace["tensors"]
         statistics = namespace["statistics"]
-        self.assertEqual(list(statistics), ["float32", "int32", "INT8", "INT4", "NF4"])
+        self.assertEqual(list(statistics), ["float32", "int32", "INT8", "INT4", "INT3", "NF4"])
         for name, stats in statistics.items():
             with self.subTest(name=name):
                 value = tensors[name]
-                if name in ("INT8", "INT4", "NF4"):
+                if name in ("INT8", "INT4", "INT3", "NF4"):
                     expected = onh.to_array(dequantize_tensor_proto(value))
                     self.assertEqual(stats.size_bytes, len(value.raw_data))
                 else:

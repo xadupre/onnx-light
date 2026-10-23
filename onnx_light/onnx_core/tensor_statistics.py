@@ -4,6 +4,7 @@
 """Computes descriptive tensor statistics using the C++ runtime."""
 
 from collections.abc import Sequence
+from typing import TypeAlias
 
 import numpy
 
@@ -11,7 +12,7 @@ from ..onnx import EncodedValueProto, ModelProto, TensorProto
 from ..onnx_py._onnxpybackend import backend_test  # type: ignore[missing-import]
 from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
-TensorStatistics = runtime.TensorStatistics
+TensorStatistics: TypeAlias = runtime.TensorStatistics
 
 
 def compute_tensor_statistics(

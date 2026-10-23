@@ -5,6 +5,10 @@ Layout is native C++ presentation state, not a viewer or a numerical graph
 transformation. It never sorts nodes, renames tensors, changes execution order,
 or modifies operator attributes merely to compute positions.
 
+See :ref:`l-example-plot-graph-layout` for a runnable gallery example that draws
+native node rectangles and port routes, applies local edits, and reloads
+persisted positions.
+
 Loading and editing
 -------------------
 

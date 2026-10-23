@@ -156,6 +156,39 @@ TEST(GraphLayout, StableIdsDoNotDependOnNodeNames) {
   EXPECT_EQ(reloaded.Order(), (std::vector<LayoutNodeId>{ids[1], ids[0]}));
 }
 
+TEST(GraphLayout, ReloadResetsAllocatorWhenNextIdIsMissingOrInvalid) {
+  for (const std::string next : {"", "invalid", "0", "9007199254740992"}) {
+    SCOPED_TRACE(next);
+    GraphProto graph;
+    Meta(graph, GraphLayout::NextIdKey, "100");
+    *graph.add_node() = Node("old");
+    GraphLayout layout(graph, true);
+    ASSERT_EQ(layout.Order()[0], 100u);
+
+    graph = GraphProto();
+    if (!next.empty())
+      Meta(graph, GraphLayout::NextIdKey, next);
+    *graph.add_node() = Node("new");
+    layout.Load();
+
+    EXPECT_EQ(layout.Order(), (std::vector<LayoutNodeId>{1}));
+    EXPECT_EQ(layout.Append(Node("later")), 2u);
+  }
+}
+
+TEST(GraphLayout, EraseRejectsMissingProtoNodeBeforeUpdatingIndexes) {
+  GraphProto graph;
+  *graph.add_node() = Node("a");
+  GraphLayout layout(graph, true);
+  const auto id = layout.Order()[0];
+  graph.clear_node();
+
+  EXPECT_THROW(layout.Erase(id), std::logic_error);
+  EXPECT_EQ(layout.Order(), (std::vector<LayoutNodeId>{id}));
+  layout.Load();
+  EXPECT_FALSE(layout.Erase(id));
+}
+
 TEST(GraphLayout, PartialAndDuplicateIdsAreRepairedWithoutStealingValidIds) {
   GraphProto graph;
   Meta(graph, GraphLayout::VersionKey, "1");

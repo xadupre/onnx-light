@@ -1496,8 +1496,13 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_prop_rw(
           "graph_callback",
           [](ParseOptions &options) -> nb::object {
-            const auto *callback = options.graph_callback.target<PyGraphCallback>();
-            return callback ? callback->fn : nb::none();
+            if (!options.graph_callback)
+              return nb::none();
+            if (const auto *callback = options.graph_callback.target<PyGraphCallback>())
+              return callback->fn;
+            return nb::cpp_function(
+                [callback = options.graph_callback](GraphProto &graph) { callback(graph); },
+                nb::arg("graph"));
           },
           [](ParseOptions &options, nb::object fn) {
             if (fn.is_none())

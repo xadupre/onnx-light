@@ -7672,7 +7672,11 @@ TEST(onnx_proto, ParseOptions_GraphCallback_PropagatesExceptions) {
   ParseOptions options;
   options.graph_callback = [](GraphProto &) { throw std::runtime_error("graph callback"); };
   GraphProto loaded;
-  EXPECT_THROW(loaded.ParseFromString(graph.SerializeAsString(), options), std::runtime_error);
+  const std::string bytes = graph.SerializeAsString();
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(bytes.data()),
+                             static_cast<int64_t>(bytes.size()));
+  EXPECT_THROW(loaded.ParseFromStream(stream, options), std::runtime_error);
+  EXPECT_FALSE(loaded.ParseFromString(bytes, options));
 }
 
 TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {

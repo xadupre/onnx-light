@@ -129,6 +129,33 @@ class TestGraphLayout(unittest.TestCase):
         with self.assertRaises(KeyError):
             placement.get(123456789)
 
+    def test_layout_callback_can_be_retrieved_and_chained(self):
+        visits = []
+        options = onnx.ParseOptions()
+        self.assertIsNone(options.graph_callback)
+
+        def callback(graph):
+            visits.append(graph.name)
+
+        options.graph_callback = callback
+        self.assertIs(options.graph_callback, callback)
+        onnx.enable_graph_layout(options)
+        layout_callback = options.graph_callback
+        self.assertTrue(callable(layout_callback))
+        options.graph_callback = None
+
+        def chained(graph):
+            layout_callback(graph)
+            visits.append("after layout")
+
+        options.graph_callback = chained
+        loaded = onnx.ModelProto()
+        loaded.ParseFromString(self.model().SerializeToString(), options)
+        self.assertEqual(visits, ["layout", "after layout"])
+        self.assertTrue(
+            any(p.key == "onnx_light.layout.version" for p in loaded.graph.metadata_props)
+        )
+
     def test_textproto(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.textproto"
@@ -181,9 +208,7 @@ class TestGraphLayout(unittest.TestCase):
         survivor = placement.order[1]
         second = placement.get(survivor)
         metadata = model.graph.node[0].metadata_props
-        for index in range(len(metadata) - 1, -1, -1):
-            if metadata[index].key == "onnx_light.layout.id":
-                del metadata[index : index + 1]
+        metadata[:] = [entry for entry in metadata if entry.key != "onnx_light.layout.id"]
         restored = onnx.load(model.SerializeToString(), layout=True)
         resumed = onnx.GraphLayout(restored.graph)
         resumed.load()

@@ -468,15 +468,15 @@ struct GraphLayout::Impl {
     for (const auto &output : state.proto->output())
       state.box.outputs.emplace_back(output);
     state.dependencies = state.box.inputs;
+    std::unordered_set<std::string> dependencies(state.dependencies.begin(),
+                                                 state.dependencies.end());
     for (const auto &child : state.children)
       for (const auto &capture : child->impl_->external)
-        if (std::find(state.dependencies.begin(), state.dependencies.end(), capture) ==
-            state.dependencies.end())
+        if (dependencies.insert(capture).second)
           state.dependencies.push_back(capture);
     for (const auto &summary : state.summaries)
       for (const auto &capture : summary.external)
-        if (std::find(state.dependencies.begin(), state.dependencies.end(), capture) ==
-            state.dependencies.end())
+        if (dependencies.insert(capture).second)
           state.dependencies.push_back(capture);
     for (const auto &input : state.dependencies)
       if (!input.empty()) {
@@ -756,6 +756,7 @@ void GraphLayout::Load(bool recurse) {
   impl.external_changes.clear();
   impl.diagnostics.clear();
   impl.stats = {};
+  impl.next_id = 1;
   const auto next = Metadata(impl.graph, NextIdKey);
   if (!next.empty()) {
     LayoutNodeId next_id = 0;
@@ -885,13 +886,17 @@ bool GraphLayout::Erase(LayoutNodeId id) {
   auto &impl = *impl_;
   if (!impl.states.count(id))
     return false;
+  const auto it = std::find(impl.order.begin(), impl.order.end(), id);
+  if (it == impl.order.end() ||
+      static_cast<size_t>(it - impl.order.begin()) >= impl.graph.node().size())
+    throw std::logic_error(
+        "Layout node order is inconsistent; call Load() after direct graph edits.");
+  const auto index = it - impl.order.begin();
   impl.stats = {};
   std::set<LayoutNodeId> affected;
   impl.Unindex(id, affected);
   impl.RemoveOccupied(impl.states.at(id));
   impl.states.erase(id);
-  const auto it = std::find(impl.order.begin(), impl.order.end(), id);
-  const auto index = it - impl.order.begin();
   impl.graph.mutable_node()->erase(impl.graph.mutable_node()->begin() + index);
   impl.order.erase(it);
   impl.Solve(affected);

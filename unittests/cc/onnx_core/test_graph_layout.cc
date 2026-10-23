@@ -343,6 +343,49 @@ TEST(GraphLayout, AppendAndInsertDiscardIncomingNodeLayoutState) {
   }
 }
 
+TEST(GraphLayout, ReplaceDiscardsIncomingMetadataAndKeepsLiveLayoutState) {
+  GraphProto source;
+  *source.add_node() = Node("replacement");
+  Meta(*source.mutable_node(0), "custom", "preserved");
+  GraphLayout original(source, true);
+  const auto incoming = original.Order()[0];
+  ASSERT_TRUE(original.SetSize(incoming, 500, 300));
+  ASSERT_TRUE(original.SetPosition(incoming, 5000, 6000));
+  original.Persist();
+  const auto serialized = source.SerializeAsString();
+
+  auto check = [&](auto &scope) {
+    GraphLayout layout(scope, true);
+    const auto id = layout.Append(Node("existing"));
+    ASSERT_TRUE(layout.SetSize(id, 240, 96));
+    ASSERT_TRUE(layout.SetPosition(id, -500, -100));
+    layout.Persist();
+    const auto before = *layout.Get(id);
+    ASSERT_TRUE(layout.Replace(id, source.node(0)));
+    EXPECT_EQ(MetaValue(scope.node(0), GraphLayout::IdKey), std::to_string(id));
+    EXPECT_EQ(MetaValue(scope.node(0), "custom"), "preserved");
+    for (const auto *key :
+         {GraphLayout::PositionKey, GraphLayout::AutomaticKey, GraphLayout::FixedSizeKey,
+          GraphLayout::RankKey, GraphLayout::SignatureKey})
+      EXPECT_TRUE(MetaValue(scope.node(0), key).empty()) << key;
+    EXPECT_EQ(layout.Get(id)->x, before.x);
+    EXPECT_EQ(layout.Get(id)->y, before.y);
+    EXPECT_EQ(layout.Get(id)->width, before.width);
+    EXPECT_EQ(layout.Get(id)->height, before.height);
+    layout.Persist();
+    layout.Load();
+    EXPECT_EQ(layout.Get(id)->x, before.x);
+    EXPECT_EQ(layout.Get(id)->y, before.y);
+    EXPECT_EQ(layout.Get(id)->width, before.width);
+    EXPECT_EQ(layout.Get(id)->height, before.height);
+    EXPECT_EQ(source.SerializeAsString(), serialized);
+  };
+  GraphProto graph;
+  check(graph);
+  FunctionProto function;
+  check(function);
+}
+
 TEST(GraphLayout, ReloadResetsAllocatorWhenNextIdIsMissingOrInvalid) {
   for (const std::string next : {"", "invalid", "0", "9007199254740993"}) {
     SCOPED_TRACE(next);
@@ -564,6 +607,65 @@ TEST(GraphLayout, NestedScopesCapturesAndTargetedChildPropagation) {
   EXPECT_TRUE(found_new);
 }
 
+TEST(GraphLayout, ReloadedChildRestoresContainerDimensionsAndUpdatesConsumers) {
+  GraphProto graph;
+  auto container = Node("outer", {}, "Container");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("inner");
+  *graph.add_node() = container;
+  *graph.add_node() = Node("consumer", {"outer"});
+  *graph.add_node() = Node("unrelated");
+  GraphLayout layout(graph, true);
+  const auto parent = layout.Order()[0], consumer = layout.Order()[1];
+  const auto unrelated = *layout.Get(layout.Order()[2]);
+  auto *child = layout.Children(parent)[0];
+  const auto inner = child->Order()[0];
+  ASSERT_TRUE(child->SetSize(inner, 500, 100));
+  layout.Persist();
+  const auto saved_parent = *layout.Get(parent);
+  const auto saved_consumer = *layout.Get(consumer);
+  ASSERT_TRUE(child->SetSize(inner, 160, 66));
+  ASSERT_LT(layout.Get(parent)->width, saved_parent.width);
+  child->Load();
+  EXPECT_EQ(child->Get(inner)->width, 500);
+  EXPECT_EQ(layout.Get(parent)->width, saved_parent.width);
+  EXPECT_EQ(layout.Get(parent)->height, saved_parent.height);
+  EXPECT_EQ(layout.Get(consumer)->x, saved_consumer.x);
+  EXPECT_EQ(layout.Get(unrelated.id)->x, unrelated.x);
+  EXPECT_EQ(layout.Get(unrelated.id)->y, unrelated.y);
+  EXPECT_EQ(layout.Stats().nodes, 2u);
+}
+
+TEST(GraphLayout, ReloadedChildRefreshesParentCapturesAfterDirectInputEdits) {
+  GraphProto graph;
+  *graph.add_node() = Node("old_capture");
+  *graph.add_node() = Node("new_capture");
+  auto container = Node("outer", {}, "Container");
+  auto *attribute = container.add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = Node("inner", {"old_capture"});
+  *graph.add_node() = container;
+  *graph.add_node() = Node("consumer", {"outer"});
+  GraphLayout layout(graph, true);
+  const auto old_source = layout.Order()[0], new_source = layout.Order()[1];
+  const auto parent = layout.Order()[2], consumer = layout.Order()[3];
+  auto *child = layout.Children(parent)[0];
+  graph.mutable_node(2)->mutable_attribute(0)->mutable_g()->mutable_node(0)->mutable_input()->Set(
+      0, "new_capture");
+  child->Load();
+  ASSERT_EQ(layout.Edges(parent).size(), 1u);
+  EXPECT_EQ(layout.Edges(parent)[0].value, "new_capture");
+  EXPECT_EQ(layout.Edges(parent)[0].source, new_source);
+  EXPECT_EQ(layout.Stats().nodes, 2u);
+  ASSERT_TRUE(layout.SetSize(old_source, 400, 100));
+  EXPECT_EQ(layout.Stats().nodes, 1u);
+  ASSERT_TRUE(layout.SetSize(new_source, 600, 100));
+  EXPECT_EQ(layout.Stats().nodes, 3u);
+  EXPECT_GE(layout.Get(parent)->x, layout.Get(new_source)->x + 680);
+  EXPECT_GT(layout.Get(consumer)->x, layout.Get(parent)->x);
+}
+
 TEST(GraphLayout, GraphOutputsCaptureOuterValuesAndLocalInputsShadowThem) {
   GraphProto graph;
   auto node = Node("result", {}, "If");
@@ -691,6 +793,44 @@ TEST(GraphLayout, ReloadRestoresFramesButAutomaticPositionsStillReactToEdits) {
   EXPECT_GT(restored.Get(b)->x, restored.Get(late)->x);
   EXPECT_EQ(restored.Get(pinned)->x, -60);
   EXPECT_EQ(restored.Get(pinned)->y, -90);
+}
+
+TEST(GraphLayout, LoadingMissingOrStalePositionsReservesUnrelatedSavedFrames) {
+  for (bool automatic : {false, true}) {
+    for (bool stale : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "automatic=" << automatic << ", stale=" << stale);
+      GraphProto graph;
+      *graph.add_node() = Node("missing");
+      *graph.add_node() = Node("saved");
+      GraphLayout original(graph, true);
+      const auto missing = original.Order()[0], saved = original.Order()[1];
+      ASSERT_TRUE(original.SetPosition(missing, 300, 0));
+      ASSERT_TRUE(original.SetPosition(saved, 0, 0));
+      original.Persist();
+      const auto before = *original.Get(saved);
+      auto &metadata = *graph.mutable_node(0)->mutable_metadata_props();
+      for (auto it = metadata.begin(); it != metadata.end();) {
+        if (!stale && it->key() == GraphLayout::PositionKey) {
+          it = metadata.erase(it);
+        } else {
+          if (stale && it->key() == GraphLayout::SignatureKey)
+            it->set_value("stale");
+          ++it;
+        }
+      }
+      if (automatic)
+        for (auto &entry : *graph.mutable_node(1)->mutable_metadata_props())
+          if (entry.key() == GraphLayout::AutomaticKey)
+            entry.set_value("1");
+      GraphLayout restored(graph, true);
+      EXPECT_EQ(restored.Get(saved)->x, before.x);
+      EXPECT_EQ(restored.Get(saved)->y, before.y);
+      EXPECT_EQ(restored.Get(saved)->width, before.width);
+      EXPECT_EQ(restored.Get(saved)->height, before.height);
+      EXPECT_GE(restored.Get(missing)->y, before.y + before.height + 24);
+      EXPECT_FALSE(restored.SetPosition(missing, before.x, before.y));
+    }
+  }
 }
 
 TEST(GraphLayout, NonrecursiveLoadReusesChildBoundsAndEscapedCaptures) {

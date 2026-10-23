@@ -69,8 +69,12 @@ insertion and deletion affect the requested semantic node-list positions.
 ``append`` and ``insert`` discard incoming node IDs, positions, sizing flags,
 ranks and signatures, assigning fresh layout state in the destination scope.
 They preserve unrelated node metadata and layout metadata inside child graphs.
-Direct modifications to the bound proto bypass the layout indexes; use a new
-layout object and ``load()`` after such modifications. Call ``persist()`` before
+``replace`` also discards incoming node layout metadata while retaining the
+destination node's ID and live positioning/sizing state.
+Direct modifications to the bound proto bypass the layout indexes; call
+``load()`` after such modifications. Reloading an attached child updates its
+owning container and affected consumers if its bounds or captures change.
+Call ``persist()`` before
 saving subsequent edits; after child edits, call it on the root layout so the
 updated container state is saved as well. Saving itself does not optimize or
 normalize layout.
@@ -170,7 +174,9 @@ constraints. Signatures are change detectors, not cryptographic authentication.
 Child scope summaries larger than 1 MiB are ignored when computing signatures,
 matching the summary parser's size limit; their raw bytes are not hashed.
 
-Missing placement state is computed locally. Invalid or duplicate IDs are
+Missing placement state is computed locally, reserving valid saved rectangles
+so missing or stale geometry does not displace unrelated saved nodes.
+Invalid or duplicate IDs are
 reassigned, stale geometry is repaired, and malformed or unsupported-version
 geometry is ignored rather than trusted. ``diagnostics`` reports recoveries;
 loading with layout enabled emits ``RuntimeWarning`` diagnostics. Metadata is

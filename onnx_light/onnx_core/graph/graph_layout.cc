@@ -67,6 +67,19 @@ template <class Proto> void SetMetadata(Proto &proto, const char *key, const std
   }
 }
 
+void ClearNodeLayoutMetadata(NodeProto &node) {
+  auto &metadata = *node.mutable_metadata_props();
+  for (auto it = metadata.begin(); it != metadata.end();) {
+    const auto &key = it->key();
+    if (key == GraphLayout::IdKey || key == GraphLayout::PositionKey ||
+        key == GraphLayout::AutomaticKey || key == GraphLayout::FixedSizeKey ||
+        key == GraphLayout::RankKey || key == GraphLayout::SignatureKey)
+      it = metadata.erase(it);
+    else
+      ++it;
+  }
+}
+
 bool ValidCoordinate(double value) {
   return std::isfinite(value) && std::abs(value) <= CoordinateLimit;
 }
@@ -490,6 +503,7 @@ struct GraphLayout::Impl {
         }
         auto child = std::make_unique<GraphLayout>(child_graph);
         child->impl_->depth = depth + 1;
+        child->Load();
         child->impl_->changed = [this, id]() {
           const auto previous_span = Span();
           external_changes.clear();
@@ -499,7 +513,6 @@ struct GraphLayout::Impl {
           if (Span() != previous_span || !external_changes.empty())
             Notify();
         };
-        child->Load();
         state.children.push_back(std::move(child));
       };
       if (attribute.type() == AttributeProto::GRAPH && attribute.has_g())
@@ -700,8 +713,22 @@ struct GraphLayout::Impl {
       if (sources.empty())
         queue.push_back(id);
     }
+    std::unordered_set<LayoutNodeId> reserved;
+    if (loading) {
+      for (auto id : affected) {
+        const State &state = states.at(id);
+        const auto [required, minimum_x] = RequiredX(state);
+        if (state.pinned && !state.box.folded && (!required || state.box.x >= minimum_x) &&
+            !Collides(state.box)) {
+          IndexOccupied(state);
+          reserved.insert(id);
+        }
+      }
+    }
     auto place = [&](LayoutNodeId id) {
       State &state = states.at(id);
+      if (reserved.erase(id))
+        RemoveOccupied(state);
       ++stats.nodes;
       size_t layer = 0;
       double x = 0;
@@ -736,7 +763,6 @@ struct GraphLayout::Impl {
         state.pinned = false;
         repaired_pin = true;
       }
-      RemoveOccupied(state);
       const bool preserve_y = state.placed && state.box.layer == layer;
       state.box.layer = layer;
       if (state.box.folded) {
@@ -820,6 +846,8 @@ GraphLayout::~GraphLayout() = default;
 
 void GraphLayout::Load(bool recurse) {
   auto &impl = *impl_;
+  const auto previous_span = impl.Span();
+  const auto previous_external = std::move(impl.external);
   impl.recursive = recurse;
   impl.loading = true;
   impl.states.clear();
@@ -882,6 +910,8 @@ void GraphLayout::Load(bool recurse) {
       state.pinned = false;
   }
   impl.loading = false;
+  if (impl.Span() != previous_span || impl.external != previous_external)
+    impl.Notify();
 }
 
 void GraphLayout::Persist(bool recurse) {
@@ -942,15 +972,7 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   nodes.push_back(node);
   for (size_t i = nodes.size() - 1; i > index; --i)
     std::swap(nodes.get(i), nodes.get(i - 1));
-  auto &metadata = *nodes[index].mutable_metadata_props();
-  for (auto it = metadata.begin(); it != metadata.end();) {
-    const auto &key = it->key();
-    if (key == IdKey || key == PositionKey || key == AutomaticKey || key == FixedSizeKey ||
-        key == RankKey || key == SignatureKey)
-      it = metadata.erase(it);
-    else
-      ++it;
-  }
+  ClearNodeLayoutMetadata(nodes[index]);
   auto id = impl.Add(nodes[index]);
   impl.order.insert(impl.order.begin() + static_cast<ptrdiff_t>(index), id);
   impl.Solve({id});
@@ -991,6 +1013,7 @@ bool GraphLayout::Replace(LayoutNodeId id, const NodeProto &node) {
   auto &state = impl.states.at(id);
   state.children.clear();
   *state.proto = node;
+  ClearNodeLayoutMetadata(*state.proto);
   SetMetadata(*state.proto, IdKey, std::to_string(id));
   impl.MakeChildren(id);
   impl.Refresh(id);

@@ -1683,6 +1683,77 @@ TEST(GraphGraph, ReorderedRewriteBatchPreservesLayerBodyMemoryAndWorkspace) {
   EXPECT_EQ(builder.Compute().PeakMemory().at(0), 1234);
 }
 
+TEST(GraphGraph, LayerBodyMemoryIncludesInitializerKindsThroughLastUse) {
+  core::shapes::RegisterComputeShapeFn(
+      "layer_initializer_test", "Probe",
+      [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+      },
+      /*accepts_structured_inputs=*/true);
+  const std::unordered_map<std::string, int> opsets{
+      {"", 28}, {"ai.rt", 1}, {"layer_initializer_test", 1}};
+  for (const std::string kind : {"dense", "sparse", "encoded"}) {
+    SCOPED_TRACE(kind);
+    core::builder::GraphBuilder body("body", SchemaLookup(), opsets);
+    body.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({16}));
+    body.MakeInitializer(MakeInitializer<float>("weight", {8}, std::vector<float>(8, 1.f)));
+    body.MakeNode("Probe", {"x"}, {"hidden"}, "layer_initializer_test");
+    body.MakeNode("Probe", {"hidden"}, {"middle"}, "layer_initializer_test");
+    body.MakeNode("Probe", {"middle", "weight"}, {"body_result"}, "layer_initializer_test");
+    body.MakeOutput("body_result");
+    GraphProto graph = body.BuildGraph();
+    if (kind == "sparse") {
+      graph.ref_initializer().clear();
+      auto *sparse = graph.add_sparse_initializer();
+      *sparse->mutable_values() = MakeInitializer<float>("weight", {2}, {1.f, 1.f});
+      *sparse->mutable_indices() = MakeInitializer<int64_t>("indices", {2}, {0, 7});
+      sparse->add_dims(8);
+    } else if (kind == "encoded") {
+      graph.ref_initializer().clear();
+      auto *encoded = graph.add_extended_initializer()->mutable_encoded_value();
+      encoded->set_name("weight");
+      encoded->mutable_affine()->set_storage_type(TensorProto::INT8);
+      *encoded->mutable_affine()->mutable_scale() = MakeInitializer<float>("", {}, {1.f});
+      auto *logical = encoded->mutable_logical_type()->mutable_tensor_type();
+      logical->set_elem_type(TensorProto::FLOAT);
+      logical->mutable_shape()->add_dim()->set_dim_value(int64_t{8});
+      encoded->set_raw_data(std::string(8, '\x01'));
+      EXPECT_EQ(graph.extended_initializer()[0].name(), encoded->name());
+    }
+
+    core::builder::GraphBuilder builder("g", SchemaLookup(), opsets);
+    builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({16}));
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &attribute = attributes.add();
+    attribute.set_name("body");
+    attribute.set_type(AttributeProto::GRAPH);
+    *attribute.mutable_g() = graph;
+    builder.MakeNode("Layer", {"X"}, {"Y"}, "ai.rt", "", attributes);
+    builder.MakeOutput("Y");
+    auto internal_bytes = [](const core::compute::ComputeContext &context) {
+      return std::get<int64_t>(
+          std::get<core::compute::TaggedMemory>(
+              context.NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
+              .at(""));
+    };
+    // The weight is live before its late use, alongside both 64-byte intermediates.
+    EXPECT_EQ(internal_bytes(builder.Compute()), 160);
+    EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                  builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey))),
+              288);
+    ModelProto model = builder.ToModel();
+    core::compute::ComputeContext context;
+    context.ComputeShapes(model);
+    context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
+    EXPECT_EQ(internal_bytes(context), 160);
+
+    ASSERT_EQ(builder.Subgraphs().size(), 1u);
+    builder.Subgraphs().front()->MakeNode("Probe", {"hidden", "middle", "weight"}, {"extra"},
+                                          "layer_initializer_test");
+    EXPECT_EQ(internal_bytes(builder.Compute()), 224);
+  }
+}
+
 TEST(GraphGraph, ReplayBatchDoesNotHideAnInvalidIntermediateDependency) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
   source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

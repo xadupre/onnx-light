@@ -7,7 +7,7 @@ IDs and ordered input routes. Python geometry, route and statistics queries
 return snapshots; child layouts are live handles that retain the root proto.
 The C++ API instead returns borrowed geometry and route views.
 
-See :doc:`../../../howto/python/incremental_layout` for persistence, mutation
+See :doc:`../../howto/python/incremental_layout` for persistence, mutation
 locality, child-handle invalidation and folded-node rendering rules, and
 :ref:`l-example-plot-graph-layout` for a runnable visualization of graph and
 function positions.

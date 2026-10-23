@@ -105,6 +105,7 @@ long double ReadNumber(const Tensor &tensor, int64_t index) {
 
 template <typename T> int64_t DistinctCountFromRaw(const Tensor &tensor, int64_t count) {
   std::unordered_set<T> distinct;
+  distinct.reserve(static_cast<size_t>(std::min<int64_t>(count, 256)));
   for (int64_t i = 0; i < count; ++i)
     distinct.insert(Load<T>(tensor.bytes(), i));
   return static_cast<int64_t>(distinct.size());
@@ -119,6 +120,7 @@ int64_t DistinctCount(const Tensor &tensor, bool has_nan) {
   if (tensor.data_type == TensorProto::UINT64)
     return DistinctCountFromRaw<uint64_t>(tensor, count);
   std::unordered_set<long double> distinct;
+  distinct.reserve(static_cast<size_t>(std::min<int64_t>(count, 256)));
   for (int64_t i = 0; i < count; ++i) {
     const long double value = ReadNumber(tensor, i);
     if (!std::isnan(value))
@@ -164,6 +166,8 @@ double Mean(const Tensor &tensor, long double scale) {
 }
 
 void Histogram(TensorStatistics &result, const Tensor &tensor, int64_t bins) {
+  result.distribution.clear();
+  result.bin_edges.clear();
   if (result.count < 10)
     return;
   long double low = std::numeric_limits<long double>::infinity(), high = -low;
@@ -376,7 +380,6 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
                                    const std::vector<double> &quantiles, bool median,
                                    const std::vector<int64_t> &rectangle_shape,
                                    bool report_distinct) {
-  ValidateOptions(bins, quantiles, rectangle_shape);
   const auto type = static_cast<DataType>(tensor.data_type);
   EXT_ENFORCE_INVALID(type != DataType::STRING && type != DataType::COMPLEX64 &&
                           type != DataType::COMPLEX128 && type != DataType::UNDEFINED,
@@ -461,6 +464,7 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape) {
+  ValidateOptions(bins, quantiles, rectangle_shape);
   const auto type = static_cast<TensorProto::DataType>(tensor.data_type);
   const bool report_distinct =
       symbolic::IsIntegerTensorType(symbolic::DataTypeToTensorType(type)) ||
@@ -472,9 +476,9 @@ TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
 TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape) {
-  ValidateOptions(bins, quantiles, rectangle_shape);
   if (value.kind == RuntimeValue::Kind::kTensor)
     return ComputeTensorStatistics(value.tensor, bins, quantiles, median, rectangle_shape);
+  ValidateOptions(bins, quantiles, rectangle_shape);
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded && value.encoded,
                       "Tensor statistics requires a tensor or encoded tensor RuntimeValue.");
   const auto metadata = EncodedMetadata(value.Encoded());

@@ -1,8 +1,10 @@
 #include "onnx.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
+#include <chrono>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -40,6 +42,73 @@ ModelProto make_test_model() {
 
   return model;
 }
+
+class EncryptedExternalTest : public ::testing::Test {
+protected:
+  std::filesystem::path directory;
+  std::string path;
+
+  void SetUp() override {
+    directory = std::filesystem::temp_directory_path() /
+                ("onnx_crypt_external_" +
+                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    path = (directory / "model.onnxc").string();
+  }
+
+  void TearDown() override { std::filesystem::remove_all(directory); }
+
+  std::string read(const std::filesystem::path &file) {
+    std::ifstream stream(file, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(stream), {});
+  }
+
+  void write(const std::filesystem::path &file, const std::string &bytes) {
+    std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+    stream.write(bytes.data(), bytes.size());
+    ASSERT_TRUE(stream.good());
+  }
+
+  ModelProto metadata() {
+    ModelProto model;
+    LoadEncryptedModelFromString(model, read(path), "secret");
+    return model;
+  }
+
+  std::string entry(TensorProto &tensor, const std::string &key) {
+    for (const auto &item : tensor.external_data())
+      if (item.key() == key)
+        return std::string(item.value());
+    return "";
+  }
+
+  void set_entry(TensorProto &tensor, const std::string &key, const std::string &value) {
+    for (auto &item : tensor.ref_external_data()) {
+      if (item.key() == key) {
+        item.set_value(value);
+        return;
+      }
+    }
+    auto *item = tensor.add_external_data();
+    item->set_key(key);
+    item->set_value(value);
+  }
+
+  void expect_same(ModelProto &expected, ModelProto &actual) {
+    ModelProto normalized_expected = expected, normalized_actual = actual;
+    for (ModelProto *model : {&normalized_expected, &normalized_actual}) {
+      IteratorTensorProto iterator(model);
+      while (iterator.next()) {
+        if (iterator->data_location() == TensorProto::DataLocation::DEFAULT)
+          iterator->set_data_location(TensorProto::DataLocation::DEFAULT);
+      }
+    }
+    std::string left, right;
+    normalized_expected.SerializeToString(left);
+    normalized_actual.SerializeToString(right);
+    EXPECT_EQ(left, right);
+  }
+};
 
 } // namespace
 
@@ -277,6 +346,187 @@ TEST(onnx_crypt, AES256GCM_RejectsTamperingAndTruncation) {
   const std::string empty_blob = SaveEncryptedModelToString(empty, "secret", "AES-256-GCM");
   EXPECT_EQ(empty_blob.size(), 52u);
   LoadEncryptedModelFromString(loaded, empty_blob, "secret");
+}
+
+TEST_F(EncryptedExternalTest, PacksAndSplitsWithoutChangingInput) {
+  ModelProto model = make_test_model();
+  TensorProto second = model.graph().initializer()[0];
+  second.set_name("W2");
+  *model.ref_graph().add_initializer() = second;
+  second.set_name("W3");
+  *model.ref_graph().add_initializer() = second;
+  std::string before, after;
+  model.SerializeToString(before);
+  SaveEncryptedModelWithExternalData(model, path, "secret", 84, 0);
+  model.SerializeToString(after);
+  EXPECT_EQ(before, after);
+  ModelProto stored = metadata();
+  auto &weights = stored.ref_graph().ref_initializer();
+  EXPECT_EQ(entry(weights[0], "location"), entry(weights[1], "location"));
+  EXPECT_NE(entry(weights[0], "location"), entry(weights[2], "location"));
+  EXPECT_EQ(entry(weights[0], "offset"), "0");
+  EXPECT_EQ(entry(weights[1], "offset"), "16");
+  EXPECT_EQ(entry(weights[2], "offset"), "0");
+  for (const auto &file : std::filesystem::directory_iterator(directory)) {
+    const std::string bytes = read(file.path());
+    EXPECT_EQ(bytes.substr(0, 8), "ONNXCRY3");
+    if (file.path() != std::filesystem::path(path))
+      EXPECT_LE(bytes.size(), 84u);
+  }
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
+  EXPECT_EQ(std::distance(std::filesystem::directory_iterator(directory),
+                          std::filesystem::directory_iterator{}),
+            3);
+}
+
+TEST_F(EncryptedExternalTest, ThresholdAndEmptyModelRemainEmbedded) {
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 53, 17);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
+  EXPECT_FALSE(loaded.graph().initializer()[0].has_external_data());
+  ModelProto empty;
+  SaveEncryptedModelWithExternalData(empty, path, "secret", 53, 0);
+  loaded = ModelProto{};
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(empty, loaded);
+}
+
+TEST_F(EncryptedExternalTest, RejectsOversizedTensorAndInvalidOptionsBeforeWriting) {
+  ModelProto model = make_test_model();
+  for (size_t limit : {size_t{0}, size_t{52}, size_t{67}, std::numeric_limits<size_t>::max()})
+    EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", limit, 0),
+                 std::runtime_error);
+  EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "", 68, 0), std::runtime_error);
+  EXPECT_TRUE(std::filesystem::is_empty(directory));
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(model, loaded);
+}
+
+TEST_F(EncryptedExternalTest, RejectsWrongPasswordMissingTamperedAndTruncatedShards) {
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata(), loaded;
+  const auto shard = directory / entry(stored.ref_graph().ref_initializer()[0], "location");
+  const std::string bytes = read(shard);
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "wrong"), std::runtime_error);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "wrong"),
+               std::runtime_error);
+  for (size_t offset : {size_t{0}, size_t{8}, size_t{24}, size_t{36}, size_t{52}}) {
+    std::string corrupt = bytes;
+    corrupt[offset] ^= 1;
+    write(shard, corrupt);
+    EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  }
+  write(shard, bytes.substr(0, 51));
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  write(shard, std::string(16, 'x'));
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  std::filesystem::remove(shard);
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+}
+
+TEST_F(EncryptedExternalTest, RejectsValidShardSubstitutionAndResourceLimitBypasses) {
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  const auto shard = directory / entry(stored.ref_graph().ref_initializer()[0], "location");
+  SaveEncryptedModelWithExternalData(model, (directory / "other.onnxc").string(), "secret", 68, 0);
+  ModelProto other;
+  LoadEncryptedModelFromString(other, read(directory / "other.onnxc"), "secret");
+  write(shard, read(directory / entry(other.ref_graph().ref_initializer()[0], "location")));
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  stored = metadata();
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", {}, 67),
+               std::runtime_error);
+  ParseOptions opts;
+  opts.max_tensor_size_bytes = 15;
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", opts),
+               std::runtime_error);
+  for (const std::string &offset : {"-1", "1", "9223372036854775808", "0junk"}) {
+    stored = metadata();
+    set_entry(stored.ref_graph().ref_initializer()[0], "offset", offset);
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),
+                 std::runtime_error);
+  }
+}
+
+TEST_F(EncryptedExternalTest, RejectsUnsafePathsAndPlainLoaders) {
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  EXPECT_THROW(LoadExternalDataForModel(stored, directory.string()), std::runtime_error);
+  std::string serialized;
+  stored.SerializeToString(serialized);
+  const auto model_path = directory / "plain.onnx";
+  write(model_path, serialized);
+  const auto location = entry(stored.ref_graph().ref_initializer()[0], "location");
+  utils::TwoFilesStream stream(model_path.string(), (directory / location).string());
+  ParseOptions opts;
+  EXPECT_THROW(model.ParseFromStream(stream, opts), std::runtime_error);
+  for (const std::string &unsafe : {"../escape", "/absolute", "sub/../../escape"}) {
+    stored = metadata();
+    set_entry(stored.ref_graph().ref_initializer()[0], "location", unsafe);
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),
+                 std::runtime_error);
+  }
+#ifndef _WIN32
+  stored = metadata();
+  const auto target = directory / location;
+  std::filesystem::rename(target, directory / "real");
+  std::filesystem::create_symlink(directory / "real", target);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret"),
+               std::runtime_error);
+#endif
+}
+
+TEST_F(EncryptedExternalTest, NestedAttributeTensorsAndNoCopyOwnTheirData) {
+  ModelProto model = make_test_model();
+  auto *attribute = model.ref_graph().ref_node()[0].add_attribute();
+  attribute->set_name("value");
+  attribute->set_type(AttributeProto::AttributeType::TENSOR);
+  *attribute->add_t() = model.graph().initializer()[0];
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ParseOptions opts;
+  opts.no_copy = true;
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", opts);
+  expect_same(model, loaded);
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 17);
+  loaded = ModelProto{};
+  LoadEncryptedModel(loaded, path, "secret", opts);
+  expect_same(model, loaded);
+}
+
+TEST_F(EncryptedExternalTest, PreservesPlainExternalDataAndRequiresLoadedWeightsOnExport) {
+  ModelProto model = make_test_model();
+  const std::string raw(
+      reinterpret_cast<const char *>(model.graph().initializer()[0].raw_data().data()), 16);
+  auto &tensor = model.ref_graph().ref_initializer()[0];
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  tensor.clear_raw_data();
+  set_entry(tensor, "location", "plain.weights");
+  set_entry(tensor, "offset", "0");
+  set_entry(tensor, "length", "16");
+  EXPECT_THROW(SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0),
+               std::runtime_error);
+  write(directory / "plain.weights", raw);
+  LoadEncryptedExternalDataForModel(model, directory.string(), "secret");
+  EXPECT_FALSE(tensor.has_raw_data());
+  LoadExternalDataForModel(model, directory.string());
+  ModelProto expected = make_test_model();
+  expect_same(expected, model);
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  expect_same(expected, loaded);
 }
 
 #else // ONNX_LIGHT_HAS_OPENSSL

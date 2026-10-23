@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -102,30 +103,28 @@ long double ReadNumber(const Tensor &tensor, int64_t index) {
   }
 }
 
-template <typename T> int64_t DistinctCountFromRaw(const Tensor &tensor, size_t count) {
-  std::vector<T> distinct;
-  distinct.reserve(count);
-  for (size_t i = 0; i < count; ++i)
-    distinct.push_back(Load<T>(tensor.bytes(), static_cast<int64_t>(i)));
-  std::sort(distinct.begin(), distinct.end());
-  return static_cast<int64_t>(std::unique(distinct.begin(), distinct.end()) - distinct.begin());
+template <typename T> int64_t DistinctCountFromRaw(const Tensor &tensor, int64_t count) {
+  std::unordered_set<T> distinct;
+  for (int64_t i = 0; i < count; ++i)
+    distinct.insert(Load<T>(tensor.bytes(), i));
+  return static_cast<int64_t>(distinct.size());
 }
 
-int64_t DistinctCount(const Tensor &tensor, const std::vector<long double> &values, bool has_nan) {
+int64_t DistinctCount(const Tensor &tensor, bool has_nan) {
+  const int64_t count = tensor.element_count();
   // Integer keys must not pass through floating-point conversion, including on platforms where
   // long double has only double precision. memcpy also permits unaligned borrowed tensor storage.
   if (tensor.data_type == TensorProto::INT64)
-    return DistinctCountFromRaw<int64_t>(tensor, values.size());
+    return DistinctCountFromRaw<int64_t>(tensor, count);
   if (tensor.data_type == TensorProto::UINT64)
-    return DistinctCountFromRaw<uint64_t>(tensor, values.size());
-  std::vector<long double> sorted;
-  sorted.reserve(values.size());
-  for (long double value : values)
+    return DistinctCountFromRaw<uint64_t>(tensor, count);
+  std::unordered_set<long double> distinct;
+  for (int64_t i = 0; i < count; ++i) {
+    const long double value = ReadNumber(tensor, i);
     if (!std::isnan(value))
-      sorted.push_back(value);
-  std::sort(sorted.begin(), sorted.end());
-  return static_cast<int64_t>(std::unique(sorted.begin(), sorted.end()) - sorted.begin()) +
-         (has_nan ? 1 : 0);
+      distinct.insert(value);
+  }
+  return static_cast<int64_t>(distinct.size()) + (has_nan ? 1 : 0);
 }
 
 double Quantile(const std::vector<long double> &sorted, double q) {
@@ -140,8 +139,8 @@ double Quantile(const std::vector<long double> &sorted, double q) {
   return static_cast<double>((1 - weight) * sorted[lower] + weight * sorted[upper]);
 }
 
-double Mean(const std::vector<long double> &values, long double scale) {
-  const int64_t count = static_cast<int64_t>(values.size());
+double Mean(const Tensor &tensor, long double scale) {
+  const int64_t count = tensor.element_count();
   const int64_t blocks = 1 + (count - 1) / kParallelForGrainSize;
   std::vector<long double> partials(static_cast<size_t>(blocks));
   ParallelFor(blocks, 2, [&](int64_t begin, int64_t end) {
@@ -150,7 +149,7 @@ double Mean(const std::vector<long double> &values, long double scale) {
       const int64_t last = first + std::min(kParallelForGrainSize, count - first);
       long double total = 0;
       for (int64_t i = first; i < last; ++i)
-        total += values[static_cast<size_t>(i)] / scale;
+        total += ReadNumber(tensor, i) / scale;
       partials[static_cast<size_t>(block)] = total;
     }
   });
@@ -161,18 +160,20 @@ double Mean(const std::vector<long double> &values, long double scale) {
     return static_cast<double>(total);
   // Accumulates bounded terms, then clamps rounding excursions before restoring the scale.
   // This does not rely on long double having a larger exponent range than double.
-  return static_cast<double>(std::clamp(total / values.size(), -1.0L, 1.0L) * scale);
+  return static_cast<double>(std::clamp(total / count, -1.0L, 1.0L) * scale);
 }
 
-void Histogram(TensorStatistics &result, const std::vector<long double> &values, int64_t bins) {
+void Histogram(TensorStatistics &result, const Tensor &tensor, int64_t bins) {
   if (result.count < 10)
     return;
   long double low = std::numeric_limits<long double>::infinity(), high = -low;
-  for (long double value : values)
+  for (int64_t i = 0; i < result.count; ++i) {
+    const long double value = ReadNumber(tensor, i);
     if (std::isfinite(value)) {
       low = std::min(low, value);
       high = std::max(high, value);
     }
+  }
   if (low > high)
     return;
   if (bins == 0)
@@ -199,7 +200,7 @@ void Histogram(TensorStatistics &result, const std::vector<long double> &values,
       const int64_t first = block * (result.count / blocks);
       const int64_t last = block == blocks - 1 ? result.count : first + result.count / blocks;
       for (int64_t i = first; i < last; ++i) {
-        const long double value = values[static_cast<size_t>(i)];
+        const long double value = ReadNumber(tensor, i);
         if (!std::isfinite(value))
           continue;
         // Search the exported edges so rounded edges and histogram counts agree exactly.
@@ -219,22 +220,27 @@ void Histogram(TensorStatistics &result, const std::vector<long double> &values,
 struct RectangleAccumulator {
   long double scale = 0;
   long double total = 0;
+  long double correction = 0;
   bool has_nan = false;
   bool positive_infinity = false;
   bool negative_infinity = false;
 };
+
+void AccumulateRectangleTotal(RectangleAccumulator &result, long double term) {
+  // Compensates rounding even when long double has only double precision.
+  const long double adjusted = term - result.correction;
+  const long double sum = result.total + adjusted;
+  result.correction = (sum - result.total) - adjusted;
+  result.total = sum;
+}
 
 void AccumulateRectangleValue(RectangleAccumulator &result, const RectangleAccumulator &value,
                               long double weight) {
   result.has_nan |= value.has_nan;
   result.positive_infinity |= value.positive_infinity;
   result.negative_infinity |= value.negative_infinity;
-  if (value.scale > result.scale) {
-    result.total *= result.scale / value.scale;
-    result.scale = value.scale;
-  }
   if (value.scale > 0)
-    result.total += value.total * (value.scale / result.scale) * weight;
+    AccumulateRectangleTotal(result, value.total * (value.scale / result.scale) * weight);
 }
 
 void AccumulateRectangleValue(RectangleAccumulator &result, long double value, long double weight) {
@@ -244,15 +250,14 @@ void AccumulateRectangleValue(RectangleAccumulator &result, long double value, l
     result.positive_infinity |= value > 0;
     result.negative_infinity |= value < 0;
   } else {
-    const long double scale = std::abs(value);
-    if (scale > result.scale) {
-      result.total *= result.scale / scale;
-      result.scale = scale;
-    }
-    if (scale > 0)
-      result.total += (value / scale) * (scale / result.scale) * weight;
+    if (result.scale > 0)
+      AccumulateRectangleTotal(result, (value / result.scale) * weight);
   }
 }
+
+long double RectangleScale(long double value) { return std::isfinite(value) ? std::abs(value) : 0; }
+
+long double RectangleScale(const RectangleAccumulator &value) { return value.scale; }
 
 double RectangleValue(const RectangleAccumulator &value) {
   if (value.has_nan || (value.positive_infinity && value.negative_infinity))
@@ -271,23 +276,30 @@ std::vector<RectangleAccumulator> ReduceRectangle(const std::vector<T> &values, 
   std::vector<RectangleAccumulator> reduced(static_cast<size_t>(output_rows * output_cols));
   const int64_t input_axis = reduce_rows ? rows : cols;
   const int64_t output_axis = reduce_rows ? output_rows : output_cols;
-  for (int64_t y = 0; y < output_rows; ++y)
-    for (int64_t x = 0; x < output_cols; ++x) {
+  ParallelFor(output_rows * output_cols, [&](int64_t begin, int64_t finish) {
+    for (int64_t index = begin; index < finish; ++index) {
+      const int64_t y = index / output_cols, x = index % output_cols;
       const int64_t output_coordinate = reduce_rows ? y : x;
       const long double start =
           static_cast<long double>(output_coordinate) * input_axis / output_axis;
       const long double end =
           static_cast<long double>(output_coordinate + 1) * input_axis / output_axis;
       const int64_t input_end = std::min(input_axis, static_cast<int64_t>(std::ceil(end)));
+      auto &cell = reduced[static_cast<size_t>(index)];
+      // Fixes each cell's scale before summing: repeated rescaling also accumulates rounding.
+      for (int64_t i = static_cast<int64_t>(start); i < input_end; ++i) {
+        const size_t input_index = static_cast<size_t>(reduce_rows ? i * cols + x : y * cols + i);
+        cell.scale = std::max(cell.scale, RectangleScale(values[input_index]));
+      }
       for (int64_t i = static_cast<int64_t>(start); i < input_end; ++i) {
         const long double weight = (std::min(end, static_cast<long double>(i + 1)) -
                                     std::max(start, static_cast<long double>(i))) /
                                    (end - start);
         const size_t input_index = static_cast<size_t>(reduce_rows ? i * cols + x : y * cols + i);
-        AccumulateRectangleValue(reduced[static_cast<size_t>(y * output_cols + x)],
-                                 values[input_index], weight);
+        AccumulateRectangleValue(cell, values[input_index], weight);
       }
     }
+  });
   return reduced;
 }
 
@@ -377,8 +389,6 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
   const size_t required = PackedByteSize(tensor.data_type, result.count);
   EXT_ENFORCE_INVALID(tensor.size_bytes() >= required && (required == 0 || tensor.bytes()),
                       "Tensor statistics tensor buffer is truncated or null.");
-  EXT_ENFORCE_INVALID(static_cast<uint64_t>(result.count) <= std::vector<long double>().max_size(),
-                      "Tensor statistics numeric allocation overflows.");
   result.quantiles.assign(quantiles.size(), kNaN);
   if (median)
     result.median = kNaN;
@@ -386,7 +396,12 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
     result.distinct_count = 0;
   if (result.count == 0)
     return result;
-  std::vector<long double> values(static_cast<size_t>(result.count));
+  std::vector<long double> values;
+  if (!quantiles.empty() || median || !rectangle_shape.empty()) {
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(result.count) <= values.max_size(),
+                        "Tensor statistics numeric allocation overflows.");
+    values.resize(static_cast<size_t>(result.count));
+  }
   struct Summary {
     long double low = std::numeric_limits<long double>::infinity(), high = -low;
     long double scale = 0;
@@ -401,7 +416,8 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
       const int64_t last = first + std::min(kParallelForGrainSize, result.count - first);
       for (int64_t i = first; i < last; ++i) {
         const long double value = ReadNumber(tensor, i);
-        values[static_cast<size_t>(i)] = value;
+        if (!values.empty())
+          values[static_cast<size_t>(i)] = value;
         summary.has_nan |= std::isnan(value);
         summary.low = std::min(summary.low, value);
         summary.high = std::max(summary.high, value);
@@ -424,11 +440,11 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
   if (!has_nan) {
     result.min = static_cast<double>(low);
     result.max = static_cast<double>(high);
-    result.mean = Mean(values, scale);
+    result.mean = Mean(tensor, scale);
   }
   if (report_distinct)
-    result.distinct_count = DistinctCount(tensor, values, has_nan);
-  Histogram(result, values, bins);
+    result.distinct_count = DistinctCount(tensor, has_nan);
+  Histogram(result, tensor, bins);
   Rectangle(result, tensor, values, rectangle_shape);
   if ((!quantiles.empty() || median) && !has_nan) {
     std::sort(values.begin(), values.end());

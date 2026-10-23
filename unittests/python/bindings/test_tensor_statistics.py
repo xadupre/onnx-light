@@ -180,6 +180,19 @@ class TestTensorStatistics(ExtTestCase):
         with self.assertRaises(ValueError):
             compute_tensor_statistics(shared.encoded)
 
+    def test_encoded_values_require_logical_tensor_metadata(self):
+        values = numpy.arange(12, dtype=numpy.float32)
+        plan = runtime.make_quantization_plan(runtime.QuantizationFormat.INT4, values.size, 4)
+        encoded = runtime.quantize_tensor_proto(onh.from_array(values), plan)
+        encoded.ClearField("logical_type")
+        with self.assertRaises(ValueError):
+            compute_tensor_statistics(encoded)
+        encoded.logical_type.sequence_type.elem_type.tensor_type.elem_type = (
+            onnx.TensorProto.FLOAT
+        )
+        with self.assertRaises(ValueError):
+            compute_tensor_statistics(encoded)
+
     def test_nonfinite_and_result_lifetime(self):
         values = numpy.array([numpy.nan, -numpy.inf, numpy.inf, 0, 1, 2, 3, 4, 5, 6])
         result = compute_tensor_statistics(values, bins=2, quantiles=[0, 0.5, 1], median=True)

@@ -9,6 +9,7 @@ rectangle_shape=(), model=None)`` accepts a NumPy array, runtime ``Tensor``,
 ``RuntimeValue`` and returns
 a :class:`TensorStatistics` instance. ``model`` optionally resolves the type
 catalogue and shared parameters of encoded values.
+``SharedQuantizedValue`` remains an alias of ``RuntimeValue`` for compatibility.
 
 The result includes ``min``, ``max``, ``mean``, the ONNX ``dtype``, ``shape``,
 element ``count``, and ``size_bytes``. Integer and quantized inputs also report
@@ -25,7 +26,10 @@ Only finite values enter the histogram; no finite values produces no histogram.
 
 ``quantiles`` requests probabilities in [0, 1] and returns values in the same
 order, using linear interpolation. ``median=True`` requests the median
-independently. Neither requires sorting unless requested.
+independently. Neither requires sorting unless requested. Basic reductions and
+histograms read the tensor directly; only order statistics and rectangle maps
+materialize a full numeric copy. Exact distinct counts use storage proportional
+to the number of distinct values.
 NaNs propagate to the minimum, maximum, mean and requested quantiles. Infinities
 follow numeric ordering and IEEE arithmetic. Empty tensors return NaN numeric
 statistics and no histogram or rectangle map.

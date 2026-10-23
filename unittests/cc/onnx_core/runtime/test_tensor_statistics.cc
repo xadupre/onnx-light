@@ -104,6 +104,53 @@ TEST(TensorStatistics, MixedAxisRectangleResize) {
     EXPECT_NEAR(value, 2.5, 1e-12);
 }
 
+TEST(TensorStatistics, MixedAxisRectanglePreservesLocalNonfiniteValues) {
+  const double inf = std::numeric_limits<double>::infinity();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const int64_t count = 100000;
+  std::vector<double> values(static_cast<size_t>(count * 4), 2.5);
+  values[1] = inf;
+  values[6] = -inf;
+  values[11] = nan;
+  const auto stats =
+      ComputeTensorStatistics(Tensor::FromDouble("X", {count, 4}, values), 0, {}, false, {1, 8});
+  ASSERT_EQ(stats.rectangle_map.size(), 8u);
+  for (size_t i = 0; i < 8; ++i) {
+    if (i < 2)
+      EXPECT_DOUBLE_EQ(stats.rectangle_map[i], 2.5);
+    else if (i < 4)
+      EXPECT_EQ(stats.rectangle_map[i], inf);
+    else if (i < 6)
+      EXPECT_EQ(stats.rectangle_map[i], -inf);
+    else
+      EXPECT_TRUE(std::isnan(stats.rectangle_map[i]));
+  }
+  const auto transposed = ComputeTensorStatistics(
+      Tensor::FromDouble("X", {1, count}, std::vector<double>(static_cast<size_t>(count), 2.5)), 0,
+      {}, false, {count, 1});
+  for (double value : transposed.rectangle_map)
+    EXPECT_DOUBLE_EQ(value, 2.5);
+}
+
+TEST(TensorStatistics, DirectReductionsMatchMaterializedStatistics) {
+  const int64_t count = 100003;
+  std::vector<int32_t> values(static_cast<size_t>(count));
+  for (int64_t i = 0; i < count; ++i)
+    values[static_cast<size_t>(i)] = static_cast<int32_t>(i % 257) - 128;
+  const auto tensor = Tensor::FromInt32("X", {count}, values);
+  const auto direct = ComputeTensorStatistics(tensor);
+  const auto materialized = ComputeTensorStatistics(tensor, 0, {0.25, 0.75}, true);
+  EXPECT_EQ(direct.min, -128);
+  EXPECT_EQ(direct.max, 128);
+  EXPECT_EQ(direct.distinct_count, 257);
+  EXPECT_EQ(direct.min, materialized.min);
+  EXPECT_EQ(direct.max, materialized.max);
+  EXPECT_EQ(direct.mean, materialized.mean);
+  EXPECT_EQ(direct.distinct_count, materialized.distinct_count);
+  EXPECT_EQ(direct.distribution, materialized.distribution);
+  EXPECT_EQ(direct.bin_edges, materialized.bin_edges);
+}
+
 TEST(TensorStatistics, ParallelChunkBoundariesPreserveNonfiniteAndPackedValues) {
   const int64_t count = 65539;
   CpuExecutionPolicy policy;
@@ -449,6 +496,16 @@ TEST(TensorStatistics, EncodedCatalogueLastOverload) {
 
 TEST(TensorStatistics, EncodedStatisticsRequireLogicalTensorType) {
   EncodedValueProto encoded;
+  EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);
+  encoded.mutable_logical_type()->mutable_sequence_type();
+  EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);
+}
+
+TEST(TensorStatistics, EncodedValuesRequireLogicalTensorMetadata) {
+  auto encoded = QuantizeTensor(Tensor::FromFloat("X", {3}, {-1, 0, 1}),
+                                MakeQuantizationPlan(QuantizationFormat::kInt8, 3))
+                     .Encoded();
+  encoded.clear_logical_type();
   EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);
   encoded.mutable_logical_type()->mutable_sequence_type();
   EXPECT_THROW(ComputeTensorStatistics(encoded), std::invalid_argument);

@@ -421,6 +421,8 @@ protected:
      * Points to function-default attributes when no node owns them.
      */
     utils::RepeatedProtoField<AttributeProto> *attributes = nullptr;
+    utils::RepeatedProtoField<SparseTensorProto> *sparse_initializers = nullptr;
+    GraphProto *graph = nullptr;
     /**
      * Stores the current node index.
      */
@@ -433,11 +435,13 @@ protected:
      * Stores the tensor and graph indices within the current attribute.
      */
     size_t attr_tensor_index = 0;
+    size_t attr_sparse_tensor_index = 0;
     size_t attr_graph_index = 0;
     /**
      * Stores the current initializer index.
      */
     size_t node_initializer_index = 0;
+    size_t sparse_initializer_index = 0;
   };
 
 public:
@@ -446,7 +450,8 @@ public:
    * @param graph Root graph to traverse.
    */
   explicit inline IteratorTensorProto(GraphProto *graph) : tp_(nullptr), positions_() {
-    positions_.emplace_back(Position{&graph->ref_node(), &graph->ref_initializer()});
+    positions_.emplace_back(Position{&graph->ref_node(), &graph->ref_initializer(), nullptr,
+                                     &graph->ref_sparse_initializer(), graph});
   }
   /**
    * Initializes the iterator from a model, including functions and rewrite plans.
@@ -461,6 +466,10 @@ public:
    * Returns the current tensor pointer.
    */
   inline TensorProto *operator->() { return tp_; }
+  /** Returns the current tensor's owning graph, or nullptr for function-level tensors. */
+  inline GraphProto *graph() const {
+    return positions_.empty() ? nullptr : positions_.back().graph;
+  }
   /**
    * Advances to the next tensor.
    * Returns true when one is found.

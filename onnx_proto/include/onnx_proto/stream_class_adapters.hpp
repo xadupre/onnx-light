@@ -230,6 +230,8 @@ bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd) const {
 
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {
+  if constexpr (std::is_same_v<Derived, ModelProto>)
+    derived().ValidateWeightSaveDescriptor(fd);
   if constexpr (std::is_same_v<Derived, ModelProto> || std::is_same_v<Derived, PipelineProto>) {
     if (opts.raw_data_callback || opts.node_callback) {
       Derived &mutable_proto = const_cast<Derived &>(derived());

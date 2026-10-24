@@ -17,6 +17,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+struct DeferredWeightSource;
+
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus : int { EXPERIMENTAL = 0, STABLE = 1 };
 
@@ -629,12 +631,23 @@ template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&delete
  *
  * The ``external_data`` and ``data_location`` fields are preserved so the
  * tensor still describes where the data originally lives.
+ * When a deferred source exists, reloads that immutable source instead of
+ * resolving metadata against base_dir again.
  *
  * @param base_dir Directory containing the external data file. The final
  *        path is ``base_dir / location``. When empty, ``location`` is used
  *        as-is.
  */
 void LoadExternalData(const std::string &base_dir = "");
+/** Retains a non-serialized, immutable backing-file range for deferred raw tensor data. */
+std::shared_ptr<const DeferredWeightSource> deferred_weight_source;
+/** Returns whether this tensor retains a recoverable backing source. */
+bool HasDeferredWeight() const { return deferred_weight_source != nullptr; }
+/** Loads this tensor's deferred bytes; returns false if already loaded. */
+bool LoadDeferredWeight();
+/** Releases this tensor's payload ownership; returns false if already unloaded.
+ *  Existing owning views or consumers may keep their copies alive. */
+bool UnloadDeferredWeight();
 /** Writes the external payload after validating its metadata, offset, and padding. */
 void WriteExternalData(utils::BinaryWriteStream &stream, const SerializeOptions &options) const;
 /**
@@ -1717,6 +1730,36 @@ FIELD_MAP_PROTO(
     RewritingProto, rewritings, 1001,
     "Named variants applied independently to the canonical model (onnx-light extension). "
     "Keys must be nonempty and unique. Model mutations must clear or regenerate these plans.")
+/** Copies model values while retaining non-serialized deferred sources. */
+ModelProto(const ModelProto &other) { CopyFrom(other); }
+ModelProto(ModelProto &&other) noexcept = default;
+ModelProto &operator=(const ModelProto &other) {
+  CopyFrom(other);
+  return *this;
+}
+ModelProto &operator=(ModelProto &&other) noexcept = default;
+/** Returns tensor names across initializers, sparse tensors, attributes, functions and rewrites.
+ *  Names may repeat, including empty names; name-based operations reject ambiguous matches. */
+std::vector<std::string> WeightNames() const;
+/** Returns whether any tensor retains a deferred backing source. */
+bool HasDeferredWeights() const;
+/** Returns whether the uniquely named tensor has a materialized payload. */
+bool IsWeightLoaded(const std::string &name) const;
+/** Loads one uniquely named deferred tensor without materializing other weights. */
+bool LoadWeight(const std::string &name);
+/** Unloads one uniquely named deferred tensor while retaining its backing source. */
+bool UnloadWeight(const std::string &name);
+/** Loads all deferred tensors and returns the number of changed tensors. */
+size_t LoadWeights();
+/** Unloads all deferred tensors and returns the number of changed tensors. */
+size_t UnloadWeights();
+/** Requires materialized weights and rejects output paths aliasing a retained backing source.
+ *  Native stream callers must invoke this before opening or truncating a destination. */
+void ValidateWeightSavePath(const std::string &path = "") const;
+/** Rejects descriptors referring to retained backing files before writing any bytes. */
+void ValidateWeightSaveDescriptor(int descriptor) const;
+/** Safely exports a fully loaded model to a single file, preserving the in-memory sources. */
+bool SerializeToFile(const std::string &path, SerializeOptions options = {}) const;
 /**
  * Appends *function* to the model's ``functions`` field and returns a
  * reference to the stored copy.

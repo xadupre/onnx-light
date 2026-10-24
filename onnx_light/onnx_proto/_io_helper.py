@@ -181,6 +181,14 @@ def save(
     assert isinstance(f, (str, Path)) or hasattr(
         f, "write"
     ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
+    proto.validate_weight_save_path(str(f) if isinstance(f, (str, Path)) else "")
+    if proto.has_deferred_weights() and (
+        save_as_external_data or location or (format or _infer_format(f)) != "protobuf"
+    ):
+        raise ValueError(
+            "Models retaining deferred sources support single-file ONNX export only. "
+            "Reload that export eagerly before converting it."
+        )
     if hasattr(f, "write"):
         # File-like object path: external data is not supported.
         if save_as_external_data or location:
@@ -299,6 +307,7 @@ def load(
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
     layout: bool = False,
+    defer_weights: bool = False,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -383,6 +392,11 @@ def load(
     :param layout: enables native incremental layout while loading. Binary graph and function
         bodies are placed at their parse-completion hooks, children first, and persisted in
         metadata. Text scopes are placed before returning. The default leaves metadata untouched.
+    :param defer_weights: retains file ranges without materializing raw weight payloads,
+        ignoring ``raw_data_threshold``. Enables ``model.load_weight(name)`` and
+        ``model.unload_weight(name)``. Requires a binary ONNX file path, immutable backing
+        files, no typed payloads, no explicit external-data stream, and ``no_copy=False``.
+        External locations are resolved relative to the original model directory.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -394,6 +408,18 @@ def load(
         raise ValueError(
             f"Unsupported format={format!r}; onnx-light only supports "
             f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    if defer_weights and (
+        not isinstance(f, str)
+        or format != "protobuf"
+        or no_copy
+        or location
+        or load_external_data
+        or tiny_external_data_threshold >= 0
+    ):
+        raise ValueError(
+            "defer_weights requires a binary ONNX file path, no_copy=False, "
+            "no location/load_external_data, and tiny_external_data_threshold < 0."
         )
     if format == "textproto":
         from ._text_format import parse_from_textproto
@@ -455,9 +481,11 @@ def load(
         or touch_raw_data_pages
         or file_load_mode != FileLoadMode.AUTO
         or layout
+        or defer_weights
     ):
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
+        opts.defer_weights = defer_weights
         opts.raw_data_threshold = raw_data_threshold
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size

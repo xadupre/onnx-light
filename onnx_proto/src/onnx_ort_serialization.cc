@@ -941,6 +941,8 @@ private:
 
 std::string SerializeModelToOrtFlatbuffers(const ModelProto &model,
                                            const SerializeOptions &options) {
+  EXT_ENFORCE(!model.HasDeferredWeights(),
+              "Reload a single-file export eagerly before converting deferred weights to ORT.");
   EXT_ENFORCE(options.max_serialized_size_bytes >= 0,
               "ORT serialization: max_serialized_size_bytes must be non-negative");
   EXT_ENFORCE(!options.skip_raw_data,

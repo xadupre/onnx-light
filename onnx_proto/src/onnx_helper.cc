@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #endif
 #include "onnx_helper.h"
+#include "external_data_internal.h"
 #include "onnx_io_policy.h"
 #include <array>
 #include <cerrno>
@@ -55,7 +56,8 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
   add_functions(model->ref_functions());
   if (model->has_graph())
     positions_.push_back(
-        Position{&model->ref_graph().ref_node(), &model->ref_graph().ref_initializer()});
+        Position{&model->ref_graph().ref_node(), &model->ref_graph().ref_initializer(), nullptr,
+                 &model->ref_graph().ref_sparse_initializer(), &model->ref_graph()});
 }
 
 bool IteratorTensorProto::next() {
@@ -78,18 +80,38 @@ bool IteratorTensorProto::next() {
                                                    : &att.ref_tensors()[index - single_tensor];
             return true;
           }
+          const size_t single_sparse = att.has_sparse_tensor() ? 1 : 0;
+          while (pos.attr_sparse_tensor_index / 2 <
+                 single_sparse + att.ref_sparse_tensors().size()) {
+            const size_t index = pos.attr_sparse_tensor_index++;
+            const size_t sparse_index = index / 2;
+            auto &sparse = single_sparse != 0 && sparse_index == 0
+                               ? att.ref_sparse_tensor()
+                               : att.ref_sparse_tensors()[sparse_index - single_sparse];
+            if (index % 2 == 0 && sparse.has_values()) {
+              tp_ = &sparse.ref_values();
+              return true;
+            }
+            if (index % 2 != 0 && sparse.has_indices()) {
+              tp_ = &sparse.ref_indices();
+              return true;
+            }
+          }
           const size_t single_graph = att.has_g() ? 1 : 0;
           if (pos.attr_graph_index < single_graph + att.ref_graphs().size()) {
             const size_t index = pos.attr_graph_index++;
             GraphProto *subgraph = single_graph != 0 && index == 0
                                        ? &att.ref_g()
                                        : &att.ref_graphs()[index - single_graph];
-            positions_.emplace_back(Position{&subgraph->ref_node(), &subgraph->ref_initializer()});
+            positions_.emplace_back(Position{&subgraph->ref_node(), &subgraph->ref_initializer(),
+                                             nullptr, &subgraph->ref_sparse_initializer(),
+                                             subgraph});
             break_loop = true;
             break;
           }
           ++pos.attr_index;
           pos.attr_tensor_index = 0;
+          pos.attr_sparse_tensor_index = 0;
           pos.attr_graph_index = 0;
         }
         if (break_loop)
@@ -106,6 +128,20 @@ bool IteratorTensorProto::next() {
         tp_ = &(*pos.initializers)[pos.node_initializer_index];
         ++pos.node_initializer_index;
         return true;
+      }
+    }
+    if (pos.sparse_initializers != nullptr) {
+      while (pos.sparse_initializer_index / 2 < pos.sparse_initializers->size()) {
+        const size_t index = pos.sparse_initializer_index++;
+        auto &sparse = (*pos.sparse_initializers)[index / 2];
+        if (index % 2 == 0 && sparse.has_values()) {
+          tp_ = &sparse.ref_values();
+          return true;
+        }
+        if (index % 2 != 0 && sparse.has_indices()) {
+          tp_ = &sparse.ref_indices();
+          return true;
+        }
       }
     }
     positions_.pop_back();
@@ -1129,6 +1165,12 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  if (model.HasDeferredWeights()) {
+    model.ValidateWeightSavePath();
+    EXT_ENFORCE(!stream.ExternalWeights() && options.format == SerializeFormat::kOnnx,
+                "Models retaining deferred sources support single-file ONNX export only. "
+                "Reload that export eagerly before converting to other formats or external data.");
+  }
   if (options.raw_data_callback || options.node_callback) {
     SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(model, options);
     SerializeOptions local_options = options;
@@ -1243,6 +1285,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
+  utils::detail::ValidateDeferredWeightParse(stream, options);
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
     ParseModelFromOrtFlatbuffers(model, stream, options);
     if (options._touch_raw_data_pages) {
@@ -1269,7 +1312,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     utils::TwoFilesStream *two_stream_ptr =
         external_weights ? &dynamic_cast<utils::TwoFilesStream &>(stream) : nullptr;
     const bool has_eligible_reads =
-        options.is_parallel() &&
+        options.is_parallel() && !options.defer_weights &&
         (!external_weights || (!options.no_copy && !two_stream_ptr->use_mmap_weights()));
 
     int32_t num_threads = options.num_threads;

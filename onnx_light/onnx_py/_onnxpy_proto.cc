@@ -656,6 +656,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
              const std::string &external_data_file) {
             std::unique_ptr<utils::BinaryStream> stream;
             const bool has_opts = nb::isinstance<ParseOptions &>(options);
+            EXT_ENFORCE(!has_opts || !nb::cast<ParseOptions &>(options).defer_weights ||
+                            external_data_file.empty(),
+                        "defer_weights does not support an explicit external stream.");
             const bool wants_no_copy = has_opts && nb::cast<ParseOptions &>(options).no_copy;
             const FileLoadMode mode =
                 has_opts ? nb::cast<ParseOptions &>(options).file_load_mode : FileLoadMode::kAuto;
@@ -687,8 +690,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
-              const bool parallel_protobuf =
-                  coptions.format == SerializeFormat::kOnnx && coptions.is_parallel();
+              const bool parallel_protobuf = coptions.format == SerializeFormat::kOnnx &&
+                                             coptions.is_parallel() && !coptions.defer_weights;
               if (parallel_protobuf) {
                 stream->StartThreadPool(coptions.num_threads);
               }
@@ -744,6 +747,24 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            if constexpr (std::is_same_v<cls, ModelProto>) {
+              self.ValidateWeightSavePath(file_path);
+              if (self.HasDeferredWeights()) {
+                EXT_ENFORCE(
+                    external_data_file.empty() &&
+                        (!nb::isinstance<SerializeOptions &>(options) ||
+                         nb::cast<SerializeOptions &>(options).format == SerializeFormat::kOnnx),
+                    "Models retaining deferred sources support single-file ONNX export "
+                    "only.");
+                SerializeOptions opts = nb::isinstance<SerializeOptions &>(options)
+                                            ? nb::cast<SerializeOptions &>(options)
+                                            : SerializeOptions{};
+                EXT_ENFORCE(self.SerializeToFile(file_path, opts),
+                            "SerializeToFile: output exceeded "
+                            "SerializeOptions.max_serialized_size_bytes.");
+                return;
+              }
+            }
             if constexpr (std::is_same_v<cls, PipelineProto>) {
               EXT_ENFORCE(external_data_file.empty(),
                           "PipelineProto serialization does not support external-weight output.");
@@ -809,6 +830,19 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
   // Helper lambda for ostream serialization, used by both SerializeToOstream and
   // SerializeToOStream to avoid code duplication
   auto serialize_to_ostream_impl = [](cls &self, nb::object output) {
+    if constexpr (std::is_same_v<cls, ModelProto>) {
+      if (self.HasDeferredWeights()) {
+        self.ValidateWeightSavePath();
+        nb::object io = nb::module_::import_("io");
+        if (nb::isinstance(output, io.attr("IOBase")) &&
+            !nb::isinstance(output, io.attr("BytesIO"))) {
+          self.ValidateWeightSaveDescriptor(nb::cast<int>(output.attr("fileno")()));
+        } else {
+          EXT_ENFORCE(nb::isinstance(output, io.attr("BytesIO")),
+                      "Deferred exports require a file path, a standard binary file, or BytesIO.");
+        }
+      }
+    }
     std::string out;
     SerializeOptions opts;
     bool ok = self.SerializeToString(out, opts);
@@ -1386,6 +1420,10 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("skip_raw_data", &ParseOptions::skip_raw_data,
               "if true, raw data will not be read but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
+      .def_rw(
+          "defer_weights", &ParseOptions::defer_weights,
+          "Defers all raw payloads from an ONNX file for per-name load/unload. "
+          "Typed payloads, bytes inputs, explicit external streams and no_copy are unsupported.")
       .def_rw("num_threads", &ParseOptions::num_threads,
               "Number of threads to use for parallel reading. Any negative value "
               "(``-1`` is the default) picks a sensible value based on the number "
@@ -2458,6 +2496,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
             return size;
           },
           "Returns the number of elements in the tensor.")
+      .def("has_deferred_weight", &TensorProto::HasDeferredWeight,
+           "Returns whether this tensor retains an immutable deferred backing source.")
       .def(
           "load_external_data",
           [](TensorProto &self, const std::string &base_dir) { self.LoadExternalData(base_dir); },
@@ -3414,7 +3454,23 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
             self.add_rewritings(name, rewrites);
           },
           nb::arg("name"), nb::arg("rewrites"), "Adds a named plan, rejecting duplicate names.")
-      .def("clear_rewritings", &ModelProto::clear_rewritings);
+      .def("clear_rewritings", &ModelProto::clear_rewritings)
+      .def("weight_names", &ModelProto::WeightNames,
+           "Returns tensor names across all scopes; duplicate names remain ambiguous.")
+      .def("is_weight_loaded", &ModelProto::IsWeightLoaded, nb::arg("name"),
+           "Returns whether the uniquely named tensor has a materialized payload.")
+      .def("load_weight", &ModelProto::LoadWeight, nb::arg("name"),
+           "Loads one deferred tensor; returns false if already loaded.")
+      .def("unload_weight", &ModelProto::UnloadWeight, nb::arg("name"),
+           "Releases one tensor's payload ownership, retaining its source for reloading.")
+      .def("load_weights", &ModelProto::LoadWeights,
+           "Loads all deferred tensors and returns the number changed.")
+      .def("unload_weights", &ModelProto::UnloadWeights,
+           "Unloads all deferred tensors and returns the number changed.")
+      .def("has_deferred_weights", &ModelProto::HasDeferredWeights,
+           "Returns whether this model retains any deferred backing sources.")
+      .def("validate_weight_save_path", &ModelProto::ValidateWeightSavePath, nb::arg("path") = "",
+           "Requires loaded weights and rejects paths aliasing their backing sources.");
   PYADD_PROTO_SERIALIZATION(ModelProto);
   nb_ModelProto
       .def(

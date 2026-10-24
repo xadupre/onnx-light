@@ -890,9 +890,14 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
   if (encrypted_external) {
     if (file_buf.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
       throw std::runtime_error("Encrypted external weights require an ONNXCRY3 model.");
-    LoadEncryptedExternalDataForModel(
-        model, utils::detail::external_path_to_utf8(std::filesystem::path(file_path).parent_path()),
-        key, opts);
+
+    std::filesystem::path base_dir_path = std::filesystem::path(file_path).parent_path();
+    if (base_dir_path.empty()) {
+      base_dir_path = ".";
+    }
+
+    LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path), key,
+                                     opts);
   }
 }
 

@@ -432,7 +432,8 @@ std::vector<uint8_t> decrypt_from_blob(const uint8_t *data, size_t data_len,
       "Bad magic bytes – not an ONNXCRY1/ONNXCRY2/ONNXCRY3 encrypted payload.");
 }
 
-constexpr size_t GCM_HEADER_SIZE = 52;
+constexpr size_t GCM_HEADER_SIZE = MAGIC_GCM.size() + SALT_LEN + NONCE_LEN + TAG_LEN;
+static_assert(GCM_HEADER_SIZE == 52);
 
 void validate_external_limits(const std::string &key, size_t limit) {
   if (key.empty() || key.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
@@ -878,9 +879,14 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
   LoadEncryptedModelFromString(model, file_buf, key, opts);
   bool encrypted_external = false;
   IteratorTensorProto iterator(&model);
-  while (iterator.next())
-    for (const auto &entry : iterator->external_data())
-      encrypted_external |= entry.key() == kExternalDataEncryptionKey;
+  while (!encrypted_external && iterator.next()) {
+    for (const auto &entry : iterator->external_data()) {
+      if (entry.key() == kExternalDataEncryptionKey) {
+        encrypted_external = true;
+        break;
+      }
+    }
+  }
   if (encrypted_external) {
     if (file_buf.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
       throw std::runtime_error("Encrypted external weights require an ONNXCRY3 model.");

@@ -163,7 +163,12 @@ protected:
 
   std::string read(const std::filesystem::path &file) {
     std::ifstream stream(file, std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(stream), {});
+    if (!stream.is_open())
+      throw std::runtime_error("Cannot open test file: " + file.string());
+    const std::string bytes(std::istreambuf_iterator<char>(stream), {});
+    if (stream.bad())
+      throw std::runtime_error("Cannot read test file: " + file.string());
+    return bytes;
   }
 
   void write(const std::filesystem::path &file, const std::string &bytes) {

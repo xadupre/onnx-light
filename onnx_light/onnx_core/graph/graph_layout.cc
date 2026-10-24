@@ -993,6 +993,7 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   impl.stats = {};
   auto &nodes = impl.Nodes();
   nodes.push_back(node);
+  // Swaps owning handles, preserving existing node payloads and child-layout proto pointers.
   for (int i = static_cast<int>(nodes.size()) - 1; i > static_cast<int>(index); --i)
     nodes.SwapElements(i, i - 1);
   ClearNodeLayoutMetadata(nodes[index]);

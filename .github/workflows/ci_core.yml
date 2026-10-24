@@ -520,6 +520,7 @@ jobs:
       - name: Run tests
         env:
           UNITTEST_GOING: "1"
+          MPLBACKEND: Agg
         run: |
           pytest --durations=10 unittests
 

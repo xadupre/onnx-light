@@ -173,8 +173,8 @@ IDs are positive decimal integers, limited to ``2**53 - 1``. The next-ID key
 also accepts ``2**53`` as an exhausted-allocator sentinel, preserved across
 reloads even after the final node is erased. Further insertion throws
 ``std::overflow_error`` without changing the node list. Ranks are
-nonnegative decimal integers and are validated against the actual dependency
-constraints. Signatures are change detectors, not cryptographic authentication.
+decimal integers in ``[0, node_count - 1]`` and are validated against the actual
+dependency constraints. Signatures are change detectors, not cryptographic authentication.
 Child scope summaries larger than 1 MiB are ignored when computing signatures,
 matching the summary parser's size limit; their raw bytes are not hashed.
 If duplicate scope summaries exist, nonrecursive loading skips malformed entries

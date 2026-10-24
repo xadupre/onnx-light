@@ -457,7 +457,7 @@ struct GraphLayout::Impl {
       const auto bounded = rank.substr(0, 17);
       const auto result = std::from_chars(bounded.data(), bounded.data() + bounded.size(), layer);
       if (rank.size() > 16 || result.ec != std::errc() ||
-          result.ptr != bounded.data() + bounded.size() || layer > Nodes().size()) {
+          result.ptr != bounded.data() + bounded.size() || layer >= Nodes().size()) {
         Diagnose("Invalid persisted layout rank; recomputed the rank.");
       } else {
         state.box.layer = layer;
@@ -758,7 +758,7 @@ struct GraphLayout::Impl {
         } else if (producer != producers.end())
           Diagnose("Self-referencing layout dependency.");
       }
-      layer = std::min(layer, states.size());
+      layer = std::min(layer, states.size() - 1);
       if (!has_predecessor && state.placed && state.box.layer == layer)
         x = state.box.x;
       bool repaired_pin = false;

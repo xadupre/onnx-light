@@ -173,6 +173,29 @@ class TestGraphLayout(unittest.TestCase):
             any(p.key == "onnx_light.layout.version" for p in loaded.graph.metadata_props)
         )
 
+    def test_callback_assignment_rejects_noncallable_without_replacing_callback(self):
+        for name in ("graph_callback", "function_callback"):
+            with self.subTest(name=name):
+                options = onnx.ParseOptions()
+                visits = []
+                callback = lambda scope: visits.append(scope.name)
+                setattr(options, name, callback)
+                for invalid in (0, "callback", object()):
+                    with self.subTest(invalid=invalid):
+                        with self.assertRaisesRegex(
+                            TypeError, f"{name} must be callable or None"
+                        ):
+                            setattr(options, name, invalid)
+                        self.assertIs(getattr(options, name), callback)
+                if name == "graph_callback":
+                    scope = onnx.GraphProto(name="graph")
+                else:
+                    scope = onnx.FunctionProto(name="function")
+                getattr(options, name)(scope)
+                self.assertEqual(visits, [scope.name])
+                setattr(options, name, None)
+                self.assertIsNone(getattr(options, name))
+
     def test_textproto(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.textproto"

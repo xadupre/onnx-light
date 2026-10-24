@@ -525,6 +525,30 @@ TEST(GraphLayout, MetadataValidationRejectsMalformedAndUnsupportedGeometry) {
   EXPECT_FALSE(layout.Diagnostics().empty());
 }
 
+TEST(GraphLayout, PersistedRankRejectsNodeCountAndAcceptsHighestValidRank) {
+  for (const auto &rank : {"1", "2"}) {
+    GraphProto graph;
+    Meta(graph, GraphLayout::VersionKey, "1");
+    *graph.add_node() = Node("a");
+    *graph.add_node() = Node("b", {"a"});
+    Meta(*graph.mutable_node(1), GraphLayout::PositionKey, "300 0 160 64");
+    Meta(*graph.mutable_node(1), GraphLayout::RankKey, rank);
+    GraphLayout layout(graph);
+    layout.Load();
+    const bool invalid_rank = std::any_of(
+        layout.Diagnostics().begin(), layout.Diagnostics().end(), [](const std::string &message) {
+          return message.find("Invalid persisted layout rank") != std::string::npos;
+        });
+    EXPECT_EQ(invalid_rank, std::string(rank) == "2");
+    for (auto id : layout.Order())
+      EXPECT_LT(layout.Get(id)->layer, graph.node().size());
+  }
+  GraphProto empty;
+  GraphLayout layout(empty);
+  layout.Load();
+  EXPECT_TRUE(layout.Order().empty());
+}
+
 TEST(GraphLayout, PortsAreOrderedOptionalInputsStayOptionalAndConstantsFold) {
   GraphProto graph;
   graph.add_input()->set_name("x");
@@ -689,6 +713,8 @@ TEST(GraphLayout, CyclesTerminateWithDiagnostics) {
   layout.Load();
   EXPECT_FALSE(layout.Diagnostics().empty());
   EXPECT_LE(layout.Stats().nodes, 1024u);
+  for (auto id : layout.Order())
+    EXPECT_LT(layout.Get(id)->layer, graph.node().size());
 }
 
 TEST(GraphLayout, DeepSubgraphsAreBounded) {

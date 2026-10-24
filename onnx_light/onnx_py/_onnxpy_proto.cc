@@ -1507,13 +1507,16 @@ void AddOnnxPyProto(nb::module_ &m) {
           [](ParseOptions &options, nb::object fn) {
             if (fn.is_none())
               options.graph_callback = {};
-            else
+            else {
+              if (!PyCallable_Check(fn.ptr()))
+                throw nb::type_error("graph_callback must be callable or None");
               options.graph_callback = PyProtoCallback<GraphProto>{fn};
+            }
           },
           "Holds an optional callable invoked as ``fn(graph)`` after all graph fields and node "
           "callbacks, including for empty graphs. Nested graphs complete before their owners. "
           "The graph argument is borrowed; retain its proto owner if keeping the reference. "
-          "Setting None disables the callback.",
+          "Setting None disables the callback. Assigning a non-callable raises TypeError.",
           nb::for_setter(nb::arg("value").none()))
       .def_prop_rw(
           "function_callback",
@@ -1530,12 +1533,16 @@ void AddOnnxPyProto(nb::module_ &m) {
           [](ParseOptions &options, nb::object fn) {
             if (fn.is_none())
               options.function_callback = {};
-            else
+            else {
+              if (!PyCallable_Check(fn.ptr()))
+                throw nb::type_error("function_callback must be callable or None");
               options.function_callback = PyProtoCallback<FunctionProto>{fn};
+            }
           },
           "Holds an optional callable invoked as ``fn(function)`` after all function fields and "
           "nested graphs, including for empty functions. The function argument is borrowed; "
-          "retain its proto owner if keeping the reference. Setting None disables the callback.",
+          "retain its proto owner if keeping the reference. Setting None disables the callback. "
+          "Assigning a non-callable raises TypeError.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",

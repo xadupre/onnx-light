@@ -119,8 +119,7 @@ jobs:
                 "$RUNNER_TEMP/onnx_proto/tests/consumer/test_onnx_proto.cc"
               consumer="$RUNNER_TEMP/proto-consumer-$shared-$compiler"
               cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \
-                -DCMAKE_CXX_COMPILER="$compiler" -DCMAKE_PREFIX_PATH="$prefix" \
-                -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON
+                -DCMAKE_CXX_COMPILER="$compiler" -DCMAKE_PREFIX_PATH="$prefix"
               cmake --build "$consumer" --parallel 6
               ctest --test-dir "$consumer" --output-on-failure
             done

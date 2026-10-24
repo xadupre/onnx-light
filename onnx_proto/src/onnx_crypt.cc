@@ -792,7 +792,7 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
     if (shard.tensors.empty())
       shard.digest = digest;
     else if (shard.digest != digest)
-      throw invalid("inconsistent onnx_light.encrypted_sha256");
+      throw invalid(std::string("inconsistent ") + kExternalDataDigestKey);
     shard.tensors.push_back(TensorReference{
         &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
   }

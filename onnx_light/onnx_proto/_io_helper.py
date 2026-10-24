@@ -192,6 +192,8 @@ def save(
     assert isinstance(f, (str, Path)) or hasattr(
         f, "write"
     ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
+    if isinstance(proto, PipelineProto):
+        proto.validate_deferred_export()
     if isinstance(proto, ModelProto):
         proto.validate_weight_save_path(str(f) if isinstance(f, (str, Path)) else "")
         if proto.has_deferred_weights() and (

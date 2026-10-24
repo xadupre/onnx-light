@@ -440,12 +440,8 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &o
     });
   };
   auto snapshot_node = [&restorer](NodeProto &node) {
-    auto saved = std::make_shared<NodeProto>();
-    saved->CopyFrom(node);
-    restorer.AddUndo([target = &node, saved]() {
-      target->Clear();
-      target->CopyFrom(*saved);
-    });
+    auto saved = std::make_shared<NodeProto>(utils::CopyWithSharedTensorStorage(node));
+    restorer.AddUndo([target = &node, saved]() { *target = std::move(*saved); });
   };
   if (options.raw_data_callback) {
     for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
@@ -497,6 +493,7 @@ SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
 
 SerializeCallbackRestorer ApplySerializeRawDataCallback(PipelineProto &pipeline,
                                                         const SerializeOptions &options) {
+  pipeline.ValidateDeferredExport();
   SerializeCallbackRestorer restorer;
   const auto apply = [&](ModelProto &model) {
     if (model.has_graph())

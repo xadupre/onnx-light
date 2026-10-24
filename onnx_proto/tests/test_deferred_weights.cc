@@ -251,6 +251,96 @@ TEST_F(DeferredWeights, RejectsExtensionOwnedWeightsWithoutChangingTheirBackingF
   }
 }
 
+TEST_F(DeferredWeights, PipelineExportsRejectSourcesInEveryStageBeforeWriting) {
+  auto original = MakeModel();
+  original.ref_graph().add_node();
+  std::string before;
+  ASSERT_TRUE(original.SerializeToString(before));
+  ASSERT_TRUE(original.SerializeToFile(path));
+  const auto file = utils::detail::OpenExternalDataFile(directory.string(), "model.onnx", true);
+  for (const bool loaded : {false, true}) {
+    auto model = Load();
+    if (loaded)
+      model.LoadWeights();
+    for (int stage = 0; stage < 3; ++stage) {
+      SCOPED_TRACE(stage);
+      SCOPED_TRACE(loaded);
+      PipelineProto pipeline;
+      auto &part = stage == 0   ? pipeline.ref_embedding()
+                   : stage == 1 ? pipeline.ref_prefill()
+                                : pipeline.ref_decode();
+      part.CopyFrom(model);
+      std::string output;
+      EXPECT_THROW(pipeline.SerializeToString(output), std::runtime_error);
+      EXPECT_THROW(pipeline.SerializeToFileDescriptor(*file), std::runtime_error);
+      int callbacks = 0;
+      SerializeOptions options;
+      options.node_callback = [&callbacks](NodeProto &, GraphProto &graph) {
+        ++callbacks;
+        graph.ref_initializer().clear();
+      };
+      EXPECT_THROW(pipeline.SerializeToString(output, options), std::runtime_error);
+      EXPECT_THROW(pipeline.SerializeToFileDescriptor(*file, options), std::runtime_error);
+      EXPECT_EQ(callbacks, 0);
+      std::fstream stream(path, std::ios::in | std::ios::out | std::ios::binary);
+      EXPECT_THROW(pipeline.SerializeToOstream(&stream), std::runtime_error);
+      utils::FdWriteStream writer(*file);
+      EXPECT_THROW(pipeline.SerializeToZeroCopyStream(&writer), std::runtime_error);
+      std::ifstream input(path, std::ios::binary);
+      EXPECT_EQ(
+          std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()),
+          before);
+    }
+  }
+}
+
+TEST_F(DeferredWeights, NodeCallbacksPreserveDeferredAttributeAndSubgraphSources) {
+  auto original = MakeModel();
+  auto *node = original.ref_graph().add_node();
+  auto *attribute = node->add_attribute();
+  attribute->ref_t().CopyFrom(original.graph().initializer()[1]);
+  attribute->ref_t().set_name("attribute");
+  auto *nested = node->add_attribute()->ref_g().add_initializer();
+  nested->CopyFrom(original.graph().initializer()[1]);
+  nested->set_name("nested");
+  ASSERT_TRUE(original.SerializeToFile(path));
+  for (int mode = 0; mode < 3; ++mode) {
+    SCOPED_TRACE(mode);
+    auto model = Load();
+    model.LoadWeights();
+    SerializeOptions options;
+    options.node_callback = [mode](NodeProto &value, GraphProto &) {
+      if (mode) {
+        value.set_doc_string("serialized only");
+        value.ref_attribute()[0].ref_t().ref_raw_data().data()[0] = 0x42;
+      }
+      if (mode == 2)
+        throw std::runtime_error("callback failure");
+    };
+    std::string serialized;
+    if (mode == 2)
+      EXPECT_THROW(model.SerializeToString(serialized, options), std::runtime_error);
+    else
+      ASSERT_TRUE(model.SerializeToString(serialized, options));
+    const auto &restored = model.graph().node()[0];
+    EXPECT_FALSE(restored.has_doc_string());
+    EXPECT_EQ(restored.attribute()[0].t().raw_data().data()[0], 0xCD);
+    for (const std::string name : {"attribute", "nested"}) {
+      EXPECT_TRUE(model.UnloadWeight(name));
+      EXPECT_TRUE(model.LoadWeight(name));
+    }
+    const auto output = (directory / "callback.onnx").string();
+    if (mode == 2)
+      EXPECT_THROW(model.SerializeToFile(output, options), std::runtime_error);
+    else
+      ASSERT_TRUE(model.SerializeToFile(output, options));
+    for (const std::string name : {"attribute", "nested"}) {
+      EXPECT_TRUE(model.UnloadWeight(name));
+      EXPECT_TRUE(model.LoadWeight(name));
+    }
+  }
+}
+
 TEST_F(DeferredWeights, ResolvesNestedAttributeNamesAndRejectsAmbiguity) {
   auto original = MakeModel();
   auto *attribute = original.ref_graph().add_node()->add_attribute();

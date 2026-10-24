@@ -771,6 +771,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               }
             }
             if constexpr (std::is_same_v<cls, PipelineProto>) {
+              self.ValidateDeferredExport();
               EXT_ENFORCE(external_data_file.empty(),
                           "PipelineProto serialization does not support external-weight output.");
             }
@@ -3586,6 +3587,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
 #endif // ONNX_LIGHT_HAS_OPENSSL
 
   PYDEFINE_PROTO(m, PipelineProto)
+      .def("validate_deferred_export", &PipelineProto::ValidateDeferredExport,
+           "Rejects exports retaining deferred model sources before destination I/O.")
       .PYFIELD_STR(PipelineProto, name)
       .PYFIELD_STR(PipelineProto, producer_name)
       .PYFIELD_STR(PipelineProto, producer_version)

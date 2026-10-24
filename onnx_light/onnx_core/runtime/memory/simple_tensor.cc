@@ -405,7 +405,7 @@ Tensor Tensor::BorrowInitializer(const TensorProto &proto) {
   if (proto.is_raw_data()) {
     const auto &raw = proto.raw_data();
     auto tensor = Borrow(proto.name(), proto.data_type(), std::move(shape), raw.data(), raw.size(),
-                         raw.owner());
+                         proto.HasDeferredWeight() ? raw.acquire_export_guard() : raw.owner());
     tensor.initializer_view_ = !raw.is_borrowed();
     return tensor;
   }

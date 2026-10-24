@@ -50,6 +50,8 @@ Only fixed-width raw payloads are supported. Typed protobuf payload fields
 ORT/text input, bytes input, explicit external streams, ``no_copy=True`` and
 tiny-external-data eager loading are explicitly rejected in deferred mode.
 ``PipelineProto`` input is unsupported; deferred loading applies to ``ModelProto``.
+Pipelines constructed from source-backed models are also rejected before file,
+descriptor or stream export, even after their weights have been loaded.
 Encoded values (including affine layouts), paged-cache blocks and struct-type
 declarations are also rejected: their extension-owned tensors are not covered
 by the weight-name traversal.
@@ -69,6 +71,8 @@ consumers may retain their own storage: unloading a proto does **not** unload
 weights already retained by a runtime session. Ordinary tensor/model copies and
 ``CopyFrom`` retain recoverable sources; serialization does not. Other subproto
 ``CopyFrom`` operations use serialization and reject unloaded deferred tensors.
+Serialization node callbacks preserve deferred sources in tensor attributes and
+nested graphs, including when callback changes are restored afterwards.
 
 Export requires all deferred tensors to be loaded. Safe single-file ONNX export
 inlines their bytes without changing in-memory external metadata or sources.
@@ -127,14 +131,17 @@ commit ``9048f1bc4`` measures 1,851,608 installed bytes, 1,331,306 ``.text`` byt
 and 898 defined dynamic symbols.
 The initial deferred-source implementation measured 1,903,824 installed bytes,
 1,388,540 ``.text`` bytes and 884 defined dynamic symbols with GCC 14.2.0
-on Linux (stripped Release, core-only Python build). CI uses this installed-size
-reference and retains the 1,331,306-byte text reference, with a 5% margin
+on Linux (stripped Release, core-only Python build). Linux CI run ``40126419070``
+at commit ``e353b5cc4`` measured 1,904,888 installed bytes, 1,373,642 ``.text``
+bytes and 912 defined dynamic symbols with GCC 13.3. CI retains the initial
+installed-size reference and uses that CI text reference, with a 5% margin
 (``--size-budget-margin-percent 5``), giving limits of 1,999,015 installed
-bytes and 1,397,871 ``.text`` bytes.
+bytes and 1,442,324 ``.text`` bytes.
 Exceeding either limit still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The strict symbol limit is 898, matching the encrypted external-weight implementation.
+The strict symbol limit is 913: the CI measurement plus the pipeline
+deferred-export validation method.
 The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto

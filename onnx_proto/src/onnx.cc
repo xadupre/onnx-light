@@ -2457,6 +2457,7 @@ bool ModelProto::SerializeToString(std::string &out,
 IMPLEMENT_PROTO(PipelineProto)
 SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                  SerializeOptions &options) const {
+  ValidateDeferredExport();
   if (options.raw_data_callback || options.node_callback) {
     PipelineProto &mutable_self = const_cast<PipelineProto &>(*this);
     SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, options);
@@ -2491,6 +2492,7 @@ SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &strea
 }
 void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                       SerializeOptions &options) const {
+  ValidateDeferredExport();
   WRITE_FIELD(options, stream, name)
   WRITE_FIELD(options, stream, producer_name)
   WRITE_FIELD(options, stream, producer_version)

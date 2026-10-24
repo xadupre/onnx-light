@@ -311,4 +311,12 @@ void ModelProto::ValidateWeightSaveDescriptor(int descriptor) const {
   }
 }
 
+void PipelineProto::ValidateDeferredExport() const {
+  EXT_ENFORCE(!(has_embedding() && embedding().HasDeferredWeights()) &&
+                  !(has_prefill() && prefill().HasDeferredWeights()) &&
+                  !(has_decode() && decode().HasDeferredWeights()),
+              "PipelineProto export with deferred sources is unsupported; export the owning "
+              "ModelProto instead.");
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -213,6 +213,32 @@ class TestDeferredWeights(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), before)
                 self.assertIsInstance(load(path), PipelineProto)
 
+    def test_pipeline_exports_preserve_sources_in_all_stages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            save(self.make_model(), path)
+            before = path.read_bytes()
+            for loaded in (False, True):
+                model = load(path, defer_weights=True)
+                if loaded:
+                    model.load_weights()
+                for stage in ("embedding", "prefill", "decode"):
+                    with self.subTest(loaded=loaded, stage=stage):
+                        pipeline = PipelineProto(**{stage: model})
+                        with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                            pipeline.SerializeToFile(str(path))
+                        for format in ("protobuf", "textproto"):
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                save(pipeline, path, format=format)
+                        with path.open("r+b") as output:
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                pipeline.SerializeToFileDescriptor(output.fileno())
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                pipeline.SerializeToOstream(output)
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                save(pipeline, output)
+                        self.assertEqual(path.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

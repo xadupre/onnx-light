@@ -99,29 +99,35 @@ class TestCMakeCppTestLayout(ExtTestCase):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            (directory / "FindOpenMP.cmake").write_text(
-                'message(FATAL_ERROR "onnx-light must not look for OpenMP")\n', encoding="utf-8"
-            )
-            result = subprocess.run(
-                [
-                    "cmake",
-                    "-S",
-                    str(root),
-                    "-B",
-                    str(directory / "build"),
-                    f"-DCMAKE_MODULE_PATH={directory.as_posix()}",
-                    "-DONNX_LIGHT_BUILD_PYTHON=OFF",
-                    "-DONNX_LIGHT_BUILD_KERNELS=OFF",
-                    "-DONNX_LIGHT_BUILD_TESTS=OFF",
-                    "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
-                    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for sentinel in ("FindOpenMP.cmake", "OpenMPConfig.cmake"):
+                (directory / sentinel).write_text(
+                    'message(FATAL_ERROR "onnx-light must not look for OpenMP")\n',
+                    encoding="utf-8",
+                )
+            for prefer_config in ("OFF", "ON"):
+                with self.subTest(prefer_config=prefer_config):
+                    result = subprocess.run(
+                        [
+                            "cmake",
+                            "-S",
+                            str(root),
+                            "-B",
+                            str(directory / prefer_config),
+                            f"-DCMAKE_MODULE_PATH={directory.as_posix()}",
+                            f"-DOpenMP_DIR={directory.as_posix()}",
+                            f"-DCMAKE_FIND_PACKAGE_PREFER_CONFIG={prefer_config}",
+                            "-DONNX_LIGHT_BUILD_PYTHON=OFF",
+                            "-DONNX_LIGHT_BUILD_KERNELS=OFF",
+                            "-DONNX_LIGHT_BUILD_TESTS=OFF",
+                            "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
+                            "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_helper_test_belongs_to_standalone_proto_project(self):
         root = Path(__file__).resolve().parents[2]

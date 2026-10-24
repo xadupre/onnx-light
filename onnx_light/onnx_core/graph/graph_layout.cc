@@ -988,8 +988,8 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   impl.stats = {};
   auto &nodes = impl.Nodes();
   nodes.push_back(node);
-  for (size_t i = nodes.size() - 1; i > index; --i)
-    std::swap(nodes.get(i), nodes.get(i - 1));
+  for (int i = static_cast<int>(nodes.size()) - 1; i > static_cast<int>(index); --i)
+    nodes.SwapElements(i, i - 1);
   ClearNodeLayoutMetadata(nodes[index]);
   auto id = impl.Add(nodes[index]);
   impl.order.insert(impl.order.begin() + static_cast<ptrdiff_t>(index), id);

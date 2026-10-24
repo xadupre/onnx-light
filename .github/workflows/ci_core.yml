@@ -387,8 +387,9 @@ jobs:
         # retain the existing text reference, strict symbol cap and dependency allowlist.
         # Linux CI run 40126419070 (e353b5cc4, GCC 13.3) measures 1904888 installed
         # bytes, 1373642 text bytes and 912 symbols. Calibrate the text reference
-        # to that CI measurement and allow the deferred APIs plus one new pipeline
-        # export-validation symbol. Keep the 5% margin and dependency allowlist.
+        # to that CI measurement and allow the deferred APIs plus the pipeline
+        # and recursive-submessage export validators (one symbol each).
+        # Keep the 5% margin and dependency allowlist.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -397,7 +398,7 @@ jobs:
             --max-installed-size 1903824 \
             --max-text-size 1373642 \
             --size-budget-margin-percent 5 \
-            --max-dynamic-symbols 913 \
+            --max-dynamic-symbols 914 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

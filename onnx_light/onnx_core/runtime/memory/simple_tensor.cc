@@ -399,6 +399,8 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
 }
 
 Tensor Tensor::BorrowInitializer(const TensorProto &proto) {
+  EXT_ENFORCE_INVALID(!proto.HasDeferredWeight() || proto.is_raw_data(), "Deferred weight '",
+                      proto.str_name(), "' must be loaded before runtime preparation.");
   Shape shape;
   for (const auto dimension : proto.dims())
     shape.push_back(static_cast<int64_t>(dimension));

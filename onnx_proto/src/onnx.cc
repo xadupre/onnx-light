@@ -3382,6 +3382,38 @@ bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor
 
 #undef VISIT_FIELD
 
+class DeferredSourceVisitor {
+public:
+  template <typename T>
+  bool operator()(const char *, bool present, bool, const T &value, const T &) {
+    return !present || !Contains(value);
+  }
+
+  template <typename T> bool Contains(const T &value) {
+    if constexpr (std::is_same_v<T, TensorProto>) {
+      return value.HasDeferredWeight();
+    } else if constexpr (requires { T::proto_id; }) {
+      return !VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      return value.has_value() && Contains(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (const auto &entry : value)
+        if (Contains(entry.second))
+          return true;
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (const auto &element : value)
+          if (Contains(element))
+            return true;
+    }
+    return false;
+  }
+};
+
 class ParseScopeCallbackVisitor {
 public:
   explicit ParseScopeCallbackVisitor(const ParseOptions &options) : options_(options) {}
@@ -3499,6 +3531,67 @@ int64_t AttributeContentHash(const AttributeProto &attribute) {
 
 void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options) {
   ParseScopeCallbackVisitor(options).Visit(model);
+}
+
+void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id) {
+  bool contains_sources;
+#define CHECK_DEFERRED_CASE(cls, id)                                                               \
+  case onnx_light::proto_serialization_detail::ProtoId::id:                                        \
+    contains_sources = DeferredSourceVisitor().Contains(*static_cast<const cls *>(source));        \
+    break;
+  switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
+    CHECK_DEFERRED_CASE(TypeProto, TypeProto)
+    CHECK_DEFERRED_CASE(TypeProto::Tensor, Tensor)
+    CHECK_DEFERRED_CASE(TypeProto::SparseTensor, SparseTensor)
+    CHECK_DEFERRED_CASE(TypeProto::Sequence, Sequence)
+    CHECK_DEFERRED_CASE(TypeProto::Optional, Optional)
+    CHECK_DEFERRED_CASE(TypeProto::Map, Map)
+    CHECK_DEFERRED_CASE(TypeProto::Opaque, Opaque)
+    CHECK_DEFERRED_CASE(TensorShapeProto, TensorShapeProto)
+    CHECK_DEFERRED_CASE(TensorShapeProto::Dimension, Dimension)
+    CHECK_DEFERRED_CASE(StructTypeProto, StructTypeProto)
+    CHECK_DEFERRED_CASE(StructTypeProto::Array, Array)
+    CHECK_DEFERRED_CASE(StructTypeProto::Structure, Structure)
+    CHECK_DEFERRED_CASE(StructTypeProto::Structure::Field, Field)
+    CHECK_DEFERRED_CASE(StructTypeProto::BitPacking, BitPacking)
+    CHECK_DEFERRED_CASE(StructTypeProto::BitPacking::Component, Component)
+    CHECK_DEFERRED_CASE(StringStringEntryProto, StringStringEntryProto)
+    CHECK_DEFERRED_CASE(TensorProto, TensorProto)
+    CHECK_DEFERRED_CASE(TensorProto::Segment, Segment)
+    CHECK_DEFERRED_CASE(SparseTensorProto, SparseTensorProto)
+    CHECK_DEFERRED_CASE(LocalRewritingProto, LocalRewritingProto)
+    CHECK_DEFERRED_CASE(RewritingProto, RewritingProto)
+    CHECK_DEFERRED_CASE(FunctionProto, FunctionProto)
+    CHECK_DEFERRED_CASE(OperatorSetIdProto, OperatorSetIdProto)
+    CHECK_DEFERRED_CASE(ValueInfoProto, ValueInfoProto)
+    CHECK_DEFERRED_CASE(NodeProto, NodeProto)
+    CHECK_DEFERRED_CASE(AttributeProto, AttributeProto)
+    CHECK_DEFERRED_CASE(GraphProto, GraphProto)
+    CHECK_DEFERRED_CASE(TensorAnnotation, TensorAnnotation)
+    CHECK_DEFERRED_CASE(PersistentBindingProto, PersistentBindingProto)
+    CHECK_DEFERRED_CASE(PagedCacheBlockProto, PagedCacheBlockProto)
+    CHECK_DEFERRED_CASE(PagedCacheProto, PagedCacheProto)
+    CHECK_DEFERRED_CASE(ExtendedInitializerProto, ExtendedInitializerProto)
+    CHECK_DEFERRED_CASE(EncodedValueProto, EncodedValueProto)
+    CHECK_DEFERRED_CASE(AffineLayoutProto, AffineLayoutProto)
+    CHECK_DEFERRED_CASE(NodeDeviceConfigurationProto, NodeDeviceConfigurationProto)
+    CHECK_DEFERRED_CASE(ShardingSpecProto, ShardingSpecProto)
+    CHECK_DEFERRED_CASE(IntIntListEntryProto, IntIntListEntryProto)
+    CHECK_DEFERRED_CASE(ShardedDimProto, ShardedDimProto)
+    CHECK_DEFERRED_CASE(SimpleShardedDimProto, SimpleShardedDimProto)
+    CHECK_DEFERRED_CASE(DeviceConfigurationProto, DeviceConfigurationProto)
+    CHECK_DEFERRED_CASE(ModelProto, ModelProto)
+    CHECK_DEFERRED_CASE(PipelineProto, PipelineProto)
+    CHECK_DEFERRED_CASE(SequenceProto, SequenceProto)
+    CHECK_DEFERRED_CASE(MapProto, MapProto)
+    CHECK_DEFERRED_CASE(OptionalProto, OptionalProto)
+  default:
+    EXT_THROW("Unsupported proto type for deferred export validation: ", proto_id, ".");
+  }
+#undef CHECK_DEFERRED_CASE
+  EXT_ENFORCE(!contains_sources,
+              "Standalone submessage export with deferred sources is unsupported; export the "
+              "owning model.");
 }
 
 #define DEFINE_PROTO_EQUALS(cls)                                                                   \

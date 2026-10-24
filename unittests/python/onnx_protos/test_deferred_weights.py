@@ -8,11 +8,13 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import (
+    GraphProto,
     ModelProto,
     ParseOptions,
     PipelineProto,
     SerializeFormat,
     SerializeOptions,
+    SparseTensorProto,
     load,
     save,
     save_tensor,
@@ -238,6 +240,54 @@ class TestDeferredWeights(unittest.TestCase):
                             with self.assertRaisesRegex(RuntimeError, "deferred sources"):
                                 save(pipeline, output)
                         self.assertEqual(path.read_bytes(), before)
+
+    def test_submessage_exports_preserve_backing_sources(self):
+        original = self.make_model()
+        original.graph.node.append(
+            oh.make_node(
+                "Constant",
+                [],
+                ["value"],
+                value=onh.from_array(np.array([3], dtype=np.float32), name="attribute"),
+            )
+        )
+        original.graph.sparse_initializer.append(
+            SparseTensorProto(
+                values=onh.from_array(np.array([4], dtype=np.float32), name="sparse_values"),
+                indices=onh.from_array(np.array([0], dtype=np.int64), name="sparse_indices"),
+                dims=[1],
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            save(original, path)
+            before = path.read_bytes()
+            for loaded in (False, True):
+                model = load(path, defer_weights=True)
+                if loaded:
+                    model.load_weights()
+                for part in (
+                    model.graph,
+                    model.graph.node[0],
+                    model.graph.node[0].attribute[0],
+                    model.graph.sparse_initializer[0],
+                ):
+                    with self.subTest(loaded=loaded, proto=type(part).__name__):
+                        with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                            part.SerializeToFile(str(path))
+                        with path.open("r+b") as output:
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                part.SerializeToFileDescriptor(output.fileno())
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                part.SerializeToOstream(output)
+                        self.assertEqual(path.read_bytes(), before)
+                if loaded:
+                    serialized = model.graph.SerializeToString()
+                    eager = GraphProto()
+                    eager.ParseFromString(serialized)
+                    output = io.BytesIO()
+                    eager.SerializeToOstream(output)
+                    self.assertEqual(output.getvalue(), serialized)
 
 
 if __name__ == "__main__":

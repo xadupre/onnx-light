@@ -7,6 +7,7 @@
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
 
@@ -47,49 +48,62 @@ protected:
 };
 
 TEST_F(DeferredInitializerLifetime, PrepareRetainsStorageAcrossUnloadAndReload) {
-  ModelProto original;
-  original.set_ir_version(10);
-  original.add_opset("", 18);
-  original.add_opset("test.deferred", 1);
-  auto &graph = original.ref_graph();
-  graph.set_name("deferred");
-  auto *weight = graph.add_initializer();
-  weight->set_name("W");
-  weight->set_data_type(TensorProto::FLOAT);
-  weight->add_dims(2);
-  const std::vector<float> values{3, 4};
-  weight->set_raw_data(values.data(), values.size() * sizeof(float));
-  graph.add_node("Read", {"W"}, {"Y"}, "test.deferred");
-  FillValueInfo(Tensor::FromFloat("Y", {1}, {0}), *graph.add_output());
-  const auto path = (directory / "model.onnx").string();
-  ASSERT_TRUE(original.SerializeToFile(path));
-  ModelProto model;
-  utils::FileStream stream(path);
-  ParseOptions options;
-  options.defer_weights = true;
-  ASSERT_TRUE(model.ParseFromStream(stream, options));
-  ASSERT_TRUE(model.LoadWeight("W"));
-  auto &raw = model.ref_graph().ref_initializer()[0].ref_raw_data();
-  const auto *payload = std::as_const(raw).data();
-  core::runtime::RuntimeContext context(
-      core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
-  context.RegisterCustomKernel(
-      "test.deferred", "Read", [](const NodeProto &node, core::runtime::RuntimeContext &rt) {
-        const auto weight = rt.Get(node.input(0)).AsFloat();
-        rt.Put(node.output(0), Tensor::FromFloat(node.output(0), {1}, {weight[0] + weight[1]}));
-      });
-  core::runtime::RuntimeSession session(model);
-  session.Prepare(context);
-  ASSERT_TRUE(raw.has_active_exports());
-  EXPECT_EQ(context.Get("W").bytes(), payload);
-  ASSERT_TRUE(model.UnloadWeight("W"));
-  ASSERT_TRUE(model.LoadWeight("W"));
-  EXPECT_NE(std::as_const(raw).data(), payload);
-  ASSERT_TRUE(model.UnloadWeight("W"));
-  for (int run = 0; run < 2; ++run) {
-    session.Run(context);
+  for (const bool external : {false, true}) {
+    SCOPED_TRACE(external);
+    ModelProto original;
+    original.set_ir_version(10);
+    original.add_opset("", 18);
+    original.add_opset("test.deferred", 1);
+    auto &graph = original.ref_graph();
+    graph.set_name("deferred");
+    auto *weight = graph.add_initializer();
+    weight->set_name("W");
+    weight->set_data_type(TensorProto::FLOAT);
+    weight->add_dims(2);
+    const std::vector<float> values{3, 4};
+    weight->set_raw_data(values.data(), values.size() * sizeof(float));
+    graph.add_node("Read", {"W"}, {"Y"}, "test.deferred");
+    FillValueInfo(Tensor::FromFloat("Y", {1}, {0}), *graph.add_output());
+    const auto path = (directory / "model.onnx").string();
+    if (external) {
+      utils::TwoFilesWriteStream output(path, (directory / "weights.bin").string());
+      SerializeOptions save_options;
+      save_options.raw_data_threshold = 0;
+      save_options.num_threads = 1;
+      ASSERT_TRUE(SerializeModelProtoToStream(original, output, save_options));
+    } else {
+      ASSERT_TRUE(original.SerializeToFile(path));
+    }
+    ModelProto model;
+    utils::FileStream stream(path);
+    ParseOptions options;
+    options.defer_weights = true;
+    ASSERT_TRUE(model.ParseFromStream(stream, options));
+    core::runtime::RuntimeContext context(
+        core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
+    context.RegisterCustomKernel(
+        "test.deferred", "Read", [](const NodeProto &node, core::runtime::RuntimeContext &rt) {
+          const auto weight = rt.Get(node.input(0)).AsFloat();
+          rt.Put(node.output(0), Tensor::FromFloat(node.output(0), {1}, {weight[0] + weight[1]}));
+        });
+    core::runtime::RuntimeSession session(model);
+    EXPECT_THROW(session.Prepare(context), std::invalid_argument);
+    EXPECT_FALSE(context.HasValue("W"));
+    ASSERT_TRUE(model.LoadWeight("W"));
+    auto &raw = model.ref_graph().ref_initializer()[0].ref_raw_data();
+    const auto *payload = std::as_const(raw).data();
+    session.Prepare(context);
+    ASSERT_TRUE(raw.has_active_exports());
     EXPECT_EQ(context.Get("W").bytes(), payload);
-    EXPECT_FLOAT_EQ(context.Get("Y").AsFloat()[0], 7);
+    ASSERT_TRUE(model.UnloadWeight("W"));
+    ASSERT_TRUE(model.LoadWeight("W"));
+    EXPECT_NE(std::as_const(raw).data(), payload);
+    ASSERT_TRUE(model.UnloadWeight("W"));
+    for (int run = 0; run < 2; ++run) {
+      session.Run(context);
+      EXPECT_EQ(context.Get("W").bytes(), payload);
+      EXPECT_FLOAT_EQ(context.Get("Y").AsFloat()[0], 7);
+    }
   }
 }
 

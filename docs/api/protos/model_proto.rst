@@ -68,7 +68,9 @@ Do not edit a deferred tensor's shape or type before reloading it.
 Unloading releases the proto's allocation ownership, not merely its logical
 size. Existing owning buffer views, explicit shared-payload copies and runtime
 consumers may retain their own storage: unloading a proto does **not** unload
-weights already retained by a runtime session. Ordinary tensor/model copies and
+weights already retained by a runtime session. Runtime preparation rejects
+unloaded deferred initializers; load them before preparing a new context.
+Ordinary tensor/model copies and
 ``CopyFrom`` retain recoverable sources; serialization does not. Other subproto
 ``CopyFrom`` operations use serialization and reject unloaded deferred tensors.
 Serialization node callbacks preserve deferred sources in tensor attributes and
@@ -84,6 +86,8 @@ Python file-like export supports standard binary files and ``io.BytesIO``.
 Standalone deferred tensor file, descriptor and stream exports (including
 ``save_tensor``) are rejected, even after loading. Path-based helpers reject
 before opening the destination; descriptor/stream methods reject before writing.
+This also applies recursively to tensor-containing submessages, including graphs,
+nodes, attributes, sparse tensors, sequences, maps and optional values.
 Export the owning model or eagerly reload a serialized, loaded tensor to detach
 its source before exporting it independently.
 External-output, text and ORT conversions require first saving a single-file
@@ -140,8 +144,8 @@ bytes and 1,442,324 ``.text`` bytes.
 Exceeding either limit still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The strict symbol limit is 913: the CI measurement plus the pipeline
-deferred-export validation method.
+The strict symbol limit is 914: the CI measurement plus the pipeline and
+recursive-submessage deferred-export validators.
 The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto

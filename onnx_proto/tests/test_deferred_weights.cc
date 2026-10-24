@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <sstream>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -290,6 +291,72 @@ TEST_F(DeferredWeights, PipelineExportsRejectSourcesInEveryStageBeforeWriting) {
       EXPECT_EQ(
           std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()),
           before);
+    }
+  }
+}
+
+TEST_F(DeferredWeights, SubmessageExportsRejectNestedSourcesBeforeWriting) {
+  auto original = MakeModel();
+  auto &graph = original.ref_graph();
+  auto &attribute = *graph.add_node()->add_attribute();
+  attribute.ref_t().CopyFrom(graph.initializer()[1]);
+  attribute.ref_t().set_name("attribute");
+  auto &sparse = *graph.add_sparse_initializer();
+  sparse.ref_values().CopyFrom(graph.initializer()[1]);
+  sparse.ref_values().set_name("sparse_values");
+  auto &indices = sparse.ref_indices();
+  indices.set_name("sparse_indices");
+  indices.set_data_type(TensorProto::INT64);
+  indices.add_dims(1);
+  indices.ref_raw_data() = std::vector<uint8_t>(8, 0);
+  sparse.add_dims(1);
+  ASSERT_TRUE(original.SerializeToFile(path));
+  std::ifstream before_stream(path, std::ios::binary);
+  const std::string before((std::istreambuf_iterator<char>(before_stream)),
+                           std::istreambuf_iterator<char>());
+  const auto file = utils::detail::OpenExternalDataFile(directory.string(), "model.onnx", true);
+  for (const bool loaded : {false, true}) {
+    SCOPED_TRACE(loaded);
+    auto model = Load();
+    if (loaded)
+      model.LoadWeights();
+    const auto check = [&](const auto &value) {
+      EXPECT_THROW(value.SerializeToFileDescriptor(*file), std::runtime_error);
+      EXPECT_THROW(value.SaveToFileDescriptor(*file), std::runtime_error);
+      std::fstream stream(path, std::ios::in | std::ios::out | std::ios::binary);
+      EXPECT_THROW(value.SerializeToOstream(&stream), std::runtime_error);
+      utils::FdWriteStream writer(*file);
+      EXPECT_THROW(value.SerializeToZeroCopyStream(&writer), std::runtime_error);
+    };
+    check(model.graph());
+    check(model.graph().node()[0]);
+    check(model.graph().node()[0].attribute()[0]);
+    check(model.graph().sparse_initializer()[0]);
+    GraphProto nested;
+    nested.add_node()->add_attribute()->ref_g().add_initializer()->CopyFrom(
+        model.graph().initializer()[1]);
+    check(nested);
+    SequenceProto sequence;
+    sequence.add_tensor_values()->CopyFrom(model.graph().initializer()[1]);
+    check(sequence);
+    MapProto map;
+    map.ref_values().add_tensor_values()->CopyFrom(model.graph().initializer()[1]);
+    check(map);
+    OptionalProto optional;
+    optional.ref_tensor_value().CopyFrom(model.graph().initializer()[1]);
+    check(optional);
+    std::ifstream input(path, std::ios::binary);
+    EXPECT_EQ(
+        std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()),
+        before);
+    if (loaded) {
+      std::string serialized;
+      ASSERT_TRUE(model.graph().SerializeToString(serialized));
+      GraphProto eager;
+      ASSERT_TRUE(eager.ParseFromString(serialized));
+      std::ostringstream output;
+      ASSERT_TRUE(eager.SerializeToOstream(&output));
+      EXPECT_EQ(output.str(), serialized);
     }
   }
 }

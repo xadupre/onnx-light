@@ -280,6 +280,83 @@ TEST(GraphLayout, InsertDeleteReplacePreserveIdsAndOrder) {
   EXPECT_THROW(layout.Insert(20, replacement), std::out_of_range);
 }
 
+TEST(GraphLayout, InsertPreservesExistingNodePayloadAndSubgraphIdentity) {
+  const std::string payload(1024 * 1024, 'x');
+  auto check = [&](auto &scope, size_t index) {
+    *scope.add_node() = Node("prefix");
+    auto *container = scope.add_node();
+    *container = Node("container", {"prefix"}, "Container");
+    auto *attribute = container->add_attribute();
+    attribute->set_name("weights");
+    attribute->set_type(AttributeProto::TENSOR);
+    auto *tensor = attribute->mutable_t();
+    tensor->set_data_type(TensorProto::FLOAT);
+    tensor->add_dims(payload.size() / sizeof(float));
+    tensor->set_raw_data(payload);
+    auto *body = container->add_attribute();
+    body->set_name("body");
+    body->set_type(AttributeProto::GRAPH);
+    auto *subgraph = body->mutable_g();
+    auto *initializer = subgraph->add_initializer();
+    *initializer = *tensor;
+    initializer->set_name("weights");
+    *subgraph->add_node() = Node("inner", {"weights"});
+    subgraph->add_output()->set_name("inner");
+    *scope.add_node() = Node("tail", {"container"});
+
+    GraphLayout layout(scope, true);
+    const auto ids = layout.Order();
+    ASSERT_EQ(layout.Children(ids[1]).size(), 1u);
+    auto *child = layout.Children(ids[1])[0];
+    const auto inner = child->Order()[0];
+    const auto *data = tensor->raw_data().data();
+    const auto *nested_data = initializer->raw_data().data();
+    const auto *nested_node = &subgraph->node(0);
+    std::vector<const NodeProto *> nodes;
+    std::vector<std::string> serialized;
+    for (const auto &node : scope.node()) {
+      nodes.push_back(&node);
+      serialized.push_back(node.SerializeAsString());
+    }
+
+    const auto inserted = layout.Insert(index, Node("inserted"));
+    auto expected = ids;
+    expected.insert(expected.begin() + static_cast<ptrdiff_t>(index), inserted);
+    EXPECT_EQ(layout.Order(), expected);
+    EXPECT_EQ(scope.node(index).output(0), "inserted");
+    ASSERT_EQ(scope.node().size(), nodes.size() + 1);
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      const auto &node = scope.node(i < index ? i : i + 1);
+      ASSERT_EQ(&node, nodes[i]);
+      EXPECT_EQ(node.SerializeAsString(), serialized[i]);
+      EXPECT_EQ(layout.Get(ids[i])->outputs[0], node.output(0));
+    }
+    ASSERT_EQ(&container->attribute(0), attribute);
+    ASSERT_EQ(&attribute->t(), tensor);
+    EXPECT_EQ(tensor->raw_data().data(), data);
+    EXPECT_EQ(tensor->raw_data(), payload);
+    ASSERT_EQ(&container->attribute(1), body);
+    ASSERT_EQ(&body->g(), subgraph);
+    ASSERT_EQ(&subgraph->initializer(0), initializer);
+    EXPECT_EQ(initializer->raw_data().data(), nested_data);
+    EXPECT_EQ(initializer->raw_data(), payload);
+    EXPECT_EQ(&subgraph->node(0), nested_node);
+    ASSERT_EQ(layout.Children(ids[1]).size(), 1u);
+    ASSERT_EQ(layout.Children(ids[1])[0], child);
+    ASSERT_TRUE(child->RewireInput(inner, 0, "capture"));
+    EXPECT_EQ(subgraph->node(0).input(0), "capture");
+    ASSERT_TRUE(layout.RewireInput(ids[1], 0, "external"));
+    EXPECT_EQ(container->input(0), "external");
+  };
+  for (size_t index : {0u, 1u, 2u, 3u}) {
+    SCOPED_TRACE(index);
+    GraphProto graph;
+    check(graph, index);
+    FunctionProto function;
+    check(function, index);
+  }
+}
+
 TEST(GraphLayout, StableIdsDoNotDependOnNodeNames) {
   GraphProto graph;
   *graph.add_node() = Node("a");

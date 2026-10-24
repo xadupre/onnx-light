@@ -11,7 +11,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @defgroup encryption Encrypted model I/O
  * @{
  *
- * Saves and loads ONNX ModelProto objects as single encrypted binary files.
+ * Saves and loads ONNX ModelProto objects and optional encrypted external weights.
  *
  * Supported formats:
  * - ONNXCRY1: AES-256-CBC (legacy, no MAC)
@@ -77,10 +77,71 @@ ONNX_LIGHT_PROTO_API void SaveEncryptedModel(ModelProto &model, const std::strin
                                              const std::string &key, const std::string &encryption);
 
 /**
+ * Saves an ONNXCRY3 model with separately authenticated ONNXCRY3 weight files.
+ *
+ * Packs nonempty raw_data tensors of at least size_threshold bytes into shards
+ * beside file_path. Typed tensor fields remain embedded. The input is unchanged;
+ * existing external tensors must have their plaintext raw_data loaded first.
+ * Struct declaration/codec tensors stay embedded; external references in those
+ * scopes and external encoded initializers are rejected before writing files.
+ * Metadata is copied, while safe tensor storage is shared with copy-on-write;
+ * ownerless borrowed buffers and actively exported buffers are copied.
+ * The caller must synchronize source access and reacquire existing storage views afterward.
+ * No plaintext files are written. Shards have unique generated relative names.
+ * max_external_file_size includes the 52-byte ONNXCRY3 envelope and must be
+ * between 53 and INT_MAX + 52 bytes. Tensors are never split: an eligible tensor
+ * exceeding the payload capacity throws before any file is written.
+ *
+ * Each tensor records location, offset and length in the decrypted shard, plus
+ * onnx_light.encryption=ONNXCRY3 and onnx_light.encrypted_sha256 (the hex SHA-256
+ * of the complete encrypted shard). The encrypted model authenticates this
+ * metadata, preventing substitution with another valid shard under the same key.
+ * Writes shards first and the model last; I/O failures may leave encrypted orphan
+ * shards. Saving is not transactional; callers manage obsolete shards.
+ *
+ * @param model Model containing in-memory tensor data.
+ * @param file_path Destination encrypted model path (created or truncated).
+ * @param key Nonempty passphrase / binary key, shared by all files.
+ * @param max_external_file_size Maximum encrypted shard size in bytes.
+ * @param size_threshold Minimum raw_data size to externalize.
+ * @throws std::runtime_error on invalid limits, unloaded external data, or I/O/crypto errors.
+ */
+ONNX_LIGHT_PROTO_API void SaveEncryptedModelWithExternalData(
+    ModelProto &model, const std::string &file_path, const std::string &key,
+    size_t max_external_file_size = 1024ULL * 1024 * 1024, size_t size_threshold = 1024);
+
+/**
+ * Loads authenticated external weights from an already decrypted model.
+ *
+ * Resolves marked external tensors relative to base_dir, verifies their
+ * ciphertext SHA-256 against the authenticated model metadata, and decrypts each
+ * shard once. Offsets and lengths address plaintext, never ciphertext. Successful
+ * tensors become embedded raw_data with external metadata removed. Unmarked
+ * plain external tensors are left unchanged (LoadExternalDataForModel handles
+ * those). The model metadata must come from a trusted/authenticated source.
+ *
+ * @param model Decrypted model whose marked tensors are populated in place.
+ * @param base_dir Directory containing the encrypted model and its shards.
+ * @param key Nonempty passphrase / binary key.
+ * @param opts Parsing limits; max_tensor_size_bytes also applies to external slices.
+ * @param max_external_file_size Maximum encrypted shard size accepted in bytes.
+ * @throws std::runtime_error on wrong passwords, missing/corrupt/substituted files,
+ *         unsafe paths, invalid metadata or limits. On failure, model may be partially loaded.
+ */
+ONNX_LIGHT_PROTO_API void
+LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &base_dir,
+                                  const std::string &key, const ParseOptions &opts = ParseOptions{},
+                                  size_t max_external_file_size = 1024ULL * 1024 * 1024);
+
+/**
  * Loads and decrypts an encrypted ONNX model from *file_path*.
  *
  * The file must have been produced by SaveEncryptedModel() with the same
- * passphrase.  The decrypted bytes are parsed into *model*.
+ * passphrase. The decrypted bytes are parsed into *model*. Marked encrypted
+ * external weights are authenticated and embedded automatically, with a default
+ * 1 GiB encrypted-shard limit. For a different limit, uses
+ * LoadEncryptedModelFromString() followed by LoadEncryptedExternalDataForModel().
+ * Plain external references retain their existing behavior (not loaded here).
  *
  * @param model      Output model populated from the decrypted payload.
  * @param file_path  Source file path.

@@ -377,15 +377,19 @@ jobs:
         # leases. Linux CI run 39752559187 (f470c5a8) measures 1773952 installed bytes,
         # 1262138 text bytes and 897 symbols. Update the measured size references and allow
         # the snapshot/lease exports; keep the 5% size margin and dependency allowlist.
+        # Authenticated external weights add shard I/O, validation and tensor traversal.
+        # Linux CI run 40030558220 (9048f1bc4) measures 1851608 installed bytes,
+        # 1331306 text bytes and 898 symbols. Update the text reference and symbol cap;
+        # keep the installed-size reference, 5% size margin and dependency allowlist.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1773952 \
-            --max-text-size 1262138 \
+            --max-text-size 1331306 \
             --size-budget-margin-percent 5 \
-            --max-dynamic-symbols 897 \
+            --max-dynamic-symbols 898 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
@@ -515,6 +519,7 @@ jobs:
       - name: Run tests
         env:
           UNITTEST_GOING: "1"
+          MPLBACKEND: Agg
         run: |
           pytest --durations=10 unittests
 

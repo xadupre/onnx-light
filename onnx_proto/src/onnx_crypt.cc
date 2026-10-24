@@ -2,16 +2,20 @@
 
 #ifdef ONNX_LIGHT_HAS_OPENSSL
 
+#include "external_data_internal.h"
 #include "stream.h"
 #include <array>
+#include <charconv>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 // ChaCha20-Poly1305 is only available when OpenSSL is built with ChaCha support.
@@ -26,6 +30,13 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 namespace {
+
+using utils::detail::kExternalDataDigestKey;
+using utils::detail::kExternalDataEncryptionFormat;
+using utils::detail::kExternalDataEncryptionKey;
+using utils::detail::kExternalDataLengthKey;
+using utils::detail::kExternalDataLocationKey;
+using utils::detail::kExternalDataOffsetKey;
 
 // File format constants.
 static constexpr std::array<char, 8> MAGIC_AES{'O', 'N', 'N', 'X', 'C', 'R', 'Y', '1'};
@@ -50,6 +61,8 @@ std::string openssl_last_error() {
 
 // Derives a 32-byte AES key from *key* and *salt* using PBKDF2-HMAC-SHA256.
 std::array<uint8_t, KEY_LEN> derive_key(const std::string &key, const uint8_t (&salt)[SALT_LEN]) {
+  if (key.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error("Encryption key exceeds INT_MAX bytes.");
   std::array<uint8_t, KEY_LEN> out{};
   if (PKCS5_PBKDF2_HMAC(key.data(), static_cast<int>(key.size()), salt, SALT_LEN, PBKDF2_ITER,
                         EVP_sha256(), KEY_LEN, out.data()) != 1) {
@@ -419,7 +432,413 @@ std::vector<uint8_t> decrypt_from_blob(const uint8_t *data, size_t data_len,
       "Bad magic bytes – not an ONNXCRY1/ONNXCRY2/ONNXCRY3 encrypted payload.");
 }
 
+constexpr size_t GCM_HEADER_SIZE = MAGIC_GCM.size() + SALT_LEN + NONCE_LEN + TAG_LEN;
+static_assert(GCM_HEADER_SIZE == 52);
+
+void validate_external_limits(const std::string &key, size_t limit) {
+  if (key.empty() || key.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error(
+        "Encrypted external data requires a nonempty key of at most INT_MAX bytes.");
+  if (limit <= GCM_HEADER_SIZE ||
+      limit - GCM_HEADER_SIZE > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error(
+        "Encrypted external file size must be between 53 and INT_MAX + 52 bytes.");
+}
+
+std::string hex_bytes(const uint8_t *bytes, size_t size) {
+  static constexpr char digits[] = "0123456789abcdef";
+  std::string result;
+  result.reserve(size * 2);
+  for (size_t i = 0; i < size; ++i) {
+    result.push_back(digits[bytes[i] >> 4]);
+    result.push_back(digits[bytes[i] & 15]);
+  }
+  return result;
+}
+
+std::string encrypted_digest(const std::string &blob) {
+  uint8_t digest[EVP_MAX_MD_SIZE];
+  unsigned int size = 0;
+  if (EVP_Digest(blob.data(), blob.size(), digest, &size, EVP_sha256(), nullptr) != 1)
+    throw std::runtime_error("Encrypted external data SHA-256 failed: " + openssl_last_error());
+  return hex_bytes(digest, size);
+}
+
+void write_encrypted_file(const std::filesystem::path &path, const std::string &blob) {
+  const auto parent = path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
+  auto file = utils::detail::OpenExternalDataFile(
+      utils::detail::external_path_to_utf8(parent),
+      utils::detail::external_path_to_utf8(path.filename()), true);
+  utils::FileWriteStream stream(utils::detail::external_path_to_utf8(path), std::move(file));
+  stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(blob.data()), blob.size());
+}
+
+void add_external_entry(TensorProto &tensor, const std::string &key, const std::string &value) {
+  auto *entry = tensor.add_external_data();
+  entry->set_key(key);
+  entry->set_value(value);
+}
+
+bool parse_external_integer(const std::string &value, int64_t &result) {
+  const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
+  return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
+}
+
+std::string external_tensor_context(const TensorProto &tensor, const std::string &location) {
+  return "tensor '" + std::string(tensor.name()) + "', location '" + location + "'";
+}
+
+void reject_unsupported_external_data(const GraphProto &graph, bool codec = false);
+void reject_unsupported_external_data(const FunctionProto &function, bool codec = false);
+void reject_external_struct_data(const TypeProto &type);
+
+void reject_external_codec_tensor(const TensorProto &tensor) {
+  if ((tensor.has_data_location() &&
+       tensor.data_location() == TensorProto::DataLocation::EXTERNAL) ||
+      !tensor.external_data().empty())
+    throw std::runtime_error("External tensor data in struct declarations/codecs is unsupported "
+                             "for encrypted storage: " +
+                             std::string(tensor.name()));
+}
+
+void reject_external_codec_tensor(const SparseTensorProto &tensor) {
+  if (tensor.has_values())
+    reject_external_codec_tensor(tensor.values());
+  if (tensor.has_indices())
+    reject_external_codec_tensor(tensor.indices());
+}
+
+void reject_external_struct_data(const StructTypeProto &type) {
+  if (type.has_decoder())
+    reject_unsupported_external_data(type.decoder(), true);
+  if (type.has_encoder())
+    reject_unsupported_external_data(type.encoder(), true);
+  if (type.has_array() && type.array().has_element_type())
+    reject_external_struct_data(type.array().element_type());
+  if (type.has_structure()) {
+    for (const auto &field : type.structure().field()) {
+      if (field.has_type())
+        reject_external_struct_data(field.type());
+      if (field.has_constant())
+        reject_external_codec_tensor(field.constant());
+    }
+  }
+}
+
+void reject_external_struct_data(const TypeProto &type) {
+  if (type.has_struct_type())
+    reject_external_struct_data(type.struct_type());
+  if (type.has_sequence_type() && type.sequence_type().has_elem_type())
+    reject_external_struct_data(type.sequence_type().elem_type());
+  if (type.has_optional_type() && type.optional_type().has_elem_type())
+    reject_external_struct_data(type.optional_type().elem_type());
+  if (type.has_map_type() && type.map_type().has_value_type())
+    reject_external_struct_data(type.map_type().value_type());
+}
+
+void reject_external_struct_data(const EncodedValueProto &value) {
+  if (value.has_struct_type())
+    reject_external_struct_data(value.struct_type());
+  if (value.has_logical_type())
+    reject_external_struct_data(value.logical_type());
+}
+
+void reject_external_encoded_value(const EncodedValueProto &value, bool codec) {
+  if ((value.has_data_location() && value.data_location() == TensorProto::DataLocation::EXTERNAL) ||
+      !value.external_data().empty())
+    throw std::runtime_error("External encoded initializer payloads are unsupported for "
+                             "encrypted export: " +
+                             std::string(value.name()));
+  if (codec && value.has_affine()) {
+    if (value.affine().has_scale())
+      reject_external_codec_tensor(value.affine().scale());
+    if (value.affine().has_zero_point())
+      reject_external_codec_tensor(value.affine().zero_point());
+  }
+  reject_external_struct_data(value);
+}
+
+void reject_external_struct_data(const utils::RepeatedProtoField<ValueInfoProto> &values) {
+  for (const auto &value : values)
+    if (value.has_type())
+      reject_external_struct_data(value.type());
+}
+
+void reject_unsupported_external_data(const AttributeProto &attribute, bool codec) {
+  if (codec) {
+    if (attribute.has_t())
+      reject_external_codec_tensor(attribute.t());
+    for (const auto &tensor : attribute.tensors())
+      reject_external_codec_tensor(tensor);
+    if (attribute.has_sparse_tensor())
+      reject_external_codec_tensor(attribute.sparse_tensor());
+    for (const auto &tensor : attribute.sparse_tensors())
+      reject_external_codec_tensor(tensor);
+  }
+  if (attribute.has_tp())
+    reject_external_struct_data(attribute.tp());
+  for (const auto &type : attribute.type_protos())
+    reject_external_struct_data(type);
+  if (attribute.has_g())
+    reject_unsupported_external_data(attribute.g(), codec);
+  for (const auto &graph : attribute.graphs())
+    reject_unsupported_external_data(graph, codec);
+}
+
+void reject_unsupported_external_data(const NodeProto &node, bool codec = false) {
+  for (const auto &attribute : node.attribute())
+    reject_unsupported_external_data(attribute, codec);
+}
+
+void reject_unsupported_external_data(const FunctionProto &function, bool codec) {
+  reject_external_struct_data(function.value_info());
+  for (const auto &node : function.node())
+    reject_unsupported_external_data(node, codec);
+  for (const auto &attribute : function.attribute_proto())
+    reject_unsupported_external_data(attribute, codec);
+}
+
+void reject_unsupported_external_data(const GraphProto &graph, bool codec) {
+  if (codec) {
+    for (const auto &tensor : graph.initializer())
+      reject_external_codec_tensor(tensor);
+    for (const auto &tensor : graph.sparse_initializer())
+      reject_external_codec_tensor(tensor);
+  }
+  reject_external_struct_data(graph.input());
+  reject_external_struct_data(graph.output());
+  reject_external_struct_data(graph.value_info());
+  for (const auto &initializer : graph.extended_initializer()) {
+    if (initializer.has_encoded_value())
+      reject_external_encoded_value(initializer.encoded_value(), codec);
+    if (initializer.has_paged_cache()) {
+      for (const auto &block : initializer.paged_cache().blocks()) {
+        if (codec) {
+          if (block.has_key())
+            reject_external_codec_tensor(block.key());
+          if (block.has_value())
+            reject_external_codec_tensor(block.value());
+          if (block.has_encoded_key())
+            reject_external_encoded_value(block.encoded_key(), true);
+          if (block.has_encoded_value())
+            reject_external_encoded_value(block.encoded_value(), true);
+        } else {
+          if (block.has_encoded_key())
+            reject_external_struct_data(block.encoded_key());
+          if (block.has_encoded_value())
+            reject_external_struct_data(block.encoded_value());
+        }
+      }
+    }
+  }
+  for (const auto &node : graph.node())
+    reject_unsupported_external_data(node, codec);
+}
+
+void reject_unsupported_external_data(const ModelProto &model) {
+  for (const auto &type : model.struct_types())
+    reject_external_struct_data(type);
+  if (model.has_graph())
+    reject_unsupported_external_data(model.graph());
+  for (const auto &function : model.functions())
+    reject_unsupported_external_data(function);
+  for (const auto &entry : model.rewritings()) {
+    const RewritingProto &rewriting = entry.second;
+    for (const auto &function : rewriting.added_functions())
+      reject_unsupported_external_data(function);
+    for (const auto &rewrite : rewriting.rewrites()) {
+      for (const auto &node : rewrite.added_nodes())
+        reject_unsupported_external_data(node);
+      for (const auto &node : rewrite.initializer_calls())
+        reject_unsupported_external_data(node);
+    }
+  }
+}
+
 } // namespace
+
+void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &file_path,
+                                        const std::string &key, size_t max_external_file_size,
+                                        size_t size_threshold) {
+  validate_external_limits(key, max_external_file_size);
+  const size_t capacity = max_external_file_size - GCM_HEADER_SIZE;
+  reject_unsupported_external_data(model);
+  ModelProto copy = utils::CopyWithSharedTensorStorage(model);
+  IteratorTensorProto check(&copy);
+  while (check.next()) {
+    TensorProto &tensor = *check;
+    if (tensor.has_data_location() &&
+        tensor.data_location() == TensorProto::DataLocation::EXTERNAL) {
+      if (!tensor.has_raw_data())
+        throw std::runtime_error("External tensor data must be loaded before encrypted export: " +
+                                 std::string(tensor.name()));
+      tensor.clr_external_data();
+      tensor.set_data_location(TensorProto::DataLocation::DEFAULT);
+    }
+    if (tensor.raw_data().size() >= size_threshold && tensor.raw_data().size() > capacity)
+      throw std::runtime_error("Tensor exceeds encrypted external file size limit: " +
+                               std::string(tensor.name()));
+  }
+
+  uint8_t identifier[16];
+  if (RAND_bytes(identifier, sizeof(identifier)) != 1)
+    throw std::runtime_error("RAND_bytes failed: " + openssl_last_error());
+  const std::filesystem::path path(file_path);
+  const std::string prefix = utils::detail::external_path_to_utf8(path.filename()) + ".weights." +
+                             hex_bytes(identifier, sizeof(identifier)) + ".";
+  std::string plain;
+  std::vector<TensorProto *> tensors;
+  size_t index = 0;
+  auto flush = [&]() {
+    if (tensors.empty())
+      return;
+    const std::string location = prefix + std::to_string(index++) + ".onnxc";
+    const std::string blob = encrypt_to_blob_gcm(plain, key);
+    const std::string digest = encrypted_digest(blob);
+    write_encrypted_file(path.parent_path() /
+                             std::filesystem::path(std::u8string(location.begin(), location.end())),
+                         blob);
+    for (TensorProto *tensor : tensors) {
+      add_external_entry(*tensor, kExternalDataLocationKey, location);
+      add_external_entry(*tensor, kExternalDataEncryptionKey, kExternalDataEncryptionFormat);
+      add_external_entry(*tensor, kExternalDataDigestKey, digest);
+    }
+    tensors.clear();
+    plain.clear();
+  };
+  IteratorTensorProto iterator(&copy);
+  while (iterator.next()) {
+    TensorProto &tensor = *iterator;
+    const size_t size = tensor.raw_data().size();
+    if (size == 0 || size < size_threshold)
+      continue;
+    if (size > capacity - plain.size())
+      flush();
+    tensor.clr_external_data();
+    add_external_entry(tensor, kExternalDataOffsetKey, std::to_string(plain.size()));
+    add_external_entry(tensor, kExternalDataLengthKey, std::to_string(size));
+    const auto &raw_data = tensor.raw_data();
+    plain.append(reinterpret_cast<const char *>(raw_data.data()), size);
+    tensor.clear_raw_data();
+    tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+    tensors.push_back(&tensor);
+  }
+  flush();
+  write_encrypted_file(path, SaveEncryptedModelToString(copy, key, "AES-256-GCM"));
+}
+
+void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &base_dir,
+                                       const std::string &key, const ParseOptions &opts,
+                                       size_t max_external_file_size) {
+  validate_external_limits(key, max_external_file_size);
+  onnx_light_helpers::ValidateAlignmentOption(opts.alignment, "ParseOptions.alignment");
+  struct TensorReference {
+    TensorProto *tensor;
+    GraphProto *graph;
+    uint64_t offset;
+    uint64_t length;
+  };
+  struct Shard {
+    std::string digest;
+    std::vector<TensorReference> tensors;
+  };
+  std::map<std::string, Shard> shards;
+  IteratorTensorProto iterator(&model);
+  while (iterator.next()) {
+    TensorProto &tensor = *iterator;
+    bool marked = false;
+    std::string location;
+    for (const auto &entry : tensor.external_data()) {
+      marked |= entry.key() == kExternalDataEncryptionKey;
+      if (entry.key() == kExternalDataLocationKey && location.empty())
+        location = entry.value();
+    }
+    if (!marked)
+      continue;
+    std::map<std::string, std::string> entries;
+    for (const auto &entry : tensor.external_data()) {
+      if (!entries.emplace(std::string(entry.key()), std::string(entry.value())).second)
+        throw std::runtime_error("Duplicate encrypted external-data key '" +
+                                 std::string(entry.key()) + "' for " +
+                                 external_tensor_context(tensor, location));
+    }
+    const auto invalid = [&](const std::string &field) {
+      return std::runtime_error("Invalid encrypted external-data " + field + " for " +
+                                external_tensor_context(tensor, location));
+    };
+    const auto required = [&](const char *field) -> const std::string & {
+      const auto found = entries.find(field);
+      if (found == entries.end())
+        throw invalid(std::string("missing field '") + field + "'");
+      return found->second;
+    };
+    int64_t offset = -1, length = -1;
+    if (tensor.data_location() != TensorProto::DataLocation::EXTERNAL)
+      throw invalid("data_location");
+    if (required(kExternalDataEncryptionKey) != kExternalDataEncryptionFormat)
+      throw invalid(kExternalDataEncryptionKey);
+    if (!IsSafeExternalDataLocation(required(kExternalDataLocationKey)))
+      throw invalid(kExternalDataLocationKey);
+    const std::string &digest = required(kExternalDataDigestKey);
+    if (digest.size() != 64)
+      throw invalid(kExternalDataDigestKey);
+    if (!parse_external_integer(required(kExternalDataOffsetKey), offset) || offset < 0)
+      throw invalid(kExternalDataOffsetKey);
+    if (!parse_external_integer(required(kExternalDataLengthKey), length) || length < 0)
+      throw invalid(kExternalDataLengthKey);
+    if (opts.max_tensor_size_bytes > 0 && length > opts.max_tensor_size_bytes)
+      throw invalid("length exceeding max_tensor_size_bytes");
+    auto &shard = shards[location];
+    if (shard.tensors.empty())
+      shard.digest = digest;
+    else if (shard.digest != digest)
+      throw invalid(std::string("inconsistent ") + kExternalDataDigestKey);
+    shard.tensors.push_back(TensorReference{
+        &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
+  }
+  for (const auto &[location, shard] : shards) {
+    std::vector<uint8_t> plain;
+    {
+      auto file = utils::detail::OpenExternalDataFile(base_dir, location);
+      const int64_t size = utils::detail::ExternalDataFileSize(*file);
+      if (size < static_cast<int64_t>(GCM_HEADER_SIZE) ||
+          static_cast<uint64_t>(size) > max_external_file_size)
+        throw std::runtime_error("Encrypted external file exceeds size limit or is truncated for " +
+                                 external_tensor_context(*shard.tensors.front().tensor, location));
+      std::string blob(static_cast<size_t>(size), '\0');
+      utils::detail::ReadExternalDataFile(*file, blob.data(), size, 0);
+      const std::string digest = encrypted_digest(blob);
+      if (digest != shard.digest ||
+          blob.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
+        throw std::runtime_error(
+            "Encrypted external file authentication failed (digest or format) for " +
+            external_tensor_context(*shard.tensors.front().tensor, location));
+      plain =
+          decrypt_from_blob_gcm(reinterpret_cast<const uint8_t *>(blob.data()), blob.size(), key);
+    }
+    for (const auto &reference : shard.tensors) {
+      if (reference.offset > plain.size() || reference.length > plain.size() - reference.offset)
+        throw std::runtime_error("Encrypted external tensor offset/length range is invalid for " +
+                                 external_tensor_context(*reference.tensor, location));
+      const size_t offset = static_cast<size_t>(reference.offset);
+      const size_t length = static_cast<size_t>(reference.length);
+      TensorProto &tensor = *reference.tensor;
+      if (opts.alignment > 1)
+        tensor.ref_raw_data().resize_aligned(length, static_cast<size_t>(opts.alignment));
+      else
+        tensor.ref_raw_data().resize(length);
+      if (length > 0)
+        std::memcpy(tensor.ref_raw_data().data(), plain.data() + offset, length);
+      tensor.clr_external_data();
+      tensor.set_data_location(TensorProto::DataLocation::DEFAULT);
+      if (opts.raw_data_callback && tensor.has_raw_data()) {
+        auto deleter = opts.raw_data_callback(tensor, reference.graph);
+        if (deleter)
+          tensor.ref_raw_data().attach_deleter(std::move(deleter));
+      }
+    }
+  }
+}
 
 void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
                         const SerializeOptions &opts, const std::string &encryption) {
@@ -458,6 +877,28 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
     throw std::runtime_error("Read error for file: " + file_path);
 
   LoadEncryptedModelFromString(model, file_buf, key, opts);
+  bool encrypted_external = false;
+  IteratorTensorProto iterator(&model);
+  while (!encrypted_external && iterator.next()) {
+    for (const auto &entry : iterator->external_data()) {
+      if (entry.key() == kExternalDataEncryptionKey) {
+        encrypted_external = true;
+        break;
+      }
+    }
+  }
+  if (encrypted_external) {
+    if (file_buf.compare(0, MAGIC_GCM.size(), MAGIC_GCM.data(), MAGIC_GCM.size()) != 0)
+      throw std::runtime_error("Encrypted external weights require an ONNXCRY3 model.");
+
+    std::filesystem::path base_dir_path = std::filesystem::path(file_path).parent_path();
+    if (base_dir_path.empty()) {
+      base_dir_path = ".";
+    }
+
+    LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path),
+                                      key, opts);
+  }
 }
 
 std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
@@ -479,6 +920,8 @@ void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypte
   auto plaintext = decrypt_from_blob(reinterpret_cast<const uint8_t *>(encrypted_data.data()),
                                      encrypted_data.size(), key);
   ParseOptions mutable_opts = opts;
+  // The decrypted buffer is local, so parsed tensors must own their bytes.
+  mutable_opts.no_copy = false;
   utils::StringStream stream(plaintext.data(), static_cast<int64_t>(plaintext.size()));
   if (mutable_opts.is_parallel())
     stream.StartThreadPool(mutable_opts.num_threads);

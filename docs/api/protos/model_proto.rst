@@ -37,15 +37,18 @@ Binary-size budget
 
 Named-plan maps and explicit shared-payload snapshots add serialization,
 comparison, copy-on-write storage and export-lease code to ``lib_onnx_proto``.
-Linux CI run ``39752559187`` at commit ``f470c5a8`` measures 1,773,952 installed
-bytes, 1,262,138 ``.text`` bytes and 897 defined dynamic symbols.
-CI uses these installed-size and text measurements as references
-with a 5% margin (``--size-budget-margin-percent 5``), giving limits of
-1,862,649 installed bytes and 1,325,244 ``.text`` bytes. Exceeding either limit
-still fails CI. The error reports the reference, margin and effective limit,
+Linux CI run ``39752559187`` at commit ``f470c5a8`` established the installed-size
+reference of 1,773,952 bytes. Authenticated encrypted external weights add shard
+I/O, validation and extended tensor traversal. Linux CI run ``40030558220`` at
+commit ``9048f1bc4`` measures 1,851,608 installed bytes, 1,331,306 ``.text`` bytes
+and 898 defined dynamic symbols.
+CI retains the installed-size reference and uses the new text measurement
+as its text reference, with a 5% margin (``--size-budget-margin-percent 5``),
+giving limits of 1,862,649 installed bytes and 1,397,871 ``.text`` bytes.
+Exceeding either limit still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The strict symbol limit remains 897 for native snapshot and export-lease code.
+The strict symbol limit is 898, matching the encrypted external-weight implementation.
 The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto

@@ -8,6 +8,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     GraphLayout,
     ModelProto,
     ParseOptions,
+    PipelineProto,
     SerializeOptions,
     TensorProto,
     enable_graph_layout,
@@ -109,7 +110,7 @@ def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | Non
 
 
 def save(
-    proto: ModelProto,
+    proto: ModelProto | PipelineProto,
     f: str | Path | IO[bytes],
     format: str | None = None,
     *,
@@ -124,12 +125,14 @@ def save(
     raw_data_callback: Callable[[TensorProto, Any | None, Any | None, bool], int] | None = None,
 ) -> None:
     """
-    Saves the ModelProto to the specified path and optionally,
+    Saves the ModelProto or PipelineProto to the specified path and optionally,
     serializes tensors with raw data as external data before saving.
     When external data is used, serialization writes through a temporary view,
     so the input in-memory ModelProto is left unchanged.
+    PipelineProto does not support external-weight output.
 
-    :param proto: should be a in-memory ModelProto
+    :param proto: should be an in-memory ModelProto or PipelineProto.
+        Pipeline files conventionally use ``.pipe-onnx`` or ``.pipeline``.
     :param f: can be a file-like object (has "write" function) or a string containing
         a file name or a pathlike object
     :param format: The serialization format, either ``"protobuf"`` (binary ONNX)
@@ -177,7 +180,9 @@ def save(
         that size and calls it again with ``size_only=False`` so it can fill
         the bytes and update tensor metadata before serialization.
     """
-    assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
+    assert isinstance(
+        proto, (ModelProto, PipelineProto)
+    ), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)) or hasattr(
         f, "write"
     ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
@@ -299,9 +304,12 @@ def load(
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
     layout: bool = False,
-) -> ModelProto:
+) -> ModelProto | PipelineProto:
     """
-    Loads a serialized ModelProto into memory.
+    Loads a serialized ModelProto or PipelineProto into memory.
+
+    Paths ending in ``.pipe-onnx`` or ``.pipeline`` are loaded as PipelineProto.
+    Other paths and bytes inputs are loaded as ModelProto.
 
     When *f* is a file path, the file is memory-mapped (``mmap`` on POSIX,
     ``CreateFileMapping`` on Windows) and parsed directly out of the mapped
@@ -383,11 +391,16 @@ def load(
     :param layout: enables native incremental layout while loading. Binary graph and function
         bodies are placed at their parse-completion hooks, children first, and persisted in
         metadata. Text scopes are placed before returning. The default leaves metadata untouched.
-    :return: Loaded in-memory ModelProto.
+    :return: Loaded in-memory ModelProto or PipelineProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
     if isinstance(f, Path):
         f = str(f)
+    proto_type = (
+        PipelineProto
+        if isinstance(f, str) and os.path.splitext(f)[-1] in {".pipe-onnx", ".pipeline"}
+        else ModelProto
+    )
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:
@@ -403,9 +416,22 @@ def load(
         else:
             with open(f, encoding="utf-8") as handle:
                 text = handle.read()
-        model = parse_from_textproto(text, ModelProto())
+        model = parse_from_textproto(text, proto_type())
         if layout:
-            scopes = [(scope, False) for scope in reversed([model.graph, *model.functions])]
+            models = (
+                [
+                    getattr(model, stage)
+                    for stage in ("embedding", "prefill", "decode")
+                    if model.HasField(stage)
+                ]
+                if isinstance(model, PipelineProto)
+                else [model]
+            )
+            scopes = [
+                (scope, False)
+                for part in models
+                for scope in reversed([part.graph, *part.functions])
+            ]
             while scopes:
                 scope, ready = scopes.pop()
                 if not ready:
@@ -446,7 +472,7 @@ def load(
         # resolver consumes each tensor's ``external_data.location`` on the same
         # parse pass and opens the matching source file on demand.
         location = os.path.abspath(f)
-    model = ModelProto()
+    model = proto_type()
     if (
         skip_raw_data
         or (num_threads > 1 or num_threads < 0)

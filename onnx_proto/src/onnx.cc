@@ -756,7 +756,8 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       stream.ExternalWeights()) {
     for (const auto &entry : ref_external_data())
       EXT_ENFORCE(entry.key() != utils::detail::kExternalDataEncryptionKey,
-                  "Encrypted external weights require LoadEncryptedExternalDataForModel.");
+                  "Encrypted external weights require an encrypted-loading path; use "
+                  "LoadEncryptedModel(...) (recommended) or LoadEncryptedExternalDataForModel(...).");
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     offset_t offset = -1; // two_stream.second_tell();
     int64_t size = -1;

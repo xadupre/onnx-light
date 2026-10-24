@@ -109,7 +109,7 @@ class TestCMakeCppTestLayout(ExtTestCase):
                     str(root),
                     "-B",
                     str(directory / "build"),
-                    f"-DCMAKE_MODULE_PATH={directory}",
+                    f"-DCMAKE_MODULE_PATH={directory.as_posix()}",
                     "-DONNX_LIGHT_BUILD_PYTHON=OFF",
                     "-DONNX_LIGHT_BUILD_KERNELS=OFF",
                     "-DONNX_LIGHT_BUILD_TESTS=OFF",

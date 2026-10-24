@@ -1,20 +1,9 @@
 name: Doxygen
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "onnx_proto/**"
-      - "onnx_light/onnx/**"
-      - "onnx_light/onnx_extensions/patterns/**"
-      - "docs/Doxyfile"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "onnx_proto/**"
-      - "onnx_light/onnx/**"
-      - "onnx_light/onnx_extensions/patterns/**"
-      - "docs/Doxyfile"
+  schedule:
+    - cron: "47 5 * * 1"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,3 +35,27 @@ jobs:
           name: cpp-docs
           path: dist/doxygen/html
           retention-days: 7
+
+  report_failure:
+    needs: doc_cpp
+    if: ${{ failure() && needs.doc_cpp.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue for the failed documentation run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: ${{ github.workflow }} failed (run ${{ github.run_id }})
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_count="$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
+            --search "${GITHUB_RUN_ID} in:title" --json number --jq 'length')"
+          if [ "$issue_count" -eq 0 ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$ISSUE_TITLE" \
+              --body "The [documentation workflow run](${RUN_URL}) failed. See the run logs for details."
+          fi

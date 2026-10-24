@@ -1,20 +1,16 @@
 name: Documentation
 
 on:
-  workflow_run:
-    workflows: ["ci-1-core"]
-    types: [completed]
+  schedule:
+    - cron: "17 5 * * 1"
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   docs:
-    # Only run if triggered manually, or if the required ci-1-core workflow
-    # (which itself gates on no-onnx) completed successfully.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 22
     env:
@@ -23,8 +19,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -83,3 +77,27 @@ jobs:
               sys.exit(0)
           sys.exit(1)
           PY
+
+  report_failure:
+    needs: docs
+    if: ${{ failure() && needs.docs.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue for the failed documentation run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: ${{ github.workflow }} failed (run ${{ github.run_id }})
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_count="$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
+            --search "${GITHUB_RUN_ID} in:title" --json number --jq 'length')"
+          if [ "$issue_count" -eq 0 ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$ISSUE_TITLE" \
+              --body "The [documentation workflow run](${RUN_URL}) failed. See the run logs for details."
+          fi

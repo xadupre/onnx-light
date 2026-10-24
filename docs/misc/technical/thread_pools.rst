@@ -13,6 +13,10 @@ ONNX operators:
     P = \operatorname{Softmax}(Y_1),\qquad
     Y_2 = \operatorname{Gemm}(P, C).
 
+onnx-light uses its own ``std::thread`` workers and does not depend on OpenMP,
+including its benchmark executables and installed CMake packages. OpenMP is
+included here only for comparison.
+
 The comparison assumes that graph optimization has not fused the operators and
 that every kernel uses the execution system named in its column. The second
 operator cannot start before the first has produced ``Y1``, and the final

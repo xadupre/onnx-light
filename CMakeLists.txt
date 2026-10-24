@@ -288,9 +288,6 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
 endif()
 
-# Find OpenMP (optional)
-find_package(OpenMP QUIET)
-
 # Find OpenSSL (optional – enables encrypted model save/load)
 find_package(OpenSSL QUIET)
 
@@ -1057,10 +1054,6 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
       target_link_libraries(${benchmark_target} PRIVATE lib_onnx_kernels)
     endif()
     set_property(TARGET ${benchmark_target} PROPERTY FOLDER "Benchmarks")
-
-    if(OpenMP_CXX_FOUND)
-      target_link_libraries(${benchmark_target} PRIVATE OpenMP::OpenMP_CXX)
-    endif()
 
     if(ONNX_LIGHT_BENCH_GPROF)
       target_compile_options(${benchmark_target} PRIVATE -pg)

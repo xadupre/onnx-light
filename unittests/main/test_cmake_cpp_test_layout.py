@@ -85,7 +85,6 @@ class TestCMakeCppTestLayout(ExtTestCase):
                             str(directory / custom),
                             f"-DGTest_DIR={package}",
                             f"-DCUSTOM_RUNTIME={custom}",
-                            "-DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=TRUE",
                             "-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE",
                             "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
                         ],
@@ -95,6 +94,34 @@ class TestCMakeCppTestLayout(ExtTestCase):
                         check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_benchmarks_configure_without_openmp_lookup(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / "FindOpenMP.cmake").write_text(
+                'message(FATAL_ERROR "onnx-light must not look for OpenMP")\n', encoding="utf-8"
+            )
+            result = subprocess.run(
+                [
+                    "cmake",
+                    "-S",
+                    str(root),
+                    "-B",
+                    str(directory / "build"),
+                    f"-DCMAKE_MODULE_PATH={directory}",
+                    "-DONNX_LIGHT_BUILD_PYTHON=OFF",
+                    "-DONNX_LIGHT_BUILD_KERNELS=OFF",
+                    "-DONNX_LIGHT_BUILD_TESTS=OFF",
+                    "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
+                    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_helper_test_belongs_to_standalone_proto_project(self):
         root = Path(__file__).resolve().parents[2]

@@ -746,6 +746,8 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
   };
   struct Shard {
     std::string digest;
+    TensorProto *range_tensor = nullptr;
+    uint64_t range_end = 0;
     std::vector<TensorReference> tensors;
   };
   std::map<std::string, Shard> shards;
@@ -794,13 +796,21 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
       throw invalid(kExternalDataLengthKey);
     if (opts.max_tensor_size_bytes > 0 && length > opts.max_tensor_size_bytes)
       throw invalid("length exceeding max_tensor_size_bytes");
-    auto &shard = shards[location];
-    if (shard.tensors.empty())
+    auto [shard_it, inserted] = shards.try_emplace(location);
+    auto &shard = shard_it->second;
+    if (inserted)
       shard.digest = digest;
     else if (shard.digest != digest)
       throw invalid(std::string("inconsistent ") + kExternalDataDigestKey);
-    shard.tensors.push_back(TensorReference{
-        &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
+    // Both values are nonnegative int64_t, so their sum fits in uint64_t.
+    const uint64_t range_end = static_cast<uint64_t>(offset) + static_cast<uint64_t>(length);
+    if (!shard.range_tensor || range_end > shard.range_end) {
+      shard.range_tensor = &tensor;
+      shard.range_end = range_end;
+    }
+    if (!opts.skip_raw_data || length < opts.raw_data_threshold)
+      shard.tensors.push_back(TensorReference{
+          &tensor, iterator.graph(), static_cast<uint64_t>(offset), static_cast<uint64_t>(length)});
   }
   for (const auto &[location, shard] : shards) {
     std::vector<uint8_t> plain;
@@ -810,7 +820,14 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
       if (size < static_cast<int64_t>(GCM_HEADER_SIZE) ||
           static_cast<uint64_t>(size) > max_external_file_size)
         throw std::runtime_error("Encrypted external file exceeds size limit or is truncated for " +
-                                 external_tensor_context(*shard.tensors.front().tensor, location));
+                                 external_tensor_context(*shard.range_tensor, location));
+      // GCM ciphertext and plaintext have equal lengths. Validate every slice,
+      // including skipped tensors, without reading or allocating the shard.
+      if (shard.range_end > static_cast<uint64_t>(size) - GCM_HEADER_SIZE)
+        throw std::runtime_error("Encrypted external tensor offset/length range is invalid for " +
+                                 external_tensor_context(*shard.range_tensor, location));
+      if (shard.tensors.empty())
+        continue;
       std::string blob(static_cast<size_t>(size), '\0');
       utils::detail::ReadExternalDataFile(*file, blob.data(), size, 0);
       const std::string digest = encrypted_digest(blob);
@@ -887,7 +904,13 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
   if (!ifs)
     throw std::runtime_error("Read error for file: " + file_path);
 
-  LoadEncryptedModelFromString(model, file_buf, key, opts);
+  ParseOptions parse_opts = opts;
+  if (opts.node_callback) {
+    parse_opts.node_callback = {};
+    parse_opts.graph_callback = {};
+    parse_opts.function_callback = {};
+  }
+  LoadEncryptedModelFromString(model, file_buf, key, parse_opts);
   bool encrypted_external = false;
   IteratorTensorProto iterator(&model);
   while (!encrypted_external && iterator.next()) {
@@ -909,6 +932,10 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
 
     LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path),
                                       key, opts);
+  }
+  if (opts.node_callback) {
+    // Traverse live scopes only: duplicate optional protobuf fields replace earlier objects.
+    utils::detail::ApplyParseScopeCallbacks(model, opts);
   }
 }
 

@@ -10,6 +10,7 @@ import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import (
     ModelProto,
     ParseOptions,
+    PipelineProto,
     SerializeFormat,
     SerializeOptions,
     load,
@@ -195,6 +196,22 @@ class TestDeferredWeights(unittest.TestCase):
                                 with self.assertRaisesRegex(ValueError, "deferred tensor"):
                                     save_tensor(tensor, output)
                             self.assertEqual(backing.read_bytes(), before)
+
+    def test_pipeline_deferred_input_is_rejected_without_changing_eager_io(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pipeline = PipelineProto(prefill=self.make_model())
+            for extension in (".pipe-onnx", ".pipeline"):
+                path = Path(directory) / f"model{extension}"
+                save(pipeline, path)
+                before = path.read_bytes()
+                with self.assertRaisesRegex(ValueError, "ModelProto"):
+                    load(path, defer_weights=True)
+                options = ParseOptions()
+                options.defer_weights = True
+                with self.assertRaisesRegex(RuntimeError, "PipelineProto"):
+                    PipelineProto().ParseFromFile(str(path), options)
+                self.assertEqual(path.read_bytes(), before)
+                self.assertIsInstance(load(path), PipelineProto)
 
 
 if __name__ == "__main__":

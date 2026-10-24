@@ -14,6 +14,13 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+namespace utils::detail {
+
+/** Applies node, graph, and function parse callbacks to live scopes in child-first order. */
+void ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options);
+
+} // namespace utils::detail
+
 namespace tensor_values_detail {
 
 template <typename T, typename Values, typename Consumer>

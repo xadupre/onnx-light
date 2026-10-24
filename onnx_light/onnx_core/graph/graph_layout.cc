@@ -184,6 +184,36 @@ struct GraphLayout::Impl {
   explicit Impl(GraphProto &graph) : scope(&graph) {}
   explicit Impl(FunctionProto &function) : scope(&function) {}
 
+  void ResetForLoad(bool recurse) {
+    // Preserves the bound scope, nesting depth and parent notification callback.
+    // Load saves the previous span and moves out external endpoints for its final notification
+    // comparison before clearing their indexes. Selects the new recursion policy and suppresses
+    // notifications while loading.
+    // Clears all derived node/child, dependency, spatial and scope-value state, plus diagnostics
+    // and work counters. Allocation restarts at one; Load rereads persisted IDs and trust metadata.
+    recursive = recurse;
+    loading = true;
+    states.clear();
+    order.clear();
+    producers.clear();
+    consumers.clear();
+    horizontal.reset();
+    local_values.clear();
+    initializers.clear();
+    graph_outputs.clear();
+    reserved_ids.clear();
+    right_edges.clear();
+    bottom_edges.clear();
+    left_edges.clear();
+    top_edges.clear();
+    external.clear();
+    external_changes.clear();
+    diagnostics.clear();
+    stats = {};
+    next_id = 1;
+    trusted_positions = false;
+  }
+
   auto &Nodes() {
     return std::visit([](auto *proto) -> auto & { return *proto->mutable_node(); }, scope);
   }
@@ -857,30 +887,7 @@ void GraphLayout::Load(bool recurse) {
   const auto previous_span = impl.Span();
   const auto previous_external = std::move(impl.external);
 
-  const auto reset_for_load = [&](bool recursive) {
-    impl.recursive = recursive;
-    impl.loading = true;
-    impl.states.clear();
-    impl.order.clear();
-    impl.producers.clear();
-    impl.consumers.clear();
-    impl.horizontal.reset();
-    impl.local_values.clear();
-    impl.initializers.clear();
-    impl.graph_outputs.clear();
-    impl.reserved_ids.clear();
-    impl.right_edges.clear();
-    impl.bottom_edges.clear();
-    impl.left_edges.clear();
-    impl.top_edges.clear();
-    impl.external.clear();
-    impl.external_changes.clear();
-    impl.diagnostics.clear();
-    impl.stats = {};
-    impl.next_id = 1;
-  };
-
-  reset_for_load(recurse);
+  impl.ResetForLoad(recurse);
   const auto next = impl.ScopeMetadata(NextIdKey);
   if (!next.empty()) {
     LayoutNodeId next_id = 0;
@@ -993,6 +1000,7 @@ LayoutNodeId GraphLayout::Insert(size_t index, const NodeProto &node) {
   impl.stats = {};
   auto &nodes = impl.Nodes();
   nodes.push_back(node);
+  // Swaps owning handles, preserving existing node payloads and child-layout proto pointers.
   for (int i = static_cast<int>(nodes.size()) - 1; i > static_cast<int>(index); --i)
     nodes.SwapElements(i, i - 1);
   ClearNodeLayoutMetadata(nodes[index]);

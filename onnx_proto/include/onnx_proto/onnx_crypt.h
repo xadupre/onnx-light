@@ -115,7 +115,11 @@ ONNX_LIGHT_PROTO_API void SaveEncryptedModelWithExternalData(
  *
  * Resolves marked external tensors relative to base_dir, verifies their
  * ciphertext SHA-256 against the authenticated model metadata, and decrypts each
- * shard once. Offsets and lengths address plaintext, never ciphertext. Successful
+ * selected shard once. Payload selection follows skip_raw_data and raw_data_threshold,
+ * as for embedded tensors. Skipped tensors retain their external metadata; their
+ * metadata, paths, file sizes and slice bounds are still validated, but shards with
+ * no selected payloads are not read, authenticated or decrypted.
+ * Offsets and lengths address plaintext, never ciphertext. Successfully loaded
  * tensors become embedded raw_data with external metadata removed. Unmarked
  * plain external tensors are left unchanged (LoadExternalDataForModel handles
  * those). The model metadata must come from a trusted/authenticated source.
@@ -142,6 +146,9 @@ LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &base_dir
  * 1 GiB encrypted-shard limit. For a different limit, uses
  * LoadEncryptedModelFromString() followed by LoadEncryptedExternalDataForModel().
  * Plain external references retain their existing behavior (not loaded here).
+ * Node callbacks run only after encrypted external weights are resolved successfully.
+ * When a node callback is supplied, graph and function callbacks are also deferred
+ * to preserve their child-first ordering.
  *
  * @param model      Output model populated from the decrypted payload.
  * @param file_path  Source file path.

@@ -1,7 +1,9 @@
 import importlib.util
+import io
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
@@ -229,6 +231,101 @@ class TestTextFormatIO(ExtTestCase):
         with self.assertRaises(ValueError) as ctx:
             onnxl.load(b"", format="json")
         self.assertIn("Unsupported format", str(ctx.exception))
+
+
+class TestPipelineIO(ExtTestCase):
+    def test_save_load_pipeline_extensions(self):
+        pipeline = onnxl.PipelineProto(
+            name="generation", prefill=_rich_model(), max_new_tokens=16
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            for extension in (".pipe-onnx", ".pipeline"):
+                for path_type in (str, Path):
+                    for num_threads in (1, -1):
+                        with self.subTest(
+                            extension=extension, path_type=path_type, num_threads=num_threads
+                        ):
+                            path = path_type(os.path.join(folder, f"generation{extension}"))
+                            onnxl.save(pipeline, path, num_threads=num_threads)
+                            self.assertEqual(
+                                Path(path).read_bytes(), pipeline.SerializeToString()
+                            )
+                            loaded = onnxl.load(path, num_threads=num_threads)
+                            self.assertIsInstance(loaded, onnxl.PipelineProto)
+                            self.assertEqual(
+                                pipeline.SerializeToString(), loaded.SerializeToString()
+                            )
+                            self.assertFalse(loaded.HasField("decode"))
+
+    def test_save_pipeline_stream(self):
+        pipeline = onnxl.PipelineProto(name="generation", prefill=_rich_model())
+        for format in ("protobuf", "textproto"):
+            with self.subTest(format=format):
+                stream = io.BytesIO()
+                onnxl.save(pipeline, stream, format=format)
+                loaded = onnxl.PipelineProto()
+                if format == "protobuf":
+                    loaded.ParseFromString(stream.getvalue())
+                else:
+                    parse_from_textproto(stream.getvalue().decode("utf-8"), loaded)
+                self.assertEqual(pipeline.SerializeToString(), loaded.SerializeToString())
+
+    def test_pipeline_explicit_textproto(self):
+        pipeline = onnxl.PipelineProto(
+            name="generation",
+            embedding=_rich_model(),
+            prefill=_rich_model(),
+            decode=_rich_model(),
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            for extension in (".pipe-onnx", ".pipeline"):
+                with self.subTest(extension=extension):
+                    path = Path(folder) / f"generation{extension}"
+                    onnxl.save(pipeline, path, format="textproto")
+                    self.assertIn('name: "generation"', path.read_text(encoding="utf-8"))
+                    loaded = onnxl.load(path, format="textproto")
+                    self.assertIsInstance(loaded, onnxl.PipelineProto)
+                    self.assertEqual(pipeline.SerializeToString(), loaded.SerializeToString())
+                    loaded = onnxl.load(path, format="textproto", layout=True)
+                    self.assertIsInstance(loaded, onnxl.PipelineProto)
+                    for stage in ("embedding", "prefill", "decode"):
+                        self.assertEqual(
+                            getattr(loaded, stage).graph.name, getattr(pipeline, stage).graph.name
+                        )
+
+    def test_other_extensions_still_load_models(self):
+        model = _rich_model()
+        with tempfile.TemporaryDirectory() as folder:
+            for extension in (".onnx", ".pb", ".pipeline.onnx", ""):
+                with self.subTest(extension=extension):
+                    path = Path(folder) / f"model{extension}"
+                    onnxl.save(model, path)
+                    loaded = onnxl.load(path)
+                    self.assertIsInstance(loaded, onnxl.ModelProto)
+                    self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
+        self.assertIsInstance(onnxl.load(model.SerializeToString()), onnxl.ModelProto)
+
+    def test_pipeline_rejects_external_output(self):
+        pipeline = onnxl.PipelineProto(name="generation", prefill=_rich_model())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "generation.pipeline"
+            weights = Path(folder) / "generation.data"
+            path.write_bytes(b"existing pipeline")
+            weights.write_bytes(b"existing weights")
+            with self.assertRaisesRegex(RuntimeError, "does not support external-weight"):
+                onnxl.save(pipeline, path, save_as_external_data=True, location=str(weights))
+            self.assertEqual(path.read_bytes(), b"existing pipeline")
+            self.assertEqual(weights.read_bytes(), b"existing weights")
+
+    def test_pipeline_rejects_unsupported_format(self):
+        pipeline = onnxl.PipelineProto(name="generation", prefill=_rich_model())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "generation.pipe-onnx"
+            with self.assertRaisesRegex(ValueError, "Unsupported format"):
+                onnxl.save(pipeline, path, format="json")
+            self.assertFalse(path.exists())
+            with self.assertRaisesRegex(ValueError, "Unsupported format"):
+                onnxl.load(path, format="json")
 
 
 @unittest.skipUnless(_HAS_ONNX, "onnx is not installed")

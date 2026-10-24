@@ -53,6 +53,35 @@ ModelProto make_test_model() {
   return model;
 }
 
+ModelProto make_callback_test_model() {
+  ModelProto model = make_test_model();
+  auto &graph = model.ref_graph();
+  graph.set_name("parent");
+  auto *node = graph.add_node();
+  node->set_op_type("Constant");
+  node->set_name("constant");
+  auto *value = node->add_attribute();
+  value->set_name("value");
+  value->set_type(AttributeProto::TENSOR);
+  *value->add_t() = graph.initializer(0);
+  value->ref_t().set_name("value");
+  auto *branches = graph.ref_node()[0].add_attribute();
+  branches->set_name("branches");
+  branches->set_type(AttributeProto::GRAPHS);
+  for (const auto &name : {"first", "second"}) {
+    auto *child = branches->add_graphs();
+    child->set_name(name);
+    *child->add_node() = *node;
+  }
+  auto *function = model.add_functions();
+  function->set_name("function");
+  auto *body = function->add_attribute_proto();
+  body->set_type(AttributeProto::GRAPH);
+  body->add_g()->set_name("default");
+  *body->ref_g().add_node() = *node;
+  return model;
+}
+
 ModelProto make_sparse_test_model() {
   ModelProto model = make_test_model();
   size_t index = 0;
@@ -588,14 +617,19 @@ TEST_F(EncryptedExternalTest, MetadataErrorsIdentifyTensorLocationAndField) {
       set_entry(tensor, field, field == "location" ? "../unsafe" : "invalid");
     }
     const auto location = entry(tensor, "location");
-    try {
-      LoadEncryptedExternalDataForModel(stored, directory.string(), "secret");
-      FAIL() << "Invalid metadata was accepted";
-    } catch (const std::runtime_error &error) {
-      const std::string message = error.what();
-      EXPECT_NE(message.find("tensor 'W'"), std::string::npos);
-      EXPECT_NE(message.find(location), std::string::npos);
-      EXPECT_NE(message.find(expected_field), std::string::npos);
+    for (bool skip : {false, true}) {
+      ParseOptions options;
+      options.skip_raw_data = skip;
+      options.raw_data_threshold = 0;
+      try {
+        LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options);
+        FAIL() << "Invalid metadata was accepted";
+      } catch (const std::runtime_error &error) {
+        const std::string message = error.what();
+        EXPECT_NE(message.find("tensor 'W'"), std::string::npos);
+        EXPECT_NE(message.find(location), std::string::npos);
+        EXPECT_NE(message.find(expected_field), std::string::npos);
+      }
     }
   }
 }
@@ -836,6 +870,199 @@ TEST_F(EncryptedExternalTest, ThresholdAndEmptyModelRemainEmbedded) {
   expect_same(empty, loaded);
 }
 
+TEST_F(EncryptedExternalTest, EmbeddedAndExternalPayloadsHonorLoadingThreshold) {
+  ModelProto model = make_test_model();
+  model.ref_graph().clr_initializer();
+  for (size_t length : {15, 16, 17}) {
+    auto *tensor = model.ref_graph().add_initializer();
+    tensor->set_name("W" + std::to_string(length));
+    tensor->set_data_type(TensorProto::DataType::UINT8);
+    tensor->add_dims(length);
+    tensor->ref_raw_data().resize(length);
+    std::memset(tensor->ref_raw_data().data(), static_cast<int>(length), length);
+  }
+  for (size_t save_threshold : {0, 16, 18}) {
+    SCOPED_TRACE(save_threshold);
+    SaveEncryptedModelWithExternalData(model, path, "secret", 84, save_threshold);
+    for (bool skip : {false, true}) {
+      for (int64_t threshold : {-1, 0, 15, 16, 17, 18}) {
+        SCOPED_TRACE(skip);
+        SCOPED_TRACE(threshold);
+        ParseOptions options;
+        options.skip_raw_data = skip;
+        options.raw_data_threshold = threshold;
+        std::vector<std::string> callbacks;
+        options.raw_data_callback = [&](TensorProto &tensor, GraphProto *) {
+          callbacks.emplace_back(tensor.name());
+          return std::function<void()>{};
+        };
+        ModelProto loaded;
+        LoadEncryptedModel(loaded, path, "secret", options);
+        ASSERT_EQ(loaded.graph().initializer().size(), 3u);
+        size_t selected_count = 0;
+        for (size_t i = 0; i < 3; ++i) {
+          const auto &expected = model.graph().initializer()[i];
+          const auto &actual = loaded.graph().initializer()[i];
+          const size_t length = expected.raw_data().size();
+          const bool selected = !skip || static_cast<int64_t>(length) < threshold;
+          EXPECT_EQ(actual.name(), expected.name());
+          ASSERT_EQ(actual.dims().size(), 1u);
+          EXPECT_EQ(actual.dims()[0], expected.dims()[0]);
+          EXPECT_EQ(actual.has_raw_data(), selected);
+          EXPECT_EQ(actual.has_external_data(), !selected && length >= save_threshold);
+          if (selected) {
+            EXPECT_EQ(actual.raw_data(), expected.raw_data());
+            ++selected_count;
+          } else if (length >= save_threshold) {
+            EXPECT_EQ(actual.data_location(), TensorProto::DataLocation::EXTERNAL);
+          }
+        }
+        EXPECT_EQ(callbacks.size(), selected_count);
+      }
+    }
+  }
+}
+
+TEST_F(EncryptedExternalTest, SkipsUnselectedShardsButAuthenticatesSelectedShards) {
+  ModelProto model = make_test_model();
+  TensorProto large = model.graph().initializer()[0];
+  large.set_name("large");
+  large.ref_dims()[0] = 5;
+  large.ref_raw_data().resize(20);
+  *model.ref_graph().add_initializer() = large;
+  SaveEncryptedModelWithExternalData(model, path, "secret", 72, 0);
+  ModelProto stored = metadata();
+  auto &weights = stored.ref_graph().ref_initializer();
+  const auto first = directory / entry(weights[0], "location");
+  const auto second = directory / entry(weights[1], "location");
+  ASSERT_NE(first, second);
+  write(second, std::string(72, 'x'));
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 17;
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(loaded.graph().initializer()[0].raw_data(), model.graph().initializer()[0].raw_data());
+  EXPECT_FALSE(loaded.graph().initializer()[1].has_raw_data());
+  EXPECT_TRUE(loaded.graph().initializer()[1].has_external_data());
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  write(first, std::string(68, 'x'));
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret", options), std::runtime_error);
+  options.raw_data_threshold = 0;
+  EXPECT_NO_THROW(LoadEncryptedModel(loaded, path, "secret", options));
+  for (const auto &tensor : loaded.graph().initializer()) {
+    EXPECT_FALSE(tensor.has_raw_data());
+    EXPECT_TRUE(tensor.has_external_data());
+  }
+}
+
+TEST_F(EncryptedExternalTest, MetadataOnlyLoadingDoesNotAllocateShardBuffers) {
+#if defined(__linux__)
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  auto &tensor = stored.ref_graph().ref_initializer()[0];
+  constexpr size_t bytes = 64 * 1024 * 1024;
+  set_entry(tensor, "length", std::to_string(bytes));
+  std::filesystem::resize_file(directory / entry(tensor, "location"), bytes + 52);
+  struct rlimit previous;
+  ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
+  std::ifstream statm("/proc/self/statm");
+  size_t pages = 0;
+  ASSERT_TRUE(static_cast<bool>(statm >> pages));
+  const long page_size = sysconf(_SC_PAGESIZE);
+  ASSERT_GT(page_size, 0);
+  struct rlimit limited = previous;
+  limited.rlim_cur = pages * static_cast<size_t>(page_size) + 16 * 1024 * 1024;
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
+  EXPECT_NO_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options));
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
+  EXPECT_FALSE(tensor.has_raw_data());
+  EXPECT_TRUE(tensor.has_external_data());
+#else
+  GTEST_SKIP() << "Requires Linux address-space accounting.";
+#endif
+}
+
+TEST_F(EncryptedExternalTest, SkippedPayloadsStillValidateReferencesAndLimits) {
+  ModelProto model = make_test_model();
+  TensorProto second = model.graph().initializer()[0];
+  second.set_name("W2");
+  *model.ref_graph().add_initializer() = second;
+  SaveEncryptedModelWithExternalData(model, path, "secret", 84, 0);
+  const ModelProto original = metadata();
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  for (const std::string field : {"offset", "length"}) {
+    for (const std::string value : {"-1", "9223372036854775808", "0junk", "9223372036854775807"}) {
+      SCOPED_TRACE(field);
+      SCOPED_TRACE(value);
+      ModelProto stored = original;
+      set_entry(stored.ref_graph().ref_initializer()[1], field, value);
+      EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                   std::runtime_error);
+    }
+  }
+  for (int64_t threshold : {0, 17}) {
+    SCOPED_TRACE(threshold);
+    options.raw_data_threshold = threshold;
+    ModelProto stored = original;
+    auto &first = stored.ref_graph().ref_initializer()[0];
+    set_entry(first, "length", "17");
+    set_entry(first, "onnx_light.encrypted_sha256", std::string(64, '0'));
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+    stored = original;
+    set_entry(stored.ref_graph().ref_initializer()[1], "length", "17");
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+    EXPECT_FALSE(stored.graph().initializer()[0].has_raw_data());
+  }
+  options.raw_data_threshold = 0;
+  ModelProto stored = original;
+  set_entry(stored.ref_graph().ref_initializer()[1], "offset", "33");
+  set_entry(stored.ref_graph().ref_initializer()[1], "length", "0");
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  stored = original;
+  stored.ref_graph().ref_initializer()[0].set_data_location(TensorProto::DataLocation::DEFAULT);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  stored = original;
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options, 83),
+               std::runtime_error);
+  options.max_tensor_size_bytes = 15;
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  options.max_tensor_size_bytes = 0;
+  for (const std::string unsafe : {"../escape", "/absolute", "sub/../../escape"}) {
+    stored = original;
+    set_entry(stored.ref_graph().ref_initializer()[0], "location", unsafe);
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+  }
+  stored = original;
+  const auto shard = directory / entry(stored.ref_graph().ref_initializer()[0], "location");
+#ifndef _WIN32
+  std::filesystem::rename(shard, directory / "real");
+  std::filesystem::create_symlink(directory / "real", shard);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  std::filesystem::remove(shard);
+  std::filesystem::rename(directory / "real", shard);
+#endif
+  write(shard, std::string(51, 'x'));
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  std::filesystem::remove(shard);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+}
+
 TEST_F(EncryptedExternalTest, RejectsOversizedTensorAndInvalidOptionsBeforeWriting) {
   ModelProto model = make_test_model();
   for (size_t limit : {size_t{0}, size_t{52}, size_t{67}, std::numeric_limits<size_t>::max()})
@@ -944,6 +1171,143 @@ TEST_F(EncryptedExternalTest, NestedAttributeTensorsAndNoCopyOwnTheirData) {
   loaded = ModelProto{};
   LoadEncryptedModel(loaded, path, "secret", opts);
   expect_same(model, loaded);
+}
+
+TEST_F(EncryptedExternalTest, NodeCallbacksObserveResolvedConstantsAndPreserveReplacements) {
+  ModelProto model = make_callback_test_model();
+  const float expected[4] = {1, 2, 3, 4};
+  const float replacement[4] = {5, 6, 7, 8};
+  for (const bool external : {false, true}) {
+    if (external)
+      SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+    else
+      SaveEncryptedModel(model, path, "secret");
+    std::vector<std::string> visits;
+    int raw_callbacks = 0;
+    ParseOptions options;
+    options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+      ++raw_callbacks;
+      return std::function<void()>{};
+    };
+    options.node_callback = [&](NodeProto &node, GraphProto &graph) {
+      visits.push_back(graph.name() + ":" + node.op_type());
+      if (node.op_type() != "Constant")
+        return;
+      auto &tensor = node.ref_attribute()[0].ref_t();
+      ASSERT_EQ(tensor.raw_data().size(), sizeof(expected));
+      EXPECT_EQ(std::memcmp(tensor.raw_data().data(), expected, sizeof(expected)), 0);
+      EXPECT_FALSE(tensor.has_external_data());
+      EXPECT_EQ(tensor.data_location(), TensorProto::DataLocation::DEFAULT);
+      std::memcpy(tensor.ref_raw_data().data(), replacement, sizeof(replacement));
+    };
+    options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+    options.function_callback = [&](FunctionProto &function) { visits.push_back(function.name()); };
+    ModelProto loaded;
+    LoadEncryptedModel(loaded, path, "secret", options);
+    EXPECT_EQ(visits, (std::vector<std::string>{
+                          "first:Constant", "first", "second:Constant", "second", "parent:Relu",
+                          "parent:Constant", "parent", "default:Constant", "default", "function"}));
+    EXPECT_EQ(raw_callbacks, 5);
+    int constants = 0;
+    IteratorTensorProto iterator(&loaded);
+    while (iterator.next()) {
+      if (iterator->name() == "W")
+        continue;
+      ASSERT_EQ(iterator->raw_data().size(), sizeof(replacement));
+      EXPECT_EQ(std::memcmp(iterator->raw_data().data(), replacement, sizeof(replacement)), 0);
+      ++constants;
+    }
+    EXPECT_EQ(constants, 4);
+  }
+}
+
+TEST_F(EncryptedExternalTest, DeferredNodeCallbacksDoNotRunAfterPartialShardFailure) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  const std::string last_location = entry(stored.ref_functions()[0]
+                                              .ref_attribute_proto()[0]
+                                              .ref_g()
+                                              .ref_node()[0]
+                                              .ref_attribute()[0]
+                                              .ref_t(),
+                                          "location");
+  ASSERT_FALSE(last_location.empty());
+  ASSERT_TRUE(std::filesystem::remove(directory / last_location));
+  int raw_callbacks = 0, node_callbacks = 0;
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+    ++raw_callbacks;
+    return std::function<void()>{};
+  };
+  options.node_callback = [&](NodeProto &, GraphProto &) { ++node_callbacks; };
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret", options), std::runtime_error);
+  EXPECT_GT(raw_callbacks, 0);
+  EXPECT_EQ(node_callbacks, 0);
+}
+
+TEST_F(EncryptedExternalTest, StringMetadataParsingKeepsNodeCallbackSemantics) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  int constants = 0, raw_callbacks = 0;
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+    ++raw_callbacks;
+    return std::function<void()>{};
+  };
+  options.node_callback = [&](NodeProto &node, GraphProto &) {
+    if (node.op_type() == "Constant") {
+      const auto &tensor = node.attribute(0).t();
+      EXPECT_TRUE(tensor.raw_data().empty());
+      EXPECT_TRUE(tensor.has_external_data());
+      ++constants;
+    }
+  };
+  ModelProto loaded;
+  LoadEncryptedModelFromString(loaded, read(path), "secret", options);
+  EXPECT_EQ(constants, 4);
+  EXPECT_EQ(raw_callbacks, 0);
+}
+
+TEST_F(EncryptedExternalTest, DeferredCallbacksIncludeCodecGraphsAndEmptyScopes) {
+  ModelProto model = make_test_model();
+  auto *codec = add_struct_codec(model, 0, false);
+  codec->set_name("codec");
+  auto *attribute = codec->add_node()->add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  attribute->add_g()->set_name("empty");
+  std::vector<std::string> visits;
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &, GraphProto &graph) {
+    visits.push_back("node:" + graph.name());
+  };
+  options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+  options.function_callback = [&](FunctionProto &function) { visits.push_back(function.name()); };
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(visits, (std::vector<std::string>{"node:test_graph", "test_graph", "empty", "codec"}));
+}
+
+TEST_F(EncryptedExternalTest, EmbeddedMetadataOnlyLoadingKeepsNodeCallbackSemantics) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModel(model, path, "secret");
+  int constants = 0;
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  options.node_callback = [&](NodeProto &node, GraphProto &) {
+    if (node.op_type() == "Constant") {
+      EXPECT_TRUE(node.attribute(0).t().raw_data().empty());
+      ++constants;
+    }
+  };
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(constants, 4);
 }
 
 TEST_F(EncryptedExternalTest, PreservesPlainExternalDataAndRequiresLoadedWeightsOnExport) {

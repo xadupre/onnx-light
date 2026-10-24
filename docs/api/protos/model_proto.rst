@@ -49,6 +49,7 @@ Only fixed-width raw payloads are supported. Typed protobuf payload fields
 (``float_data``, ``int64_data``, ``string_data``, etc.), encrypted external weights,
 ORT/text input, bytes input, explicit external streams, ``no_copy=True`` and
 tiny-external-data eager loading are explicitly rejected in deferred mode.
+``PipelineProto`` input is unsupported; deferred loading applies to ``ModelProto``.
 Encoded values (including affine layouts), paged-cache blocks and struct-type
 declarations are also rejected: their extension-owned tensors are not covered
 by the weight-name traversal.

@@ -879,6 +879,37 @@ TEST(GraphLayout, NonrecursiveLoadRejectsUnboundedChildSummaryAndFallsBack) {
   }
 }
 
+TEST(GraphLayout, PersistOmitsOversizedCaptureSummaryWithoutInvalidLoadDiagnostics) {
+  GraphProto graph;
+  auto *node = graph.add_node();
+  *node = Node("outer", {}, "If");
+  auto *attribute = node->add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  auto *child = attribute->mutable_g();
+  const std::string capture(1024 * 1024, 'x');
+  *child->add_node() = Node("inner", {capture});
+  Meta(*child, GraphLayout::ScopeKey, "stale");
+  Meta(*child, GraphLayout::ScopeKey, "duplicate");
+  Meta(*child, "custom", "preserved");
+  GraphLayout layout(graph, true);
+  layout.Persist();
+  EXPECT_FALSE(layout.Diagnostics().empty());
+  for (const auto *scope : {&graph, child})
+    for (const auto &entry : scope->metadata_props())
+      EXPECT_NE(entry.key(), GraphLayout::ScopeKey);
+  EXPECT_TRUE(std::any_of(
+      child->metadata_props().begin(), child->metadata_props().end(),
+      [](const auto &entry) { return entry.key() == "custom" && entry.value() == "preserved"; }));
+  for (size_t attempt = 0; attempt < 2; ++attempt) {
+    GraphLayout shallow(graph, false);
+    const auto id = shallow.Order()[0];
+    EXPECT_TRUE(shallow.Diagnostics().empty());
+    EXPECT_EQ(shallow.Children(id).size(), 1u);
+    ASSERT_EQ(shallow.Edges(id).size(), 1u);
+    EXPECT_EQ(shallow.Edges(id)[0].value, capture);
+  }
+}
+
 TEST(GraphLayout, NonrecursiveLoadUsesValidSummaryAfterInvalidDuplicate) {
   for (bool multiple : {false, true}) {
     GraphProto graph;

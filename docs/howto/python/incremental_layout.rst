@@ -163,6 +163,9 @@ explicit dimensions. An absent ``fixed_size`` key selects inferred dimensions.
 geometry/capture summary so a parent finishing its parse can use child state
 without rebuilding every child layout. Capture names use quoted, escaped
 strings, not whitespace-delimited tensor names.
+Persistence omits summaries exceeding the size or capture-count limits and
+reports the limit through diagnostics. An absent summary triggers direct child
+loading without an invalid-summary diagnostic.
 The graph/function key ``onnx_light.layout.next_id`` persists the monotonic ID allocator;
 node keys ``onnx_light.layout.rank`` and ``onnx_light.layout.signature`` persist
 the dependency rank and a semantic signature used to reject stale geometry.

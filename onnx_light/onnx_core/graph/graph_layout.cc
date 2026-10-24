@@ -810,9 +810,10 @@ struct GraphLayout::Impl {
       queue.pop_front();
       place(id);
       placed.insert(id);
-      for (auto user : dependents[id])
-        if (--pending[user] == 0)
-          queue.push_back(user);
+      if (auto it = dependents.find(id); it != dependents.end())
+        for (auto user : it->second)
+          if (--pending[user] == 0)
+            queue.push_back(user);
     }
     if (placed.size() != affected.size()) {
       Diagnose("Cyclic layout dependencies; laid out the remaining nodes once.");
@@ -945,7 +946,16 @@ void GraphLayout::Persist(bool recurse) {
   const std::string summary_text = summary.str();
   if (!bounded || summary_text.size() > SummaryLimit) {
     impl_->Diagnose("Layout capture summary exceeded the metadata size limit.");
-    impl_->SetScopeMetadata(ScopeKey, "");
+    std::visit(
+        [](auto *proto) {
+          auto &entries = *proto->mutable_metadata_props();
+          for (auto it = entries.begin(); it != entries.end();)
+            if (it->key() == ScopeKey)
+              it = entries.erase(it);
+            else
+              ++it;
+        },
+        impl_->scope);
   } else {
     impl_->SetScopeMetadata(ScopeKey, summary_text);
   }

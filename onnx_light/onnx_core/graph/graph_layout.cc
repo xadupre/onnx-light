@@ -856,26 +856,31 @@ void GraphLayout::Load(bool recurse) {
   auto &impl = *impl_;
   const auto previous_span = impl.Span();
   const auto previous_external = std::move(impl.external);
-  impl.recursive = recurse;
-  impl.loading = true;
-  impl.states.clear();
-  impl.order.clear();
-  impl.producers.clear();
-  impl.consumers.clear();
-  impl.horizontal.reset();
-  impl.local_values.clear();
-  impl.initializers.clear();
-  impl.graph_outputs.clear();
-  impl.reserved_ids.clear();
-  impl.right_edges.clear();
-  impl.bottom_edges.clear();
-  impl.left_edges.clear();
-  impl.top_edges.clear();
-  impl.external.clear();
-  impl.external_changes.clear();
-  impl.diagnostics.clear();
-  impl.stats = {};
-  impl.next_id = 1;
+
+  const auto reset_for_load = [&](bool recursive) {
+    impl.recursive = recursive;
+    impl.loading = true;
+    impl.states.clear();
+    impl.order.clear();
+    impl.producers.clear();
+    impl.consumers.clear();
+    impl.horizontal.reset();
+    impl.local_values.clear();
+    impl.initializers.clear();
+    impl.graph_outputs.clear();
+    impl.reserved_ids.clear();
+    impl.right_edges.clear();
+    impl.bottom_edges.clear();
+    impl.left_edges.clear();
+    impl.top_edges.clear();
+    impl.external.clear();
+    impl.external_changes.clear();
+    impl.diagnostics.clear();
+    impl.stats = {};
+    impl.next_id = 1;
+  };
+
+  reset_for_load(recurse);
   const auto next = impl.ScopeMetadata(NextIdKey);
   if (!next.empty()) {
     LayoutNodeId next_id = 0;

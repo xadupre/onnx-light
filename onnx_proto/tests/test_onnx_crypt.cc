@@ -588,14 +588,19 @@ TEST_F(EncryptedExternalTest, MetadataErrorsIdentifyTensorLocationAndField) {
       set_entry(tensor, field, field == "location" ? "../unsafe" : "invalid");
     }
     const auto location = entry(tensor, "location");
-    try {
-      LoadEncryptedExternalDataForModel(stored, directory.string(), "secret");
-      FAIL() << "Invalid metadata was accepted";
-    } catch (const std::runtime_error &error) {
-      const std::string message = error.what();
-      EXPECT_NE(message.find("tensor 'W'"), std::string::npos);
-      EXPECT_NE(message.find(location), std::string::npos);
-      EXPECT_NE(message.find(expected_field), std::string::npos);
+    for (bool skip : {false, true}) {
+      ParseOptions options;
+      options.skip_raw_data = skip;
+      options.raw_data_threshold = 0;
+      try {
+        LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options);
+        FAIL() << "Invalid metadata was accepted";
+      } catch (const std::runtime_error &error) {
+        const std::string message = error.what();
+        EXPECT_NE(message.find("tensor 'W'"), std::string::npos);
+        EXPECT_NE(message.find(location), std::string::npos);
+        EXPECT_NE(message.find(expected_field), std::string::npos);
+      }
     }
   }
 }
@@ -834,6 +839,199 @@ TEST_F(EncryptedExternalTest, ThresholdAndEmptyModelRemainEmbedded) {
   loaded = ModelProto{};
   LoadEncryptedModel(loaded, path, "secret");
   expect_same(empty, loaded);
+}
+
+TEST_F(EncryptedExternalTest, EmbeddedAndExternalPayloadsHonorLoadingThreshold) {
+  ModelProto model = make_test_model();
+  model.ref_graph().clr_initializer();
+  for (size_t length : {15, 16, 17}) {
+    auto *tensor = model.ref_graph().add_initializer();
+    tensor->set_name("W" + std::to_string(length));
+    tensor->set_data_type(TensorProto::DataType::UINT8);
+    tensor->add_dims(length);
+    tensor->ref_raw_data().resize(length);
+    std::memset(tensor->ref_raw_data().data(), static_cast<int>(length), length);
+  }
+  for (size_t save_threshold : {0, 16, 18}) {
+    SCOPED_TRACE(save_threshold);
+    SaveEncryptedModelWithExternalData(model, path, "secret", 84, save_threshold);
+    for (bool skip : {false, true}) {
+      for (int64_t threshold : {-1, 0, 15, 16, 17, 18}) {
+        SCOPED_TRACE(skip);
+        SCOPED_TRACE(threshold);
+        ParseOptions options;
+        options.skip_raw_data = skip;
+        options.raw_data_threshold = threshold;
+        std::vector<std::string> callbacks;
+        options.raw_data_callback = [&](TensorProto &tensor, GraphProto *) {
+          callbacks.emplace_back(tensor.name());
+          return std::function<void()>{};
+        };
+        ModelProto loaded;
+        LoadEncryptedModel(loaded, path, "secret", options);
+        ASSERT_EQ(loaded.graph().initializer().size(), 3u);
+        size_t selected_count = 0;
+        for (size_t i = 0; i < 3; ++i) {
+          const auto &expected = model.graph().initializer()[i];
+          const auto &actual = loaded.graph().initializer()[i];
+          const size_t length = expected.raw_data().size();
+          const bool selected = !skip || static_cast<int64_t>(length) < threshold;
+          EXPECT_EQ(actual.name(), expected.name());
+          ASSERT_EQ(actual.dims().size(), 1u);
+          EXPECT_EQ(actual.dims()[0], expected.dims()[0]);
+          EXPECT_EQ(actual.has_raw_data(), selected);
+          EXPECT_EQ(actual.has_external_data(), !selected && length >= save_threshold);
+          if (selected) {
+            EXPECT_EQ(actual.raw_data(), expected.raw_data());
+            ++selected_count;
+          } else if (length >= save_threshold) {
+            EXPECT_EQ(actual.data_location(), TensorProto::DataLocation::EXTERNAL);
+          }
+        }
+        EXPECT_EQ(callbacks.size(), selected_count);
+      }
+    }
+  }
+}
+
+TEST_F(EncryptedExternalTest, SkipsUnselectedShardsButAuthenticatesSelectedShards) {
+  ModelProto model = make_test_model();
+  TensorProto large = model.graph().initializer()[0];
+  large.set_name("large");
+  large.ref_dims()[0] = 5;
+  large.ref_raw_data().resize(20);
+  *model.ref_graph().add_initializer() = large;
+  SaveEncryptedModelWithExternalData(model, path, "secret", 72, 0);
+  ModelProto stored = metadata();
+  auto &weights = stored.ref_graph().ref_initializer();
+  const auto first = directory / entry(weights[0], "location");
+  const auto second = directory / entry(weights[1], "location");
+  ASSERT_NE(first, second);
+  write(second, std::string(72, 'x'));
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 17;
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(loaded.graph().initializer()[0].raw_data(), model.graph().initializer()[0].raw_data());
+  EXPECT_FALSE(loaded.graph().initializer()[1].has_raw_data());
+  EXPECT_TRUE(loaded.graph().initializer()[1].has_external_data());
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret"), std::runtime_error);
+  write(first, std::string(68, 'x'));
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret", options), std::runtime_error);
+  options.raw_data_threshold = 0;
+  EXPECT_NO_THROW(LoadEncryptedModel(loaded, path, "secret", options));
+  for (const auto &tensor : loaded.graph().initializer()) {
+    EXPECT_FALSE(tensor.has_raw_data());
+    EXPECT_TRUE(tensor.has_external_data());
+  }
+}
+
+TEST_F(EncryptedExternalTest, MetadataOnlyLoadingDoesNotAllocateShardBuffers) {
+#if defined(__linux__)
+  ModelProto model = make_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  auto &tensor = stored.ref_graph().ref_initializer()[0];
+  constexpr size_t bytes = 64 * 1024 * 1024;
+  set_entry(tensor, "length", std::to_string(bytes));
+  std::filesystem::resize_file(directory / entry(tensor, "location"), bytes + 52);
+  struct rlimit previous;
+  ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
+  std::ifstream statm("/proc/self/statm");
+  size_t pages = 0;
+  ASSERT_TRUE(static_cast<bool>(statm >> pages));
+  const long page_size = sysconf(_SC_PAGESIZE);
+  ASSERT_GT(page_size, 0);
+  struct rlimit limited = previous;
+  limited.rlim_cur = pages * static_cast<size_t>(page_size) + 16 * 1024 * 1024;
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
+  EXPECT_NO_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options));
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
+  EXPECT_FALSE(tensor.has_raw_data());
+  EXPECT_TRUE(tensor.has_external_data());
+#else
+  GTEST_SKIP() << "Requires Linux address-space accounting.";
+#endif
+}
+
+TEST_F(EncryptedExternalTest, SkippedPayloadsStillValidateReferencesAndLimits) {
+  ModelProto model = make_test_model();
+  TensorProto second = model.graph().initializer()[0];
+  second.set_name("W2");
+  *model.ref_graph().add_initializer() = second;
+  SaveEncryptedModelWithExternalData(model, path, "secret", 84, 0);
+  const ModelProto original = metadata();
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  for (const std::string field : {"offset", "length"}) {
+    for (const std::string value : {"-1", "9223372036854775808", "0junk", "9223372036854775807"}) {
+      SCOPED_TRACE(field);
+      SCOPED_TRACE(value);
+      ModelProto stored = original;
+      set_entry(stored.ref_graph().ref_initializer()[1], field, value);
+      EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                   std::runtime_error);
+    }
+  }
+  for (int64_t threshold : {0, 17}) {
+    SCOPED_TRACE(threshold);
+    options.raw_data_threshold = threshold;
+    ModelProto stored = original;
+    auto &first = stored.ref_graph().ref_initializer()[0];
+    set_entry(first, "length", "17");
+    set_entry(first, "onnx_light.encrypted_sha256", std::string(64, '0'));
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+    stored = original;
+    set_entry(stored.ref_graph().ref_initializer()[1], "length", "17");
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+    EXPECT_FALSE(stored.graph().initializer()[0].has_raw_data());
+  }
+  options.raw_data_threshold = 0;
+  ModelProto stored = original;
+  set_entry(stored.ref_graph().ref_initializer()[1], "offset", "33");
+  set_entry(stored.ref_graph().ref_initializer()[1], "length", "0");
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  stored = original;
+  stored.ref_graph().ref_initializer()[0].set_data_location(TensorProto::DataLocation::DEFAULT);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  stored = original;
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options, 83),
+               std::runtime_error);
+  options.max_tensor_size_bytes = 15;
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  options.max_tensor_size_bytes = 0;
+  for (const std::string unsafe : {"../escape", "/absolute", "sub/../../escape"}) {
+    stored = original;
+    set_entry(stored.ref_graph().ref_initializer()[0], "location", unsafe);
+    EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+                 std::runtime_error);
+  }
+  stored = original;
+  const auto shard = directory / entry(stored.ref_graph().ref_initializer()[0], "location");
+#ifndef _WIN32
+  std::filesystem::rename(shard, directory / "real");
+  std::filesystem::create_symlink(directory / "real", shard);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  std::filesystem::remove(shard);
+  std::filesystem::rename(directory / "real", shard);
+#endif
+  write(shard, std::string(51, 'x'));
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
+  std::filesystem::remove(shard);
+  EXPECT_THROW(LoadEncryptedExternalDataForModel(stored, directory.string(), "secret", options),
+               std::runtime_error);
 }
 
 TEST_F(EncryptedExternalTest, RejectsOversizedTensorAndInvalidOptionsBeforeWriting) {

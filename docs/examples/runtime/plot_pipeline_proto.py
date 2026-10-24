@@ -110,15 +110,14 @@ assert not pipeline.HasField("top_p")
 # Save and reload the binary container
 # -------------------------------------
 #
-# SerializeToString / ParseFromString are supported for PipelineProto, just as
-# for the other proto containers. A temporary directory keeps the example from
-# leaving files behind, including when Sphinx Gallery executes it.
+# The .pipeline and .pipe-onnx extensions select PipelineProto when loading.
+# A temporary directory keeps the example from leaving files behind, including
+# when Sphinx Gallery executes it.
 
 with TemporaryDirectory() as directory:
     path = Path(directory) / "cycle.pipeline"
-    path.write_bytes(pipeline.SerializeToString())
-    restored = onnx.PipelineProto()
-    restored.ParseFromString(path.read_bytes())
+    onnx.save(pipeline, path)
+    restored = onnx.load(path)
 
 verify.verify_pipeline(restored)
 assert not restored.HasField("top_p")

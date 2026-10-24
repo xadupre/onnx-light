@@ -896,8 +896,8 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
       base_dir_path = ".";
     }
 
-    LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path), key,
-                                     opts);
+    LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path),
+                                      key, opts);
   }
 }
 

@@ -453,6 +453,79 @@ TEST(GraphLayout, EraseRejectsMissingProtoNodeBeforeUpdatingIndexes) {
   EXPECT_FALSE(layout.Erase(id));
 }
 
+TEST(GraphLayout, RepeatedLoadClearsDerivedStateForGraphsAndFunctions) {
+  auto check = [](auto &scope) {
+    using Scope = std::decay_t<decltype(scope)>;
+    if constexpr (std::is_same_v<Scope, GraphProto>) {
+      scope.add_input()->set_name("input");
+      scope.add_initializer()->set_name("weight");
+      scope.add_output()->set_name("old_capture");
+    } else {
+      scope.add_input("input");
+      scope.add_output("old_capture");
+    }
+    Meta(scope, GraphLayout::NextIdKey, "invalid");
+    *scope.add_node() = Node("a", {"input", "weight"});
+    Meta(*scope.mutable_node(0), GraphLayout::IdKey, "73");
+    *scope.add_node() = Node("b", {"a"});
+    Meta(*scope.mutable_node(1), GraphLayout::IdKey, "1");
+    GraphLayout layout(scope, true);
+    ASSERT_FALSE(layout.Diagnostics().empty());
+    ASSERT_TRUE(layout.SetPosition(73, 2000, 3000));
+    EXPECT_GT(layout.Bounds().right, 2000);
+
+    scope.Clear();
+    *scope.add_node() = Node("a", {"input", "weight", "missing"});
+    layout.Load();
+    EXPECT_TRUE(layout.Diagnostics().empty());
+    EXPECT_EQ(layout.Order(), (std::vector<LayoutNodeId>{1}));
+    EXPECT_EQ(layout.Get(73), nullptr);
+    EXPECT_TRUE(layout.Edges(73).empty());
+    const auto *box = layout.Get(1);
+    ASSERT_NE(box, nullptr);
+    EXPECT_EQ(box->x, 0);
+    EXPECT_EQ(box->y, 0);
+    EXPECT_EQ(layout.Bounds().right, box->width);
+    EXPECT_EQ(layout.Bounds().bottom, box->height);
+    ASSERT_EQ(layout.Edges(1).size(), 3u);
+    for (const auto &edge : layout.Edges(1)) {
+      EXPECT_EQ(edge.source, 0u);
+      EXPECT_TRUE(edge.capture);
+      EXPECT_FALSE(edge.folded);
+    }
+    EXPECT_EQ(layout.Stats().nodes, 1u);
+    EXPECT_EQ(layout.Stats().edges, 3u);
+    EXPECT_EQ(layout.Stats().scopes, 1u);
+    EXPECT_EQ(layout.Stats().collision_index_visits, 0u);
+
+    const auto producer = layout.Append(Node("input"));
+    EXPECT_EQ(producer, 2u);
+    EXPECT_EQ(layout.Edges(1)[0].source, producer);
+    EXPECT_FALSE(layout.Edges(1)[0].capture);
+    EXPECT_EQ(layout.Get(1)->layer, 1u);
+    EXPECT_EQ(layout.Stats().nodes, 2u);
+
+    scope.Clear();
+    layout.Load();
+    EXPECT_TRUE(layout.Order().empty());
+    EXPECT_TRUE(layout.Diagnostics().empty());
+    EXPECT_EQ(layout.Bounds().left, 0);
+    EXPECT_EQ(layout.Bounds().top, 0);
+    EXPECT_EQ(layout.Bounds().right, 0);
+    EXPECT_EQ(layout.Bounds().bottom, 0);
+    EXPECT_EQ(layout.Stats().nodes, 0u);
+    EXPECT_EQ(layout.Stats().edges, 0u);
+    EXPECT_EQ(layout.Stats().scopes, 1u);
+    EXPECT_EQ(layout.Stats().collision_index_visits, 0u);
+    EXPECT_EQ(layout.Append(Node("fresh")), 1u);
+    EXPECT_TRUE(layout.Diagnostics().empty());
+  };
+  GraphProto graph;
+  check(graph);
+  FunctionProto function;
+  check(function);
+}
+
 TEST(GraphLayout, PartialAndDuplicateIdsAreRepairedWithoutStealingValidIds) {
   GraphProto graph;
   Meta(graph, GraphLayout::VersionKey, "1");
@@ -688,6 +761,75 @@ TEST(GraphLayout, ReloadedChildRefreshesParentCapturesAfterDirectInputEdits) {
   EXPECT_EQ(layout.Stats().nodes, 3u);
   EXPECT_GE(layout.Get(parent)->x, layout.Get(new_source)->x + 680);
   EXPECT_GT(layout.Get(consumer)->x, layout.Get(parent)->x);
+}
+
+TEST(GraphLayout, RepeatedChildLoadReplacesOutputCapturesAndPreservesParentCallback) {
+  auto check = [](auto &scope) {
+    *scope.add_node() = Node("old_capture");
+    *scope.add_node() = Node("new_capture");
+    auto container = Node("outer", {}, "Container");
+    auto *attribute = container.add_attribute();
+    attribute->set_type(AttributeProto::GRAPH);
+    auto *body = attribute->mutable_g();
+    body->add_input()->set_name("local");
+    body->add_output()->set_name("old_capture");
+    *body->add_node() = Node("inner", {"local"});
+    Meta(*body, GraphLayout::VersionKey, "unsupported");
+    *scope.add_node() = container;
+    *scope.add_node() = Node("consumer", {"outer"});
+    *scope.add_node() = Node("unrelated");
+    GraphLayout layout(scope, true);
+    const auto old_source = layout.Order()[0], new_source = layout.Order()[1];
+    const auto parent = layout.Order()[2];
+    const auto unrelated = *layout.Get(layout.Order()[4]);
+    auto *child = layout.Children(parent)[0];
+    ASSERT_FALSE(child->Diagnostics().empty());
+    const auto before = child->Bounds();
+    auto &graph = *scope.mutable_node(2)->mutable_attribute(0)->mutable_g();
+    graph.clear_metadata_props();
+    for (const auto &capture : {"new_capture", "old_capture", ""}) {
+      graph.clear_output();
+      if (capture[0])
+        graph.add_output()->set_name(capture);
+      child->Load();
+      EXPECT_TRUE(child->Diagnostics().empty());
+      EXPECT_EQ(child->Stats().nodes, 1u);
+      EXPECT_EQ(child->Stats().edges, 1u);
+      EXPECT_EQ(child->Bounds().right, before.right);
+      EXPECT_EQ(child->Bounds().bottom, before.bottom);
+      if (capture[0]) {
+        ASSERT_EQ(layout.Edges(parent).size(), 1u);
+        EXPECT_EQ(layout.Edges(parent)[0].value, capture);
+        EXPECT_EQ(layout.Edges(parent)[0].source,
+                  std::string(capture) == "new_capture" ? new_source : old_source);
+      } else {
+        EXPECT_TRUE(layout.Edges(parent).empty());
+      }
+      EXPECT_EQ(layout.Stats().nodes, 2u);
+      EXPECT_EQ(layout.Get(unrelated.id)->x, unrelated.x);
+      EXPECT_EQ(layout.Get(unrelated.id)->y, unrelated.y);
+    }
+    graph.Clear();
+    child->Load();
+    EXPECT_TRUE(child->Order().empty());
+    EXPECT_TRUE(child->Diagnostics().empty());
+    EXPECT_EQ(child->Stats().nodes, 0u);
+    EXPECT_EQ(child->Stats().edges, 0u);
+    EXPECT_EQ(child->Stats().collision_index_visits, 0u);
+    EXPECT_TRUE(layout.Edges(parent).empty());
+    EXPECT_EQ(layout.Stats().nodes, 2u);
+
+    layout.Persist();
+    layout.Load(false);
+    EXPECT_TRUE(layout.Children(parent).empty());
+    layout.Load(true);
+    ASSERT_EQ(layout.Children(parent).size(), 1u);
+    EXPECT_TRUE(layout.Children(parent)[0]->Order().empty());
+  };
+  GraphProto graph;
+  check(graph);
+  FunctionProto function;
+  check(function);
 }
 
 TEST(GraphLayout, GraphOutputsCaptureOuterValuesAndLocalInputsShadowThem) {

@@ -369,45 +369,68 @@ TEST(TensorStatistics, EmptyAndInvalidOptions) {
 TEST(TensorStatistics, OutputAllocationBudgetBoundaries) {
   const auto tensor = Tensor::FromFloat("X", {10}, std::vector<float>(10, 2));
   const auto encoded = QuantizeTensor(tensor, MakeQuantizationPlan(QuantizationFormat::kInt8, 10));
-  constexpr size_t histogram_counts_bytes = 2 * sizeof(int64_t);
-  constexpr size_t histogram_edges_bytes = 3 * sizeof(double);
-  constexpr size_t rectangle_cells_bytes = 2 * sizeof(double);
-  constexpr size_t quantiles_bytes = 1 * sizeof(double);
+  constexpr int64_t histogram_bins = 2;
+  constexpr int64_t rectangle_rows = 1;
+  constexpr int64_t rectangle_columns = 2;
+  constexpr size_t quantile_count = 1;
+  const std::vector<double> quantiles(quantile_count, 0.5);
+  const std::vector<int64_t> rectangle_shape{rectangle_rows, rectangle_columns};
+  constexpr size_t histogram_counts_bytes = histogram_bins * sizeof(int64_t);
+  constexpr size_t histogram_edges_bytes = (histogram_bins + 1) * sizeof(double);
+  constexpr size_t rectangle_cells = rectangle_rows * rectangle_columns;
+  constexpr size_t rectangle_cells_bytes = rectangle_cells * sizeof(double);
+  constexpr size_t quantiles_bytes = quantile_count * sizeof(double);
   constexpr size_t median_bytes = sizeof(double);
   constexpr size_t combined_bytes = histogram_counts_bytes + histogram_edges_bytes +
                                     rectangle_cells_bytes + quantiles_bytes + median_bytes;
   for (const auto &value : {RuntimeValue(tensor), encoded}) {
-    const auto stats = ComputeTensorStatistics(value, 2, {0.5}, true, {1, 2}, combined_bytes);
-    EXPECT_EQ(stats.distribution.size(), 2u);
-    EXPECT_EQ(stats.bin_edges.size(), 3u);
-    EXPECT_EQ(stats.rectangle_map.size(), 2u);
-    EXPECT_EQ(stats.quantiles.size(), 1u);
+    const auto stats = ComputeTensorStatistics(value, histogram_bins, quantiles, true,
+                                               rectangle_shape, combined_bytes);
+    EXPECT_EQ(stats.distribution.size(), histogram_bins);
+    EXPECT_EQ(stats.bin_edges.size(), histogram_bins + 1);
+    EXPECT_EQ(stats.rectangle_map.size(), rectangle_cells);
+    EXPECT_EQ(stats.quantiles.size(), quantile_count);
     EXPECT_TRUE(stats.median.has_value());
-    EXPECT_THROW(ComputeTensorStatistics(value, 2, {0.5}, true, {1, 2}, combined_bytes - 1),
+    EXPECT_THROW(ComputeTensorStatistics(value, histogram_bins, quantiles, true, rectangle_shape,
+                                         combined_bytes - 1),
                  std::invalid_argument);
   }
-  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 2, {0.5}, true, {1, 2}, combined_bytes));
-  EXPECT_THROW(ComputeTensorStatistics(tensor, 2, {0.5}, true, {1, 2}, combined_bytes - 1),
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, histogram_bins, quantiles, true, rectangle_shape,
+                                          combined_bytes));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, histogram_bins, quantiles, true, rectangle_shape,
+                                       combined_bytes - 1),
                std::invalid_argument);
-  EXPECT_NO_THROW(
-      ComputeTensorStatistics(encoded.Encoded(), 2, {0.5}, true, {1, 2}, {}, combined_bytes));
-  EXPECT_THROW(
-      ComputeTensorStatistics(encoded.Encoded(), 2, {0.5}, true, {1, 2}, {}, combined_bytes - 1),
-      std::invalid_argument);
+  EXPECT_NO_THROW(ComputeTensorStatistics(encoded.Encoded(), histogram_bins, quantiles, true,
+                                          rectangle_shape, {}, combined_bytes));
+  EXPECT_THROW(ComputeTensorStatistics(encoded.Encoded(), histogram_bins, quantiles, true,
+                                       rectangle_shape, {}, combined_bytes - 1),
+               std::invalid_argument);
 
-  constexpr size_t automatic_histogram_bytes = 50 * sizeof(int64_t) + 51 * sizeof(double);
+  constexpr size_t automatic_bins = 50;
+  constexpr size_t automatic_histogram_bytes =
+      automatic_bins * sizeof(int64_t) + (automatic_bins + 1) * sizeof(double);
   EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 0, {}, false, {}, automatic_histogram_bytes));
   EXPECT_THROW(ComputeTensorStatistics(tensor, 0, {}, false, {}, automatic_histogram_bytes - 1),
                std::invalid_argument);
   EXPECT_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {}, 0), std::invalid_argument);
-  constexpr size_t three_bin_histogram_bytes = 3 * sizeof(int64_t) + 4 * sizeof(double);
-  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 3, {}, false, {}, three_bin_histogram_bytes));
-  EXPECT_THROW(ComputeTensorStatistics(tensor, 3, {}, false, {}, three_bin_histogram_bytes - 1),
-               std::invalid_argument);
-  constexpr size_t one_bin_histogram_bytes = sizeof(int64_t) + 2 * sizeof(double);
-  constexpr size_t histogram_rectangle_bytes = one_bin_histogram_bytes + 2 * 2 * sizeof(double);
-  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {2, 2}, histogram_rectangle_bytes));
-  EXPECT_THROW(ComputeTensorStatistics(tensor, 1, {}, false, {2, 2}, histogram_rectangle_bytes - 1),
+  constexpr int64_t three_bins = 3;
+  constexpr size_t three_bin_histogram_bytes =
+      three_bins * sizeof(int64_t) + (three_bins + 1) * sizeof(double);
+  EXPECT_NO_THROW(
+      ComputeTensorStatistics(tensor, three_bins, {}, false, {}, three_bin_histogram_bytes));
+  EXPECT_THROW(
+      ComputeTensorStatistics(tensor, three_bins, {}, false, {}, three_bin_histogram_bytes - 1),
+      std::invalid_argument);
+  constexpr int64_t one_bin = 1;
+  constexpr int64_t square_side = 2;
+  constexpr size_t one_bin_histogram_bytes =
+      one_bin * sizeof(int64_t) + (one_bin + 1) * sizeof(double);
+  constexpr size_t histogram_rectangle_bytes =
+      one_bin_histogram_bytes + square_side * square_side * sizeof(double);
+  EXPECT_NO_THROW(ComputeTensorStatistics(tensor, one_bin, {}, false, {square_side, square_side},
+                                          histogram_rectangle_bytes));
+  EXPECT_THROW(ComputeTensorStatistics(tensor, one_bin, {}, false, {square_side, square_side},
+                                       histogram_rectangle_bytes - 1),
                std::invalid_argument);
 
   const auto empty = Tensor::FromFloat("X", {0}, {});
@@ -420,8 +443,8 @@ TEST(TensorStatistics, OutputAllocationBudgetBoundaries) {
   constexpr size_t additional_bin_bytes = sizeof(int64_t) + sizeof(double);
   EXPECT_NO_THROW(ComputeTensorStatistics(empty, maximum_bins + 1, {}, false, {},
                                           kTensorStatisticsMaxOutputBytes + additional_bin_bytes));
-  EXPECT_NO_THROW(ComputeTensorStatistics(empty, 1, {}, false, {1, maximum_cells}));
-  EXPECT_THROW(ComputeTensorStatistics(empty, 1, {}, false, {1, maximum_cells + 1}),
+  EXPECT_NO_THROW(ComputeTensorStatistics(empty, one_bin, {}, false, {1, maximum_cells}));
+  EXPECT_THROW(ComputeTensorStatistics(empty, one_bin, {}, false, {1, maximum_cells + 1}),
                std::invalid_argument);
   EXPECT_NO_THROW(ValidateTensorStatisticsOptions(maximum_bins, {}, false, {1, maximum_cells},
                                                   std::numeric_limits<size_t>::max()));

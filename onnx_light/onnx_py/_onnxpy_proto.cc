@@ -747,6 +747,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            if constexpr (std::is_same_v<cls, TensorProto>) {
+              EXT_ENFORCE(!self.HasDeferredWeight(),
+                          "Standalone deferred tensor export is unsupported; export the owning "
+                          "model.");
+            }
             if constexpr (std::is_same_v<cls, ModelProto>) {
               self.ValidateWeightSavePath(file_path);
               if (self.HasDeferredWeights()) {
@@ -830,6 +835,10 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
   // Helper lambda for ostream serialization, used by both SerializeToOstream and
   // SerializeToOStream to avoid code duplication
   auto serialize_to_ostream_impl = [](cls &self, nb::object output) {
+    if constexpr (std::is_same_v<cls, TensorProto>) {
+      EXT_ENFORCE(!self.HasDeferredWeight(),
+                  "Standalone deferred tensor export is unsupported; export the owning model.");
+    }
     if constexpr (std::is_same_v<cls, ModelProto>) {
       if (self.HasDeferredWeights()) {
         self.ValidateWeightSavePath();

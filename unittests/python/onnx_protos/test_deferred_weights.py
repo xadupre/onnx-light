@@ -14,6 +14,7 @@ from onnx_light.onnx import (
     SerializeOptions,
     load,
     save,
+    save_tensor,
 )
 
 
@@ -166,6 +167,34 @@ class TestDeferredWeights(unittest.TestCase):
             path.unlink()
             with self.assertRaises(RuntimeError):
                 model.load_weight("B")
+
+    def test_standalone_tensor_exports_do_not_overwrite_sources(self):
+        for external in (False, True):
+            with self.subTest(external=external), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "model.onnx"
+                save(self.make_model(), path, save_as_external_data=external, size_threshold=0)
+                model = load(path, defer_weights=True)
+                backing = Path(str(path) + ".data") if external else path
+                before = backing.read_bytes()
+                for index in (0, 2):
+                    tensor = model.graph.initializer[index]
+                    for loaded in (False, True):
+                        with self.subTest(name=tensor.name, loaded=loaded):
+                            if loaded:
+                                model.load_weight(tensor.name)
+                            with self.assertRaisesRegex(RuntimeError, "deferred tensor"):
+                                tensor.SerializeToFile(str(backing))
+                            for format in ("protobuf", "textproto"):
+                                with self.assertRaisesRegex(ValueError, "deferred tensor"):
+                                    save_tensor(tensor, backing, format=format)
+                            with backing.open("r+b") as output:
+                                with self.assertRaisesRegex(RuntimeError, "deferred tensor"):
+                                    tensor.SerializeToFileDescriptor(output.fileno())
+                                with self.assertRaisesRegex(RuntimeError, "deferred tensor"):
+                                    tensor.SerializeToOstream(output)
+                                with self.assertRaisesRegex(ValueError, "deferred tensor"):
+                                    save_tensor(tensor, output)
+                            self.assertEqual(backing.read_bytes(), before)
 
 
 if __name__ == "__main__":

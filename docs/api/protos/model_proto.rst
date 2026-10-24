@@ -49,6 +49,9 @@ Only fixed-width raw payloads are supported. Typed protobuf payload fields
 (``float_data``, ``int64_data``, ``string_data``, etc.), encrypted external weights,
 ORT/text input, bytes input, explicit external streams, ``no_copy=True`` and
 tiny-external-data eager loading are explicitly rejected in deferred mode.
+Encoded values (including affine layouts), paged-cache blocks and struct-type
+declarations are also rejected: their extension-owned tensors are not covered
+by the weight-name traversal.
 Existing eager parsing and ``skip_raw_data`` behavior are unchanged.
 
 Keep all backing files immutable and available until reloading is no longer
@@ -73,6 +76,11 @@ file descriptor, is rejected before writing. Native callers constructing their
 own output streams must call ``ValidateWeightSavePath`` **before opening or
 truncating** a destination; use ``SerializeToFile`` for automatic preflight.
 Python file-like export supports standard binary files and ``io.BytesIO``.
+Standalone deferred tensor file, descriptor and stream exports (including
+``save_tensor``) are rejected, even after loading. Path-based helpers reject
+before opening the destination; descriptor/stream methods reject before writing.
+Export the owning model or eagerly reload a serialized, loaded tensor to detach
+its source before exporting it independently.
 External-output, text and ORT conversions require first saving a single-file
 export and reloading it eagerly. Unloaded weights are never silently serialized.
 
@@ -116,8 +124,8 @@ reference of 1,773,952 bytes. Authenticated encrypted external weights add shard
 I/O, validation and extended tensor traversal. Linux CI run ``40030558220`` at
 commit ``9048f1bc4`` measures 1,851,608 installed bytes, 1,331,306 ``.text`` bytes
 and 898 defined dynamic symbols.
-Deferred sources and safe per-name loading/export measure 1,903,824 installed
-bytes, 1,388,540 ``.text`` bytes and 884 defined dynamic symbols with GCC 14.2.0
+The initial deferred-source implementation measured 1,903,824 installed bytes,
+1,388,540 ``.text`` bytes and 884 defined dynamic symbols with GCC 14.2.0
 on Linux (stripped Release, core-only Python build). CI uses this installed-size
 reference and retains the 1,331,306-byte text reference, with a 5% margin
 (``--size-budget-margin-percent 5``), giving limits of 1,999,015 installed

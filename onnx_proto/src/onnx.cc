@@ -1569,6 +1569,7 @@ void StructTypeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, type_id)
 }
 bool StructTypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support StructTypeProto.");
   READ_BEGIN(options, stream, StructTypeProto)              //
   READ_ONEOF_PROTO_FIELD(options, stream, array)            //
   READ_ONEOF_PROTO_FIELD(options, stream, structure)        //
@@ -1622,6 +1623,7 @@ void EncodedValueProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, parameter_ref)
 }
 bool EncodedValueProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support EncodedValueProto.");
   READ_BEGIN(options, stream, EncodedValueProto)           //
   READ_ONEOF_PROTO_FIELD(options, stream, affine)          //
   READ_ONEOF_PROTO_FIELD(options, stream, struct_type)     //
@@ -1684,6 +1686,7 @@ void PagedCacheBlockProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, encoded_value)
 }
 bool PagedCacheBlockProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support PagedCacheBlockProto.");
   READ_BEGIN(options, stream, PagedCacheBlockProto)
   READ_FIELD(options, stream, start)
   READ_FIELD(options, stream, length)

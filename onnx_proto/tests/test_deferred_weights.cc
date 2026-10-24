@@ -1,3 +1,4 @@
+#include "external_data_internal.h"
 #include "onnx_helper.h"
 #include <chrono>
 #include <filesystem>
@@ -180,6 +181,74 @@ TEST_F(DeferredWeights, RejectsChangedMissingAndTruncatedSourcesIncludingEmptyTe
   EXPECT_THROW(model.LoadWeight("B"), std::runtime_error);
   std::filesystem::remove(path);
   EXPECT_THROW(model.LoadWeight("empty"), std::runtime_error);
+}
+
+TEST_F(DeferredWeights, StandaloneTensorExportsRejectBeforeWritingLoadedOrUnloadedPayloads) {
+  auto original = MakeModel();
+  std::string before;
+  ASSERT_TRUE(original.SerializeToString(before));
+  ASSERT_TRUE(original.SerializeToFile(path));
+  auto model = Load();
+  const auto file = utils::detail::OpenExternalDataFile(directory.string(), "model.onnx", true);
+  for (const auto &name : {"A", "empty"}) {
+    auto &tensor = model.ref_graph().ref_initializer()[std::string(name) == "A" ? 0 : 2];
+    for (const bool loaded : {false, true}) {
+      SCOPED_TRACE(std::string(name) + (loaded ? " loaded" : " unloaded"));
+      if (loaded) {
+        ASSERT_TRUE(model.LoadWeight(name));
+      }
+      EXPECT_THROW(tensor.SerializeToFileDescriptor(*file), std::runtime_error);
+      EXPECT_THROW(tensor.SaveToFileDescriptor(*file), std::runtime_error);
+      std::fstream output(path, std::ios::in | std::ios::out | std::ios::binary);
+      EXPECT_THROW(tensor.SerializeToOstream(&output), std::runtime_error);
+      utils::FdWriteStream stream(*file);
+      EXPECT_THROW(tensor.SerializeToZeroCopyStream(&stream), std::runtime_error);
+      std::ifstream input(path, std::ios::binary);
+      const std::string after((std::istreambuf_iterator<char>(input)),
+                              std::istreambuf_iterator<char>());
+      EXPECT_EQ(after, before);
+    }
+  }
+}
+
+TEST_F(DeferredWeights, RejectsExtensionOwnedWeightsWithoutChangingTheirBackingFile) {
+  const auto source = MakeModel();
+  for (int kind = 0; kind < 4; ++kind) {
+    SCOPED_TRACE(kind);
+    ModelProto original;
+    if (kind == 0) {
+      auto *block = original.ref_graph().add_extended_initializer()->ref_paged_cache().add_blocks();
+      block->ref_key().CopyFrom(source.graph().initializer()[0]);
+      block->ref_value().CopyFrom(source.graph().initializer()[1]);
+    } else if (kind == 1) {
+      auto &affine =
+          original.ref_graph().add_extended_initializer()->ref_encoded_value().ref_affine();
+      affine.ref_scale().CopyFrom(source.graph().initializer()[0]);
+      affine.ref_zero_point().CopyFrom(source.graph().initializer()[1]);
+    } else {
+      auto &structure = kind == 2 ? original.add_struct_types()->ref_structure()
+                                  : original.ref_graph()
+                                        .add_input()
+                                        ->ref_type()
+                                        .ref_sequence_type()
+                                        .ref_elem_type()
+                                        .ref_struct_type()
+                                        .ref_structure();
+      structure.add_field()->ref_constant().CopyFrom(source.graph().initializer()[0]);
+    }
+    std::string before;
+    ASSERT_TRUE(original.SerializeToString(before));
+    ASSERT_TRUE(original.SerializeToFile(path));
+    EXPECT_THROW(Load(), std::runtime_error);
+    std::ifstream input(path, std::ios::binary);
+    const std::string after((std::istreambuf_iterator<char>(input)),
+                            std::istreambuf_iterator<char>());
+    EXPECT_EQ(after, before);
+    ModelProto eager;
+    utils::FileStream stream(path);
+    ParseOptions options;
+    EXPECT_TRUE(eager.ParseFromStream(stream, options));
+  }
 }
 
 TEST_F(DeferredWeights, ResolvesNestedAttributeNamesAndRejectsAmbiguity) {

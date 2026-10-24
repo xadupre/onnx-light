@@ -75,7 +75,9 @@ def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | Non
 
     The format defaults to protobuf, except for paths ending in ``.textproto``.
     This helper writes the tensor message, not a containing model, and does not
-    create or copy external tensor-data files.
+    create or copy external tensor-data files. The helper rejects standalone
+    deferred tensors; callers must save the owning model or eagerly reload the
+    tensor instead.
 
     :param proto: in-memory TensorProto.
     :param f: tensor file path or binary writable stream.
@@ -85,6 +87,10 @@ def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | Non
         raise TypeError(f"Expected TensorProto, got {type(proto)}.")
     if not isinstance(f, (str, Path)) and not hasattr(f, "write"):
         raise TypeError(f"Expected str, Path, or a binary writable stream, got {type(f)}.")
+    if proto.has_deferred_weight():
+        raise ValueError(
+            "Standalone deferred tensor export is unsupported; export the owning model."
+        )
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:

@@ -53,6 +53,35 @@ ModelProto make_test_model() {
   return model;
 }
 
+ModelProto make_callback_test_model() {
+  ModelProto model = make_test_model();
+  auto &graph = model.ref_graph();
+  graph.set_name("parent");
+  auto *node = graph.add_node();
+  node->set_op_type("Constant");
+  node->set_name("constant");
+  auto *value = node->add_attribute();
+  value->set_name("value");
+  value->set_type(AttributeProto::TENSOR);
+  *value->add_t() = graph.initializer(0);
+  value->ref_t().set_name("value");
+  auto *branches = graph.ref_node()[0].add_attribute();
+  branches->set_name("branches");
+  branches->set_type(AttributeProto::GRAPHS);
+  for (const auto &name : {"first", "second"}) {
+    auto *child = branches->add_graphs();
+    child->set_name(name);
+    *child->add_node() = *node;
+  }
+  auto *function = model.add_functions();
+  function->set_name("function");
+  auto *body = function->add_attribute_proto();
+  body->set_type(AttributeProto::GRAPH);
+  body->add_g()->set_name("default");
+  *body->ref_g().add_node() = *node;
+  return model;
+}
+
 ModelProto make_sparse_test_model() {
   ModelProto model = make_test_model();
   size_t index = 0;
@@ -944,6 +973,143 @@ TEST_F(EncryptedExternalTest, NestedAttributeTensorsAndNoCopyOwnTheirData) {
   loaded = ModelProto{};
   LoadEncryptedModel(loaded, path, "secret", opts);
   expect_same(model, loaded);
+}
+
+TEST_F(EncryptedExternalTest, NodeCallbacksObserveResolvedConstantsAndPreserveReplacements) {
+  ModelProto model = make_callback_test_model();
+  const float expected[4] = {1, 2, 3, 4};
+  const float replacement[4] = {5, 6, 7, 8};
+  for (const bool external : {false, true}) {
+    if (external)
+      SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+    else
+      SaveEncryptedModel(model, path, "secret");
+    std::vector<std::string> visits;
+    int raw_callbacks = 0;
+    ParseOptions options;
+    options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+      ++raw_callbacks;
+      return std::function<void()>{};
+    };
+    options.node_callback = [&](NodeProto &node, GraphProto &graph) {
+      visits.push_back(graph.name() + ":" + node.op_type());
+      if (node.op_type() != "Constant")
+        return;
+      auto &tensor = node.ref_attribute()[0].ref_t();
+      ASSERT_EQ(tensor.raw_data().size(), sizeof(expected));
+      EXPECT_EQ(std::memcmp(tensor.raw_data().data(), expected, sizeof(expected)), 0);
+      EXPECT_FALSE(tensor.has_external_data());
+      EXPECT_EQ(tensor.data_location(), TensorProto::DataLocation::DEFAULT);
+      std::memcpy(tensor.ref_raw_data().data(), replacement, sizeof(replacement));
+    };
+    options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+    options.function_callback = [&](FunctionProto &function) { visits.push_back(function.name()); };
+    ModelProto loaded;
+    LoadEncryptedModel(loaded, path, "secret", options);
+    EXPECT_EQ(visits, (std::vector<std::string>{
+                          "first:Constant", "first", "second:Constant", "second", "parent:Relu",
+                          "parent:Constant", "parent", "default:Constant", "default", "function"}));
+    EXPECT_EQ(raw_callbacks, 5);
+    int constants = 0;
+    IteratorTensorProto iterator(&loaded);
+    while (iterator.next()) {
+      if (iterator->name() == "W")
+        continue;
+      ASSERT_EQ(iterator->raw_data().size(), sizeof(replacement));
+      EXPECT_EQ(std::memcmp(iterator->raw_data().data(), replacement, sizeof(replacement)), 0);
+      ++constants;
+    }
+    EXPECT_EQ(constants, 4);
+  }
+}
+
+TEST_F(EncryptedExternalTest, DeferredNodeCallbacksDoNotRunAfterPartialShardFailure) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto stored = metadata();
+  const std::string last_location = entry(stored.ref_functions()[0]
+                                              .ref_attribute_proto()[0]
+                                              .ref_g()
+                                              .ref_node()[0]
+                                              .ref_attribute()[0]
+                                              .ref_t(),
+                                          "location");
+  ASSERT_FALSE(last_location.empty());
+  ASSERT_TRUE(std::filesystem::remove(directory / last_location));
+  int raw_callbacks = 0, node_callbacks = 0;
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+    ++raw_callbacks;
+    return std::function<void()>{};
+  };
+  options.node_callback = [&](NodeProto &, GraphProto &) { ++node_callbacks; };
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModel(loaded, path, "secret", options), std::runtime_error);
+  EXPECT_GT(raw_callbacks, 0);
+  EXPECT_EQ(node_callbacks, 0);
+}
+
+TEST_F(EncryptedExternalTest, StringMetadataParsingKeepsNodeCallbackSemantics) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  int constants = 0, raw_callbacks = 0;
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) {
+    ++raw_callbacks;
+    return std::function<void()>{};
+  };
+  options.node_callback = [&](NodeProto &node, GraphProto &) {
+    if (node.op_type() == "Constant") {
+      const auto &tensor = node.attribute(0).t();
+      EXPECT_TRUE(tensor.raw_data().empty());
+      EXPECT_TRUE(tensor.has_external_data());
+      ++constants;
+    }
+  };
+  ModelProto loaded;
+  LoadEncryptedModelFromString(loaded, read(path), "secret", options);
+  EXPECT_EQ(constants, 4);
+  EXPECT_EQ(raw_callbacks, 0);
+}
+
+TEST_F(EncryptedExternalTest, DeferredCallbacksIncludeCodecGraphsAndEmptyScopes) {
+  ModelProto model = make_test_model();
+  auto *codec = add_struct_codec(model, 0, false);
+  codec->set_name("codec");
+  auto *attribute = codec->add_node()->add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  attribute->add_g()->set_name("empty");
+  std::vector<std::string> visits;
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &, GraphProto &graph) {
+    visits.push_back("node:" + graph.name());
+  };
+  options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+  options.function_callback = [&](FunctionProto &function) { visits.push_back(function.name()); };
+  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(visits, (std::vector<std::string>{"node:test_graph", "test_graph", "empty", "codec"}));
+}
+
+TEST_F(EncryptedExternalTest, EmbeddedMetadataOnlyLoadingKeepsNodeCallbackSemantics) {
+  ModelProto model = make_callback_test_model();
+  SaveEncryptedModel(model, path, "secret");
+  int constants = 0;
+  ParseOptions options;
+  options.skip_raw_data = true;
+  options.raw_data_threshold = 0;
+  options.node_callback = [&](NodeProto &node, GraphProto &) {
+    if (node.op_type() == "Constant") {
+      EXPECT_TRUE(node.attribute(0).t().raw_data().empty());
+      ++constants;
+    }
+  };
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret", options);
+  EXPECT_EQ(constants, 4);
 }
 
 TEST_F(EncryptedExternalTest, PreservesPlainExternalDataAndRequiresLoadedWeightsOnExport) {

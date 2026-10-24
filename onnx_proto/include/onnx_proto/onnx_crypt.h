@@ -142,6 +142,9 @@ LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &base_dir
  * 1 GiB encrypted-shard limit. For a different limit, uses
  * LoadEncryptedModelFromString() followed by LoadEncryptedExternalDataForModel().
  * Plain external references retain their existing behavior (not loaded here).
+ * Node callbacks run only after encrypted external weights are resolved successfully.
+ * When a node callback is supplied, graph and function callbacks are also deferred
+ * to preserve their child-first ordering.
  *
  * @param model      Output model populated from the decrypted payload.
  * @param file_path  Source file path.

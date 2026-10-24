@@ -3305,6 +3305,50 @@ bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor
 
 #undef VISIT_FIELD
 
+class ParseScopeCallbackVisitor {
+public:
+  explicit ParseScopeCallbackVisitor(const ParseOptions &options) : options_(options) {}
+
+  template <typename T> bool operator()(const char *, bool, bool present, const T &, T &value) {
+    if (present)
+      Visit(value);
+    return true;
+  }
+
+  template <typename T> void Visit(T &value) {
+    if constexpr (requires { T::proto_id; }) {
+      VisitProtoFields(value, value, *this);
+      if constexpr (std::is_same_v<T, GraphProto>) {
+        if (options_.node_callback)
+          for (int i = 0; i < static_cast<int>(value.ref_node().size()); ++i)
+            options_.node_callback(value.ref_node()[i], value);
+        if (options_.graph_callback)
+          options_.graph_callback(value);
+      } else if constexpr (std::is_same_v<T, FunctionProto>) {
+        if (options_.function_callback)
+          options_.function_callback(value);
+      }
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      if (value.has_value())
+        Visit(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (auto &entry : value)
+        Visit(entry.second);
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (auto &element : value)
+          Visit(element);
+    }
+  }
+
+private:
+  const ParseOptions &options_;
+};
+
 class ProtoContentHasher {
 public:
   ProtoContentHasher() { blake3_hasher_init(&hasher_); }
@@ -3375,6 +3419,10 @@ int64_t AttributeContentHash(const AttributeProto &attribute) {
 }
 
 } // namespace
+
+void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options) {
+  ParseScopeCallbackVisitor(options).Visit(model);
+}
 
 #define DEFINE_PROTO_EQUALS(cls)                                                                   \
   bool cls::Equals(const cls &right, std::string *difference) const {                              \

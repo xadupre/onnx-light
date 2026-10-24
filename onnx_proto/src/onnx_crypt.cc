@@ -876,7 +876,13 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
   if (!ifs)
     throw std::runtime_error("Read error for file: " + file_path);
 
-  LoadEncryptedModelFromString(model, file_buf, key, opts);
+  ParseOptions parse_opts = opts;
+  if (opts.node_callback) {
+    parse_opts.node_callback = {};
+    parse_opts.graph_callback = {};
+    parse_opts.function_callback = {};
+  }
+  LoadEncryptedModelFromString(model, file_buf, key, parse_opts);
   bool encrypted_external = false;
   IteratorTensorProto iterator(&model);
   while (!encrypted_external && iterator.next()) {
@@ -898,6 +904,10 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
 
     LoadEncryptedExternalDataForModel(model, utils::detail::external_path_to_utf8(base_dir_path),
                                       key, opts);
+  }
+  if (opts.node_callback) {
+    // Traverse live scopes only: duplicate optional protobuf fields replace earlier objects.
+    utils::detail::ApplyParseScopeCallbacks(model, opts);
   }
 }
 

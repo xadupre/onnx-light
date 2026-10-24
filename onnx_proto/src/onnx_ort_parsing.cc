@@ -883,6 +883,8 @@ void OrtCallbacks(GraphProto &graph, ParseOptions &options) {
   if (options.node_callback)
     for (auto &node : graph.ref_node())
       options.node_callback(node, graph);
+  if (options.graph_callback)
+    options.graph_callback(graph);
 }
 
 } // namespace

@@ -14,6 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 class TensorProto;
 class NodeProto;
 class GraphProto;
+class FunctionProto;
 class ModelProto;
 class PipelineProto;
 struct SerializeOptions;
@@ -227,6 +228,15 @@ struct ParseOptions : TensorBufferOptions {
    *
    *  By default it is empty (no callback) and parsing behaves exactly as before. */
   std::function<void(NodeProto &, GraphProto &)> node_callback = {};
+  /** Holds an optional callback invoked after a graph and its nested graphs have been parsed.
+   *  All fields, including metadata, are available. It runs after node_callback, including for
+   *  empty graphs, and may attach graph-local state without a separate model traversal.
+   *  By default it is empty and existing parsing behavior is unchanged. */
+  std::function<void(GraphProto &)> graph_callback = {};
+  /** Holds an optional callback invoked after all function fields and nested graphs are parsed.
+   *  Receives the live function body, including its metadata. Empty functions also invoke it.
+   *  By default it is empty and existing parsing behavior is unchanged. */
+  std::function<void(FunctionProto &)> function_callback = {};
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

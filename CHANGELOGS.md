@@ -44,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
+- Adding `ParseOptions::graph_callback` and `ParseOptions::function_callback` changes the C++ layout of `ParseOptions`. Rebuild downstream C++ libraries and extensions against matching onnx-light headers and binaries; mixing prebuilt consumers of the old structure with this release is unsupported ([#5515](https://github.com/xadupre/onnx-light/pull/5515)).
 - Removed the ORT plugin roadmap after moving it to the separate `xadupre/onnx-light-ort` project ([#5499](https://github.com/xadupre/onnx-light/pull/5499)).
 - Bumped the release version to `0.2.0`.
 

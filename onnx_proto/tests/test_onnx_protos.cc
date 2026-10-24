@@ -7638,6 +7638,89 @@ ModelProto MakeModelWithSubgraph() {
 }
 } // namespace
 
+TEST(onnx_proto, ParseOptions_GraphCallback_ChildFirstAndCompleteMetadata) {
+  GraphProto graph;
+  graph.set_name("parent");
+  auto *node = graph.add_node();
+  node->set_op_type("Container");
+  auto *single = node->add_attribute();
+  single->set_type(AttributeProto::GRAPH);
+  single->mutable_g()->set_name("single");
+  auto *multiple = node->add_attribute();
+  multiple->set_type(AttributeProto::GRAPHS);
+  multiple->add_graphs()->set_name("multiple");
+  graph.add_metadata_props()->set_key("parsed_after_nodes");
+  std::vector<std::string> visits;
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &, GraphProto &) { visits.push_back("node"); };
+  options.graph_callback = [&](GraphProto &parent) {
+    visits.push_back(parent.name());
+    if (parent.name() == "parent") {
+      EXPECT_EQ(parent.metadata_props(0).key(), "parsed_after_nodes");
+    }
+    parent.add_metadata_props()->set_key("callback");
+  };
+  GraphProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(graph.SerializeAsString(), options));
+  EXPECT_EQ(visits, (std::vector<std::string>{"single", "multiple", "node", "parent"}));
+  EXPECT_EQ(loaded.metadata_props(1).key(), "callback");
+  EXPECT_EQ(loaded.node(0).attribute(0).g().metadata_props(0).key(), "callback");
+}
+
+TEST(onnx_proto, ParseOptions_GraphCallback_PropagatesExceptions) {
+  GraphProto graph;
+  ParseOptions options;
+  options.graph_callback = [](GraphProto &) { throw std::runtime_error("graph callback"); };
+  GraphProto loaded;
+  const std::string bytes = graph.SerializeAsString();
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(bytes.data()),
+                             static_cast<int64_t>(bytes.size()));
+  EXPECT_THROW(loaded.ParseFromStream(stream, options), std::runtime_error);
+  EXPECT_FALSE(loaded.ParseFromString(bytes, options));
+}
+
+TEST(onnx_proto, ParseOptions_FunctionCallback_ChildFirstAndCompleteMetadata) {
+  FunctionProto function;
+  function.set_name("function");
+  auto *attribute = function.add_node()->add_attribute();
+  attribute->set_type(AttributeProto::GRAPH);
+  attribute->mutable_g()->set_name("child");
+  function.add_metadata_props()->set_key("parsed_after_nodes");
+  std::vector<std::string> visits;
+  ParseOptions options;
+  options.graph_callback = [&](GraphProto &graph) { visits.push_back(graph.name()); };
+  options.function_callback = [&](FunctionProto &scope) {
+    visits.push_back(scope.name());
+    if (scope.name() == "function") {
+      EXPECT_EQ(scope.metadata_props(0).key(), "parsed_after_nodes");
+    }
+    scope.add_metadata_props()->set_key("callback");
+  };
+  FunctionProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(function.SerializeAsString(), options));
+  EXPECT_EQ(visits, (std::vector<std::string>{"child", "function"}));
+  EXPECT_EQ(loaded.metadata_props(1).key(), "callback");
+  FunctionProto empty;
+  FunctionProto loaded_empty;
+  ASSERT_TRUE(loaded_empty.ParseFromString(empty.SerializeAsString(), options));
+  EXPECT_EQ(visits.back(), "");
+  EXPECT_EQ(loaded_empty.metadata_props(0).key(), "callback");
+}
+
+TEST(onnx_proto, ParseOptions_FunctionCallback_PropagatesExceptions) {
+  FunctionProto function;
+  ParseOptions options;
+  options.function_callback = [](FunctionProto &) {
+    throw std::runtime_error("function callback");
+  };
+  FunctionProto loaded;
+  const std::string bytes = function.SerializeAsString();
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(bytes.data()),
+                             static_cast<int64_t>(bytes.size()));
+  EXPECT_THROW(loaded.ParseFromStream(stream, options), std::runtime_error);
+  EXPECT_FALSE(loaded.ParseFromString(bytes, options));
+}
+
 TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
   ModelProto model = MakeModelWithSubgraph();
   std::string serialized;

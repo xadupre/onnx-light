@@ -300,6 +300,14 @@ struct PyNodeCallback {
   }
 };
 
+template <class Proto> struct PyProtoCallback {
+  nb::object fn;
+  void operator()(Proto &proto) const {
+    nb::gil_scoped_acquire gil;
+    fn(nb::cast(&proto, nb::rv_policy::reference));
+  }
+};
+
 // Reusable ``raw_data_callback`` that keeps the default C++ allocation (tensor ownership
 // unchanged) while letting users observe parsing progress. When called it optionally forwards
 // the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
@@ -1484,6 +1492,57 @@ void AddOnnxPyProto(nb::module_ &m) {
           "has been fully parsed. The node and its parent :class:`GraphProto` are passed by "
           "reference; the node may be inspected or edited in place. Setting it to ``None`` (the "
           "default) disables the callback.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "graph_callback",
+          [](ParseOptions &options) -> nb::object {
+            if (!options.graph_callback)
+              return nb::none();
+            if (const auto *callback = options.graph_callback.target<PyProtoCallback<GraphProto>>())
+              return callback->fn;
+            return nb::cpp_function(
+                [callback = options.graph_callback](GraphProto &graph) { callback(graph); },
+                nb::arg("graph"));
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none())
+              options.graph_callback = {};
+            else {
+              if (!PyCallable_Check(fn.ptr()))
+                throw nb::type_error("graph_callback must be callable or None");
+              options.graph_callback = PyProtoCallback<GraphProto>{fn};
+            }
+          },
+          "Holds an optional callable invoked as ``fn(graph)`` after all graph fields and node "
+          "callbacks, including for empty graphs. Nested graphs complete before their owners. "
+          "The graph argument is borrowed; retain its proto owner if keeping the reference. "
+          "Setting None disables the callback. Assigning a non-callable raises TypeError.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "function_callback",
+          [](ParseOptions &options) -> nb::object {
+            if (!options.function_callback)
+              return nb::none();
+            if (const auto *callback =
+                    options.function_callback.target<PyProtoCallback<FunctionProto>>())
+              return callback->fn;
+            return nb::cpp_function([callback = options.function_callback](
+                                        FunctionProto &function) { callback(function); },
+                                    nb::arg("function"));
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none())
+              options.function_callback = {};
+            else {
+              if (!PyCallable_Check(fn.ptr()))
+                throw nb::type_error("function_callback must be callable or None");
+              options.function_callback = PyProtoCallback<FunctionProto>{fn};
+            }
+          },
+          "Holds an optional callable invoked as ``fn(function)`` after all function fields and "
+          "nested graphs, including for empty functions. The function argument is borrowed; "
+          "retain its proto owner if keeping the reference. Setting None disables the callback. "
+          "Assigning a non-callable raises TypeError.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",

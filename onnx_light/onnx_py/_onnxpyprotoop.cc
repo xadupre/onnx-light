@@ -29,5 +29,6 @@ NB_MODULE(_onnxpyprotoop, m) {
       },
       "Returns the native compiler and nanobind ABI metadata embedded at build time.");
   AddOnnxPyProto(m);
+  AddOnnxPyLayout(m);
   AddOnnxPyOp(m);
 }

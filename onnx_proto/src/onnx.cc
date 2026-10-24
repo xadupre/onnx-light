@@ -2001,6 +2001,8 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
       options.node_callback(ref_node()[i], *this);
     }
   }
+  if (options.graph_callback)
+    options.graph_callback(*this);
   return true;
 }
 void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
@@ -2062,6 +2064,8 @@ bool FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, value_info)      //
   READ_REPEATED_FIELD(options, stream, metadata_props)  //
   READ_END(options, stream, FunctionProto)              //  // NOLINT
+  if (options.function_callback)
+    options.function_callback(*this);
   return true;
 }
 void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {

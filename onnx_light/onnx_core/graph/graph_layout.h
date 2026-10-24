@@ -162,7 +162,14 @@ public:
   void Persist(bool recurse = true);
   /// Appends a node copy with fresh layout state, updates consumers and returns its new local ID.
   LayoutNodeId Append(const NodeProto &node);
-  /// Inserts a node copy with fresh layout state; throws std::out_of_range if index > size.
+  /**
+   * Inserts a node copy with fresh layout state; throws std::out_of_range if index > size.
+   *
+   * Shifts existing nodes by swapping owning handles without copying their payloads; node,
+   * attribute and subgraph addresses remain valid. The shifting loop takes linear time in the
+   * number of shifted nodes, independently of payload size. Layout maintenance is separate;
+   * this is not a complexity guarantee for the entire Insert operation.
+   */
   LayoutNodeId Insert(size_t index, const NodeProto &node);
   /// Removes the node and its children, updating consumers; returns false for an unknown ID.
   bool Erase(LayoutNodeId id);

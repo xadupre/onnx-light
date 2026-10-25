@@ -38,6 +38,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+using detail::external_path_from_utf8;
 using detail::external_path_to_utf8;
 using detail::ExternalDataFileSize;
 using detail::MapExternalDataFile;
@@ -45,12 +46,10 @@ using detail::OpenExternalDataFile;
 using detail::ReadExternalDataFile;
 using detail::relative_external_data_path;
 
-std::filesystem::path external_path_from_utf8(const std::string &value) {
-#ifdef __cpp_char8_t
-  return std::filesystem::path(reinterpret_cast<const char8_t *>(value.c_str()));
-#else
-  return std::filesystem::u8path(value);
-#endif
+std::shared_ptr<int> OpenDeferredModelSource(const std::string &file_path) {
+  const auto path = std::filesystem::absolute(external_path_from_utf8(file_path));
+  return OpenExternalDataFile(external_path_to_utf8(path.parent_path()),
+                              external_path_to_utf8(path.filename()));
 }
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -180,6 +179,42 @@ std::filesystem::path VerifyExternalContainment(const std::filesystem::path &pat
 } // namespace
 
 namespace detail {
+
+std::string ExternalDataFileIdentity(int descriptor, bool include_changes) {
+#ifdef _WIN32
+  BY_HANDLE_FILE_INFORMATION metadata{};
+  EXT_ENFORCE(::GetFileInformationByHandle(reinterpret_cast<HANDLE>(::_get_osfhandle(descriptor)),
+                                           &metadata),
+              "Cannot query deferred weight source information.");
+  const std::string identity = std::to_string(metadata.dwVolumeSerialNumber) + ":" +
+                               std::to_string(metadata.nFileIndexHigh) + ":" +
+                               std::to_string(metadata.nFileIndexLow);
+  if (!include_changes)
+    return identity;
+  return identity + ":" + std::to_string(metadata.nFileSizeHigh) + ":" +
+         std::to_string(metadata.nFileSizeLow) + ":" +
+         std::to_string(metadata.ftLastWriteTime.dwHighDateTime) + ":" +
+         std::to_string(metadata.ftLastWriteTime.dwLowDateTime);
+#else
+  struct stat metadata{};
+  EXT_ENFORCE(::fstat(descriptor, &metadata) == 0,
+              "Cannot query deferred weight source information.");
+#ifdef __APPLE__
+  const auto modified = metadata.st_mtimespec;
+  const auto changed = metadata.st_ctimespec;
+#else
+  const auto modified = metadata.st_mtim;
+  const auto changed = metadata.st_ctim;
+#endif
+  const std::string identity =
+      std::to_string(metadata.st_dev) + ":" + std::to_string(metadata.st_ino);
+  if (!include_changes)
+    return identity;
+  return identity + ":" + std::to_string(metadata.st_size) + ":" + std::to_string(modified.tv_sec) +
+         ":" + std::to_string(modified.tv_nsec) + ":" + std::to_string(changed.tv_sec) + ":" +
+         std::to_string(changed.tv_nsec);
+#endif
+}
 
 std::shared_ptr<int> OpenExternalDataFile(const std::string &base_dir,
                                           const std::string &relative_path, bool write) {
@@ -1400,6 +1435,25 @@ FileStream::FileStream(const std::string &file_path, std::shared_ptr<int> file)
 
 bool FileStream::is_open() const { return external_file_ || file_stream_.is_open(); }
 
+void FileStream::PinDeferredSource() {
+  if (external_file_ && read_buf_.size() == 1)
+    return;
+  EXT_ENFORCE(tell() == 0, "Deferred parsing must start with an unread file stream.");
+  file_path_ =
+      external_path_to_utf8(std::filesystem::absolute(external_path_from_utf8(file_path_)));
+  if (!external_file_) {
+    auto file = OpenDeferredModelSource(file_path_);
+    size_ = ExternalDataFileSize(*file);
+    file_stream_.close();
+    external_file_ = std::move(file);
+  }
+  deferred_mapping_ = MapExternalDataFile(*external_file_);
+  external_position_ = 0;
+  read_buf_pos_ = read_buf_end_ = 0;
+  // Refill from mapped memory without reading ahead into the next raw payload.
+  read_buf_.resize(1);
+}
+
 void FileStream::LimitTo(uint64_t len) {
   EXT_ENFORCE(limits_.size() > 0, "No limit was stored.");
   size_ = len;
@@ -1418,9 +1472,12 @@ void FileStream::_fill_read_buffer() {
   int64_t avail = size_ - tell();
   if (avail <= 0)
     return;
-  int64_t to_read = std::min(static_cast<int64_t>(READ_BUF_SIZE), avail);
+  int64_t to_read = std::min(static_cast<int64_t>(read_buf_.size()), avail);
   if (external_file_) {
-    ReadExternalDataFile(*external_file_, read_buf_.data(), to_read, external_position_);
+    if (deferred_mapping_)
+      memcpy(read_buf_.data(), deferred_mapping_.get() + external_position_, to_read);
+    else
+      ReadExternalDataFile(*external_file_, read_buf_.data(), to_read, external_position_);
     external_position_ += to_read;
     read_buf_end_ = static_cast<size_t>(to_read);
   } else {
@@ -1469,9 +1526,16 @@ uint64_t FileStream::next_uint64() {
 }
 
 const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
-  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
-              "[FileStream::read_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
-              ", size=", size_);
+  EXT_ENFORCE(n_bytes >= 0, "[FileStream::read_bytes] negative size: ", n_bytes);
+  CanRead(static_cast<uint64_t>(n_bytes), "[FileStream::read_bytes]");
+  if (deferred_mapping_) {
+    _invalidate_read_buffer();
+    const uint8_t *data = deferred_mapping_.get() + external_position_;
+    if (pre_allocated_buffer && n_bytes > 0)
+      memcpy(pre_allocated_buffer, data, static_cast<size_t>(n_bytes));
+    external_position_ += n_bytes;
+    return pre_allocated_buffer ? pre_allocated_buffer : data;
+  }
   if (pre_allocated_buffer) {
     // Drain the read-ahead buffer first, then pull any remaining bytes from file.
     size_t buffered = read_buf_end_ - read_buf_pos_;
@@ -1514,9 +1578,8 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
 }
 
 void FileStream::skip_bytes(offset_t n_bytes) {
-  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
-              "[FileStream::skip_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
-              ", size=", size_);
+  EXT_ENFORCE(n_bytes >= 0, "[FileStream::skip_bytes] negative size: ", n_bytes);
+  CanRead(static_cast<uint64_t>(n_bytes), "[FileStream::skip_bytes]");
   size_t buffered = read_buf_end_ - read_buf_pos_;
   if (static_cast<size_t>(n_bytes) <= buffered) {
     read_buf_pos_ += static_cast<size_t>(n_bytes);
@@ -1556,6 +1619,20 @@ FileStream::~FileStream() {
 /////////////////
 // MmapFileStream
 /////////////////
+
+void MmapFileStream::PinDeferredSource() {
+  if (deferred_file_)
+    return;
+  EXT_ENFORCE(tell() == 0, "Deferred parsing must start with an unread mmap stream.");
+  file_path_ =
+      external_path_to_utf8(std::filesystem::absolute(external_path_from_utf8(file_path_)));
+  auto file = OpenDeferredModelSource(file_path_);
+  const int64_t size = ExternalDataFileSize(*file);
+  auto mapping = size > 0 ? MapExternalDataFile(*file) : std::shared_ptr<uint8_t>{};
+  mmap_ = std::move(mapping);
+  Setup(mmap_.get(), size);
+  deferred_file_ = std::move(file);
+}
 
 MmapFileStream::MmapFileStream(const std::string &file_path)
     : StringStream(), file_path_(file_path) {

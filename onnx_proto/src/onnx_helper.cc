@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #endif
 #include "onnx_helper.h"
+#include "external_data_internal.h"
 #include "onnx_io_policy.h"
 #include <array>
 #include <cerrno>
@@ -34,9 +35,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 ExternalDataLocationExistsError::~ExternalDataLocationExistsError() = default;
 
 IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
+  for (const auto &type : model->struct_types())
+    utils::detail::ValidateDeferredSubmessageExport(&type, StructTypeProto::proto_id);
   const auto add_functions = [&](auto &functions) {
     for (size_t i = functions.size(); i > 0; --i) {
       auto &function = functions[i - 1];
+      for (const auto &value : function.value_info())
+        utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id);
       positions_.push_back(Position{nullptr, nullptr, &function.ref_attribute_proto()});
       positions_.push_back(Position{&function.ref_node()});
     }
@@ -62,6 +67,16 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();
+    if (pos.graph != nullptr && !pos.validated_extensions) {
+      for (const auto &initializer : pos.graph->extended_initializer())
+        utils::detail::ValidateDeferredSubmessageExport(&initializer,
+                                                        ExtendedInitializerProto::proto_id);
+      for (const auto *values :
+           {&pos.graph->input(), &pos.graph->output(), &pos.graph->value_info()})
+        for (const auto &value : *values)
+          utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id);
+      pos.validated_extensions = true;
+    }
     // loops over nodes
     bool break_loop = false;
     const size_t node_count =
@@ -72,6 +87,13 @@ bool IteratorTensorProto::next() {
                                                      : (*pos.nodes)[pos.node_index].ref_attribute();
         while (pos.attr_index < attributes.size()) {
           AttributeProto &att = attributes[pos.attr_index];
+          if (pos.attr_tensor_index == 0 && pos.attr_sparse_tensor_index == 0 &&
+              pos.attr_graph_index == 0) {
+            if (att.has_tp())
+              utils::detail::ValidateDeferredSubmessageExport(&att.tp(), TypeProto::proto_id);
+            for (const auto &type : att.type_protos())
+              utils::detail::ValidateDeferredSubmessageExport(&type, TypeProto::proto_id);
+          }
           const size_t single_tensor = att.has_t() ? 1 : 0;
           if (pos.attr_tensor_index < single_tensor + att.ref_tensors().size()) {
             const size_t index = pos.attr_tensor_index++;
@@ -439,12 +461,8 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &o
     });
   };
   auto snapshot_node = [&restorer](NodeProto &node) {
-    auto saved = std::make_shared<NodeProto>();
-    saved->CopyFrom(node);
-    restorer.AddUndo([target = &node, saved]() {
-      target->Clear();
-      target->CopyFrom(*saved);
-    });
+    auto saved = std::make_shared<NodeProto>(utils::CopyWithSharedTensorStorage(node));
+    restorer.AddUndo([target = &node, saved]() { *target = std::move(*saved); });
   };
   if (options.raw_data_callback) {
     for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
@@ -496,6 +514,7 @@ SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
 
 SerializeCallbackRestorer ApplySerializeRawDataCallback(PipelineProto &pipeline,
                                                         const SerializeOptions &options) {
+  pipeline.ValidateDeferredExport();
   SerializeCallbackRestorer restorer;
   const auto apply = [&](ModelProto &model) {
     if (model.has_graph())
@@ -1164,6 +1183,12 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  if (model.HasDeferredWeights()) {
+    model.ValidateWeightSavePath();
+    EXT_ENFORCE(!stream.ExternalWeights() && options.format == SerializeFormat::kOnnx,
+                "Models retaining deferred sources support single-file ONNX export only. "
+                "Reload that export eagerly before converting to other formats or external data.");
+  }
   if (options.raw_data_callback || options.node_callback) {
     SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(model, options);
     SerializeOptions local_options = options;
@@ -1278,6 +1303,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
+  utils::detail::ValidateDeferredWeightParse(stream, options);
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
     ParseModelFromOrtFlatbuffers(model, stream, options);
     if (options._touch_raw_data_pages) {
@@ -1304,7 +1330,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     utils::TwoFilesStream *two_stream_ptr =
         external_weights ? &dynamic_cast<utils::TwoFilesStream &>(stream) : nullptr;
     const bool has_eligible_reads =
-        options.is_parallel() &&
+        options.is_parallel() && !options.defer_weights &&
         (!external_weights || (!options.no_copy && !two_stream_ptr->use_mmap_weights()));
 
     int32_t num_threads = options.num_threads;

@@ -481,6 +481,10 @@ class ONNX_LIGHT_PROTO_API MmapFileStream : public StringStream {
 public:
   /** Maps the file at *file_path* and exposes its contents as a binary stream. */
   explicit MmapFileStream(const std::string &file_path);
+  /** Pins a securely opened source before deferred parsing starts. */
+  void PinDeferredSource();
+  /** Returns the descriptor pinned for deferred parsing. */
+  const std::shared_ptr<int> &deferred_file() const { return deferred_file_; }
   /** Returns the path of the mapped file. */
   inline const std::string &file_path() const { return file_path_; }
   /** Returns the shared_ptr that keeps the mmap region alive.
@@ -488,7 +492,6 @@ public:
    *  stream's destruction, mirroring how TwoFilesStream tracks external
    *  weights buffers. */
   inline const std::shared_ptr<uint8_t> &mmap_owner() const { return mmap_; }
-
   /** Returns the mmap ownership token so borrowed ByteSpans keep the mapping alive.
    *  This makes zero-copy parsing (``no_copy``) safe on a single-file model: every tensor
    *  borrows a view into the mapped file and retains this pointer, so the mapping survives
@@ -500,6 +503,7 @@ protected:
   std::string file_path_;
   /** Shared ownership of the mmap region; munmap fires when the last reference dies. */
   std::shared_ptr<uint8_t> mmap_;
+  std::shared_ptr<int> deferred_file_;
 };
 
 /** Binary writer backed by an owned memory buffer.
@@ -667,6 +671,8 @@ public:
   /** Returns the retained external-data file, or an empty pointer for normal model files. */
   const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual ~FileStream();
+  /** Maps a securely pinned descriptor for deferred metadata reads without payload read-ahead. */
+  void PinDeferredSource();
   /** Returns the path of the file this stream reads from. */
   inline const std::string &file_path() const { return file_path_; }
   virtual void CanRead(uint64_t len, const char *msg) override;
@@ -716,6 +722,8 @@ protected:
   /** Underlying input stream used for file I/O. */
   std::ifstream file_stream_;
   std::shared_ptr<int> external_file_;
+  /** Owns the pinned mapping used for deferred metadata reads. */
+  std::shared_ptr<uint8_t> deferred_mapping_;
   offset_t external_position_ = 0;
 #if !defined(_WIN32)
   /** POSIX file descriptor used for pread-based parallel reads on non-Windows platforms. */

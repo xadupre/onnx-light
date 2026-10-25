@@ -19,6 +19,33 @@ Optimization always operates on a
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx()
 
+Optimization callback
++++++++++++++++++++++
+
+Pass ``callback(graph, match)`` to ``optimize`` to report eligible pattern matches
+or reject individual matches before their nodes are reserved:
+
+.. code-block:: python
+
+    def on_match(graph, match):
+        print(graph.name, match.pattern.name, len(match.nodes))
+        return match.pattern.name != "TransposeTranspose"
+
+    rewrites = graph.optimize(callback=on_match)
+
+Returning ``False`` rejects the match; ``True`` or ``None`` accepts it.
+Rejected matches do not block other patterns from matching the same nodes.
+The callback also runs in nested subgraphs, receiving the corresponding graph.
+It observes matches, not completed rewrites: accepted matches are revalidated
+before application and matches may be reconsidered in subsequent iterations.
+Cleanup passes are unaffected, and no callback runs when there are no eligible
+matches. Callback exceptions propagate.
+
+The callback must not mutate the graph, patterns, or match, or retain borrowed
+graph or node references beyond the call. C++ callers can pass an
+``OptimizationCallback`` as the last argument to ``GraphGraph::Optimize``;
+its boolean result accepts or rejects the match.
+
 Pattern registration
 ++++++++++++++++++++
 

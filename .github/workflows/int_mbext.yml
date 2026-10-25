@@ -2,9 +2,7 @@ name: INT mbext
 
 # Manually-triggered integration job: validates that onnx-light can be used as a
 # drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
-# running the test suites of two external projects:
-#   * ir-py     (https://github.com/onnx/ir-py, branch xadupre/ol)
-#   * mbext     (https://github.com/xadupre/mbext)
+# running the mbext test suite (https://github.com/xadupre/mbext).
 #
 # It is opt-in (workflow_dispatch only), so it never gates pull requests.
 
@@ -85,10 +83,6 @@ jobs:
 
       - name: pip freeze
         run: pip freeze
-
-      - name: Run ir-py unit tests
-        working-directory: ir-py
-        run: pytest --durations=10 src tests
 
       - name: Run mbext fast tests
         working-directory: mbext

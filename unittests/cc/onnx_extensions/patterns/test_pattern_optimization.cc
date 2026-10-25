@@ -2830,7 +2830,7 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   core::builder::GraphGraph repeated(builder, std::move(repeated_patterns));
   const RewritingProto repeated_plan = repeated.Optimize();
   EXPECT_TRUE(repeated_plan.added_functions().empty());
-  const auto &helper = builder.LocalFunction("Parent").LocalFunction("HalfRotaryEmbedding");
+  const auto &helper = builder.LocalFunction("HalfRotaryEmbedding");
   EXPECT_EQ(helper.Nodes().size(), 6u);
   EXPECT_FALSE(helper.HasLocalFunction("HalfRotaryEmbedding"));
 
@@ -2881,6 +2881,79 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
       }
     }
   }
+}
+
+TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+
+  const auto add_decomposition = [](core::builder::GraphBuilder &scope, const std::string &prefix,
+                                    const std::string &output) {
+    utils::RepeatedProtoField<AttributeProto> split_attributes;
+    AttributeProto &num_outputs = split_attributes.add();
+    num_outputs.set_name("num_outputs");
+    num_outputs.set_type(AttributeProto::AttributeType::INT);
+    num_outputs.set_i(2);
+    AttributeProto &split_axis = split_attributes.add();
+    split_axis.set_name("axis");
+    split_axis.set_type(AttributeProto::AttributeType::INT);
+    split_axis.set_i(-1);
+    scope.MakeNode("Split", {"X"}, {prefix + "first", prefix + "second"}, "", "", split_attributes);
+    scope.MakeNode("Neg", {prefix + "second"}, {prefix + "negative"});
+    utils::RepeatedProtoField<AttributeProto> concat_attributes;
+    AttributeProto &concat_axis = concat_attributes.add();
+    concat_axis.set_name("axis");
+    concat_axis.set_type(AttributeProto::AttributeType::INT);
+    concat_axis.set_i(-1);
+    scope.MakeNode("Concat", {prefix + "negative", prefix + "first"}, {prefix + "rotated"}, "", "",
+                   concat_attributes);
+    scope.MakeNode("Mul", {prefix + "rotated", "sin"}, {prefix + "rotated_sin"});
+    scope.MakeNode("Mul", {"X", "cos"}, {prefix + "scaled"});
+    scope.MakeNode("Add", {prefix + "rotated_sin", prefix + "scaled"}, {output});
+  };
+
+  auto &then_branch = builder.MakeSubgraph("then_branch");
+  add_decomposition(then_branch, "branch_", "branch_output");
+  then_branch.MakeOutput("branch_output");
+  auto &else_branch = builder.MakeSubgraph("else_branch");
+  else_branch.MakeNode("Identity", {"X"}, {"else_output"});
+  else_branch.MakeOutput("else_output");
+  utils::RepeatedProtoField<AttributeProto> branch_attributes;
+  for (const auto &[name, graph] :
+       {std::pair<const char *, const char *>{"then_branch_ref", "then_branch"},
+        {"else_branch_ref", "else_branch"}}) {
+    AttributeProto &attribute = branch_attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::AttributeType::STRING);
+    attribute.set_s(graph);
+  }
+  builder.MakeNode("If", {"condition"}, {"unused_if_output"}, "", "", branch_attributes);
+  add_decomposition(builder, "", "Y");
+  builder.MakeOutput("Y");
+
+  const ModelProto original = builder.ToModel();
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  const RewritingProto plan = graph.Optimize();
+
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).name().value(), "HalfRotaryEmbedding");
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.graph().node().size(), 1u);
+  EXPECT_EQ(exported.graph().node(0).op_type().value(), "HalfRotaryEmbedding");
+  ASSERT_EQ(exported.functions().size(), 1u);
+  EXPECT_EQ(exported.functions(0).name().value(), "HalfRotaryEmbedding");
+
+  const ModelProto replayed =
+      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel();
+  ASSERT_EQ(replayed.graph().node().size(), 1u);
+  EXPECT_EQ(replayed.graph().node(0).op_type().value(), "HalfRotaryEmbedding");
+  ASSERT_EQ(replayed.functions().size(), 1u);
+  EXPECT_EQ(replayed.functions(0).name().value(), "HalfRotaryEmbedding");
 }
 
 TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {

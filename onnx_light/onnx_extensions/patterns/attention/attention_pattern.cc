@@ -425,10 +425,11 @@ NodeProto &AddFunctionNode(FunctionProto &function, const char *op_type,
 }
 
 bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &name) {
+  const auto &model_builder = builder.ModelBuilder();
   return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
          (builder.Shapes().HasLocalFunction(
               core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, name)) ||
-          !builder.HasName(name));
+          !model_builder.HasName(name));
 }
 
 template <typename Fields> bool SameHelperProtos(const Fields &left, const Fields &right) {
@@ -587,7 +588,12 @@ void EnsureFunction(core::builder::GraphGraph &graph, const FunctionProto &funct
   if (reuse) {
     return;
   }
-  builder.MakeLocalFunction(function);
+  auto &model_builder = builder.ModelBuilder();
+  if (model_builder.HasLocalFunction(name)) {
+    builder.MakeLocalFunction(function);
+  } else {
+    model_builder.MakeLocalFunction(function);
+  }
 }
 
 FunctionProto MakeHalfRotaryFunction(core::builder::GraphBuilder &builder) {

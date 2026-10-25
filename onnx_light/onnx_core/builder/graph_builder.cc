@@ -420,12 +420,11 @@ void RequireStandardGraph(const GraphProto &graph) {
 
 } // namespace
 
-// Materializes an initializer ``TensorProto`` (owning its payload) from a
-// runtime tensor produced by constant folding. Non-STRING tensors copy their
-// little-endian byte buffer into ``raw_data``; STRING tensors copy their
-// elements into ``string_data``.
+// Materializes an initializer from a folded tensor, sharing explicitly forwarded
+// raw storage and copying other numeric or string payloads.
 TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
-                                                 const std::string &name) {
+                                                 const std::string &name,
+                                                 const TensorProto *shared_storage) {
   TensorProto proto;
   proto.set_name(name);
   proto.set_data_type(tensor.data_type);
@@ -436,6 +435,8 @@ TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &te
     for (const std::string &value : tensor.string_data) {
       proto.add_string_data(utils::String(value));
     }
+  } else if (shared_storage != nullptr) {
+    proto.ref_raw_data() = utils::CopyWithSharedTensorStorage(shared_storage->ref_raw_data());
   } else {
     proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
   }
@@ -3419,7 +3420,18 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
       rt.Put(input, core::runtime::TensorFromProto(*const_tensors.at(input)));
     }
-    core::runtime::RunNode(node, rt);
+    // Native Identity can forward validated raw storage through both folding stages.
+    const TensorProto *forwarded_storage = nullptr;
+    if (IsForwardingIdentity(node) && node.overload().empty() && node.attribute().empty() &&
+        global_custom_kernels.find(dispatch_key) == global_custom_kernels.end()) {
+      const auto *source = const_tensors.at(node.input(0));
+      if (source->is_raw_data())
+        forwarded_storage = source;
+    }
+    if (forwarded_storage != nullptr)
+      rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+    else
+      core::runtime::RunNode(node, rt);
 
     // Reject the fold when any output exceeds the size threshold; the node is
     // then kept untouched.
@@ -3448,7 +3460,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       if (output.empty()) {
         continue;
       }
-      TensorProto proto = ProtoFromRuntimeTensor(rt.tensors().at(output), output);
+      TensorProto proto =
+          ProtoFromRuntimeTensor(rt.tensors().at(output), output, forwarded_storage);
       const auto inserted = folded.emplace(output, std::move(proto));
       const_tensors[output] = &inserted.first->second;
       folded_order.push_back(output);

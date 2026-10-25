@@ -1737,11 +1737,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
   };
   const auto unsafe_match = [&](const MatchResult &match) {
-    const bool supports_functions = match.pattern->SupportsLocalFunctions();
     for (const NodeProto *node : match.nodes) {
       if (node == nullptr)
         continue;
-      if ((!supports_functions && is_function_call(*node)) ||
+      if ((is_function_call(*node) && !match.pattern->SupportsLocalFunctions(*node)) ||
           HasUnresolvedAttributeReferences(*node))
         return true;
       for (const auto &input : node->input()) {
@@ -1749,7 +1748,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         if (producer != nullptr && producer->op_type() == "Constant" &&
             RewriteDomain(producer->domain()) == "ai.onnx" &&
             (HasUnresolvedAttributeReferences(*producer) ||
-             (!supports_functions && is_function_call(*producer))))
+             (is_function_call(*producer) && !match.pattern->SupportsLocalFunctions(*producer))))
           return true;
       }
     }
@@ -1778,13 +1777,12 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         break;
       }
       const std::set<std::string> &fast_op_types = fast_op_types_by_pattern[pattern_index];
-      const bool supports_functions = pattern->SupportsLocalFunctions();
       for (const NodeProto &candidate : builder_.nodes_) {
         if (!fast_op_types.empty() &&
             fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
           continue;
         }
-        if (!supports_functions && function_calls.count(&candidate) != 0)
+        if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
           continue;
 
         const auto match_start = std::chrono::steady_clock::now();

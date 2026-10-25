@@ -158,8 +158,8 @@ public:
   /// The optimization driver caches this value once per optimization.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
-  /// Returns whether matching explicitly supports model-local function calls.
-  virtual bool SupportsLocalFunctions() const { return false; }
+  /// Returns whether matching explicitly supports this model-local function call.
+  virtual bool SupportsLocalFunctions(const NodeProto &) const { return false; }
 
   /// Returns the match rooted at ``candidate``. A null pattern means no match.
   virtual MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const = 0;

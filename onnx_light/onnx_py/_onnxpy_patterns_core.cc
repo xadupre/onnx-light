@@ -36,8 +36,8 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
-  bool SupportsLocalFunctions() const override {
-    NB_OVERRIDE_NAME("supports_local_functions", SupportsLocalFunctions);
+  bool SupportsLocalFunctions(const NodeProto &node) const override {
+    NB_OVERRIDE_NAME("supports_local_functions", SupportsLocalFunctions, node);
   }
 
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {

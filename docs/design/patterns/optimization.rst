@@ -63,10 +63,15 @@ nodes whose attributes still contain unresolved function-attribute references,
 including Constant producers inspected outside the matched node set.
 Primitive patterns also skip model-local function overrides, both as candidates
 and as secondary matched nodes. Patterns intentionally handling local calls,
-such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions()``
-(``supports_local_functions()`` in Python) to return true.
+such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions(node)``
+(``supports_local_functions(node)`` in Python) to return true for supported calls.
+Attention and rotary second-stage patterns accept their intermediate helper
+identities, without allowing local overrides of the surrounding primitives.
 Replay validates surviving value tags in every retained graph-attribute
 occurrence, including separate exported copies of a shared subgraph.
+Constant folding forwards raw initializer storage through native Identity nodes
+without copying payloads. Input validation and folding limits still apply;
+registered custom Identity kernels retain their normal execution path.
 
 A pattern must never reuse an existing name: every value it produces is
 new. This invariant keeps the successor and predecessor maps valid

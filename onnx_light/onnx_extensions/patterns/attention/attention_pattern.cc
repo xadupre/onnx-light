@@ -811,6 +811,12 @@ ApplyRotaryTranspose(core::builder::GraphGraph &graph, const std::vector<const N
 
 } // namespace
 
+bool FunctionAttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() && NormaliseDomain(node.domain().value()) == kIntermediateDomain &&
+         node.op_type().value().starts_with("LocalAttention") &&
+         !node.op_type().value().starts_with("LocalAttentionGQA");
+}
+
 core::builder::MatchResult FunctionAttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
   const std::string &op_type = candidate.op_type().value();
@@ -1217,6 +1223,10 @@ bool IsLocalAttentionGqaCall(const NodeProto &node) {
 }
 
 } // namespace
+
+bool AttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() && IsLocalAttentionGqaCall(node);
+}
 
 core::builder::MatchResult AttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
@@ -2054,6 +2064,11 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
 }
 
 std::set<std::string> RotaryEmbeddingPattern::FastOpType() const { return {"HalfRotaryEmbedding"}; }
+
+bool RotaryEmbeddingPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() &&
+         IsDomainNode(&node, "HalfRotaryEmbedding", kIntermediateDomain, 3, 1);
+}
 
 core::builder::MatchResult RotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {

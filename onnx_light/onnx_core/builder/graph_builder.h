@@ -762,7 +762,8 @@ private:
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
   static TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
-                                            const std::string &name);
+                                            const std::string &name,
+                                            const TensorProto *shared_storage = nullptr);
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
                                const std::unordered_set<std::string> *included_outputs);
 

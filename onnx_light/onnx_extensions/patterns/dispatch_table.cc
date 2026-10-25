@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/patterns/dispatch_table.h"
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
@@ -47,6 +49,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 void RegisterPatterns() {
   static const bool registered = []() {
+    const std::vector<std::string> existing_names = core::builder::RegisteredPatternNames();
     core::builder::RegisterPattern(
         "RepeatedLayer", [] { return std::make_unique<RepeatedLayerPattern>(); }, false);
     core::builder::RegisterPattern("Cast",
@@ -421,6 +424,29 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<UnsqueezeShapePattern>();
                                    });
+
+    const std::vector<std::string> l1_names{"ConvAddFusion",
+                                            "ConvBatchNormalizationFusion",
+                                            "ConvMulFusion",
+                                            "Gelu",
+                                            "LayerNormalization",
+                                            "MatMulAdd",
+                                            "MatMulBatchNormalizationFusion",
+                                            "MatMulScaleFusion",
+                                            "PadConv",
+                                            "ReluClipFusion",
+                                            "RMSNormalization"};
+    core::builder::RegisterPatternSet("L1", l1_names);
+
+    std::vector<std::string> l2_names;
+    for (const std::string &name : core::builder::RegisteredPatternNames(false)) {
+      if (std::find(existing_names.begin(), existing_names.end(), name) == existing_names.end() &&
+          std::find(l1_names.begin(), l1_names.end(), name) == l1_names.end()) {
+        l2_names.push_back(name);
+      }
+    }
+    core::builder::RegisterPatternSet("L2", l2_names);
+    core::builder::RegisterPatternSet("Layer", {"RepeatedLayer"});
     return true;
   }();
   (void)registered;

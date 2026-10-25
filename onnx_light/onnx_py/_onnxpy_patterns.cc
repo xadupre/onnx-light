@@ -46,6 +46,7 @@
 #include <string>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -499,6 +500,41 @@ NB_MODULE(_onnxpypatterns, m) {
       nb::arg("include_opt_in") = false,
       "Returns registered standard ONNX pattern names, excluding opt-in patterns unless requested. "
       "Listing patterns does not enable them.");
+  m.def(
+      "registered_pattern_sets",
+      []() {
+        onnx_patterns::RegisterPatterns();
+        return core::builder::RegisteredPatternSets();
+      },
+      "Returns the names in every registered pattern set.");
+  m.def(
+      "registered_pattern_set_names",
+      []() {
+        onnx_patterns::RegisterPatterns();
+        return core::builder::RegisteredPatternSetNames();
+      },
+      "Returns registered pattern set names without their members.");
+  m.def(
+      "register_pattern_set",
+      [](const std::string &name, const std::vector<std::string> &pattern_names) {
+        onnx_patterns::RegisterPatterns();
+        core::builder::RegisterPatternSet(name, pattern_names);
+      },
+      nb::arg("name"), nb::arg("pattern_names"), "Registers a named set of pattern names.");
+  m.def(
+      "extend_pattern_set",
+      [](const std::string &name, const std::vector<std::string> &pattern_names) {
+        onnx_patterns::RegisterPatterns();
+        core::builder::ExtendPatternSet(name, pattern_names);
+      },
+      nb::arg("name"), nb::arg("pattern_names"), "Adds names to an existing pattern set.");
+  m.def(
+      "unregister_pattern_set",
+      [](const std::string &name) {
+        onnx_patterns::RegisterPatterns();
+        return core::builder::UnregisterPatternSet(name);
+      },
+      nb::arg("name"), "Removes a custom pattern set.");
   m.def("create_pattern", &CreatePattern, nb::arg("name"), nb::arg("priority") = nb::none(),
         "Creates a standard ONNX pattern by its registered name.");
 }

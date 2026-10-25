@@ -156,12 +156,52 @@ def standard_pattern_names(*, include_opt_in: bool = False) -> list[str]:
     return _patterns.registered_pattern_names(include_opt_in=include_opt_in)
 
 
+def standard_pattern_set_names() -> list[str]:
+    """Returns the names of registered standard pattern sets."""
+    return _patterns.registered_pattern_set_names()
+
+
+def standard_pattern_sets() -> dict[str, tuple[str, ...]]:
+    """Returns named, overlapping C++-registered groups of pattern names."""
+    return {
+        name: tuple(pattern_names)
+        for name, pattern_names in _patterns.registered_pattern_sets().items()
+    }
+
+
+def register_pattern_set(name: str, pattern_names: Iterable[str]) -> None:
+    """Creates a named pattern set in the C++ pattern registry."""
+    if isinstance(pattern_names, str):
+        raise TypeError("Pattern names must be an iterable of names, not a string.")
+    _patterns.register_pattern_set(name, list(pattern_names))
+
+
+def extend_pattern_set(name: str, pattern_names: Iterable[str]) -> None:
+    """Adds names to an existing pattern set in the C++ registry."""
+    if isinstance(pattern_names, str):
+        raise TypeError("Pattern names must be an iterable of names, not a string.")
+    _patterns.extend_pattern_set(name, list(pattern_names))
+
+
+def unregister_pattern_set(name: str) -> bool:
+    """Removes a custom pattern set from the C++ registry."""
+    return _patterns.unregister_pattern_set(name)
+
+
 def standard_patterns(names: Iterable[str] | None = None) -> list[PatternOptimization]:
     """Creates the selected standard ONNX patterns."""
     selected = standard_pattern_names() if names is None else list(names)
-    return [_patterns.create_pattern(name) for name in selected]
+    global_patterns = globals().get("_GLOBAL_PATTERNS", {})
+    patterns = []
+    for name in selected:
+        if name not in _STANDARD_PATTERN_NAMES and name in global_patterns:
+            patterns.append(global_patterns[name])
+        else:
+            patterns.append(_patterns.create_pattern(name))
+    return patterns
 
 
+_STANDARD_PATTERN_NAMES = frozenset(standard_pattern_names(include_opt_in=True))
 _GLOBAL_PATTERNS: dict[str, PatternOptimization] = {
     pattern.name: pattern for pattern in standard_patterns()
 }
@@ -523,12 +563,17 @@ __all__ = [
     "apply_rewritings",
     "apply_rewritings_to_model",
     "clear_registered_patterns",
+    "extend_pattern_set",
     "register_pattern",
+    "register_pattern_set",
     "registered_pattern_names",
     "registered_patterns",
     "render_rst_standard_patterns_table",
     "reset_registered_patterns",
     "standard_pattern_names",
+    "standard_pattern_set_names",
+    "standard_pattern_sets",
     "standard_patterns",
     "unregister_pattern",
+    "unregister_pattern_set",
 ]

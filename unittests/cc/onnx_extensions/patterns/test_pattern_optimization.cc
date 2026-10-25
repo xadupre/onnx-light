@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/patterns/attention/attention_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -20,14 +21,17 @@
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_op/operator_sets.h"
 
 #include <algorithm>
+#include <initializer_list>
 #include <limits>
 #include <memory>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -45,6 +49,14 @@ core::builder::GraphBuilder::SchemaLookupFn SchemaLookup() {
 core::symbolic::SymShape Shape() {
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
+  return shape;
+}
+
+core::symbolic::SymShape Shape(std::initializer_list<int64_t> dimensions) {
+  core::symbolic::SymShape shape;
+  for (int64_t dimension : dimensions) {
+    shape.PushBack(core::symbolic::SymDim(dimension));
+  }
   return shape;
 }
 
@@ -2504,6 +2516,7 @@ TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
   ASSERT_EQ(builder.LocalFunction("CastPair").Nodes().size(), 1u);
   EXPECT_EQ(builder.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(report.patterns[0].matches, 1u);
+  EXPECT_EQ(report.rewrites, 1u);
 
   core::builder::GraphBuilder replayed(original, SchemaLookup());
   const core::builder::GraphBuilder replayed_optimized = replayed.ApplyRewritings(plan);
@@ -2512,6 +2525,103 @@ TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
 
   const core::builder::GraphBuilder undone = builder.UndoRewritings(plan);
   ASSERT_EQ(undone.LocalFunction("CastPair").Nodes().size(), 2u);
+}
+
+TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.SetOpsetVersion("test.pattern", 1);
+  auto &function = builder.MakeLocalFunction("Parent", "test.pattern");
+  function.SetOpsetVersion("", 18);
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  function.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  function.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  const auto integer_attributes =
+      [](std::initializer_list<std::pair<std::string, int64_t>> values) {
+        utils::RepeatedProtoField<AttributeProto> attributes;
+        for (const auto &[name, value] : values) {
+          AttributeProto &attribute = attributes.add();
+          attribute.set_name(name);
+          attribute.set_type(AttributeProto::AttributeType::INT);
+          attribute.set_i(value);
+        }
+        return attributes;
+      };
+  function.MakeNode("Split", {"X"}, {"first", "second"}, "", "",
+                    integer_attributes({{"axis", -1}, {"num_outputs", 2}}));
+  function.MakeNode("Neg", {"second"}, {"negative"});
+  function.MakeNode("Concat", {"negative", "first"}, {"rotated"}, "", "",
+                    integer_attributes({{"axis", -1}}));
+  function.MakeNode("Mul", {"rotated", "sin"}, {"rotated_sin"});
+  function.MakeNode("Mul", {"X", "cos"}, {"scaled"});
+  function.MakeNode("Add", {"rotated_sin", "scaled"}, {"Y"});
+  function.MakeOutput("Y");
+  const ModelProto original = builder.ToModel();
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+  const RewritingProto plan = graph.Optimize(-1, &report);
+
+  ASSERT_EQ(report.rewrites, 1u);
+  ASSERT_EQ(plan.added_functions().size(), 2u);
+  EXPECT_EQ(plan.added_functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(plan.added_functions(1).name().value(), "Parent");
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.functions().size(), 2u);
+  EXPECT_EQ(exported.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(exported.functions(1).name().value(), "Parent");
+  ASSERT_EQ(exported.functions(1).node().size(), 1u);
+  EXPECT_EQ(exported.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+
+  core::builder::GraphBuilder replayed(original, SchemaLookup());
+  const auto replayed_optimized = replayed.ApplyRewritings(plan).ToModel();
+  ASSERT_EQ(replayed_optimized.functions().size(), 2u);
+  EXPECT_EQ(replayed_optimized.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(replayed_optimized.functions(1).name().value(), "Parent");
+  EXPECT_EQ(replayed_optimized.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+
+  const auto undone = builder.UndoRewritings(plan);
+  EXPECT_EQ(undone.LocalFunction("Parent").Nodes().size(), 6u);
+  EXPECT_FALSE(undone.LocalFunction("Parent").HasLocalFunction("HalfRotaryEmbedding"));
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> repeated_patterns;
+  repeated_patterns.push_back(
+      std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph repeated(builder, std::move(repeated_patterns));
+  const RewritingProto repeated_plan = repeated.Optimize();
+  EXPECT_TRUE(repeated_plan.added_functions().empty());
+  const auto &helper = builder.LocalFunction("Parent").LocalFunction("HalfRotaryEmbedding");
+  EXPECT_EQ(helper.Nodes().size(), 6u);
+  EXPECT_FALSE(helper.HasLocalFunction("HalfRotaryEmbedding"));
+}
+
+TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  auto &function = builder.MakeLocalFunction("Parameterized", "test.pattern");
+  function.SetOpsetVersion("", 18);
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+  const auto reference_attribute = []() {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    AttributeProto &attribute = attributes.add();
+    attribute.set_name("perm");
+    attribute.set_ref_attr_name("perm");
+    attribute.set_type(AttributeProto::AttributeType::INTS);
+    return attributes;
+  };
+  function.MakeNode("Transpose", {"X"}, {"middle"}, "", "", reference_attribute());
+  function.MakeNode("Transpose", {"middle"}, {"Y"}, "", "", reference_attribute());
+  function.MakeOutput("Y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  const RewritingProto plan = graph.Optimize();
+
+  EXPECT_TRUE(plan.added_functions().empty());
+  ASSERT_EQ(builder.LocalFunction("Parameterized").Nodes().size(), 2u);
+  EXPECT_EQ(builder.LocalFunction("Parameterized").Nodes()[0].op_type().value(), "Transpose");
+  EXPECT_EQ(builder.LocalFunction("Parameterized").Nodes()[1].op_type().value(), "Transpose");
 }
 
 TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {

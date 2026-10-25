@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <map>
+#include <queue>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
@@ -118,6 +120,82 @@ void MergeFunction(utils::RepeatedProtoField<FunctionProto> &functions,
     }
   }
   functions.push_back(utils::CopyWithSharedTensorStorage(function));
+}
+
+utils::RepeatedProtoField<FunctionProto>
+DependencyOrderFunctions(const utils::RepeatedProtoField<FunctionProto> &functions) {
+  std::map<FunctionKey, std::size_t> indices;
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    if (!indices.emplace(Identity(functions[index]), index).second) {
+      throw BuilderError("ApplyRewriting: duplicate function identity '" +
+                         functions[index].name().value() + "'.");
+    }
+  }
+  const auto dependencies = [&](const FunctionProto &function) {
+    std::set<FunctionKey> result;
+    const auto collect = [&](const auto &self, const NodeProto &node) -> void {
+      const FunctionKey identity = Identity(node);
+      if (indices.count(identity) != 0) {
+        result.insert(identity);
+      }
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g()) {
+          for (const auto &child : attribute.g().node()) {
+            self(self, child);
+          }
+        }
+        for (const auto &graph : attribute.graphs()) {
+          for (const auto &child : graph.node()) {
+            self(self, child);
+          }
+        }
+      }
+    };
+    for (const auto &node : function.node()) {
+      collect(collect, node);
+    }
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g()) {
+        for (const auto &node : attribute.g().node()) {
+          collect(collect, node);
+        }
+      }
+      for (const auto &graph : attribute.graphs()) {
+        for (const auto &node : graph.node()) {
+          collect(collect, node);
+        }
+      }
+    }
+    return result;
+  };
+
+  std::vector<std::set<FunctionKey>> required(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    required[index] = dependencies(functions[index]);
+  std::vector<std::vector<std::size_t>> dependents(functions.size());
+  std::vector<std::size_t> dependency_count(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    dependency_count[index] = required[index].size();
+    for (const FunctionKey &callee : required[index])
+      dependents[indices.at(callee)].push_back(index);
+  }
+  std::priority_queue<std::size_t, std::vector<std::size_t>, std::greater<>> ready;
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    if (dependency_count[index] == 0)
+      ready.push(index);
+  utils::RepeatedProtoField<FunctionProto> ordered;
+  while (!ready.empty()) {
+    const std::size_t index = ready.top();
+    ready.pop();
+    ordered.push_back(utils::CopyWithSharedTensorStorage(functions[index]));
+    for (std::size_t caller : dependents[index]) {
+      if (--dependency_count[caller] == 0)
+        ready.push(caller);
+    }
+  }
+  if (ordered.size() != functions.size())
+    throw BuilderError("ApplyRewriting: function dependencies contain a cycle.");
+  return ordered;
 }
 
 void MergeImport(utils::RepeatedProtoField<OperatorSetIdProto> &imports,
@@ -1537,12 +1615,12 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     MergeImport(graph_imports, opset);
   for (std::size_t i = 0; i < original_functions; ++i)
     collection.ref_added_functions().erase(collection.ref_added_functions().begin());
-  result.ref_added_functions() = std::move(collection.ref_added_functions());
+  result.ref_added_functions() = DependencyOrderFunctions(collection.added_functions());
   result.ref_required_opset_imports() = std::move(collection.ref_required_opset_imports());
   if (&builder_ == root) {
     undo->original_graph_headers = GraphHeaders(canonical);
     CaptureInversePlan(result, *undo, canonical);
-    undo->original_functions = std::move(original_definitions);
+    undo->original_functions = DependencyOrderFunctions(original_definitions);
     for (const auto &[domain, version] : original_opsets) {
       auto &opset = undo->original_opsets.add();
       opset.set_domain(domain);
@@ -1605,6 +1683,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   RewritingProto result;
   auto &applied = result.ref_rewrites();
   std::unordered_set<GraphBuilder *> optimized_subgraphs;
+  std::size_t function_body_rewrites = 0;
   const auto optimize_subgraph = [&](GraphBuilder &subgraph, std::size_t position_limit) {
     std::vector<std::string> child_path = graph_path;
     child_path.push_back(subgraph.name());
@@ -1624,6 +1703,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       const int64_t elapsed_time_ns = ElapsedNanoseconds(subgraph_start);
       report->iterations += child_report.iterations;
       report->rewrites += child_report.rewrites;
+      const std::size_t graph_rewrites = child_rewrites.rewrites().size();
+      if (child_report.rewrites < graph_rewrites)
+        throw BuilderError("GraphGraph::Optimize: nested rewrite count is inconsistent.");
+      function_body_rewrites += child_report.rewrites - graph_rewrites;
       report->subgraph_optimization_time_ns += elapsed_time_ns;
       for (std::size_t i = 0; i < report->patterns.size(); ++i) {
         report->patterns[i].attempts += child_report.patterns[i].attempts;
@@ -1670,6 +1753,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
       report->rewrites += child_report.rewrites;
+      function_body_rewrites += child_report.rewrites;
       report->subgraph_optimization_time_ns += elapsed_time_ns;
       for (std::size_t i = 0; i < report->patterns.size(); ++i) {
         report->patterns[i].attempts += child_report.patterns[i].attempts;
@@ -1749,6 +1833,39 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         }
         if (match.nodes.empty()) {
           throw BuilderError("GraphGraph::Optimize: a non-empty match is required.");
+        }
+
+        const auto has_unresolved_references = [&](const auto &self,
+                                                   const NodeProto &node) -> bool {
+          for (const auto &attribute : node.attribute()) {
+            if (!attribute.ref_attr_name().empty()) {
+              return true;
+            }
+            if (attribute.has_g()) {
+              for (const auto &child : attribute.g().node()) {
+                if (self(self, child)) {
+                  return true;
+                }
+              }
+            }
+            for (const auto &graph : attribute.graphs()) {
+              for (const auto &child : graph.node()) {
+                if (self(self, child)) {
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        };
+        if (std::any_of(match.nodes.begin(), match.nodes.end(), [&](const NodeProto *node) {
+              return node != nullptr && has_unresolved_references(has_unresolved_references, *node);
+            })) {
+          if (report != nullptr) {
+            RecordNoMatch(report->patterns[pattern_index], {}, 0,
+                          "The match contains unresolved function attribute references.");
+          }
+          continue;
         }
 
         bool skip = false;
@@ -2050,7 +2167,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     if (report != nullptr) {
       report->rewriting_time_ns += ElapsedNanoseconds(rewriting_start) - constant_folding_time_ns;
-      report->rewrites = applied.size();
+      report->rewrites = applied.size() + function_body_rewrites;
     }
 
     std::chrono::steady_clock::time_point cleanup_start;
@@ -2066,7 +2183,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     if (report != nullptr) {
       report->cleanup_time_ns += ElapsedNanoseconds(cleanup_start);
-      report->rewrites = applied.size();
+      report->rewrites = applied.size() + function_body_rewrites;
     }
 
     if (!matches.empty() || cleaned != 0) {
@@ -2701,8 +2818,34 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
   model.ref_struct_types() = Shapes().StructTypes();
   for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
-  for (const auto &function : local_functions_)
-    MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+  std::map<FunctionKey, const GraphBuilder *> source_function_builders;
+  const auto collect_source_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      source_function_builders.emplace(FunctionKey(RewriteDomain(function->function_domain_),
+                                                   function->name_,
+                                                   function->function_template_.overload().value()),
+                                       function.get());
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_source_functions(collect_source_functions, *this);
+  const auto merge_source_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      self(self, *function);
+      MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  merge_source_functions(merge_source_functions, *this);
+  for (const auto &function : rewrites.added_functions()) {
+    if (source_function_builders.count(Identity(function)) == 0) {
+      MergeFunction(model.ref_functions(), function);
+    }
+  }
+  model.ref_functions() = DependencyOrderFunctions(model.functions());
   for (const auto &opset : rewrites.required_opset_imports())
     MergeImport(model.ref_opset_import(), opset);
   for (const auto &function : rewrites.added_functions()) {
@@ -2714,36 +2857,52 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     if (identical != model.functions().end()) {
       continue;
     }
-    const auto source =
-        std::find_if(local_functions_.begin(), local_functions_.end(), [&](const auto &existing) {
-          return FunctionKey(RewriteDomain(existing->function_domain_), existing->name_,
-                             existing->function_template_.overload().value()) == key;
-        });
-    if (source == local_functions_.end()) {
+    const auto source = source_function_builders.find(key);
+    if (source == source_function_builders.end()) {
       MergeFunction(model.ref_functions(), function);
       continue;
     }
     ModelProto comparison;
     comparison.mutable_graph();
     comparison.ref_struct_types() = Shapes().StructTypes();
-    for (const auto &[domain, version] : (*source)->opsets_) {
+    for (const auto &[domain, version] : source->second->opsets_) {
       comparison.add_opset(domain, version);
     }
     comparison.ref_functions() = model.functions();
     const auto definition =
         std::find_if(comparison.ref_functions().begin(), comparison.ref_functions().end(),
                      [&](const auto &existing) { return Identity(existing) == key; });
-    const std::size_t position =
-        static_cast<std::size_t>(std::distance(comparison.ref_functions().begin(), definition));
+    if (definition == comparison.ref_functions().end())
+      throw BuilderError("ApplyRewriting: the source function definition is missing.");
     *definition = function;
+    comparison.ref_functions() = DependencyOrderFunctions(comparison.functions());
     GraphBuilder normalized(comparison, schema_lookup_);
-    const auto &candidate = *normalized.local_functions_[position];
-    auto canonical = candidate.BuildFunction((*source)->function_domain_);
-    if (candidate.opsets_ == (*source)->opsets_) {
-      canonical.ref_opset_import() = model.functions(position).opset_import();
+    const auto candidate = std::find_if(
+        normalized.local_functions_.begin(), normalized.local_functions_.end(),
+        [&](const auto &existing) {
+          return FunctionKey(RewriteDomain(existing->function_domain_), existing->name_,
+                             existing->function_template_.overload().value()) == key;
+        });
+    if (candidate == normalized.local_functions_.end())
+      throw BuilderError("ApplyRewriting: the normalized function definition is missing.");
+    auto canonical = (*candidate)->BuildFunction(source->second->function_domain_);
+    if ((*candidate)->opsets_ == source->second->opsets_) {
+      const auto model_definition =
+          std::find_if(model.functions().begin(), model.functions().end(),
+                       [&](const auto &existing) { return Identity(existing) == key; });
+      if (model_definition == model.functions().end())
+        throw BuilderError("ApplyRewriting: the model function definition is missing.");
+      canonical.ref_opset_import() = model_definition->opset_import();
     }
-    *model.ref_functions().get(position) = std::move(canonical);
+    const auto model_definition =
+        std::find_if(model.functions().begin(), model.functions().end(),
+                     [&](const auto &existing) { return Identity(existing) == key; });
+    if (model_definition == model.functions().end())
+      throw BuilderError("ApplyRewriting: the model function definition is missing.");
+    *model.ref_functions().get(static_cast<std::size_t>(
+        std::distance(model.functions().begin(), model_definition))) = std::move(canonical);
   }
+  model.ref_functions() = DependencyOrderFunctions(model.functions());
   *model.mutable_graph() =
       BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
   FunctionIndex functions;
@@ -2791,8 +2950,20 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
                            (found == tags.end() ? "<absent>" : "'" + found->second + "'") + ".");
       }
     }
-    if (allow_node_changes)
+    if (allow_node_changes) {
+      std::map<std::string, const GraphBuilder *> source_children;
+      std::map<std::string, const GraphBuilder *> reconstructed_children;
+      for (const auto &child : source.subgraphs_)
+        source_children.emplace(child->name_, child.get());
+      for (const auto &child : reconstructed.subgraphs_)
+        reconstructed_children.emplace(child->name_, child.get());
+      for (const auto &[name, child] : source_children) {
+        const auto found = reconstructed_children.find(name);
+        if (found != reconstructed_children.end())
+          self(self, *child, *found->second, path + "/subgraph:" + name, true);
+      }
       return;
+    }
     if (source.nodes_.size() != reconstructed.nodes_.size()) {
       throw BuilderError("ApplyRewritings: incompatible reconstructed node count in '" + path +
                          "'.");

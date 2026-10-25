@@ -1813,6 +1813,9 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                           const NodeProto &candidate) const {
   const bool split_form = IsNode(&candidate, "Split", -1, 2);
   const bool slice_form = IsNode(&candidate, "Slice", -1, 1);
+  if (graph.Builder().IsLocalFunction("HalfRotaryEmbedding", kIntermediateDomain)) {
+    return NoMatch(candidate, "The HalfRotaryEmbedding function cannot extract itself.");
+  }
   if (!MainOpsetAtLeast(graph, 18) || (!split_form && !slice_form) || candidate.input_size() == 0 ||
       !HasRank(graph, candidate.input()[0].value(), 4)) {
     return NoMatch(

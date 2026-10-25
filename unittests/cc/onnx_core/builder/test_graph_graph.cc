@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_helper.h"
@@ -2219,6 +2220,89 @@ TEST(GraphGraph, ReplayValidatesScopedTagsAndAllowsUntaggedValues) {
     }
     EXPECT_EQ(source.BuildGraph().SerializeAsString(), before);
     EXPECT_EQ(scope.Compute().ValueTags(), tags);
+  }
+}
+
+TEST(GraphGraph, ReplayValidatesSurvivingSubgraphsInChangedFunctions) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  auto &function = source.MakeLocalFunction("Body", "local");
+  function.SetOpsetVersion("", 28);
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = function.MakeSubgraph(name);
+    branch.MakeNode("Neg", {"X"}, {name + "_value"});
+    branch.MakeOutput(name + "_value");
+  }
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &reference = attributes.add();
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  function.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  function.MakeNode("Identity", {"selected"}, {"Y"});
+  function.MakeOutput("Y");
+  auto &then_branch = function.Subgraph("then_branch");
+  const_cast<core::compute::ComputeContext &>(then_branch.Compute())
+      .SeedValueTag("then_branch_value", "weight", then_branch.Nodes());
+  ASSERT_EQ(then_branch.Compute().ValueTags().at("then_branch_value"), "weight");
+
+  FunctionProto replacement = function.ToFunction("local");
+  replacement.ref_node()[1].set_op_type("Neg");
+  bool changed_tag = false;
+  const auto set_tag = [&](ValueInfoProto &value) {
+    if (value.name() != "then_branch_value")
+      return;
+    for (auto &metadata : value.ref_metadata_props()) {
+      if (metadata.key() == core::compute::kValueTagMetadataKey) {
+        metadata.set_value("shape");
+        changed_tag = true;
+        return;
+      }
+    }
+    auto &metadata = value.ref_metadata_props().add();
+    metadata.set_key(core::compute::kValueTagMetadataKey);
+    metadata.set_value("shape");
+    changed_tag = true;
+  };
+  const auto change_graph = [&](const auto &self, GraphProto &graph) -> void {
+    for (auto &value : graph.ref_input())
+      set_tag(value);
+    for (auto &value : graph.ref_output())
+      set_tag(value);
+    for (auto &value : graph.ref_value_info())
+      set_tag(value);
+    for (auto &node : graph.ref_node()) {
+      for (auto &attribute : node.ref_attribute()) {
+        if (attribute.has_g())
+          self(self, *attribute.mutable_g());
+        for (auto &nested : attribute.ref_graphs())
+          self(self, nested);
+      }
+    }
+  };
+  for (auto &node : replacement.ref_node())
+    for (auto &attribute : node.ref_attribute()) {
+      if (attribute.has_g())
+        change_graph(change_graph, *attribute.mutable_g());
+      for (auto &nested : attribute.ref_graphs())
+        change_graph(change_graph, nested);
+    }
+  ASSERT_TRUE(changed_tag);
+
+  RewritingProto plan;
+  plan.ref_added_functions().push_back(std::move(replacement));
+  try {
+    source.ApplyRewritings(plan);
+    FAIL() << "Expected a changed nested value tag to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("then_branch"), std::string::npos);
+    EXPECT_NE(message.find("then_branch_value"), std::string::npos);
+    EXPECT_NE(message.find("existing tag 'weight'"), std::string::npos);
+    EXPECT_NE(message.find("reconstructed tag 'shape'"), std::string::npos);
   }
 }
 

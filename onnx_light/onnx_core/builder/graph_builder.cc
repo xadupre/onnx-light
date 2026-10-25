@@ -4198,9 +4198,31 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
     model.add_opset(entry.first, entry.second);
   }
   *model.mutable_graph() = std::move(graph);
-  for (const auto &function : local_functions_) {
-    model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
-  }
+  std::set<FunctionIdentifier> exported;
+  const auto export_functions = [&](const auto &self, GraphBuilder &scope) -> void {
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+    for (const auto &function : scope.local_functions_) {
+      self(self, *function);
+      FunctionProto definition = function->ExportFunction(function->function_domain_, true);
+      const FunctionIdentifier identity =
+          MakeFunctionIdentifier(definition.domain(), definition.name(), definition.overload());
+      if (!exported.insert(identity).second) {
+        const auto previous = std::find_if(
+            model.functions().begin(), model.functions().end(), [&](const auto &candidate) {
+              return MakeFunctionIdentifier(candidate.domain(), candidate.name(),
+                                            candidate.overload()) == identity;
+            });
+        if (previous == model.functions().end() || !previous->Equals(definition)) {
+          throw BuilderError("GraphBuilder: conflicting nested local function definition '" +
+                             definition.name().value() + "'.");
+        }
+        continue;
+      }
+      model.ref_functions().push_back(std::move(definition));
+    }
+  };
+  export_functions(export_functions, *this);
   model.ref_rewritings() = utils::CopyWithSharedTensorStorage(rewritings_);
   return model;
 }
@@ -4213,13 +4235,18 @@ ModelProto GraphBuilder::ToStandardModel(int64_t ir_version) {
     throw BuilderError("GraphBuilder: standard ONNX cannot represent a structured type catalogue.");
   }
   RequireStandardGraph(BuildGraph());
-  for (const auto &function : local_functions_) {
-    const auto body = function->BuildFunction(function->function_domain_);
-    RequireStandardBody(body);
-    for (const auto &attribute : body.attribute_proto()) {
-      RequireStandardAttribute(attribute);
+  const auto validate_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+    for (const auto &function : scope.local_functions_) {
+      const auto body = function->BuildFunction(function->function_domain_);
+      RequireStandardBody(body);
+      for (const auto &attribute : body.attribute_proto())
+        RequireStandardAttribute(attribute);
+      self(self, *function);
     }
-  }
+  };
+  validate_functions(validate_functions, *this);
   return ToModel(ir_version);
 }
 

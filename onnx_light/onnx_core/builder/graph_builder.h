@@ -212,6 +212,16 @@ public:
   /// Name given to the produced graph / function.
   const std::string &name() const noexcept { return name_; }
 
+  /// Returns ``true`` when this builder represents the identified local function.
+  bool IsLocalFunction(const std::string &name, const std::string &domain,
+                       const std::string &overload = "") const noexcept {
+    const bool same_domain = function_domain_ == domain ||
+                             ((function_domain_.empty() || function_domain_ == "ai.onnx") &&
+                              (domain.empty() || domain == "ai.onnx"));
+    return is_local_function_ && name_ == name && same_domain &&
+           function_template_.overload().value() == overload;
+  }
+
   // ── Opset management ─────────────────────────────────────────────────
 
   /// Records the opset version to use for ``domain`` (an empty string denotes
@@ -689,6 +699,7 @@ public:
   GraphProto ToGraph();
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
+  /// Exports local functions from the builder and its nested scopes.
   ///
   /// @param ir_version IR version to write; ``0`` selects the library default.
   ModelProto ToModel(int64_t ir_version = 0);

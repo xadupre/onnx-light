@@ -252,6 +252,93 @@ TEST_F(DeferredWeights, RejectsExtensionOwnedWeightsWithoutChangingTheirBackingF
   }
 }
 
+TEST_F(DeferredWeights, CopiedExtensionSourcesRejectBeforeDestinationIO) {
+  ASSERT_TRUE(MakeModel().SerializeToFile(path));
+  std::ifstream before_stream(path, std::ios::binary);
+  const std::string before((std::istreambuf_iterator<char>(before_stream)),
+                           std::istreambuf_iterator<char>());
+  const auto file = utils::detail::OpenExternalDataFile(directory.string(), "model.onnx", true);
+  for (const bool loaded : {false, true}) {
+    auto source = Load();
+    if (loaded)
+      source.LoadWeights();
+    for (int kind = 0; kind < 9; ++kind) {
+      SCOPED_TRACE(loaded);
+      SCOPED_TRACE(kind);
+      ModelProto model;
+      TensorProto *tensor;
+      if (kind == 0) {
+        tensor = &model.ref_graph()
+                      .add_extended_initializer()
+                      ->ref_paged_cache()
+                      .add_blocks()
+                      ->ref_key();
+      } else if (kind == 1) {
+        tensor = &model.ref_graph()
+                      .add_extended_initializer()
+                      ->ref_encoded_value()
+                      .ref_affine()
+                      .ref_scale();
+      } else if (kind == 2) {
+        tensor = &model.add_struct_types()->ref_structure().add_field()->ref_constant();
+      } else if (kind == 3) {
+        tensor = &model.ref_graph()
+                      .add_input()
+                      ->ref_type()
+                      .ref_sequence_type()
+                      .ref_elem_type()
+                      .ref_struct_type()
+                      .ref_structure()
+                      .add_field()
+                      ->ref_constant();
+      } else if (kind == 4 || kind == 5) {
+        auto &attribute = *model.ref_graph().add_node()->add_attribute();
+        auto &type = kind == 4 ? attribute.ref_tp() : *attribute.add_type_protos();
+        tensor = &type.ref_struct_type().ref_structure().add_field()->ref_constant();
+      } else if (kind == 6 || kind == 7) {
+        auto &function = kind == 6 ? *model.add_functions()
+                                   : *model.ref_rewritings()["plan"].add_added_functions();
+        tensor = &function.add_value_info()
+                      ->ref_type()
+                      .ref_struct_type()
+                      .ref_structure()
+                      .add_field()
+                      ->ref_constant();
+      } else {
+        tensor = &model.ref_graph()
+                      .add_node()
+                      ->add_attribute()
+                      ->ref_g()
+                      .add_extended_initializer()
+                      ->ref_paged_cache()
+                      .add_blocks()
+                      ->ref_value();
+      }
+      tensor->CopyFrom(source.graph().initializer()[0]);
+      ASSERT_TRUE(tensor->HasDeferredWeight());
+      for (const bool mixed : {false, true}) {
+        SCOPED_TRACE(mixed);
+        if (mixed)
+          model.ref_graph().add_initializer()->CopyFrom(source.graph().initializer()[1]);
+        EXPECT_THROW(model.ValidateWeightSavePath(path), std::runtime_error);
+        EXPECT_THROW(model.SerializeToFile(path), std::runtime_error);
+        const auto output = (directory / "rejected.onnx").string();
+        EXPECT_THROW(model.SerializeToFile(output), std::runtime_error);
+        EXPECT_FALSE(std::filesystem::exists(output));
+        EXPECT_THROW(model.SerializeToFileDescriptor(*file), std::runtime_error);
+        utils::StringWriteStream stream;
+        SerializeOptions options;
+        EXPECT_THROW(SerializeModelProtoToStream(model, stream, options), std::runtime_error);
+        EXPECT_EQ(stream.size(), 0);
+        std::ifstream input(path, std::ios::binary);
+        EXPECT_EQ(
+            std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()),
+            before);
+      }
+    }
+  }
+}
+
 TEST_F(DeferredWeights, PipelineExportsRejectSourcesInEveryStageBeforeWriting) {
   auto original = MakeModel();
   original.ref_graph().add_node();

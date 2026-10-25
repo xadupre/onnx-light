@@ -215,6 +215,33 @@ class TestDeferredWeights(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), before)
                 self.assertIsInstance(load(path), PipelineProto)
 
+    def test_copied_extension_sources_reject_before_destination_io(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            for loaded in (False, True):
+                for mixed in (False, True):
+                    with self.subTest(loaded=loaded, mixed=mixed):
+                        save(self.make_model(), path)
+                        before = path.read_bytes()
+                        source = load(path, defer_weights=True)
+                        if loaded:
+                            source.load_weights()
+                        model = ModelProto()
+                        block = model.graph.extended_initializer.add().paged_cache.blocks.add()
+                        block.key.CopyFrom(source.graph.initializer[0])
+                        if mixed:
+                            model.graph.initializer.append(source.graph.initializer[1])
+                        with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                            save(model, path)
+                        with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                            model.SerializeToFile(str(path))
+                        with path.open("r+b") as output:
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                model.SerializeToFileDescriptor(output.fileno())
+                            with self.assertRaisesRegex(RuntimeError, "deferred sources"):
+                                model.SerializeToOstream(output)
+                        self.assertEqual(path.read_bytes(), before)
+
     def test_pipeline_exports_preserve_sources_in_all_stages(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.onnx"

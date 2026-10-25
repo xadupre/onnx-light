@@ -430,6 +430,7 @@ protected:
     utils::RepeatedProtoField<AttributeProto> *attributes = nullptr;
     utils::RepeatedProtoField<SparseTensorProto> *sparse_initializers = nullptr;
     GraphProto *graph = nullptr;
+    bool validated_extensions = false;
     /**
      * Stores the current node index.
      */
@@ -480,6 +481,7 @@ public:
   /**
    * Advances to the next tensor.
    * Returns true when one is found.
+   * Rejects deferred sources in unsupported extension-owned tensors.
    */
   bool next();
 

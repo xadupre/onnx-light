@@ -55,6 +55,9 @@ descriptor or stream export, even after their weights have been loaded.
 Encoded values (including affine layouts), paged-cache blocks and struct-type
 declarations are also rejected: their extension-owned tensors are not covered
 by the weight-name traversal.
+Models constructed in memory by copying deferred tensors into these unsupported
+extensions are rejected during weight traversal and before export destination I/O,
+even when those tensors are loaded.
 Existing eager parsing and ``skip_raw_data`` behavior are unchanged.
 
 Keep all backing files immutable and available until reloading is no longer

@@ -96,6 +96,22 @@ FunctionKey Identity(const NodeProto &call) {
   return {RewriteDomain(call.domain().value()), call.op_type().value(), call.overload().value()};
 }
 
+bool HasUnresolvedAttributeReferences(const NodeProto &node) {
+  for (const auto &attribute : node.attribute()) {
+    if (!attribute.ref_attr_name().empty())
+      return true;
+    if (attribute.has_g())
+      for (const auto &child : attribute.g().node())
+        if (HasUnresolvedAttributeReferences(child))
+          return true;
+    for (const auto &graph : attribute.graphs())
+      for (const auto &child : graph.node())
+        if (HasUnresolvedAttributeReferences(child))
+          return true;
+  }
+  return false;
+}
+
 void MergeFunction(utils::RepeatedProtoField<FunctionProto> &functions,
                    const FunctionProto &function) {
   if (function.name().empty()) {
@@ -1716,6 +1732,29 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   }
 
   std::size_t priority_index = 0;
+  const auto is_function_call = [&](const NodeProto &node) {
+    return builder_.Shapes().HasLocalFunction(
+        ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
+  };
+  const auto unsafe_match = [&](const MatchResult &match) {
+    const bool supports_functions = match.pattern->SupportsLocalFunctions();
+    for (const NodeProto *node : match.nodes) {
+      if (node == nullptr)
+        continue;
+      if ((!supports_functions && is_function_call(*node)) ||
+          HasUnresolvedAttributeReferences(*node))
+        return true;
+      for (const auto &input : node->input()) {
+        const NodeProto *producer = NodeBefore(input);
+        if (producer != nullptr && producer->op_type() == "Constant" &&
+            RewriteDomain(producer->domain()) == "ai.onnx" &&
+            (HasUnresolvedAttributeReferences(*producer) ||
+             (!supports_functions && is_function_call(*producer))))
+          return true;
+      }
+    }
+    return false;
+  };
   for (int iteration = 0; iteration < max_iter; ++iteration) {
     if (report != nullptr) {
       ++report->iterations;
@@ -1727,6 +1766,11 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       matching_start = std::chrono::steady_clock::now();
     }
+    std::unordered_set<const NodeProto *> function_calls;
+    if (!builder_.Shapes().LocalFunctions().empty())
+      for (const auto &node : builder_.nodes_)
+        if (is_function_call(node))
+          function_calls.insert(&node);
 
     for (std::size_t pattern_index = 0; pattern_index < patterns_.size(); ++pattern_index) {
       const std::shared_ptr<PatternOptimization> &pattern = patterns_[pattern_index];
@@ -1734,11 +1778,14 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         break;
       }
       const std::set<std::string> &fast_op_types = fast_op_types_by_pattern[pattern_index];
+      const bool supports_functions = pattern->SupportsLocalFunctions();
       for (const NodeProto &candidate : builder_.nodes_) {
         if (!fast_op_types.empty() &&
             fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
           continue;
         }
+        if (!supports_functions && function_calls.count(&candidate) != 0)
+          continue;
 
         const auto match_start = std::chrono::steady_clock::now();
         MatchResult match = pattern->Match(*this, candidate);
@@ -1762,35 +1809,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           throw BuilderError("GraphGraph::Optimize: a non-empty match is required.");
         }
 
-        const auto has_unresolved_references = [&](const auto &self,
-                                                   const NodeProto &node) -> bool {
-          for (const auto &attribute : node.attribute()) {
-            if (!attribute.ref_attr_name().empty()) {
-              return true;
-            }
-            if (attribute.has_g()) {
-              for (const auto &child : attribute.g().node()) {
-                if (self(self, child)) {
-                  return true;
-                }
-              }
-            }
-            for (const auto &graph : attribute.graphs()) {
-              for (const auto &child : graph.node()) {
-                if (self(self, child)) {
-                  return true;
-                }
-              }
-            }
-          }
-          return false;
-        };
-        if (std::any_of(match.nodes.begin(), match.nodes.end(), [&](const NodeProto *node) {
-              return node != nullptr && has_unresolved_references(has_unresolved_references, *node);
-            })) {
+        if (unsafe_match(match)) {
           if (report != nullptr) {
             RecordNoMatch(report->patterns[pattern_index], {}, 0,
-                          "The match contains unresolved function attribute references.");
+                          "The match depends on local-function calls or unresolved attributes.");
           }
           continue;
         }
@@ -1858,7 +1880,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       const MatchResult &match = accepted_match.match;
       const MatchResult verified = match.pattern->Match(*this, *accepted_match.candidate);
       if (verified.pattern != match.pattern || verified.nodes != match.nodes ||
-          verified.insert_at != match.insert_at) {
+          verified.insert_at != match.insert_at || unsafe_match(verified)) {
         if (report != nullptr && verified.no_match.has_value()) {
           RecordNoMatch(report->patterns[accepted_match.pattern_index],
                         verified.no_match->source_file, verified.no_match->source_line,
@@ -2932,16 +2954,75 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       }
     }
     if (allow_node_changes) {
-      std::map<std::string, const GraphBuilder *> source_children;
-      std::map<std::string, const GraphBuilder *> reconstructed_children;
+      std::unordered_map<std::string, const GraphBuilder *> source_children;
+      std::unordered_map<std::string, const GraphBuilder *> reconstructed_children;
+      std::unordered_map<std::string, const NodeProto *> reconstructed_producers;
+      std::unordered_map<std::string, const NodeProto *> reconstructed_named_nodes;
       for (const auto &child : source.subgraphs_)
         source_children.emplace(child->name_, child.get());
       for (const auto &child : reconstructed.subgraphs_)
         reconstructed_children.emplace(child->name_, child.get());
-      for (const auto &[name, child] : source_children) {
-        const auto found = reconstructed_children.find(name);
-        if (found != reconstructed_children.end())
-          self(self, *child, *found->second, path + "/subgraph:" + name, true);
+      for (const auto &node : reconstructed.nodes_) {
+        for (const auto &output : node.output())
+          if (!output.empty())
+            reconstructed_producers.emplace(output.value(), &node);
+        if (!node.name().empty())
+          reconstructed_named_nodes.emplace(node.name().value(), &node);
+      }
+      std::set<std::pair<const GraphBuilder *, const GraphBuilder *>> checked;
+      const auto check_child = [&](const GraphBuilder *original, const GraphBuilder *child) {
+        if (checked.emplace(original, child).second)
+          self(self, *original, *child, path + "/subgraph:" + original->name_, true);
+      };
+      const auto attribute_graphs = [](const auto &children, const AttributeProto &attribute) {
+        std::vector<const GraphBuilder *> graphs;
+        const auto append = [&](const std::string &name) {
+          const auto found = children.find(name);
+          graphs.push_back(found == children.end() ? nullptr : found->second);
+        };
+        if (attribute.type() == AttributeProto::STRING && attribute.has_s())
+          append(attribute.s().value());
+        else if (attribute.type() == AttributeProto::STRINGS)
+          for (const auto &name : attribute.strings())
+            append(std::string(name));
+        return graphs;
+      };
+      for (const auto &node : source.nodes_) {
+        const NodeProto *retained = nullptr;
+        for (const auto &output : node.output()) {
+          const auto found = reconstructed_producers.find(output.value());
+          if (found != reconstructed_producers.end()) {
+            retained = found->second;
+            break;
+          }
+        }
+        if (retained == nullptr && !node.name().empty()) {
+          const auto found = reconstructed_named_nodes.find(node.name().value());
+          if (found != reconstructed_named_nodes.end())
+            retained = found->second;
+        }
+        if (retained == nullptr)
+          continue;
+        for (const auto &attribute : node.attribute()) {
+          if (!HasGraphReferenceSuffix(attribute.name().value()))
+            continue;
+          const auto *replacement = FindAttribute(*retained, attribute.name().value().c_str());
+          if (replacement == nullptr)
+            continue;
+          const auto originals = attribute_graphs(source_children, attribute);
+          const auto children = attribute_graphs(reconstructed_children, *replacement);
+          for (std::size_t index = 0; index < std::min(originals.size(), children.size()); ++index)
+            if (originals[index] != nullptr && children[index] != nullptr)
+              check_child(originals[index], children[index]);
+        }
+      }
+      for (const auto &child : reconstructed.subgraphs_) {
+        const std::string &original_name = child->graph_template_.name().empty()
+                                               ? child->name_
+                                               : child->graph_template_.name().value();
+        const auto found = source_children.find(original_name);
+        if (found != source_children.end())
+          check_child(found->second, child.get());
       }
       return;
     }

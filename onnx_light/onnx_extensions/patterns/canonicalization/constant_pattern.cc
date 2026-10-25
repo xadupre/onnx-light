@@ -33,7 +33,7 @@ bool IsDefaultConstant(const NodeProto &node) {
 TensorProto CanonicaliseInitializer(const TensorProto &value, const std::string &name) {
   if (static_cast<TensorProto::DataType>(value.data_type()) == TensorProto::DataType::STRING ||
       value.has_raw_data()) {
-    TensorProto proto = value;
+    TensorProto proto = utils::CopyWithSharedTensorStorage(value);
     proto.set_name(name);
     return proto;
   }

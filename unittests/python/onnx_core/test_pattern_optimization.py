@@ -299,6 +299,37 @@ class TestPatternSelection(ExtTestCase):
 
 
 class TestPatternOptimization(ExtTestCase):
+    def test_python_pattern_explicitly_supports_local_function_calls(self):
+        class LocalNegNegPattern(NegNegPattern):
+            def supports_local_functions(self):
+                return True
+
+        model = _double_neg_model()
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        model.functions.append(
+            oh.make_function(
+                "local",
+                "Neg",
+                ["X"],
+                ["Y"],
+                [oh.make_node("Neg", ["X"], ["Y"])],
+                [oh.make_opsetid("", 18)],
+            )
+        )
+        for node in model.graph.node:
+            node.domain = "local"
+
+        for pattern, expected in (
+            (NegNegPattern(), ["Neg", "Neg"]),
+            (LocalNegNegPattern(), ["Identity"]),
+        ):
+            with self.subTest(pattern=type(pattern).__name__):
+                builder = optim.GraphBuilder(model)
+                optim.GraphGraph(builder, [pattern]).optimize()
+                self.assertEqual(
+                    [node.op_type for node in builder.to_onnx().graph.node], expected
+                )
+
     def test_stale_batched_match_is_revalidated_before_apply(self):
         class OneShotNegNegPattern(NegNegPattern):
             def __init__(self):

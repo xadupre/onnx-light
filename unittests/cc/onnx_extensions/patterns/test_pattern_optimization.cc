@@ -2592,6 +2592,53 @@ TEST(PatternOptimization, NormalizesFunctionReplacementsInOneBatch) {
   EXPECT_LE(lookups, 4 * count);
 }
 
+TEST(PatternOptimization, FunctionMatchersPreserveOverriddenPrimitivesAndSecondaryNodes) {
+  for (bool secondary : {false, true}) {
+    SCOPED_TRACE(secondary);
+    core::builder::GraphBuilder definition(secondary ? "Relu" : "Cast", SchemaLookup(), {{"", 18}});
+    definition.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    definition.MakeNode(secondary ? "Neg" : "Relu", {"X"}, {"Y"});
+    definition.MakeOutput("Y");
+    FunctionProto override = definition.ToFunction("");
+    if (!secondary)
+      override.add_attribute("to");
+
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+    auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    if (secondary) {
+      function.MakeInitializer(MakeInitializer<float>("minimum", {}, {0.0f}));
+      function.MakeNode("Relu", {"X"}, {"middle"});
+      function.MakeNode("Clip", {"middle", "minimum"}, {"Y"});
+    } else {
+      AddCast(function, "X", "middle", TensorProto::FLOAT);
+      AddCast(function, "middle", "Y", TensorProto::FLOAT);
+    }
+    function.MakeOutput("Y");
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    builder.MakeNode("Wrapper", {"x"}, {"y"}, "test.pattern");
+    builder.MakeOutput("y");
+    ModelProto model = builder.ToModel();
+    model.ref_functions().push_back(std::move(override));
+    std::swap(model.ref_functions()[0], model.ref_functions()[1]);
+    core::builder::GraphBuilder imported(model, SchemaLookup());
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    if (secondary)
+      patterns.push_back(std::make_unique<onnx_patterns::ReluClipFusionPattern>());
+    else
+      patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+    core::builder::GraphGraph optimizer(imported, std::move(patterns));
+    const RewritingProto plan = optimizer.Optimize();
+    EXPECT_TRUE(plan.rewrites().empty());
+    EXPECT_TRUE(plan.added_functions().empty());
+    const auto &optimized_function = imported.LocalFunction("Wrapper");
+    const auto &nodes = optimized_function.Nodes();
+    ASSERT_EQ(nodes.size(), secondary ? 3u : 2u);
+    EXPECT_EQ(nodes[nodes.size() - 2].op_type(), secondary ? "Relu" : "Cast");
+    EXPECT_EQ(nodes[nodes.size() - 1].op_type(), secondary ? "Clip" : "Cast");
+  }
+}
+
 TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
   ModelProto model;
   model.add_opset("", 18);

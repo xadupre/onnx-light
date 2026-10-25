@@ -343,9 +343,9 @@ class GraphBuilder(_C.GraphBuilder):
             working.register_pattern(pattern)
         plan = GraphGraph(working).optimize()
         if optimize is OptimizationMode.kRewritings:
-            restored = working.undo_rewritings(plan).to_model(ir_version)
+            restored = working.undo_rewritings(plan)
             restored.add_rewriting("optimized", plan)
-            return restored
+            return restored.to_model(ir_version)
         if kind == ProtoKind.kModel:
             return working.to_standard_model(ir_version)
         return working.to_onnx(kind, ir_version, domain)

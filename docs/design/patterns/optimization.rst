@@ -59,7 +59,14 @@ reused by model-wide domain/name/overload identity only when their definitions
 are compatible; a helper cannot extract itself, including from a nested scope.
 Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
-nodes whose attributes still contain unresolved function-attribute references.
+nodes whose attributes still contain unresolved function-attribute references,
+including Constant producers inspected outside the matched node set.
+Primitive patterns also skip model-local function overrides, both as candidates
+and as secondary matched nodes. Patterns intentionally handling local calls,
+such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions()``
+(``supports_local_functions()`` in Python) to return true.
+Replay validates surviving value tags in every retained graph-attribute
+occurrence, including separate exported copies of a shared subgraph.
 
 A pattern must never reuse an existing name: every value it produces is
 new. This invariant keeps the successor and predecessor maps valid

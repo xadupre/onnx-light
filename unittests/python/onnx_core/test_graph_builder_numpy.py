@@ -441,9 +441,10 @@ class TestGraphBuilderNumpy(ExtTestCase):
                     numpy.from_dlpack(tensor).ctypes.data for tensor in payloads(model)
                 ] == pointers
             if variant == "function":
+                # Function optimization also removes the unused weight.
                 assert [
                     numpy.from_dlpack(tensor).ctypes.data for tensor in payloads(optimized)
-                ] == pointers
+                ] == pointers[:1]
             elif variant == "zeros":
                 assert len(optimized.graph.initializer) == 0
                 assert len(optimized.graph.node) == 1

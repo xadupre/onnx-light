@@ -2307,6 +2307,58 @@ TEST(GraphGraph, ReplayValidatesSurvivingSubgraphsInChangedFunctions) {
   }
 }
 
+TEST(GraphGraph, ReplayValidatesEveryOccurrenceOfSharedFunctionSubgraphs) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  auto &function = source.MakeLocalFunction("Body", "local");
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &branch = function.MakeSubgraph("body");
+  branch.MakeNode("Neg", {"X"}, {"branch_value"});
+  ValueInfoProto branch_output;
+  branch_output.set_name("branch_value");
+  auto &tag = branch_output.ref_metadata_props().add();
+  tag.set_key(core::compute::kValueTagMetadataKey);
+  tag.set_value("weight");
+  branch.MakeOutput(branch_output);
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &reference = attributes.add();
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s("body");
+  }
+  function.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  function.MakeNode("Identity", {"selected"}, {"Y"});
+  function.MakeOutput("Y");
+  ASSERT_EQ(branch.Compute().ValueTags().at("branch_value"), "weight");
+  RewritingProto plan;
+  plan.add_replaced_function_ids("local:Body");
+  auto replacement = function.ToFunction("local");
+  replacement.ref_node()[1].set_op_type("Neg");
+  plan.ref_added_functions().push_back(std::move(replacement));
+  EXPECT_NO_THROW(source.ApplyRewritings(plan));
+
+  auto &second_branch = *plan.ref_added_functions()[0].ref_node()[0].ref_attribute()[1].mutable_g();
+  ASSERT_EQ(second_branch.name(), "body");
+  bool changed_tag = false;
+  const auto change_tag = [&](auto &values) {
+    for (auto &value : values) {
+      if (value.name() != "branch_value")
+        continue;
+      for (auto &metadata : value.ref_metadata_props()) {
+        if (metadata.key() == core::compute::kValueTagMetadataKey) {
+          metadata.set_value("shape");
+          changed_tag = true;
+        }
+      }
+    }
+  };
+  change_tag(second_branch.ref_output());
+  change_tag(second_branch.ref_value_info());
+  ASSERT_TRUE(changed_tag);
+  EXPECT_THROW(source.ApplyRewritings(plan), core::builder::BuilderError);
+}
+
 TEST(GraphGraph, ReplayMatchesFunctionTagsByDomainAndOverload) {
   for (const bool overload : {false, true}) {
     SCOPED_TRACE(overload);

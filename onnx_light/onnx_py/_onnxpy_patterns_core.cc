@@ -36,6 +36,10 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
+  bool SupportsLocalFunctions() const override {
+    NB_OVERRIDE_NAME("supports_local_functions", SupportsLocalFunctions);
+  }
+
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
     nb::detail::ticket ticket(nb_trampoline, "match", nb::detail::str_hash("match"), true);
     nb::object result = nb_trampoline.base().attr(ticket.key)(
@@ -120,6 +124,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def_rw("device", &PatternOptimization::device,
               "Exact target device, or Device.kUndefined for a device-independent pattern.")
       .def("fast_op_type", &PatternOptimization::FastOpType)
+      .def("supports_local_functions", &PatternOptimization::SupportsLocalFunctions)
       .def(
           "result",
           [](const PatternOptimization &pattern, const std::vector<const NodeProto *> &nodes,

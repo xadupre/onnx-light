@@ -1,10 +1,68 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_py import _onnxpyprotoop as m
 
 MAX_SHORT_REPR_LENGTH = 60
+
+
+class TestStandaloneFileSerialization(ExtTestCase):
+    def test_tensor_round_trip(self):
+        for raw in (False, True):
+            tensor = oh.make_tensor("weight", m.TensorProto.FLOAT, [2], [1.0, 2.0])
+            if raw:
+                tensor.ClearField("float_data")
+                tensor.raw_data = b"\x00\x00\x80\x3f\x00\x00\x00\x40"
+            for num_threads in (None, 1, 2):
+                with self.subTest(raw=raw, num_threads=num_threads):
+                    options = None
+                    if num_threads is not None:
+                        options = m.SerializeOptions()
+                        options.num_threads = num_threads
+                        options.min_parallel_block_size = 1
+                    with tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / "tensor.pb"
+                        path.write_bytes(b"existing destination")
+                        tensor.SerializeToFile(str(path), options)
+                        self.assertEqual(path.read_bytes(), tensor.SerializeToString())
+                        restored = m.TensorProto()
+                        restored.ParseFromString(path.read_bytes())
+                        self.assertEqual(restored, tensor)
+
+    def test_unsupported_output_preserves_destinations(self):
+        tensor = oh.make_tensor("weight", m.TensorProto.FLOAT, [2], [1.0, 2.0])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tensor.pb"
+            external = Path(directory) / "weights.bin"
+            sentinel = b"existing destination"
+            path.write_bytes(sentinel)
+            external.write_bytes(sentinel)
+            with self.assertRaisesRegex(RuntimeError, "external-weight output"):
+                tensor.SerializeToFile(str(path), external_data_file=str(external))
+            self.assertEqual(path.read_bytes(), sentinel)
+            self.assertEqual(external.read_bytes(), sentinel)
+            options = m.SerializeOptions()
+            options.format = m.SerializeFormat.ORT_FLATBUFFERS
+            with self.assertRaisesRegex(RuntimeError, "requires ModelProto"):
+                tensor.SerializeToFile(str(path), options)
+            self.assertEqual(path.read_bytes(), sentinel)
+            options = m.SerializeOptions()
+            options.max_serialized_size_bytes = 1
+            with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+                tensor.SerializeToFile(str(path), options)
+            self.assertEqual(path.read_bytes(), sentinel)
+
+    def test_node_round_trip(self):
+        node = oh.make_node("Identity", ["X"], ["Y"])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "node.pb"
+            node.SerializeToFile(str(path))
+            restored = m.NodeProto()
+            restored.ParseFromString(path.read_bytes())
+            self.assertEqual(restored, node)
 
 
 class TestStringBinding(ExtTestCase):

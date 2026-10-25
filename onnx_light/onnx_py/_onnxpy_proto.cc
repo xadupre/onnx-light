@@ -786,6 +786,27 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                   external_data_file.empty(),
                   "ORT FlatBuffers serialization does not support external weights output.");
             }
+            if constexpr (!std::is_same_v<cls, ModelProto> && !std::is_same_v<cls, PipelineProto>) {
+              EXT_ENFORCE(external_data_file.empty(),
+                          "Standalone message serialization does not support external-weight "
+                          "output; export the owning model.");
+              SerializeOptions opts = nb::isinstance<SerializeOptions &>(options)
+                                          ? nb::cast<SerializeOptions &>(options)
+                                          : SerializeOptions{};
+              utils::StringWriteStream size_stream;
+              const auto total_size = self.SerializeSize(size_stream, opts);
+              EXT_ENFORCE(EnforceMaxSerializedSize(total_size, opts, "SerializeToFile"),
+                          "SerializeToFile: output exceeded "
+                          "SerializeOptions.max_serialized_size_bytes.");
+              utils::FileWriteStream stream(file_path);
+              size_stream.swap_size_cache(stream);
+              if (opts.is_parallel())
+                stream.StartThreadPool(opts.num_threads);
+              self.SerializeToStream(stream, opts);
+              if (stream.HasParallelizationStarted())
+                stream.WaitForDelayedBlock();
+              return;
+            }
             cls *to_write = &self;
             std::optional<ModelProto> owned_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
@@ -815,7 +836,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             }
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
-          "Serializes this instance into a file. If ``external_data_size`` is not empty, big "
+          "Serializes this instance into a file. Standalone messages require single-file ONNX "
+          "output. If ``external_data_file`` is not empty, big "
           "weights are stored in this (depending on ``options.raw_data_threshold``). "
           "When writing to two files, temporary external-data metadata is cleared so the "
           "in-memory model stays unchanged.")

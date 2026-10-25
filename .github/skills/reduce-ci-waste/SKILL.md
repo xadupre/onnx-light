@@ -35,3 +35,20 @@ runs. Use this checklist to avoid repeating expensive runs without hiding failur
      to change; do not blindly rerun an unchanged failing workflow.
    - After submitting a change while CI is running, report that CI is pending and
      return control. Do not wait or poll just to make another speculative push.
+
+## CodeQL readiness and migration
+
+The advanced ``.github/workflows/codeql.yml`` workflow skips draft pull requests.
+It starts on ``ready_for_review`` and analyzes later updates to ready PRs.
+Returning a PR to draft cancels an in-flight analysis through workflow concurrency.
+Pushes to ``main``, weekly Monday 04:17 UTC scans, and manual runs remain enabled.
+The Actions, C/C++, and Python analyses retain the default queries, build mode
+``none``, and security-alert uploads with the existing ``/language:...`` categories.
+
+GitHub's managed default setup is a separate repository setting: adding this
+workflow does not turn it off, and custom uploads are rejected while it is enabled.
+For the one-time migration, merge the advanced workflow first, switch off default
+setup in Settings > Advanced Security > CodeQL analysis > Switch to advanced,
+then manually dispatch ``codeql.yml`` on ``main`` to establish the new baseline.
+Do not disable default setup before the replacement is merged and available.
+Keep existing alerts and analyses; do not delete them as part of the migration.

@@ -448,7 +448,7 @@ public:
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
   void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                const ShapesContext &ctx);
+                                const ShapesContext &ctx, Device device = Device::kUndefined);
 
   /// Appends the peak-memory estimate for a newly appended node, using the
   /// shapes already inferred into the owned :cpp:class:`ShapesContext`.

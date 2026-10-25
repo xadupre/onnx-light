@@ -1462,21 +1462,46 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     undo->devices = capture_devices(capture_devices, *root);
   }
   RewritingProto collection;
-  const auto capture_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+  const auto capture_functions =
+      [&](const auto &self, const GraphBuilder &scope,
+          const utils::RepeatedProtoField<FunctionProto> *originals) -> void {
     for (const auto &function : scope.local_functions_) {
-      MergeFunction(collection.ref_added_functions(),
-                    function->BuildFunction(function->function_domain_));
-      self(self, *function);
+      FunctionProto definition = function->BuildFunction(function->function_domain_);
+      auto existing =
+          std::find_if(collection.ref_added_functions().begin(),
+                       collection.ref_added_functions().end(), [&](const FunctionProto &candidate) {
+                         return Identity(candidate) == Identity(definition);
+                       });
+      if (existing == collection.ref_added_functions().end()) {
+        collection.ref_added_functions().push_back(std::move(definition));
+      } else if (!existing->Equals(definition)) {
+        if (originals == nullptr) {
+          MergeFunction(collection.ref_added_functions(), definition);
+        } else {
+          const auto original =
+              std::find_if(originals->begin(), originals->end(), [&](const auto &candidate) {
+                return Identity(candidate) == Identity(definition);
+              });
+          if (original == originals->end()) {
+            MergeFunction(collection.ref_added_functions(), definition);
+          } else if (existing->Equals(*original)) {
+            *existing = std::move(definition);
+          } else {
+            MergeFunction(collection.ref_added_functions(), definition);
+          }
+        }
+      }
+      self(self, *function, originals);
     }
     for (const auto &subgraph : scope.subgraphs_)
-      self(self, *subgraph);
+      self(self, *subgraph, originals);
   };
-  capture_functions(capture_functions, *root);
+  capture_functions(capture_functions, *root, nullptr);
   auto original_definitions = utils::CopyWithSharedTensorStorage(collection.added_functions());
   const std::size_t original_functions = collection.added_functions().size();
   auto result =
       OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
-  capture_functions(capture_functions, *root);
+  capture_functions(capture_functions, *root, &original_definitions);
   FunctionIndex functions;
   for (const auto &function : collection.added_functions())
     functions.emplace(Identity(function), &function);
@@ -1980,7 +2005,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           builder_.CollectNodeReferences(builder_.nodes_[index], references[index]);
         builder_.compute_.UpdateNodes(builder_.nodes_, old_indices, references, {},
                                       builder_.device_);
-        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes());
+        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes(),
+                                                   builder_.device_);
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;

@@ -586,6 +586,10 @@ public:
   /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
 
+  /// Creates a local function and imports its formal inputs, outputs, nodes,
+  /// opsets, value information, and node metadata.
+  GraphBuilder &MakeLocalFunction(const FunctionProto &function);
+
   /// Returns ``true`` when a local function named ``name`` exists.
   bool HasLocalFunction(const std::string &name) const {
     return FindNamedBuilder(local_functions_, name) != nullptr;
@@ -870,6 +874,7 @@ private:
 
   // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
   void ImportFunction(const FunctionProto &function);
+  std::vector<std::string> ImportNode(const NodeProto &node);
 
   // Rebuilds owned definitions on demand for function calls and graph-valued
   // inference, including direct optimizer edits to nested builders. Ordinary

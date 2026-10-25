@@ -1389,18 +1389,29 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
   for (std::size_t suffix = 1;
        builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
     function_name = "Layer_" + std::to_string(suffix);
-  builder.SetOpsetVersion("ai.rt", 1);
-  core::builder::GraphBuilder &function = builder.MakeLocalFunction(function_name, "ai.rt");
-  for (const ValueInfoProto &input : body.input())
-    function.MakeInput(input);
-  for (const NodeProto &inner : body.node()) {
-    std::vector<std::string> inputs(inner.input().begin(), inner.input().end());
-    std::vector<std::string> outputs(inner.output().begin(), inner.output().end());
-    function.MakeNode(inner.op_type(), inputs, outputs, inner.domain(), inner.name(),
-                      inner.attribute(), inner.overload());
+  core::builder::GraphBuilder &source = index.graph.Builder();
+  source.SetOpsetVersion("ai.rt", 1);
+  FunctionProto definition;
+  definition.set_name(function_name);
+  definition.set_domain("ai.rt");
+  for (const auto &[domain, version] : source.OpsetVersions()) {
+    auto *opset = definition.add_opset_import();
+    if (!domain.empty())
+      opset->set_domain(domain);
+    opset->set_version(version);
   }
-  for (const ValueInfoProto &output : body.output())
-    function.MakeOutput(output);
+  for (const ValueInfoProto &input : body.input()) {
+    definition.add_input(input.name());
+    *definition.add_value_info() = input;
+  }
+  for (const ValueInfoProto &output : body.output()) {
+    definition.add_output(output.name());
+    *definition.add_value_info() = output;
+  }
+  for (const ValueInfoProto &value_info : body.value_info())
+    *definition.add_value_info() = value_info;
+  definition.ref_node() = utils::CopyWithSharedTensorStorage(body.node());
+  builder.MakeLocalFunction(definition);
   const std::string name =
       "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
   return MakeNode(function_name.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());

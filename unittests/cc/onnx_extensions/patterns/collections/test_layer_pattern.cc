@@ -718,12 +718,65 @@ TEST(RepeatedLayerPattern, LocalCompositeCallsRetainTheirDefinitions) {
   EXPECT_EQ(model.functions().size(), 1u + ExpectLayerContracts(model.graph()));
 }
 
+TEST(RepeatedLayerPattern, ExtractedFunctionInheritsSourceFunctionOpsets) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
+  auto &source = builder.MakeLocalFunction("Source", "local.test");
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  source.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  std::string input = "x";
+  for (int index = 0; index < 3; ++index) {
+    const std::string prefix = "h" + std::to_string(index);
+    AddMatMulLayer(source, input, "w", prefix);
+    input = prefix;
+  }
+  source.MakeOutput(input);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  builder.MakeNode("Source", {"x", "w"}, {"y"}, "local.test");
+  builder.MakeOutput("y");
+
+  EXPECT_FALSE(OptimizeLayers(source).rewrites().empty());
+  const ModelProto model = builder.ToModel();
+  const FunctionProto *source_function = nullptr;
+  const FunctionProto *extracted_function = nullptr;
+  for (const FunctionProto &function : model.functions()) {
+    if (function.name() == "Source")
+      source_function = &function;
+    if (function.domain() == "ai.rt")
+      extracted_function = &function;
+  }
+  ASSERT_NE(source_function, nullptr);
+  ASSERT_NE(extracted_function, nullptr);
+  bool source_imports_call_domain = false;
+  bool source_calls_extracted_function = false;
+  for (const auto &opset : source_function->opset_import())
+    source_imports_call_domain |= opset.domain() == "ai.rt" && opset.version() == 1;
+  for (const NodeProto &node : source_function->node())
+    source_calls_extracted_function |= node.domain() == "ai.rt";
+  EXPECT_TRUE(source_imports_call_domain);
+  EXPECT_TRUE(source_calls_extracted_function);
+  for (const auto &[domain, version] : source.OpsetVersions()) {
+    const std::string exported_domain = domain == "ai.onnx" ? "" : domain;
+    const auto found =
+        std::find_if(extracted_function->opset_import().begin(),
+                     extracted_function->opset_import().end(), [&](const auto &opset) {
+                       return opset.domain() == exported_domain && opset.version() == version;
+                     });
+    EXPECT_NE(found, extracted_function->opset_import().end()) << domain;
+  }
+  EXPECT_NO_THROW(VerifyModel(model));
+}
+
 TEST(RepeatedLayerPattern, DefaultPatternsDoNotWrapButExplicitSelectionDoes) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
   AddLayerWeight(builder, "w", 4, 4);
   AddMatMulLayer(builder, "x", "w", "h0");
   AddMatMulLayer(builder, "h0", "w", "h1");
+  auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  nodes[0].set_doc_string("preserve node documentation");
+  nodes[0].add_metadata("annotation", "preserve node metadata");
+  nodes[0].add_device_configurations()->set_configuration_id("preserve device config");
   builder.MakeOutput("h1");
   onnx_patterns::RegisterPatterns();
   core::builder::GraphGraph defaults(builder, core::builder::CreateRegisteredPatterns());
@@ -731,6 +784,25 @@ TEST(RepeatedLayerPattern, DefaultPatternsDoNotWrapButExplicitSelectionDoes) {
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 0u);
   EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
   EXPECT_GE(ExpectLayerContracts(builder.BuildGraph()), 2u);
+  const ModelProto model = builder.ToModel();
+  bool preserved = false;
+  for (const FunctionProto &function : model.functions()) {
+    if (function.domain() != "ai.rt")
+      continue;
+    for (const NodeProto &node : function.node()) {
+      if (node.name() == "h0_matmul") {
+        const auto annotation =
+            std::find_if(node.metadata_props().begin(), node.metadata_props().end(),
+                         [](const auto &entry) { return entry.key() == "annotation"; });
+        preserved = node.doc_string() == "preserve node documentation" &&
+                    annotation != node.metadata_props().end() &&
+                    annotation->value() == "preserve node metadata" &&
+                    node.device_configurations().size() == 1u &&
+                    node.device_configurations()[0].configuration_id() == "preserve device config";
+      }
+    }
+  }
+  EXPECT_TRUE(preserved);
 }
 
 TEST(RepeatedLayerPattern, RejectsDifferentAttributesAndDomains) {

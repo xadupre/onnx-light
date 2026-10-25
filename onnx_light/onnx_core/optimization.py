@@ -156,6 +156,7 @@ def standard_pattern_names(*, include_opt_in: bool = False) -> list[str]:
     return _patterns.registered_pattern_names(include_opt_in=include_opt_in)
 
 
+_ALL_STANDARD_PATTERN_NAMES = tuple(standard_pattern_names(include_opt_in=True))
 _L1_PATTERN_NAMES = frozenset(
     {
         "ConvAddFusion",
@@ -174,31 +175,99 @@ _L1_PATTERN_NAMES = frozenset(
 
 
 def standard_pattern_sets() -> dict[str, tuple[str, ...]]:
-    """Returns named, overlapping groups of standard fusion patterns.
+    """Returns named, overlapping groups of standard and registered patterns.
 
     ``all`` includes opt-in patterns. ``L1`` contains patterns shared with
     ONNX Runtime, ``L2`` contains onnx-light-only standard patterns, and
-    ``Layer`` contains the repeated-layer pattern.
+    ``Layer`` contains the repeated-layer pattern. Other groups can be added,
+    extended, and removed with :func:`register_pattern_set`,
+    :func:`extend_pattern_set`, and :func:`unregister_pattern_set`.
     """
-    all_names = standard_pattern_names(include_opt_in=True)
-    l1_names = tuple(name for name in all_names if name in _L1_PATTERN_NAMES)
-    l1_set = set(l1_names)
+    all_names = list(_ALL_STANDARD_PATTERN_NAMES)
+    all_names.extend(name for name in _ALL_PATTERN_ADDITIONS if name not in all_names)
+    for names in _PATTERN_SETS.values():
+        all_names.extend(name for name in names if name not in all_names)
     return {
         "all": tuple(all_names),
-        "L1": l1_names,
-        "L2": tuple(name for name in standard_pattern_names() if name not in l1_set),
-        "Layer": tuple(name for name in all_names if name == "RepeatedLayer"),
+        **{name: tuple(names) for name, names in _PATTERN_SETS.items()},
     }
+
+
+def _validate_pattern_set_names(name: str, pattern_names: Iterable[str]) -> tuple[str, ...]:
+    if not isinstance(name, str) or not name:
+        raise ValueError("A pattern-set name must be a non-empty string.")
+    if isinstance(pattern_names, str):
+        raise TypeError("Pattern names must be an iterable of names, not a string.")
+    names = tuple(pattern_names)
+    available_names = set(_ALL_STANDARD_PATTERN_NAMES) | set(_GLOBAL_PATTERNS)
+    for pattern_name in names:
+        if not isinstance(pattern_name, str) or not pattern_name:
+            raise ValueError("Pattern names must be non-empty strings.")
+        if pattern_name not in available_names:
+            raise ValueError(f"Unknown pattern name {pattern_name!r}.")
+    return tuple(dict.fromkeys(names))
+
+
+def register_pattern_set(name: str, pattern_names: Iterable[str]) -> None:
+    """Creates a named pattern set from standard or globally registered patterns."""
+    if not isinstance(name, str) or not name:
+        raise ValueError("A pattern-set name must be a non-empty string.")
+    if name == "all" or name in _PATTERN_SETS:
+        raise ValueError(f"Pattern set {name!r} is already reserved or registered.")
+    _PATTERN_SETS[name] = _validate_pattern_set_names(name, pattern_names)
+
+
+def extend_pattern_set(name: str, pattern_names: Iterable[str]) -> None:
+    """Adds patterns to an existing set without duplicating its entries."""
+    if not isinstance(name, str) or not name:
+        raise ValueError("A pattern-set name must be a non-empty string.")
+    if name != "all" and name not in _PATTERN_SETS:
+        raise ValueError(f"Pattern set {name!r} cannot be extended.")
+    additions = _validate_pattern_set_names(name, pattern_names)
+    if name == "all":
+        existing = set(_ALL_PATTERN_ADDITIONS) | set(_ALL_STANDARD_PATTERN_NAMES)
+        _ALL_PATTERN_ADDITIONS.extend(
+            pattern_name for pattern_name in additions if pattern_name not in existing
+        )
+    else:
+        existing = set(_PATTERN_SETS[name])
+        _PATTERN_SETS[name] += tuple(
+            pattern_name for pattern_name in additions if pattern_name not in existing
+        )
+
+
+def unregister_pattern_set(name: str) -> bool:
+    """Removes a custom pattern set and reports whether it existed."""
+    if not isinstance(name, str) or not name:
+        raise ValueError("A pattern-set name must be a non-empty string.")
+    if name == "all" or name in {"L1", "L2", "Layer"}:
+        return False
+    return _PATTERN_SETS.pop(name, None) is not None
 
 
 def standard_patterns(names: Iterable[str] | None = None) -> list[PatternOptimization]:
     """Creates the selected standard ONNX patterns."""
     selected = standard_pattern_names() if names is None else list(names)
-    return [_patterns.create_pattern(name) for name in selected]
+    patterns = []
+    for name in selected:
+        if name not in _ALL_STANDARD_PATTERN_NAMES and name in _GLOBAL_PATTERNS:
+            patterns.append(_GLOBAL_PATTERNS[name])
+        else:
+            patterns.append(_patterns.create_pattern(name))
+    return patterns
 
 
 _GLOBAL_PATTERNS: dict[str, PatternOptimization] = {
     pattern.name: pattern for pattern in standard_patterns()
+}
+_ALL_PATTERN_ADDITIONS: list[str] = []
+_L1_STANDARD_PATTERN_NAMES = tuple(
+    name for name in _ALL_STANDARD_PATTERN_NAMES if name in _L1_PATTERN_NAMES
+)
+_PATTERN_SETS: dict[str, tuple[str, ...]] = {
+    "L1": _L1_STANDARD_PATTERN_NAMES,
+    "L2": tuple(name for name in standard_pattern_names() if name not in _L1_PATTERN_NAMES),
+    "Layer": ("RepeatedLayer",),
 }
 
 
@@ -558,7 +627,9 @@ __all__ = [
     "apply_rewritings",
     "apply_rewritings_to_model",
     "clear_registered_patterns",
+    "extend_pattern_set",
     "register_pattern",
+    "register_pattern_set",
     "registered_pattern_names",
     "registered_patterns",
     "render_rst_standard_patterns_table",
@@ -567,4 +638,5 @@ __all__ = [
     "standard_pattern_sets",
     "standard_patterns",
     "unregister_pattern",
+    "unregister_pattern_set",
 ]

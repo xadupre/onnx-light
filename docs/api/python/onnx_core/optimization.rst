@@ -133,6 +133,11 @@ Use :func:`standard_pattern_sets` to select the named ``all``, ``L1``, ``L2``,
 and ``Layer`` groups. ``L1`` lists the fusion patterns shared with ONNX Runtime;
 ``L2`` lists onnx-light-only standard patterns, and ``Layer`` selects the
 opt-in repeated-layer pattern. ``all`` contains the union of these groups.
+Add another group with :func:`register_pattern_set`, add members to any built-in
+group with :func:`extend_pattern_set`, and remove custom groups with
+:func:`unregister_pattern_set`. Groups can overlap. Members may be standard
+patterns or patterns previously added with :func:`register_pattern`.
+``standard_patterns(pattern_sets["custom"])`` creates the selected instances.
 The :ref:`complete pattern catalogue <l-api-pattern-catalog>` in the
 :ref:`ByOp catalogue <l-onnx-operators>` adds the C++ documentation link and
 the Before/After rewrite graph for every entry.

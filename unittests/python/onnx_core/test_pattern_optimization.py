@@ -103,6 +103,22 @@ class TestPatternSelection(ExtTestCase):
             ["RepeatedLayer"],
         )
 
+    def test_pattern_sets_can_be_extended_and_created(self):
+        custom = NegNegPattern(name="CustomNegNeg")
+        optim.register_pattern(custom)
+        self.addCleanup(optim.unregister_pattern, "CustomNegNeg")
+
+        optim.register_pattern_set("custom", ["CustomNegNeg"])
+        self.addCleanup(optim.unregister_pattern_set, "custom")
+        optim.extend_pattern_set("custom", ["GatherToSlice", "CustomNegNeg"])
+
+        pattern_sets = optim.standard_pattern_sets()
+        self.assertEqual(pattern_sets["custom"], ("CustomNegNeg", "GatherToSlice"))
+        self.assertIn("CustomNegNeg", pattern_sets["all"])
+        self.assertIn("GatherToSlice", pattern_sets["L2"])
+        self.assertIs(optim.standard_patterns(pattern_sets["custom"])[0], custom)
+        self.assertTrue(optim.unregister_pattern_set("custom"))
+
     def test_pattern_listing_defaults_and_explicit_opt_in(self):
         optim.reset_registered_patterns()
         active_names = optim.registered_pattern_names()

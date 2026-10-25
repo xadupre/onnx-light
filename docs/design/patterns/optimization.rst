@@ -130,6 +130,8 @@ This is encapsulation, not weight tying: ``w0`` and ``w1`` need not be equal.
 Each call references a local function stored in ``ModelProto.functions``.
 Models can be consumed by ONNX runtimes that support local functions and the
 operators used in their bodies.
+Function exports and snapshots captured for rewrite undo place callees before
+callers, including layers extracted inside an existing local function.
 
 Layer function contract
 ~~~~~~~~~~~~~~~~~~~~~~~~

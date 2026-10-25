@@ -408,7 +408,7 @@ TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNo
   ASSERT_FALSE(imported_source.Nodes().empty());
   const auto match = optimizer.Patterns().front()->Match(optimizer, imported_source.Nodes()[0]);
   ASSERT_NE(match.pattern, nullptr) << match.ToString();
-  EXPECT_FALSE(match.pattern->Apply(optimizer, match.nodes).empty());
+  ASSERT_FALSE(optimizer.Optimize(1).rewrites().empty());
   const ModelProto extracted = imported.ToModel();
   EXPECT_NO_THROW(VerifyModel(extracted));
   EXPECT_NO_THROW({
@@ -454,6 +454,33 @@ TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNo
   ASSERT_EQ(layer_function->node(0).device_configurations().size(), 1u);
   EXPECT_EQ(layer_function->node(0).device_configurations(0).configuration_id(), "sharded");
   EXPECT_EQ(layer_function->node(0).device_configurations(0).pipeline_stage(), 2);
+
+  core::builder::GraphGraph root_optimizer(
+      imported, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  root_optimizer.Canonicalize();
+  ModelProto before_root_optimization = imported.ToModel();
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  const auto root_plan = root_optimizer.Optimize(1, nullptr, folding);
+  auto restored = imported.UndoRewritings(root_plan);
+  ModelProto restored_model = restored.ToModel();
+  const auto order_opsets = [](auto &proto) {
+    std::map<std::string, int64_t> imports;
+    for (const auto &opset : proto.opset_import())
+      imports.emplace(opset.domain().value(), opset.version());
+    proto.clear_opset_import();
+    for (const auto &[domain, version] : imports)
+      proto.add_opset(domain, version);
+  };
+  for (ModelProto *snapshot : {&before_root_optimization, &restored_model}) {
+    order_opsets(*snapshot);
+    for (auto &function : snapshot->ref_functions())
+      order_opsets(function);
+  }
+  std::string difference;
+  EXPECT_TRUE(restored_model.Equals(before_root_optimization, &difference)) << difference;
+  EXPECT_NO_THROW(VerifyModel(restored_model));
+  EXPECT_TRUE(restored.GetShape("y").Shape() == LayerShape({2, 4}));
 }
 
 TEST(RepeatedLayerPattern, PreservesMapBoundaryDescriptorsWithTensorPlaceholders) {

@@ -1497,7 +1497,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       self(self, *subgraph, originals);
   };
   capture_functions(capture_functions, *root, nullptr);
-  auto original_definitions = utils::CopyWithSharedTensorStorage(collection.added_functions());
+  auto original_definitions = GraphBuilder::DependencyOrderFunctions(
+      utils::CopyWithSharedTensorStorage(collection.added_functions()));
   const std::size_t original_functions = collection.added_functions().size();
   auto result =
       OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);

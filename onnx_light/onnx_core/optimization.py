@@ -367,6 +367,7 @@ class GraphGraph(_C.GraphGraph):
         report: Literal[False] = False,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        parallel: bool = False,
     ) -> RewritingProto: ...
 
     @overload
@@ -377,6 +378,7 @@ class GraphGraph(_C.GraphGraph):
         report: Literal[True],
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        parallel: bool = False,
     ) -> tuple[RewritingProto, OptimizationReport]: ...
 
     @overload
@@ -387,6 +389,7 @@ class GraphGraph(_C.GraphGraph):
         report: bool,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        parallel: bool = False,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
 
     def optimize(
@@ -396,8 +399,13 @@ class GraphGraph(_C.GraphGraph):
         report: bool = False,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        parallel: bool = False,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]:
-        """Returns sequential proto edits and optionally their optimization report."""
+        """Returns proto edits and optionally their optimization report.
+
+        ``parallel=True`` matches native patterns concurrently. Python-defined
+        patterns remain sequential because their callbacks require the GIL.
+        """
         return super().optimize(
             max_iter,
             report=report,
@@ -405,6 +413,7 @@ class GraphGraph(_C.GraphGraph):
                 ConstantFoldingOptions() if folding_options is None else folding_options
             ),
             remove_unused=remove_unused,
+            parallel=parallel,
         )
 
 

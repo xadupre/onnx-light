@@ -2432,6 +2432,27 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
   EXPECT_NE(report.ToString().find("CastCast(attempts=3, matches=1"), std::string::npos);
 }
 
+TEST(PatternOptimization, ParallelMatchingPreservesCandidateOrderAndStatistics) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  for (std::size_t i = 0; i < 32; ++i) {
+    const std::string output = "y" + std::to_string(i);
+    builder.MakeNode("Add", {"x", "x"}, {output});
+    builder.MakeOutput(output);
+  }
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<CountingFastOpTypePattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+
+  graph.Optimize(1, &report, {}, false, true);
+
+  ASSERT_EQ(report.patterns.size(), 1u);
+  EXPECT_EQ(report.patterns[0].attempts, 32u);
+  EXPECT_EQ(report.patterns[0].matches, 32u);
+}
+
 TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());

@@ -410,6 +410,16 @@ class TestPatternOptimization(ExtTestCase):
             {item.reason for item in pattern_report.no_matches},
         )
 
+    def test_parallel_request_keeps_python_pattern_callbacks_sequential(self):
+        builder = optim.GraphBuilder(_double_neg_model())
+        graph = optim.GraphGraph(builder, [NegNegPattern()])
+
+        rewrites, report = graph.optimize(report=True, parallel=True)
+
+        self.assertEqual([rewrite.pattern_name for rewrite in rewrites.rewrites], ["NegNeg"])
+        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Identity"])
+        self.assertEqual(report.rewrites, 1)
+
     def test_replay_reproduces_python_rewrite(self):
         model = _double_neg_model()
         builder = optim.GraphBuilder(model)

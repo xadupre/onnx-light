@@ -182,19 +182,28 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def(
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report,
-             const core::builder::ConstantFoldingOptions &folding_options,
-             bool remove_unused) -> nb::object {
+             const core::builder::ConstantFoldingOptions &folding_options, bool remove_unused,
+             bool parallel) -> nb::object {
+            if (parallel) {
+              for (const auto &pattern : graph.Patterns()) {
+                if (dynamic_cast<const PyPatternOptimization *>(pattern.get()) != nullptr) {
+                  parallel = false;
+                  break;
+                }
+              }
+            }
             if (!report) {
-              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused));
+              return nb::cast(
+                  graph.Optimize(max_iter, nullptr, folding_options, remove_unused, parallel));
             }
             OptimizationReport statistics;
             RewritingProto rewrites =
-                graph.Optimize(max_iter, &statistics, folding_options, remove_unused);
+                graph.Optimize(max_iter, &statistics, folding_options, remove_unused, parallel);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
           nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
           nb::arg("folding_options") = core::builder::ConstantFoldingOptions{},
-          nb::arg("remove_unused") = true)
+          nb::arg("remove_unused") = true, nb::arg("parallel") = false)
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

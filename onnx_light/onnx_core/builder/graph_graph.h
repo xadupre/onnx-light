@@ -91,13 +91,16 @@ public:
    * into initializers before cleanup, subject to ``folding_options``.
    * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
    * passes may still remove nodes or initializers.
+   * ``parallel=true`` matches candidates concurrently. Match implementations
+   * must be safe for concurrent calls; Python-defined patterns are evaluated
+   * sequentially.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
   RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
                           const ConstantFoldingOptions &folding_options = {},
-                          bool remove_unused = true);
+                          bool remove_unused = true, bool parallel = false);
 
   /// Returns the patterns owned by this graph optimizer.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -213,7 +216,8 @@ private:
   RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
-                              RewritingProto &collection, detail::RewritingUndoState &undo);
+                              bool parallel, RewritingProto &collection,
+                              detail::RewritingUndoState &undo);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

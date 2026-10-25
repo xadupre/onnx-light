@@ -3473,6 +3473,56 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
   EXPECT_EQ(alloc.allocated_count(), 0u);
 }
 
+TEST(RunLoopWithSequenceState, ModelSessionRunsSequenceProducerLoopAndConsumer) {
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 13);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("sequence_loop");
+  graph->add_input()->set_name("M");
+  graph->add_input()->set_name("cond");
+  graph->add_input()->set_name("acc_init");
+  *graph->add_node() = MakeNode("SequenceEmpty", {}, {"seq_init"});
+  *graph->add_node() =
+      MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
+                   BuildMixedSequenceLoopBody());
+  *graph->add_node() = MakeNode("SequenceLength", {"seq_final"}, {"length"});
+  graph->add_output()->set_name("acc_final");
+  AddSequenceFloatValueInfo(graph->add_output(), "seq_final");
+  graph->add_output()->set_name("scan");
+  graph->add_output()->set_name("length");
+
+  RuntimeSession session(model);
+  for (const auto &[max_trip, cond] :
+       std::vector<std::pair<int64_t, bool>>{{3, true}, {0, true}, {3, false}, {1, true}}) {
+    SCOPED_TRACE(::testing::Message() << "M=" << max_trip << ", cond=" << cond);
+    RuntimeContext rt(KernelContext(DefaultOpset(13)));
+    rt.Set("M", Tensor::FromInt64("M", {}, {max_trip}));
+    rt.Set("cond", Tensor::FromBool("cond", {}, {static_cast<uint8_t>(cond)}));
+    rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+
+    session.Run(rt);
+
+    const int64_t expected_trip_count = cond ? max_trip : 0;
+    ASSERT_TRUE(rt.HasSequence("seq_final"));
+    const Sequence &seq = rt.GetSequence("seq_final");
+    ASSERT_EQ(seq.size(), static_cast<std::size_t>(expected_trip_count));
+    EXPECT_EQ(seq.elem_type, static_cast<int32_t>(DataType::FLOAT));
+    ASSERT_TRUE(rt.Has("length"));
+    EXPECT_EQ(rt.Get("length").AsInt64()[0], expected_trip_count);
+    ASSERT_TRUE(rt.Has("acc_final"));
+    EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], static_cast<float>(expected_trip_count));
+    ASSERT_TRUE(rt.Has("scan"));
+    const Tensor &scan = rt.Get("scan");
+    ASSERT_EQ(scan.shape, (std::vector<int64_t>{expected_trip_count}));
+    for (int64_t i = 0; i < expected_trip_count; ++i) {
+      ASSERT_EQ(seq.at(static_cast<std::size_t>(i)).shape, (std::vector<int64_t>{1}));
+      EXPECT_FLOAT_EQ(seq.at(static_cast<std::size_t>(i)).AsFloat()[0], static_cast<float>(i));
+      EXPECT_FLOAT_EQ(scan.AsFloat()[i], static_cast<float>(i + 1));
+    }
+  }
+}
+
 TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));

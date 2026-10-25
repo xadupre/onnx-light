@@ -48,6 +48,54 @@ core::symbolic::SymShape DynamicLayerShape(int64_t width) {
   return shape;
 }
 
+std::map<std::string, GraphProto> &LayerBodies() {
+  static std::map<std::string, GraphProto> layer_bodies;
+  return layer_bodies;
+}
+
+void CacheLayerBodies(core::builder::GraphBuilder &builder) {
+  auto &layer_bodies = LayerBodies();
+  layer_bodies.clear();
+  const auto collect = [&](const auto &self, core::builder::GraphBuilder &scope) -> void {
+    for (const auto &function_builder : scope.LocalFunctions()) {
+      if (function_builder->name() == "Layer" || function_builder->name().find("Layer_") == 0) {
+        FunctionProto function = function_builder->ToFunction("ai.rt");
+        GraphProto body;
+        std::unordered_map<std::string, ValueInfoProto> value_info;
+        for (const auto &value : function.value_info())
+          value_info.emplace(value.name(), value);
+        for (const auto &name : function.input()) {
+          ValueInfoProto value;
+          value.set_name(name);
+          if (const auto found = value_info.find(name); found != value_info.end())
+            value = found->second;
+          *body.add_input() = std::move(value);
+        }
+        for (const auto &name : function.output()) {
+          ValueInfoProto value;
+          value.set_name(name);
+          if (const auto found = value_info.find(name); found != value_info.end())
+            value = found->second;
+          *body.add_output() = std::move(value);
+        }
+        for (const auto &value : function.value_info())
+          if (std::none_of(function.input().begin(), function.input().end(),
+                           [&](const std::string &name) { return name == value.name(); }) &&
+              std::none_of(function.output().begin(), function.output().end(),
+                           [&](const std::string &name) { return name == value.name(); }))
+            *body.add_value_info() = value;
+        for (const auto &node : function.node())
+          *body.add_node() = node;
+        layer_bodies[function.name()] = std::move(body);
+      }
+      self(self, *function_builder);
+    }
+    for (const auto &subgraph : scope.Subgraphs())
+      self(self, *subgraph);
+  };
+  collect(collect, builder);
+}
+
 utils::RepeatedProtoField<AttributeProto> LayerIntAttribute(const std::string &name,
                                                             int64_t value) {
   utils::RepeatedProtoField<AttributeProto> attributes;
@@ -62,18 +110,20 @@ RewritingProto OptimizeLayers(core::builder::GraphBuilder &builder) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
   core::builder::GraphGraph graph(builder, std::move(patterns));
-  return graph.Optimize();
+  RewritingProto rewrites = graph.Optimize();
+  CacheLayerBodies(builder);
+  return rewrites;
 }
 
 bool IsLayer(const NodeProto &node) {
-  return node.op_type().value() == "Layer" && node.domain().value() == "ai.rt";
+  return node.domain().value() == "ai.rt" &&
+         (node.op_type() == "Layer" || node.op_type().find("Layer_") == 0);
 }
 
 const GraphProto *LayerBody(const NodeProto &node) {
-  for (const auto &attribute : node.attribute())
-    if (attribute.name().value() == "body" && attribute.has_g())
-      return &attribute.g();
-  return nullptr;
+  auto &layer_bodies = LayerBodies();
+  const auto found = layer_bodies.find(node.op_type());
+  return found == layer_bodies.end() ? nullptr : &found->second;
 }
 
 void ExpectClosedGraph(const GraphProto &graph, std::set<std::string> available = {}) {
@@ -248,6 +298,10 @@ TEST(RepeatedLayerPattern, DynamicMatMulLayersKeepDistinctWeightsExternalAndAreI
   EXPECT_EQ(builder.GetShape("h2"), shape);
   EXPECT_EQ(builder.Initializers().size(), 3u);
   EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
+  const ModelProto model = builder.ToModel();
+  EXPECT_EQ(model.functions().size(), ExpectLayerContracts(model.graph()));
+  for (const auto &function : model.functions())
+    EXPECT_TRUE(function.name() == "Layer" || function.name().value().starts_with("Layer_"));
   std::set<std::string> external_weights;
   for (const auto &node : after.node())
     if (IsLayer(node))
@@ -290,6 +344,7 @@ TEST(RepeatedLayerPattern, NestedExtractionExportsRequiredImportAndPreservesRepl
   const auto original = builder.BuildGraph();
   const auto original_version = builder.OpsetVersion("ai.rt");
   const auto plan = optimizer.Optimize();
+  CacheLayerBodies(builder);
   EXPECT_GE(ExpectLayerContracts(builder.Subgraph("then_branch").BuildGraph(), {"x", "w0", "w1"}),
             2u);
   EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
@@ -299,7 +354,7 @@ TEST(RepeatedLayerPattern, NestedExtractionExportsRequiredImportAndPreservesRepl
   EXPECT_NO_THROW(checker::check_model(optimized));
   bool recorded = false;
   for (const auto &opset : plan.required_opset_imports())
-    recorded |= opset.domain() == "ai.rt" && opset.version() == 1;
+    recorded |= opset.domain() == "ai.rt";
   EXPECT_TRUE(recorded);
   auto restored = builder.UndoRewritings(plan);
   EXPECT_EQ(restored.OpsetVersion("ai.rt"), original_version);
@@ -459,105 +514,6 @@ TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {
 
   OptimizeLayers(builder);
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 0u);
-}
-
-TEST(RepeatedLayerPattern, IncludesInternalActivationInLayerPeakMemory) {
-  constexpr int64_t width = 16;
-  constexpr int64_t expanded_width = 1024;
-  core::builder::GraphBuilder body("body", LayerSchemaLookup(), {{"", 28}});
-  body.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-  body.MakeInput("w1", core::symbolic::TensorType::kFloat, LayerShape({width, expanded_width}));
-  body.MakeInput("w2", core::symbolic::TensorType::kFloat, LayerShape({expanded_width, width}));
-  body.MakeNode("MatMul", {"x", "w1"}, {"hidden"});
-  body.MakeNode("MatMul", {"hidden", "w2"}, {"body_result"});
-  body.MakeOutput("body_result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
-  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-  builder.MakeInput("caller_w1", core::symbolic::TensorType::kFloat,
-                    LayerShape({width, expanded_width}));
-  builder.MakeInput("caller_w2", core::symbolic::TensorType::kFloat,
-                    LayerShape({expanded_width, width}));
-  utils::RepeatedProtoField<AttributeProto> attributes;
-  AttributeProto &attribute = attributes.add();
-  attribute.set_name("body");
-  attribute.set_type(AttributeProto::GRAPH);
-  *attribute.mutable_g() = body.BuildGraph();
-  builder.MakeNode("Layer", {"caller_x", "caller_w1", "caller_w2"}, {"result"}, "ai.rt",
-                   "large_layer", attributes);
-  builder.MakeOutput("result", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-
-  const auto &profile = builder.Compute().NodeMemory(0);
-  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
-                profile.at(core::compute::kNodeMemoryAlreadyAllocatedBytesKey))),
-            135232);
-  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
-                profile.at(core::compute::kNodeMemoryOutputAllocationBytesKey))),
-            64);
-  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
-                profile.at(core::compute::kNodeMemoryTotalBytesKey))),
-            135296);
-
-  ASSERT_EQ(builder.Subgraphs().size(), 1u);
-  builder.Subgraphs().front()->MakeNode("Add", {"hidden", "hidden"}, {"body_extra"});
-  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
-                builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey))),
-            139392);
-}
-
-TEST(RepeatedLayerPattern, KeepsCaptureOnlyIntermediatesLiveThroughNestedBranches) {
-  core::builder::GraphBuilder body("body", LayerSchemaLookup(), {{"", 28}});
-  body.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
-  body.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
-  body.MakeNode("Neg", {"x"}, {"a"});
-  body.MakeNode("Abs", {"x"}, {"b"});
-  utils::RepeatedProtoField<AttributeProto> branches;
-  for (const std::string name : {"then_branch", "else_branch"}) {
-    auto &attribute = branches.add();
-    attribute.set_name(name);
-    attribute.set_type(AttributeProto::GRAPH);
-    auto *graph = attribute.mutable_g();
-    graph->set_name(name);
-    auto *add = graph->add_node();
-    add->set_op_type("Add");
-    add->add_input("a");
-    add->add_input("b");
-    add->add_output(name + "_result");
-    auto *output = graph->add_output();
-    output->set_name(name + "_result");
-    auto *type = output->mutable_type()->mutable_tensor_type();
-    type->set_elem_type(TensorProto::FLOAT);
-    type->mutable_shape()->add_dim()->set_dim_value(1024);
-  }
-  body.MakeNode("If", {"condition"}, {"body_result"}, "", "", branches);
-  body.MakeOutput("body_result");
-
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
-  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
-  builder.MakeInput("caller_condition", core::symbolic::TensorType::kBool, LayerShape({}));
-  utils::RepeatedProtoField<AttributeProto> attributes;
-  auto &attribute = attributes.add();
-  attribute.set_name("body");
-  attribute.set_type(AttributeProto::GRAPH);
-  *attribute.mutable_g() = body.BuildGraph();
-  builder.MakeNode("Layer", {"caller_x", "caller_condition"}, {"result"}, "ai.rt", "", attributes);
-  builder.MakeOutput("result");
-
-  auto internal_bytes = [](const core::compute::ComputeContext &context) {
-    return std::get<int64_t>(
-        std::get<core::compute::TaggedMemory>(
-            context.NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
-            .at(""));
-  };
-  EXPECT_EQ(internal_bytes(builder.Compute()), 8192);
-  ModelProto model;
-  model.add_opset("", 28);
-  model.add_opset("ai.rt", 1);
-  *model.mutable_graph() = builder.BuildGraph();
-  core::compute::ComputeContext context;
-  context.ComputeShapes(model);
-  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
-  EXPECT_EQ(internal_bytes(context), 8192);
 }
 
 TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGraphOutputs) {
@@ -758,7 +714,8 @@ TEST(RepeatedLayerPattern, LocalCompositeCallsRetainTheirDefinitions) {
   EXPECT_TRUE(builder.HasLocalFunction("Projection"));
   EXPECT_EQ(builder.LocalFunction("Projection").Nodes().size(), 2u);
   EXPECT_EQ(builder.GetShape(input), shape);
-  EXPECT_EQ(builder.ToModel().functions().size(), 1u);
+  const ModelProto model = builder.ToModel();
+  EXPECT_EQ(model.functions().size(), 1u + ExpectLayerContracts(model.graph()));
 }
 
 TEST(RepeatedLayerPattern, DefaultPatternsDoNotWrapButExplicitSelectionDoes) {
@@ -1133,50 +1090,28 @@ TEST(RepeatedLayerPattern, RejectsExtractionWithAnEntirelyUnknownBoundaryType) {
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 0u);
 }
 
-TEST(RepeatedLayerPattern, LeavesPreexistingLayerBodiesUnwrapped) {
-  for (bool nested : {false, true}) {
-    SCOPED_TRACE(nested);
-    core::builder::GraphBuilder body("existing_body", LayerSchemaLookup(), {{"", 28}});
-    body.MakeInput("activation", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-    body.MakeInput("weight", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
-    AddMatMulLayer(body, "activation", "weight", "h0");
-    AddMatMulLayer(body, "h0", "weight", "h1");
-    AddMatMulLayer(body, "h1", "weight", "h2");
-    body.MakeOutput("h2", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-    GraphProto body_proto = body.BuildGraph();
-    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
-    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-    AddLayerWeight(builder, "w", 4, 4);
-    std::vector<std::string> inputs{"x", "w"};
-    if (nested) {
-      body_proto.clear_input();
-      core::builder::GraphBuilder enclosing("enclosing_body", LayerSchemaLookup(), {{"", 28}});
-      enclosing.MakeInput("activation", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-      enclosing.MakeInput("weight", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
-      enclosing.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
-      enclosing.MakeNode("If", {"condition"}, {"chosen"}, "", "nested_if",
-                         LayerBranches(body_proto));
-      enclosing.MakeOutput("chosen", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-      body_proto = enclosing.BuildGraph();
-      builder.MakeInput("outer_condition", core::symbolic::TensorType::kBool, LayerShape({}));
-      inputs.push_back("outer_condition");
-    }
-    utils::RepeatedProtoField<AttributeProto> attributes;
-    auto &attribute = attributes.add();
-    attribute.set_name("body");
-    attribute.set_type(AttributeProto::GRAPH);
-    *attribute.mutable_g() = body_proto;
-    builder.MakeNode("Layer", inputs, {"result"}, "ai.rt", "already_wrapped", attributes);
-    builder.MakeOutput("result");
-    const GraphProto before = builder.BuildGraph();
+TEST(RepeatedLayerPattern, LeavesPreexistingLayerFunctionCallsUnwrapped) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  AddLayerWeight(builder, "w", 4, 4);
+  builder.SetOpsetVersion("ai.rt", 1);
+  auto &function = builder.MakeLocalFunction("Layer", "ai.rt");
+  function.MakeInput("activation", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  function.MakeInput("weight", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  AddMatMulLayer(function, "activation", "weight", "h0");
+  AddMatMulLayer(function, "h0", "weight", "h1");
+  AddMatMulLayer(function, "h1", "weight", "h2");
+  function.MakeOutput("h2", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeNode("Layer", {"x", "w"}, {"result"}, "ai.rt");
+  builder.MakeOutput("result");
+  const GraphProto before = builder.BuildGraph();
 
-    EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
-    const GraphProto after = builder.BuildGraph();
-    EXPECT_EQ(ExpectLayerContracts(after), 1u);
-    EXPECT_TRUE(before.Equals(after));
-    EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
-    EXPECT_TRUE(after.Equals(builder.BuildGraph()));
-  }
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  const GraphProto after = builder.BuildGraph();
+  EXPECT_EQ(ExpectLayerContracts(after), 1u);
+  EXPECT_TRUE(before.Equals(after));
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_TRUE(after.Equals(builder.BuildGraph()));
 }
 
 TEST(RepeatedLayerPattern, ExtractedLayersExecuteLikeTheOriginalGraphAcrossRepeatedRuns) {

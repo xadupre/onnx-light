@@ -1834,7 +1834,7 @@ TEST(GraphBuilder, ToFunctionValidatesInitializerTypesAtSelectedOpset) {
         EXPECT_EQ(function.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
         ASSERT_EQ(function.opset_import().size(), opsets.size());
         for (const auto &entry : function.opset_import())
-          EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+          EXPECT_EQ(entry.version(), builder.OpsetVersion(entry.domain().value()));
       }
       EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
       EXPECT_EQ(builder.OpsetVersions(), opsets);
@@ -1880,7 +1880,7 @@ TEST(GraphBuilder, LocalFunctionDefinitionValidatesInitializerConstantTypes) {
       EXPECT_EQ(exported.node(0).op_type(), "Constant");
       EXPECT_EQ(exported.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
       for (const auto &entry : exported.opset_import())
-        EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+        EXPECT_EQ(entry.version(), function.OpsetVersion(entry.domain().value()));
     }
     EXPECT_EQ(function.OpsetVersions(), opsets);
     EXPECT_EQ(builder.OpsetVersions(), opsets);

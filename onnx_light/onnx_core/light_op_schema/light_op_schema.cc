@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "light_op_schema.h"
-#include "onnx_core/graph/layer_validation.h"
-
 #include <algorithm>
 #include <sstream>
 #include <unordered_set>
@@ -378,8 +376,6 @@ CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
 
 void LightOpSchema::Verify(const NodeProto &node,
                            const std::vector<std::optional<SchemaInputValue>> *inputs) const {
-  if (domain() == "ai.rt" && name() == "Layer")
-    core::graph::ValidateLayer(node);
   if (deprecated()) {
     throw SchemaError(onnx_light_helpers::MakeString(
         "Operator '", name(), "' has been deprecated since version ", since_version(), "."));

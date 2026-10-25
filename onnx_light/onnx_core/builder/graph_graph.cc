@@ -1980,9 +1980,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           builder_.CollectNodeReferences(builder_.nodes_[index], references[index]);
         builder_.compute_.UpdateNodes(builder_.nodes_, old_indices, references, {},
                                       builder_.device_);
-        builder_.compute_.RefreshIncrementalMemory(
-            builder_.nodes_, builder_.Shapes(), builder_.device_,
-            [this](const NodeProto &node) { return builder_.LayerBodyForMemory(node); });
+        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes());
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;
@@ -2889,9 +2887,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
           throw BuilderError("UndoRewritings: incompatible restored function initializer.");
       }
     }
-    scope.compute_.RestoreTagState(
-        devices.tags, scope.nodes_, node_offset,
-        [&scope](const NodeProto &node) { return scope.LayerBodyForMemory(node); });
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

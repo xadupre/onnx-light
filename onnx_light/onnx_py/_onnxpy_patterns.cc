@@ -79,7 +79,7 @@ NB_MODULE(_onnxpypatterns, m) {
 
   BindPattern<onnx_patterns::RepeatedLayerPattern>(
       m, "RepeatedLayerPattern",
-      "Encapsulates structurally repeated regions as explicit ai.rt::Layer bodies (opt-in).");
+      "Encapsulates structurally repeated regions as model-local functions (opt-in).");
 
   nb::class_<onnx_patterns::CastPattern, core::builder::PatternOptimization>(
       m, "CastPattern",

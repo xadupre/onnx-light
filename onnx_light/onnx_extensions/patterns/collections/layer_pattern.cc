@@ -44,7 +44,8 @@ using Region = std::vector<const NodeProto *>;
 using Regions = std::vector<Region>;
 
 bool IsLayer(const NodeProto &node) {
-  return node.domain().value() == "ai.rt" && node.op_type().value() == "Layer";
+  const std::string &name = node.op_type().value();
+  return node.domain().value() == "ai.rt" && (name == "Layer" || name.rfind("Layer_", 0) == 0);
 }
 
 bool IsPrimitiveAnchor(const NodeProto &node) {
@@ -1363,7 +1364,6 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
 NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary,
                     std::size_t occurrence) {
   GraphProto body;
-  body.set_name("RepeatedLayerBody_" + std::to_string(boundary.first));
   for (const std::string &name : boundary.inputs)
     *body.add_input() = ValueInfo(index, name);
   for (const std::string &name : boundary.outputs)
@@ -1384,14 +1384,26 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
     }
   }
   RenameLayerInputs(body, index.graph);
+  core::builder::GraphBuilder &builder = index.graph.Builder().ModelBuilder();
+  std::string function_name = "Layer";
+  for (std::size_t suffix = 1;
+       builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
+    function_name = "Layer_" + std::to_string(suffix);
+  builder.SetOpsetVersion("ai.rt", 1);
+  core::builder::GraphBuilder &function = builder.MakeLocalFunction(function_name, "ai.rt");
+  for (const ValueInfoProto &input : body.input())
+    function.MakeInput(input);
+  for (const NodeProto &inner : body.node()) {
+    std::vector<std::string> inputs(inner.input().begin(), inner.input().end());
+    std::vector<std::string> outputs(inner.output().begin(), inner.output().end());
+    function.MakeNode(inner.op_type(), inputs, outputs, inner.domain(), inner.name(),
+                      inner.attribute(), inner.overload());
+  }
+  for (const ValueInfoProto &output : body.output())
+    function.MakeOutput(output);
   const std::string name =
       "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
-  NodeProto layer = MakeNode("Layer", boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
-  AttributeProto *attribute = layer.add_attribute();
-  attribute->set_name("body");
-  attribute->set_type(AttributeProto::AttributeType::GRAPH);
-  *attribute->mutable_g() = std::move(body);
-  return layer;
+  return MakeNode(function_name.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
 }
 
 } // namespace
@@ -1402,14 +1414,9 @@ core::builder::MatchResult RepeatedLayerPattern::Match(GraphGraph &graph,
                                                        const NodeProto &candidate) const {
   if (graph.Builder().Nodes().empty() || &candidate != &graph.Builder().Nodes()[0])
     return NoMatch(candidate, "whole-graph detection runs only at the first graph node");
-  if (graph.IsInsideOperatorBody("ai.rt", "Layer"))
-    return NoMatch(candidate, "Layer bodies are not recursively extracted");
-  const std::string layer_key = core::shapes::ShapesContext::LocalFunctionKey("ai.rt", "Layer", "");
-  if (graph.Builder().Shapes().GetLocalFunction(layer_key) != nullptr)
-    return NoMatch(candidate, "a local function overrides the reserved ai.rt Layer identity");
   const int version = graph.Builder().OpsetVersion("ai.rt");
   if (version > 0 && version != 1)
-    return NoMatch(candidate, "Layer requires ai.rt opset 1");
+    return NoMatch(candidate, "RepeatedLayer requires ai.rt opset 1 for its local functions");
   Index index(graph);
   Plan plan;
   if (!FindPlan(index, plan))
@@ -1425,14 +1432,14 @@ RepeatedLayerPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto
   const auto verified = Match(graph, graph.Builder().Nodes()[0]);
   if (verified.pattern != this || verified.nodes != nodes)
     throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
+  const int version = graph.Builder().OpsetVersion("ai.rt");
+  if (version > 0 && version != 1)
+    throw core::builder::BuilderError(
+        "RepeatedLayer requires ai.rt opset 1 for its local functions.");
   Index index(graph);
   Plan plan;
   if (!FindPlan(index, plan))
     throw core::builder::BuilderError("RepeatedLayer::Apply could not reproduce its regions.");
-  const int version = graph.Builder().OpsetVersion("ai.rt");
-  if (version > 0 && version != 1)
-    throw core::builder::BuilderError("RepeatedLayer requires ai.rt opset 1.");
-  graph.Builder().SetOpsetVersion("ai.rt", 1);
   utils::RepeatedProtoField<NodeProto> replacement;
   for (const auto &[is_region, unit] : plan.schedule) {
     if (!is_region) {

@@ -19,8 +19,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * - Indexes producers, consumers, declared types and lexical subgraph captures.
  *   Runs detection only at the first graph node of each optimizer scan.
  * - Finds exact attention/MatMul anchors, including recursively inspected local
- *   functions. Excludes existing Layers and their bodies, stochastic operators,
- *   Dropout and opaque custom calls from candidate regions.
+ *   functions. Excludes existing layer-function calls and their bodies,
+ *   stochastic operators, Dropout and opaque custom calls from candidate regions.
  * - Groups compatible anchors into repeated seed roles. Tries individual anchors,
  *   directed port-labelled one-hop neighborhoods, then bounded periodic strides
  *   to distinguish otherwise identical projections within a larger repeat.
@@ -42,8 +42,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   and original positions. Ranks seed families by total anchor coverage, total
  *   node coverage, occurrence count (smaller period), then region size.
  * - Revalidates the selected match in Apply and replaces every selected occurrence
- *   with ai.rt::Layer. Copies its nodes in topological order into a closed body,
- *   preserves caller boundary names/types/tags, and leaves weights as explicit inputs.
+ *   with uniquely named model-local functions. Copies nodes in topological order
+ *   into closed function bodies, preserves caller boundary names/types/tags, and
+ *   leaves weights as explicit inputs.
  *   Gives body inputs fresh names to avoid lexical SSA shadowing.
  *
  * Work limits:
@@ -64,7 +65,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *             ┌─────────────────┐       ┌─────────────────┐
- *   x, w0 ───→│ ai.rt::Layer    │───y───→│ ai.rt::Layer    │───→ z
+ *   x, w0 ───→│ Layer(...)      │───y───→│ Layer_1(...)    │───→ z
  *             │ body(x, w0) → y │       │ body(y, w1) → z │
  *             └─────────────────┘       └─────────────────┘
  *                                               ↑
@@ -84,7 +85,7 @@ public:
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
-  /// Rechecks the match and emits Layer bodies with explicit formal interfaces.
+  /// Rechecks the match and emits local functions with explicit formal interfaces.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;

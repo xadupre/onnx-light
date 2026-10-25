@@ -7,6 +7,7 @@
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 
+#include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_helper.h"
 #include "onnx_lib/checker.h"
 #include "onnx_manipulations/parser.h"
@@ -46,6 +47,209 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_EQ(builder.Nodes().size(), 0u);
   EXPECT_EQ(builder.Inputs().size(), 0u);
   EXPECT_FALSE(builder.HasName("x"));
+}
+
+TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
+  constexpr char domain[] = "function_memory_test";
+  core::shapes::RegisterComputeShapeFn(
+      domain, "Expand", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({2, 1024})));
+      });
+  core::shapes::RegisterComputeShapeFn(
+      domain, "Project", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({2, 3})));
+      });
+  core::shapes::RegisterComputePeakMemoryFn(
+      domain, "Expand", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return int64_t{1234};
+      });
+
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  builder.set_device(core::symbolic::Device::kCPU);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  auto &function = builder.MakeLocalFunction("Layer", "ai.rt");
+  function.SetOpsetVersion(domain, 1);
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Expand", {"x"}, {"hidden"}, domain);
+  function.MakeNode("Project", {"hidden"}, {"result"}, domain);
+  function.MakeOutput("result");
+  builder.MakeNode("Layer", {"X"}, {"Y"}, "ai.rt");
+  builder.MakeOutput("Y");
+
+  const auto total_bytes = [](const core::compute::ComputeContext &context) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(
+        context.NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey)));
+  };
+  EXPECT_EQ(total_bytes(builder.Compute()), 8240);
+  EXPECT_EQ(builder.Compute().PeakMemory().at(0), 1234);
+  EXPECT_EQ(std::get<int64_t>(
+                std::get<core::compute::TaggedMemory>(
+                    builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
+                    .at("")),
+            8192);
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
+  EXPECT_EQ(total_bytes(context), 8240);
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 1234);
+}
+
+TEST(GraphBuilder, LocalFunctionMemoryKeepsConstantsLiveUntilTheirLastUse) {
+  constexpr char domain[] = "function_memory_lifetime_test";
+  onnx_shapes::RegisterShapeFunctions();
+  core::shapes::RegisterComputeShapeFn(domain, "Copy",
+                                       [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                         ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                       });
+
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({16}));
+  auto &function = builder.MakeLocalFunction("ConstantBody", "ai.rt");
+  function.SetOpsetVersion(domain, 1);
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({16}));
+  utils::RepeatedProtoField<AttributeProto> constant_attributes;
+  auto &value = constant_attributes.add();
+  value.set_name("value");
+  value.set_type(AttributeProto::TENSOR);
+  *value.mutable_t() = MakeInitializer<float>("", {8}, std::vector<float>(8, 1.0f));
+  function.MakeNode("Constant", {}, {"weight"}, "", "", constant_attributes);
+  function.MakeNode("Copy", {"x"}, {"hidden"}, domain);
+  function.MakeNode("Copy", {"hidden"}, {"middle"}, domain);
+  function.MakeNode("Copy", {"middle", "weight"}, {"result"}, domain);
+  function.MakeOutput("result");
+  builder.MakeNode("ConstantBody", {"X"}, {"Y"}, "ai.rt");
+  builder.MakeOutput("Y");
+
+  const auto total_bytes = [](const core::compute::ComputeContext &context) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(
+        context.NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey)));
+  };
+  EXPECT_EQ(total_bytes(builder.Compute()), 288);
+  EXPECT_EQ(std::get<int64_t>(
+                std::get<core::compute::TaggedMemory>(
+                    builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
+                    .at("")),
+            160);
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
+  EXPECT_EQ(total_bytes(context), 288);
+}
+
+TEST(GraphBuilder, LocalFunctionMemoryDefersRankUnknownTensorInputs) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"custom", 1}});
+  auto &function = builder.MakeLocalFunction("Product", "custom");
+  for (const char *name : {"A", "B"}) {
+    ValueInfoProto input;
+    input.set_name(name);
+    input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    builder.MakeInput(input);
+    function.MakeInput(input);
+  }
+  function.MakeNode("MatMul", {"A", "B"}, {"result"});
+  ValueInfoProto output;
+  output.set_name("result");
+  output.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  function.MakeOutput(output);
+  EXPECT_NO_THROW(builder.MakeNode("Product", {"A", "B"}, {"Y"}, "custom"));
+  EXPECT_FALSE(builder.Shapes().Has("Y"));
+}
+
+TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) {
+  onnx_shapes::RegisterShapeFunctions();
+  constexpr char domain[] = "graph_argument_memory";
+  core::shapes::RegisterComputeShapeFn(domain, "Copy",
+                                       [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                         ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                       });
+  core::shapes::RegisterComputePeakMemoryFn(
+      domain, "Copy", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return int64_t{37};
+      });
+  core::builder::GraphBuilder body("WithGraph", SchemaLookup(), {{"", 28}, {domain, 1}});
+  body.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  body.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> references;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &attribute = references.add();
+    attribute.set_name(name);
+    attribute.set_ref_attr_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+  }
+  body.MakeNode("If", {"condition"}, {"selected"}, "", "", references);
+  body.MakeNode("Copy", {"selected"}, {"result"}, domain);
+  body.MakeOutput("result", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  FunctionProto function = body.ToFunction(domain);
+  function.add_attribute("then_branch");
+  function.add_attribute("else_branch");
+
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {domain, 1}});
+  builder.set_device(core::symbolic::Device::kCPU);
+  builder.MakeLocalFunction(function);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> arguments;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &attribute = arguments.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+    auto &graph = *attribute.mutable_g();
+    graph.set_name(name);
+    graph.add_node(MakeNode("Identity", {"X"}, {"branch_result"}));
+    graph.add_output()->set_name("branch_result");
+  }
+  builder.MakeNode("WithGraph", {"X", "condition"}, {"Y"}, domain, "", arguments);
+  builder.MakeNode("Identity", {"Y"}, {"Z"});
+  builder.MakeOutput("Z");
+  EXPECT_EQ(builder.Compute().PeakMemory().at(0), 37);
+  const auto &intermediates = std::get<core::compute::TaggedMemory>(
+      builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey));
+  ASSERT_NE(intermediates.find(""), intermediates.end());
+  EXPECT_EQ(std::get<int64_t>(intermediates.at("")), 24);
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false,
+                                   context.ComputeValueAndNodeTags(model.graph()).first);
+  EXPECT_EQ(builder.Compute().NodeMemory(0), context.NodeMemory(0));
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 37);
+}
+
+TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Identity", {"x"}, {"outer"}, "ai.onnx");
+
+  GraphProto nested;
+  nested.set_name("nested");
+  nested.add_input()->set_name("nested_x");
+  nested.add_node(MakeNode("Identity", {"nested_x"}, {"nested_y"}, "ai.onnx"));
+  nested.add_output()->set_name("nested_y");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &body = attributes.add();
+  body.set_name("body");
+  body.set_type(AttributeProto::GRAPH);
+  *body.mutable_g() = nested;
+  builder.MakeNode("Custom", {"outer"}, {"y"}, "custom", "", attributes);
+  builder.MakeOutput("y");
+
+  const FunctionProto function = builder.ToFunction("custom");
+  ASSERT_EQ(function.node().size(), 2u);
+  EXPECT_EQ(function.node(0).domain(), "");
+  EXPECT_EQ(function.node(1).attribute(0).g().node(0).domain(), "");
+  for (const auto &opset : function.opset_import())
+    EXPECT_NE(opset.domain(), "ai.onnx");
 }
 
 TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
@@ -1834,7 +2038,7 @@ TEST(GraphBuilder, ToFunctionValidatesInitializerTypesAtSelectedOpset) {
         EXPECT_EQ(function.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
         ASSERT_EQ(function.opset_import().size(), opsets.size());
         for (const auto &entry : function.opset_import())
-          EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+          EXPECT_EQ(entry.version(), builder.OpsetVersion(entry.domain().value()));
       }
       EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
       EXPECT_EQ(builder.OpsetVersions(), opsets);
@@ -1880,7 +2084,7 @@ TEST(GraphBuilder, LocalFunctionDefinitionValidatesInitializerConstantTypes) {
       EXPECT_EQ(exported.node(0).op_type(), "Constant");
       EXPECT_EQ(exported.node(0).attribute(0).t().SerializeAsString(), dims.SerializeAsString());
       for (const auto &entry : exported.opset_import())
-        EXPECT_EQ(entry.version(), opsets.at(entry.domain().value()));
+        EXPECT_EQ(entry.version(), function.OpsetVersion(entry.domain().value()));
     }
     EXPECT_EQ(function.OpsetVersions(), opsets);
     EXPECT_EQ(builder.OpsetVersions(), opsets);
@@ -1985,6 +2189,93 @@ TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
   check_value_info(graph.output());
   check_value_info(graph.value_info());
   EXPECT_EQ(builder.ToFunction("custom").SerializeAsString(), function.SerializeAsString());
+}
+
+TEST(GraphBuilder, ExportFunctionNormalizesDefaultNodeDomainsRecursively) {
+  ModelProto model;
+  model.add_opset("ai.onnx", 18);
+  model.add_opset("local", 1);
+  FunctionProto &function = *model.add_functions();
+  function.set_name("F");
+  function.set_domain("local");
+  function.add_opset("ai.onnx", 18);
+  function.add_input("x");
+  function.add_input("condition");
+  function.add_output("y");
+  auto *if_node = function.add_node();
+  if_node->set_domain("ai.onnx");
+  if_node->set_op_type("If");
+  if_node->add_input("condition");
+  if_node->add_output("y");
+  for (const std::string branch_name : {"then_branch", "else_branch"}) {
+    auto *attribute = if_node->add_attribute();
+    attribute->set_name(branch_name);
+    attribute->set_type(AttributeProto::GRAPH);
+    auto *branch = attribute->mutable_g();
+    auto *identity = branch->add_node();
+    identity->set_domain("ai.onnx");
+    identity->set_op_type("Identity");
+    identity->add_input("x");
+    identity->add_output("branch_output");
+    auto *output = branch->add_output();
+    output->set_name("branch_output");
+    auto *type = output->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(2);
+  }
+  const auto add_input = [&](const std::string &name, TensorProto::DataType dtype, bool scalar) {
+    auto *input = function.add_value_info();
+    input->set_name(name);
+    auto *type = input->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(dtype);
+    if (scalar)
+      type->mutable_shape();
+    else
+      type->mutable_shape()->add_dim()->set_dim_value(2);
+  };
+  add_input("x", TensorProto::FLOAT, false);
+  add_input("condition", TensorProto::BOOL, true);
+  auto *output_info = function.add_value_info();
+  output_info->set_name("y");
+  auto *output_type = output_info->mutable_type()->mutable_tensor_type();
+  output_type->set_elem_type(TensorProto::FLOAT);
+  output_type->mutable_shape()->add_dim()->set_dim_value(2);
+
+  GraphProto &graph = *model.mutable_graph();
+  auto *x = graph.add_input();
+  x->set_name("x");
+  *x->mutable_type() = function.value_info(0).type();
+  auto *condition = graph.add_input();
+  condition->set_name("condition");
+  *condition->mutable_type() = function.value_info(1).type();
+  auto *call = graph.add_node();
+  call->set_domain("local");
+  call->set_op_type("F");
+  call->add_input("x");
+  call->add_input("condition");
+  call->add_output("y");
+  auto *output = graph.add_output();
+  output->set_name("y");
+  *output->mutable_type() = function.value_info(2).type();
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.functions().size(), 1u);
+  const FunctionProto &exported_function = exported.functions(0);
+  EXPECT_TRUE(std::any_of(
+      exported_function.opset_import().begin(), exported_function.opset_import().end(),
+      [](const auto &opset) { return opset.domain().empty() && opset.version() == 18; }));
+  EXPECT_FALSE(std::any_of(exported_function.opset_import().begin(),
+                           exported_function.opset_import().end(),
+                           [](const auto &opset) { return opset.domain() == "ai.onnx"; }));
+  ASSERT_EQ(exported_function.node().size(), 1u);
+  EXPECT_TRUE(exported_function.node(0).domain().empty());
+  for (const auto &attribute : exported_function.node(0).attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    EXPECT_TRUE(attribute.g().node(0).domain().empty());
+  }
+  EXPECT_NO_THROW(VerifyModel(exported));
 }
 
 TEST(GraphBuilder, ExplicitOpsetIsPreserved) {

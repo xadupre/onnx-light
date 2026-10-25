@@ -18,7 +18,6 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_core/graph/layer_validation.h"
 #include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -1051,26 +1050,6 @@ namespace {
 // resolved on the first ``Run`` and reused across all subsequent calls.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
-  ModelLocalFunctionKernel(const NodeProto &node, const GraphProto &body,
-                           const KernelContext &kernel_context,
-                           const OpsetImports *inherited_opset_imports,
-                           std::shared_ptr<ValueStore> value_store,
-                           const std::unordered_set<std::string> &immutable_inputs,
-                           const FunctionMap *model_functions)
-      : KernelBase(kernel_context), layer_formals_(std::make_unique<FunctionProto>()),
-        func_(*layer_formals_), inherited_opset_imports_(inherited_opset_imports),
-        value_store_(std::move(value_store)), model_functions_(model_functions),
-        layer_body_(&body) {
-    set_node(node);
-    for (int i = 0; i < body.input_size(); ++i) {
-      layer_formals_->add_input(body.input(i).name());
-      if (immutable_inputs.contains(node.input(i)))
-        immutable_inputs_.insert(body.input(i).name());
-    }
-    for (const auto &output : body.output())
-      layer_formals_->add_output(output.name());
-  }
-
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
                            const KernelContext &kernel_context,
                            const OpsetImports *inherited_opset_imports,
@@ -1101,32 +1080,37 @@ public:
         "RunNode: call to model-local function '", op_type, "' expects ", func_.output_size(),
         " output(s), got ", node_->output_size(), ".");
 
-    ScopedNestedSessionState nested_state(rt, layer_body_ ? std::optional<std::string>("body")
-                                                          : std::nullopt);
+    ScopedNestedSessionState nested_state(rt, std::nullopt);
     ScopedRuntimeBindings bindings(rt);
+    auto formal_info = [&](const std::string &name) -> const ValueInfoProto * {
+      for (const ValueInfoProto &value : func_.value_info())
+        if (value.name() == name)
+          return &value;
+      return nullptr;
+    };
 
     std::unordered_map<std::string, int64_t> dimensions;
     auto check_tensor = [&](const Tensor &tensor, const ValueInfoProto &formal) {
       if (!formal.has_type() || formal.type().value_case() == TypeProto::VALUE_NOT_SET)
         return;
       EXT_ENFORCE_INVALID(formal.type().has_tensor_type(),
-                          "Layer: tensor supplied for a non-tensor formal.");
+                          "Function: tensor supplied for a non-tensor formal.");
       const auto &type = formal.type().tensor_type();
       EXT_ENFORCE_INVALID(type.elem_type() == DataType::UNDEFINED ||
                               type.elem_type() == tensor.data_type,
-                          "Layer: incompatible boundary tensor dtype.");
+                          "Function: incompatible tensor dtype.");
       if (!type.has_shape())
         return;
       EXT_ENFORCE_INVALID(type.shape().dim().size() == tensor.shape.size(),
-                          "Layer: incompatible boundary tensor rank.");
+                          "Function: incompatible tensor rank.");
       for (size_t d = 0; d < tensor.shape.size(); ++d) {
         const auto &dim = type.shape().dim(d);
         EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == tensor.shape[d],
-                            "Layer: incompatible boundary tensor dimension.");
+                            "Function: incompatible tensor dimension.");
         if (dim.has_dim_param() && !dim.dim_param().empty()) {
           const auto [found, inserted] = dimensions.emplace(dim.dim_param(), tensor.shape[d]);
           EXT_ENFORCE_INVALID(inserted || found->second == tensor.shape[d],
-                              "Layer: inconsistent symbolic boundary tensor dimension.");
+                              "Function: inconsistent symbolic tensor dimension.");
         }
       }
     };
@@ -1134,7 +1118,7 @@ public:
       if (!formal.has_type() || formal.type().value_case() == TypeProto::VALUE_NOT_SET)
         return;
       EXT_ENFORCE_INVALID(formal.type().has_sequence_type(),
-                          "Layer: sequence supplied for a non-sequence formal.");
+                          "Function: sequence supplied for a non-sequence formal.");
       ValueInfoProto element;
       element.ref_type() = formal.type().sequence_type().elem_type();
       for (const auto &tensor : sequence.values)
@@ -1142,22 +1126,22 @@ public:
       if (element.type().has_tensor_type())
         EXT_ENFORCE_INVALID(element.type().tensor_type().elem_type() == DataType::UNDEFINED ||
                                 element.type().tensor_type().elem_type() == sequence.elem_type,
-                            "Layer: incompatible sequence element dtype.");
+                            "Function: incompatible sequence element dtype.");
     };
     auto check_map = [&](const Map &map, const ValueInfoProto &formal) {
       if (!formal.has_type() || formal.type().value_case() == TypeProto::VALUE_NOT_SET)
         return;
       EXT_ENFORCE_INVALID(formal.type().has_map_type(),
-                          "Layer: map supplied for a non-map formal.");
+                          "Function: map supplied for a non-map formal.");
       const auto &type = formal.type().map_type();
       EXT_ENFORCE_INVALID(type.key_type() == map.key_type && type.value_type().has_tensor_type() &&
                               type.value_type().tensor_type().elem_type() == map.value_type,
-                          "Layer: incompatible boundary map types.");
+                          "Function: incompatible map types.");
       EXT_ENFORCE_INVALID(map.keys.shape.size() == 1 && map.values.shape.size() == 1 &&
                               map.keys.shape[0] == map.values.shape[0] &&
                               map.keys.data_type == map.key_type &&
                               map.values.data_type == map.value_type,
-                          "Layer: malformed boundary map storage.");
+                          "Function: malformed map storage.");
       ValueInfoProto values;
       *values.mutable_type() = type.value_type();
       // Each map entry is scalar; the 1-D tensor holds all entries.
@@ -1168,12 +1152,12 @@ public:
     auto check_runtime_value = [&](const auto &self, const RuntimeValue &value,
                                    const TypeProto &type, size_t depth = 0) -> void {
       EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
-                          "Layer: maximum structured boundary depth exceeded.");
+                          "Function: maximum structured value depth exceeded.");
       if (type.value_case() == TypeProto::VALUE_NOT_SET)
         return;
       if (value.kind == RuntimeValue::Kind::kSequence) {
         EXT_ENFORCE_INVALID(type.has_sequence_type() && type.sequence_type().has_elem_type(),
-                            "Layer: sequence value supplied for a non-sequence formal.");
+                            "Function: sequence value supplied for a non-sequence formal.");
         for (const RuntimeValue &element : value.elements)
           self(self, element, type.sequence_type().elem_type(), depth + 1);
         return;
@@ -1197,7 +1181,7 @@ public:
           descriptor.data_type = encoded.logical_type().tensor_type().elem_type();
           for (const auto &dimension : encoded.logical_type().tensor_type().shape().dim()) {
             EXT_ENFORCE_INVALID(dimension.has_dim_value() && dimension.dim_value() >= 0,
-                                "Layer: encoded runtime value has a non-concrete shape.");
+                                "Function: encoded runtime value has a non-concrete shape.");
             descriptor.shape.push_back(dimension.dim_value());
           }
           ValueInfoProto formal;
@@ -1206,15 +1190,15 @@ public:
           return;
         }
         EXT_ENFORCE_INVALID(type.has_struct_type() && encoded.has_struct_type(),
-                            "Layer: encoded runtime value is incompatible with its formal.");
+                            "Function: encoded runtime value is incompatible with its formal.");
         const StructTypeProto &declared = catalogue.Resolve(type.struct_type());
         const StructTypeProto &actual = catalogue.Resolve(encoded.struct_type());
         EXT_ENFORCE_INVALID(CompatiblePersistentStructTypes(catalogue, actual, declared),
-                            "Layer: encoded structured runtime value has an incompatible type.");
+                            "Function: encoded structured runtime value has an incompatible type.");
         return;
       }
       EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct && type.has_struct_type(),
-                          "Layer: structured runtime value is incompatible with its formal.");
+                          "Function: structured runtime value is incompatible with its formal.");
       const StructTypeCatalogue &catalogue = rt.struct_type_catalogue();
       if (value.HasPagedCacheStructure()) {
         catalogue.ValidatePagedCache(value.ToPagedCache("", catalogue), true, &type);
@@ -1222,19 +1206,19 @@ public:
       }
       const StructTypeProto &declared = catalogue.Resolve(type.struct_type());
       EXT_ENFORCE_INVALID(declared.has_structure(),
-                          "Layer: structured runtime values require named fields.");
+                          "Function: structured runtime values require named fields.");
       size_t expected = 0;
       for (const auto &field : declared.structure().field()) {
         if (!field.has_type())
           continue;
         ++expected;
         const auto found = value.fields.find(field.name());
-        EXT_ENFORCE_INVALID(found != value.fields.end(), "Layer: missing structured field '",
+        EXT_ENFORCE_INVALID(found != value.fields.end(), "Function: missing structured field '",
                             field.name(), "'.");
         self(self, found->second, field.type(), depth + 1);
       }
       EXT_ENFORCE_INVALID(value.fields.size() == expected,
-                          "Layer: structured runtime value has unexpected fields.");
+                          "Function: structured runtime value has unexpected fields.");
     };
     std::vector<std::pair<std::string, Tensor>> tensor_bindings;
     std::vector<std::pair<std::string, RuntimeValue>> value_bindings;
@@ -1246,16 +1230,17 @@ public:
       if (caller_name.empty() || param_name.empty()) {
         continue;
       }
+      const ValueInfoProto *formal = formal_info(param_name);
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        if (layer_body_)
-          check_runtime_value(check_runtime_value, value->second, layer_body_->input(i).type());
+        if (formal != nullptr && formal->has_type())
+          check_runtime_value(check_runtime_value, value->second, formal->type());
         value_bindings.emplace_back(param_name, value->second.BorrowView());
         continue;
       }
       auto sequence = rt.sequences().find(caller_name);
-      if (layer_body_ && sequence != rt.sequences().end()) {
-        check_sequence(sequence->second, layer_body_->input(i));
+      if (formal != nullptr && sequence != rt.sequences().end()) {
+        check_sequence(sequence->second, *formal);
         Tensors views;
         for (const auto &tensor : sequence->second.values)
           views.push_back(tensor.BorrowView());
@@ -1264,8 +1249,8 @@ public:
         continue;
       }
       auto map = rt.maps().find(caller_name);
-      if (layer_body_ && map != rt.maps().end()) {
-        check_map(map->second, layer_body_->input(i));
+      if (formal != nullptr && map != rt.maps().end()) {
+        check_map(map->second, *formal);
         Map view(param_name, map->second.keys.BorrowView(), map->second.values.BorrowView());
         view.key_type = map->second.key_type;
         view.value_type = map->second.value_type;
@@ -1276,8 +1261,8 @@ public:
       EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
-      if (layer_body_)
-        check_tensor(it->second, layer_body_->input(i));
+      if (formal != nullptr)
+        check_tensor(it->second, *formal);
       tensor_bindings.emplace_back(param_name, it->second.BorrowView());
     }
 
@@ -1296,21 +1281,6 @@ public:
       caller_names.push_back(name);
     for (const std::string &name : caller_names)
       bindings.Shadow(name);
-    if (layer_body_) {
-      for (const auto &initializer : layer_body_->initializer())
-        bindings.Shadow(initializer.name());
-      for (const auto &initializer : layer_body_->sparse_initializer())
-        bindings.Shadow(initializer.values().name());
-      for (const auto &initializer : layer_body_->extended_initializer()) {
-        if (initializer.has_encoded_value())
-          bindings.Shadow(initializer.encoded_value().name());
-        else if (initializer.has_paged_cache())
-          bindings.Shadow(initializer.paged_cache().name());
-      }
-      for (const auto &inner : layer_body_->node())
-        for (const auto &output : inner.output())
-          bindings.Shadow(output);
-    }
     for (const auto &[name, tensor] : tensor_bindings)
       bindings.Bind(name, tensor);
     for (const auto &[name, value] : value_bindings)
@@ -1321,22 +1291,13 @@ public:
       bindings.Bind(name, map);
 
     // Resolve kernels once on first run, reuse on subsequent calls.
-    if (layer_body_) {
-      if (!layer_session_)
-        layer_session_ =
-            std::make_unique<SubgraphSession>(*layer_body_, inherited_opset_imports_, value_store_,
-                                              immutable_inputs_, model_functions_);
-      layer_session_->Run(rt);
-    } else {
-      if (!session_) {
-        session_ = std::make_unique<RuntimeSession>(
-            bound_func_, inherited_opset_imports_,
-            RuntimeSessionOptions{.value_store = value_store_,
-                                  .immutable_inputs = immutable_inputs_},
-            model_functions_);
-      }
-      session_->Run(rt);
+    if (!session_) {
+      session_ = std::make_unique<RuntimeSession>(
+          bound_func_, inherited_opset_imports_,
+          RuntimeSessionOptions{.value_store = value_store_, .immutable_inputs = immutable_inputs_},
+          model_functions_);
     }
+    session_->Run(rt);
 
     // Propagate formal outputs back to the caller's value maps.
     std::vector<std::pair<std::string, Tensor>> output_tensors;
@@ -1346,23 +1307,24 @@ public:
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
+      const ValueInfoProto *formal = formal_info(param_name);
       if (caller_name.empty()) {
         rt.Remove(param_name);
         continue;
       }
       auto value = rt.values().find(param_name);
       if (value != rt.values().end()) {
-        if (layer_body_)
-          check_runtime_value(check_runtime_value, value->second, layer_body_->output(i).type());
+        if (formal != nullptr && formal->has_type())
+          check_runtime_value(check_runtime_value, value->second, formal->type());
         RuntimeValue result = TakeRuntimeValue(rt, param_name);
-        if (layer_body_)
+        if (formal != nullptr)
           result = std::move(result).Retain(rt.struct_type_catalogue());
         output_values.emplace_back(caller_name, std::move(result));
         continue;
       }
-      if (layer_body_ && rt.HasSequence(param_name)) {
+      if (formal != nullptr && rt.HasSequence(param_name)) {
         Sequence result = TakeSequence(rt, param_name);
-        check_sequence(result, layer_body_->output(i));
+        check_sequence(result, *formal);
         for (auto &tensor : result.values)
           if (tensor.is_borrowed())
             tensor = tensor.ToOwned();
@@ -1370,9 +1332,9 @@ public:
         output_sequences.emplace_back(caller_name, std::move(result));
         continue;
       }
-      if (layer_body_ && rt.HasMap(param_name)) {
+      if (formal != nullptr && rt.HasMap(param_name)) {
         Map result = TakeMap(rt, param_name);
-        check_map(result, layer_body_->output(i));
+        check_map(result, *formal);
         if (result.keys.is_borrowed())
           result.keys = result.keys.ToOwned();
         if (result.values.is_borrowed())
@@ -1382,9 +1344,9 @@ public:
         continue;
       }
       Tensor result = TakeTensor(rt, param_name, "RunNode: model-local function output");
-      if (layer_body_)
-        check_tensor(result, layer_body_->output(i));
-      if (layer_body_ && result.is_borrowed())
+      if (formal != nullptr)
+        check_tensor(result, *formal);
+      if (formal != nullptr && result.is_borrowed())
         result = result.ToOwned();
       result.name = caller_name;
       output_tensors.emplace_back(caller_name, std::move(result));
@@ -1408,16 +1370,13 @@ public:
   }
 
 private:
-  std::unique_ptr<FunctionProto> layer_formals_;
   const FunctionProto &func_;
   FunctionProto bound_func_;
   const OpsetImports *inherited_opset_imports_;
   std::shared_ptr<ValueStore> value_store_;
   const FunctionMap *model_functions_;
-  const GraphProto *layer_body_ = nullptr;
   std::unordered_set<std::string> immutable_inputs_;
   std::unique_ptr<RuntimeSession> session_;
-  std::unique_ptr<SubgraphSession> layer_session_;
 };
 
 // Control-flow kernels: each owns the subgraph session(s) built once during
@@ -1523,18 +1482,6 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     }
   }
 
-  if (domain == "ai.rt" && op_type == "Layer") {
-    const core::graph::LayerFunctionLookupFn has_local_function = [&](const NodeProto &call) {
-      const std::string key = FunctionLookupKey(call.domain(), call.op_type(), call.overload());
-      if (model_functions != nullptr && model_functions->contains(key))
-        return true;
-      return rt.functions().contains(key);
-    };
-    const GraphProto &body = core::graph::ValidateLayer(node, has_local_function);
-    return std::make_unique<ModelLocalFunctionKernel>(node, body, kernel_context, opset_imports,
-                                                      std::move(value_store), immutable_inputs,
-                                                      model_functions);
-  }
   if (domain == kDefaultOnnxDomain && op_type == "If") {
     const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
     const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");

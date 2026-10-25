@@ -890,7 +890,8 @@ TEST(PatternOptimization, CapturesNestedGraphImportsWithoutMergingFunctionLocalI
     ASSERT_EQ(replayed.functions().size(), 1u);
     const auto &imports = replayed.functions(0).opset_import();
     EXPECT_TRUE(std::any_of(imports.begin(), imports.end(), [](const auto &opset) {
-      return opset.domain().value() == "ai.onnx" && opset.version() == 17;
+      return (opset.domain().value().empty() || opset.domain().value() == "ai.onnx") &&
+             opset.version() == 17;
     }));
   }
 }

@@ -720,6 +720,30 @@ class TestRotaryAttentionPatterns(ExtTestCase):
         self.assertEqual(len(rewrites), 1)
         _assert_equivalent(self, model, optimized, feeds, atol=2e-3)
 
+    def test_function_templates_preserve_untyped_boundaries(self):
+        for model, pattern, feeds in [
+            (
+                _make_half_rotary(FLOAT16),
+                "FunctionHalfRotaryEmbedding",
+                {
+                    "X": _range((1, 2, 3, 8), np.float16),
+                    "cos": _range((1, 1, 3, 8), np.float16, bias=0.1),
+                    "sin": _range((1, 1, 3, 8), np.float16, bias=0.2),
+                },
+            ),
+            (_make_causal_mask(shifted=False), "FunctionCausalMask", {"X": _range((3, 5))}),
+        ]:
+            with self.subTest(pattern=pattern):
+                optimized, rewrites = _optimize(model, [pattern])
+                self.assertEqual(len(rewrites), 1)
+                function = optimized.functions[0]
+                boundaries = set(function.input) | set(function.output)
+                for value in function.value_info:
+                    if value.name in boundaries:
+                        self.assertFalse(value.HasField("type"), value)
+                reimported = optimization.GraphBuilder(optimized).to_onnx()
+                _assert_equivalent(self, model, reimported, feeds, atol=2e-3)
+
     def test_function_half_rotary_embedding_wrong_axis_no_match(self):
         model = _make_model(
             [oh.make_node("Split", ["X"], ["x1", "x2"], axis=2, num_outputs=2)],

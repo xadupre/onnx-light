@@ -369,6 +369,9 @@ public:
                                         utils::RepeatedProtoField<AttributeProto>(),
                                     const std::string &overload = "");
 
+  /// Imports a node while retaining its documentation, metadata and device configurations.
+  void ImportNode(const NodeProto &node);
+
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
 
@@ -564,6 +567,20 @@ public:
 
   // ── Local functions / subgraphs ──────────────────────────────────────
 
+  /// Returns the root builder that owns the resulting :cpp:class:`ModelProto`.
+  GraphBuilder &ModelBuilder() noexcept {
+    GraphBuilder *root = this;
+    while (root->parent_ != nullptr)
+      root = root->parent_;
+    return *root;
+  }
+  const GraphBuilder &ModelBuilder() const noexcept {
+    const GraphBuilder *root = this;
+    while (root->parent_ != nullptr)
+      root = root->parent_;
+    return *root;
+  }
+
   /// Creates and returns a nested builder for a local function named ``name``.
   /// The nested builder is appended to this builder's local function list;
   /// local functions are emitted into the produced :cpp:class:`ModelProto`.
@@ -571,6 +588,13 @@ public:
   /// nested calls, from owned snapshots of the current function definitions.
   /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
+  /// Creates a local function with an independent set of opset imports.
+  GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain,
+                                  const std::unordered_map<std::string, int> &opsets);
+
+  /// Creates a local function and imports its formal inputs, outputs, nodes,
+  /// opsets, value information, and node metadata.
+  GraphBuilder &MakeLocalFunction(const FunctionProto &function);
 
   /// Returns ``true`` when a local function named ``name`` exists.
   bool HasLocalFunction(const std::string &name) const {
@@ -783,6 +807,8 @@ private:
   static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
                                                    const std::string &name,
                                                    const std::string &overload);
+  static utils::RepeatedProtoField<FunctionProto>
+  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions);
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
                                   std::set<FunctionIdentifier> &expanded_functions);
 
@@ -832,7 +858,6 @@ private:
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RefreshAfterMutation();
-  compute::ComputeContext::LayerBodyView LayerBodyForMemory(const NodeProto &node) const;
   void RefreshAncestors();
   void RefreshLocalFunctionDefinition(GraphBuilder &function);
   void RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent = true);
@@ -897,6 +922,7 @@ private:
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.
   void MaterializeGraphReferences(NodeProto &node, bool share_initializers = false) const;
+  compute::NodeMaterializerFn MemoryNodeMaterializer() const;
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);

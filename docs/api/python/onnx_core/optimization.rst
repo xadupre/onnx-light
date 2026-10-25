@@ -129,6 +129,10 @@ currently available patterns.
     print(render_rst_standard_patterns_table())
 
 The runtime list is available through :func:`standard_pattern_names`.
+Use :func:`standard_pattern_sets` to select the named ``all``, ``L1``, ``L2``,
+and ``Layer`` groups. ``L1`` lists the fusion patterns shared with ONNX Runtime;
+``L2`` lists onnx-light-only standard patterns, and ``Layer`` selects the
+opt-in repeated-layer pattern. ``all`` contains the union of these groups.
 The :ref:`complete pattern catalogue <l-api-pattern-catalog>` in the
 :ref:`ByOp catalogue <l-onnx-operators>` adds the C++ documentation link and
 the Before/After rewrite graph for every entry.

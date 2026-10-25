@@ -83,6 +83,26 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestPatternSelection(ExtTestCase):
+    def test_standard_pattern_sets_overlap_without_changing_defaults(self):
+        pattern_sets = optim.standard_pattern_sets()
+        all_names = set(pattern_sets["all"])
+
+        self.assertEqual(set(pattern_sets), {"all", "L1", "L2", "Layer"})
+        self.assertEqual(
+            all_names,
+            set(pattern_sets["L1"]) | set(pattern_sets["L2"]) | set(pattern_sets["Layer"]),
+        )
+        self.assertTrue(set(pattern_sets["L1"]).isdisjoint(pattern_sets["L2"]))
+        self.assertEqual(pattern_sets["Layer"], ("RepeatedLayer",))
+        self.assertTrue(
+            {"ConvAddFusion", "MatMulAdd", "LayerNormalization"}.issubset(pattern_sets["L1"])
+        )
+        self.assertNotIn("RepeatedLayer", optim.standard_pattern_names())
+        self.assertEqual(
+            [pattern.name for pattern in optim.standard_patterns(pattern_sets["Layer"])],
+            ["RepeatedLayer"],
+        )
+
     def test_pattern_listing_defaults_and_explicit_opt_in(self):
         optim.reset_registered_patterns()
         active_names = optim.registered_pattern_names()

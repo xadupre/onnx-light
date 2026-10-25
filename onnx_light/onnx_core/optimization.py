@@ -156,6 +156,41 @@ def standard_pattern_names(*, include_opt_in: bool = False) -> list[str]:
     return _patterns.registered_pattern_names(include_opt_in=include_opt_in)
 
 
+_L1_PATTERN_NAMES = frozenset(
+    {
+        "ConvAddFusion",
+        "ConvBatchNormalizationFusion",
+        "ConvMulFusion",
+        "Gelu",
+        "LayerNormalization",
+        "MatMulAdd",
+        "MatMulBatchNormalizationFusion",
+        "MatMulScaleFusion",
+        "PadConv",
+        "ReluClipFusion",
+        "RMSNormalization",
+    }
+)
+
+
+def standard_pattern_sets() -> dict[str, tuple[str, ...]]:
+    """Returns named, overlapping groups of standard fusion patterns.
+
+    ``all`` includes opt-in patterns. ``L1`` contains patterns shared with
+    ONNX Runtime, ``L2`` contains onnx-light-only standard patterns, and
+    ``Layer`` contains the repeated-layer pattern.
+    """
+    all_names = standard_pattern_names(include_opt_in=True)
+    l1_names = tuple(name for name in all_names if name in _L1_PATTERN_NAMES)
+    l1_set = set(l1_names)
+    return {
+        "all": tuple(all_names),
+        "L1": l1_names,
+        "L2": tuple(name for name in standard_pattern_names() if name not in l1_set),
+        "Layer": tuple(name for name in all_names if name == "RepeatedLayer"),
+    }
+
+
 def standard_patterns(names: Iterable[str] | None = None) -> list[PatternOptimization]:
     """Creates the selected standard ONNX patterns."""
     selected = standard_pattern_names() if names is None else list(names)
@@ -529,6 +564,7 @@ __all__ = [
     "render_rst_standard_patterns_table",
     "reset_registered_patterns",
     "standard_pattern_names",
+    "standard_pattern_sets",
     "standard_patterns",
     "unregister_pattern",
 ]

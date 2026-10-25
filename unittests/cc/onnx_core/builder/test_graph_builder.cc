@@ -2110,6 +2110,93 @@ TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
   EXPECT_EQ(builder.ToFunction("custom").SerializeAsString(), function.SerializeAsString());
 }
 
+TEST(GraphBuilder, ExportFunctionNormalizesDefaultNodeDomainsRecursively) {
+  ModelProto model;
+  model.add_opset("ai.onnx", 18);
+  model.add_opset("local", 1);
+  FunctionProto &function = *model.add_functions();
+  function.set_name("F");
+  function.set_domain("local");
+  function.add_opset("ai.onnx", 18);
+  function.add_input("x");
+  function.add_input("condition");
+  function.add_output("y");
+  auto *if_node = function.add_node();
+  if_node->set_domain("ai.onnx");
+  if_node->set_op_type("If");
+  if_node->add_input("condition");
+  if_node->add_output("y");
+  for (const std::string branch_name : {"then_branch", "else_branch"}) {
+    auto *attribute = if_node->add_attribute();
+    attribute->set_name(branch_name);
+    attribute->set_type(AttributeProto::GRAPH);
+    auto *branch = attribute->mutable_g();
+    auto *identity = branch->add_node();
+    identity->set_domain("ai.onnx");
+    identity->set_op_type("Identity");
+    identity->add_input("x");
+    identity->add_output("branch_output");
+    auto *output = branch->add_output();
+    output->set_name("branch_output");
+    auto *type = output->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(2);
+  }
+  const auto add_input = [&](const std::string &name, TensorProto::DataType dtype, bool scalar) {
+    auto *input = function.add_value_info();
+    input->set_name(name);
+    auto *type = input->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(dtype);
+    if (scalar)
+      type->mutable_shape();
+    else
+      type->mutable_shape()->add_dim()->set_dim_value(2);
+  };
+  add_input("x", TensorProto::FLOAT, false);
+  add_input("condition", TensorProto::BOOL, true);
+  auto *output_info = function.add_value_info();
+  output_info->set_name("y");
+  auto *output_type = output_info->mutable_type()->mutable_tensor_type();
+  output_type->set_elem_type(TensorProto::FLOAT);
+  output_type->mutable_shape()->add_dim()->set_dim_value(2);
+
+  GraphProto &graph = *model.mutable_graph();
+  auto *x = graph.add_input();
+  x->set_name("x");
+  *x->mutable_type() = function.value_info(0).type();
+  auto *condition = graph.add_input();
+  condition->set_name("condition");
+  *condition->mutable_type() = function.value_info(1).type();
+  auto *call = graph.add_node();
+  call->set_domain("local");
+  call->set_op_type("F");
+  call->add_input("x");
+  call->add_input("condition");
+  call->add_output("y");
+  auto *output = graph.add_output();
+  output->set_name("y");
+  *output->mutable_type() = function.value_info(2).type();
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.functions().size(), 1u);
+  const FunctionProto &exported_function = exported.functions(0);
+  EXPECT_TRUE(std::any_of(
+      exported_function.opset_import().begin(), exported_function.opset_import().end(),
+      [](const auto &opset) { return opset.domain().empty() && opset.version() == 18; }));
+  EXPECT_FALSE(std::any_of(exported_function.opset_import().begin(),
+                           exported_function.opset_import().end(),
+                           [](const auto &opset) { return opset.domain() == "ai.onnx"; }));
+  ASSERT_EQ(exported_function.node().size(), 1u);
+  EXPECT_TRUE(exported_function.node(0).domain().empty());
+  for (const auto &attribute : exported_function.node(0).attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    EXPECT_TRUE(attribute.g().node(0).domain().empty());
+  }
+  EXPECT_NO_THROW(VerifyModel(exported));
+}
+
 TEST(GraphBuilder, ExplicitOpsetIsPreserved) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 17);

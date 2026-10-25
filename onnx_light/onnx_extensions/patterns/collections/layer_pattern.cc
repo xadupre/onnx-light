@@ -1384,13 +1384,13 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
     }
   }
   RenameLayerInputs(body, index.graph);
-  core::builder::GraphBuilder &builder = index.graph.Builder().ModelBuilder();
+  core::builder::GraphBuilder &source = index.graph.Builder();
+  source.SetOpsetVersion("ai.rt", 1);
+  core::builder::GraphBuilder &builder = source.ModelBuilder();
   std::string function_name = "Layer";
   for (std::size_t suffix = 1;
        builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
     function_name = "Layer_" + std::to_string(suffix);
-  core::builder::GraphBuilder &source = index.graph.Builder();
-  source.SetOpsetVersion("ai.rt", 1);
   FunctionProto definition;
   definition.set_name(function_name);
   definition.set_domain("ai.rt");

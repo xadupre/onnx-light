@@ -147,6 +147,11 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   const FunctionProto *function = ctx.GetLocalFunction(function_key);
   if (function == nullptr || !active_functions.insert(function_key).second)
     return {};
+  struct PopFunction {
+    std::unordered_set<std::string> &active;
+    const std::string &key;
+    ~PopFunction() { active.erase(key); }
+  } pop_function{active_functions, function_key};
 
   ShapesContext body_shapes = ctx.MakeChildContext();
   body_shapes.set_events_enabled(false);
@@ -170,12 +175,34 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
       continue;
     if (!(ctx.Has(actual) || ctx.HasType(actual) || ctx.HasSequence(actual) ||
           ctx.HasEncodedValue(actual))) {
-      active_functions.erase(function_key);
       return {};
     }
     body_shapes.CopyValueFrom(function->input(i), ctx, actual);
   }
-  body_shapes.ComputeShapes(bound_nodes);
+  const auto contains_unbound_attributes = [](const auto &self, const NodeProto &candidate) {
+    for (const AttributeProto &attribute : candidate.attribute()) {
+      if (!attribute.ref_attr_name().empty())
+        return true;
+      const auto graph_contains_unbound = [&](const GraphProto &graph) {
+        return std::any_of(graph.node().begin(), graph.node().end(),
+                           [&](const NodeProto &nested) { return self(self, nested); });
+      };
+      if ((attribute.has_g() && graph_contains_unbound(attribute.g())) ||
+          std::any_of(attribute.graphs().begin(), attribute.graphs().end(), graph_contains_unbound))
+        return true;
+    }
+    return false;
+  };
+  for (const NodeProto &inner : bound_nodes) {
+    const std::vector<std::string> inputs = core::graph::CollectNodeInputs(inner);
+    const bool inputs_available =
+        std::all_of(inputs.begin(), inputs.end(), [&](const std::string &name) {
+          return name.empty() || body_shapes.Has(name) || body_shapes.HasType(name) ||
+                 body_shapes.HasSequence(name) || body_shapes.HasEncodedValue(name);
+        });
+    if (inputs_available && !contains_unbound_attributes(contains_unbound_attributes, inner))
+      body_shapes.ComputeShapeNode(inner);
+  }
   for (const ValueInfoProto &value_info : function->value_info()) {
     if (!body_shapes.Has(value_info.name().value()) && value_info.has_type()) {
       SymTensor descriptor;
@@ -253,7 +280,6 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
                                 &expression_cache);
     estimate.workspace_peak = std::max(estimate.workspace_peak, workspace);
   }
-  active_functions.erase(function_key);
   return estimate;
 }
 

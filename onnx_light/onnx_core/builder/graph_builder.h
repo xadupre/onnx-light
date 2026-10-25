@@ -369,6 +369,9 @@ public:
                                         utils::RepeatedProtoField<AttributeProto>(),
                                     const std::string &overload = "");
 
+  /// Imports a node while retaining its documentation, metadata and device configurations.
+  void ImportNode(const NodeProto &node);
+
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
 
@@ -585,6 +588,9 @@ public:
   /// nested calls, from owned snapshots of the current function definitions.
   /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
+  /// Creates a local function with an independent set of opset imports.
+  GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain,
+                                  const std::unordered_map<std::string, int> &opsets);
 
   /// Creates a local function and imports its formal inputs, outputs, nodes,
   /// opsets, value information, and node metadata.
@@ -874,7 +880,6 @@ private:
 
   // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
   void ImportFunction(const FunctionProto &function);
-  std::vector<std::string> ImportNode(const NodeProto &node);
 
   // Rebuilds owned definitions on demand for function calls and graph-valued
   // inference, including direct optimizer edits to nested builders. Ordinary

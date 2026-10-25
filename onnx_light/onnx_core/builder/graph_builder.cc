@@ -1740,6 +1740,29 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
   return imported;
 }
 
+void GraphBuilder::ImportNode(const NodeProto &node) {
+  std::vector<std::string> inputs;
+  inputs.reserve(node.input().size());
+  for (std::size_t i = 0; i < node.input().size(); ++i)
+    inputs.push_back(node.input(i));
+  std::vector<std::string> outputs;
+  outputs.reserve(node.output().size());
+  for (std::size_t i = 0; i < node.output().size(); ++i)
+    outputs.push_back(node.output(i));
+  MakeNode(node.op_type().value(), inputs, outputs,
+           node.domain().empty() ? std::string() : node.domain().value(),
+           node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+           node.overload().value());
+  NodeProto &imported_node = nodes_.back();
+  imported_node.name_ = node.name_;
+  imported_node.op_type_ = node.op_type_;
+  imported_node.domain_ = node.domain_;
+  imported_node.overload_ = node.overload_;
+  imported_node.doc_string_ = node.doc_string_;
+  imported_node.metadata_props_ = node.metadata_props_;
+  imported_node.device_configurations_ = node.device_configurations_;
+}
+
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
   if (parent_ != nullptr && !graph.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
@@ -2157,25 +2180,6 @@ std::vector<std::string> GraphBuilder::MakeNode(
   compute_.AppendNodePeakMemory(stored, node_index, device_);
   RefreshAfterMutation();
 
-  return resolved_outputs;
-}
-
-std::vector<std::string> GraphBuilder::ImportNode(const NodeProto &node) {
-  std::vector<std::string> inputs(node.input().begin(), node.input().end());
-  std::vector<std::string> outputs(node.output().begin(), node.output().end());
-  std::vector<std::string> resolved_outputs =
-      MakeNode(node.op_type().value(), inputs, outputs,
-               node.domain().empty() ? std::string() : node.domain().value(),
-               node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
-               node.overload().value());
-  NodeProto &imported_node = nodes_.back();
-  imported_node.name_ = node.name_;
-  imported_node.op_type_ = node.op_type_;
-  imported_node.domain_ = node.domain_;
-  imported_node.overload_ = node.overload_;
-  imported_node.doc_string_ = node.doc_string_;
-  imported_node.metadata_props_ = node.metadata_props_;
-  imported_node.device_configurations_ = node.device_configurations_;
   return resolved_outputs;
 }
 
@@ -3539,11 +3543,16 @@ GraphBuilder::NamedBuilderOrThrow(const std::vector<std::unique_ptr<GraphBuilder
 }
 
 GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain) {
+  return MakeLocalFunction(name, domain, opsets_);
+}
+
+GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain,
+                                              const std::unordered_map<std::string, int> &opsets) {
   if (FindNamedBuilder(local_functions_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
   ReserveName(name);
-  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets_);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets);
   child->is_local_function_ = true;
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());

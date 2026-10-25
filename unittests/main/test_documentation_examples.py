@@ -152,6 +152,19 @@ class TestDocumentationExamples(ExtTestCase):
         self.assertIn("UNITTEST_GOING", os.environ)
         self.assertEqual(os.environ["UNITTEST_GOING"], "1")
 
+    def test_onnxruntime_examples_require_onnxruntime(self):
+        for name in (
+            "plot_abs_benchmark",
+            "plot_save_ort_flatbuffers",
+            "plot_qwen3_init_benchmark",
+            "plot_backend_benchmark_vs_onnxruntime",
+        ):
+            with self.subTest(example=name):
+                method = getattr(type(self), f"test_{name}")
+                self.assertEqual(
+                    getattr(method, "__unittest_skip__", False), not has_onnxruntime()
+                )
+
     @classmethod
     def add_test_methods(cls):
         this = os.path.abspath(os.path.dirname(__file__))
@@ -185,6 +198,7 @@ class TestDocumentationExamples(ExtTestCase):
                 and not has_onnxruntime()
                 and name
                 in {
+                    "plot_abs_benchmark.py",
                     "plot_save_ort_flatbuffers.py",
                     "plot_qwen3_init_benchmark.py",
                     "plot_backend_benchmark_vs_onnxruntime.py",

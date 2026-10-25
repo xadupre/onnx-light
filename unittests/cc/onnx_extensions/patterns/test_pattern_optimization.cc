@@ -2527,6 +2527,59 @@ TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
   ASSERT_EQ(undone.LocalFunction("CastPair").Nodes().size(), 2u);
 }
 
+TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("test.pattern", 1);
+  FunctionProto &function = *model.add_functions();
+  function.set_name("TransposePair");
+  function.set_domain("test.pattern");
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_attribute("perm");
+  function.add_opset("", 18);
+  for (const auto &[input, output] :
+       {std::pair<const char *, const char *>{"X", "middle"}, {"middle", "Y"}}) {
+    NodeProto &transpose = function.add_node("Transpose", {input}, {output});
+    AttributeProto &perm = *transpose.add_attribute();
+    perm.set_name("perm");
+    perm.set_type(AttributeProto::AttributeType::INTS);
+    perm.set_ref_attr_name("perm");
+  }
+  ValueInfoProto &input = *function.add_value_info();
+  input.set_name("X");
+  input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  for (int64_t dimension : {2, 3, 4}) {
+    input.mutable_type()->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(
+        dimension);
+  }
+  model.mutable_graph()->set_name("g");
+  NodeProto &call = model.mutable_graph()->add_node("TransposePair", {"x"}, {"y"}, "test.pattern");
+  AttributeProto &permutation = *call.add_attribute();
+  permutation.set_name("perm");
+  permutation.set_type(AttributeProto::AttributeType::INTS);
+  for (int64_t value : {1, 2, 0}) {
+    permutation.add_ints(value);
+  }
+  ValueInfoProto &graph_input = *model.mutable_graph()->add_input();
+  graph_input.set_name("x");
+  graph_input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  for (int64_t dimension : {2, 3, 4}) {
+    graph_input.mutable_type()->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(
+        dimension);
+  }
+  model.mutable_graph()->add_output()->set_name("y");
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+
+  const RewritingProto plan = optimizer.Optimize();
+  EXPECT_TRUE(plan.rewrites().empty());
+  EXPECT_TRUE(plan.added_functions().empty());
+  EXPECT_EQ(builder.LocalFunction("TransposePair").Nodes().size(), 2u);
+}
+
 TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
   builder.SetOpsetVersion("test.pattern", 1);

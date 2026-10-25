@@ -367,6 +367,91 @@ TEST(RepeatedLayerPattern, NestedExtractionExportsRequiredImportAndPreservesRepl
   EXPECT_NO_THROW(checker::check_model(replayed.ToModel()));
 }
 
+TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNodeMetadata) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  auto &source = builder.MakeLocalFunction("Source", "source.local");
+  source.SetOpsetVersion("", 23);
+  source.SetOpsetVersion("ai.rt", 1);
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 3; ++index) {
+    const std::string suffix = std::to_string(index);
+    source.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    AddMatMulLayer(source, index == 0 ? "x" : "h" + std::to_string(index - 1), "w" + suffix,
+                   "h" + suffix);
+  }
+  source.MakeOutput("h2");
+  builder.SetOpsetVersion("source.local", 1);
+  builder.SetOpsetVersion("ai.rt", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 3; ++index)
+    builder.MakeInput("w" + std::to_string(index), core::symbolic::TensorType::kFloat,
+                      LayerShape({4, 4}));
+  builder.MakeNode("Source", {"x", "w0", "w1", "w2"}, {"y"}, "source.local");
+  builder.MakeOutput("y");
+
+  ModelProto model = builder.ToModel();
+  ASSERT_EQ(model.functions().size(), 1u);
+  auto *source_matmul = model.mutable_functions(0)->mutable_node(0);
+  source_matmul->set_doc_string("source node documentation");
+  auto *metadata = source_matmul->add_metadata_props();
+  metadata->set_key("source");
+  metadata->set_value("preserved");
+  auto *device = source_matmul->add_device_configurations();
+  device->set_configuration_id("sharded");
+  device->set_pipeline_stage(2);
+
+  core::builder::GraphBuilder imported(model, LayerSchemaLookup());
+  auto &imported_source = imported.LocalFunction("Source");
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+  core::builder::GraphGraph optimizer(imported_source, std::move(patterns));
+  ASSERT_FALSE(imported_source.Nodes().empty());
+  const auto match = optimizer.Patterns().front()->Match(optimizer, imported_source.Nodes()[0]);
+  ASSERT_NE(match.pattern, nullptr) << match.ToString();
+  EXPECT_FALSE(match.pattern->Apply(optimizer, match.nodes).empty());
+  const ModelProto extracted = imported.ToModel();
+  EXPECT_NO_THROW(VerifyModel(extracted));
+  const auto source_function =
+      std::find_if(extracted.functions().begin(), extracted.functions().end(),
+                   [](const FunctionProto &function) { return function.name() == "Source"; });
+  ASSERT_NE(source_function, extracted.functions().end());
+  EXPECT_TRUE(std::any_of(
+      source_function->opset_import().begin(), source_function->opset_import().end(),
+      [](const auto &opset) { return opset.domain().empty() && opset.version() == 23; }));
+  EXPECT_TRUE(std::any_of(
+      source_function->opset_import().begin(), source_function->opset_import().end(),
+      [](const auto &opset) { return opset.domain() == "ai.rt" && opset.version() == 1; }));
+  EXPECT_FALSE(std::any_of(source_function->opset_import().begin(),
+                           source_function->opset_import().end(),
+                           [](const auto &opset) { return opset.domain() == "ai.onnx"; }));
+  const auto layer_function =
+      std::find_if(extracted.functions().begin(), extracted.functions().end(),
+                   [](const FunctionProto &function) { return function.name() == "Layer"; });
+  ASSERT_NE(layer_function, extracted.functions().end());
+  EXPECT_TRUE(std::any_of(
+      layer_function->opset_import().begin(), layer_function->opset_import().end(),
+      [](const auto &opset) { return opset.domain().empty() && opset.version() == 23; }));
+  EXPECT_TRUE(std::any_of(
+      layer_function->opset_import().begin(), layer_function->opset_import().end(),
+      [](const auto &opset) { return opset.domain() == "ai.rt" && opset.version() == 1; }));
+  for (const auto &source_opset : source_function->opset_import()) {
+    EXPECT_TRUE(std::any_of(layer_function->opset_import().begin(),
+                            layer_function->opset_import().end(), [&](const auto &layer_opset) {
+                              return layer_opset.domain() == source_opset.domain() &&
+                                     layer_opset.version() == source_opset.version();
+                            }));
+  }
+  ASSERT_FALSE(layer_function->node().empty());
+  EXPECT_EQ(layer_function->node(0).doc_string(), "source node documentation");
+  EXPECT_TRUE(std::any_of(layer_function->node(0).metadata_props().begin(),
+                          layer_function->node(0).metadata_props().end(), [](const auto &entry) {
+                            return entry.key() == "source" && entry.value() == "preserved";
+                          }));
+  ASSERT_EQ(layer_function->node(0).device_configurations().size(), 1u);
+  EXPECT_EQ(layer_function->node(0).device_configurations(0).configuration_id(), "sharded");
+  EXPECT_EQ(layer_function->node(0).device_configurations(0).pipeline_stage(), 2);
+}
+
 TEST(RepeatedLayerPattern, PreservesMapBoundaryDescriptorsWithTensorPlaceholders) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local", 1}});
   ValueInfoProto map;
@@ -491,6 +576,113 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
     EXPECT_TRUE(after.Equals(builder.BuildGraph()));
   }
+}
+
+TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfiles) {
+  constexpr int64_t width = 16;
+  constexpr int64_t expanded_width = 1024;
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  auto &function = builder.MakeLocalFunction("Projection", "ai.rt", builder.OpsetVersions());
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+  function.MakeInput("w1", core::symbolic::TensorType::kFloat, LayerShape({width, expanded_width}));
+  function.MakeInput("w2", core::symbolic::TensorType::kFloat, LayerShape({expanded_width, width}));
+  function.MakeNode("MatMul", {"x", "w1"}, {"hidden"});
+  function.MakeNode("MatMul", {"hidden", "w2"}, {"function_result"});
+  function.MakeOutput("function_result");
+  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+  builder.MakeInput("caller_w1", core::symbolic::TensorType::kFloat,
+                    LayerShape({width, expanded_width}));
+  builder.MakeInput("caller_w2", core::symbolic::TensorType::kFloat,
+                    LayerShape({expanded_width, width}));
+  builder.MakeNode("Projection", {"caller_x", "caller_w1", "caller_w2"}, {"result"}, "ai.rt");
+  builder.MakeOutput("result");
+
+  const auto internal_bytes = [](const core::compute::ComputeContext &context) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(
+        context.NodeMemory(0).at(core::compute::kNodeMemoryAlreadyAllocatedBytesKey)));
+  };
+  EXPECT_EQ(internal_bytes(builder.Compute()), 135232);
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  const auto tags = context.ComputeValueAndNodeTags(model.graph());
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false, tags.first);
+  EXPECT_EQ(internal_bytes(context), 135232);
+}
+
+TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  auto &function = builder.MakeLocalFunction("BranchFunction", "ai.rt", builder.OpsetVersions());
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  function.MakeNode("Neg", {"x"}, {"a"});
+  function.MakeNode("Abs", {"x"}, {"b"});
+  utils::RepeatedProtoField<AttributeProto> branches;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &attribute = branches.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+    auto *graph = attribute.mutable_g();
+    auto *add = graph->add_node();
+    add->set_op_type("Add");
+    add->add_input("a");
+    add->add_input("b");
+    add->add_output(name + "_result");
+    auto *output = graph->add_output();
+    output->set_name(name + "_result");
+    auto *type = output->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(1024);
+  }
+  function.MakeNode("If", {"condition"}, {"function_result"}, "", "", branches);
+  function.MakeOutput("function_result");
+  builder.MakeInput("caller_x", core::symbolic::TensorType::kFloat, LayerShape({1024}));
+  builder.MakeInput("caller_condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  builder.MakeNode("BranchFunction", {"caller_x", "caller_condition"}, {"result"}, "ai.rt");
+  builder.MakeOutput("result");
+
+  const auto internal_bytes = [](const core::compute::ComputeContext &context) {
+    return std::get<int64_t>(
+        std::get<core::compute::TaggedMemory>(
+            context.NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
+            .at(""));
+  };
+  EXPECT_EQ(internal_bytes(builder.Compute()), 8192);
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  const auto tags = context.ComputeValueAndNodeTags(model.graph());
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false, tags.first);
+  EXPECT_EQ(internal_bytes(context), 8192);
+}
+
+TEST(ComputeContext, IncludesLocalFunctionWorkspaceInIncrementalAndFullPeakMemory) {
+  onnx_shapes::RegisterShapeFunctions();
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"ai.rt", 1}});
+  auto &function = builder.MakeLocalFunction("AttentionFunction", "ai.rt", builder.OpsetVersions());
+  const auto shape = LayerShape({1, 2, 4, 8});
+  const auto key_value_shape = LayerShape({1, 2, 16, 8});
+  function.MakeInput("q", core::symbolic::TensorType::kFloat, shape);
+  function.MakeInput("k", core::symbolic::TensorType::kFloat, key_value_shape);
+  function.MakeInput("v", core::symbolic::TensorType::kFloat, key_value_shape);
+  function.MakeNode("Attention", {"q", "k", "v"}, {"attention_result"});
+  function.MakeOutput("attention_result");
+  builder.MakeInput("caller_q", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInput("caller_k", core::symbolic::TensorType::kFloat, key_value_shape);
+  builder.MakeInput("caller_v", core::symbolic::TensorType::kFloat, key_value_shape);
+  builder.MakeNode("AttentionFunction", {"caller_q", "caller_k", "caller_v"}, {"result"}, "ai.rt");
+  builder.MakeOutput("result");
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.AppendNodePeakMemory(model.graph().node(0), 0, core::symbolic::Device::kCPU);
+  EXPECT_EQ(context.NodePeakMemory(0), 1 * 2 * 4 * 16 * 4);
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU),
+            (std::vector<int64_t>{1 * 2 * 4 * 16 * 4}));
 }
 
 TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {

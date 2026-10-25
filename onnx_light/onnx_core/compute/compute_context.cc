@@ -102,6 +102,151 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   return profile;
 }
 
+struct LocalFunctionMemoryEstimate {
+  expressions::DimType internal_peak = int64_t{0};
+  int64_t workspace_peak = 0;
+};
+
+LocalFunctionMemoryEstimate
+EstimateLocalFunctionMemory(const NodeProto &call, const ShapesContext &caller_shapes,
+                            Device device,
+                            std::unordered_set<const FunctionProto *> &active_functions) {
+  const FunctionProto *function = caller_shapes.GetLocalFunction(
+      ShapesContext::LocalFunctionKey(call.domain(), call.op_type(), call.overload()));
+  if (function == nullptr || !active_functions.insert(function).second)
+    return {};
+
+  struct PopFunction {
+    std::unordered_set<const FunctionProto *> &active;
+    const FunctionProto *function;
+    ~PopFunction() { active.erase(function); }
+  } pop_function{active_functions, function};
+
+  ShapesContext body_shapes = caller_shapes.MakeChildContext();
+  for (const auto &opset : function->opset_import())
+    body_shapes.SetOpsetVersion(opset.domain(), static_cast<int>(opset.version()));
+  const std::size_t input_count =
+      std::min(static_cast<std::size_t>(call.input_size()), function->input().size());
+  for (std::size_t i = 0; i < input_count; ++i) {
+    const std::string input = call.input(i);
+    const std::string formal = function->input(i);
+    if (!input.empty() && !formal.empty() &&
+        (caller_shapes.Has(input) || caller_shapes.HasType(input) ||
+         caller_shapes.HasSequence(input)))
+      body_shapes.CopyValueFrom(formal, caller_shapes, input);
+  }
+  for (const NodeProto &node : function->node()) {
+    const std::vector<std::string> node_inputs = core::graph::CollectNodeInputs(node);
+    const bool inputs_available =
+        std::all_of(node_inputs.begin(), node_inputs.end(), [&](const std::string &name) {
+          return name.empty() || body_shapes.Has(name) || body_shapes.HasType(name) ||
+                 body_shapes.HasSequence(name);
+        });
+    const auto contains_unbound_attributes = [](const auto &self, const NodeProto &candidate) {
+      for (const AttributeProto &attribute : candidate.attribute()) {
+        if (!attribute.ref_attr_name().empty())
+          return true;
+        const auto graph_contains_unbound = [&](const GraphProto &graph) {
+          return std::any_of(graph.node().begin(), graph.node().end(),
+                             [&](const NodeProto &nested) { return self(self, nested); });
+        };
+        if ((attribute.has_g() && graph_contains_unbound(attribute.g())) ||
+            std::any_of(attribute.graphs().begin(), attribute.graphs().end(),
+                        graph_contains_unbound))
+          return true;
+      }
+      return false;
+    };
+    const bool has_unbound_attributes =
+        contains_unbound_attributes(contains_unbound_attributes, node);
+    if (inputs_available && !has_unbound_attributes)
+      body_shapes.ComputeShapeNode(node);
+  }
+
+  std::unordered_set<std::string> formal_inputs(function->input().begin(), function->input().end());
+  std::unordered_set<std::string> boundary_outputs(function->output().begin(),
+                                                   function->output().end());
+  std::unordered_map<std::string, int64_t> producers;
+  std::unordered_map<std::string, int64_t> last_uses;
+  for (std::size_t index = 0; index < function->node().size(); ++index) {
+    const NodeProto &node = function->node()[index];
+    for (const std::string &input : core::graph::CollectNodeInputs(node))
+      if (!input.empty())
+        last_uses[input] = static_cast<int64_t>(index);
+    for (const std::string &output : node.output())
+      if (!output.empty()) {
+        producers[output] = static_cast<int64_t>(index);
+        last_uses[output] = static_cast<int64_t>(index);
+      }
+  }
+
+  const std::size_t node_count = function->node().size();
+  std::vector<expressions::DimSum> allocations_starting(node_count);
+  std::vector<expressions::DimSum> allocations_ending(node_count);
+  auto &expression_cache = body_shapes.ExpressionCache();
+  std::unordered_map<std::string, std::optional<expressions::DimType>> byte_sizes;
+  for (const auto &[name, producer] : producers) {
+    if (formal_inputs.count(name) != 0 || boundary_outputs.count(name) != 0)
+      continue;
+    const auto last_use = last_uses.find(name);
+    if (last_use == last_uses.end() || last_use->second < producer || !body_shapes.Has(name))
+      continue;
+    const auto bytes = GetCachedByteSizeExpr(body_shapes, name, byte_sizes, &expression_cache);
+    if (!bytes.has_value())
+      continue;
+    const std::size_t start = static_cast<std::size_t>(std::max<int64_t>(producer, 0));
+    allocations_starting[start].Add(*bytes);
+    if (last_use->second < static_cast<int64_t>(node_count))
+      allocations_ending[static_cast<std::size_t>(last_use->second)].Add(*bytes);
+  }
+
+  LocalFunctionMemoryEstimate estimate;
+  expressions::DimType live = int64_t{0};
+  for (std::size_t index = 0; index < node_count; ++index) {
+    const NodeProto &node = function->node()[index];
+    std::vector<SymShape> input_shapes;
+    input_shapes.reserve(node.input().size());
+    for (const std::string &input : node.input())
+      input_shapes.push_back(
+          !input.empty() && body_shapes.Has(input) ? body_shapes.Get(input).Shape() : SymShape{});
+    const int64_t node_workspace =
+        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    LocalFunctionMemoryEstimate nested =
+        EstimateLocalFunctionMemory(node, body_shapes, device, active_functions);
+    estimate.workspace_peak =
+        std::max({estimate.workspace_peak, node_workspace, nested.workspace_peak});
+    live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
+                                &expression_cache);
+    estimate.internal_peak = expressions::dim_max(
+        estimate.internal_peak, expressions::dim_add(live, nested.internal_peak, &expression_cache),
+        &expression_cache);
+    live = expressions::dim_sub(live, allocations_ending[index].Build(&expression_cache),
+                                &expression_cache);
+  }
+  return estimate;
+}
+
+LocalFunctionMemoryEstimate
+EstimateLocalFunctionMemory(const NodeProto &call, const ShapesContext &shapes, Device device) {
+  std::unordered_set<const FunctionProto *> active_functions;
+  return EstimateLocalFunctionMemory(call, shapes, device, active_functions);
+}
+
+void AddLocalFunctionMemory(NodeMemoryProfile &profile, const LocalFunctionMemoryEstimate &estimate,
+                            expressions::SimplifiedExpressionCache *cache) {
+  if (expressions::is_zero_dim(estimate.internal_peak))
+    return;
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) =
+      expressions::dim_add(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
+                           estimate.internal_peak, cache);
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::dim_add(
+      NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), estimate.internal_peak, cache);
+  TaggedMemory &intermediates = NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey);
+  intermediates[""] = expressions::dim_add(
+      intermediates.contains("") ? intermediates.at("") : expressions::DimType{int64_t{0}},
+      estimate.internal_peak, cache);
+}
+
 } // namespace
 
 // ── ComputeContext method implementations ────────────────────────────────────
@@ -1120,6 +1265,8 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
+    AddLocalFunctionMemory(profile, EstimateLocalFunctionMemory(node, ctx, Device::kUndefined),
+                           &expression_cache);
     memory_[index] = std::move(profile);
 
     if (index < release_after_.size()) {
@@ -1154,6 +1301,8 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
   }
   peak_memory_[node_index] =
       shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+  peak_memory_[node_index] = std::max(
+      peak_memory_[node_index], EstimateLocalFunctionMemory(node, shapes_, device).workspace_peak);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(
@@ -1314,6 +1463,8 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
+    AddLocalFunctionMemory(profile, EstimateLocalFunctionMemory(node, ctx, Device::kUndefined),
+                           &expression_cache);
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
@@ -1532,6 +1683,9 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
     }
     peak_memory_[static_cast<std::size_t>(i)] =
         shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    peak_memory_[static_cast<std::size_t>(i)] =
+        std::max(peak_memory_[static_cast<std::size_t>(i)],
+                 EstimateLocalFunctionMemory(node, shapes_, device).workspace_peak);
   }
   return peak_memory_;
 }

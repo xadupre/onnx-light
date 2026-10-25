@@ -1384,23 +1384,22 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
     }
   }
   RenameLayerInputs(body, index.graph);
-  core::builder::GraphBuilder &builder = index.graph.Builder().ModelBuilder();
+  core::builder::GraphBuilder &source = index.graph.Builder();
+  source.SetOpsetVersion("ai.rt", 1);
+  core::builder::GraphBuilder &builder = source.ModelBuilder();
   std::string function_name = "Layer";
   for (std::size_t suffix = 1;
        builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
     function_name = "Layer_" + std::to_string(suffix);
-  builder.SetOpsetVersion("ai.rt", 1);
-  core::builder::GraphBuilder &function = builder.MakeLocalFunction(function_name, "ai.rt");
+  core::builder::GraphBuilder &function =
+      builder.MakeLocalFunction(function_name, "ai.rt", source.OpsetVersions());
   for (const ValueInfoProto &input : body.input())
     function.MakeInput(input);
-  for (const NodeProto &inner : body.node()) {
-    std::vector<std::string> inputs(inner.input().begin(), inner.input().end());
-    std::vector<std::string> outputs(inner.output().begin(), inner.output().end());
-    function.MakeNode(inner.op_type(), inputs, outputs, inner.domain(), inner.name(),
-                      inner.attribute(), inner.overload());
-  }
-  for (const ValueInfoProto &output : body.output())
+  for (const NodeProto &inner : body.node())
+    function.ImportNode(inner);
+  for (const ValueInfoProto &output : body.output()) {
     function.MakeOutput(output);
+  }
   const std::string name =
       "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
   return MakeNode(function_name.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());

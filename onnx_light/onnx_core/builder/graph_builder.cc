@@ -1740,6 +1740,29 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
   return imported;
 }
 
+void GraphBuilder::ImportNode(const NodeProto &node) {
+  std::vector<std::string> inputs;
+  inputs.reserve(node.input().size());
+  for (std::size_t i = 0; i < node.input().size(); ++i)
+    inputs.push_back(node.input(i));
+  std::vector<std::string> outputs;
+  outputs.reserve(node.output().size());
+  for (std::size_t i = 0; i < node.output().size(); ++i)
+    outputs.push_back(node.output(i));
+  MakeNode(node.op_type().value(), inputs, outputs,
+           node.domain().empty() ? std::string() : node.domain().value(),
+           node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+           node.overload().value());
+  NodeProto &imported_node = nodes_.back();
+  imported_node.name_ = node.name_;
+  imported_node.op_type_ = node.op_type_;
+  imported_node.domain_ = node.domain_;
+  imported_node.overload_ = node.overload_;
+  imported_node.doc_string_ = node.doc_string_;
+  imported_node.metadata_props_ = node.metadata_props_;
+  imported_node.device_configurations_ = node.device_configurations_;
+}
+
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
   if (parent_ != nullptr && !graph.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
@@ -1795,28 +1818,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   }
   const auto declarations = StructuredDeclarations(value_infos_);
   for (const auto &node : graph.node()) {
-    std::vector<std::string> inputs;
-    inputs.reserve(node.input().size());
-    for (std::size_t i = 0; i < node.input().size(); ++i) {
-      inputs.push_back(node.input(static_cast<std::size_t>(i)));
-    }
-    std::vector<std::string> outputs;
-    outputs.reserve(node.output().size());
-    for (std::size_t i = 0; i < node.output().size(); ++i) {
-      outputs.push_back(node.output(static_cast<std::size_t>(i)));
-    }
-    MakeNode(node.op_type().value(), inputs, outputs,
-             node.domain().empty() ? std::string() : node.domain().value(),
-             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
-             node.overload().value());
-    NodeProto &imported_node = nodes_.back();
-    imported_node.name_ = node.name_;
-    imported_node.op_type_ = node.op_type_;
-    imported_node.domain_ = node.domain_;
-    imported_node.overload_ = node.overload_;
-    imported_node.doc_string_ = node.doc_string_;
-    imported_node.metadata_props_ = node.metadata_props_;
-    imported_node.device_configurations_ = node.device_configurations_;
+    ImportNode(node);
     SeedDeclaredOutputs(compute_.Shapes(), node, declarations);
   }
   for (const auto &output : graph.output()) {
@@ -1854,28 +1856,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     MakeInput(value_info);
   }
   for (const auto &node : function.node()) {
-    std::vector<std::string> inputs;
-    inputs.reserve(node.input().size());
-    for (std::size_t i = 0; i < node.input().size(); ++i) {
-      inputs.push_back(node.input(static_cast<std::size_t>(i)));
-    }
-    std::vector<std::string> outputs;
-    outputs.reserve(node.output().size());
-    for (std::size_t i = 0; i < node.output().size(); ++i) {
-      outputs.push_back(node.output(static_cast<std::size_t>(i)));
-    }
-    MakeNode(node.op_type().value(), inputs, outputs,
-             node.domain().empty() ? std::string() : node.domain().value(),
-             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
-             node.overload().value());
-    NodeProto &imported_node = nodes_.back();
-    imported_node.name_ = node.name_;
-    imported_node.op_type_ = node.op_type_;
-    imported_node.domain_ = node.domain_;
-    imported_node.overload_ = node.overload_;
-    imported_node.doc_string_ = node.doc_string_;
-    imported_node.metadata_props_ = node.metadata_props_;
-    imported_node.device_configurations_ = node.device_configurations_;
+    ImportNode(node);
   }
   for (std::size_t i = 0; i < function.output().size(); ++i) {
     ValueInfoProto value_info;
@@ -3562,11 +3543,16 @@ GraphBuilder::NamedBuilderOrThrow(const std::vector<std::unique_ptr<GraphBuilder
 }
 
 GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain) {
+  return MakeLocalFunction(name, domain, opsets_);
+}
+
+GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain,
+                                              const std::unordered_map<std::string, int> &opsets) {
   if (FindNamedBuilder(local_functions_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
   ReserveName(name);
-  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets_);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets);
   child->is_local_function_ = true;
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
@@ -4216,6 +4202,28 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   for (auto &opset : function.ref_opset_import())
     if (opset.domain() == "ai.onnx")
       opset.set_domain("");
+  const auto normalize_node_domains = [&](const auto &self, NodeProto &node) -> void {
+    if (node.domain() == "ai.onnx")
+      node.set_domain("");
+    for (auto &attribute : node.ref_attribute()) {
+      if (attribute.has_g())
+        for (auto &nested : attribute.ref_g().ref_node())
+          self(self, nested);
+      for (auto &graph : attribute.ref_graphs())
+        for (auto &nested : graph.ref_node())
+          self(self, nested);
+    }
+  };
+  for (auto &node : function.ref_node())
+    normalize_node_domains(normalize_node_domains, node);
+  for (auto &attribute : function.ref_attribute_proto()) {
+    if (attribute.has_g())
+      for (auto &node : attribute.ref_g().ref_node())
+        normalize_node_domains(normalize_node_domains, node);
+    for (auto &graph : attribute.ref_graphs())
+      for (auto &node : graph.ref_node())
+        normalize_node_domains(normalize_node_domains, node);
+  }
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];
     auto tag = std::find_if(

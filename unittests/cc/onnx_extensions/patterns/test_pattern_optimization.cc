@@ -2511,6 +2511,8 @@ TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
 
   EXPECT_TRUE(plan.rewrites().empty());
   ASSERT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(plan.replaced_function_ids().size(), 1u);
+  EXPECT_EQ(plan.replaced_function_ids(0), "test.pattern:CastPair");
   ASSERT_EQ(plan.added_functions(0).node().size(), 1u);
   EXPECT_EQ(plan.added_functions(0).node(0).op_type().value(), "Cast");
   ASSERT_EQ(builder.LocalFunction("CastPair").Nodes().size(), 1u);
@@ -2519,12 +2521,75 @@ TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
   EXPECT_EQ(report.rewrites, 1u);
 
   core::builder::GraphBuilder replayed(original, SchemaLookup());
-  const core::builder::GraphBuilder replayed_optimized = replayed.ApplyRewritings(plan);
+  RewritingProto serialized;
+  ASSERT_TRUE(serialized.ParseFromString(plan.SerializeAsString()));
+  const core::builder::GraphBuilder replayed_optimized = replayed.ApplyRewritings(serialized);
   ASSERT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes().size(), 1u);
   EXPECT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
 
+  auto invalid = serialized;
+  invalid.ref_replaced_function_ids().clear();
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.add_replaced_function_ids("test.pattern:Missing");
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.add_replaced_function_ids("test.pattern:CastPair");
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.ref_added_functions().clear();
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  auto conflict = serialized.added_functions(0);
+  conflict.ref_node()[0].set_op_type("Neg");
+  invalid.ref_added_functions().push_back(std::move(conflict));
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+
   const core::builder::GraphBuilder undone = builder.UndoRewritings(plan);
   ASSERT_EQ(undone.LocalFunction("CastPair").Nodes().size(), 2u);
+}
+
+TEST(PatternOptimization, NormalizesFunctionReplacementsInOneBatch) {
+  std::size_t lookups = 0;
+  const auto schemas = SchemaLookup();
+  const auto lookup = [&](const std::string &name) {
+    ++lookups;
+    return schemas(name);
+  };
+  core::builder::GraphBuilder builder("g", lookup, {{"", 18}, {"test.pattern", 1}});
+  constexpr std::size_t count = 8;
+  for (std::size_t index = 0; index < count; ++index) {
+    auto &function = builder.MakeLocalFunction("F" + std::to_string(index), "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    function.MakeNode("Neg", {"X"}, {"middle"});
+    function.MakeNode("Neg", {"middle"}, {"Y"});
+    function.MakeOutput("Y");
+  }
+  const auto original = builder.ToModel();
+  core::builder::GraphBuilder source(original, lookup);
+  RewritingProto plan;
+  for (const auto &function : original.functions()) {
+    auto replacement = function;
+    replacement.clr_node();
+    replacement.add_node("Identity", {"X"}, {"Y"});
+    auto &values = replacement.ref_value_info();
+    for (auto it = values.begin(); it != values.end();) {
+      if (it->name() == "middle")
+        it = values.erase(it);
+      else
+        ++it;
+    }
+    plan.add_replaced_function_ids("test.pattern:" + function.name().value());
+    plan.ref_added_functions().push_back(std::move(replacement));
+  }
+  lookups = 0;
+  const auto result = source.ApplyRewritings(plan);
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto &function = result.LocalFunction("F" + std::to_string(index));
+    ASSERT_EQ(function.Nodes().size(), 1u);
+    EXPECT_EQ(function.Nodes()[0].op_type(), "Identity");
+  }
+  EXPECT_LE(lookups, 4 * count);
 }
 
 TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
@@ -2583,11 +2648,6 @@ TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
 TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
   builder.SetOpsetVersion("test.pattern", 1);
-  auto &function = builder.MakeLocalFunction("Parent", "test.pattern");
-  function.SetOpsetVersion("", 18);
-  function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
-  function.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
-  function.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
   const auto integer_attributes =
       [](std::initializer_list<std::pair<std::string, int64_t>> values) {
         utils::RepeatedProtoField<AttributeProto> attributes;
@@ -2599,15 +2659,21 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
         }
         return attributes;
       };
-  function.MakeNode("Split", {"X"}, {"first", "second"}, "", "",
-                    integer_attributes({{"axis", -1}, {"num_outputs", 2}}));
-  function.MakeNode("Neg", {"second"}, {"negative"});
-  function.MakeNode("Concat", {"negative", "first"}, {"rotated"}, "", "",
-                    integer_attributes({{"axis", -1}}));
-  function.MakeNode("Mul", {"rotated", "sin"}, {"rotated_sin"});
-  function.MakeNode("Mul", {"X", "cos"}, {"scaled"});
-  function.MakeNode("Add", {"rotated_sin", "scaled"}, {"Y"});
-  function.MakeOutput("Y");
+  for (const auto &name : {"Parent", "OtherParent"}) {
+    auto &function = builder.MakeLocalFunction(name, "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+    function.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    function.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    function.MakeNode("Split", {"X"}, {"first", "second"}, "", "",
+                      integer_attributes({{"axis", -1}, {"num_outputs", 2}}));
+    function.MakeNode("Neg", {"second"}, {"negative"});
+    function.MakeNode("Concat", {"negative", "first"}, {"rotated"}, "", "",
+                      integer_attributes({{"axis", -1}}));
+    function.MakeNode("Mul", {"rotated", "sin"}, {"rotated_sin"});
+    function.MakeNode("Mul", {"X", "cos"}, {"scaled"});
+    function.MakeNode("Add", {"rotated_sin", "scaled"}, {"Y"});
+    function.MakeOutput("Y");
+  }
   const ModelProto original = builder.ToModel();
 
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
@@ -2616,26 +2682,32 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   core::builder::OptimizationReport report;
   const RewritingProto plan = graph.Optimize(-1, &report);
 
-  ASSERT_EQ(report.rewrites, 1u);
-  ASSERT_EQ(plan.added_functions().size(), 2u);
+  ASSERT_EQ(report.rewrites, 2u);
+  ASSERT_EQ(plan.added_functions().size(), 3u);
   EXPECT_EQ(plan.added_functions(0).name().value(), "HalfRotaryEmbedding");
   EXPECT_EQ(plan.added_functions(1).name().value(), "Parent");
   const ModelProto exported = builder.ToModel();
-  ASSERT_EQ(exported.functions().size(), 2u);
+  ASSERT_EQ(exported.functions().size(), 3u);
   EXPECT_EQ(exported.functions(0).name().value(), "HalfRotaryEmbedding");
   EXPECT_EQ(exported.functions(1).name().value(), "Parent");
   ASSERT_EQ(exported.functions(1).node().size(), 1u);
   EXPECT_EQ(exported.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(exported.functions(2).name().value(), "OtherParent");
+  ASSERT_EQ(exported.functions(2).node().size(), 1u);
+  EXPECT_EQ(exported.functions(2).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_FALSE(builder.LocalFunction("OtherParent").HasLocalFunction("HalfRotaryEmbedding"));
 
   core::builder::GraphBuilder replayed(original, SchemaLookup());
   const auto replayed_optimized = replayed.ApplyRewritings(plan).ToModel();
-  ASSERT_EQ(replayed_optimized.functions().size(), 2u);
+  ASSERT_EQ(replayed_optimized.functions().size(), 3u);
   EXPECT_EQ(replayed_optimized.functions(0).name().value(), "HalfRotaryEmbedding");
   EXPECT_EQ(replayed_optimized.functions(1).name().value(), "Parent");
   EXPECT_EQ(replayed_optimized.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(replayed_optimized.functions(2).node(0).op_type().value(), "HalfRotaryEmbedding");
 
   const auto undone = builder.UndoRewritings(plan);
   EXPECT_EQ(undone.LocalFunction("Parent").Nodes().size(), 6u);
+  EXPECT_EQ(undone.LocalFunction("OtherParent").Nodes().size(), 6u);
   EXPECT_FALSE(undone.LocalFunction("Parent").HasLocalFunction("HalfRotaryEmbedding"));
 
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> repeated_patterns;
@@ -2647,6 +2719,43 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   const auto &helper = builder.LocalFunction("Parent").LocalFunction("HalfRotaryEmbedding");
   EXPECT_EQ(helper.Nodes().size(), 6u);
   EXPECT_FALSE(helper.HasLocalFunction("HalfRotaryEmbedding"));
+
+  for (const auto &[domain, overload] : {std::pair<std::string, std::string>{"intermediate", ""},
+                                         {"other", ""},
+                                         {"intermediate", "variant"}}) {
+    for (const bool conflicting : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(overload);
+      SCOPED_TRACE(conflicting);
+      const bool same_identity = domain == "intermediate" && overload.empty();
+      ModelProto with_helper = original;
+      FunctionProto definition = exported.functions(0);
+      definition.set_domain(domain);
+      definition.set_overload(overload);
+      if (conflicting)
+        definition.ref_node().back().set_op_type("Sub");
+      utils::RepeatedProtoField<FunctionProto> functions;
+      functions.push_back(std::move(definition));
+      functions.extend(std::move(with_helper.ref_functions()));
+      with_helper.ref_functions() = std::move(functions);
+      core::builder::GraphBuilder reused(with_helper, SchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> reuse_patterns;
+      reuse_patterns.push_back(
+          std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+      core::builder::GraphGraph reuse_graph(reused, std::move(reuse_patterns));
+      if (conflicting && same_identity) {
+        EXPECT_THROW(reuse_graph.Optimize(), core::builder::BuilderError);
+        EXPECT_EQ(reused.LocalFunction("Parent").Nodes().size(), 6u);
+      } else {
+        const auto reuse_plan = reuse_graph.Optimize();
+        EXPECT_EQ(reuse_plan.added_functions().size(),
+                  same_identity ? 2u : (conflicting ? 3u : 4u));
+        const auto reused_model = reused.ToModel();
+        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 4u);
+        EXPECT_NO_THROW(core::builder::GraphBuilder(reused_model, SchemaLookup()));
+      }
+    }
+  }
 }
 
 TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {

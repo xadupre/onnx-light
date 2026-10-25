@@ -222,6 +222,15 @@ public:
            function_template_.overload().value() == overload;
   }
 
+  /// Returns ``true`` inside the identified local function, including its subgraphs.
+  bool IsInsideLocalFunction(const std::string &name, const std::string &domain,
+                             const std::string &overload = "") const noexcept {
+    for (const GraphBuilder *scope = this; scope != nullptr; scope = scope->parent_)
+      if (scope->IsLocalFunction(name, domain, overload))
+        return true;
+    return false;
+  }
+
   // ── Opset management ─────────────────────────────────────────────────
 
   /// Records the opset version to use for ``domain`` (an empty string denotes
@@ -794,6 +803,8 @@ private:
   static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
                                                    const std::string &name,
                                                    const std::string &overload);
+  static utils::RepeatedProtoField<FunctionProto>
+  DependencyOrderFunctions(const utils::RepeatedProtoField<FunctionProto> &functions);
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
                                   std::set<FunctionIdentifier> &expanded_functions);
 

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <queue>
 #include <set>
@@ -772,6 +773,19 @@ void GraphBuilder::set_device(Device device) {
 }
 
 void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
+  std::map<FunctionIdentifier, const GraphBuilder *> functions;
+  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      if (!functions.emplace(identity, function.get()).second)
+        throw BuilderError("CopyDeviceTargetsFrom: duplicate source function identity.");
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_functions(collect_functions, source);
   std::vector<std::pair<GraphBuilder *, Device>> updates;
   const auto collect = [&](const auto &self, GraphBuilder &target,
                            const GraphBuilder &original) -> void {
@@ -793,15 +807,10 @@ void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
     for (const auto &function : target.local_functions_) {
       const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
                                                    function->function_template_.overload());
-      const auto found = std::find_if(
-          original.local_functions_.begin(), original.local_functions_.end(),
-          [&](const auto &candidate) {
-            return MakeFunctionIdentifier(candidate->function_domain_, candidate->name_,
-                                          candidate->function_template_.overload()) == identity;
-          });
-      if (found == original.local_functions_.end())
+      const auto found = functions.find(identity);
+      if (found == functions.end())
         throw BuilderError("CopyDeviceTargetsFrom: incompatible exported functions.");
-      self(self, *function, **found);
+      self(self, *function, *found->second);
     }
     updates.emplace_back(&target, original.device_);
   };
@@ -2823,6 +2832,76 @@ GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std:
   return {NormaliseDomain(domain), name, overload};
 }
 
+utils::RepeatedProtoField<FunctionProto>
+GraphBuilder::DependencyOrderFunctions(const utils::RepeatedProtoField<FunctionProto> &functions) {
+  std::map<FunctionIdentifier, std::size_t> indices;
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    const auto &function = functions[index];
+    if (!indices
+             .emplace(
+                 MakeFunctionIdentifier(function.domain(), function.name(), function.overload()),
+                 index)
+             .second) {
+      throw BuilderError("GraphBuilder: duplicate function identity '" + function.name().value() +
+                         "'.");
+    }
+  }
+  const auto dependencies = [&](const FunctionProto &function) {
+    std::set<FunctionIdentifier> result;
+    const auto collect = [&](const auto &self, const NodeProto &node) -> void {
+      const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
+      if (indices.count(identity) != 0)
+        result.insert(identity);
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g())
+          for (const auto &child : attribute.g().node())
+            self(self, child);
+        for (const auto &graph : attribute.graphs())
+          for (const auto &child : graph.node())
+            self(self, child);
+      }
+    };
+    for (const auto &node : function.node())
+      collect(collect, node);
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g())
+        for (const auto &node : attribute.g().node())
+          collect(collect, node);
+      for (const auto &graph : attribute.graphs())
+        for (const auto &node : graph.node())
+          collect(collect, node);
+    }
+    return result;
+  };
+
+  std::vector<std::set<FunctionIdentifier>> required(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    required[index] = dependencies(functions[index]);
+  std::vector<std::vector<std::size_t>> dependents(functions.size());
+  std::vector<std::size_t> dependency_count(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    dependency_count[index] = required[index].size();
+    for (const auto &callee : required[index])
+      dependents[indices.at(callee)].push_back(index);
+  }
+  std::priority_queue<std::size_t, std::vector<std::size_t>, std::greater<>> ready;
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    if (dependency_count[index] == 0)
+      ready.push(index);
+  utils::RepeatedProtoField<FunctionProto> ordered;
+  while (!ready.empty()) {
+    const std::size_t index = ready.top();
+    ready.pop();
+    ordered.push_back(utils::CopyWithSharedTensorStorage(functions[index]));
+    for (std::size_t caller : dependents[index])
+      if (--dependency_count[caller] == 0)
+        ready.push(caller);
+  }
+  if (ordered.size() != functions.size())
+    throw BuilderError("GraphBuilder: function dependencies contain a cycle.");
+  return ordered;
+}
+
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
                                              const std::string &overload) const {
   const std::string normalised = NormaliseDomain(domain);
@@ -4223,6 +4302,7 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
     }
   };
   export_functions(export_functions, *this);
+  model.ref_functions() = DependencyOrderFunctions(model.functions());
   model.ref_rewritings() = utils::CopyWithSharedTensorStorage(rewritings_);
   return model;
 }

@@ -2293,6 +2293,7 @@ TEST(GraphGraph, ReplayValidatesSurvivingSubgraphsInChangedFunctions) {
   ASSERT_TRUE(changed_tag);
 
   RewritingProto plan;
+  plan.add_replaced_function_ids("local:Body");
   plan.ref_added_functions().push_back(std::move(replacement));
   try {
     source.ApplyRewritings(plan);

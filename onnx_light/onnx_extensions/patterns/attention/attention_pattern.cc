@@ -422,7 +422,10 @@ NodeProto &AddFunctionNode(FunctionProto &function, const char *op_type,
 }
 
 bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &name) {
-  return builder.HasLocalFunction(name) || !builder.HasName(name);
+  return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
+         (builder.Shapes().HasLocalFunction(
+              core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, name)) ||
+          !builder.HasName(name));
 }
 
 SymShape LocalShape(const std::string &prefix, std::size_t rank) {
@@ -473,13 +476,49 @@ void EnsureFunction(core::builder::GraphBuilder &builder, const FunctionProto &f
   const std::string name = function.name().value();
   const std::string domain = function.domain().value();
   const int opset = builder.OpsetVersion(domain);
-  if (opset == core::shapes::kUnknownOpsetVersion) {
-    builder.SetOpsetVersion(domain, 1);
-  } else if (opset != 1) {
+  if (opset != core::shapes::kUnknownOpsetVersion && opset != 1) {
     throw BuilderError("Attention function '" + name + "' requires opset 1 for domain '" + domain +
                        "', but the calling builder imports version " + std::to_string(opset) + ".");
   }
-  if (builder.HasLocalFunction(name)) {
+  const auto *existing = builder.Shapes().GetLocalFunction(
+      core::shapes::ShapesContext::LocalFunctionKey(domain, name, function.overload()));
+  const bool reuse = existing != nullptr;
+  if (reuse) {
+    const auto same_strings = [](const auto &left, const auto &right) {
+      return std::equal(left.begin(), left.end(), right.begin(), right.end());
+    };
+    const auto same_protos = [](const auto &left, const auto &right) {
+      return std::equal(left.begin(), left.end(), right.begin(), right.end(),
+                        [](const auto &a, const auto &b) { return a.Equals(b); });
+    };
+    bool compatible =
+        existing->attribute().empty() && existing->attribute_proto().empty() &&
+        same_strings(existing->input(), function.input()) &&
+        same_strings(existing->output(), function.output()) &&
+        std::equal(existing->node().begin(), existing->node().end(), function.node().begin(),
+                   function.node().end(), [&](const NodeProto &a, const NodeProto &b) {
+                     return a.op_type() == b.op_type() &&
+                            NormaliseDomain(a.domain()) == NormaliseDomain(b.domain()) &&
+                            a.overload() == b.overload() && same_strings(a.input(), b.input()) &&
+                            same_strings(a.output(), b.output()) &&
+                            same_protos(a.attribute(), b.attribute()) &&
+                            same_protos(a.device_configurations(), b.device_configurations());
+                   });
+    for (const auto &required : function.opset_import()) {
+      const auto found = std::find_if(existing->opset_import().begin(),
+                                      existing->opset_import().end(), [&](const auto &import) {
+                                        return NormaliseDomain(import.domain()) ==
+                                               NormaliseDomain(required.domain());
+                                      });
+      compatible &=
+          found != existing->opset_import().end() && found->version() == required.version();
+    }
+    if (!compatible)
+      throw BuilderError("Attention function '" + name + "' has an incompatible definition.");
+  }
+  if (opset == core::shapes::kUnknownOpsetVersion)
+    builder.SetOpsetVersion(domain, 1);
+  if (reuse) {
     return;
   }
   core::builder::GraphBuilder &local = builder.MakeLocalFunction(name, function.domain().value());
@@ -1813,9 +1852,6 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                           const NodeProto &candidate) const {
   const bool split_form = IsNode(&candidate, "Split", -1, 2);
   const bool slice_form = IsNode(&candidate, "Slice", -1, 1);
-  if (graph.Builder().IsLocalFunction("HalfRotaryEmbedding", kIntermediateDomain)) {
-    return NoMatch(candidate, "The HalfRotaryEmbedding function cannot extract itself.");
-  }
   if (!MainOpsetAtLeast(graph, 18) || (!split_form && !slice_form) || candidate.input_size() == 0 ||
       !HasRank(graph, candidate.input()[0].value(), 4)) {
     return NoMatch(

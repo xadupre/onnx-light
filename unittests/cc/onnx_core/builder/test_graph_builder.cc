@@ -2628,6 +2628,42 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
   EXPECT_FALSE(builder.HasLocalFunction("Inner"));
 }
 
+TEST(GraphBuilder, ExportsNestedFunctionsInDependencyOrder) {
+  for (const bool nested_call : {false, true}) {
+    SCOPED_TRACE(nested_call);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+    auto &base = builder.MakeLocalFunction("Base", "custom");
+    base.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    base.MakeNode("Neg", {"value"}, {"result"});
+    base.MakeOutput("result");
+
+    auto &wrapper = builder.MakeSubgraph("scope").MakeLocalFunction("Wrapper", "custom");
+    wrapper.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    if (nested_call) {
+      wrapper.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const std::string name : {"then_branch", "else_branch"}) {
+        auto &branch = wrapper.MakeSubgraph(name);
+        branch.MakeNode("Base", {"value"}, {"Y"}, "custom");
+        branch.MakeOutput("Y");
+        auto &reference = attributes.add();
+        reference.set_name(name + "_ref");
+        reference.set_type(AttributeProto::AttributeType::STRING);
+        reference.set_s(name);
+      }
+      wrapper.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+    } else {
+      wrapper.MakeNode("Base", {"value"}, {"result"}, "custom");
+    }
+    wrapper.MakeOutput("result");
+    const auto model = builder.ToModel();
+    ASSERT_EQ(model.functions().size(), 2u);
+    EXPECT_EQ(model.functions(0).name(), "Base");
+    EXPECT_EQ(model.functions(1).name(), "Wrapper");
+    EXPECT_NO_THROW(core::builder::GraphBuilder(model, SchemaLookup()));
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);

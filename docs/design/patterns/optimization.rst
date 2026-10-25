@@ -50,6 +50,17 @@ and type inference, its constant knowledge and its cleanup passes
 The rewrite invariant
 ---------------------
 
+Optimization also visits local function bodies and their nested subgraphs.
+Function-body edits contribute to ``report.rewrites`` and are recorded as
+replacement function definitions for replay and undo. Generated helpers are
+explicitly distinguished from replacements by ``replaced_function_ids`` so that
+conflicting helper definitions retain their validation errors. Helpers are
+reused by model-wide domain/name/overload identity only when their definitions
+are compatible; a helper cannot extract itself, including from a nested scope.
+Model export and replay place callees before callers, including dependencies
+inside graph attributes and function attribute defaults. Matchers do not rewrite
+nodes whose attributes still contain unresolved function-attribute references.
+
 A pattern must never reuse an existing name: every value it produces is
 new. This invariant keeps the successor and predecessor maps valid
 between two rewrites of the same iteration, which is why the builder

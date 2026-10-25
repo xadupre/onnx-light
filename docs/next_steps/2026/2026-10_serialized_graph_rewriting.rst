@@ -140,7 +140,16 @@ protobuf compiler or ``libprotobuf``. Step 3 added the
      repeated OperatorSetIdProto required_opset_imports = 2;
      repeated StringStringEntryProto metadata_props = 3;
      repeated FunctionProto added_functions = 4;
+     repeated string replaced_function_ids = 5;
    }
+
+Replacing an existing function requires its identity in ``replaced_function_ids``
+as well as its replacement in ``added_functions``. Identities use
+``domain:name[:overload]``, with ``%`` escaped as ``%25`` and ``:`` as ``%3A``
+within components; default-domain aliases normalize to the empty domain.
+Conflicting additional definitions without an explicit replacement remain errors.
+New helpers cannot silently override operations in existing function bodies,
+including nested graphs and function attribute defaults.
 
 Removal positions are relative to the corresponding initializer list before
 each edit: ``removed_initializers`` indexes dense initializers,

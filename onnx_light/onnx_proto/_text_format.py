@@ -237,6 +237,7 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("required_opset_imports", _msg(OperatorSetIdProto), True),
             ("metadata_props", _msg(string_entry), True),
             ("added_functions", _msg(FunctionProto), True),
+            ("replaced_function_ids", _STR, True),
         ],
         ModelProto: [
             ("ir_version", _INT, False),

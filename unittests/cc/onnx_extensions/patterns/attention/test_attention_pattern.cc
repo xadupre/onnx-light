@@ -138,11 +138,16 @@ void ExpectTopologicalGraph(const core::builder::GraphBuilder &builder) {
   }
 }
 
-template <typename Pattern> void OptimizeAndVerify(core::builder::GraphBuilder &builder) {
+template <typename Pattern>
+void OptimizeAndVerify(core::builder::GraphBuilder &builder, bool expect_rewrite = true) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<Pattern>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  EXPECT_FALSE(optimizer.Optimize().rewrites().empty());
+  const auto plan = optimizer.Optimize();
+  EXPECT_EQ(plan.rewrites().empty(), !expect_rewrite);
+  if (!expect_rewrite) {
+    EXPECT_TRUE(plan.added_functions().empty());
+  }
   ExpectTopologicalGraph(builder);
 }
 
@@ -638,6 +643,9 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
   EXPECT_EQ(replacement[0].op_type().value(), "ShiftedCausalMask");
   EXPECT_EQ(replacement[0].input()[2].value(), "shift");
   EXPECT_TRUE(HasFunction(builder, "ShiftedCausalMask"));
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("ShiftedCausalMask").HasLocalFunction("ShiftedCausalMask"));
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);
@@ -687,6 +695,8 @@ TEST(FunctionCausalMaskPattern, PreservesSharedRangeAndItsProducers) {
   EXPECT_EQ(builder.Nodes()[2].output()[0].value(), "r2");
   EXPECT_EQ(builder.Nodes()[3].op_type().value(), "Identity");
   EXPECT_EQ(builder.Nodes()[4].op_type().value(), "CausalMask");
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("CausalMask").HasLocalFunction("CausalMask"));
 }
 
 TEST(FunctionCausalMaskMulAddPattern, CreatesFunctionAndRejectsNonUnitStep) {
@@ -717,6 +727,9 @@ TEST(FunctionCausalMaskMulAddPattern, CreatesFunctionAndRejectsNonUnitStep) {
   EXPECT_EQ(replacement[0].op_type().value(), "CausalMaskMulAdd");
   EXPECT_EQ(replacement[0].input()[2].value(), "N");
   EXPECT_TRUE(HasFunction(builder, "CausalMaskMulAdd"));
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskMulAddPattern>(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskMulAddPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("CausalMaskMulAdd").HasLocalFunction("CausalMaskMulAdd"));
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);

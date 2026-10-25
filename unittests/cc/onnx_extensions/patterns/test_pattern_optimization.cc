@@ -409,6 +409,30 @@ ModelProto PreparationModel() {
 
 } // namespace
 
+TEST(PatternOptimization, RegistersNamedBuiltInPatternSets) {
+  onnx_patterns::RegisterPatterns();
+  const auto sets = core::builder::RegisteredPatternSets();
+
+  ASSERT_TRUE(sets.contains("all"));
+  ASSERT_TRUE(sets.contains("L1"));
+  ASSERT_TRUE(sets.contains("L2"));
+  ASSERT_TRUE(sets.contains("Layer"));
+  EXPECT_NE(std::find(sets.at("L1").begin(), sets.at("L1").end(), "MatMulAdd"),
+            sets.at("L1").end());
+  EXPECT_NE(std::find(sets.at("L2").begin(), sets.at("L2").end(), "GatherToSlice"),
+            sets.at("L2").end());
+  EXPECT_EQ(sets.at("Layer"), (std::vector<std::string>{"RepeatedLayer"}));
+  for (const std::string &name : sets.at("L1")) {
+    EXPECT_NE(std::find(sets.at("all").begin(), sets.at("all").end(), name), sets.at("all").end());
+  }
+  for (const std::string &name : sets.at("L2")) {
+    EXPECT_NE(std::find(sets.at("all").begin(), sets.at("all").end(), name), sets.at("all").end());
+  }
+  for (const std::string &name : sets.at("Layer")) {
+    EXPECT_NE(std::find(sets.at("all").begin(), sets.at("all").end(), name), sets.at("all").end());
+  }
+}
+
 TEST(PatternOptimization, NamedVariantsRoundTripSelectIndependentlyAndKeepCanonical) {
   ScopedAddKernel kernel;
   core::builder::GraphBuilder source(PreparationModel(), SchemaLookup());
@@ -878,7 +902,8 @@ TEST(PatternOptimization, CapturesNestedGraphImportsWithoutMergingFunctionLocalI
     ASSERT_EQ(replayed.functions().size(), 1u);
     const auto &imports = replayed.functions(0).opset_import();
     EXPECT_TRUE(std::any_of(imports.begin(), imports.end(), [](const auto &opset) {
-      return opset.domain().value() == "ai.onnx" && opset.version() == 17;
+      return (opset.domain().value().empty() || opset.domain().value() == "ai.onnx") &&
+             opset.version() == 17;
     }));
   }
 }

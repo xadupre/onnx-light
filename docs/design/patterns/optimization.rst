@@ -156,32 +156,32 @@ For example, two corresponding regions become two separate bodies, with their
 own parameters passed explicitly::
 
     Before:  x, w0 → MatMul → Relu → h;  h, w1 → MatMul → Relu → y
-    After:   x, w0 → Layer(body0) → h;   h, w1 → Layer(body1) → y
+    After:   x, w0 → Layer(...) → h;     h, w1 → Layer_1(...) → y
 
 This is encapsulation, not weight tying: ``w0`` and ``w1`` need not be equal.
-Models must be consumed by a Layer-aware onnx-light runtime, not an unextended
-third-party ONNX runtime.
+Each call references a local function stored in ``ModelProto.functions``.
+Models can be consumed by ONNX runtimes that support local functions and the
+operators used in their bodies.
+Function exports and snapshots captured for rewrite undo place callees before
+callers, including layers extracted inside an existing local function.
 
-Layer operator contract
+Layer function contract
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-``ai.rt::Layer`` uses custom runtime domain ``ai.rt``, **opset 1**, and exactly
-one required GRAPH attribute, ``body``. Its variadic inputs and outputs bind
-positionally to the body's formal graph inputs and outputs. Outputs must be
-nonempty and unique; omitted positional inputs are not permitted. Body formal
-names may differ from the wrapper names in hand-written models.
+The extracted regions are represented by local functions in domain ``ai.rt``
+with an ``ai.rt`` opset import of version 1. The first function is named
+``Layer``; subsequent functions use an index suffix (``Layer_1``, ``Layer_2``,
+...), so each body has a unique definition. Calls bind inputs and outputs
+positionally to the function's formal inputs and outputs. Outputs must be
+nonempty and unique; omitted positional inputs are not permitted. ``Layer`` is
+a function identity, not an operator schema.
 
-The body is a closed lexical scope at its boundary. Every dependency on a
-surrounding graph, including a dependency used only inside a nested graph
-attribute, must be supplied as a wrapper input and a body formal input.
-Nested control-flow graphs may capture values declared within this closed body;
-they may not reach past it. Validation rejects missing dependencies and
-inconsistent boundary arities rather than implicitly capturing an outer value.
-Local functions and operators retain their original domain/overload and use the
-enclosing model's opset imports and function definitions.
-Hand-written bodies may declare initializer defaults for formal inputs, but
-every formal still requires an explicit caller input, which overrides its
-default.
+The function body is a closed lexical scope at its boundary. Every dependency
+on a surrounding graph, including a dependency used only inside a nested graph
+attribute, is supplied as an explicit function input. Nested control-flow
+graphs may capture values declared within this body; they may not reach past
+it. Local function calls and operators retain their original domain/overload
+and use the enclosing model's opset imports and function definitions.
 
 The extractor keeps all surrounding initializers and constant producers outside
 the bodies and passes their values explicitly. Shared large weights are not
@@ -193,18 +193,13 @@ are deduplicated in first-use order (inputs) and topological producer/output-por
 order (outputs); repeated internal uses retain their original ports. Tensor
 descriptors are copied to the body interface.
 
-Shape inference binds actual input descriptors before inferring the body and
-publishes the body results positionally. Native execution dispatches the body
-through the existing nested execution machinery. Extraction uses the existing
+Shape inference and native execution expand the local function through the
+existing function-call machinery. Extraction uses the existing
 targeted builder mutation path, updating affected shapes and lifetime/memory
 metadata rather than rebuilding the graph for each occurrence.
-Layer memory profiles include live body-internal tensors and nested Layer
-requirements, with boundary inputs and outputs counted only by the enclosing
-graph. Kernel workspace estimates include the body kernels.
 Incremental updates inspect live builder-owned body fields without exporting
 or rebuilding the enclosing graph, including after a nested body mutation.
-Body lifetimes include values captured only by nested graph attributes; rewrite
-batch reordering preserves these activation and workspace estimates.
+Body lifetimes include values captured only by nested graph attributes.
 
 Matching and cut policy
 ~~~~~~~~~~~~~~~~~~~~~~~~

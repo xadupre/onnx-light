@@ -43,6 +43,17 @@ def _pipeline_with_node(doc_string: str) -> onnxl.PipelineProto:
     return onnxl.PipelineProto(prefill=model)
 
 
+class RecordingModelProto(onnxl.ModelProto):
+    """Retains native model validation while recording file serialization calls."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def SerializeToFile(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+
+
 class TestIOModel(ExtTestCase):
     """Tests for saving and loading ModelProto (protobuf format only)."""
 
@@ -72,6 +83,54 @@ class TestIOModel(ExtTestCase):
             onnxl.save(proto, model_path)
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
+
+    def test_saving_without_external_data_keeps_non_parallel_default(self):
+        model = RecordingModelProto()
+        onnxl.save(model, "model.onnx", num_threads=1)
+        self.assertEqual(model.calls, [(("model.onnx",), {})])
+
+    def test_saving_with_parallel_uses_serialize_options(self):
+        model = RecordingModelProto()
+        onnxl.save(model, "model.onnx", num_threads=3, min_block_size=256)
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertIsInstance(args[1], onnxl.SerializeOptions)
+        self.assertEqual(args[1].raw_data_threshold, 1024)
+        self.assertEqual(args[1].num_threads, 3)
+        self.assertEqual(args[1].min_parallel_block_size, 256)
+        self.assertEqual(args[1].max_external_file_size, 0)
+        self.assertEqual(kwargs, {})
+
+    def test_saving_with_external_data_uses_max_external_file_size(self):
+        model = RecordingModelProto()
+        onnxl.save(model, "model.onnx", location="model.data", max_external_file_size=4096)
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertIsInstance(args[1], onnxl.SerializeOptions)
+        self.assertEqual(args[1].max_external_file_size, 4096)
+        self.assertEqual(args[2], "model.data")
+        self.assertEqual(kwargs, {})
+
+    def test_saving_recording_model_keeps_deferred_source_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "model.onnx"
+            original = _simple_model()
+            original.graph.initializer.append(
+                onh.from_array(np.array([1.0], dtype=np.float32), name="W")
+            )
+            onnxl.save(original, path)
+            before = path.read_bytes()
+            model = RecordingModelProto()
+            model.CopyFrom(onnxl.load(path, defer_weights=True))
+            with self.assertRaisesRegex(RuntimeError, "unloaded deferred"):
+                onnxl.save(model, path)
+            model.load_weights()
+            with self.assertRaisesRegex(RuntimeError, "backing source"):
+                onnxl.save(model, path)
+            self.assertEqual(model.calls, [])
+            self.assertEqual(path.read_bytes(), before)
 
     def test_save_and_load_model_with_inferred_protobuf_format(self) -> None:
         """Tests protobuf inference for arbitrary filenames and path types."""

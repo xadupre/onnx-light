@@ -431,50 +431,6 @@ bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &
           !builder.HasName(name));
 }
 
-SymShape LocalShape(const std::string &prefix, std::size_t rank) {
-  SymShape shape;
-  for (std::size_t index = 0; index < rank; ++index) {
-    shape.PushBack(SymDim(prefix + std::to_string(index)));
-  }
-  return shape;
-}
-
-void MakeLocalInput(core::builder::GraphBuilder &local, const std::string &function_name,
-                    const std::string &input, std::size_t index) {
-  if (function_name == "HalfRotaryEmbedding") {
-    local.MakeInput(input, TensorType::kFloat, LocalShape(input, index == 0 ? 4 : 2));
-    return;
-  }
-  if (function_name == "CausalMask" || function_name == "ShiftedCausalMask" ||
-      function_name == "CausalMaskMulAdd") {
-    local.MakeInput(input, TensorType::kInt64, LocalShape(input, 1));
-    return;
-  }
-  if (function_name.starts_with("CosSinCache")) {
-    local.MakeInput(input, input == "weights" ? TensorType::kFloat : TensorType::kInt64,
-                    LocalShape(input, input == "weights" ? 3 : 1));
-    return;
-  }
-  if (function_name.starts_with("LocalAttention")) {
-    if (input == "expand_shape") {
-      local.MakeInput(input, TensorType::kInt64, SymShape({SymDim(5)}));
-    } else if (input == "gqa_shape") {
-      const bool squeeze = function_name.find("sQ") != std::string::npos;
-      local.MakeInput(input, TensorType::kInt64, SymShape({SymDim(squeeze ? 1 : 4)}));
-    } else if (input == "scale_sqrt") {
-      local.MakeInput(input, TensorType::kFloat, SymShape({SymDim(1)}));
-    } else if (input == "mask" || input == "not_mask") {
-      local.MakeInput(input, TensorType::kBool, LocalShape(input, 4));
-    } else {
-      local.MakeInput(input, TensorType::kFloat, LocalShape(input, 4));
-    }
-    return;
-  }
-  ValueInfoProto value_info;
-  value_info.set_name(input);
-  local.MakeInput(value_info);
-}
-
 template <typename Fields> bool SameHelperProtos(const Fields &left, const Fields &right) {
   return std::equal(left.begin(), left.end(), right.begin(), right.end(),
                     [](const auto &a, const auto &b) { return a.Equals(b); });
@@ -624,32 +580,7 @@ void EnsureFunction(core::builder::GraphBuilder &builder, const FunctionProto &f
   if (reuse) {
     return;
   }
-  core::builder::GraphBuilder &local = builder.MakeLocalFunction(name, function.domain().value());
-  for (const OperatorSetIdProto &opset : function.opset_import()) {
-    local.SetOpsetVersion(opset.domain().value(), static_cast<int>(opset.version()));
-  }
-  for (std::size_t index = 0; index < function.input().size(); ++index) {
-    MakeLocalInput(local, name, function.input(index).value(), index);
-  }
-  for (const NodeProto &node : function.node()) {
-    std::vector<std::string> inputs;
-    std::vector<std::string> outputs;
-    for (const utils::String &input : node.input()) {
-      inputs.push_back(input.value());
-    }
-    for (const utils::String &output : node.output()) {
-      outputs.push_back(output.value());
-    }
-    utils::RepeatedProtoField<AttributeProto> attributes;
-    for (const AttributeProto &attribute : node.attribute()) {
-      attributes.push_back(attribute);
-    }
-    local.MakeNode(node.op_type().value(), inputs, outputs, node.domain().value(),
-                   node.name().value(), attributes);
-  }
-  for (const utils::String &output : function.output()) {
-    local.MakeOutput(output.value());
-  }
+  builder.MakeLocalFunction(function);
 }
 
 FunctionProto MakeHalfRotaryFunction(core::builder::GraphBuilder &builder) {

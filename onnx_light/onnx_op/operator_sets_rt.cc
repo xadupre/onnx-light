@@ -6,7 +6,6 @@
 #include "onnx_op/operator_sets_rt_doc.h"
 
 #include <algorithm>
-#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::rt {
@@ -43,25 +42,6 @@ LightOpSchema MakeDelayedInitializerSchema() {
           {"offset", "Byte offset of the tensor payload within `filename`.", AttributeType::INT,
            /*required=*/true, std::monostate{}},
       });
-}
-
-LightOpSchema MakeLayerSchema() {
-  return LightOpSchema(
-             "Layer", kAiRtDomain, 1,
-             "Executes the required body graph with variadic, heterogeneous, explicitly positional "
-             "inputs and outputs. The caller's i-th input binds the body's i-th graph input; the "
-             "body's i-th graph output becomes the caller's i-th output. Arity must match exactly "
-             "and omitted boundary values are not allowed. All external weights and dependencies "
-             "must be supplied as explicit inputs, including dependencies used only in recursively "
-             "nested graph attributes. Local body initializers are allowed. Body nodes inherit "
-             "the enclosing opset imports and model-local functions. Initializers may also be body "
-             "input defaults, but every formal input still requires an explicit caller input; "
-             "the caller's value overrides its default.",
-             {{"inputs", "Variadic positional values bound to body graph inputs.", "V"}},
-             {{"outputs", "Variadic positional values returned by body graph outputs.", "V"}}, {},
-             {{"body", "Closed graph to execute; no implicit outer-scope captures.",
-               AttributeType::GRAPH, true, std::monostate{}}})
-      .set_max_output(std::numeric_limits<int>::max());
 }
 
 LightOpSchema MakeQuantizeSchema() {
@@ -199,7 +179,6 @@ LightOpSchema MakeQuantizePagedCacheSchema() {
 std::vector<LightOpSchema> GetAllOnnxOpRtSchemasWithHistory(const std::string &op_type,
                                                             bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
-      {"Layer", [] { return std::vector<LightOpSchema>{MakeLayerSchema()}; }},
       {"DelayedInitializer",
        [] { return std::vector<LightOpSchema>{MakeDelayedInitializerSchema()}; }},
       {"Quantize", [] { return std::vector<LightOpSchema>{MakeQuantizeSchema()}; }},

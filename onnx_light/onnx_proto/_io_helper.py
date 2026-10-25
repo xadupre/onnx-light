@@ -76,7 +76,9 @@ def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | Non
 
     The format defaults to protobuf, except for paths ending in ``.textproto``.
     This helper writes the tensor message, not a containing model, and does not
-    create or copy external tensor-data files.
+    create or copy external tensor-data files. The helper rejects standalone
+    deferred tensors; callers must save the owning model or eagerly reload the
+    tensor instead.
 
     :param proto: in-memory TensorProto.
     :param f: tensor file path or binary writable stream.
@@ -86,6 +88,10 @@ def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | Non
         raise TypeError(f"Expected TensorProto, got {type(proto)}.")
     if not isinstance(f, (str, Path)) and not hasattr(f, "write"):
         raise TypeError(f"Expected str, Path, or a binary writable stream, got {type(f)}.")
+    if proto.has_deferred_weight():
+        raise ValueError(
+            "Standalone deferred tensor export is unsupported; export the owning model."
+        )
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:
@@ -186,6 +192,17 @@ def save(
     assert isinstance(f, (str, Path)) or hasattr(
         f, "write"
     ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
+    if isinstance(proto, PipelineProto):
+        proto.validate_deferred_export()
+    if isinstance(proto, ModelProto):
+        proto.validate_weight_save_path(str(f) if isinstance(f, (str, Path)) else "")
+        if proto.has_deferred_weights() and (
+            save_as_external_data or location or (format or _infer_format(f)) != "protobuf"
+        ):
+            raise ValueError(
+                "Models retaining deferred sources support single-file ONNX export only. "
+                "Reload that export eagerly before converting it."
+            )
     if hasattr(f, "write"):
         # File-like object path: external data is not supported.
         if save_as_external_data or location:
@@ -304,6 +321,7 @@ def load(
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
     layout: bool = False,
+    defer_weights: bool = False,
 ) -> ModelProto | PipelineProto:
     """
     Loads a serialized ModelProto or PipelineProto into memory.
@@ -372,13 +390,15 @@ def load(
     :param file_load_mode: selects the file-backed stream implementation used when *f* is a
         file path. Accepts either a :class:`FileLoadMode` value or its name as a string
         (``"AUTO"``, ``"MMAP"`` or ``"IFSTREAM"``, case-insensitive). ``FileLoadMode.AUTO``
-        (default) lets onnx-light pick a compatible implementation without memory-mapping —
-        currently the buffered :class:`FileStream`, but this choice may change in the future.
+        (default) lets onnx-light pick a compatible implementation — currently the buffered
+        :class:`FileStream`, without memory-mapping for eager loads, but this choice may change.
         ``FileLoadMode.MMAP`` forces memory-mapped I/O (a single-file model borrows zero-copy
         views into the mapping even when ``no_copy=True``, because each borrowed pointer retains
         the mmap ownership token so the mapping stays alive for as long as the model uses it) and
         ``FileLoadMode.IFSTREAM`` forces the buffered ``std::ifstream``-based reader. Ignored when
-        *f* is a :class:`bytes` object. When an external weights file is provided via
+        *f* is a :class:`bytes` object. With ``defer_weights=True``, all three modes map the
+        securely pinned main file for metadata access without raw-payload read-ahead.
+        When an external weights file is provided via
         ``location``, the main model file is always read through the buffered reader
         (``TwoFilesStream``); ``MMAP`` then
         applies to the separate weights file, which is memory-mapped once and shared by the
@@ -391,6 +411,12 @@ def load(
     :param layout: enables native incremental layout while loading. Binary graph and function
         bodies are placed at their parse-completion hooks, children first, and persisted in
         metadata. Text scopes are placed before returning. The default leaves metadata untouched.
+    :param defer_weights: retains file ranges without materializing raw weight payloads,
+        ignoring ``raw_data_threshold``. Enables ``model.load_weight(name)`` and
+        ``model.unload_weight(name)``. Requires a binary ONNX file path, immutable backing
+        files, no typed payloads, no explicit external-data stream, and ``no_copy=False``.
+        External locations are resolved relative to the original model directory.
+        PipelineProto input is unsupported in deferred mode.
     :return: Loaded in-memory ModelProto or PipelineProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -407,6 +433,19 @@ def load(
         raise ValueError(
             f"Unsupported format={format!r}; onnx-light only supports "
             f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    if defer_weights and (
+        not isinstance(f, str)
+        or proto_type is not ModelProto
+        or format != "protobuf"
+        or no_copy
+        or location
+        or load_external_data
+        or tiny_external_data_threshold >= 0
+    ):
+        raise ValueError(
+            "defer_weights requires a binary ModelProto ONNX file path, no_copy=False, "
+            "no location/load_external_data, and tiny_external_data_threshold < 0."
         )
     if format == "textproto":
         from ._text_format import parse_from_textproto
@@ -481,9 +520,11 @@ def load(
         or touch_raw_data_pages
         or file_load_mode != FileLoadMode.AUTO
         or layout
+        or defer_weights
     ):
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
+        opts.defer_weights = defer_weights
         opts.raw_data_threshold = raw_data_threshold
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size

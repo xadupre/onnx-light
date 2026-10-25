@@ -1491,7 +1491,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       self(self, *subgraph);
   };
   capture_functions(capture_functions, *root);
-  auto original_definitions = utils::CopyWithSharedTensorStorage(collection.added_functions());
+  auto original_definitions = GraphBuilder::DependencyOrderFunctions(
+      utils::CopyWithSharedTensorStorage(collection.added_functions()));
   FunctionIndex original_function_index;
   for (const auto &function : original_definitions)
     original_function_index.emplace(Identity(function), &function);
@@ -1560,12 +1561,12 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   for (std::size_t i = 0; i < original_functions; ++i)
     collection.ref_added_functions().erase(collection.ref_added_functions().begin());
   result.ref_added_functions() =
-      GraphBuilder::DependencyOrderFunctions(collection.added_functions());
+      GraphBuilder::DependencyOrderFunctions(std::move(collection.ref_added_functions()));
   result.ref_required_opset_imports() = std::move(collection.ref_required_opset_imports());
   if (&builder_ == root) {
     undo->original_graph_headers = GraphHeaders(canonical);
     CaptureInversePlan(result, *undo, canonical);
-    undo->original_functions = GraphBuilder::DependencyOrderFunctions(original_definitions);
+    undo->original_functions = std::move(original_definitions);
     for (const auto &[domain, version] : original_opsets) {
       auto &opset = undo->original_opsets.add();
       opset.set_domain(domain);
@@ -2101,10 +2102,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         for (std::size_t index = 0; index < builder_.nodes_.size(); ++index)
           builder_.CollectNodeReferences(builder_.nodes_[index], references[index]);
         builder_.compute_.UpdateNodes(builder_.nodes_, old_indices, references, {},
-                                      builder_.device_);
-        builder_.compute_.RefreshIncrementalMemory(
-            builder_.nodes_, builder_.Shapes(), builder_.device_,
-            [this](const NodeProto &node) { return builder_.LayerBodyForMemory(node); });
+                                      builder_.device_, builder_.MemoryNodeMaterializer());
+        builder_.compute_.RefreshIncrementalMemory(builder_.nodes_, builder_.Shapes(),
+                                                   builder_.device_,
+                                                   builder_.MemoryNodeMaterializer());
       }
       for (auto &replacement : replacements) {
         auto &snapshot = replacement.undo.after;
@@ -2838,7 +2839,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       MergeFunction(model.ref_functions(), function);
     }
   }
-  model.ref_functions() = GraphBuilder::DependencyOrderFunctions(model.functions());
+  model.ref_functions() = GraphBuilder::DependencyOrderFunctions(std::move(model.ref_functions()));
   for (const auto &opset : rewrites.required_opset_imports())
     MergeImport(model.ref_opset_import(), opset);
   std::map<FunctionKey, std::size_t> function_positions;
@@ -2862,7 +2863,8 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     for (const auto &key : changed_definitions)
       comparison.ref_functions()[function_positions.at(key)] =
           utils::CopyWithSharedTensorStorage(*planned_functions.at(key));
-    comparison.ref_functions() = GraphBuilder::DependencyOrderFunctions(comparison.functions());
+    comparison.ref_functions() =
+        GraphBuilder::DependencyOrderFunctions(std::move(comparison.ref_functions()));
     GraphBuilder normalized(comparison, schema_lookup_);
     for (const auto &candidate : normalized.local_functions_) {
       const FunctionKey key{RewriteDomain(candidate->function_domain_), candidate->name_,
@@ -2890,7 +2892,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
         (void)key;
         original.ref_functions().push_back(source->BuildFunction(source->function_domain_));
       }
-      original.ref_functions() = DependencyOrderFunctions(original.functions());
+      original.ref_functions() = DependencyOrderFunctions(std::move(original.ref_functions()));
       GraphBuilder normalized_original(original, schema_lookup_);
       const auto expected = normalized_original.ToModel();
       auto actual = normalized.ToModel();
@@ -2907,7 +2909,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       }
     }
   }
-  model.ref_functions() = GraphBuilder::DependencyOrderFunctions(model.functions());
+  model.ref_functions() = GraphBuilder::DependencyOrderFunctions(std::move(model.ref_functions()));
   *model.mutable_graph() =
       BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
   FunctionIndex functions;
@@ -3212,9 +3214,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
           throw BuilderError("UndoRewritings: incompatible restored function initializer.");
       }
     }
-    scope.compute_.RestoreTagState(
-        devices.tags, scope.nodes_, node_offset,
-        [&scope](const NodeProto &node) { return scope.LayerBodyForMemory(node); });
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

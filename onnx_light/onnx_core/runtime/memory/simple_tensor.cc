@@ -399,13 +399,15 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
 }
 
 Tensor Tensor::BorrowInitializer(const TensorProto &proto) {
+  EXT_ENFORCE_INVALID(!proto.HasDeferredWeight() || proto.is_raw_data(), "Deferred weight '",
+                      proto.str_name(), "' must be loaded before runtime preparation.");
   Shape shape;
   for (const auto dimension : proto.dims())
     shape.push_back(static_cast<int64_t>(dimension));
   if (proto.is_raw_data()) {
     const auto &raw = proto.raw_data();
     auto tensor = Borrow(proto.name(), proto.data_type(), std::move(shape), raw.data(), raw.size(),
-                         raw.owner());
+                         proto.HasDeferredWeight() ? raw.acquire_export_guard() : raw.owner());
     tensor.initializer_view_ = !raw.is_borrowed();
     return tensor;
   }

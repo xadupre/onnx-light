@@ -107,6 +107,38 @@ void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  for (const std::string output_mode : {"preallocated", "alias_x", "alias_y"}) {
+    NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+    Expect(registry, std::move(node), "test_cc_where_inplace_" + output_mode, {opset}, {4, 4, 4},
+           {4}, [opset, output_mode]() -> IoData {
+             const KernelContext ctx{opset};
+             const onnx_kernels::kernel::Where where_kernel{ctx};
+             Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 0, 1});
+             Tensor x = Tensor::FromFloat("x", {2, 2}, {-0.0f, 2.0f, 3.0f, 4.0f});
+             Tensor y = Tensor::FromFloat("y", {2, 2}, {5.0f, -0.0f, 7.0f, 8.0f});
+             // Tensor copies preserve the original graph inputs when output aliases an operand.
+             Tensor output = output_mode == "alias_x" ? x : y;
+             where_kernel(condition, output_mode == "alias_x" ? output : x,
+                          output_mode == "alias_y" ? output : y, output);
+             return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+           });
+  }
+
+  {
+    NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+    Expect(registry, std::move(node), "test_cc_where_inplace_bcast", {opset}, {2, 6, 3}, {6},
+           [opset]() -> IoData {
+             const KernelContext ctx{opset};
+             const onnx_kernels::kernel::Where where_kernel{ctx};
+             Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
+             Tensor x = Tensor::FromInt32("x", {2, 3}, {1, 2, 3, 4, 5, 6});
+             Tensor y = Tensor::FromInt32("y", {1, 3}, {10, 20, 30});
+             Tensor output = Tensor::FromInt32("output", {2, 3}, {0, 0, 0, 0, 0, 0});
+             where_kernel(condition, x, y, output);
+             return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+           });
+  }
+
   // Mirrors upstream onnx ``test_where_long_example``: int64 inputs.
   {
     NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});

@@ -312,6 +312,8 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
     """Converts a TensorProto object to a numpy array.
 
     This function uses ml_dtypes if the dtype is not a native numpy dtype.
+    Deferred tensors must first be loaded explicitly; their materialized bytes
+    are used without reopening the backing file.
 
     Args:
         tensor: a TensorProto object.
@@ -338,7 +340,12 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
 
     # Read external bytes without changing the tensor's storage or metadata.
     external_raw_data = None
-    if int(tensor.data_location) == int(TensorProto.EXTERNAL):
+    deferred = isinstance(tensor, TensorProto) and tensor.has_deferred_weight()
+    if deferred and not tensor.HasField("raw_data"):
+        raise ValueError(
+            f"Deferred tensor {tensor.name!r} is not loaded; call ModelProto.load_weight first."
+        )
+    if not deferred and int(tensor.data_location) == int(TensorProto.EXTERNAL):
         external_raw_data = _read_external_data_bytes(tensor, base_dir)
 
     if external_raw_data is not None or len(tensor.raw_data) > 0:

@@ -1320,10 +1320,12 @@ class TestQuantizedValues(ExtTestCase):
         options.intra_op_num_threads = 1
         options.inter_op_num_threads = 1
         for bits in (2, 4, 8):
-            # ORT CPU has no 8-bit unpacked-compute path for floating zero points.
-            modes = ("implicit", "packed") if bits == 8 else ("implicit", "packed", "floating")
+            # ORT CPU supports floating zero points only for 4-bit weights,
+            # and 2-bit weights only with float32 inputs.
+            modes = ("implicit", "packed", "floating") if bits == 4 else ("implicit", "packed")
+            dtypes = (numpy.float32,) if bits == 2 else (numpy.float32, numpy.float16)
             for mode in modes:
-                for dtype in (numpy.float32, numpy.float16):
+                for dtype in dtypes:
                     for k, block_size in ((35, 16), (65, 32), (64, 64)):
                         with self.subTest(
                             bits=bits, mode=mode, dtype=dtype, k=k, block_size=block_size

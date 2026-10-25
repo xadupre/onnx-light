@@ -576,6 +576,10 @@ void TensorProto::Segment::PrintToStringStream(std::stringstream &ss,
 // TensorProto
 
 void TensorProto::CopyFrom(const TensorProto &proto) {
+  if (proto.HasDeferredWeight()) {
+    *this = proto;
+    return;
+  }
   const auto &raw = proto.ref_raw_data();
   if (raw.is_borrowed() && raw.owner().use_count() != 0) {
     *this = proto;
@@ -587,6 +591,8 @@ void TensorProto::CopyFrom(const TensorProto &proto) {
 }
 SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                SerializeOptions &options) const {
+  EXT_ENFORCE(!HasDeferredWeight() || (has_raw_data() && !options.skip_raw_data),
+              "Cannot serialize an unloaded deferred weight '", str_name(), "'.");
   SerializeSizeResult size;
   const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
                                        ref_data_location() == DataLocation::EXTERNAL &&
@@ -594,7 +600,9 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, dims)
   SIZE_ENUM_FIELD(size, options, stream, data_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, segment)
-  SIZE_ENUM_FIELD(size, options, stream, data_location)
+  if (!HasDeferredWeight() || write_external_raw_data) {
+    SIZE_ENUM_FIELD(size, options, stream, data_location)
+  }
   SIZE_FIELD_NULL(size, options, stream, name)
   if (has_raw_data()) {
     if (!write_external_raw_data) {
@@ -604,7 +612,9 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
     }
   }
   SIZE_FIELD(size, options, stream, doc_string)
-  SIZE_REPEATED_FIELD(size, options, stream, external_data)
+  if (!HasDeferredWeight() || write_external_raw_data) {
+    SIZE_REPEATED_FIELD(size, options, stream, external_data)
+  }
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, double_data)
   SIZE_REPEATED_FIELD(size, options, stream, float_data)
@@ -702,6 +712,8 @@ void TensorProto::WriteExternalData(utils::BinaryWriteStream &stream,
 }
 void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
+  EXT_ENFORCE(!HasDeferredWeight() || (has_raw_data() && !options.skip_raw_data),
+              "Cannot serialize an unloaded deferred weight '", str_name(), "'.");
   const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
                                        ref_data_location() == DataLocation::EXTERNAL &&
                                        stream.ExternalWeights();
@@ -715,13 +727,17 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, segment)
-  WRITE_ENUM_FIELD(options, stream, data_location)
+  if (!HasDeferredWeight() || write_external_raw_data) {
+    WRITE_ENUM_FIELD(options, stream, data_location)
+  }
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data() && !write_external_raw_data) {
     write_field_limit(stream, order_raw_data(), raw_data_, options);
   }
   WRITE_FIELD(options, stream, doc_string)
-  WRITE_REPEATED_FIELD(options, stream, external_data)
+  if (!HasDeferredWeight() || write_external_raw_data) {
+    WRITE_REPEATED_FIELD(options, stream, external_data)
+  }
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, double_data)
   WRITE_REPEATED_FIELD(options, stream, float_data)
@@ -731,6 +747,8 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, string_data)
 }
 bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  const std::string source_identity = utils::detail::ValidateDeferredWeightParse(stream, options);
+  deferred_weight_source.reset();
   READ_BEGIN(options, stream, TensorProto)                 //
   READ_REPEATED_FIELD(options, stream, dims)               //
   READ_ENUM_FIELD(options, stream, data_type)              //
@@ -739,8 +757,27 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
   else if (static_cast<int>(field_number.field_number) == order_raw_data()) {
-    read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
-                                 "raw_data", options);
+    if (options.defer_weights) {
+      EXT_ENFORCE(field_number.wire_type == FIELD_FIXED_SIZE,
+                  "Deferred raw_data requires a length-delimited field.");
+      const uint64_t length = stream.next_uint64();
+      stream.CanRead(length, "Deferred raw_data exceeds stream bounds");
+      EXT_ENFORCE(length <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+                  "Deferred raw_data length overflows.");
+      CheckAllocationLimit(length, options, "raw_data", "defer_weights");
+      utils::detail::DeferInlineWeight(*this, stream, stream.tell(), static_cast<int64_t>(length),
+                                       options);
+      stream.skip_bytes(static_cast<int64_t>(length));
+    } else {
+      read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
+                                   "raw_data", options);
+    }
+  }
+  else if (options.defer_weights &&
+           (field_number.field_number == 4 || field_number.field_number == 5 ||
+            field_number.field_number == 6 || field_number.field_number == 7 ||
+            field_number.field_number == 10 || field_number.field_number == 11)) {
+    EXT_THROW("defer_weights does not support typed tensor payload fields; use raw_data.");
   } //
   READ_REPEATED_FIELD(options, stream, external_data)  //
   READ_REPEATED_FIELD(options, stream, metadata_props) //
@@ -751,7 +788,13 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_REPEATED_FIELD(options, stream, uint64_data)    //
   READ_REPEATED_FIELD(options, stream, string_data)    //
   READ_END(options, stream, TensorProto)               //
-                                         // After the reading, we need to check the data location.
+  if (options.defer_weights) {
+    utils::detail::FinishDeferredWeight(*this, stream, options);
+    EXT_ENFORCE(source_identity == utils::detail::ValidateDeferredWeightParse(stream, options),
+                "Deferred model backing file changed while parsing.");
+    return true;
+  }
+  // After the reading, we need to check the data location.
   if (has_data_location() && ref_data_location() == DataLocation::EXTERNAL &&
       stream.ExternalWeights()) {
     for (const auto &entry : ref_external_data())
@@ -905,6 +948,10 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   return true;
 }
 void TensorProto::LoadExternalData(const std::string &base_dir) {
+  if (HasDeferredWeight()) {
+    LoadDeferredWeight();
+    return;
+  }
   for (const auto &entry : ref_external_data())
     EXT_ENFORCE(entry.key() != utils::detail::kExternalDataEncryptionKey,
                 "Encrypted external weights require LoadEncryptedExternalDataForModel.");
@@ -1522,6 +1569,7 @@ void StructTypeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, type_id)
 }
 bool StructTypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support StructTypeProto.");
   READ_BEGIN(options, stream, StructTypeProto)              //
   READ_ONEOF_PROTO_FIELD(options, stream, array)            //
   READ_ONEOF_PROTO_FIELD(options, stream, structure)        //
@@ -1575,6 +1623,7 @@ void EncodedValueProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, parameter_ref)
 }
 bool EncodedValueProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support EncodedValueProto.");
   READ_BEGIN(options, stream, EncodedValueProto)           //
   READ_ONEOF_PROTO_FIELD(options, stream, affine)          //
   READ_ONEOF_PROTO_FIELD(options, stream, struct_type)     //
@@ -1637,6 +1686,7 @@ void PagedCacheBlockProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, encoded_value)
 }
 bool PagedCacheBlockProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support PagedCacheBlockProto.");
   READ_BEGIN(options, stream, PagedCacheBlockProto)
   READ_FIELD(options, stream, start)
   READ_FIELD(options, stream, length)
@@ -2190,9 +2240,25 @@ void RewritingProto::PrintToStringStream(std::stringstream &ss,
 
 // ModelProto
 
-IMPLEMENT_PROTO(ModelProto)
+void ModelProto::CopyFrom(const ModelProto &proto) {
+  if (this == &proto)
+    return;
+  if (proto.HasDeferredWeights()) {
+    ModelProto copied = utils::CopyWithSharedTensorStorage(proto);
+    IteratorTensorProto iterator(&copied);
+    while (iterator.next()) {
+      auto &raw = iterator->ref_raw_data();
+      raw = utils::ByteSpan(raw);
+    }
+    *this = std::move(copied);
+  } else {
+    CopyProtoFrom(*this, proto);
+  }
+}
 SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
                                               SerializeOptions &options) const {
+  EXT_ENFORCE(!HasDeferredWeights() || options.format == SerializeFormat::kOnnx,
+              "Models retaining deferred sources support single-file ONNX export only.");
   if (options.raw_data_callback || options.node_callback) {
     // Apply the callbacks in place and restore afterwards instead of copying the whole model.
     // Serialization is logically const: the restorer reverts every touched tensor/node before
@@ -2231,6 +2297,8 @@ SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
 }
 void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                    SerializeOptions &options) const {
+  EXT_ENFORCE(!HasDeferredWeights() || options.format == SerializeFormat::kOnnx,
+              "Models retaining deferred sources support single-file ONNX export only.");
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
     EXT_ENFORCE(!stream.ExternalWeights(),
                 "ORT FlatBuffers serialization does not support external weights output.");
@@ -2303,6 +2371,7 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   write_map_field(stream, order_rewritings(), rewritings_, options);
 }
 bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  const std::string source_identity = utils::detail::ValidateDeferredWeightParse(stream, options);
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
     ParseModelFromOrtFlatbuffers(*this, stream, options);
     return true;
@@ -2325,6 +2394,9 @@ bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
                    options);
   }
   READ_END(options, stream, ModelProto) //  // NOLINT
+  EXT_ENFORCE(!options.defer_weights ||
+                  source_identity == utils::detail::ValidateDeferredWeightParse(stream, options),
+              "Deferred model backing file changed while parsing.");
   return true;
 }
 void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
@@ -2350,6 +2422,8 @@ bool ModelProto::SerializeToString(std::string &out,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
                                    const SerializeOptions &opts) const {
+  EXT_ENFORCE(!HasDeferredWeights(),
+              "Reload a single-file export eagerly before exporting external weight files.");
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "ModelProto::SerializeToString: external files output requires "
               "SerializeFormat::kOnnx.");
@@ -2387,6 +2461,7 @@ bool ModelProto::SerializeToString(std::string &out,
 IMPLEMENT_PROTO(PipelineProto)
 SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                  SerializeOptions &options) const {
+  ValidateDeferredExport();
   if (options.raw_data_callback || options.node_callback) {
     PipelineProto &mutable_self = const_cast<PipelineProto &>(*this);
     SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, options);
@@ -2421,6 +2496,7 @@ SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &strea
 }
 void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                       SerializeOptions &options) const {
+  ValidateDeferredExport();
   WRITE_FIELD(options, stream, name)
   WRITE_FIELD(options, stream, producer_name)
   WRITE_FIELD(options, stream, producer_version)
@@ -2444,6 +2520,7 @@ void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 bool PipelineProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support PipelineProto.");
   READ_BEGIN(options, stream, PipelineProto)            //
   READ_FIELD(options, stream, name)                     //
   READ_FIELD(options, stream, producer_name)            //
@@ -3310,6 +3387,38 @@ bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor
 
 #undef VISIT_FIELD
 
+class DeferredSourceVisitor {
+public:
+  template <typename T>
+  bool operator()(const char *, bool present, bool, const T &value, const T &) {
+    return !present || !Contains(value);
+  }
+
+  template <typename T> bool Contains(const T &value) {
+    if constexpr (std::is_same_v<T, TensorProto>) {
+      return value.HasDeferredWeight();
+    } else if constexpr (requires { T::proto_id; }) {
+      return !VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      return value.has_value() && Contains(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (const auto &entry : value)
+        if (Contains(entry.second))
+          return true;
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (const auto &element : value)
+          if (Contains(element))
+            return true;
+    }
+    return false;
+  }
+};
+
 class ParseScopeCallbackVisitor {
 public:
   explicit ParseScopeCallbackVisitor(const ParseOptions &options) : options_(options) {}
@@ -3429,6 +3538,67 @@ void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptio
   ParseScopeCallbackVisitor(options).Visit(model);
 }
 
+void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id) {
+  bool contains_sources;
+#define CHECK_DEFERRED_CASE(cls, id)                                                               \
+  case onnx_light::proto_serialization_detail::ProtoId::id:                                        \
+    contains_sources = DeferredSourceVisitor().Contains(*static_cast<const cls *>(source));        \
+    break;
+  switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
+    CHECK_DEFERRED_CASE(TypeProto, TypeProto)
+    CHECK_DEFERRED_CASE(TypeProto::Tensor, Tensor)
+    CHECK_DEFERRED_CASE(TypeProto::SparseTensor, SparseTensor)
+    CHECK_DEFERRED_CASE(TypeProto::Sequence, Sequence)
+    CHECK_DEFERRED_CASE(TypeProto::Optional, Optional)
+    CHECK_DEFERRED_CASE(TypeProto::Map, Map)
+    CHECK_DEFERRED_CASE(TypeProto::Opaque, Opaque)
+    CHECK_DEFERRED_CASE(TensorShapeProto, TensorShapeProto)
+    CHECK_DEFERRED_CASE(TensorShapeProto::Dimension, Dimension)
+    CHECK_DEFERRED_CASE(StructTypeProto, StructTypeProto)
+    CHECK_DEFERRED_CASE(StructTypeProto::Array, Array)
+    CHECK_DEFERRED_CASE(StructTypeProto::Structure, Structure)
+    CHECK_DEFERRED_CASE(StructTypeProto::Structure::Field, Field)
+    CHECK_DEFERRED_CASE(StructTypeProto::BitPacking, BitPacking)
+    CHECK_DEFERRED_CASE(StructTypeProto::BitPacking::Component, Component)
+    CHECK_DEFERRED_CASE(StringStringEntryProto, StringStringEntryProto)
+    CHECK_DEFERRED_CASE(TensorProto, TensorProto)
+    CHECK_DEFERRED_CASE(TensorProto::Segment, Segment)
+    CHECK_DEFERRED_CASE(SparseTensorProto, SparseTensorProto)
+    CHECK_DEFERRED_CASE(LocalRewritingProto, LocalRewritingProto)
+    CHECK_DEFERRED_CASE(RewritingProto, RewritingProto)
+    CHECK_DEFERRED_CASE(FunctionProto, FunctionProto)
+    CHECK_DEFERRED_CASE(OperatorSetIdProto, OperatorSetIdProto)
+    CHECK_DEFERRED_CASE(ValueInfoProto, ValueInfoProto)
+    CHECK_DEFERRED_CASE(NodeProto, NodeProto)
+    CHECK_DEFERRED_CASE(AttributeProto, AttributeProto)
+    CHECK_DEFERRED_CASE(GraphProto, GraphProto)
+    CHECK_DEFERRED_CASE(TensorAnnotation, TensorAnnotation)
+    CHECK_DEFERRED_CASE(PersistentBindingProto, PersistentBindingProto)
+    CHECK_DEFERRED_CASE(PagedCacheBlockProto, PagedCacheBlockProto)
+    CHECK_DEFERRED_CASE(PagedCacheProto, PagedCacheProto)
+    CHECK_DEFERRED_CASE(ExtendedInitializerProto, ExtendedInitializerProto)
+    CHECK_DEFERRED_CASE(EncodedValueProto, EncodedValueProto)
+    CHECK_DEFERRED_CASE(AffineLayoutProto, AffineLayoutProto)
+    CHECK_DEFERRED_CASE(NodeDeviceConfigurationProto, NodeDeviceConfigurationProto)
+    CHECK_DEFERRED_CASE(ShardingSpecProto, ShardingSpecProto)
+    CHECK_DEFERRED_CASE(IntIntListEntryProto, IntIntListEntryProto)
+    CHECK_DEFERRED_CASE(ShardedDimProto, ShardedDimProto)
+    CHECK_DEFERRED_CASE(SimpleShardedDimProto, SimpleShardedDimProto)
+    CHECK_DEFERRED_CASE(DeviceConfigurationProto, DeviceConfigurationProto)
+    CHECK_DEFERRED_CASE(ModelProto, ModelProto)
+    CHECK_DEFERRED_CASE(PipelineProto, PipelineProto)
+    CHECK_DEFERRED_CASE(SequenceProto, SequenceProto)
+    CHECK_DEFERRED_CASE(MapProto, MapProto)
+    CHECK_DEFERRED_CASE(OptionalProto, OptionalProto)
+  default:
+    EXT_THROW("Unsupported proto type for deferred export validation: ", proto_id, ".");
+  }
+#undef CHECK_DEFERRED_CASE
+  EXT_ENFORCE(!contains_sources,
+              "Standalone submessage export with deferred sources is unsupported; export the "
+              "owning model.");
+}
+
 #define DEFINE_PROTO_EQUALS(cls)                                                                   \
   bool cls::Equals(const cls &right, std::string *difference) const {                              \
     return VisitProtoFields(*this, right, ProtoComparison(difference));                            \
@@ -3515,7 +3685,8 @@ void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const vo
     COPY_PROTO_CASE(StructTypeProto::BitPacking, BitPacking)
     COPY_PROTO_CASE(StructTypeProto::BitPacking::Component, Component)
     COPY_PROTO_CASE(StringStringEntryProto, StringStringEntryProto)
-    COPY_PROTO_CASE(TensorProto, TensorProto)
+    COPY_PROTO_CASE(TensorProto, TensorProto,
+                    to.deferred_weight_source = from.deferred_weight_source;)
     COPY_PROTO_CASE(TensorProto::Segment, Segment)
     COPY_PROTO_CASE(SparseTensorProto, SparseTensorProto)
     COPY_PROTO_CASE(LocalRewritingProto, LocalRewritingProto)

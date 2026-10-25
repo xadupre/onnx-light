@@ -294,7 +294,8 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.HasValue(initializer.name()) &&
-          (initializer.data_location() != TensorProto::EXTERNAL || initializer.is_raw_data())) {
+          (initializer.HasDeferredWeight() ||
+           initializer.data_location() != TensorProto::EXTERNAL || initializer.is_raw_data())) {
         rt.Set(initializer.name(), Tensor::BorrowInitializer(initializer),
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());

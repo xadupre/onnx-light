@@ -187,6 +187,8 @@ bool ProtoMessageAdapter<Derived>::SerializeToString(std::string *out) const {
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToString(std::string &out,
                                                      SerializeOptions &opts) const {
+  if constexpr (std::is_same_v<Derived, PipelineProto>)
+    derived().ValidateDeferredExport();
   if constexpr (std::is_same_v<Derived, ModelProto> || std::is_same_v<Derived, PipelineProto>) {
     if (opts.raw_data_callback || opts.node_callback) {
       Derived &mutable_proto = const_cast<Derived &>(derived());
@@ -230,6 +232,16 @@ bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd) const {
 
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {
+  if constexpr (std::is_same_v<Derived, PipelineProto>)
+    derived().ValidateDeferredExport();
+  if constexpr (std::is_same_v<Derived, TensorProto>)
+    EXT_ENFORCE(!derived().HasDeferredWeight(),
+                "Standalone deferred tensor export is unsupported; export the owning model.");
+  if constexpr (!std::is_same_v<Derived, ModelProto> && !std::is_same_v<Derived, PipelineProto> &&
+                !std::is_same_v<Derived, TensorProto>)
+    utils::detail::ValidateDeferredSubmessageExport(&derived(), Derived::proto_id);
+  if constexpr (std::is_same_v<Derived, ModelProto>)
+    derived().ValidateWeightSaveDescriptor(fd);
   if constexpr (std::is_same_v<Derived, ModelProto> || std::is_same_v<Derived, PipelineProto>) {
     if (opts.raw_data_callback || opts.node_callback) {
       Derived &mutable_proto = const_cast<Derived &>(derived());
@@ -297,6 +309,12 @@ bool ProtoMessageAdapter<Derived>::SerializeToArray(void *data, int size) const 
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToOstream(std::ostream *output) const {
   EXT_ENFORCE(output != nullptr, "SerializeToOstream: output stream pointer must not be null.");
+  if constexpr (std::is_same_v<Derived, TensorProto>)
+    EXT_ENFORCE(!derived().HasDeferredWeight(),
+                "Standalone deferred tensor export is unsupported; export the owning model.");
+  if constexpr (!std::is_same_v<Derived, ModelProto> && !std::is_same_v<Derived, PipelineProto> &&
+                !std::is_same_v<Derived, TensorProto>)
+    utils::detail::ValidateDeferredSubmessageExport(&derived(), Derived::proto_id);
   std::string out;
   if (!SerializeToString(out))
     return false;
@@ -313,6 +331,12 @@ template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToZeroCopyStream(
     utils::BinaryWriteStream *output) const {
   EXT_ENFORCE(output != nullptr, "SerializeToZeroCopyStream: output pointer must not be null.");
+  if constexpr (std::is_same_v<Derived, TensorProto>)
+    EXT_ENFORCE(!derived().HasDeferredWeight(),
+                "Standalone deferred tensor export is unsupported; export the owning model.");
+  if constexpr (!std::is_same_v<Derived, ModelProto> && !std::is_same_v<Derived, PipelineProto> &&
+                !std::is_same_v<Derived, TensorProto>)
+    utils::detail::ValidateDeferredSubmessageExport(&derived(), Derived::proto_id);
   std::string buffer;
   if (!SerializeToString(buffer))
     return false;

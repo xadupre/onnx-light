@@ -464,11 +464,14 @@ std::string encrypted_digest(const std::string &blob) {
   return hex_bytes(digest, size);
 }
 
-void write_encrypted_file(const std::filesystem::path &path, const std::string &blob) {
+void write_encrypted_file(const std::filesystem::path &path, const std::string &blob,
+                          const ModelProto *model = nullptr) {
   const auto parent = path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
   auto file = utils::detail::OpenExternalDataFile(
       utils::detail::external_path_to_utf8(parent),
       utils::detail::external_path_to_utf8(path.filename()), true);
+  if (model != nullptr)
+    model->ValidateWeightSaveDescriptor(*file);
   utils::FileWriteStream stream(utils::detail::external_path_to_utf8(path), std::move(file));
   stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(blob.data()), blob.size());
 }
@@ -660,6 +663,9 @@ void reject_unsupported_external_data(const ModelProto &model) {
 void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &file_path,
                                         const std::string &key, size_t max_external_file_size,
                                         size_t size_threshold) {
+  EXT_ENFORCE(!model.HasDeferredWeights(),
+              "Reload a single-file export eagerly before exporting deferred weights encrypted "
+              "with external data.");
   validate_external_limits(key, max_external_file_size);
   const size_t capacity = max_external_file_size - GCM_HEADER_SIZE;
   reject_unsupported_external_data(model);
@@ -859,12 +865,17 @@ void LoadEncryptedExternalDataForModel(ModelProto &model, const std::string &bas
 
 void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
                         const SerializeOptions &opts, const std::string &encryption) {
+  model.ValidateWeightSavePath(file_path);
   std::string plain;
   SerializeOptions mutable_opts = opts;
   model.SerializeToString(plain, mutable_opts);
 
   const std::string blob = encrypt_to_blob(plain, key, encryption);
 
+  if (model.HasDeferredWeights()) {
+    write_encrypted_file(utils::detail::external_path_from_utf8(file_path), blob, &model);
+    return;
+  }
   std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
   if (!ofs.is_open())
     throw std::runtime_error("Cannot open file for writing: " + file_path);

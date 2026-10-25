@@ -114,6 +114,12 @@ struct ParseOptions : TensorBufferOptions {
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
   bool skip_raw_data = false;
+  /** Defers every raw tensor payload when parsing an ONNX file. Retains immutable backing-file
+   *  ranges for ModelProto::LoadWeight/UnloadWeight, without changing external_data metadata.
+   *  Requires a FileStream or MmapFileStream, no explicit external stream, no_copy=false, and
+   *  tiny_external_data_threshold < 0. Typed payload fields and ORT input are unsupported.
+   *  Unlike skip_raw_data, this option ignores raw_data_threshold and permits later reloading. */
+  bool defer_weights = false;
   /** Number of threads to use for parallel reading of big blocks.
    *  - ``1`` (default): no parallelization, everything runs on the calling thread.
    *  - ``> 1``: use exactly this many worker threads.

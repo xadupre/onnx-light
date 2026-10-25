@@ -530,6 +530,11 @@ public:                                                                         
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+namespace utils::detail {
+/** Rejects standalone exports containing deferred tensor sources, including nested fields. */
+ONNX_LIGHT_PROTO_API void ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id);
+} // namespace utils::detail
+
 using utils::offset_t;
 
 /** Returns true if the field holds a non-default value (always true for scalar types other

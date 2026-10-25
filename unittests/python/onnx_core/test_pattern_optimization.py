@@ -83,6 +83,54 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestPatternSelection(ExtTestCase):
+    def test_standard_pattern_sets_overlap_without_changing_defaults(self):
+        pattern_sets = optim.standard_pattern_sets()
+        all_names = set(pattern_sets["all"])
+
+        self.assertEqual(
+            pattern_sets,
+            {
+                name: tuple(names)
+                for name, names in _onnxpypatterns.registered_pattern_sets().items()
+            },
+        )
+        self.assertEqual(set(pattern_sets), {"all", "L1", "L2", "Layer"})
+        self.assertEqual(
+            optim.standard_pattern_set_names(), _onnxpypatterns.registered_pattern_set_names()
+        )
+        self.assertEqual(set(optim.standard_pattern_set_names()), set(pattern_sets))
+        self.assertEqual(
+            all_names,
+            set(pattern_sets["L1"]) | set(pattern_sets["L2"]) | set(pattern_sets["Layer"]),
+        )
+        self.assertTrue(set(pattern_sets["L1"]).isdisjoint(pattern_sets["L2"]))
+        self.assertEqual(pattern_sets["Layer"], ("RepeatedLayer",))
+        self.assertTrue(
+            {"ConvAddFusion", "MatMulAdd", "LayerNormalization"}.issubset(pattern_sets["L1"])
+        )
+        self.assertNotIn("RepeatedLayer", optim.standard_pattern_names())
+        self.assertEqual(
+            [pattern.name for pattern in optim.standard_patterns(pattern_sets["Layer"])],
+            ["RepeatedLayer"],
+        )
+
+    def test_pattern_sets_can_be_extended_and_created(self):
+        custom = NegNegPattern(name="CustomNegNeg")
+        optim.register_pattern(custom)
+        self.addCleanup(optim.unregister_pattern, "CustomNegNeg")
+
+        optim.register_pattern_set("custom", ["CustomNegNeg"])
+        self.addCleanup(optim.unregister_pattern_set, "custom")
+        optim.extend_pattern_set("custom", ["GatherToSlice", "CustomNegNeg"])
+
+        pattern_sets = optim.standard_pattern_sets()
+        self.assertIn("custom", optim.standard_pattern_set_names())
+        self.assertEqual(pattern_sets["custom"], ("CustomNegNeg", "GatherToSlice"))
+        self.assertIn("CustomNegNeg", pattern_sets["all"])
+        self.assertIn("GatherToSlice", pattern_sets["L2"])
+        self.assertIs(optim.standard_patterns(pattern_sets["custom"])[0], custom)
+        self.assertTrue(optim.unregister_pattern_set("custom"))
+
     def test_pattern_listing_defaults_and_explicit_opt_in(self):
         optim.reset_registered_patterns()
         active_names = optim.registered_pattern_names()

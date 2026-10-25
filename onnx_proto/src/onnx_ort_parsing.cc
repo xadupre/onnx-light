@@ -891,6 +891,7 @@ void OrtCallbacks(GraphProto &graph, ParseOptions &options) {
 
 void ParseModelFromOrtFlatbuffers(ModelProto &model, utils::BinaryStream &stream,
                                   ParseOptions &options) {
+  EXT_ENFORCE(!options.defer_weights, "defer_weights does not support ORT input.");
   EXT_ENFORCE(options.max_recursion_depth > 0, "ORT parsing: max_recursion_depth must be positive");
   EXT_ENFORCE(options.max_tensor_size_bytes >= 0,
               "ORT parsing: max_tensor_size_bytes must be non-negative");

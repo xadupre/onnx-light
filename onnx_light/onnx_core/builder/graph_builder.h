@@ -216,8 +216,9 @@ public:
   bool IsLocalFunction(const std::string &name, const std::string &domain,
                        const std::string &overload = "") const noexcept {
     const bool same_domain = function_domain_ == domain ||
-                             ((function_domain_.empty() || function_domain_ == "ai.onnx") &&
-                              (domain.empty() || domain == "ai.onnx"));
+                             ((function_domain_.empty() || function_domain_ == "ai.onnx" ||
+                               function_domain_ == "onnx.ai") &&
+                              (domain.empty() || domain == "ai.onnx" || domain == "onnx.ai"));
     return is_local_function_ && name_ == name && same_domain &&
            function_template_.overload().value() == overload;
   }

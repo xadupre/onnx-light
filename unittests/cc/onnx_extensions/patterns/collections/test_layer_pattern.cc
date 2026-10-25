@@ -941,6 +941,46 @@ TEST(RepeatedLayerPattern, LocalCompositeCallsRetainTheirDefinitions) {
   EXPECT_EQ(model.functions().size(), 1u + ExpectLayerContracts(model.graph()));
 }
 
+TEST(RepeatedLayerPattern, RootTraversalSurvivesHelpersAppendedByMultipleFunctions) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  constexpr std::size_t count = 8;
+  for (std::size_t index = 0; index < count; ++index) {
+    const std::string name = "Source" + std::to_string(index);
+    auto &source = builder.MakeLocalFunction(name, "local.test");
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    source.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    std::string input = "x";
+    for (int layer = 0; layer < 3; ++layer) {
+      const std::string output = "h" + std::to_string(layer);
+      AddMatMulLayer(source, input, "w", output);
+      input = output;
+    }
+    source.MakeOutput(input);
+    const std::string output = "y" + std::to_string(index);
+    builder.MakeNode(name, {"x", "w"}, {output}, "local.test");
+    builder.MakeOutput(output);
+  }
+  const auto original = builder.ToModel();
+  const auto plan = OptimizeLayers(builder);
+  EXPECT_EQ(plan.replaced_function_ids().size(), count);
+  EXPECT_GT(builder.LocalFunctions().size(), count);
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto &source = builder.LocalFunction("Source" + std::to_string(index));
+    ASSERT_EQ(source.Nodes().size(), 3u);
+    for (const auto &node : source.Nodes())
+      EXPECT_EQ(node.domain(), "ai.rt");
+  }
+  const auto optimized = builder.ToModel();
+  EXPECT_NO_THROW(VerifyModel(optimized));
+  auto replayed = core::builder::GraphBuilder(original, LayerSchemaLookup()).ApplyRewritings(plan);
+  EXPECT_TRUE(replayed.ToModel().Equals(optimized));
+  const auto restored = builder.UndoRewritings(plan);
+  for (std::size_t index = 0; index < count; ++index)
+    EXPECT_EQ(restored.LocalFunction("Source" + std::to_string(index)).Nodes().size(), 6u);
+}
+
 TEST(RepeatedLayerPattern, ExtractedFunctionInheritsSourceFunctionOpsets) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
   auto &source = builder.MakeLocalFunction("Source", "local.test");

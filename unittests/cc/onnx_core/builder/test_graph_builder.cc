@@ -3487,6 +3487,36 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
   EXPECT_FLOAT_EQ(resolved.f(), 0.25f);
 }
 
+TEST(GraphBuilder, LocalFunctionIdentityNormalizesAllDefaultDomainAliases) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    SCOPED_TRACE(domain);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    FunctionProto definition;
+    definition.set_name("Alias");
+    definition.set_domain(domain);
+    definition.set_overload("typed");
+    definition.add_opset("", 28);
+    definition.add_input("X");
+    definition.add_output("Y");
+    definition.add_node("Neg", {"X"}, {"Y"});
+    auto &function = builder.MakeLocalFunction(definition);
+    auto &branch = function.MakeSubgraph("branch");
+    auto &nested = branch.MakeSubgraph("nested");
+    for (const std::string query_domain : {"", "ai.onnx", "onnx.ai"}) {
+      EXPECT_TRUE(builder.Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey(query_domain, "Alias", "typed")));
+      EXPECT_TRUE(function.IsLocalFunction("Alias", query_domain, "typed"));
+      EXPECT_TRUE(nested.IsInsideLocalFunction("Alias", query_domain, "typed"));
+      EXPECT_FALSE(function.IsLocalFunction("Alias", query_domain));
+      EXPECT_FALSE(nested.IsInsideLocalFunction("Alias", query_domain, "other"));
+      EXPECT_FALSE(branch.IsLocalFunction("Alias", query_domain, "typed"));
+    }
+    EXPECT_FALSE(function.IsLocalFunction("Alias", "custom", "typed"));
+    EXPECT_FALSE(nested.IsInsideLocalFunction("Other", domain, "typed"));
+    EXPECT_FALSE(builder.IsInsideLocalFunction("Alias", domain, "typed"));
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 

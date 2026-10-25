@@ -60,6 +60,12 @@ are compatible; a helper cannot extract itself, including from a nested scope.
 Helper compatibility tolerates materialized constants moving to the beginning
 of a function, renamed constant aliases, and typed versus raw tensor encoding;
 constant values and executable node attributes must still match.
+During a single optimization pass, helper reuse may also validate against the
+captured pre-optimization definition when other patterns have already rewritten
+its body. This provenance is pass-local, is not inferred from a helper's name,
+and does not allow an initially conflicting definition.
+Function traversal snapshots stable builder pointers before visiting children,
+so helpers appended to the root by nested rewrites do not invalidate traversal.
 Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
 nodes whose attributes still contain unresolved function-attribute references,
@@ -70,6 +76,9 @@ such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions(node)``
 (``supports_local_functions(node)`` in Python) to return true for supported calls.
 Attention and rotary second-stage patterns accept their intermediate helper
 identities, without allowing local overrides of the surrounding primitives.
+Cast elimination also rejects replacements that would introduce an overridden
+default-domain ``Identity``; default-domain function identity checks treat
+``""``, ``ai.onnx``, and ``onnx.ai`` consistently.
 Replay validates surviving value tags in every retained graph-attribute
 occurrence, including separate exported copies of a shared subgraph.
 Constant folding forwards raw initializer storage through native Identity nodes

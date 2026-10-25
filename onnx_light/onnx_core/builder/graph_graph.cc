@@ -1263,12 +1263,24 @@ GraphGraph::GraphGraph(GraphBuilder &builder,
 GraphGraph::GraphGraph(GraphBuilder &builder,
                        const std::vector<std::shared_ptr<PatternOptimization>> &patterns,
                        DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
-                       std::size_t parent_position_limit)
+                       std::size_t parent_position_limit,
+                       const OriginalFunctions *original_functions)
     : builder_(builder), patterns_(patterns), do_not_remove_(std::move(do_not_remove)),
-      parent_graph_(parent_graph), parent_position_limit_(parent_position_limit) {
-  if (builder_.device() == symbolic::Device::kUndefined)
+      parent_graph_(parent_graph), parent_position_limit_(parent_position_limit),
+      original_functions_(original_functions) {
+  if (parent_graph_ != nullptr && builder_.device() == symbolic::Device::kUndefined)
     builder_.set_device(parent_graph_->builder_.device());
   Rebuild();
+}
+
+const FunctionProto *GraphGraph::FunctionBeforeOptimization(const std::string &domain,
+                                                            const std::string &name,
+                                                            const std::string &overload) const {
+  if (original_functions_ == nullptr)
+    return nullptr;
+  const auto found =
+      original_functions_->find(ShapesContext::LocalFunctionKey(domain, name, overload));
+  return found == original_functions_->end() ? nullptr : found->second;
 }
 
 void GraphGraph::SetTargetDevice(symbolic::Device device) {
@@ -1494,9 +1506,20 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   auto original_definitions = GraphBuilder::DependencyOrderFunctions(
       utils::CopyWithSharedTensorStorage(collection.added_functions()));
   FunctionIndex original_function_index;
-  for (const auto &function : original_definitions)
+  OriginalFunctions original_functions_by_key;
+  for (const auto &function : original_definitions) {
     original_function_index.emplace(Identity(function), &function);
+    original_functions_by_key.emplace(
+        ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()),
+        &function);
+  }
   const std::size_t original_functions = collection.added_functions().size();
+  struct OriginalFunctionsScope {
+    const OriginalFunctions *&slot;
+    const OriginalFunctions *previous;
+    ~OriginalFunctionsScope() { slot = previous; }
+  } original_functions_scope{original_functions_, original_functions_};
+  original_functions_ = &original_functions_by_key;
   auto result =
       OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
@@ -1625,6 +1648,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
     fast_op_types_by_pattern.push_back(pattern->FastOpType());
   }
+  std::vector<GraphBuilder *> functions;
+  functions.reserve(builder_.local_functions_.size());
+  for (const auto &function : builder_.local_functions_)
+    functions.push_back(function.get());
 
   RewritingProto result;
   auto &applied = result.ref_rewrites();
@@ -1638,7 +1665,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       subgraph_start = std::chrono::steady_clock::now();
     }
-    GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
+    GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit,
+                           original_functions_);
     RewritingProto child_rewrites =
         child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
                                  folding_options, remove_unused, collection, undo);
@@ -1682,8 +1710,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       optimize_subgraph(*subgraph, builder_.nodes_.size());
     }
   }
-  for (const std::unique_ptr<GraphBuilder> &function : builder_.local_functions_) {
-    if (!optimized_subgraphs.insert(function.get()).second) {
+  for (GraphBuilder *function : functions) {
+    if (!optimized_subgraphs.insert(function).second) {
       continue;
     }
     std::vector<std::string> function_path = graph_path;
@@ -1692,8 +1720,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     const auto function_start = std::chrono::steady_clock::now();
     if (function->device() == symbolic::Device::kUndefined)
       function->set_device(builder_.device());
-    GraphGraph child_graph(*function, patterns_);
-    child_graph.do_not_remove_ = do_not_remove_;
+    GraphGraph child_graph(*function, patterns_, do_not_remove_, nullptr, 0, original_functions_);
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
                              folding_options, remove_unused, collection, child_undo);

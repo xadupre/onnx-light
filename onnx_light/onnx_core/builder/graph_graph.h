@@ -104,6 +104,12 @@ public:
     return patterns_;
   }
 
+  /// Returns a function captured before this optimization pass, or nullptr outside a pass.
+  /// The definition remains valid only during the current pattern invocation.
+  const FunctionProto *FunctionBeforeOptimization(const std::string &domain,
+                                                  const std::string &name,
+                                                  const std::string &overload = "") const;
+
   // ── Structural queries ───────────────────────────────────────────────
 
   /// Returns the node producing ``name``, or ``nullptr`` when ``name`` is a
@@ -190,6 +196,8 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
+  using OriginalFunctions = std::unordered_map<std::string, const FunctionProto *>;
+
   std::size_t CanonicalizeImpl(bool &reference_changed);
   void Rebuild();
   void RebuildSuccessors();
@@ -208,7 +216,8 @@ private:
   GraphGraph(GraphBuilder &builder,
              const std::vector<std::shared_ptr<PatternOptimization>> &patterns,
              DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
-             std::size_t parent_position_limit);
+             std::size_t parent_position_limit,
+             const OriginalFunctions *original_functions = nullptr);
 
   RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
                               const std::vector<std::string> &graph_path,
@@ -220,6 +229,7 @@ private:
   DoNotRemovePredicate do_not_remove_;
   const GraphGraph *parent_graph_ = nullptr;
   std::size_t parent_position_limit_ = 0;
+  const OriginalFunctions *original_functions_ = nullptr;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;
   // Value name -> consuming nodes, deduplicated, in insertion order.

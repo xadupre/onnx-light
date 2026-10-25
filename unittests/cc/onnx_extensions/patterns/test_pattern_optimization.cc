@@ -2664,6 +2664,48 @@ TEST(PatternOptimization, FunctionMatchersPreserveOverriddenPrimitivesAndSeconda
   }
 }
 
+TEST(PatternOptimization, CastMatchersRejectIntroducedIdentityOverrides) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (bool pair : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(pair);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+      auto &identity = builder.MakeLocalFunction("Identity", domain);
+      identity.MakeInput("X", core::symbolic::TensorType::kFloat16, Shape());
+      identity.MakeNode("Neg", {"X"}, {"Y"});
+      identity.MakeOutput("Y");
+      auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+      function.MakeInput("X", core::symbolic::TensorType::kFloat16, Shape());
+      if (pair)
+        AddCast(function, "X", "middle", TensorProto::FLOAT);
+      AddCast(function, pair ? "middle" : "X", "Y", TensorProto::FLOAT16);
+      function.MakeOutput("Y");
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+      builder.MakeNode("Wrapper", {"x"}, {"y"}, "test.pattern");
+      builder.MakeOutput("y");
+      const auto original = builder.ToModel();
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::CastPattern>());
+      patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+      core::builder::GraphGraph optimizer(builder, std::move(patterns));
+      const auto plan = optimizer.Optimize();
+      EXPECT_TRUE(plan.added_functions().empty());
+      EXPECT_TRUE(plan.rewrites().empty());
+      EXPECT_TRUE(builder.ToModel().Equals(original));
+
+      core::builder::GraphGraph function_graph(function);
+      onnx_patterns::CastPattern cast;
+      onnx_patterns::CastCastPattern cast_pair;
+      if (pair)
+        EXPECT_THROW(cast_pair.Apply(function_graph, {&function.Nodes()[0], &function.Nodes()[1]}),
+                     core::builder::BuilderError);
+      else
+        EXPECT_THROW(cast.Apply(function_graph, {&function.Nodes()[0]}),
+                     core::builder::BuilderError);
+    }
+  }
+}
+
 TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
   ModelProto model;
   model.add_opset("", 18);
@@ -2802,6 +2844,17 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
       const bool same_identity = domain == "intermediate" && overload.empty();
       ModelProto with_helper = original;
       FunctionProto definition = exported.functions(0);
+      definition.ref_value_info().clear();
+      for (std::size_t index = 0; index < definition.input().size(); ++index) {
+        const auto &parent = original.functions(0);
+        const auto found = std::find_if(
+            parent.value_info().begin(), parent.value_info().end(),
+            [&](const auto &info) { return info.name().value() == parent.input(index).value(); });
+        ASSERT_NE(found, parent.value_info().end());
+        auto input = *found;
+        input.set_name(definition.input(index));
+        definition.ref_value_info().push_back(std::move(input));
+      }
       definition.set_domain(domain);
       definition.set_overload(overload);
       if (conflicting)

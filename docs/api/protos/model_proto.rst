@@ -10,6 +10,11 @@ raw tensor payloads. Unlike ``skip_raw_data``, it retains a non-serialized immut
 source range for every inline ``raw_data`` field and ordinary external tensor.
 External locations remain relative to the original model directory, including
 when several tensors share one weights file. The raw-data threshold is ignored.
+The main model file is memory-mapped through its securely pinned descriptor:
+metadata decoding does not issue a system call per varint byte. Parsing accesses
+only metadata and skips raw payload ranges without copying or explicitly reading
+them. Mapping reserves virtual address space, not a resident copy of the weights;
+the operating system may still fetch neighboring bytes at page granularity.
 
 .. code-block:: python
 

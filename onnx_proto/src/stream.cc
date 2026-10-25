@@ -1447,9 +1447,10 @@ void FileStream::PinDeferredSource() {
     file_stream_.close();
     external_file_ = std::move(file);
   }
+  deferred_mapping_ = MapExternalDataFile(*external_file_);
   external_position_ = 0;
   read_buf_pos_ = read_buf_end_ = 0;
-  // Read-ahead could otherwise materialize the beginning of the next raw payload.
+  // Refill from mapped memory without reading ahead into the next raw payload.
   read_buf_.resize(1);
 }
 
@@ -1473,7 +1474,10 @@ void FileStream::_fill_read_buffer() {
     return;
   int64_t to_read = std::min(static_cast<int64_t>(read_buf_.size()), avail);
   if (external_file_) {
-    ReadExternalDataFile(*external_file_, read_buf_.data(), to_read, external_position_);
+    if (deferred_mapping_)
+      memcpy(read_buf_.data(), deferred_mapping_.get() + external_position_, to_read);
+    else
+      ReadExternalDataFile(*external_file_, read_buf_.data(), to_read, external_position_);
     external_position_ += to_read;
     read_buf_end_ = static_cast<size_t>(to_read);
   } else {
@@ -1522,9 +1526,16 @@ uint64_t FileStream::next_uint64() {
 }
 
 const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
-  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
-              "[FileStream::read_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
-              ", size=", size_);
+  EXT_ENFORCE(n_bytes >= 0, "[FileStream::read_bytes] negative size: ", n_bytes);
+  CanRead(static_cast<uint64_t>(n_bytes), "[FileStream::read_bytes]");
+  if (deferred_mapping_) {
+    _invalidate_read_buffer();
+    const uint8_t *data = deferred_mapping_.get() + external_position_;
+    if (pre_allocated_buffer && n_bytes > 0)
+      memcpy(pre_allocated_buffer, data, static_cast<size_t>(n_bytes));
+    external_position_ += n_bytes;
+    return pre_allocated_buffer ? pre_allocated_buffer : data;
+  }
   if (pre_allocated_buffer) {
     // Drain the read-ahead buffer first, then pull any remaining bytes from file.
     size_t buffered = read_buf_end_ - read_buf_pos_;
@@ -1567,9 +1578,8 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
 }
 
 void FileStream::skip_bytes(offset_t n_bytes) {
-  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
-              "[FileStream::skip_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
-              ", size=", size_);
+  EXT_ENFORCE(n_bytes >= 0, "[FileStream::skip_bytes] negative size: ", n_bytes);
+  CanRead(static_cast<uint64_t>(n_bytes), "[FileStream::skip_bytes]");
   size_t buffered = read_buf_end_ - read_buf_pos_;
   if (static_cast<size_t>(n_bytes) <= buffered) {
     read_buf_pos_ += static_cast<size_t>(n_bytes);

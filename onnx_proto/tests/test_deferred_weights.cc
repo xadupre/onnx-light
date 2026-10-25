@@ -58,6 +58,10 @@ public:
   using utils::FileStream::FileStream;
   int64_t bytes_read = 0;
   int64_t bytes_skipped = 0;
+  void CloseDeferredDescriptor() {
+    PinDeferredSource();
+    external_file_ = std::make_shared<int>(-1);
+  }
   const uint8_t *read_bytes(utils::offset_t size, uint8_t *buffer = nullptr) override {
     bytes_read += size;
     return utils::FileStream::read_bytes(size, buffer);
@@ -68,6 +72,68 @@ public:
     utils::FileStream::skip_bytes(size);
   }
 };
+
+TEST_F(DeferredWeights, PinnedMetadataReadsDoNotRequireDescriptorReads) {
+  const std::string metadata = "metadata spanning multiple read operations";
+  const std::vector<uint8_t> payload(32768 * 4, 0xAB);
+  utils::StringWriteStream encoded;
+  encoded.write_variant_uint64(300);
+  encoded.write_variant_uint64(UINT64_MAX);
+  encoded.write_raw_bytes(reinterpret_cast<const uint8_t *>(metadata.data()), metadata.size());
+  for (uint64_t i = 0; i < 8192; ++i)
+    encoded.write_variant_uint64(16384 + i);
+  encoded.write_raw_bytes(payload.data(), payload.size());
+  encoded.write_variant_uint64(16384);
+  {
+    std::ofstream output(path, std::ios::binary);
+    output.write(reinterpret_cast<const char *>(encoded.data()), encoded.size());
+    ASSERT_TRUE(output.good());
+  }
+  CountingFileStream stream(path);
+  stream.CloseDeferredDescriptor();
+  EXPECT_EQ(stream.next_uint64(), 300);
+  EXPECT_EQ(stream.next_uint64(), UINT64_MAX);
+  stream.LimitToNext(metadata.size());
+  uint8_t prefix[3];
+  EXPECT_EQ(stream.read_bytes(sizeof(prefix), prefix), prefix);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(prefix), sizeof(prefix)),
+            metadata.substr(0, sizeof(prefix)));
+  const auto remaining = metadata.size() - sizeof(prefix);
+  const auto *suffix = stream.read_bytes(remaining);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(suffix), remaining),
+            metadata.substr(sizeof(prefix)));
+  EXPECT_FALSE(stream.NotEnd());
+  EXPECT_THROW(stream.next_uint64(), std::runtime_error);
+  EXPECT_THROW(stream.read_bytes(1), std::runtime_error);
+  stream.Restore();
+  for (uint64_t i = 0; i < 8192; ++i)
+    ASSERT_EQ(stream.next_uint64(), 16384 + i);
+  stream.skip_bytes(payload.size());
+  EXPECT_EQ(stream.bytes_skipped, static_cast<int64_t>(payload.size()));
+  EXPECT_EQ(stream.next_uint64(), 16384);
+  EXPECT_FALSE(stream.NotEnd());
+  EXPECT_EQ(stream.tell(), encoded.size());
+  EXPECT_THROW(stream.read_bytes(INT64_MAX), std::runtime_error);
+  EXPECT_THROW(stream.skip_bytes(INT64_MAX), std::runtime_error);
+  EXPECT_THROW(stream.read_bytes(-1), std::runtime_error);
+  EXPECT_THROW(stream.skip_bytes(-1), std::runtime_error);
+}
+
+TEST_F(DeferredWeights, PinnedMetadataRejectsTruncatedAndOverlongVarints) {
+  for (const std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{10}}) {
+    SCOPED_TRACE(size);
+    {
+      std::ofstream output(path, std::ios::binary);
+      const std::string bytes(size, '\x80');
+      output.write(bytes.data(), bytes.size());
+      ASSERT_TRUE(output.good());
+    }
+    CountingFileStream stream(path);
+    stream.CloseDeferredDescriptor();
+    EXPECT_THROW(stream.next_uint64(), std::runtime_error);
+    EXPECT_EQ(stream.tell(), static_cast<int64_t>(size));
+  }
+}
 
 TEST_F(DeferredWeights, InlineRangesAreIndependentAndReloadableWithoutPayloadReads) {
   auto original = MakeModel();

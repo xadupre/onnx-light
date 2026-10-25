@@ -671,7 +671,7 @@ public:
   /** Returns the retained external-data file, or an empty pointer for normal model files. */
   const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual ~FileStream();
-  /** Switches an unread stream to a securely pinned descriptor for deferred parsing. */
+  /** Maps a securely pinned descriptor for deferred metadata reads without payload read-ahead. */
   void PinDeferredSource();
   /** Returns the path of the file this stream reads from. */
   inline const std::string &file_path() const { return file_path_; }
@@ -722,6 +722,8 @@ protected:
   /** Underlying input stream used for file I/O. */
   std::ifstream file_stream_;
   std::shared_ptr<int> external_file_;
+  /** Owns the pinned mapping used for deferred metadata reads. */
+  std::shared_ptr<uint8_t> deferred_mapping_;
   offset_t external_position_ = 0;
 #if !defined(_WIN32)
   /** POSIX file descriptor used for pread-based parallel reads on non-Windows platforms. */

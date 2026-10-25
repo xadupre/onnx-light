@@ -635,7 +635,8 @@ void ComputeContext::RefreshValueTags(const utils::RepeatedProtoField<NodeProto>
 
 void ComputeContext::RestoreTagState(const TagState &state,
                                      const utils::RepeatedProtoField<NodeProto> &nodes,
-                                     std::size_t node_offset) {
+                                     std::size_t node_offset,
+                                     const NodeMaterializerFn &materialize) {
   EXT_ENFORCE_INVALID(
       node_offset <= nodes.size() && state.nodes.size() == nodes.size() - node_offset &&
           state.custom_overrides.size() == state.nodes.size() &&
@@ -657,7 +658,7 @@ void ComputeContext::RestoreTagState(const TagState &state,
   }
   // Empty seeds update tag-dependent bookkeeping without re-inferring captured tags.
   PropagateNodeTags(nodes, {}, changed);
-  RefreshIncrementalMemory(nodes, shapes_);
+  RefreshIncrementalMemory(nodes, shapes_, Device::kUndefined, materialize);
 }
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,

@@ -1903,18 +1903,45 @@ TEST(GraphGraph, ReplayRestoresDependenciesAndReuseBeforeExport) {
 }
 
 TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::GraphBuilder body("WithGraph", SchemaLookup(), {{"", 28}});
+  body.MakeInput("Y", core::symbolic::TensorType::kInt64, MakeShape({2}));
+  body.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> references;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &attribute = references.add();
+    attribute.set_name(name);
+    attribute.set_ref_attr_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+  }
+  body.MakeNode("If", {"condition"}, {"result"}, "", "", references);
+  body.MakeOutput("result", core::symbolic::TensorType::kInt64, MakeShape({2}));
+  auto function = body.ToFunction("local");
+  function.add_attribute("then_branch");
+  function.add_attribute("else_branch");
   for (const bool nested : {false, true}) {
     SCOPED_TRACE(nested);
-    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    builder.MakeLocalFunction(function);
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
     auto *scope = &builder;
     if (nested) {
-      builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
       scope = &builder.MakeSubgraph("then_branch");
     }
     scope->MakeInitializer(MakeInitializer<int64_t>("W", {2}, {1, 2}));
     scope->MakeNode("Shape", {"W"}, {"S"});
     scope->MakeNode("Add", {"W", "S"}, {"Y"});
-    scope->MakeNode("Identity", {"Y"}, {"Z"});
+    utils::RepeatedProtoField<AttributeProto> arguments;
+    for (const char *name : {"then_branch", "else_branch"}) {
+      auto &attribute = arguments.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::GRAPH);
+      auto &branch = *attribute.mutable_g();
+      branch.set_name(std::string("argument_") + name);
+      branch.add_node(MakeNode("Neg", {"Y"}, {"branch_result"}));
+      branch.add_output()->set_name("branch_result");
+    }
+    scope->MakeNode("WithGraph", {"Y", "condition"}, {"Z"}, "local", "", arguments);
     scope->MakeOutput("Z");
     if (nested) {
       auto &other = builder.MakeSubgraph("else_branch");
@@ -1935,7 +1962,10 @@ TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
                      std::make_shared<SwapAddInputs>()});
     graph.Canonicalize();
     const auto canonical = builder.BuildGraph().SerializeAsString();
-    const auto tags = scope->Compute().ValueTags();
+    const auto tags = scope->Compute().CaptureTagState();
+    const auto canonical_memory = scope->Compute().Memory();
+    const auto canonical_peak_memory = scope->Compute().PeakMemory();
+    const auto canonical_releases = scope->Compute().ReleaseAfterShapeTagged();
     core::builder::ConstantFoldingOptions options;
     options.enabled = false;
     const auto plan = graph.Optimize(1, nullptr, options);
@@ -1944,11 +1974,16 @@ TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
     const auto optimized = builder.BuildGraph().SerializeAsString();
     EXPECT_THROW(builder.ApplyRewritings(RewritingProto{}), core::builder::BuilderError);
     auto restored = builder.UndoRewritings(plan);
+    const auto &restored_scope = nested ? restored.Subgraph("then_branch") : restored;
     EXPECT_EQ(restored.BuildGraph().SerializeAsString(), canonical);
-    EXPECT_EQ((nested ? restored.Subgraph("then_branch") : restored).Compute().ValueTags(), tags);
+    EXPECT_EQ(restored_scope.Compute().CaptureTagState(), tags);
+    EXPECT_EQ(restored_scope.Compute().Memory(), canonical_memory);
+    EXPECT_EQ(restored_scope.Compute().PeakMemory(), canonical_peak_memory);
+    EXPECT_EQ(restored_scope.Compute().ReleaseAfterShapeTagged(), canonical_releases);
     EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized);
     const auto optimized_tags = scope->Compute().CaptureTagState();
     const auto memory = scope->Compute().Memory();
+    const auto peak_memory = scope->Compute().PeakMemory();
     const auto releases = scope->Compute().ReleaseAfterShapeTagged();
     core::builder::GraphGraph no_patterns(
         builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
@@ -1959,6 +1994,7 @@ TEST(GraphGraph, InverseAcceptsCapturedTagsThatDifferFromReimportedTags) {
     EXPECT_EQ(unchanged.BuildGraph().SerializeAsString(), optimized);
     EXPECT_EQ(unchanged_scope.Compute().CaptureTagState(), optimized_tags);
     EXPECT_EQ(unchanged_scope.Compute().Memory(), memory);
+    EXPECT_EQ(unchanged_scope.Compute().PeakMemory(), peak_memory);
     EXPECT_EQ(unchanged_scope.Compute().ReleaseAfterShapeTagged(), releases);
     EXPECT_EQ(scope->Compute().CaptureTagState(), optimized_tags);
   }

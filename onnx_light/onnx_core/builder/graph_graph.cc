@@ -1476,10 +1476,30 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const std::size_t original_functions = collection.added_functions().size();
   auto result =
       OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
-  capture_functions(capture_functions, *root);
+  utils::RepeatedProtoField<FunctionProto> optimized_functions;
+  const auto collect_optimized_functions = [&](const auto &self,
+                                               const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      optimized_functions.push_back(function->BuildFunction(function->function_domain_));
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_optimized_functions(collect_optimized_functions, *root);
+  for (const auto &function : optimized_functions) {
+    const auto original = std::find_if(
+        original_definitions.begin(), original_definitions.end(),
+        [&](const auto &candidate) { return Identity(candidate) == Identity(function); });
+    if (original == original_definitions.end()) {
+      MergeFunction(collection.ref_added_functions(), function);
+    } else if (!original->Equals(function)) {
+      collection.ref_added_functions().push_back(utils::CopyWithSharedTensorStorage(function));
+    }
+  }
   FunctionIndex functions;
   for (const auto &function : collection.added_functions())
-    functions.emplace(Identity(function), &function);
+    functions[Identity(function)] = &function;
   for (const auto &rewrite : result.rewrites()) {
     for (const auto &call : rewrite.initializer_calls()) {
       for (const auto &node : functions.at(Identity(call))->node()) {
@@ -1631,6 +1651,40 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   for (const std::unique_ptr<GraphBuilder> &subgraph : builder_.subgraphs_) {
     if (optimized_subgraphs.insert(subgraph.get()).second) {
       optimize_subgraph(*subgraph, builder_.nodes_.size());
+    }
+  }
+  for (const std::unique_ptr<GraphBuilder> &function : builder_.local_functions_) {
+    if (!optimized_subgraphs.insert(function.get()).second) {
+      continue;
+    }
+    std::vector<std::string> function_path = graph_path;
+    function_path.push_back("function:" + function->name());
+    OptimizationReport child_report;
+    const auto function_start = std::chrono::steady_clock::now();
+    GraphGraph child_graph(*function, patterns_);
+    child_graph.do_not_remove_ = do_not_remove_;
+    detail::RewritingUndoState child_undo;
+    child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
+                             folding_options, remove_unused, collection, child_undo);
+    if (report != nullptr) {
+      const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
+      report->iterations += child_report.iterations;
+      report->rewrites += child_report.rewrites;
+      report->subgraph_optimization_time_ns += elapsed_time_ns;
+      for (std::size_t i = 0; i < report->patterns.size(); ++i) {
+        report->patterns[i].attempts += child_report.patterns[i].attempts;
+        report->patterns[i].matches += child_report.patterns[i].matches;
+        report->patterns[i].match_time_ns += child_report.patterns[i].match_time_ns;
+        report->patterns[i].apply_time_ns += child_report.patterns[i].apply_time_ns;
+        for (const PatternNoMatchStatistics &no_match : child_report.patterns[i].no_matches) {
+          RecordNoMatch(report->patterns[i], no_match.source_file, no_match.source_line,
+                        no_match.reason, no_match.occurrences);
+        }
+      }
+      report->subgraphs.push_back(
+          {function_path, child_report.iterations, child_report.rewrites, elapsed_time_ns});
+      report->subgraphs.insert(report->subgraphs.end(), child_report.subgraphs.begin(),
+                               child_report.subgraphs.end());
     }
   }
 
@@ -2688,7 +2742,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     if (candidate.opsets_ == (*source)->opsets_) {
       canonical.ref_opset_import() = model.functions(position).opset_import();
     }
-    MergeFunction(model.ref_functions(), canonical);
+    *model.ref_functions().get(position) = std::move(canonical);
   }
   *model.mutable_graph() =
       BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
@@ -2711,17 +2765,34 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
   }
   GraphBuilder result(model, schema_lookup_);
   const auto validate_tags = [&](const auto &self, const GraphBuilder &source,
-                                 const GraphBuilder &reconstructed,
-                                 const std::string &path) -> void {
+                                 const GraphBuilder &reconstructed, const std::string &path,
+                                 bool allow_node_changes) -> void {
     const auto &tags = reconstructed.Compute().ValueTags();
+    std::unordered_set<std::string> reconstructed_values;
+    if (allow_node_changes) {
+      for (const auto &input : reconstructed.inputs_)
+        reconstructed_values.insert(input.name().value());
+      for (const auto &output : reconstructed.outputs_)
+        reconstructed_values.insert(output.name().value());
+      for (const auto &initializer : reconstructed.initializers_)
+        reconstructed_values.insert(initializer.name().value());
+      for (const auto &node : reconstructed.nodes_)
+        for (const auto &output : node.output())
+          if (!output.empty())
+            reconstructed_values.insert(output.value());
+    }
     for (const auto &[name, tag] : source.Compute().ValueTags()) {
       const auto found = tags.find(name);
+      if (allow_node_changes && found == tags.end() && !reconstructed_values.count(name))
+        continue;
       if (found == tags.end() || found->second != tag) {
         throw BuilderError("ApplyRewritings: value '" + name + "' in '" + path +
                            "' has existing tag '" + tag + "' but reconstructed tag " +
                            (found == tags.end() ? "<absent>" : "'" + found->second + "'") + ".");
       }
     }
+    if (allow_node_changes)
+      return;
     if (source.nodes_.size() != reconstructed.nodes_.size()) {
       throw BuilderError("ApplyRewritings: incompatible reconstructed node count in '" + path +
                          "'.");
@@ -2731,10 +2802,13 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       const auto children = reconstructed.ReferencedSubgraphs(reconstructed.nodes_[index]);
       for (std::size_t child = 0; child < originals.size(); ++child)
         self(self, *originals[child], *children.at(child),
-             path + "/subgraph:" + originals[child]->name_);
+             path + "/subgraph:" + originals[child]->name_, false);
     }
   };
-  validate_tags(validate_tags, *this, result, name_);
+  validate_tags(validate_tags, *this, result, name_, false);
+  std::set<FunctionKey> rewritten_functions;
+  for (const auto &function : rewrites.added_functions())
+    rewritten_functions.insert(Identity(function));
   using ScopedFunction = std::pair<const GraphBuilder *, std::string>;
   std::map<FunctionIdentifier, std::vector<ScopedFunction>> source_functions;
   const auto collect_functions = [&](const auto &self, const GraphBuilder &scope,
@@ -2758,8 +2832,17 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
                                                    function->function_template_.overload());
       const auto originals = source_functions.find(identity);
       if (originals != source_functions.end()) {
+        const FunctionProto definition = function->BuildFunction(function->function_domain_);
+        bool allow_node_changes = false;
+        if (rewritten_functions.count(Identity(definition)) != 0) {
+          for (const auto &[original, path] : originals->second) {
+            (void)path;
+            allow_node_changes |=
+                !original->BuildFunction(original->function_domain_).Equals(definition);
+          }
+        }
         for (const auto &[original, path] : originals->second)
-          validate_tags(validate_tags, *original, *function, path);
+          validate_tags(validate_tags, *original, *function, path, allow_node_changes);
       }
       self(self, *function);
     }

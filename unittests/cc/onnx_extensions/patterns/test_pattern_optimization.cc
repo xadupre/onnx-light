@@ -2477,6 +2477,43 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
 }
 
+TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.SetOpsetVersion("test.pattern", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+
+  core::builder::GraphBuilder &function = builder.MakeLocalFunction("CastPair", "test.pattern");
+  function.MakeInput("input", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(function, "input", "middle", TensorProto::DataType::FLOAT);
+  AddCast(function, "middle", "output", TensorProto::DataType::FLOAT);
+  function.MakeOutput("output");
+  builder.MakeNode("CastPair", {"x"}, {"y"}, "test.pattern");
+  builder.MakeOutput("y");
+
+  const ModelProto original = builder.ToModel();
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+  const RewritingProto plan = graph.Optimize(-1, &report);
+
+  EXPECT_TRUE(plan.rewrites().empty());
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(plan.added_functions(0).node().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).node(0).op_type().value(), "Cast");
+  ASSERT_EQ(builder.LocalFunction("CastPair").Nodes().size(), 1u);
+  EXPECT_EQ(builder.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
+  EXPECT_EQ(report.patterns[0].matches, 1u);
+
+  core::builder::GraphBuilder replayed(original, SchemaLookup());
+  const core::builder::GraphBuilder replayed_optimized = replayed.ApplyRewritings(plan);
+  ASSERT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes().size(), 1u);
+  EXPECT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
+
+  const core::builder::GraphBuilder undone = builder.UndoRewritings(plan);
+  ASSERT_EQ(undone.LocalFunction("CastPair").Nodes().size(), 2u);
+}
+
 TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion(kDefaultOnnxDomain, 21);

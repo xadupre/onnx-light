@@ -156,6 +156,11 @@ def standard_pattern_names(*, include_opt_in: bool = False) -> list[str]:
     return _patterns.registered_pattern_names(include_opt_in=include_opt_in)
 
 
+def standard_pattern_set_names() -> list[str]:
+    """Returns the names of registered standard pattern sets."""
+    return _patterns.registered_pattern_set_names()
+
+
 def standard_pattern_sets() -> dict[str, tuple[str, ...]]:
     """Returns named, overlapping C++-registered groups of pattern names."""
     return {
@@ -566,6 +571,7 @@ __all__ = [
     "render_rst_standard_patterns_table",
     "reset_registered_patterns",
     "standard_pattern_names",
+    "standard_pattern_set_names",
     "standard_pattern_sets",
     "standard_patterns",
     "unregister_pattern",

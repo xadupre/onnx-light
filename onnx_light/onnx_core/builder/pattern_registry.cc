@@ -142,6 +142,20 @@ bool UnregisterPatternSet(const std::string &name) {
   return registry.pattern_sets.erase(name) != 0;
 }
 
+std::vector<std::string> RegisteredPatternSetNames() {
+  PatternRegistry &registry = MutablePatternRegistry();
+  std::lock_guard<std::mutex> lock(registry.mutex);
+  std::vector<std::string> names;
+  names.reserve(registry.pattern_sets.size() + 1);
+  for (const auto &[name, pattern_names] : registry.pattern_sets) {
+    (void)pattern_names;
+    names.push_back(name);
+  }
+  names.push_back("all");
+  std::sort(names.begin(), names.end());
+  return names;
+}
+
 std::map<std::string, std::vector<std::string>> RegisteredPatternSets() {
   PatternRegistry &registry = MutablePatternRegistry();
   std::lock_guard<std::mutex> lock(registry.mutex);

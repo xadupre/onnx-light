@@ -53,6 +53,9 @@ void ExtendPatternSet(const std::string &name, const std::vector<std::string> &p
 /// Removes a custom set. Built-in sets and the computed ``all`` set are retained.
 bool UnregisterPatternSet(const std::string &name);
 
+/// Returns names of all registered sets, including the computed ``all`` set.
+std::vector<std::string> RegisteredPatternSetNames();
+
 /// Returns all pattern sets, including ``all`` as the union of registered names and set members.
 std::map<std::string, std::vector<std::string>> RegisteredPatternSets();
 

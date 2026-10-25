@@ -508,6 +508,13 @@ NB_MODULE(_onnxpypatterns, m) {
       },
       "Returns the names in every registered pattern set.");
   m.def(
+      "registered_pattern_set_names",
+      []() {
+        onnx_patterns::RegisterPatterns();
+        return core::builder::RegisteredPatternSetNames();
+      },
+      "Returns registered pattern set names without their members.");
+  m.def(
       "register_pattern_set",
       [](const std::string &name, const std::vector<std::string> &pattern_names) {
         onnx_patterns::RegisterPatterns();

@@ -72,9 +72,18 @@ TEST(PatternRegistry, RegistersExtendsAndRemovesPatternSets) {
   core::builder::ExtendPatternSet("test.PatternSet", {"test.PatternSetMember", "test.OtherMember"});
 
   const auto sets = core::builder::RegisteredPatternSets();
+  const auto set_names = core::builder::RegisteredPatternSetNames();
+  std::vector<std::string> expected_set_names;
+  for (const auto &[name, pattern_names] : sets) {
+    (void)pattern_names;
+    expected_set_names.push_back(name);
+  }
+  EXPECT_EQ(set_names, expected_set_names);
   const auto set = sets.find("test.PatternSet");
   ASSERT_NE(set, sets.end());
   EXPECT_EQ(set->second, (std::vector<std::string>{"test.PatternSetMember", "test.OtherMember"}));
+  EXPECT_NE(std::find(set_names.begin(), set_names.end(), "test.PatternSet"), set_names.end());
+  EXPECT_NE(std::find(set_names.begin(), set_names.end(), "all"), set_names.end());
   EXPECT_NE(std::find(sets.at("all").begin(), sets.at("all").end(), "test.OtherMember"),
             sets.at("all").end());
   EXPECT_FALSE(core::builder::UnregisterPatternSet("L1"));

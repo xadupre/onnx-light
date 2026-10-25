@@ -96,6 +96,10 @@ class TestPatternSelection(ExtTestCase):
         )
         self.assertEqual(set(pattern_sets), {"all", "L1", "L2", "Layer"})
         self.assertEqual(
+            optim.standard_pattern_set_names(), _onnxpypatterns.registered_pattern_set_names()
+        )
+        self.assertEqual(set(optim.standard_pattern_set_names()), set(pattern_sets))
+        self.assertEqual(
             all_names,
             set(pattern_sets["L1"]) | set(pattern_sets["L2"]) | set(pattern_sets["Layer"]),
         )
@@ -120,6 +124,7 @@ class TestPatternSelection(ExtTestCase):
         optim.extend_pattern_set("custom", ["GatherToSlice", "CustomNegNeg"])
 
         pattern_sets = optim.standard_pattern_sets()
+        self.assertIn("custom", optim.standard_pattern_set_names())
         self.assertEqual(pattern_sets["custom"], ("CustomNegNeg", "GatherToSlice"))
         self.assertIn("CustomNegNeg", pattern_sets["all"])
         self.assertIn("GatherToSlice", pattern_sets["L2"])

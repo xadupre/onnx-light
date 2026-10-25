@@ -130,7 +130,8 @@ currently available patterns.
 
 The runtime list is available through :func:`standard_pattern_names`.
 Use :func:`standard_pattern_sets` to select the named ``all``, ``L1``, ``L2``,
-and ``Layer`` groups. ``L1`` lists the fusion patterns shared with ONNX Runtime;
+and ``Layer`` groups registered by the C++ pattern registry and exposed through
+Python. ``L1`` lists the fusion patterns shared with ONNX Runtime;
 ``L2`` lists onnx-light-only standard patterns, and ``Layer`` selects the
 opt-in repeated-layer pattern. ``all`` contains the union of these groups.
 Add another group with :func:`register_pattern_set`, add members to any built-in

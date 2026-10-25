@@ -87,6 +87,13 @@ class TestPatternSelection(ExtTestCase):
         pattern_sets = optim.standard_pattern_sets()
         all_names = set(pattern_sets["all"])
 
+        self.assertEqual(
+            pattern_sets,
+            {
+                name: tuple(names)
+                for name, names in _onnxpypatterns.registered_pattern_sets().items()
+            },
+        )
         self.assertEqual(set(pattern_sets), {"all", "L1", "L2", "Layer"})
         self.assertEqual(
             all_names,

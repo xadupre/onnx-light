@@ -23,6 +23,8 @@ struct PatternRegistry {
   std::mutex mutex;
   std::vector<PatternRegistration> registrations;
   std::unordered_map<std::string, std::size_t> indices;
+  std::map<std::string, std::vector<std::string>> pattern_sets;
+  std::vector<std::string> all_pattern_names;
 };
 
 PatternRegistry &MutablePatternRegistry() {
@@ -73,6 +75,98 @@ std::vector<std::string> RegisteredPatternNames(bool include_opt_in) {
       names.push_back(registration.name);
   }
   return names;
+}
+
+void RegisterPatternSet(const std::string &name, const std::vector<std::string> &pattern_names) {
+  if (name.empty() || name == "all") {
+    throw PatternRegistrationError("RegisterPatternSet: invalid set name '" + name + "'.");
+  }
+  for (const std::string &pattern_name : pattern_names) {
+    if (pattern_name.empty()) {
+      throw PatternRegistrationError("RegisterPatternSet: pattern names cannot be empty.");
+    }
+  }
+
+  PatternRegistry &registry = MutablePatternRegistry();
+  std::lock_guard<std::mutex> lock(registry.mutex);
+  if (registry.pattern_sets.contains(name)) {
+    throw PatternRegistrationError("RegisterPatternSet: set '" + name + "' is already registered.");
+  }
+  std::vector<std::string> unique_names;
+  for (const std::string &pattern_name : pattern_names) {
+    if (std::find(unique_names.begin(), unique_names.end(), pattern_name) == unique_names.end()) {
+      unique_names.push_back(pattern_name);
+    }
+  }
+  registry.pattern_sets.emplace(name, std::move(unique_names));
+}
+
+void ExtendPatternSet(const std::string &name, const std::vector<std::string> &pattern_names) {
+  if (name.empty()) {
+    throw PatternRegistrationError("ExtendPatternSet: set name cannot be empty.");
+  }
+  for (const std::string &pattern_name : pattern_names) {
+    if (pattern_name.empty()) {
+      throw PatternRegistrationError("ExtendPatternSet: pattern names cannot be empty.");
+    }
+  }
+
+  PatternRegistry &registry = MutablePatternRegistry();
+  std::lock_guard<std::mutex> lock(registry.mutex);
+  std::vector<std::string> *names = nullptr;
+  if (name == "all") {
+    names = &registry.all_pattern_names;
+  } else {
+    const auto set = registry.pattern_sets.find(name);
+    if (set == registry.pattern_sets.end()) {
+      throw PatternRegistrationError("ExtendPatternSet: set '" + name + "' is not registered.");
+    }
+    names = &set->second;
+  }
+  for (const std::string &pattern_name : pattern_names) {
+    if (std::find(names->begin(), names->end(), pattern_name) == names->end()) {
+      names->push_back(pattern_name);
+    }
+  }
+}
+
+bool UnregisterPatternSet(const std::string &name) {
+  if (name.empty()) {
+    throw PatternRegistrationError("UnregisterPatternSet: set name cannot be empty.");
+  }
+  if (name == "all" || name == "L1" || name == "L2" || name == "Layer") {
+    return false;
+  }
+  PatternRegistry &registry = MutablePatternRegistry();
+  std::lock_guard<std::mutex> lock(registry.mutex);
+  return registry.pattern_sets.erase(name) != 0;
+}
+
+std::map<std::string, std::vector<std::string>> RegisteredPatternSets() {
+  PatternRegistry &registry = MutablePatternRegistry();
+  std::lock_guard<std::mutex> lock(registry.mutex);
+  std::map<std::string, std::vector<std::string>> sets = registry.pattern_sets;
+  std::vector<std::string> all_names;
+  all_names.reserve(registry.registrations.size() + registry.all_pattern_names.size());
+  for (const PatternRegistration &registration : registry.registrations) {
+    all_names.push_back(registration.name);
+  }
+  const auto append_unique = [&all_names](const std::string &name) {
+    if (std::find(all_names.begin(), all_names.end(), name) == all_names.end()) {
+      all_names.push_back(name);
+    }
+  };
+  for (const std::string &name : registry.all_pattern_names) {
+    append_unique(name);
+  }
+  for (const auto &[set_name, names] : registry.pattern_sets) {
+    (void)set_name;
+    for (const std::string &name : names) {
+      append_unique(name);
+    }
+  }
+  sets.emplace("all", std::move(all_names));
+  return sets;
 }
 
 std::vector<std::unique_ptr<PatternOptimization>>

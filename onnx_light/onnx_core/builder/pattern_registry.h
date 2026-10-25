@@ -5,6 +5,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -37,6 +38,23 @@ void RegisterPattern(const std::string &name, PatternFactory factory,
 
 /// Returns names in registration order, optionally excluding explicit-only patterns.
 std::vector<std::string> RegisteredPatternNames(bool include_opt_in = true);
+
+/**
+ * Registers a named set of pattern names.
+ *
+ * Pattern names need not be registered yet, which allows Python-defined
+ * patterns to participate in sets. Set names must be non-empty and unique.
+ */
+void RegisterPatternSet(const std::string &name, const std::vector<std::string> &pattern_names);
+
+/// Adds pattern names to an existing set or to the computed ``all`` set.
+void ExtendPatternSet(const std::string &name, const std::vector<std::string> &pattern_names);
+
+/// Removes a custom set. Built-in sets and the computed ``all`` set are retained.
+bool UnregisterPatternSet(const std::string &name);
+
+/// Returns all pattern sets, including ``all`` as the union of registered names and set members.
+std::map<std::string, std::vector<std::string>> RegisteredPatternSets();
 
 /**
  * Creates registered patterns, optionally filtering by target device.

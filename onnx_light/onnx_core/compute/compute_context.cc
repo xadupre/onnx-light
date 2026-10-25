@@ -194,13 +194,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
     return false;
   };
   for (const NodeProto &inner : bound_nodes) {
-    const std::vector<std::string> inputs = core::graph::CollectNodeInputs(inner);
-    const bool inputs_available =
-        std::all_of(inputs.begin(), inputs.end(), [&](const std::string &name) {
-          return name.empty() || body_shapes.Has(name) || body_shapes.HasType(name) ||
-                 body_shapes.HasSequence(name) || body_shapes.HasEncodedValue(name);
-        });
-    if (inputs_available && !contains_unbound_attributes(contains_unbound_attributes, inner))
+    if (shapes::ShapeInputsAvailable(body_shapes, inner) &&
+        !contains_unbound_attributes(contains_unbound_attributes, inner))
       body_shapes.ComputeShapeNode(inner);
   }
   for (const ValueInfoProto &value_info : function->value_info()) {
@@ -284,8 +279,23 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
 }
 
 FunctionBodyMemoryEstimate EstimateFunctionBodyMemory(const NodeProto &node,
-                                                      const ShapesContext &ctx, Device device) {
+                                                      const ShapesContext &ctx, Device device,
+                                                      const NodeMaterializerFn &materialize = {}) {
   std::unordered_set<std::string> active_functions;
+  if (materialize &&
+      std::any_of(node.attribute().begin(), node.attribute().end(),
+                  [](const AttributeProto &attribute) {
+                    const std::string &name = attribute.name();
+                    return name.size() > 4 && name.compare(name.size() - 4, 4, "_ref") == 0 &&
+                           (attribute.type() == AttributeProto::STRING ||
+                            attribute.type() == AttributeProto::STRINGS);
+                  }) &&
+      ctx.GetLocalFunction(ShapesContext::LocalFunctionKey(node.domain(), node.op_type(),
+                                                           node.overload())) != nullptr) {
+    NodeProto resolved = utils::CopyWithSharedTensorStorage(node);
+    materialize(resolved);
+    return EstimateFunctionBodyMemory(resolved, ctx, device, active_functions);
+  }
   return EstimateFunctionBodyMemory(node, ctx, device, active_functions);
 }
 
@@ -831,18 +841,20 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
 
 void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes,
                                  std::size_t node_index, const ShapesContext &ctx,
-                                 const std::vector<std::string> &references, Device device) {
+                                 const std::vector<std::string> &references, Device device,
+                                 const NodeMaterializerFn &materialize) {
   EXT_ENFORCE_INVALID(node_index < nodes.size() && node_index < incr_node_references_.size(),
                       "RefreshNode: node index is out of bounds.");
   const auto &outputs = nodes[node_index].output();
-  RefreshNodes(nodes, {{node_index, references}}, ctx, {outputs.begin(), outputs.end()}, device);
+  RefreshNodes(nodes, {{node_index, references}}, ctx, {outputs.begin(), outputs.end()}, device,
+               materialize);
 }
 
 void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                                   const std::map<std::size_t, std::vector<std::string>> &references,
                                   const ShapesContext &ctx,
                                   const std::unordered_set<std::string> &changed_values,
-                                  Device device) {
+                                  Device device, const NodeMaterializerFn &materialize) {
   std::size_t refresh_from = nodes.size();
   std::unordered_set<std::string> changed_references;
   for (const auto &[index, current] : references) {
@@ -973,9 +985,9 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
 
   for (std::size_t index = refresh_from; index < nodes.size(); ++index) {
     RefreshNodeReuse(nodes, index, ctx);
-    AppendNodePeakMemory(nodes[index], index, device);
+    AppendNodePeakMemory(nodes[index], index, device, materialize);
   }
-  RefreshIncrementalMemory(nodes, ctx);
+  RefreshIncrementalMemory(nodes, ctx, device, materialize);
 }
 
 void ComputeContext::EraseValue(const std::string &name) {
@@ -1002,7 +1014,7 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
                                  const std::vector<std::size_t> &old_indices,
                                  const std::vector<std::vector<std::string>> &references,
                                  const std::unordered_set<std::string> &changed_values,
-                                 Device device) {
+                                 Device device, const NodeMaterializerFn &materialize) {
   const std::size_t old_count = Size();
   EXT_ENFORCE_INVALID(old_indices.size() == nodes.size() && references.size() == nodes.size(),
                       "UpdateNodes: inconsistent node coordinates.");
@@ -1162,7 +1174,7 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
         std::any_of(references[index].begin(), references[index].end(),
                     [&](const auto &name) { return changed_references.count(name) != 0; })) {
       RefreshNodeReuse(nodes, index, shapes_);
-      AppendNodePeakMemory(nodes[index], index, device);
+      AppendNodePeakMemory(nodes[index], index, device, materialize);
       MarkMemoryRefresh(index);
     }
   }
@@ -1205,7 +1217,8 @@ void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodePr
 }
 
 void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                              const ShapesContext &ctx, Device device) {
+                                              const ShapesContext &ctx, Device device,
+                                              const NodeMaterializerFn &materialize) {
   if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1)) {
     return;
   }
@@ -1322,7 +1335,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
-    AddFunctionBodyMemory(profile, EstimateFunctionBodyMemory(node, ctx, device),
+    AddFunctionBodyMemory(profile, EstimateFunctionBodyMemory(node, ctx, device, materialize),
                           &expression_cache);
     memory_[index] = std::move(profile);
 
@@ -1343,7 +1356,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
 }
 
 void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
-                                          Device device) {
+                                          Device device, const NodeMaterializerFn &materialize) {
   if (peak_memory_.size() <= node_index) {
     peak_memory_.resize(node_index + 1, 0);
   }
@@ -1358,8 +1371,9 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
   }
   peak_memory_[node_index] =
       shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-  peak_memory_[node_index] = std::max(
-      peak_memory_[node_index], EstimateFunctionBodyMemory(node, shapes_, device).workspace_peak);
+  peak_memory_[node_index] =
+      std::max(peak_memory_[node_index],
+               EstimateFunctionBodyMemory(node, shapes_, device, materialize).workspace_peak);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(

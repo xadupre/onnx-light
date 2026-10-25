@@ -807,6 +807,8 @@ private:
   static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
                                                    const std::string &name,
                                                    const std::string &overload);
+  static utils::RepeatedProtoField<FunctionProto>
+  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions);
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
                                   std::set<FunctionIdentifier> &expanded_functions);
 
@@ -920,6 +922,7 @@ private:
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.
   void MaterializeGraphReferences(NodeProto &node, bool share_initializers = false) const;
+  compute::NodeMaterializerFn MemoryNodeMaterializer() const;
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);

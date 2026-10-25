@@ -47,6 +47,9 @@ using ::onnx_light::core::symbolic::SymShape;
 using ::onnx_light::core::symbolic::SymTensor;
 using ::onnx_light::core::symbolic::TensorType;
 
+/// Materializes builder-owned graph references in a temporary node for memory analysis.
+using NodeMaterializerFn = std::function<void(NodeProto &)>;
+
 /**
  * Kind of decision recorded in the optional :cpp:class:`ComputeContext`
  * decision log.
@@ -423,7 +426,7 @@ public:
   /// shapes changed, updating only lifetimes and profiles affected by it.
   void RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                    const ShapesContext &ctx, const std::vector<std::string> &references,
-                   Device device);
+                   Device device, const NodeMaterializerFn &materialize = {});
 
   /// Refreshes changed node references and descriptors as one batch. Preserves
   /// unchanged lifetimes, invalidates byte sizes for ``changed_values``, and
@@ -431,7 +434,7 @@ public:
   void RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                     const std::map<std::size_t, std::vector<std::string>> &references,
                     const ShapesContext &ctx, const std::unordered_set<std::string> &changed_values,
-                    Device device);
+                    Device device, const NodeMaterializerFn &materialize = {});
 
   /// Reindexes retained annotations after node replacement. An index equal to
   /// the old node count denotes a new node. Refreshes only affected lifetimes,
@@ -440,7 +443,8 @@ public:
   void UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                    const std::vector<std::size_t> &old_indices,
                    const std::vector<std::vector<std::string>> &references,
-                   const std::unordered_set<std::string> &changed_values, Device device);
+                   const std::unordered_set<std::string> &changed_values, Device device,
+                   const NodeMaterializerFn &materialize = {});
 
   /// Forgets an initializer or node value removed by a graph mutation.
   void EraseValue(const std::string &name);
@@ -448,12 +452,14 @@ public:
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
   void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                const ShapesContext &ctx, Device device = Device::kUndefined);
+                                const ShapesContext &ctx, Device device = Device::kUndefined,
+                                const NodeMaterializerFn &materialize = {});
 
   /// Appends the peak-memory estimate for a newly appended node, using the
   /// shapes already inferred into the owned :cpp:class:`ShapesContext`.
   void AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
-                            Device device = Device::kUndefined);
+                            Device device = Device::kUndefined,
+                            const NodeMaterializerFn &materialize = {});
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before

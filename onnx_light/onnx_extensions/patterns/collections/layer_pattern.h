@@ -21,6 +21,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * - Finds exact attention/MatMul anchors, including recursively inspected local
  *   functions. Excludes existing layer-function calls and their bodies,
  *   stochastic operators, Dropout and opaque custom calls from candidate regions.
+ *   Keeps nodes referencing enclosing-function attributes, including references
+ *   inside graph attributes, outside extracted regions.
  * - Groups compatible anchors into repeated seed roles. Tries individual anchors,
  *   directed port-labelled one-hop neighborhoods, then bounded periodic strides
  *   to distinguish otherwise identical projections within a larger repeat.

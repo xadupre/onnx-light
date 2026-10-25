@@ -73,6 +73,9 @@ bool AcceptsStructuredShapeInputs(const std::string &domain, const std::string &
 /** Returns whether a registered shape function accepts tensor types without a shape descriptor. */
 bool AcceptsTypeOnlyTensorShapeInputs(const std::string &domain, const std::string &op_type);
 
+/** Returns whether all node inputs satisfy its shape function's descriptor requirements. */
+bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node);
+
 /**
  * Signature of every per-operator peak-memory function registered in
  * :cpp:func:`PeakMemoryDispatchTable`. Mirroring :cpp:type:`ComputeShapeFn`,

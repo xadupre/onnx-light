@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
@@ -86,6 +87,20 @@ bool AcceptsStructuredShapeInputs(const std::string &domain, const std::string &
 
 bool AcceptsTypeOnlyTensorShapeInputs(const std::string &domain, const std::string &op_type) {
   return TypeOnlyTensorShapeInputs().count(DispatchKey(domain, op_type)) != 0;
+}
+
+bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
+  for (const std::string &input : core::graph::CollectNodeInputs(node)) {
+    if (input.empty() || shapes.Has(input) || shapes.HasSequence(input)) {
+      continue;
+    }
+    if (!shapes.HasType(input) ||
+        (shapes.GetType(input).has_tensor_type() &&
+         !AcceptsTypeOnlyTensorShapeInputs(node.domain(), node.op_type()))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {

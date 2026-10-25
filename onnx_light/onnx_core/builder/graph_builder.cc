@@ -73,20 +73,6 @@ bool HasUnboundAttributes(const NodeProto &node) {
   return false;
 }
 
-bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
-  for (const std::string &input : core::graph::CollectNodeInputs(node)) {
-    if (input.empty() || shapes.Has(input) || shapes.HasSequence(input)) {
-      continue;
-    }
-    if (!shapes.HasType(input) ||
-        (shapes.GetType(input).has_tensor_type() &&
-         !core::shapes::AcceptsTypeOnlyTensorShapeInputs(node.domain(), node.op_type()))) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Compares two packed payload fields byte-for-byte without copying.
 template <typename T>
 bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
@@ -950,7 +936,7 @@ bool GraphBuilder::RefreshDependentNodes(
 
     const bool ready = ShapeFunctionAvailable(materialized) &&
                        !HasUnboundAttributes(materialized) &&
-                       ShapeInputsAvailable(compute_.Shapes(), materialized);
+                       core::shapes::ShapeInputsAvailable(compute_.Shapes(), materialized);
     if (ready) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
@@ -987,7 +973,8 @@ bool GraphBuilder::RefreshDependentNodes(
       }
     }
   }
-  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_);
+  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_,
+                        MemoryNodeMaterializer());
   if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
       !affected_values.empty()) {
     if (is_local_function_) {
@@ -1076,7 +1063,8 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
       }
     }
   }
-  compute_.UpdateNodes(nodes_, inserted_indices, references, affected_values, device_);
+  compute_.UpdateNodes(nodes_, inserted_indices, references, affected_values, device_,
+                       MemoryNodeMaterializer());
   auto &shapes = compute_.Shapes();
   for (const auto &name : affected_values) {
     if (parent_ != nullptr && inherited_names_.count(name) != 0) {
@@ -1149,7 +1137,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
 }
 
 void GraphBuilder::RefreshAfterMutation() {
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_);
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_, MemoryNodeMaterializer());
   RefreshAncestors();
 }
 
@@ -1195,7 +1183,7 @@ void GraphBuilder::RebuildMetadata() {
     CollectNodeReferences(node, references);
     compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
     compute_.AppendNodeConstant(node, node_index);
-    compute_.AppendNodePeakMemory(node, node_index, device_);
+    compute_.AppendNodePeakMemory(node, node_index, device_, MemoryNodeMaterializer());
   }
   for (const auto &output : outputs_) {
     const std::string name = output.name().value();
@@ -1262,7 +1250,7 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
     NodeProto node = utils::CopyWithSharedTensorStorage(nodes_[i]);
     MaterializeGraphReferences(node, /*share_initializers=*/true);
     const bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node) &&
-                       ShapeInputsAvailable(shapes, node);
+                       core::shapes::ShapeInputsAvailable(shapes, node);
     if (ready) {
       shapes.set_current_node_index(static_cast<int64_t>(i));
       shapes.ComputeShapeNode(node);
@@ -1882,6 +1870,10 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   RebuildStructuredState();
 }
 
+compute::NodeMaterializerFn GraphBuilder::MemoryNodeMaterializer() const {
+  return [this](NodeProto &node) { MaterializeGraphReferences(node, /*share_initializers=*/true); };
+}
+
 void GraphBuilder::MaterializeGraphReferences(NodeProto &node, bool share_initializers) const {
   for (auto &attribute : node.ref_attribute()) {
     if (!HasGraphReferenceSuffix(attribute.name().value())) {
@@ -2131,18 +2123,18 @@ std::vector<std::string> GraphBuilder::MakeNode(
     CollectNodeReferences(missing, missing_references);
     compute_.AppendNodeReuse(nodes_, missing_index, compute_.Shapes(), missing_references);
     compute_.AppendNodeConstant(missing, missing_index);
-    compute_.AppendNodePeakMemory(missing, missing_index, device_);
+    compute_.AppendNodePeakMemory(missing, missing_index, device_, MemoryNodeMaterializer());
   }
   if (compute_.Size() != nodes_.size()) {
     throw BuilderError("GraphBuilder: incremental metadata is not aligned with the node list.");
   }
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_);
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_, MemoryNodeMaterializer());
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
   if (ShapeFunctionAvailable(node)) {
-    if (ShapeInputsAvailable(compute_.Shapes(), materialized) &&
+    if (core::shapes::ShapeInputsAvailable(compute_.Shapes(), materialized) &&
         !HasUnboundAttributes(materialized)) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(nodes_.size()));
       compute_.Shapes().ComputeShapeNode(materialized);
@@ -2177,7 +2169,7 @@ std::vector<std::string> GraphBuilder::MakeNode(
   CollectNodeReferences(stored, references);
   compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
-  compute_.AppendNodePeakMemory(stored, node_index, device_);
+  compute_.AppendNodePeakMemory(materialized, node_index, device_);
   RefreshAfterMutation();
 
   return resolved_outputs;
@@ -2746,7 +2738,7 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
   std::vector<std::vector<std::string>> references(nodes_.size());
   for (std::size_t index = 0; index < nodes_.size(); ++index)
     CollectNodeReferences(nodes_[index], references[index]);
-  compute_.UpdateNodes(nodes_, order, references, {}, device_);
+  compute_.UpdateNodes(nodes_, order, references, {}, device_, MemoryNodeMaterializer());
   RefreshAfterMutation();
   InvalidateRewritings();
 
@@ -2772,6 +2764,76 @@ GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std:
                                                                       const std::string &name,
                                                                       const std::string &overload) {
   return {NormaliseDomain(domain), name, overload};
+}
+
+utils::RepeatedProtoField<FunctionProto>
+GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) {
+  std::map<FunctionIdentifier, std::size_t> indices;
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    const auto &function = functions[index];
+    if (!indices
+             .emplace(
+                 MakeFunctionIdentifier(function.domain(), function.name(), function.overload()),
+                 index)
+             .second) {
+      throw BuilderError("GraphBuilder: duplicate function identity '" + function.name().value() +
+                         "'.");
+    }
+  }
+  const auto dependencies = [&](const FunctionProto &function) {
+    std::set<FunctionIdentifier> result;
+    const auto collect = [&](const auto &self, const NodeProto &node) -> void {
+      const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
+      if (indices.count(identity) != 0)
+        result.insert(identity);
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g())
+          for (const auto &child : attribute.g().node())
+            self(self, child);
+        for (const auto &graph : attribute.graphs())
+          for (const auto &child : graph.node())
+            self(self, child);
+      }
+    };
+    for (const auto &node : function.node())
+      collect(collect, node);
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g())
+        for (const auto &node : attribute.g().node())
+          collect(collect, node);
+      for (const auto &graph : attribute.graphs())
+        for (const auto &node : graph.node())
+          collect(collect, node);
+    }
+    return result;
+  };
+
+  std::vector<std::set<FunctionIdentifier>> required(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    required[index] = dependencies(functions[index]);
+  std::vector<std::vector<std::size_t>> dependents(functions.size());
+  std::vector<std::size_t> dependency_count(functions.size());
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    dependency_count[index] = required[index].size();
+    for (const auto &callee : required[index])
+      dependents[indices.at(callee)].push_back(index);
+  }
+  std::priority_queue<std::size_t, std::vector<std::size_t>, std::greater<>> ready;
+  for (std::size_t index = 0; index < functions.size(); ++index)
+    if (dependency_count[index] == 0)
+      ready.push(index);
+  utils::RepeatedProtoField<FunctionProto> ordered;
+  while (!ready.empty()) {
+    const std::size_t index = ready.top();
+    ready.pop();
+    ordered.push_back(std::move(functions[index]));
+    for (std::size_t caller : dependents[index])
+      if (--dependency_count[caller] == 0)
+        ready.push(caller);
+  }
+  if (ordered.size() != functions.size())
+    throw BuilderError("GraphBuilder: function dependencies contain a cycle.");
+  return ordered;
 }
 
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
@@ -4163,6 +4225,7 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
   for (const auto &function : local_functions_) {
     model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
   }
+  model.ref_functions() = DependencyOrderFunctions(std::move(model.ref_functions()));
   model.ref_rewritings() = utils::CopyWithSharedTensorStorage(rewritings_);
   return model;
 }

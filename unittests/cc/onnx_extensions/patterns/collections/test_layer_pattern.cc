@@ -411,6 +411,10 @@ TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNo
   EXPECT_FALSE(match.pattern->Apply(optimizer, match.nodes).empty());
   const ModelProto extracted = imported.ToModel();
   EXPECT_NO_THROW(VerifyModel(extracted));
+  EXPECT_NO_THROW({
+    core::builder::GraphBuilder reimported(extracted, LayerSchemaLookup());
+    EXPECT_TRUE(reimported.GetShape("y").Shape() == LayerShape({2, 4}));
+  });
   const auto source_function =
       std::find_if(extracted.functions().begin(), extracted.functions().end(),
                    [](const FunctionProto &function) { return function.name() == "Source"; });
@@ -1284,6 +1288,110 @@ TEST(RepeatedLayerPattern, KnownSizeBoundaryBeatsEqualEdgeCutWithUnknownNonZeroS
     }
   }
   EXPECT_EQ(external_nonzero, 2u);
+}
+
+TEST(RepeatedLayerPattern, PreservesAttributesBoundByRetainedFunctionCalls) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                      {{"", 28}, {"activation.local", 1}});
+  FunctionProto activation;
+  activation.set_name("Activation");
+  activation.set_domain("activation.local");
+  activation.add_opset("", 28);
+  activation.add_input("value");
+  activation.add_output("result");
+  activation.add_attribute("alpha");
+  auto leaky_relu = MakeNode("LeakyRelu", {"value"}, {"result"});
+  auto &reference = *leaky_relu.add_attribute();
+  reference.set_name("alpha");
+  reference.set_ref_attr_name("alpha");
+  reference.set_type(AttributeProto::FLOAT);
+  activation.add_node(std::move(leaky_relu));
+  builder.MakeLocalFunction(activation);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {index == 0 ? "x" : "h0", "w" + suffix}, {"m" + suffix});
+    utils::RepeatedProtoField<AttributeProto> arguments;
+    auto &alpha = arguments.add();
+    alpha.set_name("alpha");
+    alpha.set_type(AttributeProto::FLOAT);
+    alpha.set_f(0.3f);
+    builder.MakeNode("Activation", {"m" + suffix}, {"h" + suffix}, "activation.local", "",
+                     arguments);
+  }
+  builder.MakeOutput("h1");
+  EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+}
+
+TEST(RepeatedLayerPattern, RejectsEnclosingAttributeReferencesIncludingNestedGraphs) {
+  for (bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"source.local", 1}});
+    auto &source = builder.MakeLocalFunction("Source", "source.local");
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    source.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      source.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+      builder.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+      const std::string input = index == 0 ? "x" : "h0";
+      source.MakeNode("MatMul", {input, "w" + suffix}, {"m" + suffix});
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      auto &alpha = attributes.add();
+      alpha.set_name("alpha");
+      alpha.set_type(AttributeProto::FLOAT);
+      alpha.set_f(0.3f);
+      if (nested) {
+        GraphProto branch;
+        branch.set_name("branch");
+        NodeProto activation = MakeNode("LeakyRelu", {"m" + suffix}, {"result"});
+        activation.ref_attribute() = attributes;
+        branch.add_node(std::move(activation));
+        branch.add_output()->set_name("result");
+        source.MakeNode("If", {"condition"}, {"h" + suffix}, "", "", LayerBranches(branch));
+      } else {
+        source.MakeNode("LeakyRelu", {"m" + suffix}, {"h" + suffix}, "", "", attributes);
+      }
+    }
+    source.MakeOutput("h1");
+    utils::RepeatedProtoField<AttributeProto> arguments;
+    auto &slope = arguments.add();
+    slope.set_name("slope");
+    slope.set_type(AttributeProto::FLOAT);
+    slope.set_f(0.3f);
+    builder.MakeNode("Source", {"x", "condition", "w0", "w1"}, {"y"}, "source.local");
+    builder.MakeOutput("y");
+    ModelProto model = builder.ToModel();
+    auto &function = model.ref_functions()[0];
+    function.add_attribute("slope");
+    const auto reference_alpha = [&](const auto &self, NodeProto &node) -> void {
+      for (auto &attribute : node.ref_attribute()) {
+        if (node.op_type() == "LeakyRelu" && attribute.name() == "alpha") {
+          attribute.clear_f();
+          attribute.set_ref_attr_name("slope");
+        }
+        if (attribute.has_g())
+          for (auto &child : attribute.mutable_g()->ref_node())
+            self(self, child);
+        for (auto &graph : attribute.ref_graphs())
+          for (auto &child : graph.ref_node())
+            self(self, child);
+      }
+    };
+    for (auto &node : function.ref_node())
+      reference_alpha(reference_alpha, node);
+    model.mutable_graph()->mutable_node(0)->ref_attribute() = arguments;
+    core::builder::GraphBuilder imported(model, LayerSchemaLookup());
+    auto &imported_source = imported.LocalFunction("Source");
+    const GraphProto before = imported_source.BuildGraph();
+    EXPECT_TRUE(OptimizeLayers(imported_source).rewrites().empty());
+    EXPECT_TRUE(before.Equals(imported_source.BuildGraph()));
+  }
 }
 
 TEST(RepeatedLayerPattern, TypedUnknownRankBoundariesRemainUnshaped) {

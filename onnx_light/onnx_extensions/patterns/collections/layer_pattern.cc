@@ -401,16 +401,19 @@ bool KnownType(const TypeProto &type, std::size_t depth = 0);
 
 bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
                 std::map<std::string, bool> &functions, std::set<std::string> &visiting,
-                std::size_t depth, std::size_t &work);
+                std::size_t depth, std::size_t &work, bool allow_attribute_references = false);
 
 bool SafeAttributeGraphs(const AttributeProto &attribute, const GraphBuilder &builder,
                          std::map<std::string, bool> &functions, std::set<std::string> &visiting,
-                         std::size_t depth, std::size_t &work) {
+                         std::size_t depth, std::size_t &work, bool allow_attribute_references) {
+  if (!allow_attribute_references && !attribute.ref_attr_name().empty())
+    return false;
   auto safe_graph = [&](const GraphProto &graph) {
     if (!SafeGraphDeclarations(graph))
       return false;
     for (const NodeProto &inner : graph.node()) {
-      if (!IsSafeNode(inner, builder, functions, visiting, depth + 1, work))
+      if (!IsSafeNode(inner, builder, functions, visiting, depth + 1, work,
+                      allow_attribute_references))
         return false;
     }
     return true;
@@ -426,7 +429,7 @@ bool SafeAttributeGraphs(const AttributeProto &attribute, const GraphBuilder &bu
 
 bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
                 std::map<std::string, bool> &functions, std::set<std::string> &visiting,
-                std::size_t depth, std::size_t &work) {
+                std::size_t depth, std::size_t &work, bool allow_attribute_references) {
   if (IsLayer(node) || depth >= kMaxScopeDepth || (depth != 0 && ++work > kMaxFunctionWork))
     return false;
   const std::string key = core::shapes::ShapesContext::LocalFunctionKey(
@@ -439,13 +442,13 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
         return false;
       bool safe = true;
       for (const NodeProto &inner : function->node()) {
-        if (!IsSafeNode(inner, builder, functions, visiting, depth + 1, work)) {
+        if (!IsSafeNode(inner, builder, functions, visiting, depth + 1, work, true)) {
           safe = false;
           break;
         }
       }
       for (const auto &attribute : function->attribute_proto()) {
-        if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth + 1, work))
+        if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth + 1, work, true))
           safe = false;
       }
       visiting.erase(key);
@@ -466,7 +469,8 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
       return false;
   }
   for (const auto &attribute : node.attribute()) {
-    if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth, work))
+    if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth, work,
+                             allow_attribute_references))
       return false;
   }
   return true;

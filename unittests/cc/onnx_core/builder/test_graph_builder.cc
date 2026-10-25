@@ -145,6 +145,87 @@ TEST(GraphBuilder, LocalFunctionMemoryKeepsConstantsLiveUntilTheirLastUse) {
   EXPECT_EQ(total_bytes(context), 288);
 }
 
+TEST(GraphBuilder, LocalFunctionMemoryDefersRankUnknownTensorInputs) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"custom", 1}});
+  auto &function = builder.MakeLocalFunction("Product", "custom");
+  for (const char *name : {"A", "B"}) {
+    ValueInfoProto input;
+    input.set_name(name);
+    input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    builder.MakeInput(input);
+    function.MakeInput(input);
+  }
+  function.MakeNode("MatMul", {"A", "B"}, {"result"});
+  ValueInfoProto output;
+  output.set_name("result");
+  output.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  function.MakeOutput(output);
+  EXPECT_NO_THROW(builder.MakeNode("Product", {"A", "B"}, {"Y"}, "custom"));
+  EXPECT_FALSE(builder.Shapes().Has("Y"));
+}
+
+TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) {
+  onnx_shapes::RegisterShapeFunctions();
+  constexpr char domain[] = "graph_argument_memory";
+  core::shapes::RegisterComputeShapeFn(domain, "Copy",
+                                       [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                         ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                       });
+  core::shapes::RegisterComputePeakMemoryFn(
+      domain, "Copy", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return int64_t{37};
+      });
+  core::builder::GraphBuilder body("WithGraph", SchemaLookup(), {{"", 28}, {domain, 1}});
+  body.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  body.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> references;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &attribute = references.add();
+    attribute.set_name(name);
+    attribute.set_ref_attr_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+  }
+  body.MakeNode("If", {"condition"}, {"selected"}, "", "", references);
+  body.MakeNode("Copy", {"selected"}, {"result"}, domain);
+  body.MakeOutput("result", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  FunctionProto function = body.ToFunction(domain);
+  function.add_attribute("then_branch");
+  function.add_attribute("else_branch");
+
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {domain, 1}});
+  builder.set_device(core::symbolic::Device::kCPU);
+  builder.MakeLocalFunction(function);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> arguments;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &attribute = arguments.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+    auto &graph = *attribute.mutable_g();
+    graph.set_name(name);
+    graph.add_node(MakeNode("Identity", {"X"}, {"branch_result"}));
+    graph.add_output()->set_name("branch_result");
+  }
+  builder.MakeNode("WithGraph", {"X", "condition"}, {"Y"}, domain, "", arguments);
+  builder.MakeNode("Identity", {"Y"}, {"Z"});
+  builder.MakeOutput("Z");
+  EXPECT_EQ(builder.Compute().PeakMemory().at(0), 37);
+  const auto &intermediates = std::get<core::compute::TaggedMemory>(
+      builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey));
+  ASSERT_NE(intermediates.find(""), intermediates.end());
+  EXPECT_EQ(std::get<int64_t>(intermediates.at("")), 24);
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false,
+                                   context.ComputeValueAndNodeTags(model.graph()).first);
+  EXPECT_EQ(builder.Compute().NodeMemory(0), context.NodeMemory(0));
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 37);
+}
+
 TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));

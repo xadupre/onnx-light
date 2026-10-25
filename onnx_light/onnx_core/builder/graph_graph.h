@@ -75,7 +75,7 @@ public:
   /// Returns the builder being indexed and optimized.
   GraphBuilder &Builder() noexcept { return builder_; }
 
-  /// Sets a concrete target on this builder and its subgraphs.
+  /// Sets a concrete target on this builder, its local functions and their subgraphs.
   /// Rejects conflicting existing devices before modifying any builder.
   void SetTargetDevice(symbolic::Device device);
 

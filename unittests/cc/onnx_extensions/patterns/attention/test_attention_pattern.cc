@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_extensions/patterns/attention/attention_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
@@ -643,6 +644,45 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
   EXPECT_EQ(replacement[0].op_type().value(), "ShiftedCausalMask");
   EXPECT_EQ(replacement[0].input()[2].value(), "shift");
   EXPECT_TRUE(HasFunction(builder, "ShiftedCausalMask"));
+  const auto with_helper = builder.ToModel();
+  for (const bool fold_constants : {false, true}) {
+    for (const bool conflicting : {false, true}) {
+      SCOPED_TRACE(fold_constants);
+      SCOPED_TRACE(conflicting);
+      auto model = utils::CopyWithSharedTensorStorage(with_helper);
+      if (conflicting) {
+        bool changed = false;
+        for (auto &function : model.ref_functions())
+          for (auto &node : function.ref_node())
+            if (node.op_type() == "Constant" && node.output(0) == "zero") {
+              node.ref_attribute()[0].ref_t() = MakeInitializer<int64_t>("zero", {}, {2});
+              changed = true;
+            }
+        ASSERT_TRUE(changed);
+      }
+      core::builder::GraphBuilder mixed(model, SchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::ConstantToInitializerPattern>());
+      patterns.push_back(std::make_unique<onnx_patterns::FunctionCausalMaskPattern>());
+      core::builder::GraphGraph mixed_graph(mixed, std::move(patterns));
+      mixed_graph.Canonicalize();
+      const auto before = mixed.BuildGraph().SerializeAsString();
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = fold_constants;
+      if (conflicting) {
+        EXPECT_THROW(mixed_graph.Optimize(-1, nullptr, folding), core::builder::BuilderError);
+        EXPECT_EQ(mixed.BuildGraph().SerializeAsString(), before);
+      } else {
+        EXPECT_FALSE(mixed_graph.Optimize(-1, nullptr, folding).rewrites().empty());
+        ASSERT_EQ(mixed.Nodes().size(), 1u);
+        EXPECT_EQ(mixed.Nodes()[0].op_type(), "ShiftedCausalMask");
+        EXPECT_EQ(mixed.LocalFunctions().size(), 1u);
+        EXPECT_EQ(mixed.LocalFunction("ShiftedCausalMask").Initializers().size(), 4u);
+        ExpectTopologicalGraph(mixed);
+        EXPECT_NO_THROW(mixed_graph.Optimize(-1, nullptr, folding));
+      }
+    }
+  }
   OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder);
   OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder, false);
   EXPECT_FALSE(builder.LocalFunction("ShiftedCausalMask").HasLocalFunction("ShiftedCausalMask"));

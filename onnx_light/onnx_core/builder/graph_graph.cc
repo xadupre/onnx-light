@@ -1282,6 +1282,8 @@ void GraphGraph::SetTargetDevice(symbolic::Device device) {
                                   builder.name() + "'.");
     for (const auto &subgraph : builder.subgraphs_)
       builders.push_back(subgraph.get());
+    for (const auto &function : builder.local_functions_)
+      builders.push_back(function.get());
   }
   for (auto *builder : builders)
     builder->set_device(device);
@@ -1687,6 +1689,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     function_path.push_back("function:" + function->name());
     OptimizationReport child_report;
     const auto function_start = std::chrono::steady_clock::now();
+    if (function->device() == symbolic::Device::kUndefined)
+      function->set_device(builder_.device());
     GraphGraph child_graph(*function, patterns_);
     child_graph.do_not_remove_ = do_not_remove_;
     detail::RewritingUndoState child_undo;

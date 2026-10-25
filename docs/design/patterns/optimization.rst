@@ -57,6 +57,9 @@ explicitly distinguished from replacements by ``replaced_function_ids`` so that
 conflicting helper definitions retain their validation errors. Helpers are
 reused by model-wide domain/name/overload identity only when their definitions
 are compatible; a helper cannot extract itself, including from a nested scope.
+Helper compatibility tolerates materialized constants moving to the beginning
+of a function, renamed constant aliases, and typed versus raw tensor encoding;
+constant values and executable node attributes must still match.
 Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
 nodes whose attributes still contain unresolved function-attribute references,
@@ -99,6 +102,10 @@ By default only device-independent patterns are selected. ``patterns=False``
 disables patterns without disabling cleanup. A concrete ``Device`` selects
 independent patterns and patterns targeting that exact device, and sets
 ``builder.device`` unless it conflicts with an already-defined target.
+A concrete selection validates and propagates the target through local functions
+as well as subgraphs before changing any scope. During optimization, undefined
+function targets inherit their parent's device; explicit per-function targets
+remain unchanged when no common target is selected.
 A regex selects available names using ``fullmatch``. Regexes and lists can
 explicitly select device-specific patterns and leave the builder device unchanged.
 See :mod:`onnx_light.onnx_core.optimization` for the selector and migration details.

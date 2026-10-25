@@ -127,13 +127,16 @@ public:
 
 class ReplaceIndependentNeg : public core::builder::PatternOptimization {
 public:
-  explicit ReplaceIndependentNeg(bool expand = false)
-      : PatternOptimization(1, "ReplaceIndependentNeg"), expand(expand) {}
+  explicit ReplaceIndependentNeg(bool expand = false,
+                                 core::symbolic::Device device = core::symbolic::Device::kUndefined)
+      : PatternOptimization(1, "ReplaceIndependentNeg", device), expand(expand) {}
 
-  core::builder::MatchResult Match(core::builder::GraphGraph &,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override {
-    return candidate.op_type() == "Neg" ? core::builder::MatchResult{this, {&candidate}, &candidate}
-                                        : core::builder::MatchResult{};
+    return candidate.op_type() == "Neg" && (device == core::symbolic::Device::kUndefined ||
+                                            graph.Builder().device() == device)
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
   }
 
   utils::RepeatedProtoField<NodeProto>
@@ -524,6 +527,69 @@ TEST(GraphGraph, CanonicalReferencePrunesAnnotatedIdentityValues) {
               canonical.SerializeAsString());
     EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
+  }
+}
+
+TEST(GraphGraph, TargetDeviceIncludesFunctionsAndRejectsConflictsAtomically) {
+  using core::symbolic::Device;
+  for (const bool conflict : {false, true}) {
+    SCOPED_TRACE(conflict);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    auto &branch = builder.MakeSubgraph("branch");
+    auto &function = builder.MakeLocalFunction("Body", "local");
+    auto &nested = function.MakeLocalFunction("Nested", "local");
+    auto &body_branch = nested.MakeSubgraph("body_branch");
+    if (conflict)
+      nested.set_device(Device::kCPU);
+    core::builder::GraphGraph graph(builder);
+    if (conflict) {
+      EXPECT_THROW(graph.SetTargetDevice(Device::kGPU0), std::invalid_argument);
+      EXPECT_EQ(builder.device(), Device::kUndefined);
+      EXPECT_EQ(branch.device(), Device::kUndefined);
+      EXPECT_EQ(function.device(), Device::kUndefined);
+      EXPECT_EQ(nested.device(), Device::kCPU);
+      EXPECT_EQ(body_branch.device(), Device::kUndefined);
+    } else {
+      graph.SetTargetDevice(Device::kGPU0);
+      EXPECT_EQ(builder.device(), Device::kGPU0);
+      EXPECT_EQ(branch.device(), Device::kGPU0);
+      EXPECT_EQ(function.device(), Device::kGPU0);
+      EXPECT_EQ(nested.device(), Device::kGPU0);
+      EXPECT_EQ(body_branch.device(), Device::kGPU0);
+    }
+  }
+}
+
+TEST(GraphGraph, LocalFunctionsInheritDeviceForSelectedPatterns) {
+  using core::symbolic::Device;
+  for (const bool select_target : {false, true}) {
+    SCOPED_TRACE(select_target);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<ReplaceIndependentNeg>(false, Device::kGPU0)});
+    if (select_target)
+      graph.SetTargetDevice(Device::kGPU0);
+    else
+      builder.set_device(Device::kGPU0);
+    auto &function = builder.MakeLocalFunction("Body", "local");
+    function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    auto &nested = function.MakeLocalFunction("Nested", "local");
+    nested.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    nested.MakeNode("Neg", {"value"}, {"result"});
+    nested.MakeOutput("result");
+    function.MakeNode("Nested", {"arg"}, {"result"}, "local");
+    function.MakeOutput("result");
+    builder.MakeNode("Body", {"x"}, {"y"}, "local");
+    builder.MakeOutput("y");
+    core::builder::OptimizationReport report;
+    graph.Optimize(-1, &report);
+    EXPECT_GT(report.rewrites, 0u);
+    EXPECT_EQ(function.device(), Device::kGPU0);
+    EXPECT_EQ(nested.device(), Device::kGPU0);
+    ASSERT_EQ(nested.Nodes().size(), 1u);
+    EXPECT_EQ(nested.Nodes()[0].op_type(), "Abs");
   }
 }
 

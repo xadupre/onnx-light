@@ -2915,7 +2915,8 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
           throw BuilderError("UndoRewritings: incompatible restored function initializer.");
       }
     }
-    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset,
+                                   scope.MemoryNodeMaterializer());
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

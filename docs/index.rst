@@ -45,10 +45,6 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml
     :alt: Spelling
 
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/int_ir_py.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/int_ir_py.yml
-    :alt: INT ir-py
-
 .. image:: https://codecov.io/gh/xadupre/onnx-light/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/xadupre/onnx-light
 

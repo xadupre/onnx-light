@@ -3413,25 +3413,39 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
                                          opset > 0 ? static_cast<int64_t>(opset) : 0)),
                                      core::runtime::RuntimeContextOptions{.device = device_});
+    const bool forwarding_identity =
+        IsForwardingIdentity(node) && node.overload().empty() && node.attribute().empty();
+    std::shared_ptr<TensorProto> identity_storage;
     for (std::size_t i = 0; i < node.input().size(); ++i) {
       const std::string input(node.input(static_cast<std::size_t>(i)));
       if (input.empty()) {
         continue;
       }
-      rt.Put(input, core::runtime::TensorFromProto(*const_tensors.at(input)));
+      const auto *source = const_tensors.at(input);
+      auto tensor = core::runtime::TensorFromProto(*source);
+      if (forwarding_identity && source->is_raw_data() &&
+          tensor.data_type != TensorProto::DataType::STRING) {
+        // Retain real storage so the resolved kernel can safely return a borrowed view.
+        identity_storage =
+            std::make_shared<TensorProto>(utils::CopyWithSharedTensorStorage(*source));
+        const auto &raw = identity_storage->ref_raw_data();
+        tensor = core::runtime::Tensor::Borrow(input, tensor.data_type, tensor.shape, raw.data(),
+                                               raw.size(), identity_storage);
+      }
+      rt.Put(input, std::move(tensor));
     }
-    // Native Identity can forward validated raw storage through both folding stages.
+    core::runtime::RunNode(node, rt);
+
     const TensorProto *forwarded_storage = nullptr;
-    if (IsForwardingIdentity(node) && node.overload().empty() && node.attribute().empty() &&
-        global_custom_kernels.find(dispatch_key) == global_custom_kernels.end()) {
-      const auto *source = const_tensors.at(node.input(0));
-      if (source->is_raw_data())
-        forwarded_storage = source;
+    if (identity_storage != nullptr) {
+      const auto &input = rt.Get(node.input(0));
+      const auto &output = rt.Get(node.output(0));
+      const auto &raw = identity_storage->ref_raw_data();
+      if (output.data_type == input.data_type && output.shape == input.shape &&
+          output.bytes() == raw.data() && output.size_bytes() == raw.size()) {
+        forwarded_storage = identity_storage.get();
+      }
     }
-    if (forwarded_storage != nullptr)
-      rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
-    else
-      core::runtime::RunNode(node, rt);
 
     // Reject the fold when any output exceeds the size threshold; the node is
     // then kept untouched.

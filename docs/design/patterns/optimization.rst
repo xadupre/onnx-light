@@ -70,8 +70,10 @@ identities, without allowing local overrides of the surrounding primitives.
 Replay validates surviving value tags in every retained graph-attribute
 occurrence, including separate exported copies of a shared subgraph.
 Constant folding forwards raw initializer storage through native Identity nodes
-without copying payloads. Input validation and folding limits still apply;
-registered custom Identity kernels retain their normal execution path.
+without copying payloads. It always executes the resolved kernel, including
+custom and device-specific factories, and shares storage only when the returned
+tensor aliases the retained input with matching type, shape and byte size.
+Input validation and folding limits still apply.
 
 A pattern must never reuse an existing name: every value it produces is
 new. This invariant keeps the successor and predecessor maps valid

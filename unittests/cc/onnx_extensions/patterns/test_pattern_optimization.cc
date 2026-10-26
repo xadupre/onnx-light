@@ -2642,6 +2642,48 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
 }
 
+TEST(PatternOptimization, ReportsMixedGraphAndFunctionRewritesExactlyOnce) {
+  for (const int max_iter : {0, 1, -1}) {
+    SCOPED_TRACE(max_iter);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+    AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+    AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+    builder.MakeOutput("y");
+    auto &body = builder.MakeSubgraph("body");
+    AddCast(body, "x", "body_middle", TensorProto::DataType::FLOAT);
+    AddCast(body, "body_middle", "out", TensorProto::DataType::FLOAT);
+    body.MakeOutput("out");
+    AddSubgraphReference(builder, "body", "body", "body_out");
+    builder.MakeOutput("body_out");
+    for (auto *scope : {&builder, &body}) {
+      auto &function = scope->MakeLocalFunction(
+          scope == &builder ? "RootFunction" : "NestedFunction", "test.pattern");
+      function.MakeInput("input", core::symbolic::TensorType::kFloat16, Shape());
+      AddCast(function, "input", "middle", TensorProto::DataType::FLOAT);
+      AddCast(function, "middle", "output", TensorProto::DataType::FLOAT);
+      function.MakeOutput("output");
+    }
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<onnx_patterns::CastCastPattern>()});
+    core::builder::OptimizationReport report;
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    const auto plan = graph.Optimize(max_iter, &report, folding, false);
+    EXPECT_EQ(report.rewrites, max_iter == 0 ? 0u : 4u);
+    EXPECT_EQ(plan.rewrites().size(), max_iter == 0 ? 0u : 2u);
+    ASSERT_EQ(report.subgraphs.size(), 3u);
+    EXPECT_EQ(report.subgraphs[0].graph_path, std::vector<std::string>({"body"}));
+    EXPECT_EQ(report.subgraphs[0].rewrites, max_iter == 0 ? 0u : 2u);
+    EXPECT_EQ(report.subgraphs[1].graph_path,
+              std::vector<std::string>({"body", "function:NestedFunction"}));
+    EXPECT_EQ(report.subgraphs[1].rewrites, max_iter == 0 ? 0u : 1u);
+    EXPECT_EQ(report.subgraphs[2].graph_path, std::vector<std::string>({"function:RootFunction"}));
+    EXPECT_EQ(report.subgraphs[2].rewrites, max_iter == 0 ? 0u : 1u);
+  }
+}
+
 TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
   builder.SetOpsetVersion("test.pattern", 1);

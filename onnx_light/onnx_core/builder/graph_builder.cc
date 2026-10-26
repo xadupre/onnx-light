@@ -786,7 +786,10 @@ void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
                              .Equals(function->BuildFunction(function->function_domain_)) ||
                         !same_device_targets(same_device_targets, *existing->second, *function))) {
         throw BuilderError(
-            "CopyDeviceTargetsFrom: conflicting duplicate source function identity.");
+            "CopyDeviceTargetsFrom: conflicting duplicate source function '" +
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload()) +
+            "'.");
       }
       self(self, *function);
     }
@@ -817,7 +820,11 @@ void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
                                                    function->function_template_.overload());
       const auto found = functions.find(identity);
       if (found == functions.end())
-        throw BuilderError("CopyDeviceTargetsFrom: incompatible exported functions.");
+        throw BuilderError(
+            "CopyDeviceTargetsFrom: incompatible exported function '" +
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload()) +
+            "'.");
       self(self, *function, *found->second);
     }
     updates.emplace_back(&target, original.device_);
@@ -2781,13 +2788,10 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
 
 GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *> &functions,
                                                const NodeProto &node) {
-  const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-  const std::string normalised = NormaliseDomain(node_domain);
-  const std::string overload = node.overload().value();
+  const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
   for (GraphBuilder *function : functions) {
-    if (function->name() == node.op_type().value() &&
-        NormaliseDomain(function->function_domain_) == normalised &&
-        function->function_template_.overload().value() == overload) {
+    if (MakeFunctionIdentifier(function->function_domain_, function->name_,
+                               function->function_template_.overload()) == identity) {
       return function;
     }
   }
@@ -2797,7 +2801,7 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
 GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std::string &domain,
                                                                       const std::string &name,
                                                                       const std::string &overload) {
-  return {NormaliseDomain(domain), name, overload};
+  return {NormaliseDomain(domain == "onnx.ai" ? std::string() : domain), name, overload};
 }
 
 utils::RepeatedProtoField<FunctionProto>
@@ -2810,8 +2814,10 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
                  MakeFunctionIdentifier(function.domain(), function.name(), function.overload()),
                  index)
              .second) {
-      throw BuilderError("GraphBuilder: duplicate function identity '" + function.name().value() +
-                         "'.");
+      throw BuilderError(
+          "GraphBuilder: duplicate function identity '" +
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()) +
+          "'.");
     }
   }
   const auto dependencies = [&](const FunctionProto &function) {
@@ -2872,14 +2878,12 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
 
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
                                              const std::string &overload) const {
-  const std::string normalised = NormaliseDomain(domain);
+  const auto identity = MakeFunctionIdentifier(domain, name, overload);
   const std::function<std::size_t(const GraphProto &)> count_graph =
       [&](const GraphProto &graph) -> std::size_t {
     std::size_t count = 0;
     for (const auto &node : graph.node()) {
-      const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
-          node.overload().value() == overload) {
+      if (MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) == identity) {
         ++count;
       }
       for (const auto &attribute : node.attribute()) {
@@ -2895,9 +2899,7 @@ std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std:
   };
   std::size_t count = 0;
   for (const NodeProto &node : nodes_) {
-    const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
-        node.overload().value() == overload) {
+    if (MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) == identity) {
       ++count;
     }
   }
@@ -4299,7 +4301,9 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
             });
         if (previous == model.functions().end() || !previous->Equals(definition)) {
           throw BuilderError("GraphBuilder: conflicting nested local function definition '" +
-                             definition.name().value() + "'.");
+                             ShapesContext::LocalFunctionKey(definition.domain(), definition.name(),
+                                                             definition.overload()) +
+                             "'.");
         }
         continue;
       }

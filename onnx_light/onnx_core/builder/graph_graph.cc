@@ -1700,7 +1700,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(subgraph_start);
       report->iterations += child_report.iterations;
-      report->rewrites += child_report.rewrites;
       if (child_report.rewrites < graph_rewrites)
         throw BuilderError("GraphGraph::Optimize: nested rewrite count is inconsistent.");
       function_body_rewrites += child_report.rewrites - graph_rewrites;
@@ -1751,7 +1750,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
-      report->rewrites += child_report.rewrites;
       function_body_rewrites += child_report.rewrites;
       report->subgraph_optimization_time_ns += elapsed_time_ns;
       for (std::size_t i = 0; i < report->patterns.size(); ++i) {
@@ -2226,7 +2224,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     if (report != nullptr) {
       report->rewriting_time_ns += ElapsedNanoseconds(rewriting_start) - constant_folding_time_ns;
-      report->rewrites = applied.size() + function_body_rewrites;
     }
 
     std::chrono::steady_clock::time_point cleanup_start;
@@ -2242,7 +2239,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     if (report != nullptr) {
       report->cleanup_time_ns += ElapsedNanoseconds(cleanup_start);
-      report->rewrites = applied.size() + function_body_rewrites;
     }
 
     if (!matches.empty() || cleaned != 0) {
@@ -2253,6 +2249,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     ++priority_index;
   }
+  if (report != nullptr)
+    report->rewrites = applied.size() + function_body_rewrites;
   return result;
 }
 

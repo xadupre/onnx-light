@@ -389,6 +389,50 @@ TEST(GraphBuilder, CopyDeviceTargetsAcceptsCompatibleDuplicateFunctionIdentities
   EXPECT_EQ(incompatible_target.LocalFunction("F").device(), Device::kUndefined);
 }
 
+TEST(GraphBuilder, ExportAndDeviceTargetsUseCanonicalFunctionIdentities) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  for (const std::string source_domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string target_domain : {"", "ai.onnx", "onnx.ai"}) {
+      for (const std::string overload : {"", "variant:one%"}) {
+        SCOPED_TRACE(source_domain + "/" + target_domain + "/" + overload);
+        GraphBuilder source("root", SchemaLookup(), {{"", 18}, {"onnx.ai", 18}});
+        FunctionProto definition;
+        definition.set_name("F");
+        definition.set_domain(source_domain);
+        definition.set_overload(overload);
+        definition.add_opset("", 18);
+        definition.add_input("a");
+        definition.add_output("b");
+        definition.add_node(MakeNode("Neg", {"a"}, {"b"}));
+        source.MakeLocalFunction(definition).set_device(Device::kCPU);
+        source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+        source.MakeNode("F", {"x"}, {"y"}, source_domain, "",
+                        utils::RepeatedProtoField<AttributeProto>(), overload);
+        source.MakeOutput("y");
+
+        auto model = source.ToModel();
+        ASSERT_EQ(model.functions().size(), 1u);
+        model.ref_functions()[0].set_domain(target_domain);
+        GraphBuilder target(model, SchemaLookup());
+        ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+        EXPECT_EQ(target.LocalFunction("F").device(), Device::kCPU);
+        EXPECT_EQ(target.InlineLocalFunctions(), 1u);
+        ASSERT_EQ(target.Nodes().size(), 1u);
+        EXPECT_EQ(target.Nodes()[0].op_type(), "Neg");
+
+        auto duplicate = model.functions(0);
+        duplicate.set_domain(source_domain);
+        model.ref_functions().push_back(std::move(duplicate));
+        EXPECT_THROW((GraphBuilder(model, SchemaLookup())), core::builder::BuilderError);
+        model.ref_functions()[1].set_overload(overload + "different");
+        EXPECT_NO_THROW((GraphBuilder(model, SchemaLookup())));
+      }
+    }
+  }
+}
+
 TEST(GraphBuilder, CopyDeviceTargetsAlignsDuplicateFunctionBranchesByReference) {
   using core::builder::GraphBuilder;
   using core::symbolic::Device;

@@ -623,6 +623,17 @@ public:
   /// (:cpp:func:`ComputeInPlaceReuseGraph`) and per-node peak memory
   /// (:cpp:func:`ComputePeakMemory`).
   ///
+  /// Requires fixed-width dense tensor allocations and resolved shapes.
+  /// Expressions in declared input dimensions remain symbolic; new unresolved
+  /// output dimensions, strings, sparse and extended initializers are rejected.
+  /// Unlike this complete-analysis entry point, the lower-level reuse analysis
+  /// permits partially inferred graphs for incremental graph construction.
+  /// Concrete allocation products, live sums and tensor-plus-scratch totals
+  /// must fit ``int64_t``; valid zero-byte allocations are preserved.
+  ///
+  /// @throws std::invalid_argument on unsupported or unresolved allocations
+  ///         or integer overflow.
+  ///
   /// @param graph  Graph whose nodes are analysed, in topological order.
   /// @param device  Logical device passed to the peak-memory dispatch function.
   /// @param allow_input_overwrite  Forwarded to

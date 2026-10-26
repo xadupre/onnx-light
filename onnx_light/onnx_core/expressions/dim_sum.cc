@@ -3,6 +3,7 @@
 // Efficient accumulation of symbolic dimension expressions.
 
 #include "onnx_core/expressions/dim_sum.h"
+#include "onnx_core/shapes/shape_check.h"
 
 #include <string>
 #include <variant>
@@ -37,7 +38,7 @@ DimType simplify_dim_type(const DimType &value, SimplifiedExpressionCache *cache
 
 void DimSum::Add(const DimType &term) {
   if (std::holds_alternative<int64_t>(term)) {
-    constant_ += std::get<int64_t>(term);
+    constant_ = shapes::CheckedDimensionAdd(constant_, std::get<int64_t>(term));
   } else {
     coefficients_[std::get<std::string>(term)] += 1;
   }

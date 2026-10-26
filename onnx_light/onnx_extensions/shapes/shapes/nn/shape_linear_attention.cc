@@ -194,14 +194,23 @@ int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymSha
   }
 
   if (input_shapes.size() > 3 && input_shapes[3].Rank() == 4) {
-    int64_t state_elements = 1;
+    int64_t state_elements = kStateElementBytes;
+    bool empty = false;
     for (std::size_t index = 0; index < 4; ++index) {
       if (!input_shapes[3][index].IsInt()) {
         return 0;
       }
-      state_elements *= input_shapes[3][index].AsInt();
+      EXT_ENFORCE_INVALID(input_shapes[3][index].AsInt() >= 0,
+                          "Negative LinearAttention scratch dimension.");
+      empty |= input_shapes[3][index].AsInt() == 0;
     }
-    return state_elements * kStateElementBytes;
+    if (empty)
+      return 0;
+    for (std::size_t index = 0; index < 4; ++index) {
+      state_elements =
+          core::shapes::CheckedDimensionMultiply(state_elements, input_shapes[3][index].AsInt());
+    }
+    return state_elements;
   }
 
   const SymDim &batch = input_shapes[0][0];
@@ -210,7 +219,16 @@ int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymSha
   if (!batch.IsInt() || !key_hidden.IsInt() || !value_hidden.IsInt()) {
     return 0;
   }
-  return batch.AsInt() * key_hidden.AsInt() * value_hidden.AsInt() * kStateElementBytes;
+  for (const SymDim *dim : {&batch, &key_hidden, &value_hidden}) {
+    EXT_ENFORCE_INVALID(dim->AsInt() >= 0, "Negative LinearAttention scratch dimension.");
+  }
+  if (batch.AsInt() == 0 || key_hidden.AsInt() == 0 || value_hidden.AsInt() == 0)
+    return 0;
+  return core::shapes::CheckedDimensionMultiply(
+      core::shapes::CheckedDimensionMultiply(
+          core::shapes::CheckedDimensionMultiply(batch.AsInt(), key_hidden.AsInt()),
+          value_hidden.AsInt()),
+      kStateElementBytes);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

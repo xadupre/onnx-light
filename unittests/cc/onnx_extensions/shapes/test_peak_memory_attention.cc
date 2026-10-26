@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -35,6 +36,20 @@ TEST(ComputePeakMemoryAttention, StaticRank4ReturnsScoreBufferBytes) {
   EXPECT_EQ(
       onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
       expected);
+}
+
+TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  const int64_t large = int64_t{1} << 31;
+  std::vector<core::symbolic::SymShape> inputs = {Rank4(1, 1, large, 1), Rank4(1, 1, large, 1),
+                                                  Rank4(1, 1, large, 1)};
+  EXPECT_THROW(
+      core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
+  inputs[0] = Rank4(large, large, large, 1);
+  inputs[1] = Rank4(large, large, 0, 1);
+  EXPECT_EQ(core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
+            0);
 }
 
 // A symbolic contributing dimension yields no concrete estimate.

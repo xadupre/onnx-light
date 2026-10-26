@@ -575,6 +575,8 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
  *                     is ``Q`` and ``input_shapes[1]`` is ``K``.
  * @returns The estimated peak scratch memory in bytes, or ``0`` when no
  *          concrete estimate can be produced.
+ * @throws std::invalid_argument if a contributing dimension is negative or
+ *         the scratch allocation exceeds ``int64_t``.
  */
 int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
 
@@ -590,6 +592,8 @@ int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &i
  * @param input_shapes Shapes of query, key, value, and optional inputs.
  * @returns The estimated peak scratch memory in bytes, or ``0`` when no
  *          concrete estimate can be produced.
+ * @throws std::invalid_argument if a contributing dimension is negative or
+ *         the scratch allocation exceeds ``int64_t``.
  */
 int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes);
 

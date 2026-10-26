@@ -4,6 +4,7 @@
 // Ported from yobx/xexpressions (https://github.com/xadupre/yet-another-onnx-builder).
 
 #include "expressions.h"
+#include "onnx_core/shapes/shape_check.h"
 
 #include <algorithm>
 #include <cassert>
@@ -2149,7 +2150,7 @@ static DimType simplify_dim(const std::string &expr, SimplifiedExpressionCache *
 
 DimType dim_add(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) + std::get<int64_t>(b);
+    return shapes::CheckedDimensionAdd(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")+(" + dim_to_string(b) + ")", cache);
 }
 
@@ -2161,7 +2162,7 @@ DimType dim_sub(const DimType &a, const DimType &b, SimplifiedExpressionCache *c
 
 DimType dim_mul(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) * std::get<int64_t>(b);
+    return shapes::CheckedDimensionMultiply(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")*(" + dim_to_string(b) + ")", cache);
 }
 

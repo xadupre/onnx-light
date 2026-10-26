@@ -119,7 +119,9 @@ int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type,
   if (it == table.end()) {
     return 0;
   }
-  return it->second(device, input_shapes);
+  const int64_t bytes = it->second(device, input_shapes);
+  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", domain, ":", op_type, ".");
+  return bytes;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

@@ -355,8 +355,18 @@ int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &i
     return 0;
   }
 
-  return batch.AsInt() * q_num_heads.AsInt() * q_seq_len.AsInt() * kv_seq_len.AsInt() *
-         kScoreElementBytes;
+  int64_t bytes = kScoreElementBytes;
+  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
+    EXT_ENFORCE_INVALID(dim->AsInt() >= 0, "Negative Attention scratch dimension.");
+  }
+  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
+    if (dim->AsInt() == 0)
+      return 0;
+  }
+  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
+    bytes = core::shapes::CheckedDimensionMultiply(bytes, dim->AsInt());
+  }
+  return bytes;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

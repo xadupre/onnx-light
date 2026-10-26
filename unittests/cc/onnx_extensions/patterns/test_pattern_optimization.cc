@@ -2874,9 +2874,9 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
       } else {
         const auto reuse_plan = reuse_graph.Optimize();
         EXPECT_EQ(reuse_plan.added_functions().size(),
-                  same_identity ? 2u : (conflicting ? 3u : 4u));
+                  same_identity ? 2u : (conflicting ? 4u : 5u));
         const auto reused_model = reused.ToModel();
-        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 4u);
+        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 5u);
         EXPECT_NO_THROW(core::builder::GraphBuilder(reused_model, SchemaLookup()));
       }
     }
@@ -2885,10 +2885,17 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
 
 TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
-  builder.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
-  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
-  builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
-  builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.SetOpsetVersion("other", 1);
+  builder.SetOpsetVersion("test.pattern", 1);
+  auto &name_collision = builder.MakeLocalFunction("HalfRotaryEmbedding", "other");
+  name_collision.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  name_collision.MakeNode("Identity", {"X"}, {"Y"});
+  name_collision.MakeOutput("Y");
+  auto &parent = builder.MakeLocalFunction("Parent", "test.pattern");
+  parent.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+  parent.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  parent.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  parent.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
 
   const auto add_decomposition = [](core::builder::GraphBuilder &scope, const std::string &prefix,
                                     const std::string &output) {
@@ -2915,10 +2922,10 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
     scope.MakeNode("Add", {prefix + "rotated_sin", prefix + "scaled"}, {output});
   };
 
-  auto &then_branch = builder.MakeSubgraph("then_branch");
+  auto &then_branch = parent.MakeSubgraph("then_branch");
   add_decomposition(then_branch, "branch_", "branch_output");
   then_branch.MakeOutput("branch_output");
-  auto &else_branch = builder.MakeSubgraph("else_branch");
+  auto &else_branch = parent.MakeSubgraph("else_branch");
   else_branch.MakeNode("Identity", {"X"}, {"else_output"});
   else_branch.MakeOutput("else_output");
   utils::RepeatedProtoField<AttributeProto> branch_attributes;
@@ -2930,8 +2937,15 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
     attribute.set_type(AttributeProto::AttributeType::STRING);
     attribute.set_s(graph);
   }
-  builder.MakeNode("If", {"condition"}, {"unused_if_output"}, "", "", branch_attributes);
-  add_decomposition(builder, "", "Y");
+  parent.MakeNode("If", {"condition"}, {"unused_if_output"}, "", "", branch_attributes);
+  add_decomposition(parent, "", "Y");
+  parent.MakeOutput("Y");
+
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeNode("Parent", {"condition", "X", "cos", "sin"}, {"Y"}, "test.pattern");
   builder.MakeOutput("Y");
 
   const ModelProto original = builder.ToModel();
@@ -2940,20 +2954,47 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
   core::builder::GraphGraph graph(builder, std::move(patterns));
   const RewritingProto plan = graph.Optimize();
 
-  ASSERT_EQ(plan.added_functions().size(), 1u);
-  EXPECT_EQ(plan.added_functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_TRUE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
+                          [](const auto &function) {
+                            return function.name().value() == "HalfRotaryEmbedding_0" &&
+                                   function.domain().value() == "intermediate";
+                          }));
   const ModelProto exported = builder.ToModel();
   ASSERT_EQ(exported.graph().node().size(), 1u);
-  EXPECT_EQ(exported.graph().node(0).op_type().value(), "HalfRotaryEmbedding");
-  ASSERT_EQ(exported.functions().size(), 1u);
-  EXPECT_EQ(exported.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(exported.graph().node(0).op_type().value(), "Parent");
+  ASSERT_EQ(exported.functions().size(), 3u);
+  const auto helper = std::find_if(exported.functions().begin(), exported.functions().end(),
+                                   [](const auto &function) {
+                                     return function.name().value() == "HalfRotaryEmbedding_0" &&
+                                            function.domain().value() == "intermediate";
+                                   });
+  ASSERT_NE(helper, exported.functions().end());
+  const auto exported_parent =
+      std::find_if(exported.functions().begin(), exported.functions().end(),
+                   [](const auto &function) { return function.name().value() == "Parent"; });
+  ASSERT_NE(exported_parent, exported.functions().end());
+  ASSERT_EQ(exported_parent->node().size(), 1u);
+  EXPECT_EQ(exported_parent->node(0).op_type().value(), "HalfRotaryEmbedding_0");
+  EXPECT_EQ(exported_parent->node(0).domain().value(), "intermediate");
+  EXPECT_TRUE(std::any_of(exported.functions().begin(), exported.functions().end(),
+                          [](const auto &function) {
+                            return function.name().value() == "HalfRotaryEmbedding" &&
+                                   function.domain().value() == "other";
+                          }));
 
   const ModelProto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel();
   ASSERT_EQ(replayed.graph().node().size(), 1u);
-  EXPECT_EQ(replayed.graph().node(0).op_type().value(), "HalfRotaryEmbedding");
-  ASSERT_EQ(replayed.functions().size(), 1u);
-  EXPECT_EQ(replayed.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(replayed.graph().node(0).op_type().value(), "Parent");
+  ASSERT_EQ(replayed.functions().size(), 3u);
+  const auto replayed_parent =
+      std::find_if(replayed.functions().begin(), replayed.functions().end(),
+                   [](const auto &function) { return function.name().value() == "Parent"; });
+  ASSERT_NE(replayed_parent, replayed.functions().end());
+  ASSERT_EQ(replayed_parent->node().size(), 1u);
+  EXPECT_EQ(replayed_parent->node(0).op_type().value(), "HalfRotaryEmbedding_0");
+  EXPECT_EQ(replayed_parent->node(0).domain().value(), "intermediate");
+  EXPECT_NO_THROW(core::builder::GraphBuilder(replayed, SchemaLookup()));
 }
 
 TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {

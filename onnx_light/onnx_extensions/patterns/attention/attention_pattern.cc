@@ -432,6 +432,33 @@ bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &
           !model_builder.HasName(name));
 }
 
+std::string ModelScopedHelperName(core::builder::GraphBuilder &builder, const std::string &name) {
+  auto &model_builder = builder.ModelBuilder();
+  for (std::size_t suffix = 0;; ++suffix) {
+    const std::string candidate = suffix == 0 ? name : name + "_" + std::to_string(suffix - 1);
+    const bool exists_at_model_scope =
+        std::any_of(model_builder.LocalFunctions().begin(), model_builder.LocalFunctions().end(),
+                    [&](const auto &function) {
+                      return function->IsLocalFunction(candidate, kIntermediateDomain);
+                    });
+    if (exists_at_model_scope) {
+      return candidate;
+    }
+    if (!model_builder.HasName(candidate) &&
+        !builder.Shapes().HasLocalFunction(
+            core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, candidate))) {
+      return candidate;
+    }
+  }
+}
+
+bool CanEnsureHalfRotaryFunction(core::builder::GraphBuilder &builder) {
+  constexpr const char *name = "HalfRotaryEmbedding";
+  const std::string model_scoped_name = ModelScopedHelperName(builder, name);
+  return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
+         !builder.IsInsideLocalFunction(model_scoped_name, kIntermediateDomain);
+}
+
 template <typename Fields> bool SameHelperProtos(const Fields &left, const Fields &right) {
   return std::equal(left.begin(), left.end(), right.begin(), right.end(),
                     [](const auto &a, const auto &b) { return a.Equals(b); });
@@ -2033,7 +2060,7 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
       }
     }
   }
-  if (caches.size() != 2 || !CanEnsureFunction(graph.Builder(), "HalfRotaryEmbedding")) {
+  if (caches.size() != 2 || !CanEnsureHalfRotaryFunction(graph.Builder())) {
     return NoMatch(candidate, "The cache inputs or local-function name are not usable.");
   }
   const std::vector<const NodeProto *> matched =
@@ -2102,11 +2129,14 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
     throw BuilderError("FunctionHalfRotaryEmbeddingPattern::Apply could not identify both caches.");
   }
   utils::RepeatedProtoField<NodeProto> result;
+  const std::string function_name = ModelScopedHelperName(graph.Builder(), "HalfRotaryEmbedding");
   result.push_back(
-      MakePatternNode("HalfRotaryEmbedding", {first.input()[0].value(), cos_cache, sin_cache},
+      MakePatternNode(function_name.c_str(), {first.input()[0].value(), cos_cache, sin_cache},
                       {add.output()[0].value()}, kIntermediateDomain,
                       "FunctionHalfRotaryEmbeddingPattern--" + add.output()[0].value()));
-  EnsureFunction(graph, MakeHalfRotaryFunction(graph.Builder()));
+  FunctionProto function = MakeHalfRotaryFunction(graph.Builder());
+  function.set_name(function_name);
+  EnsureFunction(graph, function);
   return result;
 }
 

@@ -82,6 +82,20 @@ bool ReadStaticShape(core::builder::GraphGraph &graph, const std::string &name,
   return true;
 }
 
+bool HasDefaultZeroAxis(const NodeProto &node) {
+  bool found_axis = false;
+  for (const auto &attribute : node.attribute()) {
+    if (attribute.name().value() == "axis") {
+      if (found_axis || attribute.type() != AttributeProto::AttributeType::INT ||
+          attribute.i() != 0 || !attribute.ref_attr_name().value().empty()) {
+        return false;
+      }
+      found_axis = true;
+    }
+  }
+  return true;
+}
+
 std::vector<int64_t> StaticShapeOrThrow(core::builder::GraphGraph &graph, const std::string &name,
                                         const char *pattern_name) {
   std::vector<int64_t> shape;
@@ -1707,7 +1721,8 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return MatchLoop(graph, candidate);
   }
   if (graph.Builder().OpsetVersion("") < 29 || !IsDefaultOp(candidate, "Squeeze") ||
-      candidate.input_size() != 2 || candidate.output_size() != 1) {
+      !candidate.overload().value().empty() || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
     return NoMatch(candidate, "expected an opset-29 Squeeze");
   }
   auto axes_are = [&](const NodeProto &node, std::vector<int64_t> expected, int64_t rank) {
@@ -1727,16 +1742,17 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return axes == expected;
   };
   const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
-  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || matmul->input_size() != 2 ||
-      matmul->output_size() != 1 || !axes_are(candidate, {2}, 4)) {
+  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || !matmul->overload().value().empty() ||
+      matmul->input_size() != 2 || matmul->output_size() != 1 || !axes_are(candidate, {2}, 4)) {
     return NoMatch(candidate, "expected MatMul followed by Squeeze axis 2");
   }
   const NodeProto *unsqueeze = graph.NodeBefore(matmul->input()[0].value());
   const NodeProto *gather = graph.NodeBefore(matmul->input()[1].value());
-  if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") || unsqueeze->input_size() != 2 ||
+  if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") ||
+      !unsqueeze->overload().value().empty() || unsqueeze->input_size() != 2 ||
       unsqueeze->output_size() != 1 || !axes_are(*unsqueeze, {1, 2}, 4) || !gather ||
-      !IsDefaultOp(*gather, "Gather") || gather->input_size() != 2 || gather->output_size() != 1 ||
-      GetAttributeOr<int64_t>(*gather, "axis", 0) != 0) {
+      !IsDefaultOp(*gather, "Gather") || !gather->overload().value().empty() ||
+      gather->input_size() != 2 || gather->output_size() != 1 || !HasDefaultZeroAxis(*gather)) {
     return NoMatch(candidate, "expected Unsqueeze axes 1,2 and Gather axis 0");
   }
   const std::string &x = unsqueeze->input()[0].value();
@@ -1778,8 +1794,9 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     const NodeProto &sum = *next[0];
     const std::string &other = sum.input()[sum.input()[0] == candidate.output()[0] ? 1 : 0].value();
     const NodeProto *bg = graph.NodeBefore(other);
-    if (bg && IsDefaultOp(*bg, "Gather") && bg->input_size() == 2 && bg->output_size() == 1 &&
-        bg->input()[1].value() == indices && GetAttributeOr<int64_t>(*bg, "axis", 0) == 0 &&
+    if (sum.overload().value().empty() && bg && IsDefaultOp(*bg, "Gather") &&
+        bg->overload().value().empty() && bg->input_size() == 2 && bg->output_size() == 1 &&
+        bg->input()[1].value() == indices && HasDefaultZeroAxis(*bg) &&
         !graph.IsUsedMoreThanOnce(other) && graph.HasShape(bg->input()[0].value()) &&
         graph.HasType(bg->input()[0].value()) && graph.GetType(bg->input()[0].value()) == dtype) {
       const SymShape &bs = graph.GetShape(bg->input()[0].value()).Shape();

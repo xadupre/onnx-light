@@ -107,6 +107,13 @@ void SetNodeDomain(core::builder::GraphBuilder &builder, std::size_t index,
   nodes[index].set_domain(domain);
 }
 
+void SetAttributeReference(NodeProto &node, const char *name, const char *reference) {
+  AttributeProto &attribute = *node.add_attribute();
+  attribute.set_name(name);
+  attribute.set_type(AttributeProto::AttributeType::INT);
+  attribute.set_ref_attr_name(reference);
+}
+
 void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::string &attribute_name,
                           const std::string &subgraph_name, const std::string &output) {
   utils::RepeatedProtoField<AttributeProto> attributes;
@@ -312,6 +319,48 @@ TEST(GroupedMatMulPattern, RejectsIncompatibleMetadataAndAxes) {
     }
     core::builder::GraphGraph graph(builder);
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << guard;
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsParameterizedGatherAxes) {
+  onnx_patterns::GroupedMatMulPattern pattern;
+  for (bool bias : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder, bias);
+    auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+    SetAttributeReference(nodes[bias ? 4 : 1], "axis", "axis");
+    core::builder::GraphGraph graph(builder);
+    const auto match = pattern.Match(graph, builder.Nodes()[3]);
+    if (bias) {
+      ASSERT_EQ(match.pattern, &pattern);
+      EXPECT_EQ(match.nodes[4], nullptr);
+      EXPECT_EQ(match.nodes[5], nullptr);
+    } else {
+      EXPECT_EQ(match.pattern, nullptr);
+    }
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsOverloadedBatchedOperators) {
+  onnx_patterns::GroupedMatMulPattern pattern;
+  for (std::size_t index = 0; index < 4; ++index) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder);
+    auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+    nodes[index].set_overload("model_local");
+    core::builder::GraphGraph graph(builder);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << index;
+  }
+  for (std::size_t index : {4u, 5u}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder, true);
+    auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+    nodes[index].set_overload("model_local");
+    core::builder::GraphGraph graph(builder);
+    const auto match = pattern.Match(graph, builder.Nodes()[3]);
+    ASSERT_EQ(match.pattern, &pattern);
+    EXPECT_EQ(match.nodes[4], nullptr);
+    EXPECT_EQ(match.nodes[5], nullptr);
   }
 }
 

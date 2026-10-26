@@ -75,6 +75,21 @@ std::string Row(GraphBuilder &builder, const std::string &token, const std::stri
   return prefix + "sum";
 }
 
+void Batched(GraphBuilder &builder, bool bias) {
+  Inputs(builder, 2, TensorType::kFloat, TensorType::kInt64, bias);
+  builder.MakeInitializer(MakeInitializerShape("unsqueeze_axes", {1, 2}));
+  builder.MakeInitializer(MakeInitializerShape("squeeze_axes", {2}));
+  builder.MakeNode("Unsqueeze", {"x", "unsqueeze_axes"}, {"expanded_x"});
+  builder.MakeNode("Gather", {"w", "indices"}, {"selected_w"});
+  builder.MakeNode("MatMul", {"expanded_x", "selected_w"}, {"mm"});
+  builder.MakeNode("Squeeze", {"mm", "squeeze_axes"}, {bias ? "squeezed" : "out"});
+  if (bias) {
+    builder.MakeNode("Gather", {"bias", "indices"}, {"selected_bias"});
+    builder.MakeNode("Add", {"squeezed", "selected_bias"}, {"out"});
+  }
+  builder.MakeOutput("out");
+}
+
 void Concat(GraphBuilder &builder, bool bias = false, bool reverse = false,
             TensorType dtype = TensorType::kFloat, TensorType itype = TensorType::kInt64,
             int tokens = 2) {
@@ -173,7 +188,7 @@ void CheckReplacement(GraphBuilder &builder, const utils::RepeatedProtoField<Nod
   }
 }
 
-TEST(GroupedMatMulConcatPattern, SupportedTypesBiasOrdersAndTokenConstants) {
+TEST(GroupedMatMulPattern, ConcatSupportedTypesBiasOrdersAndTokenConstants) {
   for (auto dtype :
        {TensorType::kFloat, TensorType::kDouble, TensorType::kFloat16, TensorType::kBfloat16}) {
     for (auto itype : {TensorType::kInt32, TensorType::kInt64}) {
@@ -181,9 +196,9 @@ TEST(GroupedMatMulConcatPattern, SupportedTypesBiasOrdersAndTokenConstants) {
         GraphBuilder builder("g", Schemas(), {{"", 29}});
         Concat(builder, form != 0, form == 2, dtype, itype, 3);
         GraphGraph graph(builder);
-        onnx_patterns::GroupedMatMulConcatPattern pattern;
-        EXPECT_EQ(pattern.Name(), "GroupedMatMulConcat");
-        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Concat"}));
+        onnx_patterns::GroupedMatMulPattern pattern;
+        EXPECT_EQ(pattern.Name(), "GroupedMatMul");
+        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze", "Concat", "Loop"}));
         const auto match = pattern.Match(graph, Last(builder));
         ASSERT_EQ(match.pattern, &pattern);
         CheckReplacement(builder, pattern.Apply(graph, match.nodes), form != 0, itype);
@@ -192,7 +207,7 @@ TEST(GroupedMatMulConcatPattern, SupportedTypesBiasOrdersAndTokenConstants) {
   }
 }
 
-TEST(GroupedMatMulLoopPattern, SupportedTypesBiasOrdersAndConditions) {
+TEST(GroupedMatMulPattern, LoopSupportedTypesBiasOrdersAndConditions) {
   for (auto dtype :
        {TensorType::kFloat, TensorType::kDouble, TensorType::kFloat16, TensorType::kBfloat16}) {
     for (auto itype : {TensorType::kInt32, TensorType::kInt64}) {
@@ -205,9 +220,9 @@ TEST(GroupedMatMulLoopPattern, SupportedTypesBiasOrdersAndConditions) {
             Last(builder).add_input("trip");
           }
           GraphGraph graph(builder);
-          onnx_patterns::GroupedMatMulLoopPattern pattern;
-          EXPECT_EQ(pattern.Name(), "GroupedMatMulLoop");
-          EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Loop"}));
+          onnx_patterns::GroupedMatMulPattern pattern;
+          EXPECT_EQ(pattern.Name(), "GroupedMatMul");
+          EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze", "Concat", "Loop"}));
           const auto match = pattern.Match(graph, Last(builder));
           ASSERT_EQ(match.pattern, &pattern) << condition;
           CheckReplacement(builder, pattern.Apply(graph, match.nodes), form != 0, itype);
@@ -217,18 +232,19 @@ TEST(GroupedMatMulLoopPattern, SupportedTypesBiasOrdersAndConditions) {
   }
 }
 
-TEST(GroupedMatMulPatterns, RegistrationCleanupAndConvergence) {
-  for (bool loop : {false, true}) {
+TEST(GroupedMatMulPattern, RegistrationCleanupAndConvergence) {
+  for (int form = 0; form < 3; ++form) {
     for (bool bias : {false, true}) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
-      if (loop) {
-        Loop(builder, bias);
-      } else {
+      if (form == 0) {
+        Batched(builder, bias);
+      } else if (form == 1) {
         Concat(builder, bias);
+      } else {
+        Loop(builder, bias);
       }
       std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-      patterns.push_back(
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat"));
+      patterns.push_back(onnx_patterns::CreatePattern("GroupedMatMul"));
       GraphGraph graph(builder, std::move(patterns));
       EXPECT_FALSE(graph.Optimize().rewrites().empty());
       ASSERT_EQ(builder.Nodes().size(), 4u);
@@ -241,15 +257,17 @@ TEST(GroupedMatMulPatterns, RegistrationCleanupAndConvergence) {
   }
 }
 
-TEST(GroupedMatMulPatterns, DefaultOptimizerConvergence) {
+TEST(GroupedMatMulPattern, DefaultOptimizerConvergence) {
   onnx_patterns::RegisterPatterns();
-  for (bool loop : {false, true}) {
+  for (int form = 0; form < 3; ++form) {
     for (bool bias : {false, true}) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
-      if (loop) {
-        Loop(builder, bias);
-      } else {
+      if (form == 0) {
+        Batched(builder, bias);
+      } else if (form == 1) {
         Concat(builder, bias);
+      } else {
+        Loop(builder, bias);
       }
       GraphGraph graph(builder);
       EXPECT_FALSE(graph.Optimize().rewrites().empty());
@@ -263,14 +281,14 @@ TEST(GroupedMatMulPatterns, DefaultOptimizerConvergence) {
           EXPECT_EQ(node.output()[0].value(), "out");
         }
       }
-      EXPECT_EQ(grouped, 1) << loop << bias;
+      EXPECT_EQ(grouped, 1) << form << bias;
       EXPECT_EQ(builder.GetShape("out").Shape(), Dims({2, 2, 5}));
       EXPECT_TRUE(graph.Optimize().rewrites().empty());
     }
   }
 }
 
-TEST(GroupedMatMulConcatPattern, RejectsReorderedMissingDuplicateAndInconsistentRows) {
+TEST(GroupedMatMulPattern, ConcatRejectsReorderedMissingDuplicateAndInconsistentRows) {
   for (int guard = 0; guard < 9; ++guard) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     Concat(builder, true);
@@ -300,12 +318,12 @@ TEST(GroupedMatMulConcatPattern, RejectsReorderedMissingDuplicateAndInconsistent
       SetDescriptor(builder, "r0token", TensorType::kInt64, {1});
     }
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulConcatPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr) << guard;
   }
 }
 
-TEST(GroupedMatMulConcatPattern, RejectsSharedExportedAndCapturedIntermediates) {
+TEST(GroupedMatMulPattern, ConcatRejectsSharedExportedAndCapturedIntermediates) {
   for (const std::string value : {"r0x", "r0i", "r0w", "r0mm", "r0b", "r0sum", "r0out"}) {
     for (int use = 0; use < 3; ++use) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
@@ -327,13 +345,13 @@ TEST(GroupedMatMulConcatPattern, RejectsSharedExportedAndCapturedIntermediates) 
         builder.MakeNode("Carrier", {}, {"other"}, "", "", attrs);
       }
       GraphGraph graph(builder);
-      onnx_patterns::GroupedMatMulConcatPattern pattern;
+      onnx_patterns::GroupedMatMulPattern pattern;
       EXPECT_EQ(pattern.Match(graph, builder.Nodes()[concat]).pattern, nullptr) << value << use;
     }
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsMetadataAndOpsets) {
+TEST(GroupedMatMulPattern, RejectsMetadataAndOpsets) {
   for (bool loop : {false, true}) {
     for (int guard = 0; guard < 12; ++guard) {
       GraphBuilder builder("g", Schemas(), {{"", guard == 0 ? 28 : 29}});
@@ -368,14 +386,13 @@ TEST(GroupedMatMulPatterns, RejectsMetadataAndOpsets) {
         SetDescriptor(builder, "w", TensorType::kFloat, {4, 3});
       }
       GraphGraph graph(builder);
-      const auto pattern =
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat");
+      const auto pattern = onnx_patterns::CreatePattern("GroupedMatMul");
       EXPECT_EQ(pattern->Match(graph, Last(builder)).pattern, nullptr) << loop << guard;
     }
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsForeignDomainsAndAxes) {
+TEST(GroupedMatMulPattern, RejectsForeignDomainsAndAxes) {
   for (bool loop : {false, true}) {
     const int count = loop ? 7 : 15;
     for (int index = 0; index < count; ++index) {
@@ -388,8 +405,7 @@ TEST(GroupedMatMulPatterns, RejectsForeignDomainsAndAxes) {
       auto &nodes = loop ? Nodes(builder.Subgraph("body")) : Nodes(builder);
       nodes[index].set_domain("foreign");
       GraphGraph graph(builder);
-      const auto pattern =
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat");
+      const auto pattern = onnx_patterns::CreatePattern("GroupedMatMul");
       EXPECT_EQ(pattern->Match(graph, Last(builder)).pattern, nullptr) << loop << index;
     }
     for (int index : {0, 1, 2, 4}) {
@@ -402,14 +418,13 @@ TEST(GroupedMatMulPatterns, RejectsForeignDomainsAndAxes) {
       auto &nodes = loop ? Nodes(builder.Subgraph("body")) : Nodes(builder);
       AddAttribute<int64_t>(nodes[index], "axis", 1);
       GraphGraph graph(builder);
-      const auto pattern =
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat");
+      const auto pattern = onnx_patterns::CreatePattern("GroupedMatMul");
       EXPECT_EQ(pattern->Match(graph, Last(builder)).pattern, nullptr);
     }
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsOverloadedOperators) {
+TEST(GroupedMatMulPattern, RejectsOverloadedOperators) {
   for (bool loop : {false, true}) {
     for (int index = 0; index < (loop ? 8 : 15); ++index) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
@@ -422,15 +437,14 @@ TEST(GroupedMatMulPatterns, RejectsOverloadedOperators) {
                                           : (loop ? Last(builder) : Nodes(builder)[index]);
       node.set_overload("model_local");
       GraphGraph graph(builder);
-      const auto pattern =
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat");
+      const auto pattern = onnx_patterns::CreatePattern("GroupedMatMul");
       EXPECT_EQ(pattern->Match(graph, Last(builder)).pattern, nullptr) << loop << index;
       EXPECT_THROW(pattern->Apply(graph, {&Last(builder)}), core::builder::BuilderError);
     }
   }
 }
 
-TEST(GroupedMatMulLoopPattern, RejectsTripConditionsStateAndExtraOperations) {
+TEST(GroupedMatMulPattern, LoopRejectsTripConditionsStateAndExtraOperations) {
   for (int guard = 0; guard < 15; ++guard) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     Loop(builder, true);
@@ -474,13 +488,13 @@ TEST(GroupedMatMulLoopPattern, RejectsTripConditionsStateAndExtraOperations) {
       loop.set_domain("foreign");
     }
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulLoopPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     EXPECT_EQ(pattern.Match(graph, loop).pattern, nullptr) << guard;
     EXPECT_THROW(pattern.Apply(graph, {&loop}), core::builder::BuilderError);
   }
 }
 
-TEST(GroupedMatMulLoopPattern, RejectsShadowedCaptures) {
+TEST(GroupedMatMulPattern, LoopRejectsShadowedCaptures) {
   for (const std::string capture : {"x", "w", "indices", "bias"}) {
     for (int local = 0; local < 3; ++local) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
@@ -502,13 +516,13 @@ TEST(GroupedMatMulLoopPattern, RejectsShadowedCaptures) {
         *Nodes(body)[3].mutable_input(0) = utils::String(capture);
       }
       GraphGraph graph(builder);
-      onnx_patterns::GroupedMatMulLoopPattern pattern;
+      onnx_patterns::GroupedMatMulPattern pattern;
       EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr) << capture << local;
     }
   }
 }
 
-TEST(GroupedMatMulLoopPattern, RejectsSparseInitializerCaptureShadowing) {
+TEST(GroupedMatMulPattern, LoopRejectsSparseInitializerCaptureShadowing) {
   for (const std::string capture : {"x", "w", "indices", "bias"}) {
     GraphBuilder source("g", Schemas(), {{"", 29}});
     Loop(source, true);
@@ -532,13 +546,13 @@ TEST(GroupedMatMulLoopPattern, RejectsSparseInitializerCaptureShadowing) {
     imported_body.CollectImplicitInputs(captures);
     EXPECT_EQ(captures.count(capture), 0u);
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulLoopPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr) << capture;
     EXPECT_THROW(pattern.Apply(graph, {&Last(builder)}), core::builder::BuilderError);
   }
 }
 
-TEST(GroupedMatMulPatterns, TokenBoundariesAndUnsafeApply) {
+TEST(GroupedMatMulPattern, TokenBoundariesAndUnsafeApply) {
   for (int tokens : {0, 1, 2}) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     // A zero-token Concat is not a valid ONNX graph; use one branch with M=0.
@@ -548,7 +562,7 @@ TEST(GroupedMatMulPatterns, TokenBoundariesAndUnsafeApply) {
       SetDescriptor(builder, "indices", TensorType::kInt64, {0, 2});
     }
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulConcatPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     auto match = pattern.Match(graph, Last(builder));
     EXPECT_EQ(match.pattern != nullptr, tokens >= 2);
     EXPECT_THROW(pattern.Apply(graph, {}), core::builder::BuilderError);
@@ -561,7 +575,7 @@ TEST(GroupedMatMulPatterns, TokenBoundariesAndUnsafeApply) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     Loop(builder, false, false, TensorType::kFloat, TensorType::kInt64, tokens);
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulLoopPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     const auto match = pattern.Match(graph, Last(builder));
     EXPECT_EQ(match.pattern != nullptr, tokens > 0);
     EXPECT_THROW(pattern.Apply(graph, {}), core::builder::BuilderError);
@@ -570,7 +584,7 @@ TEST(GroupedMatMulPatterns, TokenBoundariesAndUnsafeApply) {
   }
 }
 
-TEST(GroupedMatMulConcatPattern, SupportsInt32ScalarRows) {
+TEST(GroupedMatMulPattern, ConcatSupportsInt32ScalarRows) {
   GraphBuilder builder("g", Schemas(), {{"", 29}});
   Concat(builder);
   for (int m = 0; m < 2; ++m) {
@@ -580,11 +594,11 @@ TEST(GroupedMatMulConcatPattern, SupportsInt32ScalarRows) {
     *Nodes(builder)[m * 5 + 1].mutable_input(1) = utils::String(name);
   }
   GraphGraph graph(builder);
-  onnx_patterns::GroupedMatMulConcatPattern pattern;
+  onnx_patterns::GroupedMatMulPattern pattern;
   EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, &pattern);
 }
 
-TEST(GroupedMatMulConcatPattern, RejectsInvalidUnsqueezeAndConcatAxes) {
+TEST(GroupedMatMulPattern, ConcatRejectsInvalidUnsqueezeAndConcatAxes) {
   for (int guard = 0; guard < 7; ++guard) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     Concat(builder);
@@ -606,12 +620,12 @@ TEST(GroupedMatMulConcatPattern, RejectsInvalidUnsqueezeAndConcatAxes) {
       Last(builder).mutable_attribute(0)->set_ref_attr_name("unknown_axis");
     }
     GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulConcatPattern pattern;
+    onnx_patterns::GroupedMatMulPattern pattern;
     EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr) << guard;
   }
 }
 
-TEST(GroupedMatMulPatterns, NormalizationKeepsIntegerBoundariesSafe) {
+TEST(GroupedMatMulPattern, NormalizationKeepsIntegerBoundariesSafe) {
   for (bool loop : {false, true}) {
     for (auto itype : {TensorType::kInt32, TensorType::kInt64}) {
       const int64_t groups = itype == TensorType::kInt32 ? std::numeric_limits<int32_t>::max()
@@ -624,8 +638,7 @@ TEST(GroupedMatMulPatterns, NormalizationKeepsIntegerBoundariesSafe) {
       }
       SetDescriptor(builder, "w", TensorType::kFloat, {groups, 3, 5});
       GraphGraph graph(builder);
-      const auto pattern =
-          onnx_patterns::CreatePattern(loop ? "GroupedMatMulLoop" : "GroupedMatMulConcat");
+      const auto pattern = onnx_patterns::CreatePattern("GroupedMatMul");
       const auto match = pattern->Match(graph, Last(builder));
       ASSERT_NE(match.pattern, nullptr);
       const auto replacements = pattern->Apply(graph, match.nodes);
@@ -654,7 +667,7 @@ TEST(GroupedMatMulPatterns, NormalizationKeepsIntegerBoundariesSafe) {
   }
 }
 
-TEST(GroupedMatMulLoopPattern, ComparesLargeTripCountsExactly) {
+TEST(GroupedMatMulPattern, LoopComparesLargeTripCountsExactly) {
   GraphBuilder builder("g", Schemas(), {{"", 29}});
   Loop(builder);
   const int64_t tokens = (int64_t{1} << 53) + 1;
@@ -663,7 +676,7 @@ TEST(GroupedMatMulLoopPattern, ComparesLargeTripCountsExactly) {
   builder.MakeInitializer(MakeInitializer<int64_t>("rounded_trip", {}, {tokens - 1}));
   *Last(builder).mutable_input(0) = utils::String("rounded_trip");
   GraphGraph graph(builder);
-  onnx_patterns::GroupedMatMulLoopPattern pattern;
+  onnx_patterns::GroupedMatMulPattern pattern;
   EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr);
 }
 

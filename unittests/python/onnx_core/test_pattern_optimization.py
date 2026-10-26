@@ -1431,8 +1431,7 @@ class TestPatternOptimization(ExtTestCase):
             "ShapeBasedShapeShapeAdd",
             "GemmSumFusion",
             "GemmTranspose",
-            "GroupedMatMulConcat",
-            "GroupedMatMulLoop",
+            "GroupedMatMul",
             "MatMulAdd",
             "MatMulBatchNormalizationFusion",
             "MatMulReshape2Of3",
@@ -1465,6 +1464,13 @@ class TestPatternOptimization(ExtTestCase):
             "AttentionGQA",
         )
         registered = optim.standard_pattern_names()
+        self.assertEqual(
+            [name for name in registered if name.startswith("GroupedMatMul")], ["GroupedMatMul"]
+        )
+        self.assertEqual(
+            [name for name in dir(optim) if name.startswith("GroupedMatMul")],
+            ["GroupedMatMulPattern"],
+        )
         for name in names:
             with self.subTest(name=name):
                 self.assertIn(name, registered)

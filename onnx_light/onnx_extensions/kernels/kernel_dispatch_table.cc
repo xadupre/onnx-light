@@ -166,6 +166,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:LpNormalization", MakeKernel<onnx_kernels::kernel::LpNormalization>()},
       {"ai.onnx:LpPool", MakeKernel<onnx_kernels::kernel::LpPool>()},
       {"ai.onnx:MatMul", MakeKernel<onnx_kernels::kernel::MatMul>()},
+      {"ai.onnx:GroupedMatMul", MakeKernel<onnx_kernels::kernel::GroupedMatMul>()},
       {"ai.onnx:MatMulInteger", MakeKernel<onnx_kernels::kernel::MatMulInteger>()},
       {"ai.onnx:Max", MakeKernel<onnx_kernels::kernel::Max>()},
       {"ai.onnx:MaxPool", MakeKernel<onnx_kernels::kernel::MaxPool>()},

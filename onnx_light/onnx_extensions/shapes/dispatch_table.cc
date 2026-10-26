@@ -769,6 +769,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
          math::ComputeShapeMatMul(ctx, node, node.input(0).c_str(),
                                   node.input(1).c_str());
        }},
+      {"ai.onnx:GroupedMatMul",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 3);
+        math::ComputeShapeGroupedMatMul(ctx, node);
+       }},
       {"ai.onnx:MatMulInteger",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

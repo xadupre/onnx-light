@@ -99,7 +99,8 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
   context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
   EXPECT_EQ(total_bytes(context), 8240);
   EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 1234);
-  for (const auto *computed : {&builder.Compute(), &context}) {
+  const core::compute::ComputeContext *contexts[] = {&builder.Compute(), &context};
+  for (const auto *computed : contexts) {
     const auto scalar = [&](const char *key) {
       return std::get<int64_t>(
           std::get<core::expressions::DimType>(computed->NodeMemory(0).at(key)));

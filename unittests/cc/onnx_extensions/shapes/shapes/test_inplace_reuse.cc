@@ -860,7 +860,8 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
   ctx.Compute(graph);
 
   ASSERT_EQ(ctx.NodeReuse(1).size(), 1u);
-  EXPECT_EQ(ctx.NodeReleaseAfter(1), (std::vector<std::string>{"A"}));
+  EXPECT_EQ(ComputeResultLifetimeInfo(graph, false)[1].release_after,
+            (std::vector<std::string>{"A"}));
   const auto scalar = [&](std::size_t i, const char *key) {
     return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
   };
@@ -879,34 +880,38 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
       [](core::symbolic::Device, const std::vector<SymShape> &) { return int64_t{128}; });
   GraphProto graph;
   AddInput(graph, "X", {3, 4});
-  AddOutput(graph, "Y", {3, 4});
+  AddOutput(graph, "Y", {3, 8});
   *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
   *graph.add_node() = MakeNode("Scratch", {"A"}, {"Y", "unused"});
   graph.mutable_node()->at(1).set_domain("test.memory_boundaries");
   ComputeContext ctx;
-  for (const char *name : {"X", "A", "Y", "unused"}) {
+  for (const char *name : {"X", "A"}) {
     ctx.Shapes().Set(name, SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
   }
+  for (const char *name : {"Y", "unused"}) {
+    ctx.Shapes().Set(name, SymTensor(nullptr, TensorType::kFloat, SymShape{3, 8}));
+  }
   ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  ASSERT_TRUE(ctx.NodeReuse(1).empty());
   const auto scalar = [&](std::size_t i, const char *key) {
     return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
   };
   EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey),
             scalar(1, core::compute::kNodeMemoryBeforeBytesKey));
   EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 192);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 144);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
   for (int repeat = 0; repeat < 2; ++repeat) {
     ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
-    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 320);
-    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
-    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 224);
-    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryTotalBytesKey), 192);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 416);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 144);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 272);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryTotalBytesKey), 288);
   }
   ctx.ComputePeakMemory(graph, core::symbolic::Device::kGPU0);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 192);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesPreserveSymbolicSizes) {

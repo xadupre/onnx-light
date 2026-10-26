@@ -46,6 +46,7 @@ void DeferInlineWeight(TensorProto &tensor, BinaryStream &stream, int64_t offset
 void FinishDeferredWeight(TensorProto &tensor, BinaryStream &stream, const ParseOptions &options);
 void ReadExternalDataFile(int descriptor, void *destination, int64_t size, int64_t offset);
 std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor);
+ONNX_LIGHT_PROTO_API bool IsFileMappedOwner(const std::shared_ptr<void> &owner);
 std::filesystem::path relative_external_data_path(const std::filesystem::path &candidate_path,
                                                   const std::filesystem::path &base_dir);
 

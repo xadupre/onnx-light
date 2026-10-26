@@ -38,6 +38,17 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+struct FileMappingDeleter {
+  size_t length;
+  void operator()(uint8_t *pointer) const noexcept {
+#ifndef _WIN32
+    ::munmap(pointer, length);
+#else
+    ::UnmapViewOfFile(pointer);
+#endif
+  }
+};
+
 using detail::external_path_from_utf8;
 using detail::external_path_to_utf8;
 using detail::ExternalDataFileSize;
@@ -438,8 +449,7 @@ std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor) {
 #ifndef _WIN32
   void *mapped = ::mmap(nullptr, length, PROT_READ, MAP_PRIVATE, descriptor, 0);
   EXT_ENFORCE(mapped != MAP_FAILED, "External data mmap failed.");
-  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
-                                  [length](uint8_t *p) { ::munmap(p, length); });
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped), FileMappingDeleter{length});
 #else
   HANDLE mapping = ::CreateFileMappingW(reinterpret_cast<HANDLE>(::_get_osfhandle(descriptor)),
                                         nullptr, PAGE_READONLY, 0, 0, nullptr);
@@ -447,9 +457,12 @@ std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor) {
   void *mapped = ::MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, length);
   ::CloseHandle(mapping);
   EXT_ENFORCE(mapped != nullptr, "External data MapViewOfFile failed.");
-  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
-                                  [](uint8_t *p) { ::UnmapViewOfFile(p); });
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped), FileMappingDeleter{length});
 #endif
+}
+
+bool IsFileMappedOwner(const std::shared_ptr<void> &owner) {
+  return std::get_deleter<FileMappingDeleter>(owner) != nullptr;
 }
 
 } // namespace detail
@@ -507,8 +520,7 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
   void *mapped = ::mmap(nullptr, sz, PROT_READ, MAP_PRIVATE, fd, 0);
   ::close(fd);
   EXT_ENFORCE(mapped != MAP_FAILED, "mmap_file: mmap failed for file: ", file_path);
-  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
-                                  [sz](uint8_t *ptr) { ::munmap(ptr, sz); });
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped), FileMappingDeleter{sz});
 #else
   HANDLE hFile = ::CreateFileA(file_path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -519,8 +531,7 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
   void *mapped = ::MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
   ::CloseHandle(hMapping);
   EXT_ENFORCE(mapped != nullptr, "mmap_file: MapViewOfFile failed for file: ", file_path);
-  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
-                                  [](uint8_t *ptr) { ::UnmapViewOfFile(ptr); });
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped), FileMappingDeleter{sz});
 #endif
 }
 

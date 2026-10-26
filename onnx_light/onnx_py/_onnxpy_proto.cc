@@ -1,6 +1,7 @@
 #include "_onnxpy_dlpack.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
+#include "external_data_internal.h"
 #include "onnx.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_crypt.h"
@@ -26,6 +27,7 @@
 #include <nanobind/stl/vector.h>
 #include <optional>
 #include <type_traits>
+#include <utility>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -317,14 +319,20 @@ struct RawDataCallback {
   nb::object on_tensor;
 };
 
-ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
-  // Fully reparse through bytes to ensure every borrowed span in the model
-  // becomes owned before serialization paths that may mutate buffers/metadata.
-  std::string serialized;
-  model.SerializeToString(serialized);
-  ModelProto owned;
-  owned.ParseFromString(serialized);
-  return owned;
+ModelProto MakeExternalModelProtoCopy(ModelProto &model) {
+  // Output files may overwrite mapped sources. Snapshot only file mappings before opening
+  // them, also keeping the caller's tensor data valid after an in-place file rewrite.
+  IteratorTensorProto it(&model);
+  while (it.next()) {
+    auto &raw = it->ref_raw_data();
+    if (raw.is_borrowed() && utils::detail::IsFileMappedOwner(raw.owner())) {
+      const auto &bytes = std::as_const(raw);
+      utils::ByteSpan snapshot;
+      snapshot.assign(bytes.data(), bytes.size());
+      raw = std::move(snapshot);
+    }
+  }
+  return utils::CopyWithSharedTensorStorage(model);
 }
 
 // --------------------------------------------------------------------------
@@ -376,22 +384,6 @@ NodeProto &AddNodeImpl(ProtoT &proto, nb::object op_type, nb::object inputs, nb:
   nb::object built = helper.attr("make_node")(op_type, inputs, outputs, **kwargs);
   NodeProto *stored = proto.add_node(nb::cast<const NodeProto &>(built));
   return *stored;
-}
-
-bool HasBorrowedRawData(const ModelProto &model) {
-  if (!model.has_graph()) {
-    return false;
-  }
-  // IteratorTensorProto currently exposes a mutable GraphProto traversal API.
-  // The scan is read-only, so cast away constness only to walk the graph.
-  auto &mutable_model = const_cast<ModelProto &>(model);
-  IteratorTensorProto it(&mutable_model.ref_graph());
-  while (it.next()) {
-    if (it->ref_raw_data().is_borrowed()) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Applies a single ``field=value`` keyword argument to a proto instance,
@@ -808,11 +800,12 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               return;
             }
             cls *to_write = &self;
-            std::optional<ModelProto> owned_copy;
+            std::optional<ModelProto> working_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
-              if (!external_data_file.empty() && HasBorrowedRawData(self)) {
-                owned_copy = MakeOwnedModelProtoCopy(self);
-                to_write = &(*owned_copy);
+              if (!external_data_file.empty()) {
+                // The working copy outlives the stream and all its pending asynchronous writes.
+                working_copy = MakeExternalModelProtoCopy(self);
+                to_write = &(*working_copy);
               }
             }
             std::unique_ptr<utils::BinaryWriteStream> stream =

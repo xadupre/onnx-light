@@ -1,11 +1,14 @@
+import gc
 import os
 import tempfile
 import unittest
 import warnings
+import weakref
 
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx_core.graph_builder import GraphBuilder
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_lib.external_data_helper import (
@@ -29,7 +32,228 @@ def _make_model(values: np.ndarray) -> onnxl.ModelProto:
     return model
 
 
+def _make_borrowed_model(values: np.ndarray, source_kind: str) -> onnxl.ModelProto:
+    if source_kind == "numpy":
+        builder = GraphBuilder()
+        builder.init(values, name="W", copy=False)
+        model = builder.to_onnx()
+    else:
+        model = onnxl.ModelProto()
+        model.graph.initializer.append(onnxl.TensorProto.from_dlpack(values, name="W"))
+    model.graph.node.append(oh.make_node("Identity", ["W"], ["Y"]))
+    model.graph.output.append(
+        oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, list(values.shape))
+    )
+    return model
+
+
 class TestExternalDataHelper(ExtTestCase):
+    def test_borrowed_external_save_shares_payload_and_preserves_source(self):
+        for source_kind in ("numpy", "dlpack"):
+            for num_threads in (1, 2):
+                with (
+                    self.subTest(source_kind=source_kind, num_threads=num_threads),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    values = np.arange(65536, dtype=np.float32)
+                    address = values.ctypes.data
+                    source = weakref.ref(values)
+                    model = _make_borrowed_model(values, source_kind)
+                    tensor = model.graph.initializer[0]
+                    tensor.external_data.add(key="location", value="original.bin")
+                    tensor.external_data.add(key="offset", value="0")
+                    tensor.external_data.add(key="length", value=str(values.nbytes))
+                    tensor.external_data.add(key="custom", value="preserved")
+                    tensor.data_location = onnxl.TensorProto.EXTERNAL
+                    before = model.SerializeToString()
+                    del values
+                    gc.collect()
+                    self.assertIsNotNone(source())
+                    calls = []
+
+                    def callback(node, graph):
+                        calls.append(node.op_type)
+                        self.assertIsNot(graph, model.graph)
+                        view = np.from_dlpack(graph.initializer[0])
+                        self.assertEqual(view.ctypes.data, address)
+                        node.doc_string = "saved only"
+                        graph.doc_string = "working copy only"
+
+                    options = onnxl.SerializeOptions()
+                    options.num_threads = num_threads
+                    options.min_parallel_block_size = 1
+                    options.raw_data_threshold = 1024
+                    options.node_callback = callback
+                    path = os.path.join(tmp, "model.onnx")
+                    for _ in range(2):
+                        model.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+                        self.assertEqual(model.SerializeToString(), before)
+                        self.assertEqual(np.from_dlpack(tensor).ctypes.data, address)
+                    self.assertEqual(calls, ["Identity", "Identity"])
+                    loaded = onnxl.load(path, load_external_data=True)
+                    np.testing.assert_array_equal(
+                        to_array(loaded.graph.initializer[0]), np.arange(65536, dtype=np.float32)
+                    )
+                    self.assertEqual(loaded.graph.node[0].doc_string, "saved only")
+                    self.assertEqual(loaded.graph.doc_string, "working copy only")
+                    model = None
+                    tensor = None
+                    gc.collect()
+                    self.assertIsNone(source())
+
+    def test_external_save_retains_borrowed_owner_after_source_clear(self):
+        for source_kind in ("numpy", "dlpack"):
+            with self.subTest(source_kind=source_kind), tempfile.TemporaryDirectory() as tmp:
+                values = np.arange(65536, dtype=np.float32)
+                address = values.ctypes.data
+                source = weakref.ref(values)
+                model = _make_borrowed_model(values, source_kind)
+                del values
+                calls = []
+
+                def callback(node, graph):
+                    self.assertEqual(np.from_dlpack(graph.initializer[0]).ctypes.data, address)
+                    model.graph.initializer.clear()
+                    gc.collect()
+                    self.assertIsNotNone(source())
+                    calls.append(node.op_type)
+
+                options = onnxl.SerializeOptions()
+                options.num_threads = 2
+                options.min_parallel_block_size = 1
+                options.raw_data_threshold = 0
+                options.node_callback = callback
+                path = os.path.join(tmp, "model.onnx")
+                model.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+                gc.collect()
+                self.assertIsNone(source())
+                self.assertEqual(calls, ["Identity"])
+                loaded = onnxl.load(path, load_external_data=True)
+                np.testing.assert_array_equal(
+                    to_array(loaded.graph.initializer[0]), np.arange(65536, dtype=np.float32)
+                )
+
+    def test_borrowed_external_save_raw_callback_and_failure(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as tmp:
+                values = np.arange(64, dtype=np.float32)
+                model = _make_borrowed_model(values, "dlpack")
+                before = model.SerializeToString()
+                calls = []
+
+                def callback(tensor, graph, buffer, size_only):
+                    self.assertEqual(np.from_dlpack(tensor).ctypes.data, values.ctypes.data)
+                    calls.append(size_only)
+                    graph.doc_string = "working copy only"
+                    if not size_only:
+                        if fail:
+                            raise ValueError("callback failed")
+                        buffer[:] = np.zeros_like(values).view(np.uint8)
+                        tensor.doc_string = "rewritten"
+                    return values.nbytes
+
+                path = os.path.join(tmp, "model.onnx")
+                kwargs = dict(
+                    save_as_external_data=True,
+                    location="weights.bin",
+                    size_threshold=0,
+                    raw_data_callback=callback,
+                )
+                if fail:
+                    with self.assertRaisesRegex(ValueError, "callback failed"):
+                        onnxl.save_model(model, path, **kwargs)
+                else:
+                    onnxl.save_model(model, path, **kwargs)
+                    loaded = onnxl.load(path, load_external_data=True)
+                    np.testing.assert_array_equal(
+                        to_array(loaded.graph.initializer[0]), np.zeros_like(values)
+                    )
+                    self.assertEqual(loaded.graph.initializer[0].doc_string, "rewritten")
+                self.assertEqual(calls, [True, False])
+                self.assertEqual(model.SerializeToString(), before)
+                self.assertEqual(
+                    np.from_dlpack(model.graph.initializer[0]).ctypes.data, values.ctypes.data
+                )
+
+    def test_borrowed_external_save_size_limit_preserves_source(self):
+        model = _make_borrowed_model(np.arange(64, dtype=np.float32), "numpy")
+        before = model.SerializeToString()
+        options = onnxl.SerializeOptions()
+        options.raw_data_threshold = 0
+        options.max_serialized_size_bytes = 1
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.onnx")
+            weights = os.path.join(tmp, "weights.bin")
+            with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+                model.SerializeToFile(path, options, weights)
+            self.assertEqual(model.SerializeToString(), before)
+            options.max_serialized_size_bytes = 0
+            model.SerializeToFile(path, options, weights)
+            np.testing.assert_array_equal(
+                to_array(onnxl.load(path, load_external_data=True).graph.initializer[0]),
+                np.arange(64, dtype=np.float32),
+            )
+            self.assertEqual(model.SerializeToString(), before)
+
+    def test_borrowed_external_save_validates_tensor_location(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model_dir = os.path.join(tmp, "model")
+            os.mkdir(model_dir)
+            outside = os.path.join(tmp, "outside.bin")
+            with open(outside, "wb") as f:
+                f.write(b"unchanged")
+            model = _make_borrowed_model(np.arange(64, dtype=np.float32), "dlpack")
+            tensor = model.graph.initializer[0]
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            tensor.external_data.add(key="location", value="../outside.bin")
+            tensor.external_data.add(key="offset", value="0")
+            tensor.external_data.add(key="length", value="256")
+            before = model.SerializeToString()
+            with self.assertRaises(RuntimeError):
+                model.SerializeToFile(
+                    os.path.join(model_dir, "model.onnx"),
+                    onnxl.SerializeOptions(),
+                    os.path.join(model_dir, "weights.bin"),
+                )
+            self.assertEqual(model.SerializeToString(), before)
+            with open(outside, "rb") as f:
+                self.assertEqual(f.read(), b"unchanged")
+
+    def test_mapped_external_resave_same_location(self):
+        for max_file_size in (0, 256):
+            with self.subTest(max_file_size=max_file_size), tempfile.TemporaryDirectory() as tmp:
+                values = np.arange(128, dtype=np.float32)
+                model = _make_model(values)
+                extra = oh.make_tensor(
+                    "other", onnxl.TensorProto.FLOAT, [128], (values + 1).tobytes(), raw=True
+                )
+                model.graph.initializer.append(extra)
+                path = os.path.join(tmp, "model.onnx")
+                weights = os.path.join(tmp, "weights.bin")
+                onnxl.save_model(model, path, location=weights, size_threshold=0)
+                borrowed = onnxl.load(path, load_external_data=True, no_copy=True)
+                before = borrowed.SerializeToString()
+                options = onnxl.SerializeOptions()
+                options.alignment = 4096
+                options.max_external_file_size = max_file_size
+                borrowed.SerializeToFile(path, options, weights)
+                self.assertEqual(borrowed.SerializeToString(), before)
+                loaded = onnxl.load(path, load_external_data=True)
+                for tensor, expected in zip(loaded.graph.initializer, (values, values + 1)):
+                    np.testing.assert_array_equal(to_array(tensor), expected)
+
+    def test_mapped_inline_resave_as_external_same_location(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            values = np.arange(128, dtype=np.float32)
+            path = os.path.join(tmp, "model.onnx")
+            onnxl.save_model(_make_model(values), path)
+            model = onnxl.load(path, file_load_mode="MMAP", no_copy=True)
+            before = model.SerializeToString()
+            onnxl.save_model(model, path, save_as_external_data=True, size_threshold=0)
+            self.assertEqual(model.SerializeToString(), before)
+            loaded = onnxl.load(path, load_external_data=True)
+            np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+
     @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
     def test_auto_load_linked_models(self):
         values = np.arange(64, dtype=np.float32)

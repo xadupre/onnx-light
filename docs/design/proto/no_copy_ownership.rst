@@ -181,6 +181,41 @@ In other words, external-data no-copy transfers lifetime management to shared
 ownership held by each tensor, while inline-bytes no-copy keeps lifetime
 management with the caller.
 
+Borrowed buffers during external-data saving
+--------------------------------------------
+
+Python external-data saving uses an independent copy of the model structure with
+shared tensor storage, rather than serializing and reparsing the whole model.
+Owner-backed buffers, including those imported with ``TensorProto.from_dlpack()``
+or ``GraphBuilder.init(..., copy=False)``, retain their owners throughout the save.
+The working copy outlives the output stream and its asynchronous writes.
+Temporary external-data metadata and serialization callback edits therefore do
+not change the caller's model. Ownerless borrowed buffers are copied for safety.
+Native file-backed mappings are first snapshotted into owned buffers, since output
+files may overwrite their backing files. This also keeps the caller's tensor
+contents valid after an in-place file rewrite; NumPy and DLPack buffers are not
+materialized.
+Callers must not mutate borrowed source arrays while saving.
+
+A synthetic 28-tensor FP32 model (21,474,836 elements per tensor, 2,405,181,632
+payload bytes) was saved with two writer threads on a four-CPU Linux runner,
+using DLPack-backed initializers and an observation-only node callback.
+One isolated save before and after this change gave:
+
+=============================== =========== ===========
+Measurement                     Before      After
+=============================== =========== ===========
+Save wall time                  5.95 s      5.37 s
+First node callback             0.743 s     0.00023 s
+Process peak RSS during save    6.76 GiB    2.28 GiB
+=============================== =========== ===========
+
+The source model alone reached about 2.28 GiB peak RSS before saving in both
+processes. The weights files were identical in size to the payload; all tensors
+were validated after reloading the new export. These are machine-specific
+single-run observations, not timings for the pretrained Qwen model. The callback
+also verified that the new save retained the original payload address.
+
 In-place consolidation with ConsolidateTensorsToBuffer
 ------------------------------------------------------
 

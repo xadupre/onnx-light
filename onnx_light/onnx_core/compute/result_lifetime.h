@@ -18,7 +18,7 @@
  *        :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`.
  *
  * This header isolates the purely name-based bookkeeping that decides, for
- * every node of a graph, which referenced values reach their last use at
+ * every node of a graph, which values reach their last use at
  * that node (:cpp:var:`ResultLifetimeNodeInfo::release_after` /
  * :cpp:var:`ResultLifetimeNodeInfo::not_used_after`). It does not depend on
  * shape inference or byte sizes: those live in ``compute_context.cc`` and
@@ -32,7 +32,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 struct ResultLifetimeNodeInfo {
   /// Per-node list of top-level intermediates that reach their last use at
   /// that node and are therefore releasable after it runs (excludes declared
-  /// graph inputs, initializers and outputs).
+  /// graph inputs, initializers and outputs). Unused outputs are released at
+  /// their producing node.
   std::vector<std::string> release_after;
 
   /// Per-node list of declared graph inputs / initializers that reach their
@@ -98,7 +99,7 @@ public:
   std::unordered_map<std::string, int> producer;
 
   /// Index of the last node that references each name, directly or through
-  /// a subgraph capture.
+  /// a subgraph capture, or the producer for an unused output.
   std::unordered_map<std::string, int> last_use;
 
   /// Names whose buffers must never be reused in place: initializers and

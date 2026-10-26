@@ -53,12 +53,19 @@ ResultLifetimeInfo ComputeResultLifetimeInfoImpl(const utils::RepeatedProtoField
       const std::string name = node.output(o);
       if (!name.empty() && info.producer.find(name) == info.producer.end()) {
         info.producer[name] = i;
+        // An output with no consumer dies immediately after its producer.
+        info.last_use.emplace(name, i);
       }
     }
   }
 
   for (int i = 0; i < num_nodes; ++i) {
-    const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
+    std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
+    for (const auto &output : nodes[i].output()) {
+      if (!output.empty()) {
+        referenced.push_back(output.value());
+      }
+    }
     for (const std::string &name : referenced) {
       auto use_it = info.last_use.find(name);
       if (use_it == info.last_use.end() || use_it->second != i) {
@@ -71,11 +78,11 @@ ResultLifetimeInfo ComputeResultLifetimeInfoImpl(const utils::RepeatedProtoField
         continue;
       }
       auto prod_it = info.producer.find(name);
-      // Releasable values here are top-level intermediates produced by an
-      // earlier node. ``-1`` marks declared graph inputs when input overwrite
+      // Releasable values here are top-level intermediates produced by a
+      // node. ``-1`` marks declared graph inputs when input overwrite
       // is enabled; they are not considered "results to release" metadata.
-      // Values produced at this same node are not eligible.
-      if (prod_it == info.producer.end() || prod_it->second < 0 || prod_it->second >= i) {
+      // Unused outputs are released at their producing node.
+      if (prod_it == info.producer.end() || prod_it->second < 0 || prod_it->second > i) {
         continue;
       }
       info[static_cast<std::size_t>(i)].release_after.push_back(name);

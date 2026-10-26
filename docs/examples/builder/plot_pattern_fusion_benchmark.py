@@ -14,6 +14,15 @@ Every block contains four patterns: three two-node patterns
 (``Add``-``Mul``, ``MatMul``-``Add``, and ``Add``-``Relu``) and one six-node
 pattern (``Sub``-``Abs``-``Sqrt``-``Neg``-``Exp``-``Log``). Each match is
 replaced by one custom benchmark node.
+
+The Python-defined patterns remain sequential even when ``parallel=True``.
+To exercise actual parallel matching, a third panel compares the native
+``TransposeTransposePattern`` with and without parallelization against an
+equivalent onnxscript rule. Each block in that workload contains two
+transposes followed by a ``Relu`` separator, preventing matches across blocks.
+Model conversion stays outside all fusion timings; construction timings refer
+only to the original four-pattern workload. Parallelization applies to native
+matching, not rewriting, and is not guaranteed to improve these small workloads.
 """
 
 from __future__ import annotations
@@ -35,11 +44,13 @@ from onnx_light.onnx_core.optimization import (
     GraphBuilder as OptimizationGraphBuilder,
     GraphGraph,
     PatternOptimization,
+    TransposeTransposePattern,
 )
 
 BLOCK_COUNTS = (50, 100, 250, 500)
 FUSIONS_PER_BLOCK = 4
 NODES_PER_BLOCK = 12
+TRANSPOSE_NODES_PER_BLOCK = 3
 OPSET = 18
 
 
@@ -89,6 +100,34 @@ def build_onnxscript(block_count: int):
     value.shape = onnx_ir.Shape(["N", 16])
     builder.add_output(value, None)
     return onnx_ir.to_proto(onnx_ir.Model(graph, ir_version=10))
+
+
+def build_transpose_model(block_count: int):
+    """Builds a shared workload for native sequential and parallel matching."""
+    if block_count <= 0:
+        raise ValueError("block_count must be positive.")
+    nodes = []
+    value = "X"
+    for index in range(block_count):
+        first, second, output = (f"{name}_{index}" for name in ("first", "second", "relu"))
+        nodes.extend(
+            [
+                oh.make_node("Transpose", [value], [first], perm=[1, 0, 2]),
+                oh.make_node("Transpose", [first], [second], perm=[0, 2, 1]),
+                oh.make_node("Relu", [second], [output]),
+            ]
+        )
+        value = output
+    return oh.make_model(
+        oh.make_graph(
+            nodes,
+            "transpose_fusion",
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [16, 16, 16])],
+            [oh.make_tensor_value_info(value, TensorProto.FLOAT, [16, 16, 16])],
+        ),
+        opset_imports=[oh.make_opsetid("", OPSET)],
+        ir_version=10,
+    )
 
 
 class ChainFusionPattern(PatternOptimization):
@@ -194,6 +233,19 @@ ONNXSCRIPT_RULES = rewriter.RewriteRuleSet(
 )
 
 
+def _transpose_pattern(op, x):
+    return op.Transpose(op.Transpose(x, perm=[1, 0, 2]), perm=[0, 2, 1])
+
+
+def _fused_transpose(op, x):
+    return op.Transpose(x, perm=[1, 2, 0])
+
+
+ONNXSCRIPT_TRANSPOSE_RULES = rewriter.RewriteRuleSet(
+    [rewriter.RewriteRule(_transpose_pattern, _fused_transpose, name="TransposeTranspose")]
+)
+
+
 def check_models(block_count: int) -> None:
     """Checks that both builders produce the same unfused operator sequence."""
     light = build_light(block_count)
@@ -216,45 +268,60 @@ def measure_construction(build, block_count: int, repeats: int = 3) -> float:
     return statistics.median(samples)
 
 
-def measure_light_fusion(model, repeats: int = 3) -> float:
+def measure_light_fusion(
+    model, repeats: int = 3, *, parallel: bool = False, native: bool = False
+) -> float:
     """Returns median onnx-light indexing, matching, and rewriting time."""
     samples = []
-    expected = len(model.graph.node) // NODES_PER_BLOCK * FUSIONS_PER_BLOCK
+    expected = (
+        len(model.graph.node) // TRANSPOSE_NODES_PER_BLOCK
+        if native
+        else len(model.graph.node) // NODES_PER_BLOCK * FUSIONS_PER_BLOCK
+    )
     for _ in range(repeats):
         builder = OptimizationGraphBuilder(model)
         gc.collect()
         start = time.perf_counter()
-        rewrites = GraphGraph(builder, light_patterns()).optimize()
+        patterns = [TransposeTransposePattern()] if native else light_patterns()
+        rewrites = GraphGraph(builder, patterns).optimize(parallel=parallel)
         samples.append((time.perf_counter() - start) * 1000)
         assert len(rewrites.rewrites) == expected
     return statistics.median(samples)
 
 
-def measure_onnxscript_fusion(model, repeats: int = 3) -> float:
+def measure_onnxscript_fusion(model, repeats: int = 3, *, native: bool = False) -> float:
     """Returns median onnxscript matching and rewriting time."""
     samples = []
-    expected = len(model.graph.node) // NODES_PER_BLOCK * FUSIONS_PER_BLOCK
+    expected = (
+        len(model.graph.node) // TRANSPOSE_NODES_PER_BLOCK
+        if native
+        else len(model.graph.node) // NODES_PER_BLOCK * FUSIONS_PER_BLOCK
+    )
+    rules = ONNXSCRIPT_TRANSPOSE_RULES if native else ONNXSCRIPT_RULES
     for _ in range(repeats):
-        ir_model = onnx_ir.from_proto(model)
+        ir_model = onnx_ir.serde.deserialize_model(model)
         gc.collect()
         start = time.perf_counter()
-        count = ONNXSCRIPT_RULES.apply_to_model(ir_model)
+        count = rules.apply_to_model(ir_model)
         samples.append((time.perf_counter() - start) * 1000)
         assert count == expected
     return statistics.median(samples)
 
 
 def plot_benchmark(results):
-    """Plots model construction and pattern-fusion timings separately."""
-    figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(11, 4), sharex=True)
-    for axis, metric, title in (
-        (axes[0], "construction", "Model construction and export"),
-        (axes[1], "fusion", "Pattern fusion only"),
+    """Plots construction, Python-pattern fusion, and native-pattern fusion."""
+    figure, axes = matplotlib.pyplot.subplots(1, 3, figsize=(16, 4))
+    for axis, metric, x_key, title in (
+        (axes[0], "construction", "patterns", "Model construction and export"),
+        (axes[1], "fusion", "patterns", "Python-defined pattern fusion"),
+        (axes[2], "native_fusion", "native_patterns", "Native transpose pattern fusion"),
     ):
-        for implementation in ("onnx-light", "onnxscript"):
+        for implementation in ("onnx-light", "onnx-light (parallel)", "onnxscript"):
+            if metric == "construction" and implementation == "onnx-light (parallel)":
+                continue
             rows = [row for row in results if row["implementation"] == implementation]
             axis.plot(
-                [row["patterns"] for row in rows],
+                [row[x_key] for row in rows],
                 [row[metric] for row in rows],
                 "o-",
                 label=implementation,
@@ -269,26 +336,52 @@ def plot_benchmark(results):
 
 
 if __name__ == "__main__":
-    print("patterns  implementation  construction (ms)  fusion (ms)")
+    print("Python-defined patterns stay sequential with parallel=True.")
+    print(
+        "patterns  transpose patterns  implementation         "
+        "construction (ms)  fusion (ms)  native fusion (ms)"
+    )
     results = []
     for count in BLOCK_COUNTS:
         check_models(count)
         light = build_light(count)
         scripted = build_onnxscript(count)
+        transposes = build_transpose_model(count)
         pattern_count = count * FUSIONS_PER_BLOCK
-        for name, build, fusion in (
-            ("onnx-light", build_light, measure_light_fusion(light)),
-            ("onnxscript", build_onnxscript, measure_onnxscript_fusion(scripted)),
+        light_construction = measure_construction(build_light, count)
+        for name, construction, fusion, native_fusion in (
+            (
+                "onnx-light",
+                light_construction,
+                measure_light_fusion(light),
+                measure_light_fusion(transposes, native=True),
+            ),
+            (
+                "onnx-light (parallel)",
+                light_construction,
+                measure_light_fusion(light, parallel=True),
+                measure_light_fusion(transposes, native=True, parallel=True),
+            ),
+            (
+                "onnxscript",
+                measure_construction(build_onnxscript, count),
+                measure_onnxscript_fusion(scripted),
+                measure_onnxscript_fusion(transposes, native=True),
+            ),
         ):
-            construction = measure_construction(build, count)
             results.append(
                 {
                     "patterns": pattern_count,
+                    "native_patterns": count,
                     "implementation": name,
                     "construction": construction,
                     "fusion": fusion,
+                    "native_fusion": native_fusion,
                 }
             )
-            print(f"{pattern_count:8}  {name:14}  {construction:17.2f}  {fusion:11.2f}")
+            print(
+                f"{pattern_count:8}  {count:18}  {name:21}  "
+                f"{construction:17.2f}  {fusion:11.2f}  {native_fusion:18.2f}"
+            )
     plot_benchmark(results)
     matplotlib.pyplot.show()

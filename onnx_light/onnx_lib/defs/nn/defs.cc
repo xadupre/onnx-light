@@ -1810,6 +1810,28 @@ ONNX_OPERATOR_SET_SCHEMA(
 
 static const std::vector<int64_t> mvn_default_axes = {0, 2, 3};
 
+static void MeanVarianceNormalizationShapeInference(InferenceContext &ctx) {
+  propagateShapeAndTypeFromFirstInput(ctx);
+  if (!hasInputShape(ctx, 0)) {
+    return;
+  }
+
+  const auto *axes_attribute = ctx.getAttribute("axes");
+  if (axes_attribute != nullptr && axes_attribute->has_ref_attr_name()) {
+    return;
+  }
+  const std::vector<int64_t> axes =
+      axes_attribute == nullptr
+          ? mvn_default_axes
+          : std::vector<int64_t>(axes_attribute->ints().begin(), axes_attribute->ints().end());
+  const int64_t rank = ctx.getInputType(0)->tensor_type().shape().dim_size();
+  for (const int64_t axis : axes) {
+    if (axis < -rank || axis >= rank) {
+      fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ").");
+    }
+  }
+}
+
 static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContext &ctx,
                                                    const OpSchema &schema, FunctionProto &function,
                                                    int opset) {
@@ -1827,6 +1849,9 @@ static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContex
                                    ? static_cast<int64_t>(TensorProto::FLOAT)
                                    : dtype;
   const auto *axes_attribute = ctx.getAttribute("axes");
+  if (axes_attribute != nullptr && axes_attribute->has_ref_attr_name()) {
+    return false;
+  }
   const std::vector<int64_t> axes =
       axes_attribute == nullptr
           ? mvn_default_axes
@@ -1877,6 +1902,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeConstraint("T",
                         {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(bfloat16)"},
                         "Constrain input and output types to all numeric tensors.")
+        .TypeAndShapeInferenceFunction(MeanVarianceNormalizationShapeInference)
         .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
         .SetContextDependentFunctionBodyBuilder(
             [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,

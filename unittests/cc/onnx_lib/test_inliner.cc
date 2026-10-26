@@ -125,6 +125,40 @@ TEST(FunctionInliner, PreservesContextDependentCallsWithoutCompleteInputTypes) {
   }
 }
 
+TEST(FunctionInliner, PreservesUnresolvedMeanVarianceNormalizationAxes) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("local", 1);
+  auto *graph_input = model.mutable_graph()->add_input();
+  graph_input->set_name("x");
+  graph_input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  auto &function = *model.add_functions();
+  function.set_domain("local");
+  function.set_name("normalize");
+  function.add_opset_import()->set_version(18);
+  function.add_input("x");
+  function.add_output("y");
+  function.add_attribute("axes");
+  auto &node = *function.add_node();
+  node.set_op_type("MeanVarianceNormalization");
+  node.add_input("x");
+  node.add_output("y");
+  auto &axes = *node.add_attribute();
+  axes.set_name("axes");
+  axes.set_ref_attr_name("axes");
+  axes.set_type(AttributeProto::INTS);
+
+  inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+
+  ASSERT_EQ(model.functions_size(), 1);
+  ASSERT_EQ(model.functions(0).node_size(), 1);
+  EXPECT_EQ(model.functions(0).node(0).op_type(), "MeanVarianceNormalization");
+  ASSERT_EQ(model.functions(0).node(0).attribute_size(), 1);
+  EXPECT_EQ(model.functions(0).node(0).attribute(0).ref_attr_name(), "axes");
+}
+
 // Test that inlining processes subgraphs.
 TEST(FunctionInliner, SubgraphTest) {
   const char *code = R"ONNX(

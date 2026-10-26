@@ -71,6 +71,43 @@ TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   }
 }
 
+TEST(onnx_shape_inference, MeanVarianceNormalizationUnexpandedNode) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int opset : {13, 18}) {
+    SCOPED_TRACE(opset);
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset_import()->set_version(opset);
+    auto *graph = model.mutable_graph();
+    graph->set_name("mvn_unexpanded");
+    auto *input = graph->add_input();
+    input->set_name("X");
+    auto *input_type = input->mutable_type()->mutable_tensor_type();
+    input_type->set_elem_type(TensorProto::FLOAT);
+    for (const int64_t dim : {2, 3, 4, 5}) {
+      input_type->mutable_shape()->add_dim()->set_dim_value(dim);
+    }
+    auto *output = graph->add_output();
+    output->set_name("Y");
+    auto &node = *graph->add_node();
+    node.set_op_type("MeanVarianceNormalization");
+    node.add_input("X");
+    node.add_output("Y");
+
+    ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                 ShapeInferenceOptions(true, 1, false)));
+    EXPECT_TRUE(graph->output(0).type().Equals(input->type()));
+    ASSERT_NO_THROW(checker::check_model(model, true));
+
+    ModelProto invalid_model = model;
+    auto &axes = *invalid_model.mutable_graph()->mutable_node(0)->add_attribute();
+    axes.set_name("axes");
+    axes.set_type(AttributeProto::INTS);
+    axes.add_ints(4);
+    EXPECT_THROW(checker::check_model(invalid_model, true), InferenceError);
+  }
+}
+
 namespace {
 
 template <class Type> void CreateDims(Type &proto, int num_dims) {

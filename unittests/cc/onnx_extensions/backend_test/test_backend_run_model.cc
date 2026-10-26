@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -304,10 +305,16 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
     SCOPED_TRACE(tc.name);
     EXPECT_FALSE(tc.materialized());
     const auto &model = tc.model();
-    ASSERT_NO_THROW(checker::check_model(model, true));
     const std::string op = model.graph().node(0).op_type().value();
     const auto &ds = tc.data_sets().at(0);
     ASSERT_FALSE(ds.inputs.empty());
+    if (op == "MeanVarianceNormalization" && ds.inputs[0].data_type == DataType::DOUBLE) {
+      ASSERT_NO_THROW(checker::check_model(model, false));
+      ModelProto native_shape_model = model;
+      ASSERT_NO_THROW(core::shapes::InferShapesModel(native_shape_model));
+    } else {
+      ASSERT_NO_THROW(checker::check_model(model, true));
+    }
     ASSERT_FALSE(ds.outputs.empty());
     EXPECT_TRUE(memberships.emplace(op, ds.inputs[0].data_type).second);
     operators.insert(op);

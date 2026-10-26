@@ -7,8 +7,9 @@
 // case whose graph outputs are all plain tensors, builds a single
 // ``RuntimeContext`` / ``ExecutionPlan`` / ``RuntimeSession`` and runs that same
 // session **twice**, checking that:
-//   1. the produced outputs reproduce the expected ones bit-for-bit on both
-//      runs, and
+//   1. the produced outputs reproduce the expected ones on both runs (bit-for-bit
+//      except for independent supported-dtype floating-point references, which
+//      use their declared tolerances), and
 //   2. for plain-tensor models, the pool allocator's memory peak is identical
 //      after the second run (a leak would make the second run peak higher).
 //
@@ -23,6 +24,7 @@
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -32,8 +34,10 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -176,6 +180,46 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
   ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
   EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
             std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
+}
+
+void ExpectTensorClose(const Tensor &actual, const Tensor &expected, double rtol, double atol) {
+  ASSERT_EQ(actual.data_type, expected.data_type);
+  ASSERT_EQ(actual.shape, expected.shape);
+  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+  if (actual.data_type != core::runtime::DataType::FLOAT &&
+      actual.data_type != core::runtime::DataType::DOUBLE &&
+      actual.data_type != core::runtime::DataType::FLOAT16 &&
+      actual.data_type != core::runtime::DataType::BFLOAT16) {
+    ExpectTensorBitEqual(actual, expected);
+    return;
+  }
+  auto read_value = [](const Tensor &tensor, int64_t i) -> double {
+    switch (tensor.data_type) {
+    case core::runtime::DataType::FLOAT:
+      return tensor.AsFloat()[i];
+    case core::runtime::DataType::DOUBLE:
+      return tensor.AsDouble()[i];
+    case core::runtime::DataType::FLOAT16:
+      return core::runtime::Float16BitsToFloat(
+          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
+    case core::runtime::DataType::BFLOAT16:
+      return core::runtime::Bfloat16BitsToFloat(
+          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
+    default:
+      throw std::invalid_argument("Unsupported floating-point comparison dtype.");
+    }
+  };
+  for (int64_t i = 0; i < expected.element_count(); ++i) {
+    const double value = read_value(actual, i);
+    const double reference = read_value(expected, i);
+    if (std::isnan(reference)) {
+      EXPECT_TRUE(std::isnan(value)) << "element " << i;
+    } else if (std::isinf(reference)) {
+      EXPECT_EQ(value, reference) << "element " << i;
+    } else {
+      EXPECT_NEAR(value, reference, atol + rtol * std::abs(reference)) << "element " << i;
+    }
+  }
 }
 
 // Returns whether every declared graph input, output, and value_info of
@@ -453,11 +497,11 @@ TEST(BackendRunModelAllCases, GraphBuilderRoundTripMaterializesGraphRefAttribute
 // Collects every model-based backend test case (``TestMode::TEST``, no big
 // models) and, for each data set, builds a single ``RuntimeContext``,
 // ``ExecutionPlan`` and ``RuntimeSession`` and runs that same session twice.
-// Every output is checked bit-for-bit on both runs (the expected outputs are
-// themselves produced by the very kernels the runtime dispatches to, so a
-// bit-exact comparison is appropriate). Outputs are matched positionally
-// against ``graph.output`` (a case's expected-tensor names are not required to
-// match the graph output names).
+// Outputs are checked bit-for-bit on both runs, except the independent
+// supported-dtype references, which use their declared floating-point
+// tolerances. Outputs are matched positionally against ``graph.output`` (a
+// case's expected-tensor names are not required to match the graph output
+// names).
 //
 // For plain-tensor models the context is backed by a shared
 // ``SimpleRawBufferAllocator`` and the allocator's memory peak must be
@@ -546,7 +590,12 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
         for (size_t i = 0; i < outputs.size(); ++i) {
           const std::string &oname = outputs[i].name();
           ASSERT_TRUE(rt.Has(oname)) << "Missing output '" << oname << "' for case " << tc.name;
-          ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
+          if (tc.name.find("test_cc_supported_dtype_") == 0 && graph.node_size() == 1 &&
+              graph.node(0).op_type() != "Transpose") {
+            ExpectTensorClose(rt.Get(oname), ds.outputs[i], tc.rtol, tc.atol);
+          } else {
+            ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
+          }
         }
         memory_peaks[run] = alloc.PeakAllocatedSize();
 

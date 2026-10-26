@@ -1034,6 +1034,52 @@ class TestShapeInference(ExtTestCase):
         with self.assertRaisesRegex(shape_inference.InferenceError, "missing from the inputs"):
             shape_inference.infer_shapes(model, strict_mode=True)
 
+    def test_einsum_unsupported_character_raises(self) -> None:
+        """Rejects unsupported characters and repeated ellipses in input terms."""
+        cases = [
+            ("i_j", [2, 3], "_"),
+            ("i.j", [2, 3], "."),
+            ("i1j", [2, 3], "1"),
+            ("ij..", [2, 3], "."),
+            ("...i...", [2], "."),
+        ]
+        for equation, shape, character in cases:
+            with self.subTest(equation=equation):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("Einsum", ["x"], ["y"], equation=equation)],
+                        "g",
+                        [oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, shape)],
+                        [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, None)],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                with self.assertRaisesRegex(
+                    shape_inference.InferenceError, "unsupported character"
+                ) as error:
+                    shape_inference.infer_shapes(model, strict_mode=True)
+                self.assertIn(f"'{character}'", str(error.exception))
+                self.assertIn("input 0", str(error.exception))
+
+    def test_einsum_supported_input_terms(self) -> None:
+        """Preserves shape inference for letters, spaces, and a single ellipsis."""
+        for equation, shape, expected_shape in [
+            ("i j", [2, 3], [2, 3]),
+            ("ji", [2, 3], [3, 2]),
+            ("...i", [2, 3], [2, 3]),
+            ("i...", [2, 3], [3, 2]),
+            ("...i", [2], [2]),
+        ]:
+            with self.subTest(equation=equation, shape=shape):
+                result = self._infer_output(
+                    "Einsum",
+                    {"x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, shape)},
+                    equation=equation,
+                )
+                self.assertEqual(
+                    [dim.dim_value for dim in result.tensor_type.shape.dim], expected_shape
+                )
+
     def test_einsum_ellipsis_mismatched_rank_raises(self) -> None:
         """Checks that mismatched ellipsis ranks raise InferenceError."""
         cases = [

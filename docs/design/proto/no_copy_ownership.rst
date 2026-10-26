@@ -191,10 +191,11 @@ or ``GraphBuilder.init(..., copy=False)``, retain their owners throughout the sa
 The working copy outlives the output stream and its asynchronous writes.
 Temporary external-data metadata and serialization callback edits therefore do
 not change the caller's model. Ownerless borrowed buffers are copied for safety.
-Native file-backed mappings are first snapshotted into owned buffers, since output
-files may overwrite their backing files. This also keeps the caller's tensor
-contents valid after an in-place file rewrite; NumPy and DLPack buffers are not
-materialized.
+Native file-backed mappings and NumPy or buffer-protocol views backed by file
+mappings are first snapshotted into owned buffers, since output files may
+overwrite their backing files. This also keeps the caller's tensor contents valid
+after an in-place file rewrite; ordinary in-memory NumPy and DLPack buffers are
+not materialized.
 Callers must not mutate borrowed source arrays while saving.
 
 A synthetic 28-tensor FP32 model (21,474,836 elements per tensor, 2,405,181,632

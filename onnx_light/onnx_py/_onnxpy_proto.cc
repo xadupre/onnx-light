@@ -27,6 +27,7 @@
 #include <nanobind/stl/vector.h>
 #include <optional>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 
 namespace nb = nanobind;
@@ -60,8 +61,35 @@ struct ImportedDLPackOwnerDeleter {
   void operator()(void *pointer) const { delete static_cast<ImportedDLPackOwner *>(pointer); }
 };
 
-bool IsFileMappedDLPackArray(nb::handle array) {
-  return nb::isinstance(array, nb::module_::import_("numpy").attr("memmap"));
+struct ImportedBufferOwnerDeleter {
+  bool file_mapped;
+  void operator()(Py_buffer *buffer) const {
+    nb::gil_scoped_acquire gil;
+    PyBuffer_Release(buffer);
+    delete buffer;
+  }
+};
+
+bool IsFileMappedPythonBuffer(nb::handle array) {
+  const auto numpy = nb::module_::import_("numpy");
+  const auto ndarray = numpy.attr("ndarray");
+  const auto memmap = numpy.attr("memmap");
+  auto owner = nb::borrow<nb::object>(array);
+  std::unordered_set<PyObject *> visited;
+  while (!owner.is_none()) {
+    if (!visited.insert(owner.ptr()).second)
+      throw nb::buffer_error("A borrowed buffer has a cyclic ownership chain.");
+    if (nb::isinstance(owner, memmap))
+      return true;
+    if (nb::isinstance(owner, ndarray)) {
+      owner = owner.attr("base");
+    } else if (PyMemoryView_Check(owner.ptr())) {
+      owner = owner.attr("obj");
+    } else {
+      return nb::isinstance(owner, nb::module_::import_("mmap").attr("mmap"));
+    }
+  }
+  return false;
 }
 
 TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
@@ -165,7 +193,7 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   static const uint8_t empty_data = 0;
   const auto *data =
       size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
-  const bool file_mapped = IsFileMappedDLPackArray(array);
+  const bool file_mapped = IsFileMappedPythonBuffer(array);
   std::shared_ptr<void> owner_token(owner.release(), ImportedDLPackOwnerDeleter{file_mapped});
   result.ref_raw_data().assign_borrowed(data, size, std::move(owner_token));
   try {
@@ -331,8 +359,10 @@ struct RawDataCallback {
 };
 
 bool IsFileMappedOwner(const std::shared_ptr<void> &owner) {
-  const auto *deleter = std::get_deleter<ImportedDLPackOwnerDeleter>(owner);
-  return utils::detail::IsFileMappedOwner(owner) || (deleter != nullptr && deleter->file_mapped);
+  const auto *dlpack = std::get_deleter<ImportedDLPackOwnerDeleter>(owner);
+  const auto *buffer = std::get_deleter<ImportedBufferOwnerDeleter>(owner);
+  return utils::detail::IsFileMappedOwner(owner) || (dlpack != nullptr && dlpack->file_mapped) ||
+         (buffer != nullptr && buffer->file_mapped);
 }
 
 void SnapshotBorrowedRawData(utils::ByteSpan &raw_data) {
@@ -2528,11 +2558,9 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "_set_raw_data_from_buffer",
           [](TensorProto &self, nb::handle array) {
-            auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{}, [](Py_buffer *buffer) {
-              nb::gil_scoped_acquire gil;
-              PyBuffer_Release(buffer);
-              delete buffer;
-            });
+            const bool file_mapped = IsFileMappedPythonBuffer(array);
+            auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{},
+                                                     ImportedBufferOwnerDeleter{file_mapped});
             if (PyObject_GetBuffer(array.ptr(), buffer.get(), PyBUF_CONTIG_RO) < 0)
               throw nb::python_error();
             // ByteSpan uses nullptr for absence, including for zero-length payloads.
@@ -2540,7 +2568,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             const auto *data =
                 buffer->buf ? static_cast<const uint8_t *>(buffer->buf) : &empty_data;
             const size_t size = static_cast<size_t>(buffer->len);
-            self.set_raw_data_with_deleter(data, size, [buffer = std::move(buffer)]() {});
+            self.ref_raw_data().assign_borrowed(data, size, std::move(buffer));
           },
           nb::arg("array"),
           "Borrows a contiguous buffer as raw_data and retains its exporter until final release.")

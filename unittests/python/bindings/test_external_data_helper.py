@@ -1,4 +1,5 @@
 import gc
+import mmap
 import os
 import tempfile
 import unittest
@@ -275,22 +276,66 @@ class TestExternalDataHelper(ExtTestCase):
                 loaded.graph.extended_initializer[0].encoded_value.raw_data, values.tobytes()
             )
 
-    def test_dlpack_mapped_weights_resave_to_same_path(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            values = np.arange(128, dtype=np.float32)
-            weights = os.path.join(tmp, "weights.bin")
-            with open(weights, "wb") as stream:
-                stream.write(values.tobytes())
-            mapped_values = np.memmap(weights, dtype=np.float32, mode="r+", shape=values.shape)
-            model = _make_borrowed_model(mapped_values, "dlpack")
-            path = os.path.join(tmp, "model.onnx")
-            options = onnxl.SerializeOptions()
-            options.raw_data_threshold = 0
-            model.SerializeToFile(path, options, weights)
-            loaded = onnxl.load(path, load_external_data=True)
-            np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
-            del model, mapped_values
-            gc.collect()
+    def test_borrowed_mapped_views_resave_to_same_path(self):
+        for source_kind in ("numpy", "dlpack"):
+            for view_kind in ("direct", "array", "memoryview", "slice", "mmap"):
+                with (
+                    self.subTest(source_kind=source_kind, view_kind=view_kind),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    values = np.arange(128, dtype=np.float32)
+                    weights = os.path.join(tmp, "weights.bin")
+                    with open(weights, "wb") as stream:
+                        stream.write(values.tobytes())
+                    mapping = None
+                    if view_kind == "mmap":
+                        with open(weights, "r+b") as stream:
+                            mapping = mmap.mmap(stream.fileno(), 0)
+                        mapped_values = np.frombuffer(mapping, dtype=np.float32)
+                    else:
+                        mapped_values = np.memmap(
+                            weights, dtype=np.float32, mode="r+", shape=values.shape
+                        )
+                        if view_kind == "array":
+                            mapped_values = np.asarray(mapped_values)
+                        elif view_kind == "memoryview":
+                            mapped_values = np.asarray(memoryview(mapped_values))
+                        elif view_kind == "slice":
+                            mapped_values = np.asarray(mapped_values)[16:112]
+                            values = values[16:112]
+                    model = _make_borrowed_model(mapped_values, source_kind)
+                    before = model.SerializeToString()
+                    path = os.path.join(tmp, "model.onnx")
+                    options = onnxl.SerializeOptions()
+                    options.raw_data_threshold = 0
+                    options.num_threads = 2
+                    options.min_parallel_block_size = 1
+                    model.SerializeToFile(path, options, weights)
+                    self.assertEqual(model.SerializeToString(), before)
+                    loaded = onnxl.load(path, load_external_data=True)
+                    np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+                    del model, mapped_values
+                    gc.collect()
+                    if mapping is not None:
+                        mapping.close()
+
+    def test_borrowed_buffer_rejects_cyclic_owner_chain(self):
+        class CyclicArray(np.ndarray):
+            @property
+            def base(self):
+                return self
+
+        values = np.arange(8, dtype=np.float32).view(CyclicArray)
+        source = weakref.ref(values)
+        tensor = onnxl.TensorProto(raw_data=b"unchanged")
+        with self.assertRaisesRegex(BufferError, "cyclic ownership chain"):
+            tensor._set_raw_data_from_buffer(values)
+        self.assertEqual(tensor.raw_data, b"unchanged")
+        with self.assertRaisesRegex(BufferError, "cyclic ownership chain"):
+            onnxl.TensorProto.from_dlpack(values)
+        del values
+        gc.collect()
+        self.assertIsNone(source())
 
     @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
     def test_auto_load_linked_models(self):

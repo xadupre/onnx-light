@@ -142,6 +142,10 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
 
   nb::class_<MatchResult>(builder_mod, "MatchResult")
       .def(nb::init<>())
+      .def_prop_ro(
+          "pattern",
+          [](const MatchResult &result) -> const PatternOptimization * { return result.pattern; },
+          nb::rv_policy::reference)
       .def_prop_ro("nodes",
                    [](const MatchResult &result) {
                      nb::list nodes;
@@ -175,7 +179,9 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
             new (self) GraphGraph(builder, std::move(owned));
           },
           nb::arg("builder"), nb::arg("patterns"), nb::keep_alive<1, 2>())
-      .def_prop_ro("builder", &GraphGraph::Builder, nb::rv_policy::reference_internal)
+      .def_prop_ro("builder", nb::overload_cast<>(&GraphGraph::Builder),
+                   nb::rv_policy::reference_internal)
+      .def_prop_ro("name", [](const GraphGraph &graph) { return graph.Builder().name(); })
       .def_prop_ro("patterns", &GraphGraph::Patterns)
       .def("set_target_device", &GraphGraph::SetTargetDevice, nb::arg("device"),
            "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
@@ -183,7 +189,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report,
              const core::builder::ConstantFoldingOptions &folding_options, bool remove_unused,
-             bool parallel) -> nb::object {
+             nb::object callback, bool parallel) -> nb::object {
             if (parallel) {
               for (const auto &pattern : graph.Patterns()) {
                 if (dynamic_cast<const PyPatternOptimization *>(pattern.get()) != nullptr) {
@@ -192,18 +198,29 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                 }
               }
             }
+            GraphGraph::OptimizationCallback on_match;
+            if (!callback.is_none()) {
+              if (!PyCallable_Check(callback.ptr()))
+                throw nb::type_error("callback must be callable or None.");
+              on_match = [&](const GraphGraph &scope, const MatchResult &match) {
+                nb::object decision = callback(nb::cast(&scope, nb::rv_policy::reference),
+                                               nb::cast(match, nb::rv_policy::copy));
+                return decision.is_none() || nb::cast<bool>(decision);
+              };
+            }
             if (!report) {
-              return nb::cast(
-                  graph.Optimize(max_iter, nullptr, folding_options, remove_unused, parallel));
+              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused,
+                                             on_match, parallel));
             }
             OptimizationReport statistics;
-            RewritingProto rewrites =
-                graph.Optimize(max_iter, &statistics, folding_options, remove_unused, parallel);
+            RewritingProto rewrites = graph.Optimize(max_iter, &statistics, folding_options,
+                                                     remove_unused, on_match, parallel);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
           nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
           nb::arg("folding_options") = core::builder::ConstantFoldingOptions{},
-          nb::arg("remove_unused") = true, nb::arg("parallel") = false)
+          nb::arg("remove_unused") = true, nb::arg("callback") = nb::none(),
+          nb::arg("parallel") = false)
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

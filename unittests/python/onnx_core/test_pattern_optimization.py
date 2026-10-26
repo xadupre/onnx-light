@@ -438,17 +438,65 @@ class TestPatternOptimization(ExtTestCase):
                     return self.no_match(node, "thread check")
 
             builder = GraphBuilder("parallel_python_callbacks", opsets=18)
-            builder.make_input("x", TensorProto.FLOAT, [2])
-            for index in range(32):
+            for index in range(64):
+                input_name = f"x{index}"
+                builder.make_input(input_name, TensorProto.FLOAT, [2])
                 output = f"y{index}"
-                builder.make_node("Add", ["x", "x"], outputs=[output])
+                builder.make_node("Add", [input_name, input_name], outputs=[output])
                 builder.make_output(output)
             graph = GraphGraph(builder, [ThreadTrackingPattern()])
             calling_thread = threading.get_ident()
             _, report = graph.optimize(report=True, parallel=True)
-            assert len(callback_threads) >= 32
+            assert len(callback_threads) >= 64
             assert set(callback_threads) == {calling_thread}
-            assert report.patterns[0].attempts >= 32
+            assert report.patterns[0].attempts >= 64
+        """)
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_parallel_native_matching_preserves_optimization_callback_order(self):
+        code = textwrap.dedent("""
+            import threading
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.optimization import (
+                GraphBuilder,
+                GraphGraph,
+                TransposeTransposePattern,
+            )
+
+            for parallel in (False, True):
+                builder = GraphBuilder("parallel_native_callbacks", opsets=18)
+                for index in range(32):
+                    input_name = f"x{index}"
+                    builder.make_input(input_name, TensorProto.FLOAT, [2, 3])
+                    builder.make_node(
+                        "Transpose", [input_name], outputs=[f"middle{index}"], perm=[1, 0]
+                    )
+                    builder.make_node(
+                        "Transpose", [f"middle{index}"], outputs=[f"y{index}"], perm=[1, 0]
+                    )
+                    builder.make_output(f"y{index}")
+
+                calling_thread = threading.get_ident()
+                observed = []
+
+                def callback(graph, match):
+                    assert threading.get_ident() == calling_thread
+                    position = graph.position(match.nodes[0])
+                    observed.append(position)
+                    return position % 4 == 0
+
+                graph = GraphGraph(builder, [TransposeTransposePattern()])
+                plan, report = graph.optimize(
+                    max_iter=1, report=True, callback=callback, parallel=parallel
+                )
+                assert observed == list(range(0, 64, 2)), observed
+                assert [list(r.matched_nodes) for r in plan.rewrites] == [
+                    [index, index + 1] for index in range(0, 64, 4)
+                ]
+                assert report.patterns[0].matches == 16
         """)
         result = subprocess.run(
             [sys.executable, "-c", code], capture_output=True, text=True, timeout=60

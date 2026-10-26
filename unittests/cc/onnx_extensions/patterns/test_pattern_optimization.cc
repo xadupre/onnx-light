@@ -2434,10 +2434,11 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
 
 TEST(PatternOptimization, ParallelMatchingPreservesCandidateOrderAndStatistics) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
-  for (std::size_t i = 0; i < 32; ++i) {
+  for (std::size_t i = 0; i < 64; ++i) {
+    const std::string input = "x" + std::to_string(i);
+    builder.MakeInput(input, core::symbolic::TensorType::kFloat, Shape());
     const std::string output = "y" + std::to_string(i);
-    builder.MakeNode("Add", {"x", "x"}, {output});
+    builder.MakeNode("Add", {input, input}, {output});
     builder.MakeOutput(output);
   }
 
@@ -2446,14 +2447,14 @@ TEST(PatternOptimization, ParallelMatchingPreservesCandidateOrderAndStatistics) 
   core::builder::GraphGraph graph(builder, std::move(patterns));
   core::builder::OptimizationReport report;
 
-  const RewritingProto plan = graph.Optimize(1, &report, {}, false, true);
+  const RewritingProto plan = graph.Optimize(1, &report, {}, false, {}, true);
 
   ASSERT_EQ(report.patterns.size(), 1u);
-  EXPECT_EQ(report.patterns[0].attempts, 32u);
-  EXPECT_EQ(report.patterns[0].matches, 32u);
-  ASSERT_EQ(plan.rewrites_size(), 32u);
+  EXPECT_EQ(report.patterns[0].attempts, 64u);
+  EXPECT_EQ(report.patterns[0].matches, 64u);
+  ASSERT_EQ(plan.rewrites_size(), 64);
   for (int i = 0; i < plan.rewrites_size(); ++i) {
-    ASSERT_EQ(plan.rewrites(i).matched_nodes_size(), 1u);
+    ASSERT_EQ(plan.rewrites(i).matched_nodes_size(), 1);
     EXPECT_EQ(plan.rewrites(i).matched_nodes(0), static_cast<uint64_t>(i));
   }
 }

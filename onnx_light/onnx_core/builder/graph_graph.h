@@ -61,6 +61,9 @@ public:
   /// Predicate that protects matching nodes from removal.
   using DoNotRemovePredicate = std::function<bool(const NodeProto &)>;
 
+  /// Observes an eligible match and returns whether it may be applied.
+  using OptimizationCallback = std::function<bool(const GraphGraph &, const MatchResult &)>;
+
   /// Builds the index with registered device-independent patterns.
   /// The builder must outlive the index; its device does not change this selection.
   explicit GraphGraph(GraphBuilder &builder);
@@ -74,6 +77,9 @@ public:
 
   /// Returns the builder being indexed and optimized.
   GraphBuilder &Builder() noexcept { return builder_; }
+
+  /// Returns the builder for read-only inspection.
+  const GraphBuilder &Builder() const noexcept { return builder_; }
 
   /// Sets a concrete target on this builder and its subgraphs.
   /// Rejects conflicting existing devices before modifying any builder.
@@ -94,13 +100,19 @@ public:
    * ``parallel=true`` matches candidates concurrently. Match implementations
    * must be safe for concurrent calls; Python-defined patterns are evaluated
    * sequentially.
+   * ``callback`` observes each eligible, disjoint match before its nodes are
+   * reserved, including matches in nested subgraphs. Returning false rejects
+   * that match without blocking other patterns. It does not intercept cleanup.
+   * The callback must not mutate the graph, patterns, or match, and must not
+   * retain references to the graph or matched nodes beyond the call.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
   RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
                           const ConstantFoldingOptions &folding_options = {},
-                          bool remove_unused = true, bool parallel = false);
+                          bool remove_unused = true, const OptimizationCallback &callback = {},
+                          bool parallel = false);
 
   /// Returns the patterns owned by this graph optimizer.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -216,8 +228,8 @@ private:
   RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
-                              bool parallel, RewritingProto &collection,
-                              detail::RewritingUndoState &undo);
+                              RewritingProto &collection, detail::RewritingUndoState &undo,
+                              const OptimizationCallback &callback, bool parallel);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

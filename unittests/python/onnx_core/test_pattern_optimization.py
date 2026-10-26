@@ -472,10 +472,16 @@ class TestPatternOptimization(ExtTestCase):
                     input_name = f"x{index}"
                     builder.make_input(input_name, TensorProto.FLOAT, [2, 3])
                     builder.make_node(
-                        "Transpose", [input_name], outputs=[f"middle{index}"], perm=[1, 0]
+                        "Transpose",
+                        [input_name],
+                        outputs=[f"middle{index}"],
+                        attributes={"perm": [1, 0]},
                     )
                     builder.make_node(
-                        "Transpose", [f"middle{index}"], outputs=[f"y{index}"], perm=[1, 0]
+                        "Transpose",
+                        [f"middle{index}"],
+                        outputs=[f"y{index}"],
+                        attributes={"perm": [1, 0]},
                     )
                     builder.make_output(f"y{index}")
 

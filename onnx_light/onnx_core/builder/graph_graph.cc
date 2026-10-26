@@ -3142,9 +3142,11 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       self(self, *subgraph);
   };
   validate_functions(validate_functions, result);
-  if (!conflicting_definitions.empty())
+  if (!conflicting_definitions.empty()) {
+    const auto &[domain, name, overload] = *conflicting_definitions.begin();
     throw BuilderError("ApplyRewritings: conflicting function definition '" +
-                       std::get<1>(*conflicting_definitions.begin()) + "'.");
+                       ShapesContext::LocalFunctionKey(domain, name, overload) + "'.");
+  }
   result.set_device(device_);
   std::size_t index = 0;
   while (index < rewrites.rewrites().size()) {

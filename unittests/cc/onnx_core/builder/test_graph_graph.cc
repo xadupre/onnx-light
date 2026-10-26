@@ -2369,6 +2369,40 @@ TEST(GraphGraph, ReplayErrorsIdentifyInvalidReplacementFunctionIds) {
   }
 }
 
+TEST(GraphGraph, ReplayErrorsIdentifyConflictingFunctionDefinitions) {
+  for (const std::string overload : {"", "variant:one%"}) {
+    SCOPED_TRACE(overload);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 18);
+    auto &function = *model.add_functions();
+    function.set_domain("local.domain");
+    function.set_name("Body");
+    function.set_overload(overload);
+    function.add_opset("", 18);
+    function.add_input("X");
+    function.add_output("Y");
+    function.add_node(MakeNode("Neg", {"X"}, {"Y"}));
+    core::builder::GraphBuilder builder(model, SchemaLookup());
+
+    RewritingProto plan;
+    auto replacement = function;
+    replacement.ref_node()[0].set_op_type("Abs");
+    plan.ref_added_functions().push_back(std::move(replacement));
+    try {
+      builder.ApplyRewritings(plan);
+      FAIL() << "Expected a conflicting function definition to be rejected.";
+    } catch (const core::builder::BuilderError &error) {
+      const std::string identity =
+          overload.empty() ? "local.domain:Body" : "local.domain:Body:variant%3Aone%25";
+      const std::string message = error.what();
+      EXPECT_NE(
+          message.find("ApplyRewritings: conflicting function definition '" + identity + "'."),
+          std::string::npos);
+    }
+  }
+}
+
 TEST(GraphGraph, ReplayMatchesFunctionTagsByDomainAndOverload) {
   for (const bool overload : {false, true}) {
     SCOPED_TRACE(overload);

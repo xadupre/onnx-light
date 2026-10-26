@@ -1435,7 +1435,8 @@ core::builder::MatchResult RepeatedLayerPattern::Match(GraphGraph &graph,
   if (IsLayerName("ai.rt", graph.Builder().name()) &&
       graph.Builder().IsLocalFunction(graph.Builder().name(), "ai.rt"))
     return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
-  for (const auto &[key, function] : graph.Builder().ModelBuilder().Shapes().LocalFunctions()) {
+  for (const auto &entry : graph.Builder().ModelBuilder().Shapes().LocalFunctions()) {
+    const auto &function = entry.second;
     if (IsLayerName(function->domain().value(), function->name().value()) &&
         graph.Builder().IsInsideLocalFunction(function->name().value(), function->domain().value(),
                                               function->overload().value()))

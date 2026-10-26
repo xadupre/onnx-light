@@ -613,6 +613,11 @@ ONNX_OPERATOR_SET_SCHEMA(
 
 static void processSliceInputs(const int64_t input_dim_size_or_value, int64_t &start, int64_t &end,
                                int64_t step) {
+  // Negative dimensions would violate the std::clamp bounds below.
+  if (input_dim_size_or_value < 0) {
+    fail_shape_inference("Slice input dimension must be non-negative, got ",
+                         input_dim_size_or_value);
+  }
   // process step
   if (step == 0) {
     fail_shape_inference("'step' cannot be 0 for Slice");

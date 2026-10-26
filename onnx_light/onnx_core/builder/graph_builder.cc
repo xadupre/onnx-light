@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <queue>
 #include <set>
@@ -405,12 +406,11 @@ void RequireStandardGraph(const GraphProto &graph) {
 
 } // namespace
 
-// Materializes an initializer ``TensorProto`` (owning its payload) from a
-// runtime tensor produced by constant folding. Non-STRING tensors copy their
-// little-endian byte buffer into ``raw_data``; STRING tensors copy their
-// elements into ``string_data``.
+// Materializes an initializer from a folded tensor, sharing explicitly forwarded
+// raw storage and copying other numeric or string payloads.
 TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
-                                                 const std::string &name) {
+                                                 const std::string &name,
+                                                 const TensorProto *shared_storage) {
   TensorProto proto;
   proto.set_name(name);
   proto.set_data_type(tensor.data_type);
@@ -421,6 +421,8 @@ TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &te
     for (const std::string &value : tensor.string_data) {
       proto.add_string_data(utils::String(value));
     }
+  } else if (shared_storage != nullptr) {
+    proto.ref_raw_data() = utils::CopyWithSharedTensorStorage(shared_storage->ref_raw_data());
   } else {
     proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
   }
@@ -758,6 +760,43 @@ void GraphBuilder::set_device(Device device) {
 }
 
 void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
+  std::map<FunctionIdentifier, const GraphBuilder *> functions;
+  const auto same_device_targets = [&](const auto &self, const GraphBuilder &left,
+                                       const GraphBuilder &right) -> bool {
+    if (left.device_ != right.device_ || left.nodes_.size() != right.nodes_.size())
+      return false;
+    for (std::size_t index = 0; index < left.nodes_.size(); ++index) {
+      const auto left_children = left.ReferencedSubgraphs(left.nodes_[index]);
+      const auto right_children = right.ReferencedSubgraphs(right.nodes_[index]);
+      if (left_children.size() != right_children.size())
+        return false;
+      for (std::size_t child = 0; child < left_children.size(); ++child) {
+        if (!self(self, *left_children[child], *right_children[child]))
+          return false;
+      }
+    }
+    return true;
+  };
+  const auto collect_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
+                                                   function->function_template_.overload());
+      const auto [existing, inserted] = functions.emplace(identity, function.get());
+      if (!inserted && (!existing->second->BuildFunction(existing->second->function_domain_)
+                             .Equals(function->BuildFunction(function->function_domain_)) ||
+                        !same_device_targets(same_device_targets, *existing->second, *function))) {
+        throw BuilderError(
+            "CopyDeviceTargetsFrom: conflicting duplicate source function '" +
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload()) +
+            "'.");
+      }
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_functions(collect_functions, source);
   std::vector<std::pair<GraphBuilder *, Device>> updates;
   const auto collect = [&](const auto &self, GraphBuilder &target,
                            const GraphBuilder &original) -> void {
@@ -779,15 +818,14 @@ void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
     for (const auto &function : target.local_functions_) {
       const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
                                                    function->function_template_.overload());
-      const auto found = std::find_if(
-          original.local_functions_.begin(), original.local_functions_.end(),
-          [&](const auto &candidate) {
-            return MakeFunctionIdentifier(candidate->function_domain_, candidate->name_,
-                                          candidate->function_template_.overload()) == identity;
-          });
-      if (found == original.local_functions_.end())
-        throw BuilderError("CopyDeviceTargetsFrom: incompatible exported functions.");
-      self(self, *function, **found);
+      const auto found = functions.find(identity);
+      if (found == functions.end())
+        throw BuilderError(
+            "CopyDeviceTargetsFrom: incompatible exported function '" +
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload()) +
+            "'.");
+      self(self, *function, *found->second);
     }
     updates.emplace_back(&target, original.device_);
   };
@@ -1953,16 +1991,19 @@ void GraphBuilder::RefreshLocalFunctions() {
     }
   };
   collect(*root);
-  std::unordered_set<std::string> function_keys;
+  std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> function_definitions;
   for (GraphBuilder *builder : builders) {
     for (const auto &function : builder->local_functions_) {
       const std::string key = ShapesContext::LocalFunctionKey(
           function->function_domain_, function->name_, function->function_template_.overload());
-      if (!function_keys.insert(key).second) {
-        throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
-      }
       const auto definition =
           std::make_shared<FunctionProto>(function->BuildFunction(function->function_domain_));
+      const auto [existing, inserted] = function_definitions.emplace(key, definition);
+      if (!inserted) {
+        if (!existing->second->Equals(*definition))
+          throw BuilderError("GraphBuilder: conflicting duplicate local function '" + key + "'.");
+        continue;
+      }
       for (GraphBuilder *target : builders) {
         target->compute_.Shapes().SetLocalFunction(definition);
       }
@@ -2747,13 +2788,10 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
 
 GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *> &functions,
                                                const NodeProto &node) {
-  const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-  const std::string normalised = NormaliseDomain(node_domain);
-  const std::string overload = node.overload().value();
+  const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
   for (GraphBuilder *function : functions) {
-    if (function->name() == node.op_type().value() &&
-        NormaliseDomain(function->function_domain_) == normalised &&
-        function->function_template_.overload().value() == overload) {
+    if (MakeFunctionIdentifier(function->function_domain_, function->name_,
+                               function->function_template_.overload()) == identity) {
       return function;
     }
   }
@@ -2763,7 +2801,7 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
 GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std::string &domain,
                                                                       const std::string &name,
                                                                       const std::string &overload) {
-  return {NormaliseDomain(domain), name, overload};
+  return {NormaliseDomain(domain == "onnx.ai" ? std::string() : domain), name, overload};
 }
 
 utils::RepeatedProtoField<FunctionProto>
@@ -2776,8 +2814,10 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
                  MakeFunctionIdentifier(function.domain(), function.name(), function.overload()),
                  index)
              .second) {
-      throw BuilderError("GraphBuilder: duplicate function identity '" + function.name().value() +
-                         "'.");
+      throw BuilderError(
+          "GraphBuilder: duplicate function identity '" +
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()) +
+          "'.");
     }
   }
   const auto dependencies = [&](const FunctionProto &function) {
@@ -2838,14 +2878,12 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
 
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
                                              const std::string &overload) const {
-  const std::string normalised = NormaliseDomain(domain);
+  const auto identity = MakeFunctionIdentifier(domain, name, overload);
   const std::function<std::size_t(const GraphProto &)> count_graph =
       [&](const GraphProto &graph) -> std::size_t {
     std::size_t count = 0;
     for (const auto &node : graph.node()) {
-      const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
-          node.overload().value() == overload) {
+      if (MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) == identity) {
         ++count;
       }
       for (const auto &attribute : node.attribute()) {
@@ -2861,9 +2899,7 @@ std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std:
   };
   std::size_t count = 0;
   for (const NodeProto &node : nodes_) {
-    const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
-        node.overload().value() == overload) {
+    if (MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) == identity) {
       ++count;
     }
   }
@@ -3346,14 +3382,39 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
                                          opset > 0 ? static_cast<int64_t>(opset) : 0)),
                                      core::runtime::RuntimeContextOptions{.device = device_});
+    const bool forwarding_identity =
+        IsForwardingIdentity(node) && node.overload().empty() && node.attribute().empty();
+    std::shared_ptr<TensorProto> identity_storage;
     for (std::size_t i = 0; i < node.input().size(); ++i) {
       const std::string input(node.input(static_cast<std::size_t>(i)));
       if (input.empty()) {
         continue;
       }
-      rt.Put(input, core::runtime::TensorFromProto(*const_tensors.at(input)));
+      const auto *source = const_tensors.at(input);
+      auto tensor = core::runtime::TensorFromProto(*source);
+      if (forwarding_identity && source->is_raw_data() &&
+          tensor.data_type != TensorProto::DataType::STRING) {
+        // Retain real storage so the resolved kernel can safely return a borrowed view.
+        identity_storage =
+            std::make_shared<TensorProto>(utils::CopyWithSharedTensorStorage(*source));
+        const auto &raw = identity_storage->ref_raw_data();
+        tensor = core::runtime::Tensor::Borrow(input, tensor.data_type, tensor.shape, raw.data(),
+                                               raw.size(), identity_storage);
+      }
+      rt.Put(input, std::move(tensor));
     }
     core::runtime::RunNode(node, rt);
+
+    const TensorProto *forwarded_storage = nullptr;
+    if (identity_storage != nullptr) {
+      const auto &input = rt.Get(node.input(0));
+      const auto &output = rt.Get(node.output(0));
+      const auto &raw = identity_storage->ref_raw_data();
+      if (output.data_type == input.data_type && output.shape == input.shape &&
+          output.bytes() == raw.data() && output.size_bytes() == raw.size()) {
+        forwarded_storage = identity_storage.get();
+      }
+    }
 
     // Reject the fold when any output exceeds the size threshold; the node is
     // then kept untouched.
@@ -3382,7 +3443,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       if (output.empty()) {
         continue;
       }
-      TensorProto proto = ProtoFromRuntimeTensor(rt.tensors().at(output), output);
+      TensorProto proto =
+          ProtoFromRuntimeTensor(rt.tensors().at(output), output, forwarded_storage);
       const auto inserted = folded.emplace(output, std::move(proto));
       const_tensors[output] = &inserted.first->second;
       folded_order.push_back(output);
@@ -4222,9 +4284,33 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
     model.add_opset(entry.first, entry.second);
   }
   *model.mutable_graph() = std::move(graph);
-  for (const auto &function : local_functions_) {
-    model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
-  }
+  std::set<FunctionIdentifier> exported;
+  const auto export_functions = [&](const auto &self, GraphBuilder &scope) -> void {
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+    for (const auto &function : scope.local_functions_) {
+      self(self, *function);
+      FunctionProto definition = function->ExportFunction(function->function_domain_, true);
+      const FunctionIdentifier identity =
+          MakeFunctionIdentifier(definition.domain(), definition.name(), definition.overload());
+      if (!exported.insert(identity).second) {
+        const auto previous = std::find_if(
+            model.functions().begin(), model.functions().end(), [&](const auto &candidate) {
+              return MakeFunctionIdentifier(candidate.domain(), candidate.name(),
+                                            candidate.overload()) == identity;
+            });
+        if (previous == model.functions().end() || !previous->Equals(definition)) {
+          throw BuilderError("GraphBuilder: conflicting nested local function definition '" +
+                             ShapesContext::LocalFunctionKey(definition.domain(), definition.name(),
+                                                             definition.overload()) +
+                             "'.");
+        }
+        continue;
+      }
+      model.ref_functions().push_back(std::move(definition));
+    }
+  };
+  export_functions(export_functions, *this);
   model.ref_functions() = DependencyOrderFunctions(std::move(model.ref_functions()));
   model.ref_rewritings() = utils::CopyWithSharedTensorStorage(rewritings_);
   return model;
@@ -4238,13 +4324,18 @@ ModelProto GraphBuilder::ToStandardModel(int64_t ir_version) {
     throw BuilderError("GraphBuilder: standard ONNX cannot represent a structured type catalogue.");
   }
   RequireStandardGraph(BuildGraph());
-  for (const auto &function : local_functions_) {
-    const auto body = function->BuildFunction(function->function_domain_);
-    RequireStandardBody(body);
-    for (const auto &attribute : body.attribute_proto()) {
-      RequireStandardAttribute(attribute);
+  const auto validate_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+    for (const auto &function : scope.local_functions_) {
+      const auto body = function->BuildFunction(function->function_domain_);
+      RequireStandardBody(body);
+      for (const auto &attribute : body.attribute_proto())
+        RequireStandardAttribute(attribute);
+      self(self, *function);
     }
-  }
+  };
+  validate_functions(validate_functions, *this);
   return ToModel(ir_version);
 }
 

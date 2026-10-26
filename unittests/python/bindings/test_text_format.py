@@ -77,6 +77,17 @@ class TestTextFormat(ExtTestCase):
         parsed = parse_from_textproto(text, onnxl.ModelProto())
         self.assertEqual(model.SerializeToString(), parsed.SerializeToString())
 
+    def test_round_trip_function_replacements(self):
+        plan = onnxl.RewritingProto()
+        function = plan.added_functions.add()
+        function.domain = "custom"
+        function.name = "F:pair"
+        function.overload = "v%1"
+        plan.replaced_function_ids.append("custom:F%3Apair:v%251")
+        text = serialize_to_textproto(plan)
+        parsed = parse_from_textproto(text, onnxl.RewritingProto())
+        self.assertEqual(plan.SerializeToString(), parsed.SerializeToString())
+
     def test_round_trip_pipeline(self):
         """Tests models and generation settings in a pipeline textproto."""
         pipeline = onnxl.PipelineProto(

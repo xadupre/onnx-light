@@ -2209,6 +2209,7 @@ SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stre
   SIZE_REPEATED_FIELD(size, options, stream, required_opset_imports)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, added_functions)
+  SIZE_REPEATED_FIELD(size, options, stream, replaced_function_ids)
   return size;
 }
 void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2217,6 +2218,7 @@ void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, required_opset_imports)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, added_functions)
+  WRITE_REPEATED_FIELD(options, stream, replaced_function_ids)
 }
 bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, RewritingProto)
@@ -2224,6 +2226,7 @@ bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, required_opset_imports)
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, added_functions)
+  READ_REPEATED_FIELD(options, stream, replaced_function_ids)
   READ_END(options, stream, RewritingProto)
   return true;
 }
@@ -2231,7 +2234,8 @@ void RewritingProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(rewrites), NAME_EXIST_VALUE(required_opset_imports),
-      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions));
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions),
+      NAME_EXIST_VALUE(replaced_function_ids));
 }
 
 // ModelProto
@@ -3099,6 +3103,7 @@ bool VisitProtoFields(const RewritingProto &left, Right &right, Visitor &&visito
   VISIT_FIELD(required_opset_imports)
   VISIT_FIELD(metadata_props)
   VISIT_FIELD(added_functions)
+  VISIT_FIELD(replaced_function_ids)
   return true;
 }
 

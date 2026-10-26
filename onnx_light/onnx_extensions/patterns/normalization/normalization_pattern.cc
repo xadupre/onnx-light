@@ -121,12 +121,14 @@ bool ReadConstantValues(core::builder::GraphGraph &graph, const std::string &nam
     return false;
   }
   const AttributeProto *value_int = FindAttribute(*constant, "value_int");
-  if (value_int != nullptr && value_int->type() == AttributeProto::AttributeType::INT) {
+  if (value_int != nullptr && value_int->type() == AttributeProto::AttributeType::INT &&
+      value_int->ref_attr_name().empty() && value_int->has_i()) {
     values = {static_cast<double>(value_int->i())};
     return true;
   }
   const AttributeProto *value_float = FindAttribute(*constant, "value_float");
-  if (value_float != nullptr && value_float->type() == AttributeProto::AttributeType::FLOAT) {
+  if (value_float != nullptr && value_float->type() == AttributeProto::AttributeType::FLOAT &&
+      value_float->ref_attr_name().empty() && value_float->has_f()) {
     values = {static_cast<double>(value_float->f())};
     return true;
   }

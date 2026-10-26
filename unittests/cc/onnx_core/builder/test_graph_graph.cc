@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_helper.h"
@@ -126,13 +127,16 @@ public:
 
 class ReplaceIndependentNeg : public core::builder::PatternOptimization {
 public:
-  explicit ReplaceIndependentNeg(bool expand = false)
-      : PatternOptimization(1, "ReplaceIndependentNeg"), expand(expand) {}
+  explicit ReplaceIndependentNeg(bool expand = false,
+                                 core::symbolic::Device device = core::symbolic::Device::kUndefined)
+      : PatternOptimization(1, "ReplaceIndependentNeg", device), expand(expand) {}
 
-  core::builder::MatchResult Match(core::builder::GraphGraph &,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override {
-    return candidate.op_type() == "Neg" ? core::builder::MatchResult{this, {&candidate}, &candidate}
-                                        : core::builder::MatchResult{};
+    return candidate.op_type() == "Neg" && (device == core::symbolic::Device::kUndefined ||
+                                            graph.Builder().device() == device)
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
   }
 
   utils::RepeatedProtoField<NodeProto>
@@ -523,6 +527,69 @@ TEST(GraphGraph, CanonicalReferencePrunesAnnotatedIdentityValues) {
               canonical.SerializeAsString());
     EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
+  }
+}
+
+TEST(GraphGraph, TargetDeviceIncludesFunctionsAndRejectsConflictsAtomically) {
+  using core::symbolic::Device;
+  for (const bool conflict : {false, true}) {
+    SCOPED_TRACE(conflict);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    auto &branch = builder.MakeSubgraph("branch");
+    auto &function = builder.MakeLocalFunction("Body", "local");
+    auto &nested = function.MakeLocalFunction("Nested", "local");
+    auto &body_branch = nested.MakeSubgraph("body_branch");
+    if (conflict)
+      nested.set_device(Device::kCPU);
+    core::builder::GraphGraph graph(builder);
+    if (conflict) {
+      EXPECT_THROW(graph.SetTargetDevice(Device::kGPU0), std::invalid_argument);
+      EXPECT_EQ(builder.device(), Device::kUndefined);
+      EXPECT_EQ(branch.device(), Device::kUndefined);
+      EXPECT_EQ(function.device(), Device::kUndefined);
+      EXPECT_EQ(nested.device(), Device::kCPU);
+      EXPECT_EQ(body_branch.device(), Device::kUndefined);
+    } else {
+      graph.SetTargetDevice(Device::kGPU0);
+      EXPECT_EQ(builder.device(), Device::kGPU0);
+      EXPECT_EQ(branch.device(), Device::kGPU0);
+      EXPECT_EQ(function.device(), Device::kGPU0);
+      EXPECT_EQ(nested.device(), Device::kGPU0);
+      EXPECT_EQ(body_branch.device(), Device::kGPU0);
+    }
+  }
+}
+
+TEST(GraphGraph, LocalFunctionsInheritDeviceForSelectedPatterns) {
+  using core::symbolic::Device;
+  for (const bool select_target : {false, true}) {
+    SCOPED_TRACE(select_target);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<ReplaceIndependentNeg>(false, Device::kGPU0)});
+    if (select_target)
+      graph.SetTargetDevice(Device::kGPU0);
+    else
+      builder.set_device(Device::kGPU0);
+    auto &function = builder.MakeLocalFunction("Body", "local");
+    function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    auto &nested = function.MakeLocalFunction("Nested", "local");
+    nested.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    nested.MakeNode("Neg", {"value"}, {"result"});
+    nested.MakeOutput("result");
+    function.MakeNode("Nested", {"arg"}, {"result"}, "local");
+    function.MakeOutput("result");
+    builder.MakeNode("Body", {"x"}, {"y"}, "local");
+    builder.MakeOutput("y");
+    core::builder::OptimizationReport report;
+    graph.Optimize(-1, &report);
+    EXPECT_GT(report.rewrites, 0u);
+    EXPECT_EQ(function.device(), Device::kGPU0);
+    EXPECT_EQ(nested.device(), Device::kGPU0);
+    ASSERT_EQ(nested.Nodes().size(), 1u);
+    EXPECT_EQ(nested.Nodes()[0].op_type(), "Abs");
   }
 }
 
@@ -2131,6 +2198,214 @@ TEST(GraphGraph, ReplayValidatesScopedTagsAndAllowsUntaggedValues) {
     }
     EXPECT_EQ(source.BuildGraph().SerializeAsString(), before);
     EXPECT_EQ(scope.Compute().ValueTags(), tags);
+  }
+}
+
+TEST(GraphGraph, ReplayValidatesSurvivingSubgraphsInChangedFunctions) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  auto &function = source.MakeLocalFunction("Body", "local");
+  function.SetOpsetVersion("", 28);
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = function.MakeSubgraph(name);
+    branch.MakeNode("Neg", {"X"}, {name + "_value"});
+    branch.MakeOutput(name + "_value");
+  }
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &reference = attributes.add();
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  function.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  function.MakeNode("Identity", {"selected"}, {"Y"});
+  function.MakeOutput("Y");
+  auto &then_branch = function.Subgraph("then_branch");
+  const_cast<core::compute::ComputeContext &>(then_branch.Compute())
+      .SeedValueTag("then_branch_value", "weight", then_branch.Nodes());
+  ASSERT_EQ(then_branch.Compute().ValueTags().at("then_branch_value"), "weight");
+
+  FunctionProto replacement = function.ToFunction("local");
+  replacement.ref_node()[1].set_op_type("Neg");
+  bool changed_tag = false;
+  const auto set_tag = [&](ValueInfoProto &value) {
+    if (value.name() != "then_branch_value")
+      return;
+    for (auto &metadata : value.ref_metadata_props()) {
+      if (metadata.key() == core::compute::kValueTagMetadataKey) {
+        metadata.set_value("shape");
+        changed_tag = true;
+        return;
+      }
+    }
+    auto &metadata = value.ref_metadata_props().add();
+    metadata.set_key(core::compute::kValueTagMetadataKey);
+    metadata.set_value("shape");
+    changed_tag = true;
+  };
+  const auto change_graph = [&](const auto &self, GraphProto &graph) -> void {
+    for (auto &value : graph.ref_input())
+      set_tag(value);
+    for (auto &value : graph.ref_output())
+      set_tag(value);
+    for (auto &value : graph.ref_value_info())
+      set_tag(value);
+    for (auto &node : graph.ref_node()) {
+      for (auto &attribute : node.ref_attribute()) {
+        if (attribute.has_g())
+          self(self, *attribute.mutable_g());
+        for (auto &nested : attribute.ref_graphs())
+          self(self, nested);
+      }
+    }
+  };
+  for (auto &node : replacement.ref_node())
+    for (auto &attribute : node.ref_attribute()) {
+      if (attribute.has_g())
+        change_graph(change_graph, *attribute.mutable_g());
+      for (auto &nested : attribute.ref_graphs())
+        change_graph(change_graph, nested);
+    }
+  ASSERT_TRUE(changed_tag);
+
+  RewritingProto plan;
+  plan.add_replaced_function_ids("local:Body");
+  plan.ref_added_functions().push_back(std::move(replacement));
+  try {
+    source.ApplyRewritings(plan);
+    FAIL() << "Expected a changed nested value tag to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("then_branch"), std::string::npos);
+    EXPECT_NE(message.find("then_branch_value"), std::string::npos);
+    EXPECT_NE(message.find("existing tag 'weight'"), std::string::npos);
+    EXPECT_NE(message.find("reconstructed tag 'shape'"), std::string::npos);
+  }
+}
+
+TEST(GraphGraph, ReplayValidatesEveryOccurrenceOfSharedFunctionSubgraphs) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}, {"local", 1}});
+  auto &function = source.MakeLocalFunction("Body", "local");
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &branch = function.MakeSubgraph("body");
+  branch.MakeNode("Neg", {"X"}, {"branch_value"});
+  ValueInfoProto branch_output;
+  branch_output.set_name("branch_value");
+  auto &tag = branch_output.ref_metadata_props().add();
+  tag.set_key(core::compute::kValueTagMetadataKey);
+  tag.set_value("weight");
+  branch.MakeOutput(branch_output);
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &reference = attributes.add();
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s("body");
+  }
+  function.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  function.MakeNode("Identity", {"selected"}, {"Y"});
+  function.MakeOutput("Y");
+  ASSERT_EQ(branch.Compute().ValueTags().at("branch_value"), "weight");
+  RewritingProto plan;
+  plan.add_replaced_function_ids("local:Body");
+  auto replacement = function.ToFunction("local");
+  replacement.ref_node()[1].set_op_type("Neg");
+  plan.ref_added_functions().push_back(std::move(replacement));
+  EXPECT_NO_THROW(source.ApplyRewritings(plan));
+
+  auto &second_branch = *plan.ref_added_functions()[0].ref_node()[0].ref_attribute()[1].mutable_g();
+  ASSERT_EQ(second_branch.name(), "body");
+  bool changed_tag = false;
+  const auto change_tag = [&](auto &values) {
+    for (auto &value : values) {
+      if (value.name() != "branch_value")
+        continue;
+      for (auto &metadata : value.ref_metadata_props()) {
+        if (metadata.key() == core::compute::kValueTagMetadataKey) {
+          metadata.set_value("shape");
+          changed_tag = true;
+        }
+      }
+    }
+  };
+  change_tag(second_branch.ref_output());
+  change_tag(second_branch.ref_value_info());
+  ASSERT_TRUE(changed_tag);
+  EXPECT_THROW(source.ApplyRewritings(plan), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, ReplayErrorsIdentifyInvalidReplacementFunctionIds) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+  auto &function = builder.MakeLocalFunction("Body", "local");
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Identity", {"X"}, {"Y"});
+  function.MakeOutput("Y");
+
+  RewritingProto unknown;
+  unknown.add_replaced_function_ids("local:Missing");
+  try {
+    builder.ApplyRewritings(unknown);
+    FAIL() << "Expected an unknown replacement function identity to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("local:Missing"), std::string::npos);
+    EXPECT_NE(message.find("not replaceable"), std::string::npos);
+  }
+
+  RewritingProto duplicate;
+  duplicate.add_replaced_function_ids("local:Body");
+  duplicate.add_replaced_function_ids("local:Body");
+  duplicate.ref_added_functions().push_back(function.ToFunction("local"));
+  try {
+    builder.ApplyRewritings(duplicate);
+    FAIL() << "Expected a duplicate replacement function identity to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("local:Body"), std::string::npos);
+    EXPECT_NE(message.find("duplicate"), std::string::npos);
+  }
+}
+
+TEST(GraphGraph, ReplayErrorsIdentifyConflictingFunctionDefinitions) {
+  for (const std::string overload : {"", "variant:one%"}) {
+    SCOPED_TRACE(overload);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 18);
+    auto &function = *model.add_functions();
+    function.set_domain("local.domain");
+    function.set_name("Body");
+    function.set_overload(overload);
+    function.add_opset("", 18);
+    function.add_input("X");
+    function.add_output("Y");
+    function.add_node(MakeNode("Neg", {"X"}, {"Y"}));
+    core::builder::GraphBuilder builder(model, SchemaLookup());
+
+    for (const bool duplicate_addition : {false, true}) {
+      SCOPED_TRACE(duplicate_addition);
+      RewritingProto plan;
+      auto replacement = function;
+      replacement.ref_node()[0].set_op_type("Abs");
+      plan.ref_added_functions().push_back(std::move(replacement));
+      if (duplicate_addition)
+        plan.ref_added_functions().push_back(function);
+      try {
+        builder.ApplyRewritings(plan);
+        FAIL() << "Expected a conflicting function definition to be rejected.";
+      } catch (const core::builder::BuilderError &error) {
+        const std::string identity =
+            overload.empty() ? "local.domain:Body" : "local.domain:Body:variant%3Aone%25";
+        const std::string context =
+            duplicate_addition ? "added function definitions for" : "function definition";
+        const std::string message = error.what();
+        EXPECT_NE(message.find("ApplyRewritings: conflicting " + context + " '" + identity + "'."),
+                  std::string::npos);
+      }
+    }
   }
 }
 

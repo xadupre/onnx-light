@@ -50,6 +50,43 @@ and type inference, its constant knowledge and its cleanup passes
 The rewrite invariant
 ---------------------
 
+Optimization also visits local function bodies and their nested subgraphs.
+Function-body edits contribute to ``report.rewrites`` and are recorded as
+replacement function definitions for replay and undo. Generated helpers are
+explicitly distinguished from replacements by ``replaced_function_ids`` so that
+conflicting helper definitions retain their validation errors. Helpers are
+reused by model-wide domain/name/overload identity only when their definitions
+are compatible; a helper cannot extract itself, including from a nested scope.
+Helper compatibility tolerates materialized constants moving to the beginning
+of a function, renamed constant aliases, and typed versus raw tensor encoding;
+constant values and executable node attributes must still match.
+During a single optimization pass, helper reuse may also validate against the
+captured pre-optimization definition when other patterns have already rewritten
+its body. This provenance is pass-local, is not inferred from a helper's name,
+and does not allow an initially conflicting definition.
+Function traversal snapshots stable builder pointers before visiting children,
+so helpers appended to the root by nested rewrites do not invalidate traversal.
+Model export and replay place callees before callers, including dependencies
+inside graph attributes and function attribute defaults. Matchers do not rewrite
+nodes whose attributes still contain unresolved function-attribute references,
+including Constant producers inspected outside the matched node set.
+Primitive patterns also skip model-local function overrides, both as candidates
+and as secondary matched nodes. Patterns intentionally handling local calls,
+such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions(node)``
+(``supports_local_functions(node)`` in Python) to return true for supported calls.
+Attention and rotary second-stage patterns accept their intermediate helper
+identities, without allowing local overrides of the surrounding primitives.
+Cast elimination also rejects replacements that would introduce an overridden
+default-domain ``Identity``; default-domain function identity checks treat
+``""``, ``ai.onnx``, and ``onnx.ai`` consistently.
+Replay validates surviving value tags in every retained graph-attribute
+occurrence, including separate exported copies of a shared subgraph.
+Constant folding forwards raw initializer storage through native Identity nodes
+without copying payloads. It always executes the resolved kernel, including
+custom and device-specific factories, and shares storage only when the returned
+tensor aliases the retained input with matching type, shape and byte size.
+Input validation and folding limits still apply.
+
 A pattern must never reuse an existing name: every value it produces is
 new. This invariant keeps the successor and predecessor maps valid
 between two rewrites of the same iteration, which is why the builder
@@ -74,6 +111,10 @@ By default only device-independent patterns are selected. ``patterns=False``
 disables patterns without disabling cleanup. A concrete ``Device`` selects
 independent patterns and patterns targeting that exact device, and sets
 ``builder.device`` unless it conflicts with an already-defined target.
+A concrete selection validates and propagates the target through local functions
+as well as subgraphs before changing any scope. During optimization, undefined
+function targets inherit their parent's device; explicit per-function targets
+remain unchanged when no common target is selected.
 A regex selects available names using ``fullmatch``. Regexes and lists can
 explicitly select device-specific patterns and leave the builder device unchanged.
 See :mod:`onnx_light.onnx_core.optimization` for the selector and migration details.

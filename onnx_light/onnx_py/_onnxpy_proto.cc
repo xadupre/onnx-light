@@ -3454,7 +3454,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(RewritingProto, rewrites)
       .PYFIELD(RewritingProto, required_opset_imports)
       .PYFIELD(RewritingProto, metadata_props)
-      .PYFIELD(RewritingProto, added_functions);
+      .PYFIELD(RewritingProto, added_functions)
+      .PYFIELD(RewritingProto, replaced_function_ids);
   PYADD_PROTO_SERIALIZATION(RewritingProto);
   nb_RewritingProto
       .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })

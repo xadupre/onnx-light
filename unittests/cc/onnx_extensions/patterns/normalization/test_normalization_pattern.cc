@@ -150,6 +150,54 @@ TEST(LayerNormalizationPattern, FusesExactVarianceGraph) {
   EXPECT_EQ(builder.Initializers()[4].dims()[0], 3);
 }
 
+TEST(LayerNormalizationPattern, PreservesFunctionEpsilonAttributeReferences) {
+  core::builder::GraphBuilder definition("Parameterized", SchemaLookup(), {{"", 23}});
+  definition.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddAxes(definition, "axes", {-1});
+  AddFloatInitializer(definition, "two", {1}, {2.0F});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &epsilon = attributes.add();
+  epsilon.set_name("value_float");
+  epsilon.set_type(AttributeProto::FLOAT);
+  epsilon.set_ref_attr_name("epsilon");
+  definition.MakeNode("Constant", {}, {"epsilon"}, "", "", attributes);
+  definition.MakeNode("ReduceMean", {"x", "axes"}, {"mean"}, "", "", Attributes({{"keepdims", 1}}));
+  definition.MakeNode("Sub", {"x", "mean"}, {"centered"});
+  definition.MakeNode("Pow", {"centered", "two"}, {"squared"});
+  definition.MakeNode("ReduceMean", {"squared", "axes"}, {"variance"});
+  definition.MakeNode("Add", {"variance", "epsilon"}, {"variance_epsilon"});
+  definition.MakeNode("Sqrt", {"variance_epsilon"}, {"standard_deviation"});
+  definition.MakeNode("Div", {"centered", "standard_deviation"}, {"y"});
+  definition.MakeOutput("y");
+  FunctionProto proto = definition.ToFunction("test.norm");
+  proto.add_attribute("epsilon");
+
+  ModelProto model;
+  model.mutable_graph()->set_name("g");
+  model.add_opset("", 23);
+  model.add_opset("test.norm", 1);
+  model.ref_functions().push_back(std::move(proto));
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  auto &function = builder.LocalFunction("Parameterized");
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeNode("Parameterized", {"X"}, {"Y"}, "test.norm", "",
+                   Attributes({}, {{"epsilon", 1e-4F}}));
+  builder.MakeOutput("Y");
+  core::builder::GraphGraph graph(function);
+  onnx_patterns::LayerNormalizationPattern pattern;
+  const auto *variance = graph.NodeBefore("variance");
+  ASSERT_NE(variance, nullptr);
+  EXPECT_EQ(pattern.Match(graph, *variance).pattern, nullptr);
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::LayerNormalizationPattern>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  const auto plan = optimizer.Optimize();
+  EXPECT_TRUE(plan.added_functions().empty());
+  for (const auto &node : function.Nodes())
+    EXPECT_NE(node.op_type(), "LayerNormalization");
+}
+
 TEST(LayerNormalizationPattern, RejectsImplicitMeanKeepdims) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);

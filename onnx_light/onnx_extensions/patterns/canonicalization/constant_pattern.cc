@@ -33,7 +33,7 @@ bool IsDefaultConstant(const NodeProto &node) {
 TensorProto CanonicaliseInitializer(const TensorProto &value, const std::string &name) {
   if (static_cast<TensorProto::DataType>(value.data_type()) == TensorProto::DataType::STRING ||
       value.has_raw_data()) {
-    TensorProto proto = value;
+    TensorProto proto = utils::CopyWithSharedTensorStorage(value);
     proto.set_name(name);
     return proto;
   }
@@ -57,6 +57,10 @@ core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::Gr
   if (!IsDefaultConstant(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Constant");
   }
+  if (graph.Builder().Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey("", "Identity"))) {
+    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
+  }
   if (graph.GetComputedConstant(candidate.output()[0].value()) == nullptr) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");
   }
@@ -70,11 +74,11 @@ ConstantToInitializerPattern::Apply(core::builder::GraphGraph &graph,
     throw BuilderError("ConstantToInitializerPattern::Apply expects one Constant node.");
   }
   const NodeProto &node = *nodes[0];
-  const TensorProto *value = graph.GetComputedConstant(node.output()[0].value());
-  if (value == nullptr) {
+  if (Match(graph, node).pattern != this) {
     throw BuilderError(
-        "ConstantToInitializerPattern::Apply received a non-materialisable Constant.");
+        "ConstantToInitializerPattern::Apply received an unsafe or non-materialisable Constant.");
   }
+  const TensorProto *value = graph.GetComputedConstant(node.output()[0].value());
   core::builder::GraphBuilder &builder = graph.Builder();
   const std::string base = node.output()[0].value() + "_cst2init";
   std::string init_name = base;

@@ -4,6 +4,8 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_extensions/patterns/attention/attention_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
@@ -138,18 +140,24 @@ void ExpectTopologicalGraph(const core::builder::GraphBuilder &builder) {
   }
 }
 
-template <typename Pattern> void OptimizeAndVerify(core::builder::GraphBuilder &builder) {
+template <typename Pattern>
+void OptimizeAndVerify(core::builder::GraphBuilder &builder, bool expect_rewrite = true) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<Pattern>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  EXPECT_FALSE(optimizer.Optimize().rewrites().empty());
+  const auto plan = optimizer.Optimize();
+  EXPECT_EQ(plan.rewrites().empty(), !expect_rewrite);
+  if (!expect_rewrite) {
+    EXPECT_TRUE(plan.added_functions().empty());
+  }
   ExpectTopologicalGraph(builder);
 }
 
 core::builder::GraphBuilder
 MakeCosSinBuilder(TensorProto::DataType position_cast = TensorProto::DataType::FLOAT,
                   core::symbolic::TensorType weight_type = core::symbolic::TensorType::kFloat,
-                  bool late_weight = false, bool shared_reshape = false) {
+                  bool late_weight = false, bool shared_reshape = false,
+                  TensorProto::DataType cache_cast = TensorProto::DataType::FLOAT16) {
   core::builder::GraphBuilder builder("cos_sin", SchemaLookup());
   builder.SetOpsetVersion("", 18);
   builder.MakeInput("A", core::symbolic::TensorType::kInt64, Shape({1}));
@@ -172,13 +180,12 @@ MakeCosSinBuilder(TensorProto::DataType position_cast = TensorProto::DataType::F
   }
   builder.MakeNode("Mul", {"weights", "reshaped"}, {"weighted"});
   builder.MakeNode("Cos", {"weighted"}, {"cos"});
-  builder.MakeNode("Cast", {"cos"}, {"cos_cache"}, "", "",
-                   IntAttr("to", TensorProto::DataType::FLOAT16));
+  builder.MakeNode("Cast", {"cos"}, {"cos_cache"}, "", "", IntAttr("to", cache_cast));
   builder.MakeNode("Sin", {"weighted"}, {"sin"});
-  builder.MakeNode("Cast", {"sin"}, {"sin_cache"}, "", "",
-                   IntAttr("to", TensorProto::DataType::FLOAT16));
-  builder.MakeOutput("cos_cache", core::symbolic::TensorType::kFloat16, Shape({1, 3, 8}));
-  builder.MakeOutput("sin_cache", core::symbolic::TensorType::kFloat16, Shape({1, 3, 8}));
+  builder.MakeNode("Cast", {"sin"}, {"sin_cache"}, "", "", IntAttr("to", cache_cast));
+  const auto cache_type = core::symbolic::DataTypeToTensorType(cache_cast);
+  builder.MakeOutput("cos_cache", cache_type, Shape({1, 3, 8}));
+  builder.MakeOutput("sin_cache", cache_type, Shape({1, 3, 8}));
   return builder;
 }
 
@@ -638,6 +645,48 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
   EXPECT_EQ(replacement[0].op_type().value(), "ShiftedCausalMask");
   EXPECT_EQ(replacement[0].input()[2].value(), "shift");
   EXPECT_TRUE(HasFunction(builder, "ShiftedCausalMask"));
+  const auto with_helper = builder.ToModel();
+  for (const bool fold_constants : {false, true}) {
+    for (const bool conflicting : {false, true}) {
+      SCOPED_TRACE(fold_constants);
+      SCOPED_TRACE(conflicting);
+      auto model = utils::CopyWithSharedTensorStorage(with_helper);
+      if (conflicting) {
+        bool changed = false;
+        for (auto &function : model.ref_functions())
+          for (auto &node : function.ref_node())
+            if (node.op_type() == "Constant" && node.output(0) == "zero") {
+              node.ref_attribute()[0].ref_t() = MakeInitializer<int64_t>("zero", {}, {2});
+              changed = true;
+            }
+        ASSERT_TRUE(changed);
+      }
+      core::builder::GraphBuilder mixed(model, SchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::ConstantToInitializerPattern>());
+      patterns.push_back(std::make_unique<onnx_patterns::FunctionCausalMaskPattern>());
+      core::builder::GraphGraph mixed_graph(mixed, std::move(patterns));
+      mixed_graph.Canonicalize();
+      const auto before = mixed.BuildGraph().SerializeAsString();
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = fold_constants;
+      if (conflicting) {
+        EXPECT_THROW(mixed_graph.Optimize(-1, nullptr, folding), core::builder::BuilderError);
+        EXPECT_EQ(mixed.BuildGraph().SerializeAsString(), before);
+      } else {
+        EXPECT_FALSE(mixed_graph.Optimize(-1, nullptr, folding).rewrites().empty());
+        ASSERT_EQ(mixed.Nodes().size(), 1u);
+        EXPECT_EQ(mixed.Nodes()[0].op_type(), "ShiftedCausalMask");
+        EXPECT_EQ(mixed.LocalFunctions().size(), 1u);
+        EXPECT_EQ(mixed.LocalFunction("ShiftedCausalMask").Initializers().size(), 4u);
+        ExpectTopologicalGraph(mixed);
+        EXPECT_NO_THROW(mixed_graph.Optimize(-1, nullptr, folding));
+      }
+    }
+  }
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("ShiftedCausalMask").HasLocalFunction("ShiftedCausalMask"));
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);
@@ -687,6 +736,8 @@ TEST(FunctionCausalMaskPattern, PreservesSharedRangeAndItsProducers) {
   EXPECT_EQ(builder.Nodes()[2].output()[0].value(), "r2");
   EXPECT_EQ(builder.Nodes()[3].op_type().value(), "Identity");
   EXPECT_EQ(builder.Nodes()[4].op_type().value(), "CausalMask");
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("CausalMask").HasLocalFunction("CausalMask"));
 }
 
 TEST(FunctionCausalMaskMulAddPattern, CreatesFunctionAndRejectsNonUnitStep) {
@@ -717,6 +768,9 @@ TEST(FunctionCausalMaskMulAddPattern, CreatesFunctionAndRejectsNonUnitStep) {
   EXPECT_EQ(replacement[0].op_type().value(), "CausalMaskMulAdd");
   EXPECT_EQ(replacement[0].input()[2].value(), "N");
   EXPECT_TRUE(HasFunction(builder, "CausalMaskMulAdd"));
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskMulAddPattern>(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskMulAddPattern>(builder, false);
+  EXPECT_FALSE(builder.LocalFunction("CausalMaskMulAdd").HasLocalFunction("CausalMaskMulAdd"));
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);
@@ -785,6 +839,80 @@ TEST(FunctionCosSinCachePattern, CreatesTypedFunctionAndRejectsMismatchedCasts) 
   }
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[7]).pattern, nullptr);
+}
+
+TEST(FunctionCosSinCachePattern, ReusesHelperRewrittenByCastPatternWithoutAcceptingConflicts) {
+  auto source = MakeCosSinBuilder(TensorProto::FLOAT, core::symbolic::TensorType::kFloat, false,
+                                  false, TensorProto::FLOAT);
+  core::builder::GraphGraph source_graph(source);
+  onnx_patterns::FunctionCosSinCachePattern pattern;
+  const auto match = pattern.Match(source_graph, source.Nodes()[7]);
+  ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+  pattern.Apply(source_graph, match.nodes);
+  const auto with_helper = source.ToModel();
+
+  for (bool conflicting : {false, true}) {
+    SCOPED_TRACE(conflicting);
+    auto model = utils::CopyWithSharedTensorStorage(with_helper);
+    ASSERT_EQ(model.functions().size(), 1u);
+    auto &helper = model.ref_functions()[0];
+    for (std::size_t index = 0; index < helper.input().size(); ++index) {
+      auto input = model.graph().input(index);
+      input.set_name(helper.input(index));
+      auto found = std::find_if(helper.ref_value_info().begin(), helper.ref_value_info().end(),
+                                [&](const auto &info) { return info.name() == input.name(); });
+      if (found == helper.ref_value_info().end())
+        helper.ref_value_info().push_back(std::move(input));
+      else
+        *found = std::move(input);
+    }
+    if (conflicting)
+      for (auto &node : helper.ref_node())
+        if (node.op_type() == "Cos")
+          node.set_op_type("Sin");
+    core::builder::GraphBuilder builder(model, SchemaLookup());
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::FunctionCosSinCachePattern>(0));
+    patterns.push_back(std::make_unique<onnx_patterns::CastPattern>(1));
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    optimizer.Canonicalize();
+    const auto before = builder.BuildGraph();
+    if (conflicting) {
+      EXPECT_THROW(optimizer.Optimize(), core::builder::BuilderError);
+      EXPECT_TRUE(builder.BuildGraph().Equals(before));
+      EXPECT_EQ(optimizer.FunctionBeforeOptimization("intermediate", "CosSinCacheWithRange_to1"),
+                nullptr);
+      continue;
+    }
+    const auto plan = optimizer.Optimize();
+    ASSERT_EQ(builder.Nodes().size(), 1u);
+    EXPECT_EQ(builder.Nodes()[0].op_type(), "CosSinCacheWithRange_to1");
+    ASSERT_EQ(plan.replaced_function_ids().size(), 1u);
+    const auto &optimized_helper = builder.LocalFunction("CosSinCacheWithRange_to1");
+    EXPECT_EQ(std::count_if(optimized_helper.Nodes().begin(), optimized_helper.Nodes().end(),
+                            [](const auto &node) { return node.op_type() == "Cast"; }),
+              1);
+    const auto optimized = builder.ToModel();
+    EXPECT_NO_THROW(VerifyModel(optimized));
+    auto replayed = core::builder::GraphBuilder(model, SchemaLookup()).ApplyRewritings(plan);
+    const auto replayed_model = replayed.ToModel();
+    std::string difference;
+    EXPECT_TRUE(replayed_model.graph().Equals(optimized.graph(), &difference)) << difference;
+    EXPECT_EQ(replayed.OpsetVersions(), builder.OpsetVersions());
+    ASSERT_EQ(replayed_model.functions().size(), optimized.functions().size());
+    EXPECT_EQ(replayed.LocalFunction("CosSinCacheWithRange_to1").OpsetVersions(),
+              optimized_helper.OpsetVersions());
+    auto replayed_helper = replayed_model.functions(0);
+    auto expected_helper = optimized.functions(0);
+    EXPECT_EQ(replayed_helper.opset_import().size(), expected_helper.opset_import().size());
+    replayed_helper.ref_opset_import().clear();
+    expected_helper.ref_opset_import().clear();
+    EXPECT_TRUE(replayed_helper.Equals(expected_helper, &difference)) << difference;
+    EXPECT_EQ(optimizer.NodeBefore("cos_cache"), &builder.Nodes()[0]);
+    EXPECT_EQ(optimizer.FunctionBeforeOptimization("intermediate", "CosSinCacheWithRange_to1"),
+              nullptr);
+    EXPECT_NO_THROW(optimizer.Optimize());
+  }
 }
 
 TEST(FunctionAttentionPattern, CreatesLocalAttentionAndRejectsPositiveInfinity) {

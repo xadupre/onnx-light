@@ -96,6 +96,9 @@ core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
   if (target_type != graph.GetType(candidate.input()[0].value())) {
     return NoMatch(candidate, "the input and target element types differ");
   }
+  if (graph.Builder().Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
+    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
@@ -111,6 +114,8 @@ CastPattern::Apply(core::builder::GraphGraph &graph,
       target_type != graph.GetType(cast.input()[0].value())) {
     throw core::builder::BuilderError("CastPattern::Apply received a non-redundant Cast.");
   }
+  if (Match(graph, cast).pattern != this)
+    throw BuilderError("CastPattern::Apply received an unsafe Identity replacement.");
   utils::RepeatedProtoField<NodeProto> replacements;
   const std::string name = "CastPattern--" + cast.name().value();
   NodeProto replacement =
@@ -166,10 +171,15 @@ core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &gra
   if (!CastTarget(candidate, final_type)) {
     return NoMatch(candidate, "the second Cast 'to' attribute is missing or invalid");
   }
-  if (OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
-      TensorType::kUndefined) {
+  const TensorType input_type = graph.GetType(inner->input()[0].value());
+  const TensorType replacement_type = OneCastType(input_type, middle_type, final_type);
+  if (replacement_type == TensorType::kUndefined) {
     return NoMatch(candidate, "combining the Cast operations would change the result");
   }
+  if (replacement_type == input_type &&
+      graph.Builder().Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
+    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   return core::builder::MatchResult{
       this,
       {inner, &candidate},
@@ -196,6 +206,9 @@ CastCastPattern::Apply(core::builder::GraphGraph &graph,
   if (replacement_type == TensorType::kUndefined) {
     throw BuilderError("CastCastPattern::Apply received an unsafe Cast match.");
   }
+  const auto verified = Match(graph, outer);
+  if (verified.pattern != this || verified.nodes != nodes)
+    throw BuilderError("CastCastPattern::Apply received an unsafe replacement.");
 
   utils::RepeatedProtoField<NodeProto> replacements;
   if (graph.IsUsedMoreThanOnce(inner.output()[0].value())) {

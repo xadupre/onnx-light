@@ -350,6 +350,64 @@ class TestPatternSelection(ExtTestCase):
 
 
 class TestPatternOptimization(ExtTestCase):
+    def test_constant_identity_folding_shares_raw_storage_and_honors_limit(self):
+        values = numpy.array([1, 2], dtype=numpy.float32)
+        builder = optim.GraphBuilder("sharing", opsets=18)
+        builder.make_initializer(onh.from_array(values, "weight"))
+        builder.make_node("Identity", ["weight"], ["Y"])
+        builder.make_output("Y")
+        canonical = builder.to_model()
+        pointer = numpy.from_dlpack(canonical.graph.initializer[0]).ctypes.data
+        options = ConstantFoldingOptions()
+        options.max_element_count = 1
+        self.assertEqual(builder.constant_fold(options), 0)
+        self.assertEqual(len(builder.to_model().graph.node), 1)
+        options.max_element_count = -1
+        self.assertEqual(builder.constant_fold(options), 1)
+        folded = next(t for t in builder.to_model().graph.initializer if t.name == "Y")
+        actual = numpy.from_dlpack(folded)
+        self.assertEqual(actual.ctypes.data, pointer)
+        self.assertEqualArray(actual, values)
+
+    def test_python_pattern_explicitly_supports_local_function_calls(self):
+        class LocalNegNegPattern(NegNegPattern):
+            def supports_local_functions(self, node):
+                return node.domain == "local"
+
+        model = _double_neg_model()
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        model.functions.append(
+            oh.make_function(
+                "local",
+                "Neg",
+                ["X"],
+                ["Y"],
+                [oh.make_node("Neg", ["X"], ["Y"])],
+                [oh.make_opsetid("", 18)],
+            )
+        )
+        for node in model.graph.node:
+            node.domain = "local"
+
+        for pattern, expected in (
+            (NegNegPattern(), ["Neg", "Neg"]),
+            (LocalNegNegPattern(), ["Identity"]),
+        ):
+            with self.subTest(pattern=type(pattern).__name__):
+                builder = optim.GraphBuilder(model)
+                optim.GraphGraph(builder, [pattern]).optimize()
+                self.assertEqual(
+                    [node.op_type for node in builder.to_onnx().graph.node], expected
+                )
+
+        model.functions[0].domain = ""
+        model.functions[0].node[0].op_type = "Identity"
+        for node in model.graph.node:
+            node.domain = ""
+        builder = optim.GraphBuilder(model)
+        optim.GraphGraph(builder, [LocalNegNegPattern()]).optimize()
+        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Neg", "Neg"])
+
     def test_stale_batched_match_is_revalidated_before_apply(self):
         class OneShotNegNegPattern(NegNegPattern):
             def __init__(self):

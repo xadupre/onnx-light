@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/patterns/attention/attention_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -20,6 +21,7 @@
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/common/scoped_resource.h"
@@ -28,9 +30,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <thread>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -48,6 +52,14 @@ core::builder::GraphBuilder::SchemaLookupFn SchemaLookup() {
 core::symbolic::SymShape Shape() {
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
+  return shape;
+}
+
+core::symbolic::SymShape Shape(std::initializer_list<int64_t> dimensions) {
+  core::symbolic::SymShape shape;
+  for (int64_t dimension : dimensions) {
+    shape.PushBack(core::symbolic::SymDim(dimension));
+  }
   return shape;
 }
 
@@ -295,6 +307,34 @@ public:
       core::runtime::RegisterGlobalCustomKernelFactory("", "Identity", std::move(previous_));
     else
       core::runtime::UnregisterGlobalCustomKernel("", "Identity");
+  }
+
+private:
+  core::runtime::NodeKernelFn previous_;
+};
+
+class ScopedConstantKernel {
+public:
+  ScopedConstantKernel() {
+    const auto &kernels = core::runtime::GlobalCustomKernels();
+    const auto existing = kernels.find(kDefaultOnnxDomain + ":Constant");
+    if (existing != kernels.end())
+      previous_ = existing->second;
+    core::runtime::RegisterGlobalCustomKernel(
+        "", "Constant", [](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+          ASSERT_EQ(node.attribute_size(), 1);
+          const auto &value = node.attribute(0);
+          ASSERT_EQ(value.name(), "value");
+          ASSERT_TRUE(value.has_t());
+          runtime.Set(node.output(0).value(), core::runtime::TensorFromProto(value.t()));
+        });
+  }
+
+  ~ScopedConstantKernel() {
+    if (previous_)
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Constant", std::move(previous_));
+    else
+      core::runtime::UnregisterGlobalCustomKernel("", "Constant");
   }
 
 private:
@@ -2600,6 +2640,638 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   invalid.ref_rewrites()[0].ref_graph_path()[1] = "missing";
   EXPECT_THROW(builder.UndoRewritings(invalid), core::builder::BuilderError);
   EXPECT_EQ(builder.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
+}
+
+TEST(PatternOptimization, ReportsMixedGraphAndFunctionRewritesExactlyOnce) {
+  for (const int max_iter : {0, 1, -1}) {
+    SCOPED_TRACE(max_iter);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+    AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+    AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+    builder.MakeOutput("y");
+    auto &body = builder.MakeSubgraph("body");
+    AddCast(body, "x", "body_middle", TensorProto::DataType::FLOAT);
+    AddCast(body, "body_middle", "out", TensorProto::DataType::FLOAT);
+    body.MakeOutput("out");
+    AddSubgraphReference(builder, "body", "body", "body_out");
+    builder.MakeOutput("body_out");
+    for (auto *scope : {&builder, &body}) {
+      auto &function = scope->MakeLocalFunction(
+          scope == &builder ? "RootFunction" : "NestedFunction", "test.pattern");
+      function.MakeInput("input", core::symbolic::TensorType::kFloat16, Shape());
+      AddCast(function, "input", "middle", TensorProto::DataType::FLOAT);
+      AddCast(function, "middle", "output", TensorProto::DataType::FLOAT);
+      function.MakeOutput("output");
+    }
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<onnx_patterns::CastCastPattern>()});
+    core::builder::OptimizationReport report;
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    const auto plan = graph.Optimize(max_iter, &report, folding, false);
+    EXPECT_EQ(report.rewrites, max_iter == 0 ? 0u : 4u);
+    EXPECT_EQ(plan.rewrites().size(), max_iter == 0 ? 0u : 2u);
+    ASSERT_EQ(report.subgraphs.size(), 3u);
+    EXPECT_EQ(report.subgraphs[0].graph_path, std::vector<std::string>({"body"}));
+    EXPECT_EQ(report.subgraphs[0].rewrites, max_iter == 0 ? 0u : 2u);
+    EXPECT_EQ(report.subgraphs[1].graph_path,
+              std::vector<std::string>({"body", "function:NestedFunction"}));
+    EXPECT_EQ(report.subgraphs[1].rewrites, max_iter == 0 ? 0u : 1u);
+    EXPECT_EQ(report.subgraphs[2].graph_path, std::vector<std::string>({"function:RootFunction"}));
+    EXPECT_EQ(report.subgraphs[2].rewrites, max_iter == 0 ? 0u : 1u);
+  }
+}
+
+TEST(PatternOptimization, OptimizesAndReplaysLocalFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.SetOpsetVersion("test.pattern", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+
+  core::builder::GraphBuilder &function = builder.MakeLocalFunction("CastPair", "test.pattern");
+  function.MakeInput("input", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(function, "input", "middle", TensorProto::DataType::FLOAT);
+  AddCast(function, "middle", "output", TensorProto::DataType::FLOAT);
+  function.MakeOutput("output");
+  builder.MakeNode("CastPair", {"x"}, {"y"}, "test.pattern");
+  builder.MakeOutput("y");
+
+  const ModelProto original = builder.ToModel();
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+  const RewritingProto plan = graph.Optimize(-1, &report);
+
+  EXPECT_TRUE(plan.rewrites().empty());
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(plan.replaced_function_ids().size(), 1u);
+  EXPECT_EQ(plan.replaced_function_ids(0), "test.pattern:CastPair");
+  ASSERT_EQ(plan.added_functions(0).node().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).node(0).op_type().value(), "Cast");
+  ASSERT_EQ(builder.LocalFunction("CastPair").Nodes().size(), 1u);
+  EXPECT_EQ(builder.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
+  EXPECT_EQ(report.patterns[0].matches, 1u);
+  EXPECT_EQ(report.rewrites, 1u);
+
+  core::builder::GraphBuilder replayed(original, SchemaLookup());
+  RewritingProto serialized;
+  ASSERT_TRUE(serialized.ParseFromString(plan.SerializeAsString()));
+  const core::builder::GraphBuilder replayed_optimized = replayed.ApplyRewritings(serialized);
+  ASSERT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes().size(), 1u);
+  EXPECT_EQ(replayed_optimized.LocalFunction("CastPair").Nodes()[0].op_type().value(), "Cast");
+
+  auto invalid = serialized;
+  invalid.ref_replaced_function_ids().clear();
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.add_replaced_function_ids("test.pattern:Missing");
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.add_replaced_function_ids("test.pattern:CastPair");
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  invalid.ref_added_functions().clear();
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+  invalid = serialized;
+  auto conflict = serialized.added_functions(0);
+  conflict.ref_node()[0].set_op_type("Neg");
+  invalid.ref_added_functions().push_back(std::move(conflict));
+  EXPECT_THROW(replayed.ApplyRewritings(invalid), core::builder::BuilderError);
+
+  const core::builder::GraphBuilder undone = builder.UndoRewritings(plan);
+  ASSERT_EQ(undone.LocalFunction("CastPair").Nodes().size(), 2u);
+}
+
+TEST(PatternOptimization, NormalizesFunctionReplacementsInOneBatch) {
+  std::size_t lookups = 0;
+  const auto schemas = SchemaLookup();
+  const auto lookup = [&](const std::string &name) {
+    ++lookups;
+    return schemas(name);
+  };
+  core::builder::GraphBuilder builder("g", lookup, {{"", 18}, {"test.pattern", 1}});
+  constexpr std::size_t count = 8;
+  for (std::size_t index = 0; index < count; ++index) {
+    auto &function = builder.MakeLocalFunction("F" + std::to_string(index), "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    function.MakeNode("Neg", {"X"}, {"middle"});
+    function.MakeNode("Neg", {"middle"}, {"Y"});
+    function.MakeOutput("Y");
+  }
+  const auto original = builder.ToModel();
+  core::builder::GraphBuilder source(original, lookup);
+  RewritingProto plan;
+  for (const auto &function : original.functions()) {
+    auto replacement = function;
+    replacement.clr_node();
+    replacement.add_node("Identity", {"X"}, {"Y"});
+    auto &values = replacement.ref_value_info();
+    for (auto it = values.begin(); it != values.end();) {
+      if (it->name() == "middle")
+        it = values.erase(it);
+      else
+        ++it;
+    }
+    plan.add_replaced_function_ids("test.pattern:" + function.name().value());
+    plan.ref_added_functions().push_back(std::move(replacement));
+  }
+  lookups = 0;
+  const auto result = source.ApplyRewritings(plan);
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto &function = result.LocalFunction("F" + std::to_string(index));
+    ASSERT_EQ(function.Nodes().size(), 1u);
+    EXPECT_EQ(function.Nodes()[0].op_type(), "Identity");
+  }
+  EXPECT_LE(lookups, 4 * count);
+}
+
+TEST(PatternOptimization, FunctionMatchersPreserveOverriddenPrimitivesAndSecondaryNodes) {
+  for (bool secondary : {false, true}) {
+    SCOPED_TRACE(secondary);
+    core::builder::GraphBuilder definition(secondary ? "Relu" : "Cast", SchemaLookup(), {{"", 18}});
+    definition.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    definition.MakeNode(secondary ? "Neg" : "Relu", {"X"}, {"Y"});
+    definition.MakeOutput("Y");
+    FunctionProto override = definition.ToFunction("");
+    if (!secondary)
+      override.add_attribute("to");
+
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+    auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    if (secondary) {
+      function.MakeInitializer(MakeInitializer<float>("minimum", {}, {0.0f}));
+      function.MakeNode("Relu", {"X"}, {"middle"});
+      function.MakeNode("Clip", {"middle", "minimum"}, {"Y"});
+    } else {
+      AddCast(function, "X", "middle", TensorProto::FLOAT);
+      AddCast(function, "middle", "Y", TensorProto::FLOAT);
+    }
+    function.MakeOutput("Y");
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    builder.MakeNode("Wrapper", {"x"}, {"y"}, "test.pattern");
+    builder.MakeOutput("y");
+    ModelProto model = builder.ToModel();
+    model.ref_functions().push_back(std::move(override));
+    std::swap(model.ref_functions()[0], model.ref_functions()[1]);
+    core::builder::GraphBuilder imported(model, SchemaLookup());
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    if (secondary)
+      patterns.push_back(std::make_unique<onnx_patterns::ReluClipFusionPattern>());
+    else
+      patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+    core::builder::GraphGraph optimizer(imported, std::move(patterns));
+    const RewritingProto plan = optimizer.Optimize();
+    EXPECT_TRUE(plan.rewrites().empty());
+    EXPECT_TRUE(plan.added_functions().empty());
+    const auto &optimized_function = imported.LocalFunction("Wrapper");
+    const auto &nodes = optimized_function.Nodes();
+    ASSERT_EQ(nodes.size(), secondary ? 3u : 2u);
+    EXPECT_EQ(nodes[nodes.size() - 2].op_type(), secondary ? "Relu" : "Cast");
+    EXPECT_EQ(nodes[nodes.size() - 1].op_type(), secondary ? "Clip" : "Cast");
+  }
+}
+
+TEST(PatternOptimization, CastMatchersRejectIntroducedIdentityOverrides) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (bool pair : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(pair);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+      auto &identity = builder.MakeLocalFunction("Identity", domain);
+      identity.MakeInput("X", core::symbolic::TensorType::kFloat16, Shape());
+      identity.MakeNode("Neg", {"X"}, {"Y"});
+      identity.MakeOutput("Y");
+      auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+      function.MakeInput("X", core::symbolic::TensorType::kFloat16, Shape());
+      if (pair)
+        AddCast(function, "X", "middle", TensorProto::FLOAT);
+      AddCast(function, pair ? "middle" : "X", "Y", TensorProto::FLOAT16);
+      function.MakeOutput("Y");
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+      builder.MakeNode("Wrapper", {"x"}, {"y"}, "test.pattern");
+      builder.MakeOutput("y");
+      const auto original = builder.ToModel();
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::CastPattern>());
+      patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+      core::builder::GraphGraph optimizer(builder, std::move(patterns));
+      const auto plan = optimizer.Optimize();
+      EXPECT_TRUE(plan.added_functions().empty());
+      EXPECT_TRUE(plan.rewrites().empty());
+      EXPECT_TRUE(builder.ToModel().Equals(original));
+
+      core::builder::GraphGraph function_graph(function);
+      onnx_patterns::CastPattern cast;
+      onnx_patterns::CastCastPattern cast_pair;
+      if (pair)
+        EXPECT_THROW(cast_pair.Apply(function_graph, {&function.Nodes()[0], &function.Nodes()[1]}),
+                     core::builder::BuilderError);
+      else
+        EXPECT_THROW(cast.Apply(function_graph, {&function.Nodes()[0]}),
+                     core::builder::BuilderError);
+    }
+  }
+}
+
+TEST(PatternOptimization, ConstantFunctionOutputPreservesIntroducedIdentityOverrides) {
+  ScopedConstantKernel kernel;
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    SCOPED_TRACE(domain);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+    auto &identity = builder.MakeLocalFunction("Identity", domain);
+    identity.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    identity.MakeNode("Neg", {"X"}, {"Y"});
+    identity.MakeOutput("Y");
+    auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &value = attributes.add();
+    value.set_name("value");
+    value.set_type(AttributeProto::TENSOR);
+    *value.mutable_t() = MakeInitializer<float>("", {2}, {1, 2});
+    function.MakeNode("Constant", {}, {"Y"}, "", "", attributes);
+    function.MakeOutput("Y");
+    builder.MakeNode("Wrapper", {}, {"y"}, "test.pattern");
+    builder.MakeOutput("y");
+    const ModelProto original = builder.ToModel();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::ConstantToInitializerPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    const auto plan = graph.Optimize(-1, nullptr, folding);
+    EXPECT_TRUE(plan.rewrites().empty());
+    EXPECT_TRUE(plan.added_functions().empty());
+    EXPECT_TRUE(function.Initializers().empty());
+    for (const auto &model : {original, builder.ToModel()}) {
+      const auto outputs = core::runtime::RunModel(model, {});
+      ASSERT_EQ(outputs.size(), 1u);
+      ASSERT_EQ(outputs[0].element_count(), 2);
+      EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], 1);
+      EXPECT_FLOAT_EQ(outputs[0].AsFloat()[1], 2);
+    }
+  }
+}
+
+TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("test.pattern", 1);
+  FunctionProto &function = *model.add_functions();
+  function.set_name("TransposePair");
+  function.set_domain("test.pattern");
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_attribute("perm");
+  function.add_opset("", 18);
+  for (const auto &[input, output] :
+       {std::pair<const char *, const char *>{"X", "middle"}, {"middle", "Y"}}) {
+    NodeProto &transpose = function.add_node("Transpose", {input}, {output});
+    AttributeProto &perm = *transpose.add_attribute();
+    perm.set_name("perm");
+    perm.set_type(AttributeProto::AttributeType::INTS);
+    perm.set_ref_attr_name("perm");
+  }
+  ValueInfoProto &input = *function.add_value_info();
+  input.set_name("X");
+  input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  for (int64_t dimension : {2, 3, 4}) {
+    input.mutable_type()->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(
+        dimension);
+  }
+  model.mutable_graph()->set_name("g");
+  NodeProto &call = model.mutable_graph()->add_node("TransposePair", {"x"}, {"y"}, "test.pattern");
+  AttributeProto &permutation = *call.add_attribute();
+  permutation.set_name("perm");
+  permutation.set_type(AttributeProto::AttributeType::INTS);
+  for (int64_t value : {1, 2, 0}) {
+    permutation.add_ints(value);
+  }
+  ValueInfoProto &graph_input = *model.mutable_graph()->add_input();
+  graph_input.set_name("x");
+  graph_input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  for (int64_t dimension : {2, 3, 4}) {
+    graph_input.mutable_type()->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(
+        dimension);
+  }
+  model.mutable_graph()->add_output()->set_name("y");
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+
+  const RewritingProto plan = optimizer.Optimize();
+  EXPECT_TRUE(plan.rewrites().empty());
+  EXPECT_TRUE(plan.added_functions().empty());
+  EXPECT_EQ(builder.LocalFunction("TransposePair").Nodes().size(), 2u);
+}
+
+TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.SetOpsetVersion("test.pattern", 1);
+  const auto integer_attributes =
+      [](std::initializer_list<std::pair<std::string, int64_t>> values) {
+        utils::RepeatedProtoField<AttributeProto> attributes;
+        for (const auto &[name, value] : values) {
+          AttributeProto &attribute = attributes.add();
+          attribute.set_name(name);
+          attribute.set_type(AttributeProto::AttributeType::INT);
+          attribute.set_i(value);
+        }
+        return attributes;
+      };
+  for (const auto &name : {"Parent", "OtherParent"}) {
+    auto &function = builder.MakeLocalFunction(name, "test.pattern");
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+    function.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    function.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    function.MakeNode("Split", {"X"}, {"first", "second"}, "", "",
+                      integer_attributes({{"axis", -1}, {"num_outputs", 2}}));
+    function.MakeNode("Neg", {"second"}, {"negative"});
+    function.MakeNode("Concat", {"negative", "first"}, {"rotated"}, "", "",
+                      integer_attributes({{"axis", -1}}));
+    function.MakeNode("Mul", {"rotated", "sin"}, {"rotated_sin"});
+    function.MakeNode("Mul", {"X", "cos"}, {"scaled"});
+    function.MakeNode("Add", {"rotated_sin", "scaled"}, {"Y"});
+    function.MakeOutput("Y");
+  }
+  const ModelProto original = builder.ToModel();
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+  const RewritingProto plan = graph.Optimize(-1, &report);
+
+  ASSERT_EQ(report.rewrites, 2u);
+  ASSERT_EQ(plan.added_functions().size(), 3u);
+  EXPECT_EQ(plan.added_functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(plan.added_functions(1).name().value(), "Parent");
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.functions().size(), 3u);
+  EXPECT_EQ(exported.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(exported.functions(1).name().value(), "Parent");
+  ASSERT_EQ(exported.functions(1).node().size(), 1u);
+  EXPECT_EQ(exported.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(exported.functions(2).name().value(), "OtherParent");
+  ASSERT_EQ(exported.functions(2).node().size(), 1u);
+  EXPECT_EQ(exported.functions(2).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_FALSE(builder.LocalFunction("OtherParent").HasLocalFunction("HalfRotaryEmbedding"));
+
+  core::builder::GraphBuilder replayed(original, SchemaLookup());
+  const auto replayed_optimized = replayed.ApplyRewritings(plan).ToModel();
+  ASSERT_EQ(replayed_optimized.functions().size(), 3u);
+  EXPECT_EQ(replayed_optimized.functions(0).name().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(replayed_optimized.functions(1).name().value(), "Parent");
+  EXPECT_EQ(replayed_optimized.functions(1).node(0).op_type().value(), "HalfRotaryEmbedding");
+  EXPECT_EQ(replayed_optimized.functions(2).node(0).op_type().value(), "HalfRotaryEmbedding");
+
+  const auto undone = builder.UndoRewritings(plan);
+  EXPECT_EQ(undone.LocalFunction("Parent").Nodes().size(), 6u);
+  EXPECT_EQ(undone.LocalFunction("OtherParent").Nodes().size(), 6u);
+  EXPECT_FALSE(undone.LocalFunction("Parent").HasLocalFunction("HalfRotaryEmbedding"));
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> repeated_patterns;
+  repeated_patterns.push_back(
+      std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph repeated(builder, std::move(repeated_patterns));
+  const RewritingProto repeated_plan = repeated.Optimize();
+  EXPECT_TRUE(repeated_plan.added_functions().empty());
+  const auto &helper = builder.LocalFunction("HalfRotaryEmbedding");
+  EXPECT_EQ(helper.Nodes().size(), 6u);
+  EXPECT_FALSE(helper.HasLocalFunction("HalfRotaryEmbedding"));
+
+  for (const auto &[domain, overload] : {std::pair<std::string, std::string>{"intermediate", ""},
+                                         {"other", ""},
+                                         {"intermediate", "variant"}}) {
+    for (const bool conflicting : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(overload);
+      SCOPED_TRACE(conflicting);
+      const bool same_identity = domain == "intermediate" && overload.empty();
+      ModelProto with_helper = original;
+      FunctionProto definition = exported.functions(0);
+      definition.ref_value_info().clear();
+      for (std::size_t index = 0; index < definition.input().size(); ++index) {
+        const auto &parent = original.functions(0);
+        const auto found = std::find_if(
+            parent.value_info().begin(), parent.value_info().end(),
+            [&](const auto &info) { return info.name().value() == parent.input(index).value(); });
+        ASSERT_NE(found, parent.value_info().end());
+        auto input = *found;
+        input.set_name(definition.input(index));
+        definition.ref_value_info().push_back(std::move(input));
+      }
+      definition.set_domain(domain);
+      definition.set_overload(overload);
+      if (conflicting)
+        definition.ref_node().back().set_op_type("Sub");
+      utils::RepeatedProtoField<FunctionProto> functions;
+      functions.push_back(std::move(definition));
+      functions.extend(std::move(with_helper.ref_functions()));
+      with_helper.ref_functions() = std::move(functions);
+      core::builder::GraphBuilder reused(with_helper, SchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> reuse_patterns;
+      reuse_patterns.push_back(
+          std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+      core::builder::GraphGraph reuse_graph(reused, std::move(reuse_patterns));
+      if (conflicting && same_identity) {
+        EXPECT_THROW(reuse_graph.Optimize(), core::builder::BuilderError);
+        EXPECT_EQ(reused.LocalFunction("Parent").Nodes().size(), 6u);
+      } else {
+        const auto reuse_plan = reuse_graph.Optimize();
+        EXPECT_EQ(reuse_plan.added_functions().size(),
+                  same_identity ? 2u : (conflicting ? 3u : 4u));
+        const auto reused_model = reused.ToModel();
+        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 4u);
+        EXPECT_NO_THROW(core::builder::GraphBuilder(reused_model, SchemaLookup()));
+      }
+    }
+  }
+}
+
+void CheckSharedHelperWhenUnusedBranchIsPruned(bool preexisting) {
+  SCOPED_TRACE(preexisting);
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.SetOpsetVersion("other", 1);
+  builder.SetOpsetVersion("test.pattern", 1);
+  auto &name_collision = builder.MakeLocalFunction("HalfRotaryEmbedding", "other");
+  name_collision.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  name_collision.MakeNode("Identity", {"X"}, {"Y"});
+  name_collision.MakeOutput("Y");
+  auto &parent = builder.MakeLocalFunction("Parent", "test.pattern");
+  parent.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+  parent.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  parent.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  parent.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+
+  const auto add_decomposition = [](core::builder::GraphBuilder &scope, const std::string &prefix,
+                                    const std::string &output) {
+    utils::RepeatedProtoField<AttributeProto> split_attributes;
+    AttributeProto &num_outputs = split_attributes.add();
+    num_outputs.set_name("num_outputs");
+    num_outputs.set_type(AttributeProto::AttributeType::INT);
+    num_outputs.set_i(2);
+    AttributeProto &split_axis = split_attributes.add();
+    split_axis.set_name("axis");
+    split_axis.set_type(AttributeProto::AttributeType::INT);
+    split_axis.set_i(-1);
+    scope.MakeNode("Split", {"X"}, {prefix + "first", prefix + "second"}, "", "", split_attributes);
+    scope.MakeNode("Neg", {prefix + "second"}, {prefix + "negative"});
+    utils::RepeatedProtoField<AttributeProto> concat_attributes;
+    AttributeProto &concat_axis = concat_attributes.add();
+    concat_axis.set_name("axis");
+    concat_axis.set_type(AttributeProto::AttributeType::INT);
+    concat_axis.set_i(-1);
+    scope.MakeNode("Concat", {prefix + "negative", prefix + "first"}, {prefix + "rotated"}, "", "",
+                   concat_attributes);
+    scope.MakeNode("Mul", {prefix + "rotated", "sin"}, {prefix + "rotated_sin"});
+    scope.MakeNode("Mul", {"X", "cos"}, {prefix + "scaled"});
+    scope.MakeNode("Add", {prefix + "rotated_sin", prefix + "scaled"}, {output});
+  };
+
+  auto &then_branch = parent.MakeSubgraph("then_branch");
+  add_decomposition(then_branch, "branch_", "branch_output");
+  then_branch.MakeOutput("branch_output");
+  auto &else_branch = parent.MakeSubgraph("else_branch");
+  else_branch.MakeNode("Identity", {"X"}, {"else_output"});
+  else_branch.MakeOutput("else_output");
+  if (preexisting) {
+    auto &helper = then_branch.MakeLocalFunction("HalfRotaryEmbedding_0", "intermediate");
+    helper.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+    helper.MakeInput("cos_cache", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    helper.MakeInput("sin_cache", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    auto split = MakeNode("Split", {"X"}, {"left", "right"});
+    AddAttribute<int64_t>(split, "num_outputs", 2);
+    AddAttribute<int64_t>(split, "axis", -1);
+    helper.ImportNode(split);
+    helper.MakeNode("Neg", {"right"}, {"right_neg"});
+    auto concat = MakeNode("Concat", {"right_neg", "left"}, {"rotated"});
+    AddAttribute<int64_t>(concat, "axis", -1);
+    helper.ImportNode(concat);
+    helper.MakeNode("Mul", {"X", "cos_cache"}, {"x_cos"});
+    helper.MakeNode("Mul", {"rotated", "sin_cache"}, {"rotated_sin"});
+    helper.MakeNode("Add", {"x_cos", "rotated_sin"}, {"Y"});
+    helper.MakeOutput("Y");
+    helper.set_device(core::symbolic::Device::kGPU0);
+  }
+  utils::RepeatedProtoField<AttributeProto> branch_attributes;
+  for (const auto &[name, graph] :
+       {std::pair<const char *, const char *>{"then_branch_ref", "then_branch"},
+        {"else_branch_ref", "else_branch"}}) {
+    AttributeProto &attribute = branch_attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::AttributeType::STRING);
+    attribute.set_s(graph);
+  }
+  parent.MakeNode("If", {"condition"}, {"unused_if_output"}, "", "", branch_attributes);
+  add_decomposition(parent, "", "Y");
+  parent.MakeOutput("Y");
+
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+  builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeNode("Parent", {"condition", "X", "cos", "sin"}, {"Y"}, "test.pattern");
+  builder.MakeOutput("Y");
+
+  const ModelProto original = builder.ToModel();
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  const RewritingProto plan = graph.Optimize();
+
+  if (!preexisting) {
+    EXPECT_TRUE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
+                            [](const auto &function) {
+                              return function.name().value() == "HalfRotaryEmbedding_0" &&
+                                     function.domain().value() == "intermediate";
+                            }));
+  }
+  EXPECT_FALSE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
+                           [](const auto &function) {
+                             return function.name().value() == "HalfRotaryEmbedding_1" &&
+                                    function.domain().value() == "intermediate";
+                           }));
+  const ModelProto exported = builder.ToModel();
+  if (preexisting) {
+    ASSERT_TRUE(builder.HasLocalFunction("HalfRotaryEmbedding_0"));
+    EXPECT_EQ(builder.LocalFunction("HalfRotaryEmbedding_0").device(),
+              core::symbolic::Device::kGPU0);
+  }
+  ASSERT_EQ(exported.graph().node().size(), 1u);
+  EXPECT_EQ(exported.graph().node(0).op_type().value(), "Parent");
+  ASSERT_EQ(exported.functions().size(), 3u);
+  const auto helper = std::find_if(exported.functions().begin(), exported.functions().end(),
+                                   [](const auto &function) {
+                                     return function.name().value() == "HalfRotaryEmbedding_0" &&
+                                            function.domain().value() == "intermediate";
+                                   });
+  ASSERT_NE(helper, exported.functions().end());
+  const auto exported_parent =
+      std::find_if(exported.functions().begin(), exported.functions().end(),
+                   [](const auto &function) { return function.name().value() == "Parent"; });
+  ASSERT_NE(exported_parent, exported.functions().end());
+  ASSERT_EQ(exported_parent->node().size(), 1u);
+  EXPECT_EQ(exported_parent->node(0).op_type().value(), "HalfRotaryEmbedding_0");
+  EXPECT_EQ(exported_parent->node(0).domain().value(), "intermediate");
+  EXPECT_TRUE(std::any_of(exported.functions().begin(), exported.functions().end(),
+                          [](const auto &function) {
+                            return function.name().value() == "HalfRotaryEmbedding" &&
+                                   function.domain().value() == "other";
+                          }));
+
+  const ModelProto replayed =
+      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel();
+  ASSERT_EQ(replayed.graph().node().size(), 1u);
+  EXPECT_EQ(replayed.graph().node(0).op_type().value(), "Parent");
+  ASSERT_EQ(replayed.functions().size(), 3u);
+  const auto replayed_parent =
+      std::find_if(replayed.functions().begin(), replayed.functions().end(),
+                   [](const auto &function) { return function.name().value() == "Parent"; });
+  ASSERT_NE(replayed_parent, replayed.functions().end());
+  ASSERT_EQ(replayed_parent->node().size(), 1u);
+  EXPECT_EQ(replayed_parent->node(0).op_type().value(), "HalfRotaryEmbedding_0");
+  EXPECT_EQ(replayed_parent->node(0).domain().value(), "intermediate");
+  EXPECT_NO_THROW(core::builder::GraphBuilder(replayed, SchemaLookup()));
+}
+
+TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
+  CheckSharedHelperWhenUnusedBranchIsPruned(false);
+}
+
+TEST(PatternOptimization, KeepsPreexistingNestedHelperWhenUnusedBranchIsPruned) {
+  CheckSharedHelperWhenUnusedBranchIsPruned(true);
+}
+
+TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  auto &function = builder.MakeLocalFunction("Parameterized", "test.pattern");
+  function.SetOpsetVersion("", 18);
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+  const auto reference_attribute = []() {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    AttributeProto &attribute = attributes.add();
+    attribute.set_name("perm");
+    attribute.set_ref_attr_name("perm");
+    attribute.set_type(AttributeProto::AttributeType::INTS);
+    return attributes;
+  };
+  function.MakeNode("Transpose", {"X"}, {"middle"}, "", "", reference_attribute());
+  function.MakeNode("Transpose", {"middle"}, {"Y"}, "", "", reference_attribute());
+  function.MakeOutput("Y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  const RewritingProto plan = graph.Optimize();
+
+  EXPECT_TRUE(plan.added_functions().empty());
+  ASSERT_EQ(builder.LocalFunction("Parameterized").Nodes().size(), 2u);
+  EXPECT_EQ(builder.LocalFunction("Parameterized").Nodes()[0].op_type().value(), "Transpose");
+  EXPECT_EQ(builder.LocalFunction("Parameterized").Nodes()[1].op_type().value(), "Transpose");
 }
 
 TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {

@@ -581,6 +581,53 @@ TEST(onnx_shape_inference, OptionalOpsInferIr14SequenceTypesAtOpset28) {
   ASSERT_EQ(inferred_element.ref_tensor_type().ref_shape().ref_dim().size(), 2u);
 }
 
+TEST(onnx_shape_inference, SliceInputDimensions) {
+  for (const int64_t version : {10, 11, 13}) {
+    for (const int64_t dimension :
+         {int64_t{-1}, int64_t{-5}, std::numeric_limits<int64_t>::min(), int64_t{0}, int64_t{6}}) {
+      for (const int64_t step : {1, -1}) {
+        SCOPED_TRACE(MakeString("version=", version, ", dimension=", dimension, ", step=", step));
+        ModelProto model;
+        const auto status = OnnxParser::Parse(model, R"ONNX(
+          <ir_version: 8, opset_import: [ "" : 13 ]>
+          slice_graph (float[3, 6] X) => (float[] Y)
+          <int64[1] starts = {0}, int64[1] ends = {1},
+           int64[1] axes = {1}, int64[1] steps = {1}>
+          {
+            Y = Slice(X, starts, ends, axes, steps)
+          }
+        )ONNX");
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        model.mutable_opset_import(0)->set_version(version);
+        auto *graph = model.mutable_graph();
+        graph->mutable_input(0)
+            ->mutable_type()
+            ->mutable_tensor_type()
+            ->mutable_shape()
+            ->mutable_dim(1)
+            ->set_dim_value(dimension);
+        graph->mutable_initializer(0)->ref_int64_data()[0] = step > 0 ? 0 : 1;
+        graph->mutable_initializer(1)->ref_int64_data()[0] = step > 0 ? 1 : 0;
+        graph->mutable_initializer(3)->ref_int64_data()[0] = step;
+
+        if (dimension < 0) {
+          EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                    ShapeInferenceOptions(false, 1, false)),
+                       InferenceError);
+          EXPECT_NO_THROW(shape_inference::InferShapes(model));
+        } else {
+          ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                       ShapeInferenceOptions(false, 1, false)));
+          const auto &shape = graph->output(0).type().tensor_type().shape();
+          ASSERT_EQ(shape.dim_size(), 2);
+          EXPECT_EQ(shape.dim(0).dim_value(), 3);
+          EXPECT_EQ(shape.dim(1).dim_value(), dimension == 0 ? 0 : 1);
+        }
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_DFTOnesidedLengths) {
   for (const int64_t version : {17, 20}) {
     for (const int64_t length :

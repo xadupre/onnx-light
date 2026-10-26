@@ -1496,6 +1496,31 @@ TEST(RunNodes, RunNodeShapeUsesStartAndEndAttributes) {
   EXPECT_EQ(got[1], 4);
 }
 
+TEST(RunNodes, RunNodeShapeEndBelowNegativeRankIsEmpty) {
+  const std::array<std::optional<int64_t>, 3> starts = {std::nullopt, 1, -2};
+  for (const std::optional<int64_t> start : starts) {
+    RuntimeContext rt(KernelContext(DefaultOpset(15)));
+    rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3, 4}, std::vector<float>(24, 0.0f));
+    NodeProto node = MakeNode("Shape", {"x"}, {"y"});
+    if (start.has_value()) {
+      AttributeProto *attr_start = node.add_attribute();
+      attr_start->set_name("start");
+      attr_start->set_type(AttributeProto::AttributeType::INT);
+      attr_start->set_i(*start);
+    }
+    AttributeProto *attr_end = node.add_attribute();
+    attr_end->set_name("end");
+    attr_end->set_type(AttributeProto::AttributeType::INT);
+    attr_end->set_i(-4);
+
+    RunNode(node, rt);
+
+    const Tensor &y = rt.tensors()["y"];
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{0}));
+    EXPECT_EQ(y.data_type, 7); // INT64
+  }
+}
+
 TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
   // Verify the Einsum trampoline forwards the variadic inputs and the
   // ``equation`` STRING attribute to ``kernel::Einsum``. The equation

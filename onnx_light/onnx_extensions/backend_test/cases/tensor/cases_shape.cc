@@ -265,6 +265,16 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
+  // test_cc_shape_clip_end_negative
+  {
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/-4),
+           "test_cc_shape_clip_end_negative", {opset}, []() -> IoData {
+             Tensor x3d = Tensor::FromFloat("x", {3, 4, 5}, std::vector<float>(3 * 4 * 5, 0.0f));
+             Tensor y = Tensor::FromInt64("y", {0}, {});
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
+  }
+
   // test_cc_shape_start_greater_than_end
   {
     Expect(registry, MakeShapeNode(/*start=*/2, /*end=*/1), "test_cc_shape_start_greater_than_end",

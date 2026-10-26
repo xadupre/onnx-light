@@ -418,8 +418,9 @@ class GraphGraph(_C.GraphGraph):
         references to the graph or matched nodes beyond the call. Exceptions
         propagate to the caller.
 
-        ``parallel=True`` matches native patterns concurrently. Python-defined
-        patterns remain sequential because their callbacks require the GIL.
+        ``parallel=True`` matches explicitly opted-in native patterns concurrently.
+        Other patterns, including Python-defined patterns requiring the GIL,
+        remain sequential.
         The optimization callback always runs sequentially on the calling thread.
         """
         return super().optimize(

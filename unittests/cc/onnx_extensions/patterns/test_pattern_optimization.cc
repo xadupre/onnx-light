@@ -110,6 +110,8 @@ public:
     return {"Add"};
   }
 
+  bool CanMatchInParallel() const noexcept override { return true; }
+
   core::builder::MatchResult Match(core::builder::GraphGraph &,
                                    const NodeProto &candidate) const override {
     return core::builder::MatchResult{this, {&candidate}, &candidate};
@@ -125,15 +127,12 @@ public:
   mutable std::size_t fast_op_type_calls = 0;
 };
 
-class ThreadTrackingPattern final : public core::builder::PatternOptimization {
+class ThreadTrackingPattern : public core::builder::PatternOptimization {
 public:
-  explicit ThreadTrackingPattern(bool parallel)
-      : PatternOptimization(1, parallel ? "ParallelTracking" : "SequentialTracking"),
-        parallel_(parallel), calling_thread_(std::this_thread::get_id()) {}
+  explicit ThreadTrackingPattern(std::string name = "SequentialTracking")
+      : PatternOptimization(1, std::move(name)), calling_thread_(std::this_thread::get_id()) {}
 
   std::set<std::string> FastOpType() const override { return {"Add"}; }
-
-  bool CanMatchInParallel() const noexcept override { return parallel_; }
 
   core::builder::MatchResult Match(core::builder::GraphGraph &, const NodeProto &) const override {
     if (std::this_thread::get_id() != calling_thread_) {
@@ -150,8 +149,14 @@ public:
   mutable std::atomic<std::size_t> worker_calls{0};
 
 private:
-  bool parallel_;
   std::thread::id calling_thread_;
+};
+
+class ParallelThreadTrackingPattern final : public ThreadTrackingPattern {
+public:
+  ParallelThreadTrackingPattern() : ThreadTrackingPattern("ParallelTracking") {}
+
+  bool CanMatchInParallel() const noexcept override { return true; }
 };
 
 class ReorderedFoldingPattern final : public core::builder::PatternOptimization {
@@ -2502,12 +2507,14 @@ TEST(PatternOptimization, ParallelMatchingRespectsEachPatternsThreadSafety) {
       builder.MakeNode("Add", {input, input}, {output});
       builder.MakeOutput(output);
     }
-    auto sequential_pattern = std::make_shared<ThreadTrackingPattern>(false);
-    auto parallel_pattern = std::make_shared<ThreadTrackingPattern>(true);
+    auto sequential_pattern = std::make_shared<ThreadTrackingPattern>();
+    auto parallel_pattern = std::make_shared<ParallelThreadTrackingPattern>();
     core::builder::GraphGraph graph(
         builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
                      sequential_pattern, parallel_pattern});
     core::builder::OptimizationReport report;
+    core::runtime::ParallelRegionCollector collector(2);
+    core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
     const RewritingProto plan = graph.Optimize(1, &report, {}, false, {}, parallel);
 
     EXPECT_EQ(plan.rewrites_size(), 0);
@@ -2515,8 +2522,10 @@ TEST(PatternOptimization, ParallelMatchingRespectsEachPatternsThreadSafety) {
     EXPECT_EQ(report.patterns[0].attempts, 64u);
     EXPECT_EQ(report.patterns[1].attempts, 64u);
     EXPECT_EQ(sequential_pattern->worker_calls.load(), 0u);
-    if (parallel && core::runtime::ParallelForThreadCount() > 1) {
-      EXPECT_GT(parallel_pattern->worker_calls.load(), 0u);
+    EXPECT_EQ(collector.dropped_events(), 0u);
+    ASSERT_EQ(collector.events().size(), parallel ? 1u : 0u);
+    if (parallel) {
+      EXPECT_EQ(collector.events()[0].total_iterations, 64);
     } else {
       EXPECT_EQ(parallel_pattern->worker_calls.load(), 0u);
     }

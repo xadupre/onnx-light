@@ -69,7 +69,8 @@ namespace {
 
 using UndoState = detail::RewritingUndoState;
 
-constexpr int64_t kParallelPatternMatchMinimumCandidates = 32;
+constexpr int64_t kParallelMatchMinimumCandidates = 32;
+constexpr int64_t kParallelMatchDispatchThreshold = 32;
 
 struct PendingReplacement {
   std::size_t position;
@@ -1770,11 +1771,11 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           candidates.push_back(&candidate);
         }
 
-        if (candidates.size() >= kParallelPatternMatchMinimumCandidates) {
+        if (candidates.size() >= kParallelMatchMinimumCandidates) {
           std::vector<std::pair<MatchResult, int64_t>> candidate_matches(candidates.size());
           std::vector<std::exception_ptr> match_exceptions(candidates.size());
           core::runtime::ParallelFor(
-              static_cast<int64_t>(candidates.size()), kParallelPatternMatchMinimumCandidates,
+              static_cast<int64_t>(candidates.size()), kParallelMatchDispatchThreshold,
               [&](int64_t begin, int64_t end) {
                 for (int64_t candidate_index = begin; candidate_index < end; ++candidate_index) {
                   const auto match_start = std::chrono::steady_clock::now();

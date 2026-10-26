@@ -100,6 +100,11 @@ public:
    * ``parallel=true`` matches candidates concurrently when the pattern's
    * CanMatchInParallel returns true. Python-defined patterns are evaluated
    * sequentially, including in mixed native/Python pattern lists.
+   * Concurrent matchers may read the frozen structural index through NodeBefore,
+   * NextNodes, Predecessors, Successors, IsOutput, IsUsed, IsUsedMoreThanOnce,
+   * IsUsedBySubgraph, and Position. They must not mutate Builder or call
+   * SetComputedConstant. Other queries require their own thread-safety audit,
+   * including any lazy evaluation or cache writes in their dependencies.
    * ``callback`` observes each eligible, disjoint match before its nodes are
    * reserved, including matches in nested subgraphs. Returning false rejects
    * that match without blocking other patterns. It does not intercept cleanup.

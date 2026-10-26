@@ -105,6 +105,38 @@ void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  for (int64_t version : {17, 18}) {
+    for (bool use_double : {false, true}) {
+      NodeProto node;
+      node.set_op_type("ReduceMean");
+      node.add_input("data");
+      if (version >= 18) {
+        node.add_input("axes");
+      } else {
+        AddAttribute<std::vector<int64_t>>(node, "axes", {1});
+      }
+      node.add_output("reduced");
+      AddAttribute<int64_t>(node, "keepdims", 0);
+      const std::string name = "test_cc_reducemean_finite_range_" +
+                               std::string(use_double ? "double_" : "float_") +
+                               std::to_string(version);
+      Expect(registry, std::move(node), name, {DefaultOpset(version)},
+             [version, use_double]() -> IoData {
+               Tensor data = use_double
+                                 ? Tensor::FromDouble("", {2, 2}, {1e308, 1e308, -1e308, -1e308})
+                                 : Tensor::FromFloat("", {2, 2}, {3e38f, 3e38f, -3e38f, -3e38f});
+               Tensor expected = use_double ? Tensor::FromDouble("", {2}, {1e308, -1e308})
+                                            : Tensor::FromFloat("", {2}, {3e38f, -3e38f});
+               std::vector<Tensor> inputs;
+               inputs.push_back(std::move(data));
+               if (version >= 18) {
+                 inputs.push_back(Tensor::FromInt64("", {1}, {1}));
+               }
+               return IoData{std::move(inputs), {std::move(expected)}};
+             });
+    }
+  }
+
   const std::vector<int64_t> shape = {3, 2, 2};
   // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling
   // ``cases_reducesum.cc`` / ``cases_reduceprod.cc`` files and by the

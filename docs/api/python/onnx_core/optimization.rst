@@ -49,12 +49,18 @@ its boolean result accepts or rejects the match.
 Parallel matching
 +++++++++++++++++
 
-Pass ``parallel=True`` to match native patterns concurrently when at least
-32 candidates are eligible. Match acceptance, optimization callbacks and rewrite
-application remain sequential and preserve candidate order. Python-defined
+Pass ``parallel=True`` to match explicitly opted-in native patterns concurrently
+when at least 32 candidates are eligible. Match acceptance, optimization callbacks
+and rewrite application remain sequential and preserve candidate order. Python-defined
 patterns are always matched sequentially on the calling thread.
 Mixing native and Python-defined patterns does not disable native parallel matching.
 The C++ ``parallel`` argument follows the optional optimization callback.
+
+Native patterns are sequential by default. ``CanMatchInParallel`` may return true
+only after auditing the matcher's state and every graph query it uses for
+concurrent access. Matchers must not mutate the pattern, builder, graph, or shared
+caches. ``TransposeTranspose`` opts in because it reads only immutable nodes and
+the frozen structural index; unaudited patterns remain sequential.
 
 Pattern registration
 ++++++++++++++++++++

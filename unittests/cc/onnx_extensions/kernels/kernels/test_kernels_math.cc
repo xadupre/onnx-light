@@ -58,6 +58,7 @@ using onnx_kernels::kernel::Erf;
 using onnx_kernels::kernel::Exp;
 using onnx_kernels::kernel::Floor;
 using onnx_kernels::kernel::Gemm;
+using onnx_kernels::kernel::GroupedMatMul;
 using onnx_kernels::kernel::HammingWindow;
 using onnx_kernels::kernel::HannWindow;
 using onnx_kernels::kernel::Hardmax;
@@ -3446,6 +3447,66 @@ TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
   ASSERT_EQ(y.shape.size(), 2u);
   EXPECT_EQ(y.shape[0], 5); // floor(8/2) + 1
   EXPECT_EQ(y.shape[1], 4); // num_mel_bins
+}
+
+TEST(KernelClass, GroupedMatMulRejectsInvalidInputs) {
+  const KernelContext ctx{DefaultOpset(29)};
+  const GroupedMatMul kernel{ctx};
+  const Tensor input = Tensor::FromFloat("", {1, 2}, {1, 2});
+  const Tensor weights = Tensor::FromFloat("", {2, 2, 1}, {1, 2, 3, 4});
+  const Tensor indices = Tensor::FromInt64("", {1, 1}, {1});
+  for (int64_t group : {int64_t{-1}, int64_t{2}, std::numeric_limits<int64_t>::max()}) {
+    EXPECT_THROW(kernel(input, weights, Tensor::FromInt64("", {1, 1}, {group})),
+                 std::invalid_argument);
+  }
+  EXPECT_THROW(kernel(input, weights, Tensor::FromInt32("", {1, 1}, {-1})), std::invalid_argument);
+  EXPECT_THROW(kernel(input, weights, Tensor::FromFloat("", {1, 1}, {0})), std::invalid_argument);
+  EXPECT_THROW(kernel(input, weights, Tensor::FromInt64("", {1}, {0})), std::invalid_argument);
+  EXPECT_THROW(kernel(Tensor::FromInt32("", {1, 2}, {1, 2}), weights, indices),
+               std::invalid_argument);
+  EXPECT_THROW(kernel(input, Tensor::FromDouble("", {2, 2, 1}, {1, 2, 3, 4}), indices),
+               std::invalid_argument);
+  Tensor bad_weights = weights;
+  bad_weights.shape = {2, 1, 2};
+  EXPECT_THROW(kernel(input, bad_weights, indices), std::invalid_argument);
+  bad_weights = weights;
+  bad_weights.shape = {3, 2, 1};
+  EXPECT_THROW(kernel(input, bad_weights, indices), std::invalid_argument);
+  Tensor bad_indices = indices;
+  bad_indices.shape = {1, 2};
+  EXPECT_THROW(kernel(input, weights, bad_indices), std::invalid_argument);
+  const Tensor bad_bias = Tensor::FromFloat("", {1, 2}, {1, 2});
+  EXPECT_THROW(kernel(input, weights, indices, &bad_bias), std::invalid_argument);
+  const Tensor wrong_bias_type = Tensor::FromDouble("", {2, 1}, {1, 2});
+  EXPECT_THROW(kernel(input, weights, indices, &wrong_bias_type), std::invalid_argument);
+  const Tensor empty_weights = Tensor::FromFloat("", {2, 2, 0}, {});
+  EXPECT_THROW(kernel(input, empty_weights, Tensor::FromInt64("", {1, 1}, {2})),
+               std::invalid_argument);
+  Tensor overflow = weights;
+  overflow.shape = {2, std::numeric_limits<int64_t>::max(), 2};
+  Tensor overflow_input = input;
+  overflow_input.shape = {1, std::numeric_limits<int64_t>::max()};
+  EXPECT_THROW(kernel(overflow_input, overflow, indices), std::invalid_argument);
+  const Tensor wide_weights =
+      Tensor::FromFloat("", {1, 0, std::numeric_limits<int64_t>::max()}, {});
+  EXPECT_THROW(kernel(Tensor::FromFloat("", {2, 0}, {}), wide_weights,
+                      Tensor::FromInt64("", {2, 1}, {0, 0})),
+               std::invalid_argument);
+}
+
+TEST(KernelClass, GroupedMatMulZeroInnerDimension) {
+  const KernelContext ctx{DefaultOpset(29)};
+  const GroupedMatMul kernel{ctx};
+  const Tensor input = Tensor::FromFloat("", {2, 0}, {});
+  const Tensor weights = Tensor::FromFloat("", {1, 0, 2}, {});
+  const Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
+  const Tensor bias = Tensor::FromFloat("", {1, 2}, {3, 4});
+  const Tensor result = kernel(input, weights, indices, &bias);
+  EXPECT_EQ(result.shape, Shape({2, 1, 2}));
+  EXPECT_EQ(result.AsFloat()[0], 3);
+  EXPECT_EQ(result.AsFloat()[1], 4);
+  EXPECT_EQ(result.AsFloat()[2], 3);
+  EXPECT_EQ(result.AsFloat()[3], 4);
 }
 
 } // namespace Test

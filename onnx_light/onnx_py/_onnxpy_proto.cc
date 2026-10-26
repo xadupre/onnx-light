@@ -55,6 +55,15 @@ struct ImportedDLPackOwner {
   }
 };
 
+struct ImportedDLPackOwnerDeleter {
+  bool file_mapped;
+  void operator()(void *pointer) const { delete static_cast<ImportedDLPackOwner *>(pointer); }
+};
+
+bool IsFileMappedDLPackArray(nb::handle array) {
+  return nb::isinstance(array, nb::module_::import_("numpy").attr("memmap"));
+}
+
 TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   if (!nb::hasattr(array, "__dlpack__") || !nb::hasattr(array, "__dlpack_device__"))
     throw nb::type_error("TensorProto.from_dlpack requires the DLPack array protocol.");
@@ -77,7 +86,7 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   const bool versioned = PyCapsule_IsValid(capsule.ptr(), "dltensor_versioned");
   if (!versioned && !PyCapsule_IsValid(capsule.ptr(), "dltensor"))
     throw nb::value_error("TensorProto.from_dlpack requires an unconsumed DLPack capsule.");
-  auto owner = std::make_shared<ImportedDLPackOwner>();
+  auto owner = std::make_unique<ImportedDLPackOwner>();
   void *managed =
       PyCapsule_GetPointer(capsule.ptr(), versioned ? "dltensor_versioned" : "dltensor");
   if (PyCapsule_SetName(capsule.ptr(), versioned ? "used_dltensor_versioned" : "used_dltensor") < 0)
@@ -156,7 +165,9 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   static const uint8_t empty_data = 0;
   const auto *data =
       size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
-  result.ref_raw_data().assign_borrowed(data, size, std::move(owner));
+  const bool file_mapped = IsFileMappedDLPackArray(array);
+  std::shared_ptr<void> owner_token(owner.release(), ImportedDLPackOwnerDeleter{file_mapped});
+  result.ref_raw_data().assign_borrowed(data, size, std::move(owner_token));
   try {
     ValidateDLPack(result);
   } catch (const DLPackBufferError &error) {
@@ -319,20 +330,101 @@ struct RawDataCallback {
   nb::object on_tensor;
 };
 
-ModelProto MakeExternalModelProtoCopy(ModelProto &model) {
-  // Output files may overwrite mapped sources. Snapshot only file mappings before opening
-  // them, also keeping the caller's tensor data valid after an in-place file rewrite.
-  IteratorTensorProto it(&model);
-  while (it.next()) {
-    auto &raw = it->ref_raw_data();
-    if (raw.is_borrowed() && utils::detail::IsFileMappedOwner(raw.owner())) {
-      const auto &bytes = std::as_const(raw);
-      utils::ByteSpan snapshot;
-      snapshot.assign(bytes.data(), bytes.size());
-      raw = std::move(snapshot);
+bool IsFileMappedOwner(const std::shared_ptr<void> &owner) {
+  const auto *deleter = std::get_deleter<ImportedDLPackOwnerDeleter>(owner);
+  return utils::detail::IsFileMappedOwner(owner) || (deleter != nullptr && deleter->file_mapped);
+}
+
+void SnapshotBorrowedRawData(utils::ByteSpan &raw_data) {
+  if (!raw_data.is_borrowed() || !IsFileMappedOwner(raw_data.owner()))
+    return;
+  const auto &bytes = std::as_const(raw_data);
+  utils::ByteSpan snapshot;
+  snapshot.assign(bytes.data(), bytes.size());
+  raw_data = std::move(snapshot);
+}
+
+void SnapshotEncodedValue(EncodedValueProto &value) {
+  SnapshotBorrowedRawData(value.ref_raw_data());
+}
+
+void SnapshotGraphPayloads(GraphProto &graph);
+
+void SnapshotAttributeGraphs(AttributeProto &attribute) {
+  if (attribute.has_g())
+    SnapshotGraphPayloads(attribute.ref_g());
+  for (auto &graph : attribute.ref_graphs())
+    SnapshotGraphPayloads(graph);
+}
+
+void SnapshotNodeGraphs(NodeProto &node) {
+  for (auto &attribute : node.ref_attribute())
+    SnapshotAttributeGraphs(attribute);
+}
+
+void SnapshotGraphPayloads(GraphProto &graph) {
+  for (auto &initializer : graph.ref_extended_initializer()) {
+    if (initializer.has_encoded_value()) {
+      SnapshotEncodedValue(initializer.ref_encoded_value());
+    } else if (initializer.has_paged_cache()) {
+      for (auto &block : initializer.ref_paged_cache().ref_blocks()) {
+        if (block.has_key())
+          SnapshotBorrowedRawData(block.ref_key().ref_raw_data());
+        else if (block.has_encoded_key())
+          SnapshotEncodedValue(block.ref_encoded_key());
+        if (block.has_value())
+          SnapshotBorrowedRawData(block.ref_value().ref_raw_data());
+        else if (block.has_encoded_value())
+          SnapshotEncodedValue(block.ref_encoded_value());
+      }
     }
   }
-  return utils::CopyWithSharedTensorStorage(model);
+  for (auto &node : graph.ref_node())
+    SnapshotNodeGraphs(node);
+}
+
+void SnapshotFunctionGraphs(FunctionProto &function) {
+  for (auto &attribute : function.ref_attribute_proto())
+    SnapshotAttributeGraphs(attribute);
+  for (auto &node : function.ref_node())
+    SnapshotNodeGraphs(node);
+}
+
+void SnapshotModelGraphs(ModelProto &model) {
+  if (model.has_graph())
+    SnapshotGraphPayloads(model.ref_graph());
+  for (auto &function : model.ref_functions())
+    SnapshotFunctionGraphs(function);
+  for (auto &entry : model.ref_rewritings()) {
+    RewritingProto &rewriting = entry.second;
+    for (auto &function : rewriting.ref_added_functions())
+      SnapshotFunctionGraphs(function);
+    for (auto &edit : rewriting.ref_rewrites()) {
+      for (auto &node : edit.ref_added_nodes())
+        SnapshotNodeGraphs(node);
+      for (auto &node : edit.ref_initializer_calls())
+        SnapshotNodeGraphs(node);
+    }
+  }
+}
+
+void SnapshotModelTensors(ModelProto &model) {
+  IteratorTensorProto it(&model);
+  while (it.next())
+    SnapshotBorrowedRawData(it->ref_raw_data());
+}
+
+ModelProto MakeExternalModelProtoCopy(ModelProto &model) {
+  // Keep mapped payloads in the caller's model valid before any output file is opened.
+  SnapshotModelTensors(model);
+  SnapshotModelGraphs(model);
+
+  ModelProto copy = utils::CopyWithSharedTensorStorage(model);
+  // External-data output may truncate a mapped source file. Snapshot mapped payloads in the
+  // working copy before opening output files.
+  SnapshotModelTensors(copy);
+  SnapshotModelGraphs(copy);
+  return copy;
 }
 
 // --------------------------------------------------------------------------

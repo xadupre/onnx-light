@@ -254,6 +254,44 @@ class TestExternalDataHelper(ExtTestCase):
             loaded = onnxl.load(path, load_external_data=True)
             np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
 
+    def test_mapped_mixed_initializers_resave_same_model_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            values = np.arange(128, dtype=np.float32)
+            model = _make_model(values)
+            encoded = onnxl.EncodedValueProto(name="encoded", raw_data=values.tobytes())
+            model.graph.extended_initializer.append(
+                onnxl.ExtendedInitializerProto(encoded_value=encoded)
+            )
+            path = os.path.join(tmp, "model.onnx")
+            weights = os.path.join(tmp, "weights.bin")
+            onnxl.save_model(model, path)
+            mapped = onnxl.load(path, file_load_mode="MMAP", no_copy=True)
+            options = onnxl.SerializeOptions()
+            options.raw_data_threshold = 0
+            mapped.SerializeToFile(path, options, weights)
+            loaded = onnxl.load(path, load_external_data=True)
+            np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+            self.assertEqual(
+                loaded.graph.extended_initializer[0].encoded_value.raw_data, values.tobytes()
+            )
+
+    def test_dlpack_mapped_weights_resave_to_same_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            values = np.arange(128, dtype=np.float32)
+            weights = os.path.join(tmp, "weights.bin")
+            with open(weights, "wb") as stream:
+                stream.write(values.tobytes())
+            mapped_values = np.memmap(weights, dtype=np.float32, mode="r+", shape=values.shape)
+            model = _make_borrowed_model(mapped_values, "dlpack")
+            path = os.path.join(tmp, "model.onnx")
+            options = onnxl.SerializeOptions()
+            options.raw_data_threshold = 0
+            model.SerializeToFile(path, options, weights)
+            loaded = onnxl.load(path, load_external_data=True)
+            np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+            del model, mapped_values
+            gc.collect()
+
     @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
     def test_auto_load_linked_models(self):
         values = np.arange(64, dtype=np.float32)

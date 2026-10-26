@@ -426,6 +426,14 @@ protected:
    * Tracks traversal indices for one scope in the DFS stack.
    */
   struct Position {
+    Position(utils::RepeatedProtoField<NodeProto> *nodes = nullptr,
+             utils::RepeatedProtoField<TensorProto> *initializers = nullptr,
+             utils::RepeatedProtoField<AttributeProto> *attributes = nullptr,
+             utils::RepeatedProtoField<SparseTensorProto> *sparse_initializers = nullptr,
+             GraphProto *graph = nullptr)
+        : nodes(nodes), initializers(initializers), attributes(attributes),
+          sparse_initializers(sparse_initializers), graph(graph) {}
+
     /**
      * Points to the nodes traversed at this stack level.
      */

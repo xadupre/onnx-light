@@ -46,6 +46,7 @@ extern ONNX_LIGHT_LIB_API const char kDoc_EyeLike_ver9[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Flatten_ver24[];
 extern ONNX_LIGHT_LIB_API const char kDoc_GridSample_ver20[];
 extern ONNX_LIGHT_LIB_API const char kDoc_GRU_ver14[];
+extern ONNX_LIGHT_LIB_API const char kDoc_GroupedMatMul_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_HardSigmoid_ver6[];
 extern ONNX_LIGHT_LIB_API const char kDoc_HardSwish_ver14[];
 extern ONNX_LIGHT_LIB_API const char kDoc_InstanceNormalization_ver6[];

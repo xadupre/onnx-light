@@ -33,6 +33,7 @@ using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
 using onnx_kernels::kernel::Concat;
+using onnx_kernels::kernel::Expand;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Pad;
 using onnx_kernels::kernel::Reshape;
@@ -43,6 +44,21 @@ using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
+
+TEST(KernelClass, ExpandBroadcastsSingletonAndZeroDimensionsToZero) {
+  const KernelContext ctx{DefaultOpset(13)};
+  const Expand kernel{ctx};
+  for (bool empty_input : {false, true}) {
+    const Tensor input = empty_input ? Tensor::FromFloat("", {2, 0, 3}, {})
+                                     : Tensor::FromFloat("", {2, 1, 3}, {1, 2, 3, 4, 5, 6});
+    const Tensor shape = Tensor::FromInt64("", {3}, {2, empty_input ? 1 : 0, 3});
+    const Tensor output = kernel(input, shape);
+    EXPECT_EQ(output.shape, core::runtime::Shape({2, 0, 3}));
+    EXPECT_EQ(output.size_bytes(), 0u);
+  }
+  EXPECT_THROW(kernel(Tensor::FromFloat("", {1}, {1}), Tensor::FromInt64("", {1}, {-1})),
+               std::invalid_argument);
+}
 
 namespace {
 
@@ -495,6 +511,30 @@ TEST(KernelClass, CastClassFloatToDouble) {
   EXPECT_DOUBLE_EQ(py[0], -1.5);
   EXPECT_DOUBLE_EQ(py[1], 0.0);
   EXPECT_DOUBLE_EQ(py[2], 2.25);
+}
+
+TEST(KernelClass, BitCastRejectsSubByteBitWidthMismatch) {
+  using core::runtime::DataType;
+  const KernelContext ctx{DefaultOpset(26)};
+  const onnx_kernels::kernel::BitCast kernel{ctx};
+  for (const auto &[from, to] :
+       std::vector<std::pair<DataType, DataType>>{{DataType::INT4, DataType::INT8},
+                                                  {DataType::UINT4, DataType::UINT8},
+                                                  {DataType::FLOAT4E2M1, DataType::FLOAT8E4M3FN},
+                                                  {DataType::INT2, DataType::INT4},
+                                                  {DataType::FLOAT6E2M3, DataType::UINT8},
+                                                  {DataType::FLOAT6E3M2, DataType::UINT8},
+                                                  {DataType::UINT8, DataType::UINT4}}) {
+    SCOPED_TRACE("from=" + std::to_string(from) + ", to=" + std::to_string(to));
+    for (const int64_t count : {0, 1, 2}) {
+      SCOPED_TRACE(count);
+      const Tensor input("", from, {count},
+                         std::vector<uint8_t>(onnx_kernels::PackedByteSize(from, count)));
+      Tensor output("", to, {count}, std::vector<uint8_t>(onnx_kernels::PackedByteSize(to, count)));
+      EXPECT_THROW((void)kernel(input, to), std::invalid_argument);
+      EXPECT_THROW(kernel(input, to, output), std::invalid_argument);
+    }
+  }
 }
 
 TEST(KernelClass, CastComplexOutputsAndInputs) {

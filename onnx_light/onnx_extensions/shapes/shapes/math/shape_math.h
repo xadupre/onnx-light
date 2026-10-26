@@ -543,6 +543,9 @@ void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, 
  */
 void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/// Computes the per-selection [M,S,N] shape of GroupedMatMul.
+void ComputeShapeGroupedMatMul(ShapesContext &ctx, const NodeProto &node);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of a ``MatMulInteger`` node and
  * stores it in ``ctx``.

@@ -328,6 +328,33 @@ TEST(BackendRunModel, SupportedDtypeComparisonRetainsExactReferences) {
 // shot).
 
 TEST(BackendRunModel, Abs) { RunBackendCasesFor("Abs"); }
+TEST(BackendRunModel, GroupedMatMul) { RunBackendCasesFor("GroupedMatMul"); }
+
+TEST(BackendRunModel, GroupedMatMulFunctionDecomposition) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto *schema = OpSchemaRegistry::Schema("GroupedMatMul", 29, "");
+  ASSERT_NE(schema, nullptr);
+  auto cases = CollectTestCases("GroupedMatMul");
+  ASSERT_FALSE(cases.empty());
+  for (auto &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard guard(tc);
+    ModelProto model = tc.model();
+    NodeProto node = model.graph().node(0);
+    FunctionBodyBuildContextImpl context(node);
+    FunctionProto function;
+    ASSERT_TRUE(schema->BuildContextDependentFunction(context, function));
+    model.mutable_graph()->clear_node();
+    FunctionExpandHelper(node, function, *model.mutable_graph());
+    RuntimeContext rt;
+    for (const auto &input : tc.data_sets()[0].inputs) {
+      rt.Set(input.name, input);
+    }
+    ASSERT_NO_THROW(RunModelViaSession(model, rt));
+    const auto &expected = tc.data_sets()[0].outputs[0];
+    ExpectTensorBitEqual(rt.Get(expected.name), expected);
+  }
+}
 TEST(BackendRunModel, Neg) { RunBackendCasesFor("Neg"); }
 TEST(BackendRunModel, Add) { RunBackendCasesFor("Add"); }
 TEST(BackendRunModel, Sub) { RunBackendCasesFor("Sub"); }

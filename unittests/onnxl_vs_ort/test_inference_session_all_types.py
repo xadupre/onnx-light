@@ -95,6 +95,40 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         expected = np.array([1.0, 2.0, 3.0], dtype=np.float16)
         np.testing.assert_allclose(outputs[0], expected, rtol=1e-3)
 
+    def test_bfloat16_output_preserves_bits_and_owns_storage(self):
+        for shape in ((2, 3), (), (0, 3)):
+            with self.subTest(shape=shape):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("Identity", ["X"], ["Y"])],
+                        "identity_bfloat16",
+                        [
+                            oh.make_tensor_value_info(
+                                "X", TensorProto.BFLOAT16, [None] * len(shape)
+                            )
+                        ],
+                        [
+                            oh.make_tensor_value_info(
+                                "Y", TensorProto.BFLOAT16, [None] * len(shape)
+                            )
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=13,
+                )
+                sess = InferenceSessionAllTypes(model)
+                bits = np.resize(
+                    np.array([0, 0x8000, 0x3F80, 0x7F80, 0x7FC1, 0xFF80], dtype=np.uint16), shape
+                )
+                x = bits.view(np.dtype("bfloat16")).copy()
+                output = sess.run(None, {"X": x})[0]
+                self.assertEqual(output.dtype, x.dtype)
+                self.assertEqual(output.shape, shape)
+                np.testing.assert_array_equal(output.view(np.uint16), bits)
+                x[...] = 0
+                sess.run(None, {"X": x})
+                np.testing.assert_array_equal(output.view(np.uint16), bits)
+
     def test_cast_float_to_int2(self):
         """Tests Cast from FLOAT to INT2 uses IOBinding path."""
         import ml_dtypes  # noqa: F401

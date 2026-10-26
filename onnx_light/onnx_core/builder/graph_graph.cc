@@ -1421,7 +1421,7 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
 
 RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     const ConstantFoldingOptions &folding_options,
-                                    bool remove_unused) {
+                                    bool remove_unused, const OptimizationCallback &callback) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   bool reference_changed = false;
@@ -1500,8 +1500,8 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   auto original_definitions = GraphBuilder::DependencyOrderFunctions(
       utils::CopyWithSharedTensorStorage(collection.added_functions()));
   const std::size_t original_functions = collection.added_functions().size();
-  auto result =
-      OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
+  auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
+                             *undo, callback);
   capture_functions(capture_functions, *root, &original_definitions);
   FunctionIndex functions;
   for (const auto &function : collection.added_functions())
@@ -1590,7 +1590,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,
                                         bool remove_unused, RewritingProto &collection,
-                                        detail::RewritingUndoState &undo) {
+                                        detail::RewritingUndoState &undo,
+                                        const OptimizationCallback &callback) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1622,7 +1623,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
     RewritingProto child_rewrites =
         child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
-                                 folding_options, remove_unused, collection, undo);
+                                 folding_options, remove_unused, collection, undo, callback);
 
     applied.extend(std::move(child_rewrites.ref_rewrites()));
 
@@ -1745,6 +1746,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         }
         if (match.insert_at != nullptr) {
           Position(*match.insert_at);
+        }
+        if (callback && !callback(*this, match)) {
+          continue;
         }
         for (const NodeProto *node : match.nodes) {
           if (node != nullptr) {

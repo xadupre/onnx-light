@@ -265,6 +265,39 @@ for _case_name in (
     "averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_True",
     # ORT rejects four spatial dimensions with "Unsupported pooling size".
     "maxunpool_export_4d",
+    # These supported-dtype cases remain covered by the native runtime. ORT CPU
+    # lacks the corresponding kernels, including primitives in schema functions.
+    "supported_dtype_Acos_BFLOAT16",
+    "supported_dtype_Acosh_BFLOAT16",
+    "supported_dtype_Asin_BFLOAT16",
+    "supported_dtype_Asinh_BFLOAT16",
+    "supported_dtype_Atan_BFLOAT16",
+    "supported_dtype_Atanh_BFLOAT16",
+    "supported_dtype_Conv_BFLOAT16",
+    "supported_dtype_Cos_BFLOAT16",
+    "supported_dtype_Cosh_BFLOAT16",
+    "supported_dtype_Erf_DOUBLE",
+    "supported_dtype_Gemm_BFLOAT16",
+    "supported_dtype_GlobalLpPool_BFLOAT16",
+    "supported_dtype_GlobalLpPool_DOUBLE",
+    "supported_dtype_GlobalLpPool_FLOAT16",
+    "supported_dtype_HardSwish_BFLOAT16",
+    "supported_dtype_MatMul_BFLOAT16",
+    "supported_dtype_Mish_BFLOAT16",
+    "supported_dtype_Mish_DOUBLE",
+    "supported_dtype_PRelu_BFLOAT16",
+    "supported_dtype_PRelu_UINT64",
+    "supported_dtype_ReduceMean_BFLOAT16",
+    "supported_dtype_Round_BFLOAT16",
+    "supported_dtype_Sin_BFLOAT16",
+    "supported_dtype_Sinh_BFLOAT16",
+    "supported_dtype_Softmax_BFLOAT16",
+    "supported_dtype_Softplus_DOUBLE",
+    "supported_dtype_Softsign_DOUBLE",
+    "supported_dtype_SwiGLU_DOUBLE",
+    "supported_dtype_Tan_BFLOAT16",
+    # The schema expansion mixes FLOAT constants with DOUBLE inputs (#5611).
+    "supported_dtype_MeanVarianceNormalization_DOUBLE",
 ):
     _method_name = f"test_test_cc_{_case_name}"
     setattr(

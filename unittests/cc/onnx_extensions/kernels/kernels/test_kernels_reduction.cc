@@ -26,6 +26,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::RuntimeContext;
+using core::runtime::Shape;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::ReduceL1;
@@ -825,6 +826,114 @@ TEST(KernelClass, ReduceMeanSessionTunesForIntermediateDataType) {
   EXPECT_EQ(collector->events()[0].label, "ReduceMean");
   EXPECT_GT(collector->events()[0].admitted_threads, 1);
   EXPECT_FLOAT_EQ(rt.Get("output").AsFloat()[0], 1.0f);
+}
+
+TEST(KernelClass, ReduceMeanRepairsOnlyOverflowedFiniteSlices) {
+  const auto check = [](auto magnitude) {
+    using T = decltype(magnitude);
+    const T inf = std::numeric_limits<T>::infinity();
+    const T nan = std::numeric_limits<T>::quiet_NaN();
+    const T tiny = static_cast<T>(1e-10);
+    const std::vector<T> values = {
+        magnitude,  magnitude,  magnitude,  magnitude, -magnitude, -magnitude,
+        -magnitude, -magnitude, magnitude,  magnitude, -magnitude, -magnitude,
+        magnitude,  tiny,       -magnitude, tiny,      magnitude,  -magnitude,
+        tiny,       tiny,       inf,        1,         2,          3,
+        inf,        -inf,       2,          3,         nan,        1,
+        2,          3,          -T{0},      -T{0},     -T{0},      -T{0}};
+    for (int64_t opset : {17, 18}) {
+      const ReduceMean mean{KernelContext{DefaultOpset(opset)}};
+      for (bool keepdims : {false, true}) {
+        for (bool transposed : {false, true}) {
+          SCOPED_TRACE(opset);
+          SCOPED_TRACE(keepdims);
+          SCOPED_TRACE(transposed);
+          std::vector<T> input = values;
+          if (transposed) {
+            for (size_t row = 0; row < 9; ++row) {
+              for (size_t column = 0; column < 4; ++column) {
+                input[column * 9 + row] = values[row * 4 + column];
+              }
+            }
+          }
+          const Tensor data = Tensor::From<T>("", transposed ? Shape{4, 9} : Shape{9, 4}, input);
+          const Tensor axes = Tensor::FromInt64("", {1}, {transposed ? 0 : -1});
+          const Tensor result = mean(data, axes, keepdims);
+          ASSERT_EQ(result.shape, keepdims ? (transposed ? Shape{1, 9} : Shape{9, 1}) : Shape{9});
+          EXPECT_EQ(result.data_type, data.data_type);
+          const T *actual = result.As<T>();
+          EXPECT_EQ(actual[0], magnitude);
+          EXPECT_EQ(actual[1], -magnitude);
+          EXPECT_EQ(actual[2], T{0});
+          // Preserve the existing finite result, including accumulation order.
+          EXPECT_EQ(actual[3], tiny / T{4});
+          EXPECT_EQ(actual[4], tiny / T{2});
+          EXPECT_EQ(actual[5], inf);
+          EXPECT_TRUE(std::isnan(actual[6]));
+          EXPECT_TRUE(std::isnan(actual[7]));
+          EXPECT_EQ(actual[8], T{0});
+          EXPECT_FALSE(std::signbit(actual[8]));
+        }
+      }
+    }
+  };
+  check(3e38f);
+  check(1e308);
+}
+
+TEST(KernelClass, ReduceMeanOverflowCancellationRetainsSmallTerms) {
+  const auto check = [](auto magnitude) {
+    using T = decltype(magnitude);
+    const T tiny = static_cast<T>(1e-10);
+    const ReduceMean mean{KernelContext{DefaultOpset(18)}};
+    const Tensor data =
+        Tensor::From<T>("", {6}, {magnitude, magnitude, tiny, -magnitude, -magnitude, tiny});
+    const Tensor result = mean(data, /*keepdims=*/false);
+    ASSERT_TRUE(result.shape.empty());
+    EXPECT_EQ(result.As<T>()[0], tiny / T{3});
+  };
+  check(3e38f);
+  check(1e308);
+}
+
+TEST(KernelClass, ReduceMeanFiniteRangeAxesAndEmptyInputs) {
+  const auto check = [](auto magnitude) {
+    using T = decltype(magnitude);
+    const ReduceMean mean{KernelContext{DefaultOpset(18)}};
+    for (bool keepdims : {false, true}) {
+      for (const std::vector<int64_t> &axes_values :
+           {std::vector<int64_t>{0, -1}, std::vector<int64_t>{}}) {
+        const Tensor data = Tensor::From<T>("", {2, 3, 2}, std::vector<T>(12, magnitude));
+        const Tensor axes =
+            Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+        const Tensor result = mean(data, axes, keepdims);
+        const Shape expected_shape = axes_values.empty() ? (keepdims ? Shape{1, 1, 1} : Shape{})
+                                                         : (keepdims ? Shape{1, 3, 1} : Shape{3});
+        ASSERT_EQ(result.shape, expected_shape);
+        for (int64_t i = 0; i < result.element_count(); ++i) {
+          EXPECT_EQ(result.As<T>()[i], magnitude);
+        }
+        const Tensor all = mean(data, keepdims);
+        EXPECT_EQ(all.As<T>()[0], magnitude);
+        const Tensor noop = mean(data, axes, keepdims, /*noop_with_empty_axes=*/true);
+        if (axes_values.empty()) {
+          EXPECT_EQ(noop.shape, data.shape);
+          EXPECT_EQ(noop.data, data.data);
+        }
+      }
+    }
+    const Tensor empty = Tensor::From<T>("", {0, 3}, {});
+    const Tensor axes = Tensor::FromInt64("", {1}, {0});
+    const Tensor result = mean(empty, axes, /*keepdims=*/false);
+    ASSERT_EQ(result.shape, (Shape{3}));
+    for (int64_t i = 0; i < 3; ++i) {
+      EXPECT_TRUE(std::isnan(result.As<T>()[i]));
+    }
+    const Tensor scalar = Tensor::From<T>("", {}, {magnitude});
+    EXPECT_EQ(mean(scalar).As<T>()[0], magnitude);
+  };
+  check(std::numeric_limits<float>::max());
+  check(std::numeric_limits<double>::max());
 }
 
 TEST(KernelClass, ReduceMeanDefaultAxesReducesAll) {

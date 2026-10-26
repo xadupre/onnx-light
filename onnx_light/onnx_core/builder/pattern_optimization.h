@@ -161,6 +161,16 @@ public:
   /// Returns whether matching explicitly supports this model-local function call.
   virtual bool SupportsLocalFunctions(const NodeProto &) const { return false; }
 
+  /**
+   * Returns whether Match may run concurrently on worker threads.
+   *
+   * Opt-in requires an audited, reentrant Match implementation: it must not
+   * mutate pattern state, the graph, its builder, or shared caches. Every graph
+   * query it uses must support concurrent reads of the frozen matching state;
+   * a const-qualified method alone does not establish thread safety.
+   */
+  virtual bool CanMatchInParallel() const noexcept { return false; }
+
   /// Returns the match rooted at ``candidate``. A null pattern means no match.
   virtual MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const = 0;
 

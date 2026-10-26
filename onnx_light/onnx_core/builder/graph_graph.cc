@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
+#include <exception>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -26,6 +27,7 @@
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_threads/parallel_for.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
@@ -67,6 +69,9 @@ struct RewritingUndoState {
 namespace {
 
 using UndoState = detail::RewritingUndoState;
+
+constexpr int64_t kParallelMatchMinimumCandidates = 32;
+constexpr int64_t kParallelMatchDispatchThreshold = 32;
 
 struct PendingReplacement {
   std::size_t position;
@@ -1452,7 +1457,8 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
 
 RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     const ConstantFoldingOptions &folding_options,
-                                    bool remove_unused, const OptimizationCallback &callback) {
+                                    bool remove_unused, const OptimizationCallback &callback,
+                                    bool parallel) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   bool reference_changed = false;
@@ -1546,7 +1552,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   } original_functions_scope{original_functions_, original_functions_};
   original_functions_ = &original_functions_by_key;
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
-                             *undo, callback);
+                             *undo, callback, parallel);
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
   capture_functions(capture_functions, *root, optimized_functions, &original_definitions);
   for (const auto &function : optimized_functions) {
@@ -1648,7 +1654,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                                         const ConstantFoldingOptions &folding_options,
                                         bool remove_unused, RewritingProto &collection,
                                         detail::RewritingUndoState &undo,
-                                        const OptimizationCallback &callback) {
+                                        const OptimizationCallback &callback, bool parallel) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1684,9 +1690,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     }
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit,
                            original_functions_);
-    RewritingProto child_rewrites =
-        child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
-                                 folding_options, remove_unused, collection, undo, callback);
+    RewritingProto child_rewrites = child_graph.OptimizeImpl(
+        max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options,
+        remove_unused, collection, undo, callback, parallel);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -1740,7 +1746,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     GraphGraph child_graph(*function, patterns_, do_not_remove_, nullptr, 0, original_functions_);
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
-                             folding_options, remove_unused, collection, child_undo, callback);
+                             folding_options, remove_unused, collection, child_undo, callback,
+                             parallel);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
@@ -1826,17 +1833,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         break;
       }
       const std::set<std::string> &fast_op_types = fast_op_types_by_pattern[pattern_index];
-      for (const NodeProto &candidate : builder_.nodes_) {
-        if (!fast_op_types.empty() &&
-            fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
-          continue;
-        }
-        if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
-          continue;
-
-        const auto match_start = std::chrono::steady_clock::now();
-        MatchResult match = pattern->Match(*this, candidate);
-        const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+      const auto process_match = [&](const NodeProto &candidate, MatchResult match,
+                                     int64_t match_time_ns) {
         if (report != nullptr) {
           PatternOptimizationStatistics &statistics = report->patterns[pattern_index];
           ++statistics.attempts;
@@ -1847,7 +1845,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
             RecordNoMatch(report->patterns[pattern_index], match.no_match->source_file,
                           match.no_match->source_line, match.no_match->reason);
           }
-          continue;
+          return;
         }
         if (match.pattern != pattern.get()) {
           throw BuilderError("GraphGraph::Optimize: a match refers to another pattern.");
@@ -1861,7 +1859,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
             RecordNoMatch(report->patterns[pattern_index], {}, 0,
                           "The match depends on local-function calls or unresolved attributes.");
           }
-          continue;
+          return;
         }
 
         bool skip = false;
@@ -1882,13 +1880,13 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               "GraphGraph::Optimize: a match must contain at least one non-null node.");
         }
         if (skip) {
-          continue;
+          return;
         }
         if (match.insert_at != nullptr) {
           Position(*match.insert_at);
         }
         if (callback && !callback(*this, match)) {
-          continue;
+          return;
         }
         for (const NodeProto *node : match.nodes) {
           if (node != nullptr) {
@@ -1899,6 +1897,68 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
           ++report->patterns[pattern_index].matches;
         }
         matches.push_back(AcceptedMatch{std::move(match), &candidate, pattern_index});
+      };
+
+      if (parallel && pattern->CanMatchInParallel()) {
+        std::vector<const NodeProto *> candidates;
+        candidates.reserve(builder_.nodes_.size());
+        for (const NodeProto &candidate : builder_.nodes_) {
+          if (!fast_op_types.empty() &&
+              fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
+            continue;
+          }
+          if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
+            continue;
+          candidates.push_back(&candidate);
+        }
+
+        if (candidates.size() >= kParallelMatchMinimumCandidates) {
+          std::vector<std::pair<MatchResult, int64_t>> candidate_matches(candidates.size());
+          std::vector<std::exception_ptr> match_exceptions(candidates.size());
+          core::runtime::ParallelFor(
+              static_cast<int64_t>(candidates.size()), kParallelMatchDispatchThreshold,
+              [&](int64_t begin, int64_t end) {
+                for (int64_t candidate_index = begin; candidate_index < end; ++candidate_index) {
+                  const auto match_start = std::chrono::steady_clock::now();
+                  try {
+                    MatchResult match = pattern->Match(*this, *candidates[candidate_index]);
+                    const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+                    candidate_matches[candidate_index] = {std::move(match), match_time_ns};
+                  } catch (...) {
+                    match_exceptions[candidate_index] = std::current_exception();
+                  }
+                }
+              });
+          for (std::size_t candidate_index = 0; candidate_index < candidates.size();
+               ++candidate_index) {
+            if (match_exceptions[candidate_index] != nullptr) {
+              std::rethrow_exception(match_exceptions[candidate_index]);
+            }
+            process_match(*candidates[candidate_index],
+                          std::move(candidate_matches[candidate_index].first),
+                          candidate_matches[candidate_index].second);
+          }
+        } else {
+          for (const NodeProto *candidate : candidates) {
+            const auto match_start = std::chrono::steady_clock::now();
+            MatchResult match = pattern->Match(*this, *candidate);
+            const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+            process_match(*candidate, std::move(match), match_time_ns);
+          }
+        }
+      } else {
+        for (const NodeProto &candidate : builder_.nodes_) {
+          if (!fast_op_types.empty() &&
+              fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
+            continue;
+          }
+          if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
+            continue;
+          const auto match_start = std::chrono::steady_clock::now();
+          MatchResult match = pattern->Match(*this, candidate);
+          const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+          process_match(candidate, std::move(match), match_time_ns);
+        }
       }
     }
     if (report != nullptr) {

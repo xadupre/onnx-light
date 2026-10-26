@@ -368,6 +368,7 @@ class GraphGraph(_C.GraphGraph):
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
         callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+        parallel: bool = False,
     ) -> RewritingProto: ...
 
     @overload
@@ -379,6 +380,7 @@ class GraphGraph(_C.GraphGraph):
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
         callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+        parallel: bool = False,
     ) -> tuple[RewritingProto, OptimizationReport]: ...
 
     @overload
@@ -390,6 +392,7 @@ class GraphGraph(_C.GraphGraph):
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
         callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+        parallel: bool = False,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
 
     def optimize(
@@ -400,6 +403,7 @@ class GraphGraph(_C.GraphGraph):
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
         callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+        parallel: bool = False,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]:
         """Returns sequential proto edits and optionally their optimization report.
 
@@ -413,6 +417,11 @@ class GraphGraph(_C.GraphGraph):
         The callback must not mutate the graph, patterns, or match, or retain
         references to the graph or matched nodes beyond the call. Exceptions
         propagate to the caller.
+
+        ``parallel=True`` matches explicitly opted-in native patterns concurrently.
+        Other patterns, including Python-defined patterns requiring the GIL,
+        remain sequential.
+        The optimization callback always runs sequentially on the calling thread.
         """
         return super().optimize(
             max_iter,
@@ -422,6 +431,7 @@ class GraphGraph(_C.GraphGraph):
             ),
             remove_unused=remove_unused,
             callback=callback,
+            parallel=parallel,
         )
 
 

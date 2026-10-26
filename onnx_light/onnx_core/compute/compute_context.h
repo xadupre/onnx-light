@@ -523,6 +523,9 @@ public:
   // ComputeContext owns the ShapesContext driving every downstream
   // analysis (in-place reuse, peak memory) so the inferred descriptors stay
   // alive alongside the reuse / release results.
+  // Every ComputeShapes overload clears previous inferred state while retaining
+  // custom shape-inference callbacks registered on Shapes(), including inside
+  // subgraphs and model-local functions.
 
   /// Runs shape inference on ``graph`` and stores the resulting descriptors in
   /// the :cpp:class:`ShapesContext` owned by ``*this``.

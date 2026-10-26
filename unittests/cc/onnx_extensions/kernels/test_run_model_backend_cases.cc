@@ -23,6 +23,7 @@
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -32,8 +33,10 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -537,7 +540,11 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
         for (size_t i = 0; i < outputs.size(); ++i) {
           const std::string &oname = outputs[i].name();
           ASSERT_TRUE(rt.Has(oname)) << "Missing output '" << oname << "' for case " << tc.name;
-          ExpectBackendCaseTensorEqual(rt.Get(oname), ds.outputs[i], tc);
+          if (graph.node_size() == 1) {
+            ExpectBackendCaseTensorEqual(rt.Get(oname), ds.outputs[i], tc);
+          } else {
+            ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
+          }
         }
         memory_peaks[run] = alloc.PeakAllocatedSize();
 

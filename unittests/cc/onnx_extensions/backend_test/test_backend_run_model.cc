@@ -257,19 +257,20 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
     SCOPED_TRACE(tc.name);
     EXPECT_FALSE(tc.materialized());
     const auto &model = tc.model();
-    const bool double_mvn = tc.name == "test_cc_supported_dtype_MeanVarianceNormalization_DOUBLE";
-    // The schema function mixes FLOAT Epsilon with DOUBLE STD (#5611). Keep schema
-    // validation and verify the native inferred type without expanding it.
-    ASSERT_NO_THROW(checker::check_model(model, !double_mvn));
-    if (double_mvn) {
-      ModelProto inferred = model;
-      inferred.mutable_graph()->mutable_output(0)->clear_type();
-      ASSERT_NO_THROW(core::shapes::InferShapesModel(inferred));
-      EXPECT_TRUE(inferred.graph().output(0).type().Equals(model.graph().output(0).type()));
-    }
     const std::string op = model.graph().node(0).op_type().value();
     const auto &ds = tc.data_sets().at(0);
     ASSERT_FALSE(ds.inputs.empty());
+    if (op == "MeanVarianceNormalization" && ds.inputs[0].data_type == DataType::DOUBLE) {
+      // The schema function mixes FLOAT Epsilon with DOUBLE STD (#5611).
+      ASSERT_NO_THROW(checker::check_model(model, false));
+      ModelProto native_shape_model = model;
+      native_shape_model.mutable_graph()->mutable_output(0)->clear_type();
+      ASSERT_NO_THROW(core::shapes::InferShapesModel(native_shape_model));
+      EXPECT_TRUE(
+          native_shape_model.graph().output(0).type().Equals(model.graph().output(0).type()));
+    } else {
+      ASSERT_NO_THROW(checker::check_model(model, true));
+    }
     ASSERT_FALSE(ds.outputs.empty());
     EXPECT_TRUE(memberships.emplace(op, ds.inputs[0].data_type).second);
     operators.insert(op);

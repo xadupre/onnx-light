@@ -497,6 +497,30 @@ TEST(KernelClass, CastClassFloatToDouble) {
   EXPECT_DOUBLE_EQ(py[2], 2.25);
 }
 
+TEST(KernelClass, BitCastRejectsSubByteBitWidthMismatch) {
+  using core::runtime::DataType;
+  const KernelContext ctx{DefaultOpset(26)};
+  const onnx_kernels::kernel::BitCast kernel{ctx};
+  for (const auto &[from, to] :
+       std::vector<std::pair<DataType, DataType>>{{DataType::INT4, DataType::INT8},
+                                                  {DataType::UINT4, DataType::UINT8},
+                                                  {DataType::FLOAT4E2M1, DataType::FLOAT8E4M3FN},
+                                                  {DataType::INT2, DataType::INT4},
+                                                  {DataType::FLOAT6E2M3, DataType::UINT8},
+                                                  {DataType::FLOAT6E3M2, DataType::UINT8},
+                                                  {DataType::UINT8, DataType::UINT4}}) {
+    SCOPED_TRACE("from=" + std::to_string(from) + ", to=" + std::to_string(to));
+    for (const int64_t count : {0, 1, 2}) {
+      SCOPED_TRACE(count);
+      const Tensor input("", from, {count},
+                         std::vector<uint8_t>(onnx_kernels::PackedByteSize(from, count)));
+      Tensor output("", to, {count}, std::vector<uint8_t>(onnx_kernels::PackedByteSize(to, count)));
+      EXPECT_THROW((void)kernel(input, to), std::invalid_argument);
+      EXPECT_THROW(kernel(input, to, output), std::invalid_argument);
+    }
+  }
+}
+
 TEST(KernelClass, CastComplexOutputsAndInputs) {
   using core::runtime::DataType;
   const KernelContext ctx{DefaultOpset(13)};

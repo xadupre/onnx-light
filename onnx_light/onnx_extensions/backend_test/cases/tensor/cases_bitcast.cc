@@ -53,6 +53,29 @@ void RegisterBitCastCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  // Sub-byte reinterpretations preserve the packed bits, not the numeric values.
+  struct SubByteCase {
+    const char *name;
+    DataType from;
+    DataType to;
+    std::vector<uint8_t> bytes;
+  };
+  for (const auto &test : {
+           SubByteCase{"test_bitcast_int4_to_uint4", DataType::INT4, DataType::UINT4, {0xf8, 0x70}},
+           SubByteCase{"test_bitcast_float4e2m1_to_uint4",
+                       DataType::FLOAT4E2M1,
+                       DataType::UINT4,
+                       {0x9f, 0x70}},
+           SubByteCase{"test_bitcast_int2_to_uint2", DataType::INT2, DataType::UINT2, {0x4e}},
+       }) {
+    NodeProto node = MakeBitCastNode(test.to);
+    Expect(registry, std::move(node), test.name, {opset}, [test]() -> IoData {
+      Tensor x("", test.from, {4}, test.bytes);
+      Tensor y("", test.to, {4}, test.bytes);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
+  }
+
   // 32-bit reinterpret: FLOAT <-> INT32 (same bit-width).
   {
     NodeProto node = MakeBitCastNode(DataType::INT32);

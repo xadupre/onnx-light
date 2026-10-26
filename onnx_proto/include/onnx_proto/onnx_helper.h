@@ -19,6 +19,16 @@ namespace utils::detail {
 /** Applies node, graph, and function parse callbacks to live scopes in child-first order. */
 void ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options);
 
+/** Associates a layout tensor with its owning graph. */
+struct LayoutTensor {
+  TensorProto *tensor;
+  GraphProto *graph;
+};
+
+/** Collects tensors nested in a layout-owning submessage in serialization order. */
+void CollectLayoutTensors(void *source, uint16_t proto_id, std::vector<LayoutTensor> &tensors,
+                          GraphProto *graph = nullptr);
+
 } // namespace utils::detail
 
 namespace tensor_values_detail {
@@ -445,11 +455,15 @@ protected:
     size_t attr_tensor_index = 0;
     size_t attr_sparse_tensor_index = 0;
     size_t attr_graph_index = 0;
+    bool attr_repeated_fields = false;
     /**
      * Stores the current initializer index.
      */
     size_t node_initializer_index = 0;
     size_t sparse_initializer_index = 0;
+    std::vector<utils::detail::LayoutTensor> layout_tensors;
+    size_t layout_tensor_index = 0;
+    bool collected_layouts = false;
   };
 
 public:
@@ -476,7 +490,11 @@ public:
   inline TensorProto *operator->() { return tp_; }
   /** Returns the current tensor's owning graph, or nullptr for function-level tensors. */
   inline GraphProto *graph() const {
-    return positions_.empty() ? nullptr : positions_.back().graph;
+    if (positions_.empty())
+      return nullptr;
+    const auto &pos = positions_.back();
+    return pos.layout_tensor_index == 0 ? pos.graph
+                                        : pos.layout_tensors[pos.layout_tensor_index - 1].graph;
   }
   /**
    * Advances to the next tensor.

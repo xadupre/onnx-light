@@ -2385,20 +2385,26 @@ TEST(GraphGraph, ReplayErrorsIdentifyConflictingFunctionDefinitions) {
     function.add_node(MakeNode("Neg", {"X"}, {"Y"}));
     core::builder::GraphBuilder builder(model, SchemaLookup());
 
-    RewritingProto plan;
-    auto replacement = function;
-    replacement.ref_node()[0].set_op_type("Abs");
-    plan.ref_added_functions().push_back(std::move(replacement));
-    try {
-      builder.ApplyRewritings(plan);
-      FAIL() << "Expected a conflicting function definition to be rejected.";
-    } catch (const core::builder::BuilderError &error) {
-      const std::string identity =
-          overload.empty() ? "local.domain:Body" : "local.domain:Body:variant%3Aone%25";
-      const std::string message = error.what();
-      EXPECT_NE(
-          message.find("ApplyRewritings: conflicting function definition '" + identity + "'."),
-          std::string::npos);
+    for (const bool duplicate_addition : {false, true}) {
+      SCOPED_TRACE(duplicate_addition);
+      RewritingProto plan;
+      auto replacement = function;
+      replacement.ref_node()[0].set_op_type("Abs");
+      plan.ref_added_functions().push_back(std::move(replacement));
+      if (duplicate_addition)
+        plan.ref_added_functions().push_back(function);
+      try {
+        builder.ApplyRewritings(plan);
+        FAIL() << "Expected a conflicting function definition to be rejected.";
+      } catch (const core::builder::BuilderError &error) {
+        const std::string identity =
+            overload.empty() ? "local.domain:Body" : "local.domain:Body:variant%3Aone%25";
+        const std::string context =
+            duplicate_addition ? "added function definitions for" : "function definition";
+        const std::string message = error.what();
+        EXPECT_NE(message.find("ApplyRewritings: conflicting " + context + " '" + identity + "'."),
+                  std::string::npos);
+      }
     }
   }
 }

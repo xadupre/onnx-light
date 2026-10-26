@@ -55,6 +55,10 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFunctionsPopulatesCoreDispatchTable
 }
 
 TEST(OnnxKernelsDispatchTable, ConstantFoldingRunsRegisteredIdentityFactory) {
+  struct IdentityState {
+    int factory_calls = 0;
+    int runs = 0;
+  };
   struct RestoreIdentityFactory {
     core::runtime::NodeKernelFn original =
         core::runtime::KernelDispatchTable().at("ai.onnx:Identity");
@@ -62,15 +66,15 @@ TEST(OnnxKernelsDispatchTable, ConstantFoldingRunsRegisteredIdentityFactory) {
       core::runtime::RegisterKernelFn("", "Identity", core::symbolic::Device::kCPU,
                                       std::move(original));
     }
-  } restore;
+  };
 
   for (const std::string mode : {"transform", "copy", "forward"}) {
     SCOPED_TRACE(mode);
-    int factory_calls = 0;
-    int runs = 0;
+    RestoreIdentityFactory restore;
+    const auto state = std::make_shared<IdentityState>();
     auto factory = core::runtime::MakeCustomKernelFactory(
-        [&, mode](const NodeProto &node, core::runtime::RuntimeContext &rt) {
-          ++runs;
+        [state, mode](const NodeProto &node, core::runtime::RuntimeContext &rt) {
+          ++state->runs;
           const auto &input = rt.Get(node.input(0));
           EXPECT_NE(input.borrowed_owner().use_count(), 0);
           if (mode == "forward") {
@@ -83,10 +87,10 @@ TEST(OnnxKernelsDispatchTable, ConstantFoldingRunsRegisteredIdentityFactory) {
           }
         });
     core::runtime::RegisterKernelFn("", "Identity", core::symbolic::Device::kCPU,
-                                    [&, factory](const NodeProto &node,
-                                                 core::runtime::RuntimeContext &rt,
-                                                 const core::runtime::KernelContext &ctx) {
-                                      ++factory_calls;
+                                    [state, factory](const NodeProto &node,
+                                                     core::runtime::RuntimeContext &rt,
+                                                     const core::runtime::KernelContext &ctx) {
+                                      ++state->factory_calls;
                                       EXPECT_EQ(rt.device(), core::symbolic::Device::kCPU);
                                       return factory(node, rt, ctx);
                                     });
@@ -108,8 +112,8 @@ TEST(OnnxKernelsDispatchTable, ConstantFoldingRunsRegisteredIdentityFactory) {
     builder.MakeOutput("Y");
 
     ASSERT_EQ(builder.ConstantFold(), 1u);
-    EXPECT_EQ(factory_calls, 1);
-    EXPECT_EQ(runs, 1);
+    EXPECT_EQ(state->factory_calls, 1);
+    EXPECT_EQ(state->runs, 1);
     ASSERT_EQ(builder.Initializers().size(), 2u);
     const auto &folded = builder.Initializers()[1];
     const auto actual = core::runtime::TensorFromProto(folded);

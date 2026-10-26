@@ -313,6 +313,34 @@ private:
   core::runtime::NodeKernelFn previous_;
 };
 
+class ScopedConstantKernel {
+public:
+  ScopedConstantKernel() {
+    const auto &kernels = core::runtime::GlobalCustomKernels();
+    const auto existing = kernels.find(kDefaultOnnxDomain + ":Constant");
+    if (existing != kernels.end())
+      previous_ = existing->second;
+    core::runtime::RegisterGlobalCustomKernel(
+        "", "Constant", [](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+          ASSERT_EQ(node.attribute_size(), 1);
+          const auto &value = node.attribute(0);
+          ASSERT_EQ(value.name(), "value");
+          ASSERT_TRUE(value.has_t());
+          runtime.Set(node.output(0).value(), core::runtime::TensorFromProto(value.t()));
+        });
+  }
+
+  ~ScopedConstantKernel() {
+    if (previous_)
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Constant", std::move(previous_));
+    else
+      core::runtime::UnregisterGlobalCustomKernel("", "Constant");
+  }
+
+private:
+  core::runtime::NodeKernelFn previous_;
+};
+
 class ScopedAbsShapeCounter {
 public:
   ScopedAbsShapeCounter() : previous_(core::shapes::DispatchTable().at("ai.onnx:Abs")) {
@@ -2807,6 +2835,7 @@ TEST(PatternOptimization, CastMatchersRejectIntroducedIdentityOverrides) {
 }
 
 TEST(PatternOptimization, ConstantFunctionOutputPreservesIntroducedIdentityOverrides) {
+  ScopedConstantKernel kernel;
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     SCOPED_TRACE(domain);
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});

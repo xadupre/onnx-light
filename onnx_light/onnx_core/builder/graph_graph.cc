@@ -2906,7 +2906,10 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     const auto key = Identity(function);
     const auto [previous, inserted] = planned_functions.emplace(key, &function);
     if (!inserted && !previous->second->Equals(function))
-      throw BuilderError("ApplyRewritings: conflicting added function definitions.");
+      throw BuilderError(
+          "ApplyRewritings: conflicting added function definitions for '" +
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()) +
+          "'.");
     if (source_function_builders.count(key) == 0)
       new_functions.insert(key);
     else

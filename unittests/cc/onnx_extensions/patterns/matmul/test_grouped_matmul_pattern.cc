@@ -12,8 +12,10 @@
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -454,6 +456,126 @@ TEST(GroupedMatMulPattern, RejectsOverloadedOperators) {
       EXPECT_EQ(pattern->Match(graph, Last(builder)).pattern, nullptr) << loop << index;
       EXPECT_THROW(pattern->Apply(graph, {&Last(builder)}), core::builder::BuilderError);
     }
+  }
+}
+
+FunctionProto GroupedOverride(const std::string &op, int inputs, const std::string &domain = "",
+                              const std::string &overload = "") {
+  FunctionProto function;
+  function.set_name(op);
+  function.set_domain(domain);
+  function.set_overload(overload);
+  function.add_opset("", 29);
+  for (int i = 0; i < inputs; ++i) {
+    function.add_input("arg" + std::to_string(i));
+  }
+  function.add_output("result");
+  function.ref_node().push_back(
+      op == "Add" ? MakeNode("Mul", {"arg0", "arg1"}, {"result"})
+                  : MakeNode(op == "Identity" ? "Not" : "Identity", {"arg0"}, {"result"}));
+  return function;
+}
+
+void RegisterGroupedOverride(GraphBuilder &builder, const FunctionProto &function) {
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+  for (const auto &body : builder.Subgraphs()) {
+    RegisterGroupedOverride(*body, function);
+  }
+  for (const auto &body : builder.LocalFunctions()) {
+    RegisterGroupedOverride(*body, function);
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsEmptyOverloadFunctionsForMatchedOperatorsInEveryScope) {
+  const std::vector<std::vector<std::pair<std::string, int>>> operators = {
+      {{"Unsqueeze", 2}, {"Gather", 2}, {"MatMul", 2}, {"Squeeze", 2}, {"Add", 2}},
+      {{"Gather", 2}, {"MatMul", 2}, {"Add", 2}, {"Unsqueeze", 2}, {"Concat", 2}},
+      {{"Gather", 2}, {"MatMul", 2}, {"Add", 2}, {"Identity", 1}, {"Loop", 2}}};
+  for (int form = 0; form < 3; ++form) {
+    for (int scope = 0; scope < 3; ++scope) {
+      for (const auto &[op, inputs] : operators[form]) {
+        SCOPED_TRACE(form);
+        SCOPED_TRACE(scope);
+        SCOPED_TRACE(op);
+        GraphBuilder root("g", Schemas(), {{"", 29}});
+        auto &builder = scope == 0   ? root
+                        : scope == 1 ? root.MakeSubgraph("selection")
+                                     : root.MakeLocalFunction("Selection");
+        if (form == 0) {
+          Batched(builder, true);
+        } else if (form == 1) {
+          Concat(builder, true);
+        } else {
+          Loop(builder, true);
+        }
+        RegisterGroupedOverride(root, GroupedOverride(op, inputs));
+        if (scope != 0) {
+          EXPECT_FALSE(builder.HasLocalFunction(op));
+        }
+        GraphGraph graph(builder);
+        onnx_patterns::GroupedMatMulPattern pattern;
+        const auto &candidate = form == 0 ? builder.Nodes()[3] : Last(builder);
+        EXPECT_EQ(pattern.Match(graph, candidate).pattern, nullptr);
+        EXPECT_THROW(pattern.Apply(graph, {&candidate}), core::builder::BuilderError);
+      }
+    }
+  }
+}
+
+TEST(GroupedMatMulPattern, ChecksExactFunctionIdentitiesForEveryReplacementOperator) {
+  for (int form = 0; form < 3; ++form) {
+    for (const auto &[op, inputs] : std::vector<std::pair<std::string, int>>{
+             {"Less", 2}, {"Where", 3}, {"Add", 2}, {"GroupedMatMul", 3}}) {
+      for (const std::string domain : {"", "ai.onnx", "foreign"}) {
+        for (const std::string overload : {"", "other"}) {
+          SCOPED_TRACE(form);
+          SCOPED_TRACE(op);
+          SCOPED_TRACE(domain);
+          SCOPED_TRACE(overload);
+          GraphBuilder builder("g", Schemas(), {{"", 29}});
+          if (form == 0) {
+            Batched(builder, false);
+          } else if (form == 1) {
+            Concat(builder);
+          } else {
+            Loop(builder);
+          }
+          RegisterGroupedOverride(builder, GroupedOverride(op, inputs, domain, overload));
+          GraphGraph graph(builder);
+          onnx_patterns::GroupedMatMulPattern pattern;
+          const bool overridden = domain != "foreign" && overload.empty();
+          const auto match = pattern.Match(graph, Last(builder));
+          EXPECT_EQ(match.pattern != nullptr, !overridden);
+          if (!overridden) {
+            EXPECT_EQ(pattern.Apply(graph, match.nodes).size(), 4u);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsImportedAddOverrideWithoutChangingTheGraph) {
+  for (int form = 0; form < 3; ++form) {
+    GraphBuilder source("g", Schemas(), {{"", 29}});
+    if (form == 0) {
+      Batched(source, true);
+    } else if (form == 1) {
+      Concat(source, true);
+    } else {
+      Loop(source, true);
+    }
+    auto model = source.ToModel();
+    model.ref_functions().push_back(GroupedOverride("Add", 2));
+    GraphBuilder builder(model, Schemas());
+    const auto before = builder.ToModel().SerializeAsString();
+    GraphGraph graph(builder);
+    onnx_patterns::GroupedMatMulPattern pattern;
+    const auto *candidate = form == 0 ? graph.NodeBefore("squeezed") : &Last(builder);
+    ASSERT_NE(candidate, nullptr);
+    EXPECT_EQ(pattern.Match(graph, *candidate).pattern, nullptr);
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
   }
 }
 

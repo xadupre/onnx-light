@@ -1712,8 +1712,32 @@ std::set<std::string> GroupedMatMulPattern::FastOpType() const {
   return {"Squeeze", "Concat", "Loop"};
 }
 
+namespace {
+
+bool HasGroupedFunction(const core::builder::GraphBuilder &builder, const std::string &domain,
+                        const std::string &op, const std::string &overload = "") {
+  return !builder.Shapes().LocalFunctions().empty() &&
+         builder.Shapes().HasLocalFunction(
+             core::shapes::ShapesContext::LocalFunctionKey(domain, op, overload));
+}
+
+bool IsGroupedPrimitive(const core::builder::GraphBuilder &builder, const NodeProto &node) {
+  return node.overload().value().empty() &&
+         !HasGroupedFunction(builder, node.domain(), node.op_type(), node.overload());
+}
+
+} // namespace
+
 core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  for (const char *op : {"Less", "Where", "Add", "GroupedMatMul"}) {
+    if (HasGroupedFunction(graph.Builder(), "", op)) {
+      return NoMatch(candidate, "a replacement operator resolves to a local function");
+    }
+  }
+  if (!IsGroupedPrimitive(graph.Builder(), candidate)) {
+    return NoMatch(candidate, "candidate resolves to a local function or overload");
+  }
   if (candidate.op_type() == "Concat") {
     return MatchConcat(graph, candidate);
   }
@@ -1721,8 +1745,7 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return MatchLoop(graph, candidate);
   }
   if (graph.Builder().OpsetVersion("") < 29 || !IsDefaultOp(candidate, "Squeeze") ||
-      !candidate.overload().value().empty() || candidate.input_size() != 2 ||
-      candidate.output_size() != 1) {
+      candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "expected an opset-29 Squeeze");
   }
   auto axes_are = [&](const NodeProto &node, std::vector<int64_t> expected, int64_t rank) {
@@ -1742,16 +1765,16 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return axes == expected;
   };
   const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
-  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || !matmul->overload().value().empty() ||
+  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || !IsGroupedPrimitive(graph.Builder(), *matmul) ||
       matmul->input_size() != 2 || matmul->output_size() != 1 || !axes_are(candidate, {2}, 4)) {
     return NoMatch(candidate, "expected MatMul followed by Squeeze axis 2");
   }
   const NodeProto *unsqueeze = graph.NodeBefore(matmul->input()[0].value());
   const NodeProto *gather = graph.NodeBefore(matmul->input()[1].value());
   if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") ||
-      !unsqueeze->overload().value().empty() || unsqueeze->input_size() != 2 ||
+      !IsGroupedPrimitive(graph.Builder(), *unsqueeze) || unsqueeze->input_size() != 2 ||
       unsqueeze->output_size() != 1 || !axes_are(*unsqueeze, {1, 2}, 4) || !gather ||
-      !IsDefaultOp(*gather, "Gather") || !gather->overload().value().empty() ||
+      !IsDefaultOp(*gather, "Gather") || !IsGroupedPrimitive(graph.Builder(), *gather) ||
       gather->input_size() != 2 || gather->output_size() != 1 || !HasDefaultZeroAxis(*gather)) {
     return NoMatch(candidate, "expected Unsqueeze axes 1,2 and Gather axis 0");
   }
@@ -1794,9 +1817,9 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     const NodeProto &sum = *next[0];
     const std::string &other = sum.input()[sum.input()[0] == candidate.output()[0] ? 1 : 0].value();
     const NodeProto *bg = graph.NodeBefore(other);
-    if (sum.overload().value().empty() && bg && IsDefaultOp(*bg, "Gather") &&
-        bg->overload().value().empty() && bg->input_size() == 2 && bg->output_size() == 1 &&
-        bg->input()[1].value() == indices && HasDefaultZeroAxis(*bg) &&
+    if (IsGroupedPrimitive(graph.Builder(), sum) && bg && IsDefaultOp(*bg, "Gather") &&
+        IsGroupedPrimitive(graph.Builder(), *bg) && bg->input_size() == 2 &&
+        bg->output_size() == 1 && bg->input()[1].value() == indices && HasDefaultZeroAxis(*bg) &&
         !graph.IsUsedMoreThanOnce(other) && graph.HasShape(bg->input()[0].value()) &&
         graph.HasType(bg->input()[0].value()) && graph.GetType(bg->input()[0].value()) == dtype) {
       const SymShape &bs = graph.GetShape(bg->input()[0].value()).Shape();
@@ -2016,6 +2039,11 @@ bool ReadGroupedLoop(core::builder::GraphGraph &graph, const NodeProto &loop, Gr
   if (expected.size() != body.Nodes().size()) {
     return false;
   }
+  for (const auto *node : row.nodes) {
+    if (!IsGroupedPrimitive(body, *node)) {
+      return false;
+    }
+  }
   int64_t tokens = 0;
   return GroupedInputs(graph, row.x, row.weights, row.indices, row.bias, tokens) &&
          ExactScalar(graph, loop.input()[0].value(), TensorType::kInt64, tokens) &&
@@ -2101,6 +2129,9 @@ core::builder::MatchResult GroupedMatMulPattern::MatchConcat(core::builder::Grap
     return NoMatch(candidate, "branches contain duplicate nodes");
   }
   for (std::size_t i = 1; i < nodes.size(); ++i) {
+    if (!IsGroupedPrimitive(graph.Builder(), *nodes[i])) {
+      return NoMatch(candidate, "a matched operator resolves to a local function or overload");
+    }
     const std::string &out = nodes[i]->output()[0].value();
     if (graph.IsOutput(out) || graph.IsUsedBySubgraph(out)) {
       return NoMatch(candidate, "an intermediate is exported or captured");

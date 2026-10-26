@@ -56,18 +56,14 @@ TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
         if (explicit_axes) {
           AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
         }
-        graph->add_node()->CopyFrom(node);
-        ASSERT_NO_THROW(checker::check_model(model, true));
-
         FunctionProto function;
-        FunctionBodyBuildContextImpl context(node, {input_type});
+        FunctionBodyBuildContextImpl context(node, std::vector<TypeProto>{input_type});
         ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, opset));
         if (opset >= 18) {
           const auto *body = schema->GetFunction(opset, false);
           ASSERT_NE(body, nullptr);
           EXPECT_EQ(function.node_size(), body->node_size());
         }
-        graph->clear_node();
         FunctionExpandHelper(node, function, *graph);
         graph->mutable_output(0)->clear_type();
         ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),

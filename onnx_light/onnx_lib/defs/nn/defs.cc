@@ -1820,14 +1820,12 @@ static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContex
   }
   const int64_t dtype = input_type->tensor_type().elem_type();
   FunctionBuilder builder(function);
-  builder.Const("ExponentFloat", ToTensor<float>(2.0f))
-      .Const("EpsilonFloat", ToTensor<float>(1e-9f))
-      .Add("Exponent = Cast (ExponentFloat)", "to", dtype)
+  builder.Const("EpsilonFloat", ToTensor<float>(1e-9f))
       .Add("Epsilon = Cast (EpsilonFloat)", "to", dtype)
       .Add(R"ONNX(
          X_RM = ReduceMean <axes : ints = @axes> (X)
-         EX_squared = Pow (X_RM, Exponent)
-         X_squared = Pow (X, Exponent)
+         EX_squared = Mul (X_RM, X_RM)
+         X_squared = Mul (X, X)
          E_Xsquared = ReduceMean <axes : ints = @axes> (X_squared)
          Variance = Sub (E_Xsquared, EX_squared)
          STD = Sqrt (Variance)
@@ -1858,14 +1856,12 @@ ONNX_OPERATOR_SET_SCHEMA(
         .FunctionBody(
             R"ONNX(
         {
-          ExponentFloat = Constant <value = float {2.0}>()
           EpsilonFloat = Constant <value = float {1e-9}>()
-          Exponent = CastLike (ExponentFloat, X)
           Epsilon = CastLike (EpsilonFloat, X)
           axes = Constant <value_ints: ints = @axes>()
           X_RM = ReduceMean (X, axes)
-          EX_squared = Pow (X_RM, Exponent)
-          X_squared = Pow (X, Exponent)
+          EX_squared = Mul (X_RM, X_RM)
+          X_squared = Mul (X, X)
           E_Xsquared = ReduceMean (X_squared, axes)
           Variance = Sub (E_Xsquared, EX_squared)
           STD = Sqrt (Variance)

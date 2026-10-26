@@ -441,7 +441,9 @@ std::string ModelScopedHelperName(core::builder::GraphBuilder &builder, const st
                     [&](const auto &function) {
                       return function->IsLocalFunction(candidate, kIntermediateDomain);
                     });
-    if (exists_at_model_scope) {
+    if (exists_at_model_scope ||
+        builder.Shapes().HasLocalFunction(
+            core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, candidate))) {
       return candidate;
     }
     if (!model_builder.HasName(candidate) &&

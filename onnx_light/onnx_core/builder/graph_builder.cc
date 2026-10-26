@@ -761,12 +761,27 @@ void GraphBuilder::set_device(Device device) {
 
 void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
   std::map<FunctionIdentifier, const GraphBuilder *> functions;
+  const auto same_device_targets = [&](const auto &self, const GraphBuilder &left,
+                                       const GraphBuilder &right) -> bool {
+    if (left.device_ != right.device_ || left.subgraphs_.size() != right.subgraphs_.size())
+      return false;
+    for (std::size_t index = 0; index < left.subgraphs_.size(); ++index) {
+      if (!self(self, *left.subgraphs_[index], *right.subgraphs_[index]))
+        return false;
+    }
+    return true;
+  };
   const auto collect_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &function : scope.local_functions_) {
       const auto identity = MakeFunctionIdentifier(function->function_domain_, function->name_,
                                                    function->function_template_.overload());
-      if (!functions.emplace(identity, function.get()).second)
-        throw BuilderError("CopyDeviceTargetsFrom: duplicate source function identity.");
+      const auto [existing, inserted] = functions.emplace(identity, function.get());
+      if (!inserted && (!existing->second->BuildFunction(existing->second->function_domain_)
+                             .Equals(function->BuildFunction(function->function_domain_)) ||
+                        !same_device_targets(same_device_targets, *existing->second, *function))) {
+        throw BuilderError(
+            "CopyDeviceTargetsFrom: conflicting duplicate source function identity.");
+      }
       self(self, *function);
     }
     for (const auto &subgraph : scope.subgraphs_)
@@ -1963,16 +1978,19 @@ void GraphBuilder::RefreshLocalFunctions() {
     }
   };
   collect(*root);
-  std::unordered_set<std::string> function_keys;
+  std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> function_definitions;
   for (GraphBuilder *builder : builders) {
     for (const auto &function : builder->local_functions_) {
       const std::string key = ShapesContext::LocalFunctionKey(
           function->function_domain_, function->name_, function->function_template_.overload());
-      if (!function_keys.insert(key).second) {
-        throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
-      }
       const auto definition =
           std::make_shared<FunctionProto>(function->BuildFunction(function->function_domain_));
+      const auto [existing, inserted] = function_definitions.emplace(key, definition);
+      if (!inserted) {
+        if (!existing->second->Equals(*definition))
+          throw BuilderError("GraphBuilder: conflicting duplicate local function '" + key + "'.");
+        continue;
+      }
       for (GraphBuilder *target : builders) {
         target->compute_.Shapes().SetLocalFunction(definition);
       }

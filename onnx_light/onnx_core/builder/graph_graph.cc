@@ -2855,9 +2855,15 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
   }
   std::set<std::string> replaced_functions;
   for (const auto &identity : rewrites.replaced_function_ids()) {
-    if (replaceable_functions.count(identity.value()) == 0 ||
-        !replaced_functions.insert(identity.value()).second)
-      throw BuilderError("ApplyRewritings: invalid replacement function identity.");
+    const std::string &value = identity.value();
+    if (replaceable_functions.count(value) == 0) {
+      throw BuilderError("ApplyRewritings: replacement function identity '" + value +
+                         "' is not replaceable.");
+    }
+    if (!replaced_functions.insert(value).second) {
+      throw BuilderError("ApplyRewritings: duplicate replacement function identity '" + value +
+                         "'.");
+    }
   }
   if (!new_functions.empty()) {
     const auto check_overrides = [&](const auto &self, const NodeProto &node) -> void {

@@ -344,6 +344,51 @@ TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
     EXPECT_EQ(child->device(), Device::kCPU);
 }
 
+TEST(GraphBuilder, CopyDeviceTargetsAcceptsCompatibleDuplicateFunctionIdentities) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  const auto make_source = [](Device second_function_device) {
+    GraphBuilder source("root", SchemaLookup(), {{"", 18}});
+    source.MakeInput("condition", TensorType::kBool, MakeShape({}));
+    source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+    for (const auto &[scope_name, device] : {std::pair<const char *, Device>{"then", Device::kCPU},
+                                             {"else", second_function_device}}) {
+      auto &scope = source.MakeSubgraph(scope_name);
+      scope.MakeNode("Identity", {"x"}, {"result"});
+      scope.MakeOutput("result");
+      auto &function = scope.MakeLocalFunction("F", "local");
+      function.MakeInput("a", TensorType::kFloat, MakeShape({2}));
+      function.MakeNode("Identity", {"a"}, {"b"});
+      function.MakeOutput("b");
+      function.set_device(device);
+    }
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &[name, scope] :
+         {std::pair<const char *, const char *>("then_branch_ref", "then"),
+          {"else_branch_ref", "else"}}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(scope);
+    }
+    source.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+    source.MakeOutput("y");
+    return source;
+  };
+
+  GraphBuilder source = make_source(Device::kCPU);
+  GraphBuilder target(source.ToModel(), SchemaLookup());
+  ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+  EXPECT_EQ(target.LocalFunction("F").device(), Device::kCPU);
+
+  GraphBuilder incompatible_source = make_source(Device::kGPU0);
+  GraphBuilder incompatible_target(incompatible_source.ToModel(), SchemaLookup());
+  EXPECT_THROW(incompatible_target.CopyDeviceTargetsFrom(incompatible_source),
+               core::builder::BuilderError);
+  EXPECT_EQ(incompatible_target.LocalFunction("F").device(), Device::kUndefined);
+}
+
 TEST(GraphBuilder, ConstructorOpsets) {
   for (const std::string domain : {"", "ai.onnx"}) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});

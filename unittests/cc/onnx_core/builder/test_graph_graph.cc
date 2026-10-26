@@ -2337,6 +2337,38 @@ TEST(GraphGraph, ReplayValidatesEveryOccurrenceOfSharedFunctionSubgraphs) {
   EXPECT_THROW(source.ApplyRewritings(plan), core::builder::BuilderError);
 }
 
+TEST(GraphGraph, ReplayErrorsIdentifyInvalidReplacementFunctionIds) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+  auto &function = builder.MakeLocalFunction("Body", "local");
+  function.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Identity", {"X"}, {"Y"});
+  function.MakeOutput("Y");
+
+  RewritingProto unknown;
+  unknown.add_replaced_function_ids("local:Missing");
+  try {
+    builder.ApplyRewritings(unknown);
+    FAIL() << "Expected an unknown replacement function identity to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("local:Missing"), std::string::npos);
+    EXPECT_NE(message.find("not replaceable"), std::string::npos);
+  }
+
+  RewritingProto duplicate;
+  duplicate.add_replaced_function_ids("local:Body");
+  duplicate.add_replaced_function_ids("local:Body");
+  duplicate.ref_added_functions().push_back(function.ToFunction("local"));
+  try {
+    builder.ApplyRewritings(duplicate);
+    FAIL() << "Expected a duplicate replacement function identity to be rejected.";
+  } catch (const core::builder::BuilderError &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("local:Body"), std::string::npos);
+    EXPECT_NE(message.find("duplicate"), std::string::npos);
+  }
+}
+
 TEST(GraphGraph, ReplayMatchesFunctionTagsByDomainAndOverload) {
   for (const bool overload : {false, true}) {
     SCOPED_TRACE(overload);

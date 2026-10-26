@@ -2874,9 +2874,9 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
       } else {
         const auto reuse_plan = reuse_graph.Optimize();
         EXPECT_EQ(reuse_plan.added_functions().size(),
-                  same_identity ? 2u : (conflicting ? 4u : 5u));
+                  same_identity ? 2u : (conflicting ? 3u : 4u));
         const auto reused_model = reused.ToModel();
-        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 5u);
+        EXPECT_EQ(reused_model.functions().size(), same_identity ? 3u : 4u);
         EXPECT_NO_THROW(core::builder::GraphBuilder(reused_model, SchemaLookup()));
       }
     }
@@ -2959,6 +2959,11 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
                             return function.name().value() == "HalfRotaryEmbedding_0" &&
                                    function.domain().value() == "intermediate";
                           }));
+  EXPECT_FALSE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
+                           [](const auto &function) {
+                             return function.name().value() == "HalfRotaryEmbedding_1" &&
+                                    function.domain().value() == "intermediate";
+                           }));
   const ModelProto exported = builder.ToModel();
   ASSERT_EQ(exported.graph().node().size(), 1u);
   EXPECT_EQ(exported.graph().node(0).op_type().value(), "Parent");

@@ -156,7 +156,7 @@ TEST(GroupedMatMulPattern, FusesSupportedTypesAndBothBiasOrders) {
         core::builder::GraphGraph graph(builder);
         onnx_patterns::GroupedMatMulPattern pattern;
         EXPECT_EQ(pattern.Name(), "GroupedMatMul");
-        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Concat", "Loop", "Squeeze"}));
+        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze", "Concat", "Loop"}));
         const auto match = pattern.Match(graph, builder.Nodes()[3]);
         ASSERT_EQ(match.pattern, &pattern);
         EXPECT_EQ(match.insert_at, &builder.Nodes()[form == 0 ? 3 : 5]);

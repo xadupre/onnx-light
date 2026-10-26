@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Fuses per-token expert selection into an opset-29 GroupedMatMul.
  *
  * @code
- * Before (batched expert selection):
+ * Before (batched Gather):
  *             ┌─────────────────────┐
  *   x[M,K] ──→│ Unsqueeze axes=1,2  │────┐
  *             └─────────────────────┘    │
@@ -25,32 +25,30 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *                                 │ Squeeze axis=2 │──→ y[M,S,N]
  *                                 └────────────────┘
  *
- * Before (ordered complete unrolling, each m = 0,...,M-1):
+ * Before (unrolled per-token MatMuls, M >= 2):
  *                  ┌────────────────────────────────┐
  *   x, W, I, m ───→│ Gather rows and expert weights │
  *                  └────────────────────────────────┘
- *                                  │
  *                                  ↓
  *                  ┌────────────────────────────────┐
  *                  │ MatMul, optional gathered bias │
  *                  └────────────────────────────────┘
- *                                  │
  *                                  ↓
  *                  ┌────────────────────────────────┐
  *                  │ Unsqueeze(0), Concat(0)        │──→ y[M,S,N]
  *                  └────────────────────────────────┘
  *
- * Before (stateless, fixed-trip scan):
+ * Before (stateless, fixed-trip Loop):
  *                         ┌────────────────────────────────────┐
- *   M, true, x, W, I, B ──→│ Loop: Gather rows/weights by iter   │
- *                         │ MatMul, optional gathered bias     │
+ *   M, true, x, W, I, B ─→│ Loop: Gather rows/weights by iter   │
+ *                         │ MatMul, optional gathered bias      │
  *                         │ condition forwarded, scan [S,N]    │──→ y[M,S,N]
  *                         └────────────────────────────────────┘
  *
- * After (all three forms, with optional bias B):
- *                ┌───────────────────┐
- *   x, W, I, B ─→│ GroupedMatMul     │────→ y[M,S,N]
- *                └───────────────────┘
+ * After (all three forms):
+ *                         ┌────────────────────────┐
+ *   x, W, I, optional B ─→│ GroupedMatMul          │──→ y[M,S,N]
+ *                         └────────────────────────┘
  * @endcode
  *
  * W has shape [G,K,N] and I has shape [M,S]. G must be a positive static
@@ -58,16 +56,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * normalized with Less, Where, and Add before GroupedMatMul. A following Add
  * of Gather(bias[G,N], I, axis=0) may be absorbed in either input order.
  * Removed intermediates must not be shared, exported, or captured.
- * Data must be float, double, float16, or bfloat16; indices must be int32
- * or int64. Negative expert indices are normalized without overflow.
- * Concat requires static compatible shapes and all M >= 2 rows in token order,
- * with identical inputs and optional bias. Every removed intermediate must be
- * private to the matched branches.
- * Loop requires the same static shapes and positive M equal to its trip count.
- * Its initial condition is true or omitted; its body cannot terminate early,
- * carry state, shadow captures, contain extra operations, or reference nested
- * subgraphs. The default priority precedes GatherToSlice, which would obscure
- * scalar rows.
+ * Concat and Loop forms require fully static compatible shapes and positive M.
+ * Concat branches must cover every token in order. The Loop condition is true
+ * or omitted, and the body cannot terminate early, carry state, shadow captures,
+ * contain extra operations, or reference nested subgraphs.
+ * The default priority precedes GatherToSlice, which would obscure scalar rows.
  */
 class GroupedMatMulPattern final : public core::builder::PatternOptimization {
 public:
@@ -81,8 +74,6 @@ public:
         const std::vector<const NodeProto *> &nodes) const override;
 
 private:
-  core::builder::MatchResult MatchSqueeze(core::builder::GraphGraph &graph,
-                                          const NodeProto &candidate) const;
   core::builder::MatchResult MatchConcat(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const;
   core::builder::MatchResult MatchLoop(core::builder::GraphGraph &graph,

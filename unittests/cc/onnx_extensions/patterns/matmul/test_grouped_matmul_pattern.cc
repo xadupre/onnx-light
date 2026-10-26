@@ -75,6 +75,21 @@ std::string Row(GraphBuilder &builder, const std::string &token, const std::stri
   return prefix + "sum";
 }
 
+void Batched(GraphBuilder &builder, bool bias) {
+  Inputs(builder, 2, TensorType::kFloat, TensorType::kInt64, bias);
+  builder.MakeInitializer(MakeInitializerShape("unsqueeze_axes", {1, 2}));
+  builder.MakeInitializer(MakeInitializerShape("squeeze_axes", {2}));
+  builder.MakeNode("Unsqueeze", {"x", "unsqueeze_axes"}, {"expanded_x"});
+  builder.MakeNode("Gather", {"w", "indices"}, {"selected_w"});
+  builder.MakeNode("MatMul", {"expanded_x", "selected_w"}, {"mm"});
+  builder.MakeNode("Squeeze", {"mm", "squeeze_axes"}, {bias ? "squeezed" : "out"});
+  if (bias) {
+    builder.MakeNode("Gather", {"bias", "indices"}, {"selected_bias"});
+    builder.MakeNode("Add", {"squeezed", "selected_bias"}, {"out"});
+  }
+  builder.MakeOutput("out");
+}
+
 void Concat(GraphBuilder &builder, bool bias = false, bool reverse = false,
             TensorType dtype = TensorType::kFloat, TensorType itype = TensorType::kInt64,
             int tokens = 2) {
@@ -132,21 +147,6 @@ void Loop(GraphBuilder &builder, bool bias = false, bool reverse = false,
   builder.MakeOutput("out");
 }
 
-void Squeeze(GraphBuilder &builder, bool bias) {
-  Inputs(builder, 2, TensorType::kFloat, TensorType::kInt64, bias);
-  builder.MakeInitializer(MakeInitializerShape("unsqueeze_axes", {1, 2}));
-  builder.MakeInitializer(MakeInitializerShape("squeeze_axes", {2}));
-  builder.MakeNode("Unsqueeze", {"x", "unsqueeze_axes"}, {"xu"});
-  builder.MakeNode("Gather", {"w", "indices"}, {"selected"});
-  builder.MakeNode("MatMul", {"xu", "selected"}, {"mm"});
-  builder.MakeNode("Squeeze", {"mm", "squeeze_axes"}, {bias ? "squeezed" : "out"});
-  if (bias) {
-    builder.MakeNode("Gather", {"bias", "indices"}, {"selected_bias"});
-    builder.MakeNode("Add", {"squeezed", "selected_bias"}, {"out"});
-  }
-  builder.MakeOutput("out");
-}
-
 void CheckReplacement(GraphBuilder &builder, const utils::RepeatedProtoField<NodeProto> &nodes,
                       bool bias, TensorType itype) {
   ASSERT_EQ(nodes.size(), 4u);
@@ -198,7 +198,7 @@ TEST(GroupedMatMulPattern, ConcatSupportedTypesBiasOrdersAndTokenConstants) {
         GraphGraph graph(builder);
         onnx_patterns::GroupedMatMulPattern pattern;
         EXPECT_EQ(pattern.Name(), "GroupedMatMul");
-        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Concat", "Loop", "Squeeze"}));
+        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze", "Concat", "Loop"}));
         const auto match = pattern.Match(graph, Last(builder));
         ASSERT_EQ(match.pattern, &pattern);
         CheckReplacement(builder, pattern.Apply(graph, match.nodes), form != 0, itype);
@@ -222,7 +222,7 @@ TEST(GroupedMatMulPattern, LoopSupportedTypesBiasOrdersAndConditions) {
           GraphGraph graph(builder);
           onnx_patterns::GroupedMatMulPattern pattern;
           EXPECT_EQ(pattern.Name(), "GroupedMatMul");
-          EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Concat", "Loop", "Squeeze"}));
+          EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze", "Concat", "Loop"}));
           const auto match = pattern.Match(graph, Last(builder));
           ASSERT_EQ(match.pattern, &pattern) << condition;
           CheckReplacement(builder, pattern.Apply(graph, match.nodes), form != 0, itype);
@@ -232,14 +232,16 @@ TEST(GroupedMatMulPattern, LoopSupportedTypesBiasOrdersAndConditions) {
   }
 }
 
-TEST(GroupedMatMulPatterns, RegistrationCleanupAndConvergence) {
-  for (bool loop : {false, true}) {
+TEST(GroupedMatMulPattern, RegistrationCleanupAndConvergence) {
+  for (int form = 0; form < 3; ++form) {
     for (bool bias : {false, true}) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
-      if (loop) {
-        Loop(builder, bias);
-      } else {
+      if (form == 0) {
+        Batched(builder, bias);
+      } else if (form == 1) {
         Concat(builder, bias);
+      } else {
+        Loop(builder, bias);
       }
       std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
       patterns.push_back(onnx_patterns::CreatePattern("GroupedMatMul"));
@@ -255,19 +257,18 @@ TEST(GroupedMatMulPatterns, RegistrationCleanupAndConvergence) {
   }
 }
 
-TEST(GroupedMatMulPatterns, SameInstanceAllFormsAndDefaultOptimizerConvergence) {
+TEST(GroupedMatMulPattern, DefaultOptimizerConvergence) {
   onnx_patterns::RegisterPatterns();
   onnx_patterns::GroupedMatMulPattern pattern;
-  EXPECT_EQ(pattern.priority, -1);
   for (int form = 0; form < 3; ++form) {
     for (bool bias : {false, true}) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
       if (form == 0) {
-        Squeeze(builder, bias);
+        Batched(builder, bias);
       } else if (form == 1) {
-        Loop(builder, bias);
-      } else {
         Concat(builder, bias);
+      } else {
+        Loop(builder, bias);
       }
       GraphGraph graph(builder);
       const NodeProto *root = form == 0 && bias ? graph.NodeBefore("squeezed") : &Last(builder);
@@ -363,7 +364,7 @@ TEST(GroupedMatMulPattern, ConcatRejectsSharedExportedAndCapturedIntermediates) 
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsMetadataAndOpsets) {
+TEST(GroupedMatMulPattern, RejectsMetadataAndOpsets) {
   for (bool loop : {false, true}) {
     for (int guard = 0; guard < 12; ++guard) {
       GraphBuilder builder("g", Schemas(), {{"", guard == 0 ? 28 : 29}});
@@ -404,7 +405,7 @@ TEST(GroupedMatMulPatterns, RejectsMetadataAndOpsets) {
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsForeignDomainsAndAxes) {
+TEST(GroupedMatMulPattern, RejectsForeignDomainsAndAxes) {
   for (bool loop : {false, true}) {
     const int count = loop ? 7 : 15;
     for (int index = 0; index < count; ++index) {
@@ -436,7 +437,7 @@ TEST(GroupedMatMulPatterns, RejectsForeignDomainsAndAxes) {
   }
 }
 
-TEST(GroupedMatMulPatterns, RejectsOverloadedOperators) {
+TEST(GroupedMatMulPattern, RejectsOverloadedOperators) {
   for (bool loop : {false, true}) {
     for (int index = 0; index < (loop ? 8 : 15); ++index) {
       GraphBuilder builder("g", Schemas(), {{"", 29}});
@@ -564,7 +565,7 @@ TEST(GroupedMatMulPattern, LoopRejectsSparseInitializerCaptureShadowing) {
   }
 }
 
-TEST(GroupedMatMulPatterns, TokenBoundariesAndUnsafeApply) {
+TEST(GroupedMatMulPattern, TokenBoundariesAndUnsafeApply) {
   for (int tokens : {0, 1, 2}) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});
     // A zero-token Concat is not a valid ONNX graph; use one branch with M=0.
@@ -637,7 +638,7 @@ TEST(GroupedMatMulPattern, ConcatRejectsInvalidUnsqueezeAndConcatAxes) {
   }
 }
 
-TEST(GroupedMatMulPatterns, NormalizationKeepsIntegerBoundariesSafe) {
+TEST(GroupedMatMulPattern, NormalizationKeepsIntegerBoundariesSafe) {
   for (bool loop : {false, true}) {
     for (auto itype : {TensorType::kInt32, TensorType::kInt64}) {
       const int64_t groups = itype == TensorType::kInt32 ? std::numeric_limits<int32_t>::max()

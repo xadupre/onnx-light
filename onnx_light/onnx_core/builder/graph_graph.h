@@ -210,6 +210,10 @@ public:
   /// over the builder's initializers and ``Constant`` node attributes.
   const TensorProto *GetComputedConstant(const std::string &name) const;
 
+  /// Returns the scope providing a materialized constant, or nullptr when no
+  /// visible definition exists. Local definitions never resolve to outer values.
+  const GraphGraph *GetConstantScope(const std::string &name) const;
+
   /// Records a folded constant value for ``name`` so later queries can read it
   /// through :cpp:func:`GetComputedConstant`. A name is assigned once and never
   /// reused, so the cached value stays valid for the lifetime of the index.

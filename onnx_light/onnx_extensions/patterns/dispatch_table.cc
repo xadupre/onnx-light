@@ -316,6 +316,8 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ShapeBasedShapeShapeAdd", [] {
       return std::make_unique<ShapeBasedShapeShapeAddPattern>();
     });
+    core::builder::RegisterPattern("GroupedMatMul",
+                                   [] { return std::make_unique<GroupedMatMulPattern>(); });
     core::builder::RegisterPattern("GemmTranspose",
                                    [] { return std::make_unique<GemmTransposePattern>(); });
     core::builder::RegisterPattern("GemmSumFusion",

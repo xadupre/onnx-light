@@ -165,7 +165,7 @@ struct ConstantFoldingOptions {
 class GraphBuilder {
 public:
   // The pattern optimizer's read-only index needs access to the private
-  // subgraph-reference helpers (ReferencedSubgraphs / CollectImplicitInputs)
+  // subgraph-reference helper (ReferencedSubgraphs)
   // to compute the set of values captured by nested subgraphs.
   friend class GraphGraph;
 
@@ -751,6 +751,11 @@ public:
   /// @param domain Function domain.
   FunctionProto ToFunction(const std::string &domain = "");
 
+  /// Collects referenced names not defined by graph inputs, dense, extended or
+  /// sparse initializers, or node outputs into ``out``. Resolves nested-subgraph
+  /// captures relative to this scope and propagates those still undefined here.
+  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
+
 private:
   void InvalidateRewritings();
 
@@ -805,12 +810,6 @@ private:
   // Returns the nested subgraph builders referenced by ``node`` through its
   // ``*_ref`` STRING / STRINGS attributes.
   std::vector<GraphBuilder *> ReferencedSubgraphs(const NodeProto &node) const;
-
-  // Collects the implicit inputs of this builder (value names it references but
-  // does not itself define as an input, initializer or node output) into
-  // ``out``. Implicit inputs of nested subgraphs are resolved relative to this
-  // scope and propagated when they remain undefined here.
-  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
 
   // Appends to ``refs`` the value names ``node`` depends on: its explicit
   // inputs plus the implicit inputs of any nested subgraph it references.

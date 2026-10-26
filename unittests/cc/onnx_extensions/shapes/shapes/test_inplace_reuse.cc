@@ -817,6 +817,40 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
   EXPECT_TRUE(found_shape_tag);
 }
 
+TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseEncodesRetainedLegacyShapeNames) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  *graph.add_node() = MakeNode("Shape", {"X"}, {"S%raw"});
+  *graph.add_node() = MakeNode("Reshape", {"X", "S%raw"}, {"Y"});
+  graph.node()[1].add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, "S%raw");
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  WriteInPlaceReuseToMetadata(graph, ctx);
+
+  const NodeProto &reshape = graph.node()[1];
+  std::string encoding;
+  std::string release_after;
+  std::string release_after_shape_tag;
+  for (const auto &entry : reshape.metadata_props()) {
+    if (entry.key() == core::compute::kLifetimeNamesEncodingMetadataKey) {
+      encoding = entry.value();
+    } else if (entry.key() == core::compute::kReleaseAfterMetadataKey) {
+      release_after = entry.value();
+    } else if (entry.key() == core::compute::kReleaseAfterShapeTagMetadataKey) {
+      release_after_shape_tag = entry.value();
+    }
+  }
+  EXPECT_EQ(encoding, "percent");
+  EXPECT_EQ(release_after, "S%25raw");
+  EXPECT_EQ(release_after_shape_tag, "S%25raw");
+  EXPECT_NO_THROW(core::runtime::ExecutionPlan{graph});
+}
+
 // ComputeContext::Compute runs shape inference, value tagging, in-place reuse
 // and peak memory in one call, holding every result alive in the context.
 TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {

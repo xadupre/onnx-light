@@ -1431,6 +1431,8 @@ class TestPatternOptimization(ExtTestCase):
             "ShapeBasedShapeShapeAdd",
             "GemmSumFusion",
             "GemmTranspose",
+            "GroupedMatMulConcat",
+            "GroupedMatMulLoop",
             "MatMulAdd",
             "MatMulBatchNormalizationFusion",
             "MatMulReshape2Of3",

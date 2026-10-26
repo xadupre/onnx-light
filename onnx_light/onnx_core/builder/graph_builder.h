@@ -291,6 +291,11 @@ public:
     return initializers_;
   }
 
+  /// Returns graph-local sparse initializers retained during import.
+  const utils::RepeatedProtoField<SparseTensorProto> &SparseInitializers() const noexcept {
+    return graph_template_.sparse_initializer();
+  }
+
   // ── Inputs / outputs ─────────────────────────────────────────────────
 
   /// Declares a graph input from a ready-made :cpp:class:`ValueInfoProto` and

@@ -57,9 +57,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 
-template <typename T> void BindPattern(nb::module_ &m, const char *name, const char *doc) {
+template <typename T>
+void BindPattern(nb::module_ &m, const char *name, const char *doc, int default_priority = 0) {
   nb::class_<T, core::builder::PatternOptimization>(m, name, doc)
-      .def(nb::init<int>(), nb::arg("priority") = 0);
+      .def(nb::init<int>(), nb::arg("priority") = default_priority);
 }
 
 std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::string &name,
@@ -381,6 +382,11 @@ NB_MODULE(_onnxpypatterns, m) {
       "Exposes the upstream placeholder for additions of two Shape outputs.");
   BindPattern<onnx_patterns::GroupedMatMulPattern>(
       m, "GroupedMatMulPattern", "Fuses gathered expert weights and MatMul into GroupedMatMul.");
+  BindPattern<onnx_patterns::GroupedMatMulConcatPattern>(
+      m, "GroupedMatMulConcatPattern", "Fuses concatenated per-token MatMuls into GroupedMatMul.",
+      -1);
+  BindPattern<onnx_patterns::GroupedMatMulLoopPattern>(
+      m, "GroupedMatMulLoopPattern", "Fuses a per-token MatMul scan Loop into GroupedMatMul.", 1);
   BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
                                                    "Folds input transposes into a Gemm operation.");
   BindPattern<onnx_patterns::GemmSumFusionPattern>(

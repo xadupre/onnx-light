@@ -2901,6 +2901,8 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       "ShapeBasedShapeShapeAdd",
       "GemmSumFusion",
       "GemmTranspose",
+      "GroupedMatMulConcat",
+      "GroupedMatMulLoop",
       "MatMulAdd",
       "MatMulBatchNormalizationFusion",
       "MatMulReshape2Of3",

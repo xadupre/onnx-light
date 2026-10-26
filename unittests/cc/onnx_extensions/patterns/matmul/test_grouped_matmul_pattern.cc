@@ -579,6 +579,98 @@ TEST(GroupedMatMulPattern, RejectsImportedAddOverrideWithoutChangingTheGraph) {
   }
 }
 
+TEST(GroupedMatMulPattern, ValidatesConstantProducersInTheirDefiningScope) {
+  const std::vector<std::pair<int, std::string>> constants = {
+      {0, "unsqueeze_axes"}, {0, "squeeze_axes"}, {1, "axes"}, {1, "r0token"},
+      {1, "r1token"},        {2, "trip"},         {2, "true"}};
+  for (const auto &[form, name] : constants) {
+    for (bool captured : {false, true}) {
+      for (int variant = 0; variant < 6; ++variant) {
+        SCOPED_TRACE(name);
+        SCOPED_TRACE(captured);
+        SCOPED_TRACE(variant);
+        GraphBuilder root("g", Schemas(), {{"", 29}});
+        TensorProto literal;
+        if (name == "unsqueeze_axes") {
+          literal = MakeInitializerShape("", {1, 2});
+        } else if (name == "squeeze_axes" || name == "axes") {
+          literal = MakeInitializerShape("", {name == "axes" ? 0 : 2});
+        } else if (name == "true") {
+          literal = MakeInitializer<int32_t>("", {}, {1});
+          literal.set_data_type(TensorProto::BOOL);
+        } else {
+          literal = MakeInitializer<int64_t>("", {},
+                                             {name == "trip"      ? 2
+                                              : name == "r1token" ? 1
+                                                                  : 0});
+        }
+        utils::RepeatedProtoField<AttributeProto> attributes;
+        auto &value = attributes.add();
+        value.set_name("value");
+        value.set_type(AttributeProto::TENSOR);
+        *value.mutable_t() = literal;
+        root.MakeNode("Constant", {}, {"checked_constant"}, "", "", attributes);
+        auto &builder = captured ? root.MakeSubgraph("selection") : root;
+        if (form == 0) {
+          Batched(builder, false);
+        } else if (form == 1) {
+          Concat(builder);
+        } else {
+          Loop(builder);
+        }
+        for (auto &node : Nodes(builder))
+          for (auto &input : node.ref_input())
+            if (input.value() == name)
+              input = utils::String("checked_constant");
+        if (variant == 1) {
+          Nodes(root)[0].set_overload("different");
+        } else if (variant == 5) {
+          Nodes(root)[0].mutable_attribute(0)->set_ref_attr_name("parameter");
+        } else if (variant >= 2) {
+          FunctionProto function;
+          function.set_name("Constant");
+          function.set_domain(variant == 4 ? "foreign" : "");
+          function.set_overload(variant == 3 ? "different" : "");
+          function.add_opset("", 29);
+          function.add_output("result");
+          function.ref_node().push_back(MakeNode("SequenceEmpty", {}, {"empty"}));
+          function.ref_node().push_back(MakeNode("SequenceLength", {"empty"}, {"result"}));
+          auto &shapes = const_cast<core::shapes::ShapesContext &>(root.Shapes());
+          shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+        }
+        const bool primitive = variant == 0 || variant == 3 || variant == 4;
+        auto pattern = std::make_shared<onnx_patterns::GroupedMatMulPattern>();
+        if (!captured) {
+          GraphGraph graph(builder);
+          const auto &candidate = Last(builder);
+          const auto match = pattern->Match(graph, candidate);
+          EXPECT_EQ(match.pattern != nullptr, primitive);
+          if (!primitive) {
+            EXPECT_THROW(pattern->Apply(graph, {&candidate}), core::builder::BuilderError);
+          }
+        } else {
+          utils::RepeatedProtoField<AttributeProto> references;
+          auto &body = references.add();
+          body.set_name("body_ref");
+          body.set_type(AttributeProto::STRING);
+          body.set_s("selection");
+          root.MakeNode("SubgraphCarrier", {}, {"nested_out"}, "", "", references);
+          root.MakeOutput("nested_out");
+          GraphGraph graph(
+              root, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+          core::builder::ConstantFoldingOptions folding;
+          folding.enabled = false;
+          graph.Optimize(-1, nullptr, folding);
+          bool fused = false;
+          for (const auto &node : builder.Nodes())
+            fused |= node.op_type() == "GroupedMatMul";
+          EXPECT_EQ(fused, primitive);
+        }
+      }
+    }
+  }
+}
+
 TEST(GroupedMatMulPattern, LoopRejectsTripConditionsStateAndExtraOperations) {
   for (int guard = 0; guard < 15; ++guard) {
     GraphBuilder builder("g", Schemas(), {{"", 29}});

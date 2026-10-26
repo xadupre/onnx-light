@@ -3154,6 +3154,22 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
              : parent_graph_->GetComputedConstant(name);
 }
 
+const GraphGraph *GraphGraph::GetConstantScope(const std::string &name) const {
+  if (computed_constants_.count(name) != 0 || initializers_.count(name) != 0)
+    return this;
+  if (const auto *node = NodeBefore(name)) {
+    if (!node->domain().value().empty() || node->op_type() != "Constant")
+      return nullptr;
+    const auto *value = FindAttribute(*node, "value");
+    return value != nullptr && value->has_t() ? this : nullptr;
+  }
+  if (builder_.names_.count(name) != 0)
+    return nullptr;
+  return parent_graph_ == nullptr || !parent_graph_->IsVisibleBefore(name, parent_position_limit_)
+             ? nullptr
+             : parent_graph_->GetConstantScope(name);
+}
+
 bool GraphGraph::IsVisibleBefore(const std::string &name, std::size_t position_limit) const {
   const NodeProto *producer = NodeBefore(name);
   return producer == nullptr || Position(*producer) < position_limit;

@@ -49,6 +49,15 @@ void RegisterGroupedMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
       }
     };
     for (const bool int32_indices : {false, true}) {
+      if (dtype == DataType::FLOAT16 || dtype == DataType::DOUBLE) {
+        add(std::string("test_cc_groupedmatmul_") +
+                (dtype == DataType::FLOAT16 ? "float16" : "float64") +
+                (int32_indices ? "_int32" : "_int64"),
+            {make({2, 2}, {1, 2, 3, 4}), make({2, 2, 2}, {1, 0, 0, 1, 0, 1, 1, 0}),
+             int32_indices ? Tensor::FromInt32("", {2, 2}, {0, 1, 1, 0})
+                           : Tensor::FromInt64("", {2, 2}, {0, 1, 1, 0})},
+            make({2, 2, 2}, {1, 2, 2, 1, 4, 3, 3, 4}));
+      }
       add("test_cc_groupedmatmul_with_bias_" + std::to_string(dtype) +
               (int32_indices ? "_int32" : "_int64"),
           {make({2, 2}, {1, 2, 3, 4}), make({2, 2, 2}, {1, 0, 0, 1, 0, 1, 1, 0}),

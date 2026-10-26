@@ -1726,6 +1726,21 @@ bool IsGroupedPrimitive(const core::builder::GraphBuilder &builder, const NodePr
          !HasGroupedFunction(builder, node.domain(), node.op_type(), node.overload());
 }
 
+bool IsGroupedConstant(core::builder::GraphGraph &graph, const std::string &name) {
+  const auto *scope = graph.GetConstantScope(name);
+  if (scope == nullptr)
+    return false;
+  const auto *producer = scope->NodeBefore(name);
+  if (producer == nullptr)
+    return true;
+  if (!IsGroupedPrimitive(scope->Builder(), *producer))
+    return false;
+  for (const auto &attribute : producer->attribute())
+    if (!attribute.ref_attr_name().value().empty())
+      return false;
+  return true;
+}
+
 } // namespace
 
 core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
@@ -1753,7 +1768,7 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     std::vector<int64_t> axes;
     if (!graph.HasShape(name) || graph.GetShape(name).Shape().Rank() != 1 || !graph.HasType(name) ||
         graph.GetType(name) != core::symbolic::TensorType::kInt64 ||
-        !ReadConstantInts(graph, name, axes)) {
+        !IsGroupedConstant(graph, name) || !ReadConstantInts(graph, name, axes)) {
       return false;
     }
     for (int64_t &axis : axes) {
@@ -1970,7 +1985,7 @@ bool ReadGroupedRow(const std::string &output, Lookup before, GroupedRow &row) {
 bool ExactScalar(core::builder::GraphGraph &graph, const std::string &name,
                  core::symbolic::TensorType type, int64_t value) {
   if (!graph.HasShape(name) || graph.GetShape(name).Shape().Rank() != 0 || !graph.HasType(name) ||
-      graph.GetType(name) != type) {
+      graph.GetType(name) != type || !IsGroupedConstant(graph, name)) {
     return false;
   }
   if (type == core::symbolic::TensorType::kBool) {
@@ -2100,7 +2115,8 @@ core::builder::MatchResult GroupedMatMulPattern::MatchConcat(core::builder::Grap
     const std::string &axis = unsqueeze->input()[1].value();
     if (!graph.HasType(axis) || graph.GetType(axis) != core::symbolic::TensorType::kInt64 ||
         !graph.HasShape(axis) || graph.GetShape(axis).Shape().Rank() != 1 ||
-        !ReadConstantInts(graph, axis, axes) || axes != std::vector<int64_t>{0}) {
+        !IsGroupedConstant(graph, axis) || !ReadConstantInts(graph, axis, axes) ||
+        axes != std::vector<int64_t>{0}) {
       return NoMatch(candidate, "expected constant Unsqueeze axes [0]");
     }
     GroupedRow row;

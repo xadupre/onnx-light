@@ -146,7 +146,7 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   // Compute output last dim = q_num_heads * d_v.
   SymDim out_last;
   if (d_v_resolved) {
-    out_last = SymDim(q_num_heads * d_v.AsInt());
+    out_last = SymDim(core::shapes::CheckedDimensionMultiply(q_num_heads, d_v.AsInt()));
   } else if (q_num_heads == kv_num_heads && !v_shape[2].IsInt()) {
     // Special case: q_num_heads * d_v = q_num_heads * (v_shape[2] / kv_num_heads) = v_shape[2].
     out_last = v_shape[2];

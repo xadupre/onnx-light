@@ -58,7 +58,8 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
       const SymDim &in_dim = in_shape[static_cast<std::size_t>(i)];
       const SymDim &rep_dim = repeats[static_cast<std::size_t>(i)];
       if (in_dim.IsInt() && rep_dim.IsInt()) {
-        out_shape.PushBack(SymDim(in_dim.AsInt() * rep_dim.AsInt()));
+        out_shape.PushBack(
+            SymDim(core::shapes::CheckedDimensionMultiply(in_dim.AsInt(), rep_dim.AsInt())));
       } else if (rep_dim.IsInt()) {
         // The repeat count is known but the input dim is symbolic: compute
         // the product symbolically using the expressions library so that

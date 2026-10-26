@@ -14,6 +14,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
+/// Multiplies dimension values, throwing std::invalid_argument on integer overflow.
+int64_t CheckedDimensionMultiply(int64_t lhs, int64_t rhs);
+
+/// Adds dimension values, throwing std::invalid_argument on integer overflow.
+int64_t CheckedDimensionAdd(int64_t lhs, int64_t rhs);
+
 /**
  * Validates the common preamble of every ``ComputeShape*`` function:
  *

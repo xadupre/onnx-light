@@ -41,7 +41,7 @@ void RequireRank4(const SymShape &shape, const char *name) {
 // Returns ``a + b`` when both dims are static; otherwise returns ``a``.
 SymDim AddDims(const SymDim &a, const SymDim &b) {
   if (a.IsInt() && b.IsInt()) {
-    return SymDim(a.AsInt() + b.AsInt());
+    return SymDim(core::shapes::CheckedDimensionAdd(a.AsInt(), b.AsInt()));
   }
   return a;
 }
@@ -63,7 +63,7 @@ SymDim DivideByHeads(const SymDim &hidden, int64_t num_heads, const char *what) 
 // fresh symbolic placeholder.
 SymDim MultiplyByHeads(int64_t num_heads, const SymDim &head) {
   if (head.IsInt()) {
-    return SymDim(num_heads * head.AsInt());
+    return SymDim(core::shapes::CheckedDimensionMultiply(num_heads, head.AsInt()));
   }
   return SymDim(std::string("?"));
 }

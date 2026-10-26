@@ -18,7 +18,7 @@ namespace {
 
 SymDim MulDim(const SymDim &dim, int64_t factor) {
   if (dim.IsInt()) {
-    return SymDim(dim.AsInt() * factor);
+    return SymDim(core::shapes::CheckedDimensionMultiply(dim.AsInt(), factor));
   }
   return SymDim("(" + dim.AsExpr() + ")*" + std::to_string(factor));
 }
@@ -56,7 +56,7 @@ void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeDepthToSpace: input must be a 4-D tensor (got rank ",
                       input_shape.Rank(), ").");
 
-  const int64_t bs2 = blocksize * blocksize;
+  const int64_t bs2 = core::shapes::CheckedDimensionMultiply(blocksize, blocksize);
   SymShape out_shape;
   out_shape.PushBack(input_shape[0]);
   out_shape.PushBack(DivDim(input_shape[1], bs2));

@@ -163,7 +163,8 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
         const SymDim &input_dim = data_shape[i];
         out_shape.PushBack(input_dim);
         if (input_dim.IsInt()) {
-          output_product *= input_dim.AsInt();
+          output_product =
+              core::shapes::CheckedDimensionMultiply(output_product, input_dim.AsInt());
         } else {
           unresolved_zeros[i] = true;
           output_product_valid = false;
@@ -174,7 +175,7 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       }
     } else if (v > 0) {
       out_shape.PushBack(SymDim(v));
-      output_product *= v;
+      output_product = core::shapes::CheckedDimensionMultiply(output_product, v);
     } else {
       EXT_THROW_INVALID("ComputeShapeReshape: invalid dimension value ", v, " in target shape.");
     }
@@ -188,7 +189,8 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
     bool input_product_valid = true;
     for (int i = 0; i < data_rank; ++i) {
       if (data_shape[i].IsInt()) {
-        input_product *= data_shape[i].AsInt();
+        input_product =
+            core::shapes::CheckedDimensionMultiply(input_product, data_shape[i].AsInt());
       } else if (i >= static_cast<int>(unresolved_zeros.size()) || !unresolved_zeros[i]) {
         input_product_valid = false;
         break;

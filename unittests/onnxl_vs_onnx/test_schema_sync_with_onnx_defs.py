@@ -137,7 +137,13 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(len(schema.inputs), len(lights.inputs))
                 self.assertEqual(len(schema.outputs), len(lights.outputs))
                 self.assertEqual(len(schema.type_constraints), len(lights.type_constraints))
-                self.assertEqual(schema.has_function, lights.has_function)
+                if key == ("", "MeanVarianceNormalization", 13):
+                    # Correct FLOAT16/DOUBLE expansion needs the input dtype.
+                    self.assertFalse(lights.has_function)
+                    self.assertTrue(lights.has_context_dependent_function)
+                    self.assertEqual(lights.all_function_opset_versions, [13, 18])
+                else:
+                    self.assertEqual(schema.has_function, lights.has_function)
                 self.assertEqual(schema.deprecated, lights.deprecated)
                 self.assertEqual(schema.is_infinite(0), lights.is_infinite(0))
                 self.assertEqual(schema.max_input, lights.max_input)

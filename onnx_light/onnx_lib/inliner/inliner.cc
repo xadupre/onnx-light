@@ -400,25 +400,26 @@ ConstNodeMap FindConstantNodes(const GraphProto &graph) {
 }
 #endif // ONNX_LIGHT_VERSION_CONVERTER
 
-const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
-  for (const auto &vi : model.graph().value_info()) {
-    if (vi.name() == var)
-      return &vi.type();
-  }
-  for (const auto &vi : model.graph().input()) {
-    if (vi.name() == var)
-      return &vi.type();
-  }
-  for (const auto &vi : model.graph().output()) {
+const TypeProto *TryGetType(const utils::RepeatedProtoField<ValueInfoProto> &values,
+                            const std::string &var) {
+  for (const auto &vi : values) {
     if (vi.name() == var)
       return &vi.type();
   }
   return nullptr;
 }
 
+const TypeProto *TryGetType(const GraphProto &graph, const std::string &var) {
+  if (const auto *type = TryGetType(graph.value_info(), var))
+    return type;
+  if (const auto *type = TryGetType(graph.input(), var))
+    return type;
+  return TryGetType(graph.output(), var);
+}
+
 #ifdef ONNX_LIGHT_VERSION_CONVERTER
 const TypeProto &GetType(const ModelProto &model, const std::string &var) {
-  const TypeProto *type = TryGetType(model, var);
+  const TypeProto *type = TryGetType(model.graph(), var);
   ONNX_ASSERTM(type != nullptr, "Type unknown for ", var)
   return *type;
 }
@@ -509,6 +510,43 @@ using FunctionMap = std::unordered_map<FunctionImplId, std::pair<const FunctionP
 using NodeList = utils::RepeatedProtoField<NodeProto>;
 using InlinerValueInfoList = utils::RepeatedProtoField<ValueInfoProto>;
 
+struct InlinerTypeScope {
+  const InlinerValueInfoList &value_infos;
+  const GraphProto *graph;
+  const InlinerTypeScope *parent;
+  std::unordered_set<std::string> definitions;
+
+  InlinerTypeScope(const InlinerValueInfoList &values, const GraphProto *graph_ = nullptr,
+                   const InlinerTypeScope *parent_ = nullptr)
+      : value_infos(values), graph(graph_), parent(parent_) {
+    if (graph != nullptr && parent != nullptr) {
+      for (const auto &input : graph->input())
+        definitions.insert(input.name());
+      for (const auto &initializer : graph->initializer())
+        definitions.insert(initializer.name());
+      for (const auto &initializer : graph->sparse_initializer())
+        definitions.insert(initializer.values().name());
+      for (const auto &initializer : graph->extended_initializer())
+        definitions.insert(initializer.name());
+    }
+  }
+
+  void AddDefinitions(const NodeList &nodes) {
+    if (parent != nullptr) {
+      for (const auto &node : nodes)
+        for (const auto &output : node.output())
+          definitions.insert(output);
+    }
+  }
+
+  const TypeProto *GetType(const std::string &name) const {
+    const auto *type = graph != nullptr ? TryGetType(*graph, name) : TryGetType(value_infos, name);
+    if (type != nullptr)
+      return type;
+    return parent != nullptr && definitions.count(name) == 0 ? parent->GetType(name) : nullptr;
+  }
+};
+
 struct InlinerImpl {
   ModelProto &model;
   const FunctionIdSet &to_inline;
@@ -525,7 +563,8 @@ struct InlinerImpl {
 
   ~InlinerImpl() = default;
 
-  bool GetCallee(const NodeProto &node, FunctionProto &callee, int64_t &target_version) {
+  bool GetCallee(const NodeProto &node, FunctionProto &callee, int64_t &target_version,
+                 const InlinerTypeScope &scope) {
     std::string domain = node.domain();
     std::string function_name = node.op_type();
     if (!to_inline.Contains(domain, function_name)) {
@@ -567,7 +606,7 @@ struct InlinerImpl {
 #endif
         utils::RepeatedProtoField<TypeProto> input_types;
         for (const auto &input : node.input()) {
-          const TypeProto *t = TryGetType(model, input);
+          const TypeProto *t = scope.GetType(input);
           if (t == nullptr) {
             // Type information is not available for this input (e.g. it is the
             // output of a node that was just inlined and whose type was not
@@ -579,9 +618,7 @@ struct InlinerImpl {
         }
         ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl function_body_ctx(node, input_types);
         target_version = kNoConversion;
-        // BuildContextDependentFunction is void in onnx-light; it throws on failure.
-        op_schema->BuildContextDependentFunction(function_body_ctx, callee, domain_version);
-        return true;
+        return op_schema->BuildContextDependentFunction(function_body_ctx, callee, domain_version);
       }
     }
     return false;
@@ -591,7 +628,8 @@ struct InlinerImpl {
    * @param nodes Mutable list of nodes (of function or graph)
    * @param value_infos Mutable list of value_infos (of function or graph)
    */
-  void Process(NodeList &nodes, InlinerValueInfoList &value_infos) {
+  void Process(NodeList &nodes, InlinerValueInfoList &value_infos, InlinerTypeScope &scope) {
+    scope.AddDefinitions(nodes);
     NodeList original_nodes;
     // Move all nodes into original_nodes
     std::swap(original_nodes, nodes);
@@ -599,7 +637,7 @@ struct InlinerImpl {
     std::function<void(NodeProto & node)> append_node = [&](NodeProto &node) {
       FunctionProto callee;
       int64_t target_version = kNoConversion;
-      if (GetCallee(node, callee, target_version)) {
+      if (GetCallee(node, callee, target_version, scope)) {
         // Bind attribute parameters
         internal::AttributeBinder::BindAttributes(node, callee);
 
@@ -623,16 +661,17 @@ struct InlinerImpl {
           }
         }
         // Append nodes of called function
+        scope.AddDefinitions(callee.node());
         for (auto &callee_node : callee.node())
           append_node(callee_node);
       } else {
         // Append node without inlining.
         for (auto &attr : node.attribute()) {
           if (attr.has_g()) {
-            ProcessGraph(*attr.mutable_g());
+            ProcessGraph(*attr.mutable_g(), schema_registry != nullptr ? &scope : nullptr);
           }
           for (auto &g : attr.graphs()) {
-            ProcessGraph(g);
+            ProcessGraph(g, schema_registry != nullptr ? &scope : nullptr);
           }
         }
 
@@ -647,10 +686,11 @@ struct InlinerImpl {
   /** Utility function used for inlining into a GraphProto.
    * @param graph Mutable graph
    */
-  void ProcessGraph(GraphProto &graph) {
+  void ProcessGraph(GraphProto &graph, const InlinerTypeScope *parent = nullptr) {
     auto &nodes = graph.node();
     auto &value_infos = graph.value_info();
-    Process(nodes, value_infos);
+    InlinerTypeScope scope(value_infos, &graph, parent);
+    Process(nodes, value_infos, scope);
   }
 
   /** Utility function used for inlining into a FunctionProto.
@@ -659,7 +699,9 @@ struct InlinerImpl {
   void ProcessFunction(FunctionProto &function) {
     auto &nodes = function.node();
     auto &value_infos = function.value_info();
-    Process(nodes, value_infos);
+    // Function parameters never capture names from the main graph.
+    InlinerTypeScope scope(value_infos);
+    Process(nodes, value_infos, scope);
   }
 
   // Erase every model-local function whose id appears in `inlined`.

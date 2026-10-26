@@ -1,6 +1,8 @@
 #include "onnx.h"
+#include "onnx_lib/checker.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/string_utils.h"
+#include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
@@ -14,6 +16,97 @@
 #include <tuple>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->GetNodeDeterminism(), OpSchema::NodeDeterminism::Deterministic);
+  NodeProto untyped_node;
+  untyped_node.add_input("X");
+  FunctionBodyBuildContextImpl untyped_context(untyped_node);
+  FunctionProto untyped_function;
+  for (const int opset : {13, 17, 18, 21}) {
+    EXPECT_FALSE(schema->BuildContextDependentFunction(untyped_context, untyped_function, opset));
+    for (const auto dtype :
+         {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+      for (const bool explicit_axes : {false, true}) {
+        SCOPED_TRACE(opset);
+        SCOPED_TRACE(dtype);
+        SCOPED_TRACE(explicit_axes);
+        ModelProto model;
+        model.set_ir_version(IR_VERSION);
+        model.add_opset_import()->set_version(opset);
+        auto *graph = model.mutable_graph();
+        graph->set_name("mvn");
+        auto *input = graph->add_input();
+        input->set_name("X");
+        auto *tensor_type = input->mutable_type()->mutable_tensor_type();
+        tensor_type->set_elem_type(dtype);
+        for (const int64_t dim : {2, 3, 4, 5}) {
+          tensor_type->mutable_shape()->add_dim()->set_dim_value(dim);
+        }
+        const TypeProto input_type = input->type();
+        auto *output = graph->add_output();
+        output->set_name("Y");
+        output->mutable_type()->CopyFrom(input_type);
+        NodeProto node;
+        node.set_op_type("MeanVarianceNormalization");
+        node.add_input("X");
+        node.add_output("Y");
+        if (explicit_axes) {
+          AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
+        }
+        FunctionProto function;
+        FunctionBodyBuildContextImpl context(node, std::vector<TypeProto>{input_type});
+        ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, opset));
+        FunctionExpandHelper(node, function, *graph);
+        graph->mutable_output(0)->clear_type();
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(true, 1, false)));
+        EXPECT_TRUE(graph->output(0).type().Equals(input_type));
+        ASSERT_NO_THROW(checker::check_model(model, true));
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, MeanVarianceNormalizationUnexpandedNode) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int opset : {13, 18}) {
+    SCOPED_TRACE(opset);
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset_import()->set_version(opset);
+    auto *graph = model.mutable_graph();
+    graph->set_name("mvn_unexpanded");
+    auto *input = graph->add_input();
+    input->set_name("X");
+    auto *input_type = input->mutable_type()->mutable_tensor_type();
+    input_type->set_elem_type(TensorProto::FLOAT);
+    for (const int64_t dim : {2, 3, 4, 5}) {
+      input_type->mutable_shape()->add_dim()->set_dim_value(dim);
+    }
+    auto *output = graph->add_output();
+    output->set_name("Y");
+    auto &node = *graph->add_node();
+    node.set_op_type("MeanVarianceNormalization");
+    node.add_input("X");
+    node.add_output("Y");
+
+    ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                 ShapeInferenceOptions(true, 1, false)));
+    EXPECT_TRUE(graph->output(0).type().Equals(input->type()));
+    ASSERT_NO_THROW(checker::check_model(model, true));
+
+    ModelProto invalid_model = model;
+    auto &axes = *invalid_model.mutable_graph()->mutable_node(0)->add_attribute();
+    axes.set_name("axes");
+    axes.set_type(AttributeProto::INTS);
+    axes.add_ints(4);
+    EXPECT_THROW(checker::check_model(invalid_model, true), InferenceError);
+  }
+}
 
 namespace {
 

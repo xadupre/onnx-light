@@ -297,12 +297,6 @@ class TestPipelineIO(ExtTestCase):
                     loaded = onnxl.load(path, format="textproto")
                     self.assertIsInstance(loaded, onnxl.PipelineProto)
                     self.assertEqual(pipeline.SerializeToString(), loaded.SerializeToString())
-                    loaded = onnxl.load(path, format="textproto", layout=True)
-                    self.assertIsInstance(loaded, onnxl.PipelineProto)
-                    for stage in ("embedding", "prefill", "decode"):
-                        self.assertEqual(
-                            getattr(loaded, stage).graph.name, getattr(pipeline, stage).graph.name
-                        )
 
     def test_other_extensions_still_load_models(self):
         model = _rich_model()

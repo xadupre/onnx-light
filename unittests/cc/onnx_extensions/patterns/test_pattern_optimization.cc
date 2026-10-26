@@ -2706,6 +2706,44 @@ TEST(PatternOptimization, CastMatchersRejectIntroducedIdentityOverrides) {
   }
 }
 
+TEST(PatternOptimization, ConstantFunctionOutputPreservesIntroducedIdentityOverrides) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    SCOPED_TRACE(domain);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});
+    auto &identity = builder.MakeLocalFunction("Identity", domain);
+    identity.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    identity.MakeNode("Neg", {"X"}, {"Y"});
+    identity.MakeOutput("Y");
+    auto &function = builder.MakeLocalFunction("Wrapper", "test.pattern");
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &value = attributes.add();
+    value.set_name("value");
+    value.set_type(AttributeProto::TENSOR);
+    *value.mutable_t() = MakeInitializer<float>("", {2}, {1, 2});
+    function.MakeNode("Constant", {}, {"Y"}, "", "", attributes);
+    function.MakeOutput("Y");
+    builder.MakeNode("Wrapper", {}, {"y"}, "test.pattern");
+    builder.MakeOutput("y");
+    const ModelProto original = builder.ToModel();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::ConstantToInitializerPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    const auto plan = graph.Optimize(-1, nullptr, folding);
+    EXPECT_TRUE(plan.rewrites().empty());
+    EXPECT_TRUE(plan.added_functions().empty());
+    EXPECT_TRUE(function.Initializers().empty());
+    for (const auto &model : {original, builder.ToModel()}) {
+      const auto outputs = core::runtime::RunModel(model, {});
+      ASSERT_EQ(outputs.size(), 1u);
+      ASSERT_EQ(outputs[0].element_count(), 2);
+      EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], 1);
+      EXPECT_FLOAT_EQ(outputs[0].AsFloat()[1], 2);
+    }
+  }
+}
+
 TEST(PatternOptimization, FunctionMatchersRejectUnresolvedAttributeReferences) {
   ModelProto model;
   model.add_opset("", 18);
@@ -2883,7 +2921,8 @@ TEST(PatternOptimization, ExportsAndReplaysHelpersCreatedInsideFunctions) {
   }
 }
 
-TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
+void CheckSharedHelperWhenUnusedBranchIsPruned(bool preexisting) {
+  SCOPED_TRACE(preexisting);
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
   builder.SetOpsetVersion("other", 1);
   builder.SetOpsetVersion("test.pattern", 1);
@@ -2928,6 +2967,25 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
   auto &else_branch = parent.MakeSubgraph("else_branch");
   else_branch.MakeNode("Identity", {"X"}, {"else_output"});
   else_branch.MakeOutput("else_output");
+  if (preexisting) {
+    auto &helper = then_branch.MakeLocalFunction("HalfRotaryEmbedding_0", "intermediate");
+    helper.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+    helper.MakeInput("cos_cache", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    helper.MakeInput("sin_cache", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+    auto split = MakeNode("Split", {"X"}, {"left", "right"});
+    AddAttribute<int64_t>(split, "num_outputs", 2);
+    AddAttribute<int64_t>(split, "axis", -1);
+    helper.ImportNode(split);
+    helper.MakeNode("Neg", {"right"}, {"right_neg"});
+    auto concat = MakeNode("Concat", {"right_neg", "left"}, {"rotated"});
+    AddAttribute<int64_t>(concat, "axis", -1);
+    helper.ImportNode(concat);
+    helper.MakeNode("Mul", {"X", "cos_cache"}, {"x_cos"});
+    helper.MakeNode("Mul", {"rotated", "sin_cache"}, {"rotated_sin"});
+    helper.MakeNode("Add", {"x_cos", "rotated_sin"}, {"Y"});
+    helper.MakeOutput("Y");
+    helper.set_device(core::symbolic::Device::kGPU0);
+  }
   utils::RepeatedProtoField<AttributeProto> branch_attributes;
   for (const auto &[name, graph] :
        {std::pair<const char *, const char *>{"then_branch_ref", "then_branch"},
@@ -2954,17 +3012,24 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
   core::builder::GraphGraph graph(builder, std::move(patterns));
   const RewritingProto plan = graph.Optimize();
 
-  EXPECT_TRUE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
-                          [](const auto &function) {
-                            return function.name().value() == "HalfRotaryEmbedding_0" &&
-                                   function.domain().value() == "intermediate";
-                          }));
+  if (!preexisting) {
+    EXPECT_TRUE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
+                            [](const auto &function) {
+                              return function.name().value() == "HalfRotaryEmbedding_0" &&
+                                     function.domain().value() == "intermediate";
+                            }));
+  }
   EXPECT_FALSE(std::any_of(plan.added_functions().begin(), plan.added_functions().end(),
                            [](const auto &function) {
                              return function.name().value() == "HalfRotaryEmbedding_1" &&
                                     function.domain().value() == "intermediate";
                            }));
   const ModelProto exported = builder.ToModel();
+  if (preexisting) {
+    ASSERT_TRUE(builder.HasLocalFunction("HalfRotaryEmbedding_0"));
+    EXPECT_EQ(builder.LocalFunction("HalfRotaryEmbedding_0").device(),
+              core::symbolic::Device::kGPU0);
+  }
   ASSERT_EQ(exported.graph().node().size(), 1u);
   EXPECT_EQ(exported.graph().node(0).op_type().value(), "Parent");
   ASSERT_EQ(exported.functions().size(), 3u);
@@ -3000,6 +3065,14 @@ TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
   EXPECT_EQ(replayed_parent->node(0).op_type().value(), "HalfRotaryEmbedding_0");
   EXPECT_EQ(replayed_parent->node(0).domain().value(), "intermediate");
   EXPECT_NO_THROW(core::builder::GraphBuilder(replayed, SchemaLookup()));
+}
+
+TEST(PatternOptimization, KeepsSharedHelperWhenUnusedBranchIsPruned) {
+  CheckSharedHelperWhenUnusedBranchIsPruned(false);
+}
+
+TEST(PatternOptimization, KeepsPreexistingNestedHelperWhenUnusedBranchIsPruned) {
+  CheckSharedHelperWhenUnusedBranchIsPruned(true);
 }
 
 TEST(PatternOptimization, SkipsFunctionPatternsWithUnresolvedAttributeReferences) {

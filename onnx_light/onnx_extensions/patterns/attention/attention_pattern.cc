@@ -426,6 +426,11 @@ NodeProto &AddFunctionNode(FunctionProto &function, const char *op_type,
 
 bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &name) {
   const auto &model_builder = builder.ModelBuilder();
+  if (&builder == &model_builder &&
+      (model_builder.HasName(name) || model_builder.HasLocalFunction(name)) &&
+      (!model_builder.HasLocalFunction(name) ||
+       !model_builder.LocalFunction(name).IsLocalFunction(name, kIntermediateDomain)))
+    return false;
   return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
          (builder.Shapes().HasLocalFunction(
               core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, name)) ||
@@ -441,12 +446,14 @@ std::string ModelScopedHelperName(core::builder::GraphBuilder &builder, const st
                     [&](const auto &function) {
                       return function->IsLocalFunction(candidate, kIntermediateDomain);
                     });
-    if (exists_at_model_scope ||
-        builder.Shapes().HasLocalFunction(
-            core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, candidate))) {
+    const bool occupied =
+        model_builder.HasName(candidate) || model_builder.HasLocalFunction(candidate);
+    if (exists_at_model_scope || (!occupied && builder.Shapes().HasLocalFunction(
+                                                   core::shapes::ShapesContext::LocalFunctionKey(
+                                                       kIntermediateDomain, candidate)))) {
       return candidate;
     }
-    if (!model_builder.HasName(candidate) &&
+    if (!occupied &&
         !builder.Shapes().HasLocalFunction(
             core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, candidate))) {
       return candidate;
@@ -614,15 +621,40 @@ void EnsureFunction(core::builder::GraphGraph &graph, const FunctionProto &funct
   }
   if (opset == core::shapes::kUnknownOpsetVersion)
     builder.SetOpsetVersion(domain, 1);
+  auto &model_builder = builder.ModelBuilder();
+  auto &owner = (model_builder.HasName(name) || model_builder.HasLocalFunction(name)) &&
+                        (!model_builder.HasLocalFunction(name) ||
+                         !model_builder.LocalFunction(name).IsLocalFunction(name, domain,
+                                                                            function.overload()))
+                    ? builder
+                    : model_builder;
   if (reuse) {
+    if (owner.HasLocalFunction(name) &&
+        owner.LocalFunction(name).IsLocalFunction(name, domain, function.overload()))
+      return;
+    const auto find_owner =
+        [&](const auto &self,
+            const core::builder::GraphBuilder &scope) -> const core::builder::GraphBuilder * {
+      for (const auto &local : scope.LocalFunctions()) {
+        if (local->IsLocalFunction(name, domain, function.overload()))
+          return local.get();
+        if (const auto *found = self(self, *local))
+          return found;
+      }
+      for (const auto &subgraph : scope.Subgraphs()) {
+        if (const auto *found = self(self, *subgraph))
+          return found;
+      }
+      return nullptr;
+    };
+    const auto *source = find_owner(find_owner, model_builder);
+    const FunctionProto retained = utils::CopyWithSharedTensorStorage(*existing);
+    auto &helper = owner.MakeLocalFunction(retained);
+    if (source != nullptr)
+      helper.CopyDeviceTargetsFrom(*source);
     return;
   }
-  auto &model_builder = builder.ModelBuilder();
-  if (model_builder.HasLocalFunction(name)) {
-    builder.MakeLocalFunction(function);
-  } else {
-    model_builder.MakeLocalFunction(function);
-  }
+  owner.MakeLocalFunction(function);
 }
 
 FunctionProto MakeHalfRotaryFunction(core::builder::GraphBuilder &builder) {

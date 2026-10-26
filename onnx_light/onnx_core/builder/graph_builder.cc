@@ -763,11 +763,17 @@ void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
   std::map<FunctionIdentifier, const GraphBuilder *> functions;
   const auto same_device_targets = [&](const auto &self, const GraphBuilder &left,
                                        const GraphBuilder &right) -> bool {
-    if (left.device_ != right.device_ || left.subgraphs_.size() != right.subgraphs_.size())
+    if (left.device_ != right.device_ || left.nodes_.size() != right.nodes_.size())
       return false;
-    for (std::size_t index = 0; index < left.subgraphs_.size(); ++index) {
-      if (!self(self, *left.subgraphs_[index], *right.subgraphs_[index]))
+    for (std::size_t index = 0; index < left.nodes_.size(); ++index) {
+      const auto left_children = left.ReferencedSubgraphs(left.nodes_[index]);
+      const auto right_children = right.ReferencedSubgraphs(right.nodes_[index]);
+      if (left_children.size() != right_children.size())
         return false;
+      for (std::size_t child = 0; child < left_children.size(); ++child) {
+        if (!self(self, *left_children[child], *right_children[child]))
+          return false;
+      }
     }
     return true;
   };

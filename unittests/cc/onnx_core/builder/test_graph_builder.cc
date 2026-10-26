@@ -389,6 +389,71 @@ TEST(GraphBuilder, CopyDeviceTargetsAcceptsCompatibleDuplicateFunctionIdentities
   EXPECT_EQ(incompatible_target.LocalFunction("F").device(), Device::kUndefined);
 }
 
+TEST(GraphBuilder, CopyDeviceTargetsAlignsDuplicateFunctionBranchesByReference) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  for (const bool compatible : {false, true}) {
+    SCOPED_TRACE(compatible);
+    GraphBuilder source("root", SchemaLookup(), {{"", 18}});
+    source.MakeInput("condition", TensorType::kBool, MakeShape({}));
+    source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+    for (const bool reverse : {false, true}) {
+      GraphBuilder isolated("isolated", SchemaLookup(), {{"", 18}});
+      isolated.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+      auto &scope = isolated.MakeSubgraph(reverse ? "right" : "left");
+      scope.MakeNode("Identity", {"x"}, {"result"});
+      scope.MakeOutput("result");
+      auto &function = scope.MakeLocalFunction("F", "local");
+      function.MakeInput("flag", TensorType::kBool, MakeShape({}));
+      function.MakeInput("a", TensorType::kFloat, MakeShape({2}));
+      function.set_device(Device::kCPU);
+      for (int index = 0; index < 2; ++index) {
+        const bool then_branch = reverse ? index == 1 : index == 0;
+        auto &branch = function.MakeSubgraph(then_branch ? "then" : "else");
+        branch.MakeNode("Identity", {"a"}, {"out"});
+        branch.MakeOutput("out");
+        const bool cpu = reverse && !compatible ? !then_branch : then_branch;
+        branch.set_device(cpu ? Device::kCPU : Device::kGPU0);
+      }
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const auto &[name, branch] :
+           {std::pair<const char *, const char *>{"then_branch_ref", "then"},
+            {"else_branch_ref", "else"}}) {
+        auto &attribute = attributes.add();
+        attribute.set_name(name);
+        attribute.set_type(AttributeProto::STRING);
+        attribute.set_s(branch);
+      }
+      function.MakeNode("If", {"flag"}, {"b"}, "", "", attributes);
+      function.MakeOutput("b");
+      source.MakeSubgraph(scope.name()) = std::move(scope);
+    }
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &[name, branch] :
+         {std::pair<const char *, const char *>{"then_branch_ref", "left"},
+          {"else_branch_ref", "right"}}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(branch);
+    }
+    source.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+    source.MakeOutput("y");
+    GraphBuilder target(source.ToModel(), SchemaLookup());
+    if (compatible) {
+      ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+      EXPECT_EQ(target.LocalFunction("F").Subgraph("then").device(), Device::kCPU);
+      EXPECT_EQ(target.LocalFunction("F").Subgraph("else").device(), Device::kGPU0);
+    } else {
+      EXPECT_THROW(target.CopyDeviceTargetsFrom(source), core::builder::BuilderError);
+      EXPECT_EQ(target.LocalFunction("F").device(), Device::kUndefined);
+      for (const auto &branch : target.LocalFunction("F").Subgraphs())
+        EXPECT_EQ(branch->device(), Device::kUndefined);
+    }
+  }
+}
+
 TEST(GraphBuilder, ConstructorOpsets) {
   for (const std::string domain : {"", "ai.onnx"}) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});

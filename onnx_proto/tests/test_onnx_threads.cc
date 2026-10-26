@@ -1395,6 +1395,76 @@ TEST(onnx_threads, MinParallelBlockSizeMixedSizesRoundTrip) {
   std::remove(data_path.c_str());
 }
 
+TEST(onnx_threads, ExternalWritePolicySubmitsEligibleBytes) {
+  constexpr int64_t mib = 1024 * 1024;
+  const std::vector<int64_t> sizes = {64, mib - 4, mib, mib + 4, 4 * mib};
+  ModelProto model;
+  model.set_ir_version(9);
+  auto &graph = *model.add_graph();
+  graph.set_name("external_write_policy");
+  for (size_t i = 0; i < sizes.size(); ++i) {
+    auto &tensor = *graph.add_initializer();
+    tensor.set_name("w" + std::to_string(i));
+    tensor.set_data_type(TensorProto::DataType::FLOAT);
+    tensor.add_dims(sizes[i] / sizeof(float));
+    tensor.set_raw_data(std::vector<uint8_t>(sizes[i], static_cast<uint8_t>(i + 1)));
+  }
+
+  const std::filesystem::path root = "test_external_write_policy";
+  std::filesystem::create_directories(root);
+  const auto model_path = (root / "model.onnx").string();
+  const auto weights_path = (root / "weights.bin").string();
+  for (int64_t file_limit : {int64_t{0}, 2 * mib}) {
+    for (int threads : {-1, 0, 1, 4}) {
+      for (int64_t threshold : {int64_t{0}, int64_t{1}, mib, 16 * mib}) {
+        SCOPED_TRACE(::testing::Message() << "file_limit=" << file_limit << " threads=" << threads
+                                          << " threshold=" << threshold);
+        SerializeOptions opts;
+        opts.num_threads = threads;
+        opts.min_parallel_block_size = threshold;
+        opts.raw_data_threshold = 1;
+        opts.max_external_file_size = file_limit;
+        utils::IOPolicyTrace trace;
+        opts.io_trace = &trace;
+        {
+          utils::TwoFilesWriteStream stream(model_path, weights_path);
+          ASSERT_TRUE(SerializeModelProtoToStream(model, stream, opts));
+        }
+
+        int64_t expected_submitted = 0;
+        if (opts.is_parallel()) {
+          const int64_t resolved_threshold = threshold > 0 ? threshold : mib;
+          EXPECT_EQ(trace.storage_kind, utils::IOStorageKind::kBufferedWrites);
+          EXPECT_EQ(trace.resolved_min_block_size, resolved_threshold);
+          if (threads > 1) {
+            EXPECT_EQ(trace.resolved_workers, threads);
+          }
+          for (int64_t size : sizes) {
+            if (size >= resolved_threshold)
+              expected_submitted += size;
+          }
+        } else {
+          EXPECT_EQ(trace.resolved_workers, 0);
+        }
+        EXPECT_EQ(trace.bytes_in_flight, expected_submitted);
+
+        ModelProto loaded;
+        {
+          utils::TwoFilesStream stream(model_path, weights_path);
+          ParseOptions parse_opts;
+          ParseModelProtoFromStream(loaded, stream, parse_opts);
+        }
+        ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), sizes.size());
+        for (size_t i = 0; i < sizes.size(); ++i) {
+          EXPECT_EQ(loaded.ref_graph().ref_initializer()[i].ref_raw_data(),
+                    model.ref_graph().ref_initializer()[i].ref_raw_data());
+        }
+      }
+    }
+  }
+  std::filesystem::remove_all(root);
+}
+
 // Verify that the automatic (num_threads < 0) parse populates ParseOptions::io_trace with a
 // resolved, non-default policy and observed byte counters.
 TEST(onnx_threads, ParseModelProtoPopulatesIOTrace) {

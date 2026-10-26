@@ -167,9 +167,11 @@ def save(
         default) picks a sensible value based on the number of
         available CPU cores.
     :param min_block_size: minimum raw-data block size in bytes to write in parallel
-        when ``num_threads != 1``; tensor blocks smaller than this threshold are
+        when parallel serialization is enabled; tensor blocks smaller than this threshold are
         written on the calling thread to avoid thread-pool overhead.
-        A value of 0 (default) parallelizes all blocks.
+        For external-data writes, 0 (default) selects the automatic 1 MiB threshold.
+        A positive value overrides it; use 1 to submit every nonempty external block.
+        For inline data, 0 imposes no minimum block size.
     :param max_external_file_size: maximum size in bytes for one external
         weight file when saving with external data. A value of 0 (default)
         means no limit.

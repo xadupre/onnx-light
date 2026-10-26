@@ -1,4 +1,5 @@
 #include "onnx_io_policy.h"
+#include <algorithm>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <string>
@@ -24,7 +25,7 @@ TEST(onnx_io_policy, MmapAlwaysResolvesToZeroWorkers) {
 
 TEST(onnx_io_policy, ExplicitRequestIsHonoredForNonMmapKinds) {
   for (IOStorageKind kind : {IOStorageKind::kWarmPageCache, IOStorageKind::kBufferedReads,
-                             IOStorageKind::kColdStorage}) {
+                             IOStorageKind::kColdStorage, IOStorageKind::kBufferedWrites}) {
     IOPolicy serial =
         ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(kind, 1 << 20, /*requested_num_threads=*/1, 0);
     EXPECT_EQ(serial.workers, 1) << "kind=" << static_cast<int>(kind);
@@ -62,6 +63,34 @@ TEST(onnx_io_policy, ExplicitMinBlockSizeOverridesDefault) {
   IOPolicy policy = ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(
       IOStorageKind::kColdStorage, 1 << 20, -1, /*requested_min_block_size=*/12345);
   EXPECT_EQ(policy.min_block_size, 12345);
+}
+
+TEST(onnx_io_policy, BufferedWritesDoNotUseColdReadThreshold) {
+  const int64_t mib = 1024 * 1024;
+  const int32_t hw =
+      std::max<int32_t>(1, static_cast<int32_t>(std::thread::hardware_concurrency()));
+  const auto writes = ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(IOStorageKind::kBufferedWrites,
+                                                                   256 * mib, -1, 0);
+  EXPECT_EQ(writes.min_block_size, mib);
+  EXPECT_EQ(writes.workers, std::min<int32_t>(std::max<int32_t>(1, hw / 2), 256));
+  const auto reads =
+      ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(IOStorageKind::kColdStorage, 256 * mib, -1, 0);
+  EXPECT_EQ(reads.min_block_size, 16 * mib);
+
+  for (int64_t bytes : {int64_t{0}, mib - 1, mib, 2 * mib}) {
+    const auto policy =
+        ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(IOStorageKind::kBufferedWrites, bytes, -1, 0);
+    if (bytes > 0) {
+      EXPECT_LE(policy.workers, std::max<int64_t>(1, bytes / mib));
+    }
+    EXPECT_GE(policy.workers, 1);
+  }
+  for (int64_t threshold : {int64_t{1}, mib, 16 * mib}) {
+    const auto policy = ONNX_LIGHT_NAMESPACE::utils::ResolveIOPolicy(IOStorageKind::kBufferedWrites,
+                                                                     256 * mib, 5, threshold);
+    EXPECT_EQ(policy.workers, 5);
+    EXPECT_EQ(policy.min_block_size, threshold);
+  }
 }
 
 TEST(onnx_io_policy, DetectIOStorageKindFallsBackForMissingFile) {

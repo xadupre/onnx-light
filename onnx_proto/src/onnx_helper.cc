@@ -1226,15 +1226,14 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
         model, options.raw_data_threshold, weight_path.string(), options.use_external_data_location,
         options.max_external_file_size, options.alignment);
     if (options.is_parallel() && total_external_size > 0) {
-      // External-data writes are always cold (a brand-new or truncated destination file), so
-      // there is no page-cache residency to probe; resolve the automatic worker count and
-      // minimum block size from that assumption alone.
+      // Buffered output has different scheduling costs from cold reads; in particular, a
+      // cold-read cutoff would keep most typical LLM matrices on the calling thread.
       const utils::IOPolicy write_policy =
-          utils::ResolveIOPolicy(utils::IOStorageKind::kColdStorage, total_external_size,
+          utils::ResolveIOPolicy(utils::IOStorageKind::kBufferedWrites, total_external_size,
                                  options.num_threads, options.min_parallel_block_size);
       two_stream.SetMinParallelBlockSize(write_policy.min_block_size);
       if (options.io_trace != nullptr) {
-        options.io_trace->storage_kind = utils::IOStorageKind::kColdStorage;
+        options.io_trace->storage_kind = utils::IOStorageKind::kBufferedWrites;
         options.io_trace->resolved_workers = write_policy.workers;
         options.io_trace->resolved_min_block_size = write_policy.min_block_size;
         options.io_trace->physical_bytes = total_external_size;
@@ -1290,6 +1289,8 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     two_stream.WaitForWriteCompletion();
+    if (options.io_trace != nullptr)
+      options.io_trace->bytes_in_flight = two_stream.TotalSubmittedWriteBytes();
     // Flush the buffered main .onnx structure to the primary file in one write.
     // This keeps the two output streams separate: all tensor weight bytes have
     // been written to the weights file already; the main .onnx bytes were

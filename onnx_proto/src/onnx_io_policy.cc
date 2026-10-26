@@ -40,6 +40,10 @@ IOKindDefaults DefaultsFor(IOStorageKind kind, int32_t hw) {
     // Disk-latency bound: larger reads reduce seek overhead, but still scale worker count with
     // the machine (half of hw, at least 1) instead of an arbitrary tiny constant.
     return {std::max<int32_t>(1, hw / 2), 16 * kMiB};
+  case IOStorageKind::kBufferedWrites:
+    // Keep tiny writes inline without excluding the many 1--16 MiB matrices in LLMs.
+    // Buffered output does not have the same seek costs as cold reads.
+    return {std::max<int32_t>(1, hw / 2), 1 * kMiB};
   case IOStorageKind::kBufferedReads:
   default:
     // Unknown/mixed (also the only outcome on non-Linux platforms today): keep the previous

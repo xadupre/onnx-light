@@ -1855,6 +1855,7 @@ void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   parallel_write_ = true;
   virtual_write_pos_ = 0;
   extra_virtual_write_pos_.clear();
+  submitted_write_bytes_ = 0;
   write_thread_pool_.Start(n_threads);
 }
 
@@ -1884,6 +1885,7 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
       if (n_bytes >= min_parallel_block_size_) {
         write_thread_pool_.SubmitTask(
             [file, ptr, n_bytes, offset]() { WriteExternalDataFile(*file, ptr, n_bytes, offset); });
+        submitted_write_bytes_ += n_bytes;
       } else {
         // Below-threshold writes never run concurrently with another writer of this stream (they
         // execute synchronously on the calling thread), so reuse the already-open weights_stream_
@@ -1909,6 +1911,7 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
       auto file = it->second->external_file();
       write_thread_pool_.SubmitTask(
           [file, ptr, n_bytes, offset]() { WriteExternalDataFile(*file, ptr, n_bytes, offset); });
+      submitted_write_bytes_ += n_bytes;
     } else {
       // Same reasoning as above: below-threshold writes run synchronously on the calling
       // thread, so they can safely reuse the already-open per-location file handle.

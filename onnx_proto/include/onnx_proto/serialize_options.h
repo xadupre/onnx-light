@@ -268,8 +268,9 @@ struct SerializeOptions : TensorBufferOptions {
    *  ORT FlatBuffers assembly remains single-threaded regardless of this value. */
   int32_t num_threads = 1;
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel writing is
-   * enabled (``num_threads != 1``); blocks smaller than this value are written on the main thread
-   * to avoid thread-pool overhead */
+   * enabled; blocks smaller than this value are written on the main thread to avoid thread-pool
+   * overhead. For external data, 0 selects the automatic 1 MiB cutoff; positive values override
+   * it (1 submits every nonempty block). For inline data, 0 imposes no minimum. */
   int64_t min_parallel_block_size = 0;
   /** Returns true when parallel writing should be enabled, i.e. when
    *  ``num_threads`` is greater than 1 or negative.  ``num_threads == 0`` and

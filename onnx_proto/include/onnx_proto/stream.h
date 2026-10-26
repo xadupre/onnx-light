@@ -810,6 +810,9 @@ public:
   /** Blocks until all pending write tasks have completed and stops the thread pool. */
   void WaitForWriteCompletion();
 
+  /** Returns the total bytes submitted to write workers since StartWriteThreadPool(). */
+  inline int64_t TotalSubmittedWriteBytes() const { return submitted_write_bytes_; }
+
   /** Flushes the in-memory main-file buffer to disk in a single write.
    *  Must be called after all serialization is complete (after WaitForWriteCompletion). */
   void FlushMainToFile();
@@ -862,6 +865,8 @@ protected:
   /** Minimum block size (bytes) required for a write to be submitted to
    *  write_thread_pool_ instead of being written inline. See SetMinParallelBlockSize. */
   int64_t min_parallel_block_size_ = 0;
+  /** Total submitted bytes, updated only by the calling thread. */
+  int64_t submitted_write_bytes_ = 0;
 };
 
 /** Two-file reader for ONNX models with external tensor data.

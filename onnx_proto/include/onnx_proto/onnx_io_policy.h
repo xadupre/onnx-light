@@ -26,7 +26,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
-/** Coarse classification of the storage backing an external-data read, used to calibrate the
+/** Coarse classification of external-data I/O, used to calibrate the
  *  adaptive I/O policy. */
 enum class IOStorageKind : int32_t {
   /** The tensor bytes are borrowed from a memory-mapped file (``no_copy`` or
@@ -41,6 +41,9 @@ enum class IOStorageKind : int32_t {
   /** The file is not resident in the OS page cache: reads are disk-latency bound, so fewer
    *  workers with larger blocks reduce seek overhead. */
   kColdStorage = 3,
+  /** Buffered output to new external-data files. Write scheduling must not inherit the
+   *  seek-oriented cutoff for cold reads: LLM weights commonly occupy 1--16 MiB per tensor. */
+  kBufferedWrites = 4,
 };
 
 /** Resolved worker count and minimum block size for one parallel I/O operation. */
@@ -65,8 +68,8 @@ struct IOPolicyTrace {
   /** Bytes physically present in the external-data source examined to resolve the policy
    *  (typically the weights file size). */
   int64_t physical_bytes = 0;
-  /** Total bytes submitted to the thread pool as delayed blocks and awaited together, i.e. the
-   *  peak number of bytes outstanding at once under the current submit-then-wait model. */
+  /** Total bytes submitted to workers and awaited before returning. Excludes blocks processed
+   *  on the calling thread; this is a submission total, not a measured concurrency peak. */
   int64_t bytes_in_flight = 0;
   /** Number of memory pages touched by :cpp:var:`ParseOptions::_touch_raw_data_pages`, i.e. an
    *  upper bound on the lazy page faults a wholly mapped load can trigger. Zero when page

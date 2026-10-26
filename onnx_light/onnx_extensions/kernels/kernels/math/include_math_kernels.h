@@ -1086,6 +1086,17 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Computes per-selection expert matrix products with optional per-group bias.
+class GroupedMatMul : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GroupedMatMul";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &input, const Tensor &weights, const Tensor &group_indices,
+                    const Tensor *bias = nullptr, RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference ``MatMulInteger`` kernel (opset 10). Computes
 /// ``Y = matmul(A - a_zero_point, B - b_zero_point)`` with INT8/UINT8 inputs
 /// and an INT32 output. ``a_zero_point`` and ``b_zero_point`` are optional and

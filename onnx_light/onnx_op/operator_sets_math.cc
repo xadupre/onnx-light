@@ -2204,6 +2204,33 @@ std::vector<LightOpSchema> BuildMatMulSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildGroupedMatMulSchemas() {
+  static constexpr const char *doc = R"DOC(
+GroupedMatMul multiplies each row of `input` [M,K] by the expert matrices
+selected from `weights` [G,K,N] by `group_indices` [M,S]. The output has
+shape [M,S,N], with output[m,i] = input[m] @ weights[group_indices[m,i]].
+Optional `bias` [G,N] adds bias[group_indices[m,i]] to each result.
+Indices must be in [0,G); negative indices are invalid.
+The context-dependent function decomposes into Gather, Expand, and MatMul.
+Runtimes may fuse it to avoid expanded [M*S,K,N] weights, or fuse upstream
+DequantizeLinear for weight-only quantized experts.
+)DOC";
+  return {LightOpSchema(
+      "GroupedMatMul", kOnnxDomain, 29, doc,
+      {{"input", "Token matrix with shape [M, K].", "T"},
+       {"weights", "Group weight matrices with shape [G, K, N].", "T"},
+       {"group_indices", "Group indices with shape [M, S], in [0, G).", "Tind"},
+       {"bias", "Optional per-group bias with shape [G, N].", "T"}},
+      {{"output", "Per-selection results with shape [M, S, N].", "T"}},
+      {{"T",
+        {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+        "Constrain input, weights, bias, and output to floating-point tensors."},
+       {"Tind",
+        {TensorType::kInt32, TensorType::kInt64},
+        "Constrain group indices to int32 or int64 tensors."}},
+      /*has_function_implementation=*/true)};
+}
+
 std::vector<LightOpSchema> BuildMatMulIntegerSchemas() {
   const std::string doc = MakeMatMulIntegerDoc();
   std::vector<LightOpSchema> schemas;
@@ -3136,6 +3163,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gelu", [] { return BuildGeluSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
+      {"GroupedMatMul", [] { return BuildGroupedMatMulSchemas(); }},
       {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
       {"HardSigmoid", [] { return BuildHardSigmoidSchemas(); }},

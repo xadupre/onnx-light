@@ -33,6 +33,7 @@ using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
 using onnx_kernels::kernel::Concat;
+using onnx_kernels::kernel::Expand;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Pad;
 using onnx_kernels::kernel::Reshape;
@@ -43,6 +44,21 @@ using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
+
+TEST(KernelClass, ExpandBroadcastsSingletonAndZeroDimensionsToZero) {
+  const KernelContext ctx{DefaultOpset(13)};
+  const Expand kernel{ctx};
+  for (bool empty_input : {false, true}) {
+    const Tensor input = empty_input ? Tensor::FromFloat("", {2, 0, 3}, {})
+                                     : Tensor::FromFloat("", {2, 1, 3}, {1, 2, 3, 4, 5, 6});
+    const Tensor shape = Tensor::FromInt64("", {3}, {2, empty_input ? 1 : 0, 3});
+    const Tensor output = kernel(input, shape);
+    EXPECT_EQ(output.shape, core::runtime::Shape({2, 0, 3}));
+    EXPECT_EQ(output.size_bytes(), 0u);
+  }
+  EXPECT_THROW(kernel(Tensor::FromFloat("", {1}, {1}), Tensor::FromInt64("", {1}, {-1})),
+               std::invalid_argument);
+}
 
 namespace {
 

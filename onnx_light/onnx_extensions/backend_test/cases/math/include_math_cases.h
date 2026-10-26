@@ -11,6 +11,10 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
+/// Registers the GroupedMatMul backend cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterGroupedMatMulCases(std::vector<TestCase> &registry,
+                                                              TestMode mode = TestMode::TEST);
+
 // ---------------------------------------------------------------------------
 // Per-operator registration helpers for the ``math`` op category — exposed so
 // individual cases live in separate translation units yet can be invoked from

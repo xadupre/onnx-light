@@ -69,6 +69,7 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
     for vi in model.graph.output:
         t = ctx.get(vi.name)
         if int(t.data_type) in {
+            int(onnxl.TensorProto.BFLOAT16),
             int(onnxl.TensorProto.FLOAT6E2M3),
             int(onnxl.TensorProto.FLOAT6E3M2),
             int(onnxl.TensorProto.FLOAT8E8M0),

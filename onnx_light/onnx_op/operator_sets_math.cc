@@ -2218,10 +2218,13 @@ DequantizeLinear for weight-only quantized experts.
   return {LightOpSchema(
       "GroupedMatMul", kOnnxDomain, 29, doc,
       {{"input", "Token matrix with shape [M, K].", "T"},
-       {"weights", "Group weight matrices with shape [G, K, N].", "T"},
-       {"group_indices", "Group indices with shape [M, S], in [0, G).", "Tind"},
+       {"weights", "Stack of G group weight matrices with shape [G, K, N].", "T"},
+       {"group_indices",
+        "Group index for each token and selection, with shape [M, S]. Values outside "
+        "[0, G) are invalid input.",
+        "Tind"},
        {"bias", "Optional per-group bias with shape [G, N].", "T"}},
-      {{"output", "Per-selection results with shape [M, S, N].", "T"}},
+      {{"output", "Per-group matrix multiplication results with shape [M, S, N].", "T"}},
       {{"T",
         {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
         "Constrain input, weights, bias, and output to floating-point tensors."},

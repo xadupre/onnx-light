@@ -318,10 +318,6 @@ void RegisterPatterns() {
     });
     core::builder::RegisterPattern("GroupedMatMul",
                                    [] { return std::make_unique<GroupedMatMulPattern>(); });
-    core::builder::RegisterPattern("GroupedMatMulConcat",
-                                   [] { return std::make_unique<GroupedMatMulConcatPattern>(); });
-    core::builder::RegisterPattern("GroupedMatMulLoop",
-                                   [] { return std::make_unique<GroupedMatMulLoopPattern>(); });
     core::builder::RegisterPattern("GemmTranspose",
                                    [] { return std::make_unique<GemmTransposePattern>(); });
     core::builder::RegisterPattern("GemmSumFusion",

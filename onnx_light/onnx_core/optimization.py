@@ -119,8 +119,6 @@ LinearAttentionPattern: TypeAlias = _patterns.LinearAttentionPattern
 FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
 AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GroupedMatMulPattern: TypeAlias = _patterns.GroupedMatMulPattern
-GroupedMatMulConcatPattern: TypeAlias = _patterns.GroupedMatMulConcatPattern
-GroupedMatMulLoopPattern: TypeAlias = _patterns.GroupedMatMulLoopPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
 GemmSumFusionPattern: TypeAlias = _patterns.GemmSumFusionPattern
 MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
@@ -500,8 +498,6 @@ __all__ = [
     "GemmTransposePattern",
     "GraphBuilder",
     "GraphGraph",
-    "GroupedMatMulConcatPattern",
-    "GroupedMatMulLoopPattern",
     "GroupedMatMulPattern",
     "IdentityPattern",
     "InitializerUnsqueezeCastPattern",

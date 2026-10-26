@@ -1694,10 +1694,26 @@ SwitchReshapeActivationPattern::Apply(core::builder::GraphGraph &graph,
   return replacements;
 }
 
-std::set<std::string> GroupedMatMulPattern::FastOpType() const { return {"Squeeze"}; }
+std::set<std::string> GroupedMatMulPattern::FastOpType() const {
+  return {"Concat", "Loop", "Squeeze"};
+}
 
 core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (candidate.op_type().value() == "Squeeze") {
+    return MatchSqueeze(graph, candidate);
+  }
+  if (candidate.op_type().value() == "Concat") {
+    return MatchConcat(graph, candidate);
+  }
+  if (candidate.op_type().value() == "Loop") {
+    return MatchLoop(graph, candidate);
+  }
+  return NoMatch(candidate, "expected Squeeze, Concat, or Loop");
+}
+
+core::builder::MatchResult GroupedMatMulPattern::MatchSqueeze(core::builder::GraphGraph &graph,
+                                                              const NodeProto &candidate) const {
   if (graph.Builder().OpsetVersion("") < 29 || !IsDefaultOp(candidate, "Squeeze") ||
       candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "expected an opset-29 Squeeze");
@@ -2003,22 +2019,32 @@ bool ReadGroupedLoop(core::builder::GraphGraph &graph, const NodeProto &loop, Gr
 utils::RepeatedProtoField<NodeProto>
 GroupedMatMulPattern::Apply(core::builder::GraphGraph &graph,
                             const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 6 || nodes[0] == nullptr) {
-    throw BuilderError("GroupedMatMulPattern::Apply expects six match slots.");
+  if (nodes.empty() || nodes[0] == nullptr) {
+    throw BuilderError("GroupedMatMulPattern::Apply expects a match root.");
   }
   const auto verified = Match(graph, *nodes[0]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError("GroupedMatMulPattern::Apply received an unsafe or inconsistent match.");
   }
-  return MakeGroupedReplacement(
-      graph, nodes[5] ? *nodes[5] : *nodes[0], nodes[2]->input()[0].value(),
-      nodes[3]->input()[0].value(), nodes[3]->input()[1].value(),
-      nodes[4] ? nodes[4]->input()[0].value() : "", "GroupedMatMulPattern");
+  if (nodes[0]->op_type().value() == "Squeeze") {
+    return MakeGroupedReplacement(
+        graph, nodes[5] ? *nodes[5] : *nodes[0], nodes[2]->input()[0].value(),
+        nodes[3]->input()[0].value(), nodes[3]->input()[1].value(),
+        nodes[4] ? nodes[4]->input()[0].value() : "", "GroupedMatMulPattern");
+  }
+  GroupedRow row;
+  if (nodes[0]->op_type().value() == "Concat") {
+    ReadGroupedRow(
+        nodes[1]->input()[0].value(),
+        [&](const std::string &name) { return graph.NodeBefore(name); }, row);
+  } else {
+    ReadGroupedLoop(graph, *nodes[0], row);
+  }
+  return MakeGroupedReplacement(graph, *nodes[0], row.x, row.weights, row.indices, row.bias,
+                                "GroupedMatMulPattern");
 }
 
-std::set<std::string> GroupedMatMulConcatPattern::FastOpType() const { return {"Concat"}; }
-
-core::builder::MatchResult GroupedMatMulConcatPattern::Match(core::builder::GraphGraph &graph,
+core::builder::MatchResult GroupedMatMulPattern::MatchConcat(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
   if (graph.Builder().OpsetVersion("") < 29 || candidate.input_size() < 2 ||
       !PlainGroupedOp(&candidate, "Concat", candidate.input_size(), true) ||
@@ -2078,45 +2104,13 @@ core::builder::MatchResult GroupedMatMulConcatPattern::Match(core::builder::Grap
   return core::builder::MatchResult{this, nodes, &candidate};
 }
 
-utils::RepeatedProtoField<NodeProto>
-GroupedMatMulConcatPattern::Apply(core::builder::GraphGraph &graph,
-                                  const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.empty() || !nodes[0]) {
-    throw BuilderError("GroupedMatMulConcatPattern::Apply expects a Concat match.");
-  }
-  const auto verified = Match(graph, *nodes[0]);
-  if (!verified.pattern || verified.nodes != nodes) {
-    throw BuilderError("GroupedMatMulConcatPattern::Apply received an unsafe match.");
-  }
-  GroupedRow row;
-  ReadGroupedRow(
-      nodes[1]->input()[0].value(), [&](const std::string &name) { return graph.NodeBefore(name); },
-      row);
-  return MakeGroupedReplacement(graph, *nodes[0], row.x, row.weights, row.indices, row.bias,
-                                "GroupedMatMulConcatPattern");
-}
-
-std::set<std::string> GroupedMatMulLoopPattern::FastOpType() const { return {"Loop"}; }
-
-core::builder::MatchResult GroupedMatMulLoopPattern::Match(core::builder::GraphGraph &graph,
+core::builder::MatchResult GroupedMatMulPattern::MatchLoop(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
   GroupedRow row;
   if (!ReadGroupedLoop(graph, candidate, row)) {
     return NoMatch(candidate, "expected a stateless, fixed-trip per-token expert MatMul Loop");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};
-}
-
-utils::RepeatedProtoField<NodeProto>
-GroupedMatMulLoopPattern::Apply(core::builder::GraphGraph &graph,
-                                const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 1 || !nodes[0] || !Match(graph, *nodes[0]).pattern) {
-    throw BuilderError("GroupedMatMulLoopPattern::Apply received an unsafe match.");
-  }
-  GroupedRow row;
-  ReadGroupedLoop(graph, *nodes[0], row);
-  return MakeGroupedReplacement(graph, *nodes[0], row.x, row.weights, row.indices, row.bias,
-                                "GroupedMatMulLoopPattern");
 }
 
 std::set<std::string> ShapeBasedMatMulToMulPattern::FastOpType() const { return {"MatMul"}; }

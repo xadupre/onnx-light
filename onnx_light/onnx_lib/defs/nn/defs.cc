@@ -1811,28 +1811,53 @@ ONNX_OPERATOR_SET_SCHEMA(
 static const std::vector<int64_t> mvn_default_axes = {0, 2, 3};
 
 static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContext &ctx,
-                                                   const OpSchema &schema,
-                                                   FunctionProto &function) {
+                                                   const OpSchema &schema, FunctionProto &function,
+                                                   int opset) {
   const auto *input_type = ctx.getInputType(0);
   if (input_type == nullptr || !input_type->has_tensor_type() ||
       !input_type->tensor_type().has_elem_type()) {
     return false;
   }
   const int64_t dtype = input_type->tensor_type().elem_type();
+  if (dtype != TensorProto::FLOAT && dtype != TensorProto::DOUBLE &&
+      dtype != TensorProto::FLOAT16 && dtype != TensorProto::BFLOAT16) {
+    return false;
+  }
+  const int64_t compute_type = dtype == TensorProto::FLOAT16 || dtype == TensorProto::BFLOAT16
+                                   ? static_cast<int64_t>(TensorProto::FLOAT)
+                                   : dtype;
+  const auto *axes_attribute = ctx.getAttribute("axes");
+  const std::vector<int64_t> axes =
+      axes_attribute == nullptr
+          ? mvn_default_axes
+          : std::vector<int64_t>(axes_attribute->ints().begin(), axes_attribute->ints().end());
   FunctionBuilder builder(function);
   builder.Const("EpsilonFloat", ToTensor<float>(1e-9f))
-      .Add("Epsilon = Cast (EpsilonFloat)", "to", dtype)
-      .Add(R"ONNX(
-         X_RM = ReduceMean <axes : ints = @axes> (X)
+      .Add("Epsilon = Cast (EpsilonFloat)", "to", compute_type)
+      .Add("XCompute = Cast (X)", "to", compute_type);
+  if (opset == 13) {
+    builder.Add("X_RM = ReduceMean (XCompute)", "axes", axes);
+  } else {
+    builder.Add("axes = Constant()", "value_ints", axes).Add("X_RM = ReduceMean (XCompute, axes)");
+  }
+  builder.Add(R"ONNX(
          EX_squared = Mul (X_RM, X_RM)
-         X_squared = Mul (X, X)
-         E_Xsquared = ReduceMean <axes : ints = @axes> (X_squared)
+         X_squared = Mul (XCompute, XCompute)
+      )ONNX");
+  if (opset == 13) {
+    builder.Add("E_Xsquared = ReduceMean (X_squared)", "axes", axes);
+  } else {
+    builder.Add("E_Xsquared = ReduceMean (X_squared, axes)");
+  }
+  builder
+      .Add(R"ONNX(
          Variance = Sub (E_Xsquared, EX_squared)
          STD = Sqrt (Variance)
-         X_variance = Sub (X, X_RM)
+         X_variance = Sub (XCompute, X_RM)
          Processed_STD = Add (STD, Epsilon)
-         Y = Div (X_variance, Processed_STD)
-      )ONNX");
+         YCompute = Div (X_variance, Processed_STD)
+      )ONNX")
+      .Add("Y = Cast (YCompute)", "to", dtype);
   schema.BuildFunction(function);
   return true;
 }
@@ -1852,29 +1877,17 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeConstraint("T",
                         {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(bfloat16)"},
                         "Constrain input and output types to all numeric tensors.")
-        .SetContextDependentFunctionBodyBuilder(BuildMeanVarianceNormalizationFunction, 13)
-        .FunctionBody(
-            R"ONNX(
-        {
-          EpsilonFloat = Constant <value = float {1e-9}>()
-          Epsilon = CastLike (EpsilonFloat, X)
-          axes = Constant <value_ints: ints = @axes>()
-          X_RM = ReduceMean (X, axes)
-          EX_squared = Mul (X_RM, X_RM)
-          X_squared = Mul (X, X)
-          E_Xsquared = ReduceMean (X_squared, axes)
-          Variance = Sub (E_Xsquared, EX_squared)
-          STD = Sqrt (Variance)
-          X_variance = Sub (X, X_RM)
-          Processed_STD = Add (STD, Epsilon)
-          Y = Div (X_variance, Processed_STD)
-        }
-        )ONNX",
-            18)
+        .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
         .SetContextDependentFunctionBodyBuilder(
-            [](const FunctionBodyBuildContext &, const OpSchema &schema, FunctionProto &function) {
-              function.CopyFrom(*schema.GetFunction(18));
-              return true;
+            [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,
+               FunctionProto &function) {
+              return BuildMeanVarianceNormalizationFunction(ctx, schema, function, 13);
+            },
+            13)
+        .SetContextDependentFunctionBodyBuilder(
+            [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,
+               FunctionProto &function) {
+              return BuildMeanVarianceNormalizationFunction(ctx, schema, function, 18);
             },
             18));
 

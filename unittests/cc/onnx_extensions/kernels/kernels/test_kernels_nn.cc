@@ -7,11 +7,15 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
+#include "onnx_lib/checker.h"
+#include "onnx_lib/defs/schema.h"
+#include "onnx_lib/inliner/inliner.h"
 
 #include <gtest/gtest.h>
 
@@ -25,7 +29,6 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
-using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeEvent;
 using core::runtime::RuntimeEventLog;
@@ -49,6 +52,8 @@ using onnx_kernels::kernel::RMSNormalization;
 using onnx_kernels::kernel::RotaryEmbedding;
 
 namespace Test {
+
+using core::runtime::DataType;
 
 namespace {
 
@@ -796,6 +801,76 @@ TEST(KernelClass, MeanVarianceNormalizationCustomAxes) {
   EXPECT_NEAR(py[1], 1.0f, 1e-5f);
   EXPECT_NEAR(py[2], -1.0f, 1e-5f);
   EXPECT_NEAR(py[3], 1.0f, 1e-5f);
+}
+
+TEST(KernelClass, MeanVarianceNormalizationSchemaExpansionPreservesNumericalResults) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  for (const int opset : {13, 17, 18, 21}) {
+    for (const int32_t dtype :
+         {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT, TensorProto::DOUBLE}) {
+      for (const bool explicit_axes : {false, true}) {
+        for (const std::vector<float> &values :
+             {std::vector<float>{1, 1, 1, 1}, {1, 3, 5, 7}, {-300, 300, -100, 100}}) {
+          SCOPED_TRACE(opset);
+          SCOPED_TRACE(dtype);
+          SCOPED_TRACE(explicit_axes);
+          SCOPED_TRACE(values[0]);
+          ModelProto model;
+          model.set_ir_version(IR_VERSION);
+          model.add_opset("", opset);
+          auto &graph = *model.mutable_graph();
+          graph.set_name("mvn_expansion");
+          auto &input = *graph.add_input();
+          input.set_name("X");
+          auto &type = *input.mutable_type()->mutable_tensor_type();
+          type.set_elem_type(dtype);
+          for (const int64_t dim : {2, 2, 1, 1})
+            type.mutable_shape()->add_dim()->set_dim_value(dim);
+          auto &output = *graph.add_output();
+          output.set_name("Y");
+          *output.mutable_type() = input.type();
+          auto &node = *graph.add_node();
+          node.set_op_type("MeanVarianceNormalization");
+          node.add_input("X");
+          node.add_output("Y");
+          if (explicit_axes) {
+            auto &axes = *node.add_attribute();
+            axes.set_name("axes");
+            axes.set_type(AttributeProto::INTS);
+            axes.add_ints(1);
+          }
+          inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+          ASSERT_GT(graph.node_size(), 1);
+          ASSERT_NO_THROW(checker::check_model(model, true));
+          Tensor x = dtype == TensorProto::DOUBLE
+                         ? Tensor::FromDouble("X", {2, 2, 1, 1},
+                                              std::vector<double>(values.begin(), values.end()))
+                         : Tensor::FromFloat("X", {2, 2, 1, 1}, values);
+          if (core::runtime::IsHalfPrecision(dtype))
+            x = core::runtime::DemoteFromFloat32(x, dtype);
+          const auto outputs = core::runtime::RunModel(model, {std::move(x)});
+          ASSERT_EQ(outputs.size(), 1u);
+          EXPECT_EQ(outputs[0].data_type, dtype);
+          EXPECT_EQ(outputs[0].shape, (Shape{2, 2, 1, 1}));
+          const auto actual = core::runtime::PromoteToFloat32(outputs[0]);
+          for (std::size_t index = 0; index < values.size(); ++index) {
+            const double other = values[index ^ (explicit_axes ? 1u : 2u)];
+            const double difference = static_cast<double>(values[index]) - other;
+            const double expected =
+                difference / 2 / (std::abs(difference) / 2 + static_cast<double>(1e-9f));
+            const double value =
+                dtype == TensorProto::DOUBLE ? actual.AsDouble()[index] : actual.AsFloat()[index];
+            EXPECT_TRUE(std::isfinite(value));
+            const double tolerance = dtype == TensorProto::DOUBLE  ? 1e-12
+                                     : dtype == TensorProto::FLOAT ? 1e-6
+                                                                   : 1e-3;
+            EXPECT_NEAR(value, expected, tolerance);
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST(KernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {

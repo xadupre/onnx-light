@@ -21,12 +21,13 @@ TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   RegisterAllOnnxOperatorSchemas();
   const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");
   ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->GetNodeDeterminism(), OpSchema::NodeDeterminism::Deterministic);
   NodeProto untyped_node;
   untyped_node.add_input("X");
   FunctionBodyBuildContextImpl untyped_context(untyped_node);
   FunctionProto untyped_function;
-  EXPECT_FALSE(schema->BuildContextDependentFunction(untyped_context, untyped_function, 13));
   for (const int opset : {13, 17, 18, 21}) {
+    EXPECT_FALSE(schema->BuildContextDependentFunction(untyped_context, untyped_function, opset));
     for (const auto dtype :
          {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
       for (const bool explicit_axes : {false, true}) {
@@ -59,11 +60,6 @@ TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
         FunctionProto function;
         FunctionBodyBuildContextImpl context(node, std::vector<TypeProto>{input_type});
         ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, opset));
-        if (opset >= 18) {
-          const auto *body = schema->GetFunction(opset, false);
-          ASSERT_NE(body, nullptr);
-          EXPECT_EQ(function.node_size(), body->node_size());
-        }
         FunctionExpandHelper(node, function, *graph);
         graph->mutable_output(0)->clear_type();
         ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),

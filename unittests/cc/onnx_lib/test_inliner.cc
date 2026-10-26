@@ -77,6 +77,54 @@ TEST(FunctionInliner, BasicTest) {
   ASSERT_EQ(num_functions, 0U);
 }
 
+TEST(FunctionInliner, PreservesContextDependentCallsWithoutCompleteInputTypes) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  for (const int opset : {13, 18}) {
+    for (const int annotation : {0, 1, 2, 3, 4}) {
+      SCOPED_TRACE(opset);
+      SCOPED_TRACE(annotation);
+      ModelProto model;
+      model.add_opset("", opset);
+      model.add_opset("local", 1);
+      auto &graph = *model.mutable_graph();
+      graph.set_name("partial_types");
+      graph.add_input()->set_name("X");
+      auto &producer = *graph.add_node();
+      producer.set_domain("local");
+      producer.set_op_type("Producer");
+      producer.add_input("X");
+      producer.add_output("intermediate");
+      if (annotation != 0) {
+        auto &value = *graph.add_value_info();
+        value.set_name("intermediate");
+        if (annotation >= 2) {
+          auto &type = *value.mutable_type()->mutable_tensor_type();
+          type.mutable_shape()->add_dim()->set_dim_value(2);
+          if (annotation >= 3)
+            type.set_elem_type(annotation == 3 ? TensorProto::UNDEFINED : TensorProto::FLOAT);
+        }
+      }
+      auto &node = *graph.add_node();
+      node.set_op_type("MeanVarianceNormalization");
+      node.add_input("intermediate");
+      node.add_output("Y");
+      graph.add_output()->set_name("Y");
+      const auto original = graph.SerializeAsString();
+      ASSERT_NO_THROW(
+          inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance()));
+      if (annotation == 4) {
+        EXPECT_GT(graph.node_size(), 2);
+        EXPECT_TRUE(std::none_of(graph.node().begin(), graph.node().end(), [](const auto &item) {
+          return item.op_type() == "MeanVarianceNormalization";
+        }));
+      } else {
+        EXPECT_EQ(graph.SerializeAsString(), original);
+      }
+    }
+  }
+}
+
 // Test that inlining processes subgraphs.
 TEST(FunctionInliner, SubgraphTest) {
   const char *code = R"ONNX(

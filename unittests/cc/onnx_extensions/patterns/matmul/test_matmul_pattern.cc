@@ -181,7 +181,7 @@ TEST(GroupedMatMulPattern, FusesSupportedTypesAndBothBiasOrders) {
         const auto *groups = FindInitializer(builder, replacements[1].input()[1].value());
         ASSERT_NE(zero, nullptr);
         ASSERT_NE(groups, nullptr);
-        EXPECT_EQ(zero->data_type(), static_cast<int>(itype));
+        EXPECT_EQ(zero->data_type(), core::symbolic::TensorTypeToDataType(itype));
         std::vector<int64_t> values;
         ASSERT_TRUE(ReadIntegerValues(*groups, values));
         EXPECT_EQ(values, (std::vector<int64_t>{4}));
@@ -265,7 +265,7 @@ TEST(GroupedMatMulPattern, RejectsOldOpsetsAndForeignDomains) {
 
 TEST(GroupedMatMulPattern, RejectsIncompatibleMetadataAndAxes) {
   onnx_patterns::GroupedMatMulPattern pattern;
-  for (int guard = 0; guard < 10; ++guard) {
+  for (int guard = 0; guard < 12; ++guard) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
     MakeGroupedMatMul(builder);
     auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
@@ -295,12 +295,20 @@ TEST(GroupedMatMulPattern, RejectsIncompatibleMetadataAndAxes) {
     } else if (guard == 8) {
       shapes.Set("indices", SymTensor(nullptr, TensorType::kInt32, Shape({2, 2})));
       shapes.Set("w", SymTensor(nullptr, TensorType::kFloat, Shape({int64_t{1} << 32, 3, 5})));
-    } else {
+    } else if (guard == 9) {
       const auto unknown = core::symbolic::SymDim("");
       shapes.Set("x", SymTensor(nullptr, TensorType::kFloat,
                                 SymbolicShape({unknown, core::symbolic::SymDim(3)})));
       shapes.Set("indices", SymTensor(nullptr, TensorType::kInt64,
                                       SymbolicShape({unknown, core::symbolic::SymDim(2)})));
+    } else {
+      if (guard == 10) {
+        builder.MakeInitializer(MakeInitializer<int64_t>("bad_axes", {}, {2}));
+      } else {
+        builder.MakeInput("bad_axes", TensorType::kInt64, Shape({1}));
+      }
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      *nodes[3].mutable_input(1) = utils::String("bad_axes");
     }
     core::builder::GraphGraph graph(builder);
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << guard;

@@ -1702,8 +1702,11 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return NoMatch(candidate, "expected an opset-29 Squeeze");
   }
   auto axes_are = [&](const NodeProto &node, std::vector<int64_t> expected, int64_t rank) {
+    const std::string &name = node.input()[1].value();
     std::vector<int64_t> axes;
-    if (!ReadConstantInts(graph, node.input()[1].value(), axes)) {
+    if (!graph.HasShape(name) || graph.GetShape(name).Shape().Rank() != 1 || !graph.HasType(name) ||
+        graph.GetType(name) != core::symbolic::TensorType::kInt64 ||
+        !ReadConstantInts(graph, name, axes)) {
       return false;
     }
     for (int64_t &axis : axes) {

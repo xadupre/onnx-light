@@ -30,6 +30,23 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 namespace {
 
+std::string EncodeLifetimeName(const std::string &name, bool encode) {
+  if (!encode) {
+    return name;
+  }
+  std::string result;
+  for (char c : name) {
+    if (c == '%') {
+      result += "%25";
+    } else if (c == ';') {
+      result += "%3B";
+    } else {
+      result += c;
+    }
+  }
+  return result;
+}
+
 // ── Helpers for ComputeInPlaceReuseGraph ─────────────────────────────────────
 
 enum class MemoryValueSource : uint8_t {
@@ -1646,6 +1663,21 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
       continue;
     }
     NodeProto &node = (*graph.mutable_node())[i];
+    const auto needs_encoding = [](const std::vector<std::string> &names) {
+      return std::any_of(names.begin(), names.end(), [](const std::string &name) {
+        return name.find_first_of("%;") != std::string::npos;
+      });
+    };
+    bool encode_names = needs_encoding(release_after_[i]) || needs_encoding(not_used_after_[i]) ||
+                        (has_shape_tagged && needs_encoding(release_after_shape_tagged_[i]));
+    for (const auto &entry : node.metadata_props()) {
+      if (entry.key() == kLifetimeNamesEncodingMetadataKey) {
+        encode_names = true;
+      }
+    }
+    if (encode_names) {
+      node.add_metadata(kLifetimeNamesEncodingMetadataKey, "percent");
+    }
     if (!reuse_[i].empty()) {
       std::ostringstream value;
       for (std::size_t j = 0; j < reuse_[i].size(); ++j) {
@@ -1664,7 +1696,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << release_after_[i][j];
+        value << EncodeLifetimeName(release_after_[i][j], encode_names);
       }
       node.add_metadata(kReleaseAfterMetadataKey, value.str());
     }
@@ -1674,7 +1706,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << not_used_after_[i][j];
+        value << EncodeLifetimeName(not_used_after_[i][j], encode_names);
       }
       node.add_metadata(kNotUsedAfterMetadataKey, value.str());
     }
@@ -1684,7 +1716,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << release_after_shape_tagged_[i][j];
+        value << EncodeLifetimeName(release_after_shape_tagged_[i][j], encode_names);
       }
       node.add_metadata(kReleaseAfterShapeTagMetadataKey, value.str());
     }

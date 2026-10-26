@@ -1018,4 +1018,118 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlan) {
   EXPECT_EQ(plan.keep().count("Y"), 1u);
 }
 
+TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesLiteralNames) {
+  using core::runtime::ExecuteActionKind;
+  for (const std::string &name :
+       std::vector<std::string>{"shared;activation", ";shared;;activation;", "shared%3Bactivation",
+                                "shared%25;activation", std::string(1024, 'a') + ";activation"}) {
+    SCOPED_TRACE(name);
+    GraphProto graph;
+    graph.set_name("g");
+    const std::string input = "input;value%3B";
+    AddInput(graph, input, {3, 4});
+    AddOutput(graph, "Y", {3, 4});
+    *graph.add_node() = MakeNode("Abs", {input}, {name});
+    *graph.add_node() = MakeNode("Neg", {input}, {"other"});
+    *graph.add_node() = MakeNode("Add", {name, "other"}, {"Y"});
+
+    ComputeContext ctx;
+    ctx.set_events_enabled(true);
+    ctx.Compute(graph);
+    std::set<std::string> event_releases;
+    for (const auto &event : ctx.Events()) {
+      if (event.action == core::compute::ComputeEventAction::kRelease) {
+        EXPECT_EQ(event.node_index, 2);
+        event_releases.insert(event.name);
+      }
+    }
+    EXPECT_EQ(event_releases, (std::set<std::string>{name, "other"}));
+
+    // Repeated writes and standalone plans must use the same exact identities.
+    for (int pass = 0; pass < 2; ++pass) {
+      const auto computed_plan = ctx.BuildExecutionPlan(graph);
+      const core::runtime::ExecutionPlan standalone_plan(graph);
+      for (const auto *plan : {&computed_plan, &standalone_plan}) {
+        std::set<std::string> releases;
+        size_t release_count = 0;
+        size_t unlock_count = 0;
+        for (const auto &action : plan->actions()) {
+          if (action.kind() == ExecuteActionKind::kDeleteBuffer) {
+            EXPECT_EQ(action.node_index(), 2u);
+            releases.insert(action.name());
+            ++release_count;
+          } else if (action.kind() == ExecuteActionKind::kUnlockInput) {
+            EXPECT_EQ(action.name(), input);
+            ++unlock_count;
+          }
+        }
+        EXPECT_EQ(releases, event_releases);
+        EXPECT_EQ(release_count, 2u);
+        EXPECT_EQ(unlock_count, 1u);
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesShapeNames) {
+  using core::runtime::ExecuteActionKind;
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  const std::string name = "shared;activation%3B";
+  *graph.add_node() = MakeNode("Shape", {"X"}, {name});
+  *graph.add_node() = MakeNode("Reshape", {"X", name}, {"Y"});
+
+  ShapesContext shapes;
+  shapes.SetOpsetVersion("", 18);
+  shapes.ComputeShapeGraph(graph);
+  ComputeContext ctx;
+  ctx.ComputeInPlaceReuseGraph(graph, shapes, false, {{name, "shape"}});
+  const auto plan = ctx.BuildExecutionPlan(graph);
+  size_t created = 0;
+  size_t deleted = 0;
+  for (const auto &action : plan.actions()) {
+    if (action.kind() == ExecuteActionKind::kCreateShape) {
+      EXPECT_EQ(action.name(), name);
+      ++created;
+    } else if (action.kind() == ExecuteActionKind::kDeleteShape) {
+      EXPECT_EQ(action.name(), name);
+      EXPECT_EQ(action.node_index(), 1u);
+      ++deleted;
+    }
+    EXPECT_NE(action.kind(), ExecuteActionKind::kDeleteBuffer);
+  }
+  EXPECT_EQ(created, 1u);
+  EXPECT_EQ(deleted, 1u);
+}
+
+TEST(OnnxOptimInPlaceReuse, ExecutionPlanLifetimeEncodingCompatibilityAndValidation) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"literal%3Bname"});
+  *graph.add_node() = MakeNode("Abs", {"literal%3Bname"}, {"Y"});
+  auto &node = (*graph.mutable_node())[1];
+  node.add_metadata(core::compute::kReleaseAfterMetadataKey, "literal%3Bname");
+  const core::runtime::ExecutionPlan legacy_plan(graph);
+  size_t releases = 0;
+  for (const auto &action : legacy_plan.actions()) {
+    if (action.kind() == core::runtime::ExecuteActionKind::kDeleteBuffer) {
+      EXPECT_EQ(action.name(), "literal%3Bname");
+      ++releases;
+    }
+  }
+  EXPECT_EQ(releases, 1u);
+
+  node.add_metadata(core::compute::kLifetimeNamesEncodingMetadataKey, "percent");
+  for (const char *invalid : {"%", "%3", "%00", "%XY"}) {
+    node.add_metadata(core::compute::kReleaseAfterMetadataKey, invalid);
+    EXPECT_THROW(core::runtime::ExecutionPlan{graph}, std::invalid_argument);
+  }
+  node.add_metadata(core::compute::kLifetimeNamesEncodingMetadataKey, "unknown");
+  EXPECT_THROW(core::runtime::ExecutionPlan{graph}, std::invalid_argument);
+}
+
 } // namespace Test

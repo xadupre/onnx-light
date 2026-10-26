@@ -68,6 +68,48 @@ class TestIOModel(ExtTestCase):
         loaded_proto = onnxl.load(proto_bytes)
         self.assertEqual(proto, loaded_proto)
 
+    def test_load_preserves_nested_scopes_and_metadata(self) -> None:
+        proto = _simple_model()
+        branch = onnxl.GraphProto()
+        branch.name = "branch"
+        branch.add_node("Identity", ["X"], ["Y"])
+        proto.graph.node.append(
+            oh.make_node("If", ["condition"], ["Y"], then_branch=branch, else_branch=branch)
+        )
+        proto.functions.append(
+            oh.make_function(
+                "local",
+                "Activation",
+                ["X"],
+                ["Y"],
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                opset_imports=[oh.make_opsetid("", 18)],
+            )
+        )
+        for scope in (
+            proto.graph,
+            proto.graph.node[0],
+            proto.graph.node[0].attribute[0].g,
+            proto.graph.node[0].attribute[0].g.node[0],
+            proto.functions[0],
+            proto.functions[0].node[0],
+        ):
+            metadata = scope.metadata_props.add()
+            metadata.key = "custom"
+            metadata.value = "preserved"
+        original = proto.SerializeToString()
+        for format in ("protobuf", "textproto"):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                path = pathlib.Path(temp_dir) / f"model.{format}"
+                onnxl.save(proto, path, format=format)
+                for source in (path, path.read_bytes()):
+                    for num_threads in (1, 2):
+                        with self.subTest(
+                            format=format, source=type(source).__name__, num_threads=num_threads
+                        ):
+                            loaded = onnxl.load(source, format=format, num_threads=num_threads)
+                            self.assertEqual(loaded.SerializeToString(), original)
+
     def test_save_and_load_model_when_input_is_file_name(self) -> None:
         proto = _simple_model()
         with tempfile.TemporaryDirectory() as temp_dir:

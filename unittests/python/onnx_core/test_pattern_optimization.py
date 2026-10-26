@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import gc
 import re
+import subprocess
+import sys
+import textwrap
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -411,14 +414,46 @@ class TestPatternOptimization(ExtTestCase):
         )
 
     def test_parallel_request_keeps_python_pattern_callbacks_sequential(self):
-        builder = optim.GraphBuilder(_double_neg_model())
-        graph = optim.GraphGraph(builder, [NegNegPattern()])
+        code = textwrap.dedent("""
+            import threading
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.optimization import (
+                GraphBuilder,
+                GraphGraph,
+                PatternOptimization,
+            )
 
-        rewrites, report = graph.optimize(report=True, parallel=True)
+            callback_threads = []
 
-        self.assertEqual([rewrite.pattern_name for rewrite in rewrites.rewrites], ["NegNeg"])
-        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Identity"])
-        self.assertEqual(report.rewrites, 1)
+            class ThreadTrackingPattern(PatternOptimization):
+                def __init__(self):
+                    super().__init__(priority=1, name="ThreadTracking")
+
+                def fast_op_type(self):
+                    return {"Add"}
+
+                def match(self, graph, node):
+                    del graph
+                    callback_threads.append(threading.get_ident())
+                    return self.no_match(node, "thread check")
+
+            builder = GraphBuilder("parallel_python_callbacks", opsets=18)
+            builder.make_input("x", TensorProto.FLOAT, [2])
+            for index in range(32):
+                output = f"y{index}"
+                builder.make_node("Add", ["x", "x"], outputs=[output])
+                builder.make_output(output)
+            graph = GraphGraph(builder, [ThreadTrackingPattern()])
+            calling_thread = threading.get_ident()
+            _, report = graph.optimize(report=True, parallel=True)
+            assert len(callback_threads) >= 32
+            assert set(callback_threads) == {calling_thread}
+            assert report.patterns[0].attempts >= 32
+        """)
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_replay_reproduces_python_rewrite(self):
         model = _double_neg_model()

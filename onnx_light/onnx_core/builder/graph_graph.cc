@@ -1776,8 +1776,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                   const auto match_start = std::chrono::steady_clock::now();
                   try {
                     MatchResult match = pattern->Match(*this, *candidates[candidate_index]);
-                    candidate_matches[candidate_index] = {std::move(match),
-                                                          ElapsedNanoseconds(match_start)};
+                    const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+                    candidate_matches[candidate_index] = {std::move(match), match_time_ns};
                   } catch (...) {
                     match_exceptions[candidate_index] = std::current_exception();
                   }
@@ -1795,8 +1795,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         } else {
           for (const NodeProto *candidate : candidates) {
             const auto match_start = std::chrono::steady_clock::now();
-            process_match(*candidate, pattern->Match(*this, *candidate),
-                          ElapsedNanoseconds(match_start));
+            MatchResult match = pattern->Match(*this, *candidate);
+            const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+            process_match(*candidate, std::move(match), match_time_ns);
           }
         }
       } else {
@@ -1806,8 +1807,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
             continue;
           }
           const auto match_start = std::chrono::steady_clock::now();
-          process_match(candidate, pattern->Match(*this, candidate),
-                        ElapsedNanoseconds(match_start));
+          MatchResult match = pattern->Match(*this, candidate);
+          const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+          process_match(candidate, std::move(match), match_time_ns);
         }
       }
     }

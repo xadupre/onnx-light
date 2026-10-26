@@ -7,8 +7,8 @@
 // case whose graph outputs are all plain tensors, builds a single
 // ``RuntimeContext`` / ``ExecutionPlan`` / ``RuntimeSession`` and runs that same
 // session **twice**, checking that:
-//   1. the produced outputs reproduce the expected ones bit-for-bit on both
-//      runs, and
+//   1. the produced outputs match the expected ones on both runs, using declared
+//      tolerances only for the supported-dtype floating-point references, and
 //   2. for plain-tensor models, the pool allocator's memory peak is identical
 //      after the second run (a leak would make the second run peak higher).
 //
@@ -23,6 +23,7 @@
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -32,8 +33,10 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -42,6 +45,8 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
+using core::backend_test::ExpectBackendCaseTensorEqual;
+using core::backend_test::ExpectTensorBitEqual;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::Map;
@@ -165,17 +170,6 @@ bool HasStringTensor(const ModelProto &model) {
     }
   }
   return false;
-}
-
-// Asserts that ``actual`` and ``expected`` are bit-for-bit identical: same data
-// type, shape, string data, and raw byte content.
-void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
-  EXPECT_EQ(actual.data_type, expected.data_type);
-  EXPECT_EQ(actual.shape, expected.shape);
-  EXPECT_EQ(actual.string_data, expected.string_data);
-  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
-  EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
-            std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
 }
 
 // Returns whether every declared graph input, output, and value_info of
@@ -453,9 +447,9 @@ TEST(BackendRunModelAllCases, GraphBuilderRoundTripMaterializesGraphRefAttribute
 // Collects every model-based backend test case (``TestMode::TEST``, no big
 // models) and, for each data set, builds a single ``RuntimeContext``,
 // ``ExecutionPlan`` and ``RuntimeSession`` and runs that same session twice.
-// Every output is checked bit-for-bit on both runs (the expected outputs are
-// themselves produced by the very kernels the runtime dispatches to, so a
-// bit-exact comparison is appropriate). Outputs are matched positionally
+// Existing cases, integer tensors, and Transpose outputs are checked bit-for-bit
+// on both runs. Independent supported-dtype floating-point references use their
+// declared tolerances. Outputs are matched positionally
 // against ``graph.output`` (a case's expected-tensor names are not required to
 // match the graph output names).
 //
@@ -546,7 +540,11 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
         for (size_t i = 0; i < outputs.size(); ++i) {
           const std::string &oname = outputs[i].name();
           ASSERT_TRUE(rt.Has(oname)) << "Missing output '" << oname << "' for case " << tc.name;
-          ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
+          if (graph.node_size() == 1) {
+            ExpectBackendCaseTensorEqual(rt.Get(oname), ds.outputs[i], tc);
+          } else {
+            ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
+          }
         }
         memory_peaks[run] = alloc.PeakAllocatedSize();
 

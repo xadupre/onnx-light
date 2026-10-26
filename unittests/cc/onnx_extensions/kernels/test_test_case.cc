@@ -30,6 +30,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
 #include <regex>
 #include <stdexcept>
@@ -587,6 +588,9 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   EXPECT_FALSE(peak_memory_only.empty());
 
   const auto all = CollectTestCases();
+  const auto supported_type_count = std::count_if(all.begin(), all.end(), [](const TestCase &tc) {
+    return tc.name.find("test_cc_supported_dtype_") == 0;
+  });
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() + image_only.size() +
                             object_detection_only.size() + optional_only.size() +
@@ -595,7 +599,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
                             training_only.size() + nn_only.size() + empty_shape_only.size() +
                             constant_only.size() + inplace_only.size() + release_only.size() +
                             shape_inference_only.size() + nan_inf_only.size() +
-                            shape_tag_only.size() + peak_memory_only.size());
+                            shape_tag_only.size() + peak_memory_only.size() +
+                            static_cast<size_t>(supported_type_count));
 }
 
 TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {

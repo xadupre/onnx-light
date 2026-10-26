@@ -1,3 +1,4 @@
+import ctypes
 import importlib.util
 import os
 import shutil
@@ -693,6 +694,16 @@ class InferenceSessionAllTypes:
                 outputs.append(
                     self._unpack_sub_byte(buffer, shape, bits, signed, numpy_dtype_name)
                 )
+            elif output_metas[index].type == "tensor(bfloat16)":
+                ort_output = ort_outputs[index]
+                if ort_output.device_name() != "cpu":
+                    raise ValueError("BFLOAT16 output conversion requires a CPU buffer.")
+                output = np.empty(ort_output.shape(), dtype=np.dtype("bfloat16"))
+                if output.nbytes:
+                    if not ort_output.data_ptr():
+                        raise ValueError("Nonempty BFLOAT16 output has a null data pointer.")
+                    ctypes.memmove(output.ctypes.data, ort_output.data_ptr(), output.nbytes)
+                outputs.append(output)
             else:
                 outputs.append(ort_outputs[index].numpy())
         return outputs

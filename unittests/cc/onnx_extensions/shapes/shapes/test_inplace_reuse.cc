@@ -333,6 +333,15 @@ TEST(OnnxOptimInPlaceReuse, LargerInputBufferIsReportedAsGreater) {
   // Node 1 reuses the larger intermediate A buffer for its smaller output.
   ASSERT_EQ(reuse[1].size(), 1u);
   EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+
+  ComputeContext compute;
+  compute.ComputeInPlaceReuseGraph(graph, ctx);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                compute.NodeMemory(1).at(core::compute::kNodeMemoryAfterBytesKey))),
+            48);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                compute.NodeMemory(1).at(core::compute::kNodeMemoryReleasedBytesKey))),
+            0);
 }
 
 // When both a same-sized and a strictly larger input are available for the
@@ -839,6 +848,93 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
   // Peak memory has one entry per node (Abs has no scratch, so all zero).
   ASSERT_EQ(ctx.PeakMemory().size(), 3u);
   EXPECT_EQ(ctx.NodePeakMemory(0), 0);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
+  GraphProto graph;
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+  ComputeContext ctx;
+  ctx.Compute(graph);
+
+  ASSERT_EQ(ctx.NodeReuse(1).size(), 1u);
+  EXPECT_EQ(ctx.NodeReleaseAfter(1), (std::vector<std::string>{"A"}));
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryBeforeBytesKey), 48);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 0);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
+  core::shapes::RegisterComputePeakMemoryFn(
+      "test.memory_boundaries", "Scratch", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<SymShape> &) { return int64_t{128}; });
+  GraphProto graph;
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Scratch", {"A"}, {"Y", "unused"});
+  graph.mutable_node()->at(1).set_domain("test.memory_boundaries");
+  ComputeContext ctx;
+  for (const char *name : {"X", "A", "Y", "unused"}) {
+    ctx.Shapes().Set(name, SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
+  }
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey),
+            scalar(1, core::compute::kNodeMemoryBeforeBytesKey));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 192);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 96);
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 320);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 224);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryTotalBytesKey), 192);
+  }
+  ctx.ComputePeakMemory(graph, core::symbolic::Device::kGPU0);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 192);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 96);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesPreserveSymbolicSizes) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  *graph.add_node() = MakeCastNode("X", "A", TensorProto::DataType::DOUBLE);
+  *graph.add_node() = MakeNode("Copy", {"A"}, {"Y"});
+  graph.mutable_node()->at(1).set_domain("test.memory_boundaries");
+  ComputeContext ctx;
+  const SymShape shape{SymDim("N"), SymDim(4)};
+  ctx.Shapes().Set("X", SymTensor(nullptr, TensorType::kFloat, shape));
+  ctx.Shapes().Set("A", SymTensor(nullptr, TensorType::kDouble, shape));
+  ctx.Shapes().Set("Y", SymTensor(nullptr, TensorType::kFloat, shape));
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey),
+            scalar(1, core::compute::kNodeMemoryBeforeBytesKey));
+  const auto expected = [](const char *expression) {
+    return core::expressions::simplify_dim_type(
+        core::expressions::DimType{std::string(expression)});
+  };
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), expected("48*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), expected("64*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), expected("32*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), expected("32*N"));
 }
 
 // ComputeContext::WriteToGraph pushes inferred shapes into value_info and the

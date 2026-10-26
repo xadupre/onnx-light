@@ -114,17 +114,37 @@ using ComputeEventLog = std::vector<ComputeEvent>;
  *     opportunity covers them;
  *   - ``total_bytes`` is their sum.
  *
- * The profile is stored as a ``std::map`` with seven well-known keys:
+ * Four additional scalar entries expose execution boundaries, including the
+ * final node:
+ *
+ *   - ``before_bytes`` counts live buffers before execution, excluding temporary
+ *     function-body allocations;
+ *   - ``during_bytes`` is ``total_bytes`` plus the node's peak scratch estimate;
+ *   - ``after_bytes`` counts retained buffers after releases and scratch
+ *     deallocation, using the same allocation ownership as the profiler;
+ *   - ``released_bytes`` is ``during_bytes - after_bytes``, including scratch,
+ *     temporary function-body allocations and unused outputs. An in-place
+ *     ownership transfer does not release the retained buffer.
+ *
+ * Scratch is zero until :cpp:func:`ComputeContext::ComputePeakMemory` is called
+ * (or the incremental peak estimate is updated). Recomputing it updates the
+ * boundary entries without accumulating scratch.
+ *
+ * The profile is stored as a ``std::map`` with eleven well-known keys:
  *
  *   - ``"total_bytes"``
  *   - ``"already_allocated_bytes"``
  *   - ``"output_allocation_bytes"``
+ *   - ``"before_bytes"``
+ *   - ``"during_bytes"``
+ *   - ``"after_bytes"``
+ *   - ``"released_bytes"``
  *   - ``"inputs"``
  *   - ``"initializers"``
  *   - ``"intermediates"``
  *   - ``"outputs"``
  *
- * The first three keys map to scalar :cpp:type:`core::expressions::DimType`
+ * The first seven keys map to scalar :cpp:type:`core::expressions::DimType`
  * values. The other four keys map to ``std::map<ShapeTag, DimType>`` buckets
  * split by value tag (``"shape"``, ``"axes"``, ``"weight"``, or the empty string
  * for untagged values). ``"already_allocated_bytes"`` is the sum of the
@@ -144,6 +164,10 @@ using NodeMemoryProfile = std::map<std::string, NodeMemoryProfileValue>;
 constexpr const char *kNodeMemoryTotalBytesKey = "total_bytes";
 constexpr const char *kNodeMemoryAlreadyAllocatedBytesKey = "already_allocated_bytes";
 constexpr const char *kNodeMemoryOutputAllocationBytesKey = "output_allocation_bytes";
+constexpr const char *kNodeMemoryBeforeBytesKey = "before_bytes";
+constexpr const char *kNodeMemoryDuringBytesKey = "during_bytes";
+constexpr const char *kNodeMemoryAfterBytesKey = "after_bytes";
+constexpr const char *kNodeMemoryReleasedBytesKey = "released_bytes";
 constexpr const char *kNodeMemoryInputsKey = "inputs";
 constexpr const char *kNodeMemoryInitializersKey = "initializers";
 constexpr const char *kNodeMemoryIntermediatesKey = "intermediates";

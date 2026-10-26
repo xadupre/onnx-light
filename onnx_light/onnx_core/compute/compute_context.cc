@@ -96,11 +96,24 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = int64_t{0};
   NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = int64_t{0};
   NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryBeforeBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryDuringBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryReleasedBytesKey) = int64_t{0};
   NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey);
   NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey);
   NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey);
   NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey);
   return profile;
+}
+
+void UpdateNodeMemoryBoundaries(NodeMemoryProfile &profile, int64_t scratch,
+                                expressions::SimplifiedExpressionCache *cache) {
+  const expressions::DimType during = expressions::dim_add(
+      NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), scratch, cache);
+  NodeMemoryProfileScalar(profile, kNodeMemoryDuringBytesKey) = during;
+  NodeMemoryProfileScalar(profile, kNodeMemoryReleasedBytesKey) = expressions::dim_sub(
+      during, NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey), cache);
 }
 
 struct FunctionBodyMemoryEstimate {
@@ -1326,6 +1339,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
     const expressions::DimType already_allocated = already_sum.Build(&expression_cache);
     const expressions::DimType output_allocation = output_sum.Build(&expression_cache);
     NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
+    NodeMemoryProfileScalar(profile, kNodeMemoryBeforeBytesKey) = already_allocated;
     NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
     NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
         expressions::dim_add(already_allocated, output_allocation, &expression_cache);
@@ -1339,8 +1353,6 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      &expression_cache);
     AddFunctionBodyMemory(profile, EstimateFunctionBodyMemory(node, ctx, device, materialize),
                           &expression_cache);
-    memory_[index] = std::move(profile);
-
     if (index < release_after_.size()) {
       for (const std::string &name : release_after_[index]) {
         alive.erase(name);
@@ -1350,6 +1362,17 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
       alive.erase(output);
     }
     alive.insert(outputs_to_add.begin(), outputs_to_add.end());
+    expressions::DimSum after_sum;
+    for (const std::string &name : alive) {
+      const auto allocation = incr_allocation_bytes_.find(name);
+      if (allocation != incr_allocation_bytes_.end()) {
+        after_sum.Add(allocation->second);
+      }
+    }
+    NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) = after_sum.Build(&expression_cache);
+    UpdateNodeMemoryBoundaries(profile, index < peak_memory_.size() ? peak_memory_[index] : 0,
+                               &expression_cache);
+    memory_[index] = std::move(profile);
   }
   incr_memory_alive_ = std::move(alive);
   incr_memory_alive_before_refresh_.clear();
@@ -1376,6 +1399,10 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
   peak_memory_[node_index] =
       std::max(peak_memory_[node_index],
                EstimateFunctionBodyMemory(node, shapes_, device, materialize).workspace_peak);
+  if (node_index < memory_.size()) {
+    UpdateNodeMemoryBoundaries(memory_[node_index], peak_memory_[node_index],
+                               &shapes_.ExpressionCache());
+  }
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(
@@ -1525,6 +1552,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
     const expressions::DimType already_allocated = already_sum.Build(&expression_cache);
     const expressions::DimType output_allocation = output_sum.Build(&expression_cache);
     NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
+    NodeMemoryProfileScalar(profile, kNodeMemoryBeforeBytesKey) = already_allocated;
     NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
     NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
         expressions::dim_add(already_allocated, output_allocation, &expression_cache);
@@ -1587,6 +1615,12 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
     for (auto &entry : outputs_to_add) {
       alive[entry.first] = std::move(entry.second);
     }
+    expressions::DimSum after_sum;
+    for (const auto &entry : alive) {
+      after_sum.Add(entry.second.bytes);
+    }
+    NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) = after_sum.Build(&expression_cache);
+    UpdateNodeMemoryBoundaries(profile, 0, &expression_cache);
   }
 
   reuse_ = std::move(result);
@@ -1759,6 +1793,9 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
     peak_memory_[static_cast<std::size_t>(i)] =
         std::max(peak_memory_[static_cast<std::size_t>(i)],
                  EstimateFunctionBodyMemory(node, shapes_, device).workspace_peak);
+    if (i < memory_.size()) {
+      UpdateNodeMemoryBoundaries(memory_[i], peak_memory_[i], &shapes_.ExpressionCache());
+    }
   }
   return peak_memory_;
 }

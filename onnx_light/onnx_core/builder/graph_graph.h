@@ -97,6 +97,14 @@ public:
    * into initializers before cleanup, subject to ``folding_options``.
    * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
    * passes may still remove nodes or initializers.
+   * ``parallel=true`` matches candidates concurrently when the pattern's
+   * CanMatchInParallel returns true. Python-defined patterns are evaluated
+   * sequentially, including in mixed native/Python pattern lists.
+   * Concurrent matchers may read the frozen structural index through NodeBefore,
+   * NextNodes, Predecessors, Successors, IsOutput, IsUsed, IsUsedMoreThanOnce,
+   * IsUsedBySubgraph, and Position. They must not mutate Builder or call
+   * SetComputedConstant. Other queries require their own thread-safety audit,
+   * including any lazy evaluation or cache writes in their dependencies.
    * ``callback`` observes each eligible, disjoint match before its nodes are
    * reserved, including matches in nested subgraphs. Returning false rejects
    * that match without blocking other patterns. It does not intercept cleanup.
@@ -108,7 +116,8 @@ public:
    */
   RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
                           const ConstantFoldingOptions &folding_options = {},
-                          bool remove_unused = true, const OptimizationCallback &callback = {});
+                          bool remove_unused = true, const OptimizationCallback &callback = {},
+                          bool parallel = false);
 
   /// Returns the patterns owned by this graph optimizer.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -225,7 +234,7 @@ private:
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
                               RewritingProto &collection, detail::RewritingUndoState &undo,
-                              const OptimizationCallback &callback);
+                              const OptimizationCallback &callback, bool parallel);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

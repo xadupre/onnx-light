@@ -36,6 +36,8 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
+  bool CanMatchInParallel() const noexcept override { return false; }
+
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
     nb::detail::ticket ticket(nb_trampoline, "match", nb::detail::str_hash("match"), true);
     nb::object result = nb_trampoline.base().attr(ticket.key)(
@@ -189,7 +191,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report,
              const core::builder::ConstantFoldingOptions &folding_options, bool remove_unused,
-             nb::object callback) -> nb::object {
+             nb::object callback, bool parallel) -> nb::object {
             GraphGraph::OptimizationCallback on_match;
             if (!callback.is_none()) {
               if (!PyCallable_Check(callback.ptr()))
@@ -201,17 +203,18 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
               };
             }
             if (!report) {
-              return nb::cast(
-                  graph.Optimize(max_iter, nullptr, folding_options, remove_unused, on_match));
+              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused,
+                                             on_match, parallel));
             }
             OptimizationReport statistics;
-            RewritingProto rewrites =
-                graph.Optimize(max_iter, &statistics, folding_options, remove_unused, on_match);
+            RewritingProto rewrites = graph.Optimize(max_iter, &statistics, folding_options,
+                                                     remove_unused, on_match, parallel);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
           nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
           nb::arg("folding_options") = core::builder::ConstantFoldingOptions{},
-          nb::arg("remove_unused") = true, nb::arg("callback") = nb::none())
+          nb::arg("remove_unused") = true, nb::arg("callback") = nb::none(),
+          nb::arg("parallel") = false)
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

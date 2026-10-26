@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import gc
 import re
+import subprocess
+import sys
+import textwrap
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -409,6 +412,139 @@ class TestPatternOptimization(ExtTestCase):
             "the input is not produced by Neg",
             {item.reason for item in pattern_report.no_matches},
         )
+
+    def test_parallel_request_keeps_python_pattern_callbacks_sequential(self):
+        code = textwrap.dedent("""
+            import threading
+            import unittest
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.optimization import (
+                GraphBuilder,
+                GraphGraph,
+                PatternOptimization,
+                TransposeTransposePattern,
+            )
+
+            callback_threads = []
+            checks = unittest.TestCase()
+
+            class ThreadTrackingPattern(PatternOptimization):
+                def __init__(self):
+                    super().__init__(priority=0, name="ThreadTracking")
+
+                def fast_op_type(self):
+                    return {"Add"}
+
+                def match(self, graph, node):
+                    del graph
+                    callback_threads.append(threading.get_ident())
+                    return self.no_match(node, "thread check")
+
+            for mixed in (False, True):
+                callback_threads.clear()
+                builder = GraphBuilder("parallel_python_callbacks", opsets=18)
+                for index in range(64):
+                    input_name = f"x{index}"
+                    builder.make_input(input_name, TensorProto.FLOAT, [2, 3])
+                    output = f"y{index}"
+                    builder.make_node("Add", [input_name, input_name], outputs=[output])
+                    if mixed:
+                        for prefix in ("middle", "transposed"):
+                            transposed = f"{prefix}{index}"
+                            builder.make_node(
+                                "Transpose",
+                                [output],
+                                outputs=[transposed],
+                                attributes={"perm": [1, 0]},
+                            )
+                            output = transposed
+                    builder.make_output(output)
+                patterns = [ThreadTrackingPattern()]
+                if mixed:
+                    patterns.append(TransposeTransposePattern())
+                graph = GraphGraph(builder, patterns)
+                calling_thread = threading.get_ident()
+                plan, report = graph.optimize(max_iter=1, report=True, parallel=True)
+                checks.assertEqual(len(callback_threads), 64)
+                checks.assertEqual(set(callback_threads), {calling_thread})
+                statistics = {item.pattern_name: item for item in report.patterns}
+                checks.assertEqual(statistics["ThreadTracking"].attempts, 64)
+                if mixed:
+                    checks.assertEqual(statistics["TransposeTranspose"].attempts, 128)
+                    checks.assertEqual(statistics["TransposeTranspose"].matches, 64)
+                    checks.assertEqual(len(plan.rewrites), 64)
+        """)
+        for options in ([], ["-O"]):
+            with self.subTest(options=options):
+                result = subprocess.run(
+                    [sys.executable, *options, "-c", code],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_parallel_native_matching_preserves_optimization_callback_order(self):
+        code = textwrap.dedent("""
+            import threading
+            import unittest
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.optimization import (
+                GraphBuilder,
+                GraphGraph,
+                TransposeTransposePattern,
+            )
+
+            checks = unittest.TestCase()
+            for parallel in (False, True):
+                builder = GraphBuilder("parallel_native_callbacks", opsets=18)
+                for index in range(32):
+                    input_name = f"x{index}"
+                    builder.make_input(input_name, TensorProto.FLOAT, [2, 3])
+                    builder.make_node(
+                        "Transpose",
+                        [input_name],
+                        outputs=[f"middle{index}"],
+                        attributes={"perm": [1, 0]},
+                    )
+                    builder.make_node(
+                        "Transpose",
+                        [f"middle{index}"],
+                        outputs=[f"y{index}"],
+                        attributes={"perm": [1, 0]},
+                    )
+                    builder.make_output(f"y{index}")
+
+                calling_thread = threading.get_ident()
+                observed = []
+
+                def callback(graph, match):
+                    checks.assertEqual(threading.get_ident(), calling_thread)
+                    position = graph.position(match.nodes[0])
+                    observed.append(position)
+                    return position % 4 == 0
+
+                graph = GraphGraph(builder, [TransposeTransposePattern()])
+                plan, report = graph.optimize(
+                    max_iter=1, report=True, callback=callback, parallel=parallel
+                )
+                checks.assertEqual(observed, list(range(0, 64, 2)))
+                # Rewrite indices refer to the graph after preceding edits.
+                matched_nodes = [list(r.matched_nodes) for r in plan.rewrites]
+                checks.assertEqual(matched_nodes, [
+                    [index, index + 1] for index in range(0, 48, 3)
+                ])
+                checks.assertEqual(report.patterns[0].matches, 16)
+        """)
+        for options in ([], ["-O"]):
+            with self.subTest(options=options):
+                result = subprocess.run(
+                    [sys.executable, *options, "-c", code],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_replay_reproduces_python_rewrite(self):
         model = _double_neg_model()

@@ -47,6 +47,9 @@ public:
   /// Returns ``Transpose`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
+  /// Enables reentrant matching using immutable nodes and structural index queries.
+  bool CanMatchInParallel() const noexcept override { return true; }
+
   /// Finds a ``Transpose`` followed by another default-domain ``Transpose``.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;

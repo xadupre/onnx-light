@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -19,6 +20,7 @@
 #include "onnx_proto/onnx_helper.h"
 #include "test_case_utils.h"
 
+#include <gtest/gtest-spi.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -34,6 +36,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
+using core::backend_test::ExpectBackendCaseTensorEqual;
+using core::backend_test::ExpectTensorBitEqual;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::ExecutionPlan;
@@ -60,53 +64,6 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
     }
   }
   return kFallbackDefaultOpsetVersion;
-}
-
-void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
-  EXPECT_EQ(actual.data_type, expected.data_type);
-  EXPECT_EQ(actual.shape, expected.shape);
-  EXPECT_EQ(actual.string_data, expected.string_data);
-  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
-  EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
-            std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
-}
-
-void ExpectTensorClose(const Tensor &actual, const Tensor &expected, double rtol, double atol) {
-  ASSERT_EQ(actual.data_type, expected.data_type);
-  ASSERT_EQ(actual.shape, expected.shape);
-  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
-  if (actual.data_type != DataType::FLOAT && actual.data_type != DataType::DOUBLE &&
-      actual.data_type != DataType::FLOAT16 && actual.data_type != DataType::BFLOAT16) {
-    ExpectTensorBitEqual(actual, expected);
-    return;
-  }
-  auto read_value = [](const Tensor &tensor, int64_t i) -> double {
-    switch (tensor.data_type) {
-    case DataType::FLOAT:
-      return tensor.AsFloat()[i];
-    case DataType::DOUBLE:
-      return tensor.AsDouble()[i];
-    case DataType::FLOAT16:
-      return core::runtime::Float16BitsToFloat(
-          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
-    case DataType::BFLOAT16:
-      return core::runtime::Bfloat16BitsToFloat(
-          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
-    default:
-      throw std::invalid_argument("Unsupported floating-point comparison dtype.");
-    }
-  };
-  for (int64_t i = 0; i < expected.element_count(); ++i) {
-    const double value = read_value(actual, i);
-    const double reference = read_value(expected, i);
-    if (std::isnan(reference)) {
-      EXPECT_TRUE(std::isnan(value)) << "element " << i;
-    } else if (std::isinf(reference)) {
-      EXPECT_EQ(value, reference) << "element " << i;
-    } else {
-      EXPECT_NEAR(value, reference, atol + rtol * std::abs(reference)) << "element " << i;
-    }
-  }
 }
 
 // Registers `model`'s local functions in `rt`, seeds `model.graph()`'s
@@ -270,11 +227,7 @@ void RunBackendCasesFor(const std::string &op_type,
       for (const Tensor &expected : ds.outputs) {
         ASSERT_TRUE(rt.Has(expected.name))
             << "Missing output '" << expected.name << "' for case " << tc.name;
-        if (tc.name.find("test_cc_supported_dtype_") == 0 && op_type != "Transpose") {
-          ExpectTensorClose(rt.Get(expected.name), expected, tc.rtol, tc.atol);
-        } else {
-          ExpectTensorBitEqual(rt.Get(expected.name), expected);
-        }
+        ExpectBackendCaseTensorEqual(rt.Get(expected.name), expected, tc);
       }
       ran_case = true;
     }
@@ -304,7 +257,16 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
     SCOPED_TRACE(tc.name);
     EXPECT_FALSE(tc.materialized());
     const auto &model = tc.model();
-    ASSERT_NO_THROW(checker::check_model(model, true));
+    const bool double_mvn = tc.name == "test_cc_supported_dtype_MeanVarianceNormalization_DOUBLE";
+    // The schema function mixes FLOAT Epsilon with DOUBLE STD (#5611). Keep schema
+    // validation and verify the native inferred type without expanding it.
+    ASSERT_NO_THROW(checker::check_model(model, !double_mvn));
+    if (double_mvn) {
+      ModelProto inferred = model;
+      inferred.mutable_graph()->mutable_output(0)->clear_type();
+      ASSERT_NO_THROW(core::shapes::InferShapesModel(inferred));
+      EXPECT_TRUE(inferred.graph().output(0).type().Equals(model.graph().output(0).type()));
+    }
     const std::string op = model.graph().node(0).op_type().value();
     const auto &ds = tc.data_sets().at(0);
     ASSERT_FALSE(ds.inputs.empty());
@@ -327,6 +289,34 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
   auto benchmarks = core::backend_test::CollectTestCasesByName(
       "^test_cc_supported_dtype_", false, core::backend_test::TestMode::BENCHMARK);
   EXPECT_TRUE(benchmarks.empty());
+}
+
+TEST(BackendRunModel, SupportedDtypeComparisonRetainsExactReferences) {
+  const Tensor positive_zero = Tensor::FromDouble("", {1}, {0.0});
+  const Tensor negative_zero = Tensor::FromDouble("", {1}, {-0.0});
+  for (const std::string name : {"test_cc_existing", "test_cc_supported_dtype_Transpose_DOUBLE"}) {
+    TestCase tc(name);
+    tc.rtol = 1.0;
+    tc.atol = 1.0;
+    EXPECT_NONFATAL_FAILURE(ExpectBackendCaseTensorEqual(positive_zero, negative_zero, tc),
+                            "std::vector<uint8_t>");
+  }
+  TestCase integer_case("test_cc_supported_dtype_MatMul_INT64");
+  integer_case.rtol = 1.0;
+  integer_case.atol = 1.0;
+  const Tensor one = Tensor::FromInt64("", {1}, {1});
+  const Tensor two = Tensor::FromInt64("", {1}, {2});
+  EXPECT_NONFATAL_FAILURE(ExpectBackendCaseTensorEqual(one, two, integer_case),
+                          "std::vector<uint8_t>");
+  TestCase float_case("test_cc_supported_dtype_MeanVarianceNormalization_DOUBLE");
+  float_case.rtol = 1e-12;
+  float_case.atol = 1e-14;
+  ExpectBackendCaseTensorEqual(Tensor::FromDouble("", {1}, {1.0 - 1e-13}),
+                               Tensor::FromDouble("", {1}, {1.0}), float_case);
+  EXPECT_NONFATAL_FAILURE(ExpectBackendCaseTensorEqual(Tensor::FromDouble("", {1}, {0.99}),
+                                                       Tensor::FromDouble("", {1}, {1.0}),
+                                                       float_case),
+                          "exceeds");
 }
 
 // One TEST per kernel currently registered in ``KernelDispatchTable``

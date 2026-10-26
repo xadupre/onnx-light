@@ -19,22 +19,31 @@ using namespace core::backend_test;
 
 namespace {
 
+template <typename T> std::vector<T> CastValues(const std::vector<double> &values) {
+  std::vector<T> converted;
+  converted.reserve(values.size());
+  for (double value : values) {
+    converted.push_back(static_cast<T>(value));
+  }
+  return converted;
+}
+
 Tensor TypedTensor(DataType dtype, const Shape &shape, const std::vector<double> &values) {
   switch (dtype) {
   case DataType::DOUBLE:
     return Tensor::FromDouble("", shape, values);
   case DataType::FLOAT16:
-    return MakeFloat16Tensor("", shape, std::vector<float>(values.begin(), values.end()));
+    return MakeFloat16Tensor("", shape, CastValues<float>(values));
   case DataType::BFLOAT16:
-    return MakeBfloat16Tensor("", shape, std::vector<float>(values.begin(), values.end()));
+    return MakeBfloat16Tensor("", shape, CastValues<float>(values));
   case DataType::INT32:
-    return Tensor::FromInt32("", shape, std::vector<int32_t>(values.begin(), values.end()));
+    return Tensor::FromInt32("", shape, CastValues<int32_t>(values));
   case DataType::INT64:
-    return Tensor::FromInt64("", shape, std::vector<int64_t>(values.begin(), values.end()));
+    return Tensor::FromInt64("", shape, CastValues<int64_t>(values));
   case DataType::UINT32:
-    return Tensor::FromUint32("", shape, std::vector<uint32_t>(values.begin(), values.end()));
+    return Tensor::FromUint32("", shape, CastValues<uint32_t>(values));
   case DataType::UINT64:
-    return Tensor::FromUint64("", shape, std::vector<uint64_t>(values.begin(), values.end()));
+    return Tensor::FromUint64("", shape, CastValues<uint64_t>(values));
   default:
     throw std::invalid_argument("Unsupported correctness-case numeric dtype.");
   }

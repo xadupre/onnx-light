@@ -70,7 +70,11 @@ struct ImportedBufferOwnerDeleter {
   }
 };
 
+bool IsFileMappedOwner(const std::shared_ptr<void> &owner);
+
 bool IsFileMappedPythonBuffer(nb::handle array) {
+  if (nb::isinstance<TensorProto>(array))
+    return IsFileMappedOwner(nb::cast<const TensorProto &>(array).raw_data().owner());
   const auto numpy = nb::module_::import_("numpy");
   const auto ndarray = numpy.attr("ndarray");
   const auto memmap = numpy.attr("memmap");
@@ -374,13 +378,73 @@ void SnapshotBorrowedRawData(utils::ByteSpan &raw_data) {
   raw_data = std::move(snapshot);
 }
 
-void SnapshotEncodedValue(EncodedValueProto &value) {
-  SnapshotBorrowedRawData(value.ref_raw_data());
+void SnapshotGraphPayloads(GraphProto &graph);
+void SnapshotFunctionGraphs(FunctionProto &function);
+void SnapshotTypePayloads(TypeProto &type);
+
+void SnapshotStructPayloads(StructTypeProto &type) {
+  if (type.has_structure())
+    for (auto &field : type.ref_structure().ref_field()) {
+      if (field.has_constant())
+        SnapshotBorrowedRawData(field.ref_constant().ref_raw_data());
+      if (field.has_type())
+        SnapshotTypePayloads(field.ref_type());
+    }
+  if (type.has_array() && type.array().has_element_type())
+    SnapshotTypePayloads(type.ref_array().ref_element_type());
+  if (type.has_decoder())
+    SnapshotFunctionGraphs(type.ref_decoder());
+  if (type.has_encoder())
+    SnapshotFunctionGraphs(type.ref_encoder());
 }
 
-void SnapshotGraphPayloads(GraphProto &graph);
+void SnapshotTypePayloads(TypeProto &type) {
+  if (type.has_struct_type())
+    SnapshotStructPayloads(type.ref_struct_type());
+  if (type.has_sequence_type() && type.sequence_type().has_elem_type())
+    SnapshotTypePayloads(type.ref_sequence_type().ref_elem_type());
+  if (type.has_optional_type() && type.optional_type().has_elem_type())
+    SnapshotTypePayloads(type.ref_optional_type().ref_elem_type());
+  if (type.has_map_type() && type.map_type().has_value_type())
+    SnapshotTypePayloads(type.ref_map_type().ref_value_type());
+}
+
+void SnapshotEncodedValue(EncodedValueProto &value) {
+  SnapshotBorrowedRawData(value.ref_raw_data());
+  if (value.has_affine()) {
+    if (value.affine().has_scale())
+      SnapshotBorrowedRawData(value.ref_affine().ref_scale().ref_raw_data());
+    if (value.affine().has_zero_point())
+      SnapshotBorrowedRawData(value.ref_affine().ref_zero_point().ref_raw_data());
+  }
+  if (value.has_struct_type())
+    SnapshotStructPayloads(value.ref_struct_type());
+  if (value.has_logical_type())
+    SnapshotTypePayloads(value.ref_logical_type());
+}
 
 void SnapshotAttributeGraphs(AttributeProto &attribute) {
+  if (attribute.has_t())
+    SnapshotBorrowedRawData(attribute.ref_t().ref_raw_data());
+  for (auto &tensor : attribute.ref_tensors())
+    SnapshotBorrowedRawData(tensor.ref_raw_data());
+  if (attribute.has_sparse_tensor()) {
+    auto &sparse = attribute.ref_sparse_tensor();
+    if (sparse.has_values())
+      SnapshotBorrowedRawData(sparse.ref_values().ref_raw_data());
+    if (sparse.has_indices())
+      SnapshotBorrowedRawData(sparse.ref_indices().ref_raw_data());
+  }
+  for (auto &sparse : attribute.ref_sparse_tensors()) {
+    if (sparse.has_values())
+      SnapshotBorrowedRawData(sparse.ref_values().ref_raw_data());
+    if (sparse.has_indices())
+      SnapshotBorrowedRawData(sparse.ref_indices().ref_raw_data());
+  }
+  if (attribute.has_tp())
+    SnapshotTypePayloads(attribute.ref_tp());
+  for (auto &type : attribute.ref_type_protos())
+    SnapshotTypePayloads(type);
   if (attribute.has_g())
     SnapshotGraphPayloads(attribute.ref_g());
   for (auto &graph : attribute.ref_graphs())
@@ -393,6 +457,18 @@ void SnapshotNodeGraphs(NodeProto &node) {
 }
 
 void SnapshotGraphPayloads(GraphProto &graph) {
+  for (auto &tensor : graph.ref_initializer())
+    SnapshotBorrowedRawData(tensor.ref_raw_data());
+  for (auto &sparse : graph.ref_sparse_initializer()) {
+    if (sparse.has_values())
+      SnapshotBorrowedRawData(sparse.ref_values().ref_raw_data());
+    if (sparse.has_indices())
+      SnapshotBorrowedRawData(sparse.ref_indices().ref_raw_data());
+  }
+  for (auto *values : {&graph.ref_input(), &graph.ref_output(), &graph.ref_value_info()})
+    for (auto &value : *values)
+      if (value.has_type())
+        SnapshotTypePayloads(value.ref_type());
   for (auto &initializer : graph.ref_extended_initializer()) {
     if (initializer.has_encoded_value()) {
       SnapshotEncodedValue(initializer.ref_encoded_value());
@@ -414,6 +490,9 @@ void SnapshotGraphPayloads(GraphProto &graph) {
 }
 
 void SnapshotFunctionGraphs(FunctionProto &function) {
+  for (auto &value : function.ref_value_info())
+    if (value.has_type())
+      SnapshotTypePayloads(value.ref_type());
   for (auto &attribute : function.ref_attribute_proto())
     SnapshotAttributeGraphs(attribute);
   for (auto &node : function.ref_node())
@@ -421,6 +500,8 @@ void SnapshotFunctionGraphs(FunctionProto &function) {
 }
 
 void SnapshotModelGraphs(ModelProto &model) {
+  for (auto &type : model.ref_struct_types())
+    SnapshotStructPayloads(type);
   if (model.has_graph())
     SnapshotGraphPayloads(model.ref_graph());
   for (auto &function : model.ref_functions())

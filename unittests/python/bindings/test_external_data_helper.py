@@ -276,6 +276,142 @@ class TestExternalDataHelper(ExtTestCase):
                 loaded.graph.extended_initializer[0].encoded_value.raw_data, values.tobytes()
             )
 
+    def test_native_mapped_dlpack_reimports_resave_to_same_path(self):
+        for external in (False, True):
+            for depth in (1, 3):
+                with (
+                    self.subTest(external=external, depth=depth),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    values = np.arange(128, dtype=np.float32)
+                    path = os.path.join(tmp, "model.onnx")
+                    weights = os.path.join(tmp, "weights.bin")
+                    onnxl.save_model(
+                        _make_model(values),
+                        path,
+                        save_as_external_data=external,
+                        location="weights.bin" if external else None,
+                        size_threshold=0,
+                    )
+                    mapped = onnxl.load(
+                        path, load_external_data=external, file_load_mode="MMAP", no_copy=True
+                    )
+                    tensor = mapped.graph.initializer[0]
+                    for _ in range(depth):
+                        tensor = onnxl.TensorProto.from_dlpack(tensor, name="W")
+                    model = _make_model(values)
+                    model.graph.initializer[0].CopyFrom(tensor)
+                    del mapped, tensor
+                    gc.collect()
+                    before = model.SerializeToString()
+                    options = onnxl.SerializeOptions()
+                    options.raw_data_threshold = 0
+                    options.num_threads = 2
+                    options.min_parallel_block_size = 1
+                    model.SerializeToFile(path, options, weights)
+                    self.assertEqual(model.SerializeToString(), before)
+                    loaded = onnxl.load(path, load_external_data=True)
+                    np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+
+    def test_mapped_layout_tensors_resave_same_model_path(self):
+        for layout in ("affine", "inline", "catalogue", "nested", "array", "codec"):
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory() as tmp:
+                values = np.arange(2048, dtype=np.float32)
+                model = _make_model(values)
+                encoded = onnxl.EncodedValueProto(name="encoded", raw_data=bytes(range(128)))
+                if layout == "affine":
+                    encoded.affine.storage_type = onnxl.TensorProto.UINT8
+                    encoded.affine.scale.CopyFrom(
+                        oh.make_tensor(
+                            "", onnxl.TensorProto.FLOAT, [], np.float32(0.25).tobytes(), raw=True
+                        )
+                    )
+                    encoded.affine.zero_point.CopyFrom(
+                        oh.make_tensor("", onnxl.TensorProto.UINT8, [], b"\x11", raw=True)
+                    )
+                    encoded.logical_type.CopyFrom(
+                        oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [128])
+                    )
+                else:
+                    declaration = onnxl.StructTypeProto(
+                        structure=onnxl.StructTypeProto.Structure(
+                            field=[
+                                onnxl.StructTypeProto.Structure.Field(
+                                    name="code",
+                                    type=oh.make_tensor_type_proto(onnxl.TensorProto.UINT8, []),
+                                ),
+                                onnxl.StructTypeProto.Structure.Field(
+                                    name="constant",
+                                    constant=oh.make_tensor(
+                                        "",
+                                        onnxl.TensorProto.FLOAT,
+                                        [128],
+                                        values[:128].tobytes(),
+                                        raw=True,
+                                    ),
+                                ),
+                            ]
+                        )
+                    )
+                    if layout == "codec":
+                        declaration.decoder.CopyFrom(
+                            onnxl.FunctionProto(
+                                name="Decode",
+                                domain="test",
+                                input=["X"],
+                                output=["Y"],
+                                node=[oh.make_node("Identity", ["X"], ["Y"])],
+                                opset_import=[oh.make_opsetid("", 17)],
+                                attribute_proto=[
+                                    oh.make_attribute("body", _make_model(values[:128]).graph)
+                                ],
+                            )
+                        )
+                    if layout == "array":
+                        encoded.struct_type.array.element_type.CopyFrom(
+                            onnxl.TypeProto(struct_type=declaration)
+                        )
+                        encoded.struct_type.array.dimension = 128
+                    elif layout == "catalogue":
+                        declaration.type_id = 1
+                        model.struct_types.append(declaration)
+                        encoded.struct_type.type_ref = 1
+                    elif layout == "nested":
+                        element = onnxl.TypeProto(struct_type=declaration)
+                        nested = onnxl.TypeProto(
+                            optional_type=onnxl.TypeProto.Optional(
+                                elem_type=onnxl.TypeProto(
+                                    map_type=onnxl.TypeProto.Map(
+                                        key_type=onnxl.TensorProto.INT64,
+                                        value_type=onnxl.TypeProto(
+                                            sequence_type=onnxl.TypeProto.Sequence(
+                                                elem_type=element
+                                            )
+                                        ),
+                                    )
+                                )
+                            )
+                        )
+                        model.graph.input.append(onnxl.ValueInfoProto(name="record", type=nested))
+                    else:
+                        encoded.struct_type.CopyFrom(declaration)
+                model.graph.extended_initializer.append(
+                    onnxl.ExtendedInitializerProto(encoded_value=encoded)
+                )
+                path = os.path.join(tmp, "model.onnx")
+                onnxl.save_model(model, path)
+                mapped = onnxl.load(path, file_load_mode="MMAP", no_copy=True)
+                before = mapped.SerializeToString()
+                options = onnxl.SerializeOptions()
+                options.raw_data_threshold = 1024
+                options.num_threads = 2
+                options.min_parallel_block_size = 1
+                mapped.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+                self.assertEqual(mapped.SerializeToString(), before)
+                loaded = onnxl.load(path, load_external_data=True)
+                loaded.graph.initializer[0].CopyFrom(model.graph.initializer[0])
+                self.assertEqual(loaded.SerializeToString(), model.SerializeToString())
+
     def test_borrowed_mapped_views_resave_to_same_path(self):
         for source_kind in ("numpy", "dlpack"):
             for view_kind in ("direct", "array", "memoryview", "slice", "mmap"):

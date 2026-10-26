@@ -390,6 +390,9 @@ jobs:
         # to that CI measurement and allow the deferred APIs plus the pipeline
         # and recursive-submessage export validators (one symbol each).
         # Keep the 5% margin and dependency allowlist.
+        # Mapping provenance adds one exported IsFileMappedOwner helper.
+        # Linux CI run 40395315010 measures 1917208 installed bytes, 1387258 text
+        # bytes and 915 symbols; only the strict symbol cap increases by one.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -398,7 +401,7 @@ jobs:
             --max-installed-size 1903824 \
             --max-text-size 1373642 \
             --size-budget-margin-percent 5 \
-            --max-dynamic-symbols 914 \
+            --max-dynamic-symbols 915 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

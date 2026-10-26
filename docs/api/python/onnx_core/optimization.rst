@@ -53,6 +53,7 @@ Pass ``parallel=True`` to match native patterns concurrently when at least
 32 candidates are eligible. Match acceptance, optimization callbacks and rewrite
 application remain sequential and preserve candidate order. Python-defined
 patterns are always matched sequentially on the calling thread.
+Mixing native and Python-defined patterns does not disable native parallel matching.
 The C++ ``parallel`` argument follows the optional optimization callback.
 
 Pattern registration

@@ -1759,7 +1759,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         matches.push_back(AcceptedMatch{std::move(match), &candidate, pattern_index});
       };
 
-      if (parallel) {
+      if (parallel && pattern->CanMatchInParallel()) {
         std::vector<const NodeProto *> candidates;
         candidates.reserve(builder_.nodes_.size());
         for (const NodeProto &candidate : builder_.nodes_) {

@@ -36,6 +36,8 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
+  bool CanMatchInParallel() const noexcept override { return false; }
+
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
     nb::detail::ticket ticket(nb_trampoline, "match", nb::detail::str_hash("match"), true);
     nb::object result = nb_trampoline.base().attr(ticket.key)(
@@ -190,14 +192,6 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           [](GraphGraph &graph, int max_iter, bool report,
              const core::builder::ConstantFoldingOptions &folding_options, bool remove_unused,
              nb::object callback, bool parallel) -> nb::object {
-            if (parallel) {
-              for (const auto &pattern : graph.Patterns()) {
-                if (dynamic_cast<const PyPatternOptimization *>(pattern.get()) != nullptr) {
-                  parallel = false;
-                  break;
-                }
-              }
-            }
             GraphGraph::OptimizationCallback on_match;
             if (!callback.is_none()) {
               if (!PyCallable_Check(callback.ptr()))

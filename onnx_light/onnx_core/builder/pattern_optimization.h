@@ -158,6 +158,9 @@ public:
   /// The optimization driver caches this value once per optimization.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
+  /// Returns whether Match may run concurrently on worker threads.
+  virtual bool CanMatchInParallel() const noexcept { return true; }
+
   /// Returns the match rooted at ``candidate``. A null pattern means no match.
   virtual MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const = 0;
 

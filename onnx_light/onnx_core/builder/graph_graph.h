@@ -97,9 +97,9 @@ public:
    * into initializers before cleanup, subject to ``folding_options``.
    * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
    * passes may still remove nodes or initializers.
-   * ``parallel=true`` matches candidates concurrently. Match implementations
-   * must be safe for concurrent calls; Python-defined patterns are evaluated
-   * sequentially.
+   * ``parallel=true`` matches candidates concurrently when the pattern's
+   * CanMatchInParallel returns true. Python-defined patterns are evaluated
+   * sequentially, including in mixed native/Python pattern lists.
    * ``callback`` observes each eligible, disjoint match before its nodes are
    * reserved, including matches in nested subgraphs. Returning false rejects
    * that match without blocking other patterns. It does not intercept cleanup.

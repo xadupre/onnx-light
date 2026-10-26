@@ -24,10 +24,13 @@
 #include "onnx_helper.h"
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_op/operator_sets.h"
+#include "onnx_threads/parallel_for.h"
 
 #include <algorithm>
+#include <atomic>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -120,6 +123,35 @@ public:
   }
 
   mutable std::size_t fast_op_type_calls = 0;
+};
+
+class ThreadTrackingPattern final : public core::builder::PatternOptimization {
+public:
+  explicit ThreadTrackingPattern(bool parallel)
+      : PatternOptimization(1, parallel ? "ParallelTracking" : "SequentialTracking"),
+        parallel_(parallel), calling_thread_(std::this_thread::get_id()) {}
+
+  std::set<std::string> FastOpType() const override { return {"Add"}; }
+
+  bool CanMatchInParallel() const noexcept override { return parallel_; }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &, const NodeProto &) const override {
+    if (std::this_thread::get_id() != calling_thread_) {
+      worker_calls.fetch_add(1, std::memory_order_relaxed);
+    }
+    return {};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &) const override {
+    throw core::builder::BuilderError("ThreadTrackingPattern never matches.");
+  }
+
+  mutable std::atomic<std::size_t> worker_calls{0};
+
+private:
+  bool parallel_;
+  std::thread::id calling_thread_;
 };
 
 class ReorderedFoldingPattern final : public core::builder::PatternOptimization {
@@ -2456,6 +2488,38 @@ TEST(PatternOptimization, ParallelMatchingPreservesCandidateOrderAndStatistics) 
   for (int i = 0; i < plan.rewrites_size(); ++i) {
     ASSERT_EQ(plan.rewrites(i).matched_nodes_size(), 1);
     EXPECT_EQ(plan.rewrites(i).matched_nodes(0), static_cast<uint64_t>(i));
+  }
+}
+
+TEST(PatternOptimization, ParallelMatchingRespectsEachPatternsThreadSafety) {
+  for (bool parallel : {false, true}) {
+    SCOPED_TRACE(parallel);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    for (std::size_t i = 0; i < 64; ++i) {
+      const std::string input = "x" + std::to_string(i);
+      const std::string output = "y" + std::to_string(i);
+      builder.MakeInput(input, core::symbolic::TensorType::kFloat, Shape());
+      builder.MakeNode("Add", {input, input}, {output});
+      builder.MakeOutput(output);
+    }
+    auto sequential_pattern = std::make_shared<ThreadTrackingPattern>(false);
+    auto parallel_pattern = std::make_shared<ThreadTrackingPattern>(true);
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     sequential_pattern, parallel_pattern});
+    core::builder::OptimizationReport report;
+    const RewritingProto plan = graph.Optimize(1, &report, {}, false, {}, parallel);
+
+    EXPECT_EQ(plan.rewrites_size(), 0);
+    ASSERT_EQ(report.patterns.size(), 2u);
+    EXPECT_EQ(report.patterns[0].attempts, 64u);
+    EXPECT_EQ(report.patterns[1].attempts, 64u);
+    EXPECT_EQ(sequential_pattern->worker_calls.load(), 0u);
+    if (parallel && core::runtime::ParallelForThreadCount() > 1) {
+      EXPECT_GT(parallel_pattern->worker_calls.load(), 0u);
+    } else {
+      EXPECT_EQ(parallel_pattern->worker_calls.load(), 0u);
+    }
   }
 }
 

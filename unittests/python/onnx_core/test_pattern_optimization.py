@@ -421,13 +421,14 @@ class TestPatternOptimization(ExtTestCase):
                 GraphBuilder,
                 GraphGraph,
                 PatternOptimization,
+                TransposeTransposePattern,
             )
 
             callback_threads = []
 
             class ThreadTrackingPattern(PatternOptimization):
                 def __init__(self):
-                    super().__init__(priority=1, name="ThreadTracking")
+                    super().__init__(priority=0, name="ThreadTracking")
 
                 def fast_op_type(self):
                     return {"Add"}
@@ -437,19 +438,39 @@ class TestPatternOptimization(ExtTestCase):
                     callback_threads.append(threading.get_ident())
                     return self.no_match(node, "thread check")
 
-            builder = GraphBuilder("parallel_python_callbacks", opsets=18)
-            for index in range(64):
-                input_name = f"x{index}"
-                builder.make_input(input_name, TensorProto.FLOAT, [2])
-                output = f"y{index}"
-                builder.make_node("Add", [input_name, input_name], outputs=[output])
-                builder.make_output(output)
-            graph = GraphGraph(builder, [ThreadTrackingPattern()])
-            calling_thread = threading.get_ident()
-            _, report = graph.optimize(report=True, parallel=True)
-            assert len(callback_threads) >= 64
-            assert set(callback_threads) == {calling_thread}
-            assert report.patterns[0].attempts >= 64
+            for mixed in (False, True):
+                callback_threads.clear()
+                builder = GraphBuilder("parallel_python_callbacks", opsets=18)
+                for index in range(64):
+                    input_name = f"x{index}"
+                    builder.make_input(input_name, TensorProto.FLOAT, [2, 3])
+                    output = f"y{index}"
+                    builder.make_node("Add", [input_name, input_name], outputs=[output])
+                    if mixed:
+                        for prefix in ("middle", "transposed"):
+                            transposed = f"{prefix}{index}"
+                            builder.make_node(
+                                "Transpose",
+                                [output],
+                                outputs=[transposed],
+                                attributes={"perm": [1, 0]},
+                            )
+                            output = transposed
+                    builder.make_output(output)
+                patterns = [ThreadTrackingPattern()]
+                if mixed:
+                    patterns.append(TransposeTransposePattern())
+                graph = GraphGraph(builder, patterns)
+                calling_thread = threading.get_ident()
+                plan, report = graph.optimize(max_iter=1, report=True, parallel=True)
+                assert len(callback_threads) == 64
+                assert set(callback_threads) == {calling_thread}
+                statistics = {item.pattern_name: item for item in report.patterns}
+                assert statistics["ThreadTracking"].attempts == 64
+                if mixed:
+                    assert statistics["TransposeTranspose"].attempts == 128
+                    assert statistics["TransposeTranspose"].matches == 64
+                    assert len(plan.rewrites) == 64
         """)
         result = subprocess.run(
             [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
@@ -499,9 +520,11 @@ class TestPatternOptimization(ExtTestCase):
                     max_iter=1, report=True, callback=callback, parallel=parallel
                 )
                 assert observed == list(range(0, 64, 2)), observed
-                assert [list(r.matched_nodes) for r in plan.rewrites] == [
-                    [index, index + 1] for index in range(0, 64, 4)
-                ]
+                # Rewrite indices refer to the graph after preceding edits.
+                matched_nodes = [list(r.matched_nodes) for r in plan.rewrites]
+                assert matched_nodes == [
+                    [index, index + 1] for index in range(0, 48, 3)
+                ], matched_nodes
                 assert report.patterns[0].matches == 16
         """)
         result = subprocess.run(

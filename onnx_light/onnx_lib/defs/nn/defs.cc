@@ -1810,6 +1810,35 @@ ONNX_OPERATOR_SET_SCHEMA(
 
 static const std::vector<int64_t> mvn_default_axes = {0, 2, 3};
 
+static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContext &ctx,
+                                                   const OpSchema &schema,
+                                                   FunctionProto &function) {
+  const auto *input_type = ctx.getInputType(0);
+  if (input_type == nullptr || !input_type->has_tensor_type() ||
+      !input_type->tensor_type().has_elem_type()) {
+    return false;
+  }
+  const int64_t dtype = input_type->tensor_type().elem_type();
+  FunctionBuilder builder(function);
+  builder.Const("ExponentFloat", ToTensor<float>(2.0f))
+      .Const("EpsilonFloat", ToTensor<float>(1e-9f))
+      .Add("Exponent = Cast (ExponentFloat)", "to", dtype)
+      .Add("Epsilon = Cast (EpsilonFloat)", "to", dtype)
+      .Add(R"ONNX(
+         X_RM = ReduceMean <axes : ints = @axes> (X)
+         EX_squared = Pow (X_RM, Exponent)
+         X_squared = Pow (X, Exponent)
+         E_Xsquared = ReduceMean <axes : ints = @axes> (X_squared)
+         Variance = Sub (E_Xsquared, EX_squared)
+         STD = Sqrt (Variance)
+         X_variance = Sub (X, X_RM)
+         Processed_STD = Add (STD, Epsilon)
+         Y = Div (X_variance, Processed_STD)
+      )ONNX");
+  schema.BuildFunction(function);
+  return true;
+}
+
 ONNX_OPERATOR_SET_SCHEMA(
     MeanVarianceNormalization, 13,
     OpSchema()
@@ -1825,26 +1854,14 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeConstraint("T",
                         {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(bfloat16)"},
                         "Constrain input and output types to all numeric tensors.")
-        .FunctionBody(R"ONNX(
-        {
-          Exponent = Constant <value = float {2.0}>()
-          Epsilon = Constant <value = float {1e-9}>()
-          X_RM = ReduceMean <axes : ints = @axes> (X)
-          EX_squared = Pow (X_RM, Exponent)
-          X_squared = Pow (X, Exponent)
-          E_Xsquared = ReduceMean <axes : ints = @axes> (X_squared)
-          Variance = Sub (E_Xsquared, EX_squared)
-          STD = Sqrt (Variance)
-          X_variance = Sub (X, X_RM)
-          Processed_STD = Add (STD, Epsilon)
-          Y = Div (X_variance, Processed_STD)
-        }
-        )ONNX")
+        .SetContextDependentFunctionBodyBuilder(BuildMeanVarianceNormalizationFunction, 13)
         .FunctionBody(
             R"ONNX(
         {
-          Exponent = Constant <value = float {2.0}>()
-          Epsilon = Constant <value = float {1e-9}>()
+          ExponentFloat = Constant <value = float {2.0}>()
+          EpsilonFloat = Constant <value = float {1e-9}>()
+          Exponent = CastLike (ExponentFloat, X)
+          Epsilon = CastLike (EpsilonFloat, X)
           axes = Constant <value_ints: ints = @axes>()
           X_RM = ReduceMean (X, axes)
           EX_squared = Pow (X_RM, Exponent)
@@ -1857,6 +1874,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           Y = Div (X_variance, Processed_STD)
         }
         )ONNX",
+            18)
+        .SetContextDependentFunctionBodyBuilder(
+            [](const FunctionBodyBuildContext &, const OpSchema &schema, FunctionProto &function) {
+              function.CopyFrom(*schema.GetFunction(18));
+              return true;
+            },
             18));
 
 static void col2imShapeInference(InferenceContext &ctx) {

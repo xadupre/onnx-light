@@ -260,16 +260,13 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
     const std::string op = model.graph().node(0).op_type().value();
     const auto &ds = tc.data_sets().at(0);
     ASSERT_FALSE(ds.inputs.empty());
+    ASSERT_NO_THROW(checker::check_model(model, true));
     if (op == "MeanVarianceNormalization" && ds.inputs[0].data_type == DataType::DOUBLE) {
-      // The schema function mixes FLOAT Epsilon with DOUBLE STD (#5611).
-      ASSERT_NO_THROW(checker::check_model(model, false));
       ModelProto native_shape_model = model;
       native_shape_model.mutable_graph()->mutable_output(0)->clear_type();
       ASSERT_NO_THROW(core::shapes::InferShapesModel(native_shape_model));
       EXPECT_TRUE(
           native_shape_model.graph().output(0).type().Equals(model.graph().output(0).type()));
-    } else {
-      ASSERT_NO_THROW(checker::check_model(model, true));
     }
     ASSERT_FALSE(ds.outputs.empty());
     EXPECT_TRUE(memberships.emplace(op, ds.inputs[0].data_type).second);

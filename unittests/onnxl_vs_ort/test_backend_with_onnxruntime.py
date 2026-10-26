@@ -226,6 +226,8 @@ ORT_EXCLUDE_REGEX = [
     # the bool type ("ReduceMax is not defined for empty set with bool type"),
     # whereas onnx-light follows the ONNX reference (onnx/onnx#8312).
     r"^test_reduce_max_empty_set_bool$",
+    # ORT overflows intermediate sums for finite-range ReduceMean inputs.
+    r"^test_cc_reducemean_finite_range_",
 ]
 
 # Exclusions that only apply on a given platform. On macOS/arm64 ONNX Runtime

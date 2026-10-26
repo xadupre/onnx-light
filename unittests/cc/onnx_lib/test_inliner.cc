@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 
+#include "onnx_lib/checker.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/inliner/inliner.h"
@@ -141,6 +142,9 @@ TEST(FunctionInliner, PreservesUnresolvedMeanVarianceNormalizationAxes) {
   function.add_input("x");
   function.add_output("y");
   function.add_attribute("axes");
+  auto &input_type = *function.add_value_info();
+  input_type.set_name("x");
+  input_type.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
   auto &node = *function.add_node();
   node.set_op_type("MeanVarianceNormalization");
   node.add_input("x");
@@ -157,6 +161,151 @@ TEST(FunctionInliner, PreservesUnresolvedMeanVarianceNormalizationAxes) {
   EXPECT_EQ(model.functions(0).node(0).op_type(), "MeanVarianceNormalization");
   ASSERT_EQ(model.functions(0).node(0).attribute_size(), 1);
   EXPECT_EQ(model.functions(0).node(0).attribute(0).ref_attr_name(), "axes");
+}
+
+TEST(FunctionInliner, ContextDependentCallsUseRetainedFunctionTypes) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  for (int opset : {13, 18}) {
+    for (int dtype : {TensorProto::FLOAT, TensorProto::DOUBLE}) {
+      for (int annotation = 0; annotation < 3; ++annotation) {
+        SCOPED_TRACE(opset);
+        SCOPED_TRACE(dtype);
+        SCOPED_TRACE(annotation);
+        ModelProto model;
+        auto status = OnnxParser::Parse(model, R"ONNX(
+          <ir_version: 10, opset_import: [ "" : 18, "local" : 1 ]>
+          main (double[1,1,2,2] x, float[1,1,2,2] actual) => (float[1,1,2,2] result) {
+            result = local.normalize(actual)
+          }
+          <opset_import: [ "" : 18 ], domain: "local">
+          normalize (x) => (y) <float[1,1,2,2] x> {
+            y = MeanVarianceNormalization(x)
+          }
+        )ONNX");
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        model.ref_opset_import()[0].set_version(opset);
+        auto &graph = *model.mutable_graph();
+        graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+            dtype == TensorProto::FLOAT ? TensorProto::DOUBLE : TensorProto::FLOAT);
+        graph.mutable_input(1)->mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
+        graph.mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
+        auto &function = model.ref_functions()[0];
+        function.ref_opset_import()[0].set_version(opset);
+        if (annotation == 0)
+          function.clear_value_info();
+        else
+          function.mutable_value_info(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+              annotation == 1 ? TensorProto::UNDEFINED : dtype);
+        const auto original = function.SerializeAsString();
+
+        inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+
+        ASSERT_EQ(model.functions_size(), 1);
+        const auto &retained = model.functions(0);
+        if (annotation != 2) {
+          EXPECT_EQ(retained.SerializeAsString(), original);
+        } else {
+          ASSERT_GT(retained.node_size(), 1);
+          const auto &last = retained.node(retained.node_size() - 1);
+          EXPECT_EQ(last.op_type(), "Cast");
+          EXPECT_EQ(last.output(0), "y");
+          ASSERT_EQ(last.attribute_size(), 1);
+          EXPECT_EQ(last.attribute(0).name(), "to");
+          EXPECT_EQ(last.attribute(0).i(), dtype);
+          ASSERT_NO_THROW(checker::check_model(model, true));
+        }
+      }
+    }
+  }
+}
+
+TEST(FunctionInliner, SubgraphCapturesUseTheirEnclosingFunctionTypes) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  for (bool typed : {false, true}) {
+    ModelProto model;
+    auto status = OnnxParser::Parse(model, R"ONNX(
+      <ir_version: 10, opset_import: [ "" : 18, "local" : 1 ]>
+      main (double[1,1,2,2] x, float[1,1,2,2] actual, bool cond) => (float[1,1,2,2] result) {
+        result = local.normalize(actual, cond)
+      }
+      <opset_import: [ "" : 18 ], domain: "local">
+      normalize (x, cond) => (y) <float[1,1,2,2] x, bool cond> {
+        y = If(cond) <
+          then_branch = then_graph () => (float[1,1,2,2] out) {
+            out = MeanVarianceNormalization(x)
+          },
+          else_branch = else_graph () => (float[1,1,2,2] out) {
+            out = MeanVarianceNormalization(x)
+          }
+        >
+      }
+    )ONNX");
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    if (!typed)
+      model.ref_functions()[0].ref_value_info().erase(
+          model.ref_functions()[0].ref_value_info().begin());
+
+    inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+
+    ASSERT_EQ(model.functions_size(), 1);
+    const auto &conditional = model.functions(0).node(0);
+    ASSERT_EQ(conditional.attribute_size(), 2);
+    for (const auto &attribute : conditional.attribute()) {
+      const auto &body = attribute.g();
+      ASSERT_GE(body.node_size(), 1);
+      const auto &last = body.node(body.node_size() - 1);
+      if (typed) {
+        EXPECT_EQ(last.op_type(), "Cast");
+        ASSERT_EQ(last.attribute_size(), 1);
+        EXPECT_EQ(last.attribute(0).i(), TensorProto::FLOAT);
+      } else {
+        EXPECT_EQ(body.node_size(), 1);
+        EXPECT_EQ(last.op_type(), "MeanVarianceNormalization");
+      }
+    }
+    ASSERT_NO_THROW(checker::check_model(model, true));
+  }
+}
+
+TEST(FunctionInliner, UnknownSubgraphDefinitionsDoNotUseOuterAnnotations) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  for (bool typed : {false, true}) {
+    ModelProto model;
+    auto status = OnnxParser::Parse(model, R"ONNX(
+      <ir_version: 10, opset_import: [ "" : 18 ]>
+      main (double[1,1,2,2] x, float[1,1,2,2] actual, bool cond) => (float[1,1,2,2] result) {
+        result = If(cond) <
+          then_branch = then_graph () => (float[1,1,2,2] out) <float[1,1,2,2] x> {
+            x = Identity(actual)
+            out = MeanVarianceNormalization(x)
+          },
+          else_branch = else_graph () => (float[1,1,2,2] out) {
+            out = Identity(actual)
+          }
+        >
+      }
+    )ONNX");
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    if (!typed)
+      model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->mutable_g()->clear_value_info();
+
+    inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+
+    const auto &branch = model.graph().node(0).attribute(0).g();
+    ASSERT_GE(branch.node_size(), 2);
+    const auto &last = branch.node(branch.node_size() - 1);
+    if (typed) {
+      EXPECT_EQ(last.op_type(), "Cast");
+      ASSERT_EQ(last.attribute_size(), 1);
+      EXPECT_EQ(last.attribute(0).i(), TensorProto::FLOAT);
+    } else {
+      EXPECT_EQ(branch.node_size(), 2);
+      EXPECT_EQ(last.op_type(), "MeanVarianceNormalization");
+    }
+  }
 }
 
 // Test that inlining processes subgraphs.

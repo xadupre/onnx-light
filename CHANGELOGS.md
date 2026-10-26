@@ -5,8 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.1] – Unreleased
 
+### New Features
+
+- Added incremental native `GraphLayout` with local mutations, nested graph support, persisted layout metadata, and opt-in layout during model loading ([#5515](https://github.com/xadupre/onnx-light/pull/5515)).
+- Added C++ and Python tensor statistics for numeric and quantized values, including histograms, quantiles, median, and area-averaged rectangle maps. Output allocations share a configurable `max_output_bytes` budget, defaulting to 64 MiB ([#5508](https://github.com/xadupre/onnx-light/pull/5508), [#5531](https://github.com/xadupre/onnx-light/pull/5531), [#5543](https://github.com/xadupre/onnx-light/pull/5543)).
+- Added opt-in repeated-layer extraction, with extracted regions represented as model-local `ai.rt::Layer`, `Layer_1`, and subsequent functions rather than a dedicated Layer operator ([#5516](https://github.com/xadupre/onnx-light/pull/5516), [#5571](https://github.com/xadupre/onnx-light/pull/5571)).
+- Added opt-in `load(path, defer_weights=True)` and native `ParseOptions.defer_weights`, with per-name and bulk weight loading/unloading and loaded-state queries. Deferred loading supports validated inline raw and ordinary external weights; unsupported payload types, input modes, and unsafe exports are rejected explicitly ([#5561](https://github.com/xadupre/onnx-light/pull/5561)).
+- Supported encrypted models with separately authenticated AES-256-GCM external weight files, automatic shard loading, and ciphertext digests bound to model metadata ([#5534](https://github.com/xadupre/onnx-light/pull/5534)).
+- Recognized `.pipe-onnx` and `.pipeline` as binary `PipelineProto` extensions in `onnx.load` and supported pipeline objects in `onnx.save` ([#5566](https://github.com/xadupre/onnx-light/pull/5566)).
+
+### Improvements
+
+- Exposed named, overlapping fusion groups through `standard_pattern_sets()`, covering standard, ONNX Runtime-shared, onnx-light-only, and opt-in repeated-layer patterns. Python pattern enumeration now excludes opt-in patterns by default; pass `include_opt_in=True` to list them without activating them ([#5569](https://github.com/xadupre/onnx-light/pull/5569), [#5541](https://github.com/xadupre/onnx-light/pull/5541)).
+- Removed OpenMP discovery, linkage, and package dependencies; native parallel execution continues to use onnx-light's own `std::thread` workers ([#5549](https://github.com/xadupre/onnx-light/pull/5549)).
+- Ported applicable LLVM 23 compatibility changes, including signed-shift replacements in shape arithmetic and clang-tidy compatibility updates, and eliminated macOS release-build warnings ([#5536](https://github.com/xadupre/onnx-light/pull/5536), [#5514](https://github.com/xadupre/onnx-light/pull/5514)).
+
+### Fixes
+
+- Fixed standalone `TensorProto.SerializeToFile` dispatch and rejected unsupported output modes and size-limit failures before opening or truncating destination files ([#5584](https://github.com/xadupre/onnx-light/pull/5584)).
+- Honored metadata-only loading and payload thresholds for encrypted external tensors without reading or decrypting skipped shards, while retaining metadata, path, range, and resource-limit validation ([#5564](https://github.com/xadupre/onnx-light/pull/5564)).
+- Deferred encrypted-model node, graph, and function callbacks until external shards resolve successfully, preserving callback replacements and nested ordering ([#5563](https://github.com/xadupre/onnx-light/pull/5563)).
+- Included sparse initializer payloads in extracted-layer memory estimates ([#5542](https://github.com/xadupre/onnx-light/pull/5542)).
+- Supported rank-2 real `STFT` signals in shape inference and represented omitted Qwen test weights as synthetic external tensors so strict verification and metadata refresh do not require materializing their payloads ([#5520](https://github.com/xadupre/onnx-light/pull/5520), [#5510](https://github.com/xadupre/onnx-light/pull/5510)).
+
 ### Documentation & CI
 
+- Added graph-layout and tensor-statistics gallery examples and expanded the Python tensor-statistics API documentation ([#5515](https://github.com/xadupre/onnx-light/pull/5515), [#5530](https://github.com/xadupre/onnx-light/pull/5530), [#5532](https://github.com/xadupre/onnx-light/pull/5532)).
+- Moved Sphinx and Doxygen builds to weekly schedules with manual dispatch and automatic failure issues ([#5548](https://github.com/xadupre/onnx-light/pull/5548)).
+- Ran native shape inference on every backend case, added native `WhereInPlaceTyped` and sequence-state `Loop` reachability coverage, and corrected optional ONNX Runtime dependency handling and quantization selection in Pixi tests ([#5522](https://github.com/xadupre/onnx-light/pull/5522), [#5577](https://github.com/xadupre/onnx-light/pull/5577), [#5575](https://github.com/xadupre/onnx-light/pull/5575), [#5581](https://github.com/xadupre/onnx-light/pull/5581)).
 - Bumped the release version to `0.2.1`.
 
 ## [0.2.0] – 2026-10-22

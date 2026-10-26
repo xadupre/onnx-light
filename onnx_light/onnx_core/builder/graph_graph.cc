@@ -1452,7 +1452,7 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
 
 RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     const ConstantFoldingOptions &folding_options,
-                                    bool remove_unused) {
+                                    bool remove_unused, const OptimizationCallback &callback) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   bool reference_changed = false;
@@ -1493,16 +1493,41 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     undo->devices = capture_devices(capture_devices, *root);
   }
   RewritingProto collection;
-  const auto capture_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
+  const auto capture_functions =
+      [&](const auto &self, const GraphBuilder &scope,
+          utils::RepeatedProtoField<FunctionProto> &functions,
+          const utils::RepeatedProtoField<FunctionProto> *originals) -> void {
     for (const auto &function : scope.local_functions_) {
-      MergeFunction(collection.ref_added_functions(),
-                    function->BuildFunction(function->function_domain_));
-      self(self, *function);
+      FunctionProto definition = function->BuildFunction(function->function_domain_);
+      auto existing =
+          std::find_if(functions.begin(), functions.end(), [&](const FunctionProto &candidate) {
+            return Identity(candidate) == Identity(definition);
+          });
+      if (existing == functions.end()) {
+        functions.push_back(std::move(definition));
+      } else if (!existing->Equals(definition)) {
+        if (originals == nullptr) {
+          MergeFunction(functions, definition);
+        } else {
+          const auto original =
+              std::find_if(originals->begin(), originals->end(), [&](const auto &candidate) {
+                return Identity(candidate) == Identity(definition);
+              });
+          if (original == originals->end()) {
+            MergeFunction(functions, definition);
+          } else if (existing->Equals(*original)) {
+            *existing = std::move(definition);
+          } else {
+            MergeFunction(functions, definition);
+          }
+        }
+      }
+      self(self, *function, functions, originals);
     }
     for (const auto &subgraph : scope.subgraphs_)
-      self(self, *subgraph);
+      self(self, *subgraph, functions, originals);
   };
-  capture_functions(capture_functions, *root);
+  capture_functions(capture_functions, *root, collection.ref_added_functions(), nullptr);
   auto original_definitions = GraphBuilder::DependencyOrderFunctions(
       utils::CopyWithSharedTensorStorage(collection.added_functions()));
   FunctionIndex original_function_index;
@@ -1520,19 +1545,10 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     ~OriginalFunctionsScope() { slot = previous; }
   } original_functions_scope{original_functions_, original_functions_};
   original_functions_ = &original_functions_by_key;
-  auto result =
-      OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection, *undo);
+  auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
+                             *undo, callback);
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
-  const auto collect_optimized_functions = [&](const auto &self,
-                                               const GraphBuilder &scope) -> void {
-    for (const auto &function : scope.local_functions_) {
-      optimized_functions.push_back(function->BuildFunction(function->function_domain_));
-      self(self, *function);
-    }
-    for (const auto &subgraph : scope.subgraphs_)
-      self(self, *subgraph);
-  };
-  collect_optimized_functions(collect_optimized_functions, *root);
+  capture_functions(capture_functions, *root, optimized_functions, &original_definitions);
   for (const auto &function : optimized_functions) {
     const auto original = original_function_index.find(Identity(function));
     if (original == original_function_index.end()) {
@@ -1631,7 +1647,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                                         const std::vector<std::string> &graph_path,
                                         const ConstantFoldingOptions &folding_options,
                                         bool remove_unused, RewritingProto &collection,
-                                        detail::RewritingUndoState &undo) {
+                                        detail::RewritingUndoState &undo,
+                                        const OptimizationCallback &callback) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1669,7 +1686,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                            original_functions_);
     RewritingProto child_rewrites =
         child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
-                                 folding_options, remove_unused, collection, undo);
+                                 folding_options, remove_unused, collection, undo, callback);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -1723,7 +1740,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     GraphGraph child_graph(*function, patterns_, do_not_remove_, nullptr, 0, original_functions_);
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
-                             folding_options, remove_unused, collection, child_undo);
+                             folding_options, remove_unused, collection, child_undo, callback);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
@@ -1869,6 +1886,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         }
         if (match.insert_at != nullptr) {
           Position(*match.insert_at);
+        }
+        if (callback && !callback(*this, match)) {
+          continue;
         }
         for (const NodeProto *node : match.nodes) {
           if (node != nullptr) {
@@ -3241,7 +3261,8 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
           throw BuilderError("UndoRewritings: incompatible restored function initializer.");
       }
     }
-    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset);
+    scope.compute_.RestoreTagState(devices.tags, scope.nodes_, node_offset,
+                                   scope.MemoryNodeMaterializer());
     scope.set_device(devices.device);
     for (const auto &subgraph : scope.subgraphs_) {
       const auto found = devices.subgraphs.find(subgraph->name_);

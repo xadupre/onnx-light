@@ -266,7 +266,7 @@ public:
   /// Restores captured tags and refreshes affected release and memory metadata.
   /// The offset accounts for initializer Constants materialized in exported functions.
   void RestoreTagState(const TagState &state, const utils::RepeatedProtoField<NodeProto> &nodes,
-                       std::size_t node_offset = 0);
+                       std::size_t node_offset = 0, const NodeMaterializerFn &materialize = {});
 
   /// Tag inferred for the node at ``node_index``.
   ///

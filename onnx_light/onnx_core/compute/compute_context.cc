@@ -199,7 +199,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
       body_shapes.ComputeShapeNode(inner);
   }
   for (const ValueInfoProto &value_info : function->value_info()) {
-    if (!body_shapes.Has(value_info.name().value()) && value_info.has_type()) {
+    if (!body_shapes.Has(value_info.name().value()) && value_info.has_type() &&
+        value_info.type().has_tensor_type() && value_info.type().tensor_type().has_shape()) {
       SymTensor descriptor;
       if (SymTensorFromValueInfo(value_info, descriptor))
         body_shapes.Set(value_info.name().value(), std::move(descriptor));
@@ -635,7 +636,8 @@ void ComputeContext::RefreshValueTags(const utils::RepeatedProtoField<NodeProto>
 
 void ComputeContext::RestoreTagState(const TagState &state,
                                      const utils::RepeatedProtoField<NodeProto> &nodes,
-                                     std::size_t node_offset) {
+                                     std::size_t node_offset,
+                                     const NodeMaterializerFn &materialize) {
   EXT_ENFORCE_INVALID(
       node_offset <= nodes.size() && state.nodes.size() == nodes.size() - node_offset &&
           state.custom_overrides.size() == state.nodes.size() &&
@@ -657,7 +659,7 @@ void ComputeContext::RestoreTagState(const TagState &state,
   }
   // Empty seeds update tag-dependent bookkeeping without re-inferring captured tags.
   PropagateNodeTags(nodes, {}, changed);
-  RefreshIncrementalMemory(nodes, shapes_);
+  RefreshIncrementalMemory(nodes, shapes_, Device::kUndefined, materialize);
 }
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,

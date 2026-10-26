@@ -163,6 +163,47 @@ TEST(GraphBuilder, LocalFunctionMemoryDefersRankUnknownTensorInputs) {
   function.MakeOutput(output);
   EXPECT_NO_THROW(builder.MakeNode("Product", {"A", "B"}, {"Y"}, "custom"));
   EXPECT_FALSE(builder.Shapes().Has("Y"));
+
+  auto &outer = builder.MakeLocalFunction("Outer", "custom");
+  for (const char *name : {"A", "B"}) {
+    ValueInfoProto input;
+    input.set_name(name);
+    input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    outer.MakeInput(input);
+  }
+  outer.MakeNode("Product", {"A", "B"}, {"result"}, "custom");
+  outer.MakeOutput(output);
+
+  ValueInfoProto sequence;
+  sequence.set_name("sequence");
+  sequence.mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::FLOAT);
+  builder.MakeInput(sequence);
+  builder.MakeInput("position", core::symbolic::TensorType::kInt64, MakeShape({}));
+  builder.MakeNode("SequenceAt", {"sequence", "position"}, {"typed_unknown"});
+  ASSERT_TRUE(builder.Shapes().HasType("typed_unknown"));
+  EXPECT_EQ(builder.Shapes().GetType("typed_unknown").tensor_type().elem_type(),
+            TensorProto::FLOAT);
+  ASSERT_FALSE(builder.Shapes().Has("typed_unknown"));
+  ASSERT_NO_THROW(
+      builder.MakeNode("Outer", {"typed_unknown", "typed_unknown"}, {"nested"}, "custom"));
+  EXPECT_FALSE(builder.Shapes().Has("nested"));
+  output.set_name("nested");
+  builder.MakeOutput(output);
+
+  core::builder::GraphBuilder imported(builder.ToModel(), SchemaLookup());
+  ASSERT_TRUE(imported.Shapes().HasType("typed_unknown"));
+  EXPECT_EQ(imported.Shapes().GetType("typed_unknown").tensor_type().elem_type(),
+            TensorProto::FLOAT);
+  EXPECT_FALSE(imported.Shapes().Has("typed_unknown"));
+  EXPECT_FALSE(imported.Shapes().Has("nested"));
+
+  builder.MakeInput("scalar", core::symbolic::TensorType::kFloat, MakeShape({}));
+  EXPECT_THROW(builder.MakeNode("Outer", {"scalar", "scalar"}, {"invalid"}, "custom"),
+               std::invalid_argument);
 }
 
 TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) {

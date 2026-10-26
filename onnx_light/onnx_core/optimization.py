@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 import re
 from typing import Literal, TypeAlias, overload
 
@@ -367,6 +367,7 @@ class GraphGraph(_C.GraphGraph):
         report: Literal[False] = False,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
     ) -> RewritingProto: ...
 
     @overload
@@ -377,6 +378,7 @@ class GraphGraph(_C.GraphGraph):
         report: Literal[True],
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
     ) -> tuple[RewritingProto, OptimizationReport]: ...
 
     @overload
@@ -387,6 +389,7 @@ class GraphGraph(_C.GraphGraph):
         report: bool,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
 
     def optimize(
@@ -396,8 +399,21 @@ class GraphGraph(_C.GraphGraph):
         report: bool = False,
         folding_options: ConstantFoldingOptions | None = None,
         remove_unused: bool = True,
+        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]:
-        """Returns sequential proto edits and optionally their optimization report."""
+        """Returns sequential proto edits and optionally their optimization report.
+
+        Calls ``callback(graph, match)`` for each eligible, disjoint pattern match,
+        including matches in nested subgraphs, before reserving its nodes.
+        Returning ``False`` rejects that match without blocking other patterns;
+        ``True`` or ``None`` accepts it, so reporting-only callbacks need no return.
+        Cleanup passes are not intercepted. Matches may be reconsidered in later
+        iterations and accepted matches are revalidated before application.
+
+        The callback must not mutate the graph, patterns, or match, or retain
+        references to the graph or matched nodes beyond the call. Exceptions
+        propagate to the caller.
+        """
         return super().optimize(
             max_iter,
             report=report,
@@ -405,6 +421,7 @@ class GraphGraph(_C.GraphGraph):
                 ConstantFoldingOptions() if folding_options is None else folding_options
             ),
             remove_unused=remove_unused,
+            callback=callback,
         )
 
 

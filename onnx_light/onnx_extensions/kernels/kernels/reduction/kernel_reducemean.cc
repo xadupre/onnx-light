@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -131,9 +132,73 @@ void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
                 "ReduceMean");
   }
 
+  bool needs_repair = false;
   for (int64_t i = 0; i < out_count; ++i) {
     py[i] = reduced_count > 0 ? py[i] / static_cast<T>(reduced_count)
                               : std::numeric_limits<T>::quiet_NaN();
+    needs_repair |= !std::isfinite(py[i]);
+  }
+  if (!needs_repair || reduced_count == 0) {
+    return;
+  }
+
+  const Shape input_strides = RowMajorStrides(data.shape);
+  for (int64_t i = 0; i < out_count; ++i) {
+    if (std::isfinite(py[i])) {
+      continue;
+    }
+    int64_t remaining = i;
+    int64_t base = 0;
+    for (size_t d = data.shape.size(); d-- > 0;) {
+      if (!is_reduced[d]) {
+        base += (remaining % data.shape[d]) * input_strides[d];
+        remaining /= data.shape[d];
+      }
+    }
+    const auto input_offset = [&](int64_t index) {
+      int64_t offset = base;
+      for (size_t d = data.shape.size(); d-- > 0;) {
+        if (is_reduced[d]) {
+          offset += (index % data.shape[d]) * input_strides[d];
+          index /= data.shape[d];
+        }
+      }
+      return offset;
+    };
+    long double magnitude = 0;
+    bool finite = true;
+    for (int64_t j = 0; j < reduced_count; ++j) {
+      const T value = px[input_offset(j)];
+      if (!std::isfinite(value)) {
+        finite = false;
+        break;
+      }
+      magnitude = std::max(magnitude, std::abs(static_cast<long double>(value)));
+    }
+    if (!finite || magnitude == 0) {
+      continue;
+    }
+
+    // Repair only intermediate overflow, preserving ordinary accumulation and
+    // non-finite-input semantics. Power-of-two scaling bounds the sum without
+    // discarding small terms when large positive and negative values cancel.
+    int value_exponent = 0;
+    int count_exponent = 0;
+    std::frexp(magnitude, &value_exponent);
+    std::frexp(static_cast<long double>(reduced_count), &count_exponent);
+    const int shift = std::max(0, value_exponent + count_exponent -
+                                      std::numeric_limits<long double>::max_exponent + 1);
+    long double sum = 0;
+    long double correction = 0;
+    for (int64_t j = 0; j < reduced_count; ++j) {
+      const long double value = std::scalbn(static_cast<long double>(px[input_offset(j)]), -shift);
+      const long double next = sum + value;
+      correction += std::abs(sum) >= std::abs(value) ? (sum - next) + value : (value - next) + sum;
+      sum = next;
+    }
+    const long double mean =
+        std::scalbn((sum + correction) / static_cast<long double>(reduced_count), shift);
+    py[i] = static_cast<T>(std::clamp(mean, -magnitude, magnitude));
   }
 }
 

@@ -246,7 +246,7 @@ def main() -> None:
     print("-- write inferred shapes and annotations back to the model")
     compute_context.write_to_model(onnx_model)
     print("-- saves the model again")
-    ol_save(onnx_model, filename, save_as_external_data=True)
+    ol_save(onnx_model, filename)
 
     print("-- create export")
     plot_assignments = make_plot_assignments(args)

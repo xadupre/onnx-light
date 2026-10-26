@@ -1693,6 +1693,144 @@ SwitchReshapeActivationPattern::Apply(core::builder::GraphGraph &graph,
   return replacements;
 }
 
+std::set<std::string> GroupedMatMulPattern::FastOpType() const { return {"Squeeze"}; }
+
+core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
+                                                       const NodeProto &candidate) const {
+  if (graph.Builder().OpsetVersion("") < 29 || !IsDefaultOp(candidate, "Squeeze") ||
+      candidate.input_size() != 2 || candidate.output_size() != 1) {
+    return NoMatch(candidate, "expected an opset-29 Squeeze");
+  }
+  auto axes_are = [&](const NodeProto &node, std::vector<int64_t> expected, int64_t rank) {
+    std::vector<int64_t> axes;
+    if (!ReadConstantInts(graph, node.input()[1].value(), axes)) {
+      return false;
+    }
+    for (int64_t &axis : axes) {
+      if (axis < 0) {
+        axis += rank;
+      }
+    }
+    std::sort(axes.begin(), axes.end());
+    return axes == expected;
+  };
+  const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
+  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || matmul->input_size() != 2 ||
+      matmul->output_size() != 1 || !axes_are(candidate, {2}, 4)) {
+    return NoMatch(candidate, "expected MatMul followed by Squeeze axis 2");
+  }
+  const NodeProto *unsqueeze = graph.NodeBefore(matmul->input()[0].value());
+  const NodeProto *gather = graph.NodeBefore(matmul->input()[1].value());
+  if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") || unsqueeze->input_size() != 2 ||
+      unsqueeze->output_size() != 1 || !axes_are(*unsqueeze, {1, 2}, 4) || !gather ||
+      !IsDefaultOp(*gather, "Gather") || gather->input_size() != 2 || gather->output_size() != 1 ||
+      GetAttributeOr<int64_t>(*gather, "axis", 0) != 0) {
+    return NoMatch(candidate, "expected Unsqueeze axes 1,2 and Gather axis 0");
+  }
+  const std::string &x = unsqueeze->input()[0].value();
+  const std::string &w = gather->input()[0].value();
+  const std::string &indices = gather->input()[1].value();
+  if (!graph.HasShape(x) || !graph.HasShape(w) || !graph.HasShape(indices) || !graph.HasType(x) ||
+      !graph.HasType(w) || !graph.HasType(indices)) {
+    return NoMatch(candidate, "input shapes and types must be known");
+  }
+  const auto dtype = graph.GetType(x);
+  using core::symbolic::TensorType;
+  const auto itype = graph.GetType(indices);
+  if ((dtype != TensorType::kFloat && dtype != TensorType::kDouble &&
+       dtype != TensorType::kFloat16 && dtype != TensorType::kBfloat16) ||
+      graph.GetType(w) != dtype || (itype != TensorType::kInt32 && itype != TensorType::kInt64)) {
+    return NoMatch(candidate, "unsupported input or index dtype");
+  }
+  const SymShape &xs = graph.GetShape(x).Shape();
+  const SymShape &ws = graph.GetShape(w).Shape();
+  const SymShape &is = graph.GetShape(indices).Shape();
+  auto same_dim = [](const SymDim &left, const SymDim &right) {
+    return left == right && (left.IsInt() ? left.AsInt() >= 0 : !left.AsExpr().empty());
+  };
+  if (xs.Rank() != 2 || ws.Rank() != 3 || is.Rank() != 2 || !same_dim(xs[0], is[0]) ||
+      !same_dim(xs[1], ws[1]) || !ws[0].IsInt() || ws[0].AsInt() <= 0 ||
+      (itype == TensorType::kInt32 && ws[0].AsInt() > std::numeric_limits<int32_t>::max())) {
+    return NoMatch(candidate, "incompatible token, weight, or index dimensions");
+  }
+  for (const NodeProto *node : {unsqueeze, gather, matmul}) {
+    if (graph.IsUsedMoreThanOnce(node->output()[0].value())) {
+      return NoMatch(candidate, "an intermediate is shared, exported, or captured");
+    }
+  }
+  const NodeProto *bias_gather = nullptr;
+  const NodeProto *add = nullptr;
+  const auto &next = graph.NextNodes(candidate.output()[0].value());
+  if (!graph.IsUsedMoreThanOnce(candidate.output()[0].value()) && next.size() == 1 &&
+      IsDefaultOp(*next[0], "Add") && next[0]->input_size() == 2 && next[0]->output_size() == 1) {
+    const NodeProto &sum = *next[0];
+    const std::string &other = sum.input()[sum.input()[0] == candidate.output()[0] ? 1 : 0].value();
+    const NodeProto *bg = graph.NodeBefore(other);
+    if (bg && IsDefaultOp(*bg, "Gather") && bg->input_size() == 2 && bg->output_size() == 1 &&
+        bg->input()[1].value() == indices && GetAttributeOr<int64_t>(*bg, "axis", 0) == 0 &&
+        !graph.IsUsedMoreThanOnce(other) && graph.HasShape(bg->input()[0].value()) &&
+        graph.HasType(bg->input()[0].value()) && graph.GetType(bg->input()[0].value()) == dtype) {
+      const SymShape &bs = graph.GetShape(bg->input()[0].value()).Shape();
+      if (bs.Rank() == 2 && same_dim(bs[0], ws[0]) && same_dim(bs[1], ws[2])) {
+        bias_gather = bg;
+        add = &sum;
+      }
+    }
+  }
+  return core::builder::MatchResult{
+      this, {&candidate, matmul, unsqueeze, gather, bias_gather, add}, add ? add : &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+GroupedMatMulPattern::Apply(core::builder::GraphGraph &graph,
+                            const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 6 || nodes[0] == nullptr) {
+    throw BuilderError("GroupedMatMulPattern::Apply expects six match slots.");
+  }
+  const auto verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("GroupedMatMulPattern::Apply received an unsafe or inconsistent match.");
+  }
+  auto &builder = graph.Builder();
+  const std::string &indices = nodes[3]->input()[1].value();
+  const std::string &weights = nodes[3]->input()[0].value();
+  const int64_t groups = graph.GetShape(weights).Shape()[0].AsInt();
+  const std::string zero = FreeInitializerName(builder, "grouped-matmul-zero");
+  const std::string count = FreeInitializerName(builder, "grouped-matmul-groups");
+  if (graph.GetType(indices) == core::symbolic::TensorType::kInt32) {
+    builder.MakeInitializer(MakeInitializer<int32_t>(zero.c_str(), {}, {0}));
+    builder.MakeInitializer(
+        MakeInitializer<int32_t>(count.c_str(), {}, {static_cast<int32_t>(groups)}));
+  } else {
+    builder.MakeInitializer(MakeInitializer<int64_t>(zero.c_str(), {}, {0}));
+    builder.MakeInitializer(MakeInitializer<int64_t>(count.c_str(), {}, {groups}));
+  }
+  const std::string negative = builder.UniqueName("grouped-matmul-negative");
+  const std::string offset = builder.UniqueName("grouped-matmul-offset");
+  const std::string normalized = builder.UniqueName("grouped-matmul-indices");
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(MakePatternNode("Less", {indices, zero}, {negative}, "", ""));
+  replacements.push_back(MakePatternNode("Where", {negative, count, zero}, {offset}, "", ""));
+  // Selects the offset before addition so nonnegative indices cannot overflow.
+  replacements.push_back(MakePatternNode("Add", {indices, offset}, {normalized}, "", ""));
+  std::vector<std::string> inputs = {nodes[2]->input()[0].value(), weights, normalized};
+  if (nodes[4]) {
+    inputs.push_back(nodes[4]->input()[0].value());
+  }
+  const NodeProto &last = nodes[5] ? *nodes[5] : *nodes[0];
+  NodeProto fused = last;
+  fused.set_op_type("GroupedMatMul");
+  fused.set_domain("");
+  fused.set_name("GroupedMatMulPattern--" + last.name().value());
+  fused.clear_input();
+  fused.clear_attribute();
+  for (const std::string &input : inputs) {
+    fused.add_input(input);
+  }
+  replacements.push_back(std::move(fused));
+  return replacements;
+}
+
 std::set<std::string> ShapeBasedMatMulToMulPattern::FastOpType() const { return {"MatMul"}; }
 
 core::builder::MatchResult ShapeBasedMatMulToMulPattern::Match(core::builder::GraphGraph &graph,

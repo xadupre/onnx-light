@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -114,6 +115,260 @@ void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::strin
   attribute.set_type(AttributeProto::AttributeType::STRING);
   attribute.set_s(subgraph_name);
   builder.MakeNode("SubgraphCarrier", {}, {output}, "", "", attributes);
+}
+
+void MakeGroupedMatMul(core::builder::GraphBuilder &builder, bool bias = false,
+                       bool reverse_add = false,
+                       core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat,
+                       core::symbolic::TensorType itype = core::symbolic::TensorType::kInt64) {
+  builder.MakeInput("x", dtype, Shape({2, 3}));
+  builder.MakeInput("w", dtype, Shape({4, 3, 5}));
+  builder.MakeInput("indices", itype, Shape({2, 2}));
+  AddShape(builder, "unsqueeze_axes", {1, 2});
+  AddShape(builder, "squeeze_axes", {2});
+  builder.MakeNode("Unsqueeze", {"x", "unsqueeze_axes"}, {"xu"});
+  builder.MakeNode("Gather", {"w", "indices"}, {"selected"});
+  builder.MakeNode("MatMul", {"xu", "selected"}, {"mm"});
+  builder.MakeNode("Squeeze", {"mm", "squeeze_axes"}, {"result"}, "", "squeeze");
+  if (bias) {
+    builder.MakeInput("bias", dtype, Shape({4, 5}));
+    builder.MakeNode("Gather", {"bias", "indices"}, {"selected_bias"});
+    builder.MakeNode("Add",
+                     reverse_add ? std::vector<std::string>{"selected_bias", "result"}
+                                 : std::vector<std::string>{"result", "selected_bias"},
+                     {"out"}, "", "sum");
+  }
+  builder.MakeOutput(bias ? "out" : "result");
+}
+
+TEST(GroupedMatMulPattern, FusesSupportedTypesAndBothBiasOrders) {
+  using core::symbolic::TensorType;
+  for (const auto dtype :
+       {TensorType::kFloat, TensorType::kDouble, TensorType::kFloat16, TensorType::kBfloat16}) {
+    for (const auto itype : {TensorType::kInt32, TensorType::kInt64}) {
+      for (int form = 0; form < 3; ++form) {
+        core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+        MakeGroupedMatMul(builder, form != 0, form == 2, dtype, itype);
+        if (form != 0) {
+          auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+          nodes[5].set_doc_string("expert result");
+        }
+        core::builder::GraphGraph graph(builder);
+        onnx_patterns::GroupedMatMulPattern pattern;
+        EXPECT_EQ(pattern.Name(), "GroupedMatMul");
+        EXPECT_EQ(pattern.FastOpType(), (std::set<std::string>{"Squeeze"}));
+        const auto match = pattern.Match(graph, builder.Nodes()[3]);
+        ASSERT_EQ(match.pattern, &pattern);
+        EXPECT_EQ(match.insert_at, &builder.Nodes()[form == 0 ? 3 : 5]);
+        const auto replacements = pattern.Apply(graph, match.nodes);
+        ASSERT_EQ(replacements.size(), 4u);
+        EXPECT_EQ(replacements[0].op_type().value(), "Less");
+        EXPECT_EQ(replacements[1].op_type().value(), "Where");
+        EXPECT_EQ(replacements[2].op_type().value(), "Add");
+        const auto &fused = replacements[3];
+        EXPECT_EQ(fused.op_type().value(), "GroupedMatMul");
+        EXPECT_TRUE(fused.domain().value().empty());
+        ASSERT_EQ(fused.input_size(), form == 0 ? 3 : 4);
+        EXPECT_EQ(fused.input()[0].value(), "x");
+        EXPECT_EQ(fused.input()[1].value(), "w");
+        EXPECT_EQ(fused.input()[2], replacements[2].output()[0]);
+        EXPECT_EQ(fused.output()[0].value(), form == 0 ? "result" : "out");
+        if (form != 0) {
+          EXPECT_EQ(fused.input()[3].value(), "bias");
+          EXPECT_EQ(fused.doc_string().value(), "expert result");
+        }
+        const auto *zero = FindInitializer(builder, replacements[0].input()[1].value());
+        const auto *groups = FindInitializer(builder, replacements[1].input()[1].value());
+        ASSERT_NE(zero, nullptr);
+        ASSERT_NE(groups, nullptr);
+        EXPECT_EQ(zero->data_type(), static_cast<int>(itype));
+        std::vector<int64_t> values;
+        ASSERT_TRUE(ReadIntegerValues(*groups, values));
+        EXPECT_EQ(values, (std::vector<int64_t>{4}));
+        EXPECT_EQ(replacements[1].input()[2], replacements[0].input()[1]);
+        EXPECT_EQ(replacements[2].input()[0].value(), "indices");
+        EXPECT_EQ(replacements[2].input()[1], replacements[1].output()[0]);
+      }
+    }
+  }
+}
+
+TEST(GroupedMatMulPattern, OptimizerRegistrationCleanupAndConvergence) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+  MakeGroupedMatMul(builder, true);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("GroupedMatMul"));
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  EXPECT_FALSE(graph.Optimize().rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  const auto &fused = builder.Nodes()[3];
+  EXPECT_EQ(fused.op_type().value(), "GroupedMatMul");
+  EXPECT_EQ(fused.input_size(), 4);
+  EXPECT_EQ(fused.output()[0].value(), "out");
+  ASSERT_TRUE(builder.HasShape("out"));
+  EXPECT_EQ(builder.GetShape("out").Shape(), Shape({2, 2, 5}));
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
+}
+
+TEST(GroupedMatMulPattern, RejectsSharedExportedAndCapturedIntermediates) {
+  for (const auto &value : {"xu", "selected", "mm"}) {
+    for (int usage = 0; usage < 3; ++usage) {
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+      MakeGroupedMatMul(builder);
+      if (usage == 0) {
+        builder.MakeNode("Identity", {value}, {"other"});
+      } else if (usage == 1) {
+        builder.MakeOutput(value);
+      } else {
+        auto &subgraph = builder.MakeSubgraph("body");
+        subgraph.MakeNode("Identity", {value}, {"captured"});
+        subgraph.MakeOutput("captured");
+        AddSubgraphReference(builder, "body", "body", "carrier");
+      }
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::GroupedMatMulPattern pattern;
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << value << usage;
+    }
+  }
+}
+
+TEST(GroupedMatMulPattern, KeepsSharedBiasAndResult) {
+  for (const auto &value : {"selected_bias", "result"}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder, true);
+    builder.MakeNode("Identity", {value}, {"other"});
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GroupedMatMulPattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[3]);
+    ASSERT_EQ(match.pattern, &pattern);
+    EXPECT_EQ(match.nodes[4], nullptr);
+    EXPECT_EQ(match.nodes[5], nullptr);
+    const auto replacements = pattern.Apply(graph, match.nodes);
+    EXPECT_EQ(replacements[replacements.size() - 1].output()[0].value(), "result");
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsOldOpsetsAndForeignDomains) {
+  onnx_patterns::GroupedMatMulPattern pattern;
+  core::builder::GraphBuilder old("old", SchemaLookup(), {{"", 28}});
+  MakeGroupedMatMul(old);
+  core::builder::GraphGraph old_graph(old);
+  EXPECT_EQ(pattern.Match(old_graph, old.Nodes()[3]).pattern, nullptr);
+  for (std::size_t index = 0; index < 4; ++index) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder);
+    SetNodeDomain(builder, index, "custom");
+    core::builder::GraphGraph graph(builder);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr);
+  }
+}
+
+TEST(GroupedMatMulPattern, RejectsIncompatibleMetadataAndAxes) {
+  onnx_patterns::GroupedMatMulPattern pattern;
+  for (int guard = 0; guard < 10; ++guard) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder);
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+    using core::symbolic::SymTensor;
+    using core::symbolic::TensorType;
+    if (guard == 0) {
+      shapes.Set("x", SymTensor(nullptr, TensorType::kFloat, Shape({1, 3})));
+    } else if (guard == 1) {
+      shapes.Set("w", SymTensor(nullptr, TensorType::kFloat, Shape({4, 7, 5})));
+    } else if (guard == 2) {
+      shapes.Set("w", SymTensor(nullptr, TensorType::kFloat, Shape({0, 3, 5})));
+    } else if (guard == 3) {
+      shapes.Set("w",
+                 SymTensor(nullptr, TensorType::kFloat,
+                           SymbolicShape({core::symbolic::SymDim("G"), core::symbolic::SymDim(3),
+                                          core::symbolic::SymDim(5)})));
+    } else if (guard == 4) {
+      shapes.Set("indices", SymTensor(nullptr, TensorType::kFloat, Shape({2, 2})));
+    } else if (guard == 5) {
+      shapes.Set("w", SymTensor(nullptr, TensorType::kDouble, Shape({4, 3, 5})));
+    } else if (guard == 6) {
+      shapes.Set("x", SymTensor(nullptr, TensorType::kUndefined, Shape({2, 3})));
+    } else if (guard == 7) {
+      AddShape(builder, "bad_axes", {1});
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      *nodes[3].mutable_input(1) = utils::String("bad_axes");
+    } else if (guard == 8) {
+      shapes.Set("indices", SymTensor(nullptr, TensorType::kInt32, Shape({2, 2})));
+      shapes.Set("w", SymTensor(nullptr, TensorType::kFloat, Shape({int64_t{1} << 32, 3, 5})));
+    } else {
+      const auto unknown = core::symbolic::SymDim("");
+      shapes.Set("x", SymTensor(nullptr, TensorType::kFloat,
+                                SymbolicShape({unknown, core::symbolic::SymDim(3)})));
+      shapes.Set("indices", SymTensor(nullptr, TensorType::kInt64,
+                                      SymbolicShape({unknown, core::symbolic::SymDim(2)})));
+    }
+    core::builder::GraphGraph graph(builder);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << guard;
+  }
+}
+
+TEST(GroupedMatMulPattern, ValidatesDirectApplyCalls) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+  MakeGroupedMatMul(builder);
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GroupedMatMulPattern pattern;
+  EXPECT_THROW(pattern.Apply(graph, {}), core::builder::BuilderError);
+  auto match = pattern.Match(graph, builder.Nodes()[3]);
+  ASSERT_EQ(match.pattern, &pattern);
+  std::swap(match.nodes[1], match.nodes[2]);
+  EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+}
+
+TEST(GroupedMatMulPattern, SupportsSymbolicTokensAndNegativeAxes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+  MakeGroupedMatMul(builder);
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  using core::symbolic::SymDim;
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  shapes.Set("x",
+             SymTensor(nullptr, TensorType::kFloat, SymbolicShape({SymDim("M"), SymDim("K")})));
+  shapes.Set("w", SymTensor(nullptr, TensorType::kFloat,
+                            SymbolicShape({SymDim(4), SymDim("K"), SymDim("N")})));
+  shapes.Set("indices",
+             SymTensor(nullptr, TensorType::kInt64, SymbolicShape({SymDim("M"), SymDim("S")})));
+  AddShape(builder, "negative_unsqueeze", {-2, -3});
+  AddShape(builder, "negative_squeeze", {-2});
+  auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  *nodes[0].mutable_input(1) = utils::String("negative_unsqueeze");
+  *nodes[3].mutable_input(1) = utils::String("negative_squeeze");
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GroupedMatMulPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, &pattern);
+}
+
+TEST(GroupedMatMulPattern, DoesNotAbsorbIncompatibleBias) {
+  for (int guard = 0; guard < 5; ++guard) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 29}});
+    MakeGroupedMatMul(builder, true);
+    auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+    using core::symbolic::SymTensor;
+    using core::symbolic::TensorType;
+    if (guard == 0) {
+      nodes[4].set_domain("custom");
+    } else if (guard == 1) {
+      nodes[5].set_domain("custom");
+    } else if (guard == 2) {
+      shapes.Set("bias", SymTensor(nullptr, TensorType::kFloat, Shape({1, 5})));
+    } else if (guard == 3) {
+      shapes.Set("bias", SymTensor(nullptr, TensorType::kDouble, Shape({4, 5})));
+    } else {
+      builder.MakeInput("other_indices", TensorType::kInt64, Shape({2, 2}));
+      *nodes[4].mutable_input(1) = utils::String("other_indices");
+    }
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GroupedMatMulPattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[3]);
+    ASSERT_EQ(match.pattern, &pattern);
+    EXPECT_EQ(match.nodes[4], nullptr) << guard;
+    EXPECT_EQ(match.nodes[5], nullptr) << guard;
+  }
 }
 
 TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {

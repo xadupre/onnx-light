@@ -9,6 +9,47 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
+ * Fuses per-token expert selection into an opset-29 GroupedMatMul.
+ *
+ * @code
+ * Before:
+ *             ┌─────────────────────┐
+ *   x[M,K] ──→│ Unsqueeze axes=1,2  │────┐
+ *             └─────────────────────┘    │
+ *             ┌─────────────────────┐    ↓
+ *   W, I ────→│ Gather axis=0       │→┌────────┐
+ *             └─────────────────────┘ │ MatMul │
+ *                                     └────────┘
+ *                                          ↓
+ *                                 ┌────────────────┐
+ *                                 │ Squeeze axis=2 │──→ y[M,S,N]
+ *                                 └────────────────┘
+ *
+ * After:
+ *                ┌───────────────────┐
+ *   x, W, I ────→│ GroupedMatMul      │────→ y[M,S,N]
+ *                └───────────────────┘
+ * @endcode
+ *
+ * W has shape [G,K,N] and I has shape [M,S]. G must be a positive static
+ * dimension representable in the index dtype. Negative Gather indices are
+ * normalized with Less, Where, and Add before GroupedMatMul. A following Add
+ * of Gather(bias[G,N], I, axis=0) may be absorbed in either input order.
+ * Removed intermediates must not be shared, exported, or captured.
+ */
+class GroupedMatMulPattern final : public core::builder::PatternOptimization {
+public:
+  explicit GroupedMatMulPattern(int priority = 1)
+      : PatternOptimization(priority, "GroupedMatMul") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Exposes a constant Gemm weight transpose while preserving Gemm semantics.
  *
  * @code

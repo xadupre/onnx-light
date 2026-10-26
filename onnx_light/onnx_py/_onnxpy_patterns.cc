@@ -379,6 +379,8 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::ShapeBasedShapeShapeAddPattern>(
       m, "ShapeBasedShapeShapeAddPattern",
       "Exposes the upstream placeholder for additions of two Shape outputs.");
+  BindPattern<onnx_patterns::GroupedMatMulPattern>(
+      m, "GroupedMatMulPattern", "Fuses gathered expert weights and MatMul into GroupedMatMul.");
   BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
                                                    "Folds input transposes into a Gemm operation.");
   BindPattern<onnx_patterns::GemmSumFusionPattern>(

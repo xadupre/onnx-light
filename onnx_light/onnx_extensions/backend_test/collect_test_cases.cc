@@ -39,6 +39,14 @@
 
 #include <regex>
 
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
+
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+CollectSupportedTypeTestCases(std::vector<core::backend_test::TestCase> &registry,
+                              const std::string &op_type, core::backend_test::TestMode mode);
+
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test
+
 namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
@@ -66,6 +74,9 @@ namespace {
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectMathTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectSupportedTypeTestCases(r, op, m);
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectNNTestCases(r, op, m);

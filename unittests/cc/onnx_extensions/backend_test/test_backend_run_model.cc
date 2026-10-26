@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -12,6 +13,7 @@
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
+#include "onnx_lib/checker.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -24,6 +26,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -66,6 +69,44 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
   ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
   EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
             std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
+}
+
+void ExpectTensorClose(const Tensor &actual, const Tensor &expected, double rtol, double atol) {
+  ASSERT_EQ(actual.data_type, expected.data_type);
+  ASSERT_EQ(actual.shape, expected.shape);
+  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+  if (actual.data_type != DataType::FLOAT && actual.data_type != DataType::DOUBLE &&
+      actual.data_type != DataType::FLOAT16 && actual.data_type != DataType::BFLOAT16) {
+    ExpectTensorBitEqual(actual, expected);
+    return;
+  }
+  auto read_value = [](const Tensor &tensor, int64_t i) -> double {
+    switch (tensor.data_type) {
+    case DataType::FLOAT:
+      return tensor.AsFloat()[i];
+    case DataType::DOUBLE:
+      return tensor.AsDouble()[i];
+    case DataType::FLOAT16:
+      return core::runtime::Float16BitsToFloat(
+          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
+    case DataType::BFLOAT16:
+      return core::runtime::Bfloat16BitsToFloat(
+          reinterpret_cast<const uint16_t *>(tensor.bytes())[i]);
+    default:
+      throw std::invalid_argument("Unsupported floating-point comparison dtype.");
+    }
+  };
+  for (int64_t i = 0; i < expected.element_count(); ++i) {
+    const double value = read_value(actual, i);
+    const double reference = read_value(expected, i);
+    if (std::isnan(reference)) {
+      EXPECT_TRUE(std::isnan(value)) << "element " << i;
+    } else if (std::isinf(reference)) {
+      EXPECT_EQ(value, reference) << "element " << i;
+    } else {
+      EXPECT_NEAR(value, reference, atol + rtol * std::abs(reference)) << "element " << i;
+    }
+  }
 }
 
 // Registers `model`'s local functions in `rt`, seeds `model.graph()`'s
@@ -177,10 +218,9 @@ TEST(BackendRunModel, ShapeBasedIdentityPreservesDynamicSlice) {
 // contains a single node whose ``op_type`` matches ``op_type``, and verifies that the computed
 // outputs match the expected outputs of every ``DataSet``. The per-case dataset tensors carry the
 // graph input/output names (see :cpp:func:`Expect`), so we can wire them by name into the
-// :cpp:class:`RuntimeContext` directly. The expected outputs in the
-// ``cases_*`` registry are themselves produced by the very same kernels that
-// :cpp:func:`RunModelViaSession` will dispatch to, so a bit-exact comparison is
-// appropriate.
+// :cpp:class:`RuntimeContext` directly. The supported-dtype batch uses independent
+// floating-point references and declared tolerances. Existing kernel-generated
+// references and all Transpose outputs retain bit-exact comparisons.
 //
 // Evaluates the optional ``accept_test_case`` predicate once per
 // ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
@@ -230,7 +270,11 @@ void RunBackendCasesFor(const std::string &op_type,
       for (const Tensor &expected : ds.outputs) {
         ASSERT_TRUE(rt.Has(expected.name))
             << "Missing output '" << expected.name << "' for case " << tc.name;
-        ExpectTensorBitEqual(rt.Get(expected.name), expected);
+        if (tc.name.find("test_cc_supported_dtype_") == 0 && op_type != "Transpose") {
+          ExpectTensorClose(rt.Get(expected.name), expected, tc.rtol, tc.atol);
+        } else {
+          ExpectTensorBitEqual(rt.Get(expected.name), expected);
+        }
       }
       ran_case = true;
     }
@@ -250,6 +294,40 @@ void RunBackendCasesFor(
 }
 
 } // namespace
+
+TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
+  auto cases = core::backend_test::CollectTestCasesByName("^test_cc_supported_dtype_");
+  ASSERT_EQ(cases.size(), 91u);
+  std::set<std::pair<std::string, int32_t>> memberships;
+  std::set<std::string> operators;
+  for (TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    EXPECT_FALSE(tc.materialized());
+    const auto &model = tc.model();
+    ASSERT_NO_THROW(checker::check_model(model, true));
+    const std::string op = model.graph().node(0).op_type().value();
+    const auto &ds = tc.data_sets().at(0);
+    ASSERT_FALSE(ds.inputs.empty());
+    ASSERT_FALSE(ds.outputs.empty());
+    EXPECT_TRUE(memberships.emplace(op, ds.inputs[0].data_type).second);
+    operators.insert(op);
+    for (const Tensor &input : ds.inputs) {
+      EXPECT_GT(input.element_count(), 0);
+    }
+    for (const Tensor &output : ds.outputs) {
+      EXPECT_GT(output.element_count(), 0);
+    }
+    const Tensor expected = ds.outputs[0];
+    tc.unload();
+    EXPECT_FALSE(tc.materialized());
+    ExpectTensorBitEqual(tc.data_sets().at(0).outputs[0], expected);
+    tc.unload();
+  }
+  EXPECT_EQ(operators.size(), 39u);
+  auto benchmarks = core::backend_test::CollectTestCasesByName(
+      "^test_cc_supported_dtype_", false, core::backend_test::TestMode::BENCHMARK);
+  EXPECT_TRUE(benchmarks.empty());
+}
 
 // One TEST per kernel currently registered in ``KernelDispatchTable``
 // (see ``onnx_kernels/run_nodes.cc``). When a new kernel is registered there

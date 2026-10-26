@@ -90,7 +90,7 @@ bool IsFileMappedPythonBuffer(nb::handle array) {
     } else if (PyMemoryView_Check(owner.ptr())) {
       owner = owner.attr("obj");
     } else {
-      return nb::isinstance(owner, nb::module_::import_("mmap").attr("mmap"));
+      return true;
     }
   }
   return false;

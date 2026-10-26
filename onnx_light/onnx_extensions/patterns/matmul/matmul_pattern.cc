@@ -11,6 +11,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1945,8 +1946,7 @@ bool ReadGroupedLoop(core::builder::GraphGraph &graph, const NodeProto &loop, Gr
   }
   const auto &body = graph.Builder().Subgraph(attr.s().value());
   if (body.Inputs().size() != 2 || body.Outputs().size() != 2 || !body.Initializers().empty() ||
-      !body.ExtendedInitializers().empty() || !body.SparseInitializers().empty() ||
-      !body.Subgraphs().empty()) {
+      !body.ExtendedInitializers().empty() || !body.Subgraphs().empty()) {
     return false;
   }
   auto before = [&](const std::string &name) -> const NodeProto * {
@@ -1979,10 +1979,11 @@ bool ReadGroupedLoop(core::builder::GraphGraph &graph, const NodeProto &loop, Gr
       return false;
     }
   }
-  // Captures must resolve in the outer scope, never to a same-named local value.
+  // This query excludes every local definition, including sparse initializers.
+  std::unordered_set<std::string> captures;
+  body.CollectImplicitInputs(captures);
   for (const auto &capture : {row.x, row.weights, row.indices, row.bias}) {
-    if (!capture.empty() &&
-        (capture == row.token || capture == condition || before(capture) != nullptr)) {
+    if (!capture.empty() && captures.count(capture) == 0) {
       return false;
     }
   }

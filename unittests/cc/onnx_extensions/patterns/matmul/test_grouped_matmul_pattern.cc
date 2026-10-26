@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -527,8 +528,9 @@ TEST(GroupedMatMulLoopPattern, RejectsSparseInitializerCaptureShadowing) {
     }
     GraphBuilder builder(model, Schemas());
     const auto &imported_body = builder.Subgraph(Last(builder).attribute(0).s().value());
-    ASSERT_EQ(imported_body.SparseInitializers().size(), 1u);
-    EXPECT_EQ(imported_body.SparseInitializers()[0].values().name().value(), capture);
+    std::unordered_set<std::string> captures;
+    imported_body.CollectImplicitInputs(captures);
+    EXPECT_EQ(captures.count(capture), 0u);
     GraphGraph graph(builder);
     onnx_patterns::GroupedMatMulLoopPattern pattern;
     EXPECT_EQ(pattern.Match(graph, Last(builder)).pattern, nullptr) << capture;

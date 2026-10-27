@@ -569,6 +569,67 @@ TEST(CastLayerNormalizationCastPattern, HandlesDefaultDomainAliases) {
   }
 }
 
+TEST(CastLayerNormalizationCastPattern, RejectsScalarConstantFunctionsAndOverloads) {
+  for (const std::string op : {"LayerNormalization", "RMSNormalization"}) {
+    for (const std::string node_domain : {"", "ai.onnx"}) {
+      SCOPED_TRACE(op + " constant domain=" + node_domain);
+      core::builder::GraphBuilder builder("g", SchemaLookup());
+      builder.SetOpsetVersion("", 23);
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
+      builder.MakeNode("Constant", {}, {"scale"}, node_domain, "",
+                       Attributes({}, {{"value_float", 1.0F}}));
+      AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
+      builder.MakeNode(op, {"cast_x", "scale"}, {"normalized"});
+      AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
+      builder.MakeOutput("y");
+
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::CastLayerNormalizationCastPattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[2]);
+      ASSERT_EQ(match.pattern, &pattern);
+      const auto replacements = pattern.Apply(graph, match.nodes);
+      ASSERT_EQ(replacements.size(), 2u);
+      EXPECT_EQ(replacements[1].op_type().value(), op);
+      EXPECT_EQ(replacements[1].input()[0].value(), "x");
+      EXPECT_EQ(replacements[1].output()[0].value(), "y");
+
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      for (const std::string overload : {"", "custom"}) {
+        SCOPED_TRACE("overload=" + overload);
+        nodes[0].set_overload(overload);
+        if (!overload.empty()) {
+          EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, nullptr);
+          EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+        }
+        for (const std::string function_domain : {"", "ai.onnx", "onnx.ai"}) {
+          SCOPED_TRACE("function domain=" + function_domain);
+          FunctionProto function;
+          function.set_name("Constant");
+          function.set_domain(function_domain);
+          function.set_overload(overload);
+          function.add_attribute("value_float");
+          function.add_output("result");
+          function.add_opset("", 23);
+          NodeProto weights = MakeNode("RandomUniform", {}, {"result"});
+          AddAttribute<std::vector<int64_t>>(weights, "shape", {3});
+          AddAttribute<float>(weights, "low", 2.0F);
+          AddAttribute<float>(weights, "high", 3.0F);
+          function.ref_node().push_back(std::move(weights));
+          shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+          const auto rejected = pattern.Match(graph, builder.Nodes()[2]);
+          EXPECT_EQ(rejected.pattern, nullptr);
+          EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+          ASSERT_TRUE(rejected.no_match.has_value());
+          EXPECT_EQ(rejected.no_match->reason,
+                    "the scale constant resolves to a local function or overload");
+          shapes.ClearLocalFunctions();
+        }
+      }
+    }
+  }
+}
+
 TEST(CastLayerNormalizationCastPattern, PreservesUnusedOptionalOutputs) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);

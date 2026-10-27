@@ -782,7 +782,10 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   const std::string &constant_name =
       scale_cast == nullptr ? scale_name : scale_cast->input()[0].value();
   const core::builder::GraphGraph *scope = graph.GetConstantScope(constant_name);
-  const NodeProto *producer = scope == nullptr ? nullptr : scope->NodeBefore(constant_name);
+  if (scope == nullptr) {
+    scope = &graph;
+  }
+  const NodeProto *producer = scope->NodeBefore(constant_name);
   if (producer != nullptr && !IsStandardPrimitive(*scope, *producer)) {
     return NoMatch(candidate, "the scale constant resolves to a local function or overload");
   }

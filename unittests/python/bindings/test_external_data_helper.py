@@ -49,6 +49,29 @@ def _make_borrowed_model(values: np.ndarray, source_kind: str) -> onnxl.ModelPro
     return model
 
 
+def _iter_tensor_payloads(proto):
+    """Yields tensors through bound properties independently of the native iterator."""
+    if isinstance(proto, onnxl.TensorProto):
+        yield proto
+        return
+    for name, descriptor in vars(type(proto)).items():
+        if not isinstance(descriptor, property):
+            continue
+        presence = getattr(proto, "has_" + name, None)
+        if presence is not None and not presence():
+            continue
+        value = getattr(proto, name)
+        if hasattr(value, "SerializeToString"):
+            yield from _iter_tensor_payloads(value)
+        elif hasattr(value, "values"):
+            for item in value.values():
+                yield from _iter_tensor_payloads(item)
+        elif not isinstance(value, (str, bytes)) and hasattr(value, "__iter__"):
+            for item in value:
+                if hasattr(item, "SerializeToString"):
+                    yield from _iter_tensor_payloads(item)
+
+
 class TestExternalDataHelper(ExtTestCase):
     def test_borrowed_external_save_shares_payload_and_preserves_source(self):
         for source_kind in ("numpy", "dlpack"):
@@ -216,6 +239,24 @@ class TestExternalDataHelper(ExtTestCase):
                 to_array(onnxl.load(path, load_external_data=True).graph.initializer[0]),
                 np.arange(64, dtype=np.float32),
             )
+            self.assertEqual(model.SerializeToString(), before)
+
+    def test_mapped_external_save_failure_detaches_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.onnx")
+            values = np.arange(128, dtype=np.float32)
+            onnxl.save_model(_make_model(values), path)
+            model = onnxl.load(path, file_load_mode="MMAP", no_copy=True)
+            before = model.SerializeToString()
+            borrowed = np.from_dlpack(model.graph.initializer[0])
+            options = onnxl.SerializeOptions()
+            options.raw_data_threshold = 0
+            options.max_serialized_size_bytes = 1
+            with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+                model.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+            snapshot = np.from_dlpack(model.graph.initializer[0])
+            self.assertNotEqual(snapshot.ctypes.data, borrowed.ctypes.data)
+            np.testing.assert_array_equal(snapshot, values)
             self.assertEqual(model.SerializeToString(), before)
 
     def test_borrowed_external_save_validates_tensor_location(self):
@@ -481,11 +522,26 @@ class TestExternalDataHelper(ExtTestCase):
                 onnxl.save_model(model, path)
                 mapped = onnxl.load(path, file_load_mode="MMAP", no_copy=True)
                 before = mapped.SerializeToString()
+                tensors = [tensor for tensor in _iter_tensor_payloads(mapped) if tensor.raw_data]
+                self.assertGreaterEqual(len(tensors), 2)
+                borrowed_views = []
+                for tensor in tensors:
+                    # Byte-wise borrowed views also cover unaligned inline payloads.
+                    byte_tensor = onnxl.TensorProto()
+                    byte_tensor.CopyFrom(tensor)
+                    byte_tensor.data_type = onnxl.TensorProto.UINT8
+                    byte_tensor.dims.clear()
+                    byte_tensor.dims.append(len(tensor.raw_data))
+                    borrowed_views.append(np.from_dlpack(byte_tensor))
+                mapped_addresses = {view.ctypes.data for view in borrowed_views}
                 options = onnxl.SerializeOptions()
                 options.raw_data_threshold = 1024
                 options.num_threads = 2
                 options.min_parallel_block_size = 1
                 mapped.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+                for tensor in _iter_tensor_payloads(mapped):
+                    if tensor.raw_data:
+                        self.assertNotIn(np.from_dlpack(tensor).ctypes.data, mapped_addresses)
                 self.assertEqual(mapped.SerializeToString(), before)
                 loaded = onnxl.load(path, load_external_data=True)
                 loaded.graph.initializer[0].CopyFrom(model.graph.initializer[0])

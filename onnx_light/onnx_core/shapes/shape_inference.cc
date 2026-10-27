@@ -116,19 +116,14 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     std::vector<const FunctionProto *> &stack;
     ~PopActive() { stack.pop_back(); }
   } pop_active{active};
-  ShapesContext sub_ctx;
-  sub_ctx.SetStructTypes(ctx.StructTypes());
-  // Inherit caller opsets first, then let the function's own opset
-  // imports override them.
-  for (const auto &kv : ctx.Opsets()) {
-    sub_ctx.SetOpsetVersion(kv.first, kv.second);
-  }
+  ShapesContext sub_ctx = ctx.MakeChildContext();
+  sub_ctx.set_events_enabled(false);
+  sub_ctx.clear_event_callback();
+  // Let the function's own opset imports override the inherited caller opsets.
   for (std::size_t i = 0; i < func.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = func.opset_import()[i];
     sub_ctx.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
-  // Forward the local-function map so nested calls are dispatched too.
-  sub_ctx.CopyLocalFunctions(ctx);
   // Positional binding: function input names take the descriptors of
   // the caller's input names.
   const int n_inputs = std::min(node.input_size(), func.input_size());

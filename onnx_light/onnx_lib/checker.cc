@@ -837,12 +837,18 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   }
 
   // Resolve domain for node
+  const std::string domain = node.domain() == "ai.onnx" || node.domain() == "onnx.ai"
+                                 ? std::string()
+                                 : node.domain().value();
   const auto &opset_imports = ctx.get_opset_imports();
   auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
-    // Both "" (ONNX_DOMAIN) and "ai.onnx" refer to the default ONNX domain.
-    if (node.domain().sv() == ONNX_DOMAIN) {
-      dit = opset_imports.find("ai.onnx");
+    if (domain == ONNX_DOMAIN) {
+      for (const char *alias : {"", "ai.onnx", "onnx.ai"}) {
+        dit = opset_imports.find(alias);
+        if (dit != opset_imports.end())
+          break;
+      }
     }
     if (dit == opset_imports.end()) {
       fail_check("No opset import for domain '", node.domain(), "'");
@@ -871,10 +877,13 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   }
 
   const auto *const schema =
-      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, node.domain());
+      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, domain);
+  if (schema != nullptr && !node.overload().empty()) {
+    fail_check("Registered operator '", node.domain(), "::", node.op_type(),
+               "' cannot specify a function overload.");
+  }
   if (!schema) {
-    if (node.domain().sv() == ONNX_DOMAIN || node.domain().sv() == AI_ONNX_ML_DOMAIN ||
-        node.domain().sv() == "ai.onnx" || node.domain().sv() == AI_ONNX_TRAINING_DOMAIN ||
+    if (domain == ONNX_DOMAIN || domain == AI_ONNX_ML_DOMAIN || domain == AI_ONNX_TRAINING_DOMAIN ||
         ctx.check_custom_domain()) {
       // fail the checker if op is in built-in domains or if it has no schema when
       // `check_custom_domain` is true
@@ -1249,6 +1258,15 @@ void check_model_local_functions(const ModelProto &model, const CheckerContext &
   ctx_copy.set_opset_imports(model_opset_imports);
 
   for (const auto &function_proto : model.functions()) {
+    const std::string domain =
+        function_proto.domain() == "ai.onnx" || function_proto.domain() == "onnx.ai"
+            ? std::string()
+            : function_proto.domain().value();
+    if (ctx.get_schema_registry()->GetSchema(function_proto.name(), std::numeric_limits<int>::max(),
+                                             domain) != nullptr) {
+      fail_check("Local function '", function_proto.domain(), "::", function_proto.name(),
+                 "' cannot redefine a registered operator, regardless of overload.");
+    }
     check_function(function_proto, ctx_copy, parent_lex);
   }
 }
@@ -1473,14 +1491,10 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   StructTypeCatalogue catalogue;
   check_structured([&]() { catalogue.Build(model); });
   ctx.set_struct_type_catalogue(catalogue);
-  check_quantization_parameter_references(model, catalogue);
   LexicalScopeContext lex_ctx;
+  check_model_local_functions(model, ctx, lex_ctx);
+  check_quantization_parameter_references(model, catalogue);
   check_graph(model.graph(), ctx, lex_ctx);
-
-  if (ctx.get_ir_version() >= 0x00000008) {
-    check_model_local_functions(model, ctx, lex_ctx);
-    // TODO(ONNX): check consistency between local functions and ops referencing it.
-  }
 }
 
 void check_model(const std::string &model_path, bool full_check,

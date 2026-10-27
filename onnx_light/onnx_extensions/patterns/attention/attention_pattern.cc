@@ -919,16 +919,11 @@ ApplyRotaryTranspose(core::builder::GraphGraph &graph, const std::vector<const N
 
 } // namespace
 
-bool FunctionAttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
-  return node.overload().empty() && NormaliseDomain(node.domain().value()) == kIntermediateDomain &&
-         node.op_type().value().starts_with("LocalAttention") &&
-         !node.op_type().value().starts_with("LocalAttentionGQA");
-}
-
 core::builder::MatchResult FunctionAttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
   const std::string &op_type = candidate.op_type().value();
-  if (!op_type.starts_with("LocalAttention") || op_type.starts_with("LocalAttentionGQA") ||
+  if (!candidate.overload().empty() || !op_type.starts_with("LocalAttention") ||
+      op_type.starts_with("LocalAttentionGQA") ||
       NormaliseDomain(candidate.domain().value()) != kIntermediateDomain ||
       candidate.input_size() < 3 || candidate.output_size() != 1 || !MainOpsetAtLeast(graph, 18)) {
     return NoMatch(candidate, "FunctionAttentionGQAPattern expects a LocalAttention call.");
@@ -1332,13 +1327,10 @@ bool IsLocalAttentionGqaCall(const NodeProto &node) {
 
 } // namespace
 
-bool AttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
-  return node.overload().empty() && IsLocalAttentionGqaCall(node);
-}
-
 core::builder::MatchResult AttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!MainOpsetAtLeast(graph, 23) || candidate.output_size() != 1) {
+  if (!candidate.overload().empty() || !MainOpsetAtLeast(graph, 23) ||
+      candidate.output_size() != 1) {
     return NoMatch(candidate, "AttentionGQAPattern requires opset 23 and one output.");
   }
   const bool onnx_attention = IsNode(&candidate, "Attention", -1, 1);
@@ -2176,14 +2168,9 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
 
 std::set<std::string> RotaryEmbeddingPattern::FastOpType() const { return {"HalfRotaryEmbedding"}; }
 
-bool RotaryEmbeddingPattern::SupportsLocalFunctions(const NodeProto &node) const {
-  return node.overload().empty() &&
-         IsDomainNode(&node, "HalfRotaryEmbedding", kIntermediateDomain, 3, 1);
-}
-
 core::builder::MatchResult RotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
-  if (!MainOpsetAtLeast(graph, 23) ||
+  if (!candidate.overload().empty() || !MainOpsetAtLeast(graph, 23) ||
       !IsDomainNode(&candidate, "HalfRotaryEmbedding", kIntermediateDomain, 3, 1) ||
       !HasRank(graph, candidate.input()[0].value(), 4) ||
       !graph.HasShape(candidate.input()[1].value()) ||

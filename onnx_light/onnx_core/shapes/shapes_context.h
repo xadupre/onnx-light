@@ -590,13 +590,9 @@ public:
   /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
   /// lifetime of the shape-inference pass. Replaces any previous entry
   /// registered under the same domain/name/overload key. ``func`` must
-  /// not be ``nullptr``.
-  void SetLocalFunction(const FunctionProto *func) {
-    EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-    const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
-    local_functions_[key] = func;
-    owned_local_functions_.erase(key);
-  }
+  /// not be ``nullptr``. Rejects domain/name collisions with registered
+  /// operators, regardless of overload.
+  void SetLocalFunction(const FunctionProto *func);
 
   /// Registers an owned definition whose lifetime also covers copied contexts.
   void SetLocalFunction(std::shared_ptr<const FunctionProto> func);

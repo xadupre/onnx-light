@@ -70,15 +70,21 @@ Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
 nodes whose attributes still contain unresolved function-attribute references,
 including Constant producers inspected outside the matched node set.
-Primitive patterns also skip model-local function overrides, both as candidates
-and as secondary matched nodes. Patterns intentionally handling local calls,
-such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions(node)``
-(``supports_local_functions(node)`` in Python) to return true for supported calls.
-Attention and rotary second-stage patterns accept their intermediate helper
-identities, without allowing local overrides of the surrounding primitives.
-Cast elimination also rejects replacements that would introduce an overridden
-default-domain ``Identity``; default-domain function identity checks treat
-``""``, ``ai.onnx``, and ``onnx.ai`` consistently.
+Local functions cannot redefine a registered operator with the same normalized
+domain and name, regardless of ``overload`` or the imported opset version.
+The schema-aware model checker rejects these definitions, even when unused;
+the builder rejects them before importing or registering a function.
+Schema-free core contexts enforce collisions against their registered shape
+functions; the structural ``onnx_proto`` verifier remains schema-independent.
+Default-domain function identities treat ``""``, ``ai.onnx``, and ``onnx.ai``
+consistently. Custom-domain functions may reuse standard operator names, and
+noncolliding default-domain functions remain supported.
+Primitive matchers therefore only check operator domains and types, using the
+unchanged ``MatchResult`` / ``self.result`` interface. ``RepeatedLayer`` preserves
+function calls as opaque nodes, while attention and rotary second-stage patterns
+recognize their intermediate helper identities. There is no per-pattern
+function-support hook. Constant queries reject unresolved function-attribute
+references.
 Replay validates surviving value tags in every retained graph-attribute
 occurrence, including separate exported copies of a shared subgraph.
 Constant folding forwards raw initializer storage through native Identity nodes
@@ -328,8 +334,10 @@ the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
                   return {"Neg"}
 
               def match(self, graph, node):
+                  if node.domain not in ("", "ai.onnx"):
+                      return self.no_match(node, "the candidate is not in the default ONNX domain")
                   previous = graph.node_before(node.input[0])
-                  if previous is None or previous.op_type != "Neg":
+                  if previous is None or previous.op_type != "Neg" or previous.domain not in ("", "ai.onnx"):
                       return self.no_match(node, "the input is not produced by Neg")
                   return self.result([previous, node], insert_at=node)
 
@@ -360,8 +368,11 @@ the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
 
             builder::MatchResult Match(builder::GraphGraph &graph,
                                        const onnx_light::NodeProto &candidate) const override {
+              if (!candidate.domain().empty() && candidate.domain() != "ai.onnx")
+                return NoMatch(candidate, "the candidate is not in the default ONNX domain");
               const auto *previous = graph.NodeBefore(candidate.input()[0].value());
-              if (previous == nullptr || previous->op_type().value() != "Neg") {
+              if (previous == nullptr || (!previous->domain().empty() && previous->domain() != "ai.onnx") ||
+                  previous->op_type().value() != "Neg") {
                 return NoMatch(candidate, "the input is not produced by Neg");
               }
               return builder::MatchResult{this, {previous, &candidate}, &candidate};

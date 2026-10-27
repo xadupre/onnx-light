@@ -1714,17 +1714,7 @@ std::set<std::string> GroupedMatMulPattern::FastOpType() const {
 
 namespace {
 
-bool HasGroupedFunction(const core::builder::GraphBuilder &builder, const std::string &domain,
-                        const std::string &op, const std::string &overload = "") {
-  return !builder.Shapes().LocalFunctions().empty() &&
-         builder.Shapes().HasLocalFunction(
-             core::shapes::ShapesContext::LocalFunctionKey(domain, op, overload));
-}
-
-bool IsGroupedPrimitive(const core::builder::GraphBuilder &builder, const NodeProto &node) {
-  return node.overload().value().empty() &&
-         !HasGroupedFunction(builder, node.domain(), node.op_type(), node.overload());
-}
+bool IsGroupedPrimitive(const NodeProto &node) { return node.overload().empty(); }
 
 bool IsGroupedConstant(core::builder::GraphGraph &graph, const std::string &name) {
   const auto *scope = graph.GetConstantScope(name);
@@ -1733,7 +1723,7 @@ bool IsGroupedConstant(core::builder::GraphGraph &graph, const std::string &name
   const auto *producer = scope->NodeBefore(name);
   if (producer == nullptr)
     return true;
-  if (!IsGroupedPrimitive(scope->Builder(), *producer))
+  if (!IsGroupedPrimitive(*producer))
     return false;
   for (const auto &attribute : producer->attribute())
     if (!attribute.ref_attr_name().value().empty())
@@ -1745,13 +1735,8 @@ bool IsGroupedConstant(core::builder::GraphGraph &graph, const std::string &name
 
 core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
-  for (const char *op : {"Less", "Where", "Add", "GroupedMatMul"}) {
-    if (HasGroupedFunction(graph.Builder(), "", op)) {
-      return NoMatch(candidate, "a replacement operator resolves to a local function");
-    }
-  }
-  if (!IsGroupedPrimitive(graph.Builder(), candidate)) {
-    return NoMatch(candidate, "candidate resolves to a local function or overload");
+  if (!IsGroupedPrimitive(candidate)) {
+    return NoMatch(candidate, "candidate specifies a function overload");
   }
   if (candidate.op_type() == "Concat") {
     return MatchConcat(graph, candidate);
@@ -1780,17 +1765,17 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     return axes == expected;
   };
   const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
-  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || !IsGroupedPrimitive(graph.Builder(), *matmul) ||
+  if (!matmul || !IsDefaultOp(*matmul, "MatMul") || !IsGroupedPrimitive(*matmul) ||
       matmul->input_size() != 2 || matmul->output_size() != 1 || !axes_are(candidate, {2}, 4)) {
     return NoMatch(candidate, "expected MatMul followed by Squeeze axis 2");
   }
   const NodeProto *unsqueeze = graph.NodeBefore(matmul->input()[0].value());
   const NodeProto *gather = graph.NodeBefore(matmul->input()[1].value());
-  if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") ||
-      !IsGroupedPrimitive(graph.Builder(), *unsqueeze) || unsqueeze->input_size() != 2 ||
-      unsqueeze->output_size() != 1 || !axes_are(*unsqueeze, {1, 2}, 4) || !gather ||
-      !IsDefaultOp(*gather, "Gather") || !IsGroupedPrimitive(graph.Builder(), *gather) ||
-      gather->input_size() != 2 || gather->output_size() != 1 || !HasDefaultZeroAxis(*gather)) {
+  if (!unsqueeze || !IsDefaultOp(*unsqueeze, "Unsqueeze") || !IsGroupedPrimitive(*unsqueeze) ||
+      unsqueeze->input_size() != 2 || unsqueeze->output_size() != 1 ||
+      !axes_are(*unsqueeze, {1, 2}, 4) || !gather || !IsDefaultOp(*gather, "Gather") ||
+      !IsGroupedPrimitive(*gather) || gather->input_size() != 2 || gather->output_size() != 1 ||
+      !HasDefaultZeroAxis(*gather)) {
     return NoMatch(candidate, "expected Unsqueeze axes 1,2 and Gather axis 0");
   }
   const std::string &x = unsqueeze->input()[0].value();
@@ -1832,11 +1817,11 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
     const NodeProto &sum = *next[0];
     const std::string &other = sum.input()[sum.input()[0] == candidate.output()[0] ? 1 : 0].value();
     const NodeProto *bg = graph.NodeBefore(other);
-    if (IsGroupedPrimitive(graph.Builder(), sum) && bg && IsDefaultOp(*bg, "Gather") &&
-        IsGroupedPrimitive(graph.Builder(), *bg) && bg->input_size() == 2 &&
-        bg->output_size() == 1 && bg->input()[1].value() == indices && HasDefaultZeroAxis(*bg) &&
-        !graph.IsUsedMoreThanOnce(other) && graph.HasShape(bg->input()[0].value()) &&
-        graph.HasType(bg->input()[0].value()) && graph.GetType(bg->input()[0].value()) == dtype) {
+    if (IsGroupedPrimitive(sum) && bg && IsDefaultOp(*bg, "Gather") && IsGroupedPrimitive(*bg) &&
+        bg->input_size() == 2 && bg->output_size() == 1 && bg->input()[1].value() == indices &&
+        HasDefaultZeroAxis(*bg) && !graph.IsUsedMoreThanOnce(other) &&
+        graph.HasShape(bg->input()[0].value()) && graph.HasType(bg->input()[0].value()) &&
+        graph.GetType(bg->input()[0].value()) == dtype) {
       const SymShape &bs = graph.GetShape(bg->input()[0].value()).Shape();
       if (bs.Rank() == 2 && same_dim(bs[0], ws[0]) && same_dim(bs[1], ws[2])) {
         bias_gather = bg;
@@ -2055,7 +2040,7 @@ bool ReadGroupedLoop(core::builder::GraphGraph &graph, const NodeProto &loop, Gr
     return false;
   }
   for (const auto *node : row.nodes) {
-    if (!IsGroupedPrimitive(body, *node)) {
+    if (!IsGroupedPrimitive(*node)) {
       return false;
     }
   }
@@ -2145,8 +2130,8 @@ core::builder::MatchResult GroupedMatMulPattern::MatchConcat(core::builder::Grap
     return NoMatch(candidate, "branches contain duplicate nodes");
   }
   for (std::size_t i = 1; i < nodes.size(); ++i) {
-    if (!IsGroupedPrimitive(graph.Builder(), *nodes[i])) {
-      return NoMatch(candidate, "a matched operator resolves to a local function or overload");
+    if (!IsGroupedPrimitive(*nodes[i])) {
+      return NoMatch(candidate, "a matched operator specifies a function overload");
     }
     const std::string &out = nodes[i]->output()[0].value();
     if (graph.IsOutput(out) || graph.IsUsedBySubgraph(out)) {

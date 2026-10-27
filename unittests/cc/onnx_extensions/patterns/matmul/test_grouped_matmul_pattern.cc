@@ -509,15 +509,17 @@ TEST(GroupedMatMulPattern, RejectsEmptyOverloadFunctionsForMatchedOperatorsInEve
         } else {
           Loop(builder, true);
         }
-        RegisterGroupedOverride(root, GroupedOverride(op, inputs));
+        const auto before = root.ToModel();
+        EXPECT_THROW(RegisterGroupedOverride(root, GroupedOverride(op, inputs)),
+                     std::invalid_argument);
+        EXPECT_TRUE(root.ToModel().Equals(before));
         if (scope != 0) {
           EXPECT_FALSE(builder.HasLocalFunction(op));
         }
         GraphGraph graph(builder);
         onnx_patterns::GroupedMatMulPattern pattern;
         const auto &candidate = form == 0 ? builder.Nodes()[3] : Last(builder);
-        EXPECT_EQ(pattern.Match(graph, candidate).pattern, nullptr);
-        EXPECT_THROW(pattern.Apply(graph, {&candidate}), core::builder::BuilderError);
+        EXPECT_EQ(pattern.Match(graph, candidate).pattern, &pattern);
       }
     }
   }
@@ -541,15 +543,18 @@ TEST(GroupedMatMulPattern, ChecksExactFunctionIdentitiesForEveryReplacementOpera
           } else {
             Loop(builder);
           }
-          RegisterGroupedOverride(builder, GroupedOverride(op, inputs, domain, overload));
+          if (domain == "foreign") {
+            RegisterGroupedOverride(builder, GroupedOverride(op, inputs, domain, overload));
+          } else {
+            EXPECT_THROW(
+                RegisterGroupedOverride(builder, GroupedOverride(op, inputs, domain, overload)),
+                std::invalid_argument);
+          }
           GraphGraph graph(builder);
           onnx_patterns::GroupedMatMulPattern pattern;
-          const bool overridden = domain != "foreign" && overload.empty();
           const auto match = pattern.Match(graph, Last(builder));
-          EXPECT_EQ(match.pattern != nullptr, !overridden);
-          if (!overridden) {
-            EXPECT_EQ(pattern.Apply(graph, match.nodes).size(), 4u);
-          }
+          ASSERT_EQ(match.pattern, &pattern);
+          EXPECT_EQ(pattern.Apply(graph, match.nodes).size(), 4u);
         }
       }
     }
@@ -568,14 +573,9 @@ TEST(GroupedMatMulPattern, RejectsImportedAddOverrideWithoutChangingTheGraph) {
     }
     auto model = source.ToModel();
     model.ref_functions().push_back(GroupedOverride("Add", 2));
-    GraphBuilder builder(model, Schemas());
-    const auto before = builder.ToModel().SerializeAsString();
-    GraphGraph graph(builder);
-    onnx_patterns::GroupedMatMulPattern pattern;
-    const auto *candidate = form == 0 ? graph.NodeBefore("squeezed") : &Last(builder);
-    ASSERT_NE(candidate, nullptr);
-    EXPECT_EQ(pattern.Match(graph, *candidate).pattern, nullptr);
-    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+    const auto before = source.ToModel().SerializeAsString();
+    EXPECT_THROW(GraphBuilder(model, Schemas()), core::builder::BuilderError);
+    EXPECT_EQ(source.ToModel().SerializeAsString(), before);
   }
 }
 
@@ -636,9 +636,14 @@ TEST(GroupedMatMulPattern, ValidatesConstantProducersInTheirDefiningScope) {
           function.ref_node().push_back(MakeNode("SequenceEmpty", {}, {"empty"}));
           function.ref_node().push_back(MakeNode("SequenceLength", {"empty"}, {"result"}));
           auto &shapes = const_cast<core::shapes::ShapesContext &>(root.Shapes());
-          shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+          if (variant == 4) {
+            shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+          } else {
+            EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                         std::invalid_argument);
+          }
         }
-        const bool primitive = variant == 0 || variant == 3 || variant == 4;
+        const bool primitive = variant == 0 || variant == 2 || variant == 3 || variant == 4;
         auto pattern = std::make_shared<onnx_patterns::GroupedMatMulPattern>();
         if (!captured) {
           GraphGraph graph(builder);

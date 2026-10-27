@@ -65,11 +65,9 @@ bool IsBinaryArithmetic(const NodeProto &node) {
 bool IsSupportedOperation(const NodeProto &node) {
   const std::string &op_type = node.op_type().value();
   const bool binary = op_type == "Add" || op_type == "Div" || op_type == "Mul" || op_type == "Sub";
-  const bool unary =
-      op_type == "MulSigmoid" || op_type == "Neg" || op_type == "Sigmoid" || op_type == "Softmax";
-  return ((binary && NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain &&
-           node.input_size() == 2) ||
-          (unary && node.input_size() == 1)) &&
+  const bool unary = op_type == "Neg" || op_type == "Sigmoid" || op_type == "Softmax";
+  return NormaliseDomain(node.domain()) == kDefaultOnnxDomain && node.overload().empty() &&
+         ((binary && node.input_size() == 2) || (unary && node.input_size() == 1)) &&
          node.output_size() == 1;
 }
 
@@ -96,9 +94,6 @@ core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
   if (target_type != graph.GetType(candidate.input()[0].value())) {
     return NoMatch(candidate, "the input and target element types differ");
   }
-  if (graph.Builder().Shapes().HasLocalFunction(
-          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
-    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
@@ -176,10 +171,6 @@ core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &gra
   if (replacement_type == TensorType::kUndefined) {
     return NoMatch(candidate, "combining the Cast operations would change the result");
   }
-  if (replacement_type == input_type &&
-      graph.Builder().Shapes().HasLocalFunction(
-          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
-    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   return core::builder::MatchResult{
       this,
       {inner, &candidate},
@@ -312,7 +303,7 @@ CastCastBinaryPattern::Apply(core::builder::GraphGraph &graph,
 }
 
 std::set<std::string> CastOpCastPattern::FastOpType() const {
-  return {"Add", "Div", "Mul", "MulSigmoid", "Neg", "Sigmoid", "Softmax", "Sub"};
+  return {"Add", "Div", "Mul", "Neg", "Sigmoid", "Softmax", "Sub"};
 }
 
 core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &graph,

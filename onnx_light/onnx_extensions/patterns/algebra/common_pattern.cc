@@ -22,6 +22,11 @@ namespace {
 using collections::IsDefaultOp;
 using core::builder::BuilderError;
 
+bool SameOperation(const NodeProto &first, const NodeProto &second) {
+  return first.op_type() == second.op_type() && first.overload().sv() == second.overload().sv() &&
+         NormaliseDomain(first.domain()) == NormaliseDomain(second.domain());
+}
+
 bool SameAttributes(const NodeProto &first, const NodeProto &second) {
   if (first.attribute_size() != second.attribute_size()) {
     return false;
@@ -72,8 +77,7 @@ bool SameInputs(const NodeProto &first, const NodeProto &second) {
   if (equal) {
     return true;
   }
-  const std::string &type = first.op_type().value();
-  return (type == "Add" || type == "Mul") && first.input_size() == 2 &&
+  return (IsDefaultOp(first, "Add") || IsDefaultOp(first, "Mul")) && first.input_size() == 2 &&
          first.input()[0].value() == second.input()[1].value() &&
          first.input()[1].value() == second.input()[0].value();
 }
@@ -136,9 +140,7 @@ bool IsUnaryLike(const std::string &op_type) {
                                                         "Tan",
                                                         "Tanh",
                                                         "ThresholdedRelu",
-                                                        "ThresholdRelu",
-                                                        "Trilu",
-                                                        "Trunc"};
+                                                        "Trilu"};
   return types.find(op_type) != types.end();
 }
 
@@ -153,13 +155,15 @@ bool HasOneElementVectorShape(core::builder::GraphGraph &graph, const std::strin
 } // namespace
 
 bool SameChildrenPattern::SameNode(const NodeProto &first, const NodeProto &second) {
-  return SameInputs(first, second) && SameOutputs(first, second) && SameAttributes(first, second);
+  return SameOperation(first, second) && SameInputs(first, second) && SameOutputs(first, second) &&
+         SameAttributes(first, second);
 }
 
 bool SameChildrenPattern::SameNodeWithAliases(
     const NodeProto &first, const NodeProto &second,
     const std::unordered_map<std::string, std::unordered_set<std::string>> &aliases) {
-  if (first.input_size() != second.input_size() || first.output_size() != second.output_size() ||
+  if (!SameOperation(first, second) || first.input_size() != second.input_size() ||
+      first.output_size() != second.output_size() ||
       first.attribute_size() != second.attribute_size()) {
     return false;
   }
@@ -531,7 +535,8 @@ core::builder::MatchResult SwapUnaryPattern::Match(core::builder::GraphGraph &gr
       (next->op_type().value() == "Mul" || next->op_type().value() == "Add" ||
        next->op_type().value() == "Div" || next->op_type().value() == "Sub") &&
       next->input_size() >= 2 && HasOneElementVectorShape(graph, next->input()[1].value());
-  if (!IsUnaryLike(next->op_type().value()) && !scalar_binary) {
+  if (NormaliseDomain(next->domain()) != kDefaultOnnxDomain || !next->overload().empty() ||
+      (!IsUnaryLike(next->op_type().value()) && !scalar_binary)) {
     return NoMatch(candidate, "the layout consumer is not unary-like or binary with shape [1]");
   }
   return core::builder::MatchResult{this, {&candidate, next}, nullptr};

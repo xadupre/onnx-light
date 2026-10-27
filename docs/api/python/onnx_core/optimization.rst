@@ -212,8 +212,10 @@ Custom Python pattern
             return {"Neg"}
 
         def match(self, graph, node):
+            if node.domain not in ("", "ai.onnx"):
+                return self.no_match(node, "the candidate is not in the default ONNX domain")
             previous = graph.node_before(node.input[0])
-            if previous is None or previous.op_type != "Neg":
+            if previous is None or previous.op_type != "Neg" or previous.domain not in ("", "ai.onnx"):
                 return self.no_match(node, "input is not produced by Neg")
             return self.result([previous, node], insert_at=node)
 

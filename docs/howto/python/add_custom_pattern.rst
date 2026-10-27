@@ -51,8 +51,10 @@ The running example collapses two consecutive ``Neg`` nodes into an
             return {"Neg"}
 
         def match(self, graph, node):
+            if node.domain not in ("", "ai.onnx"):
+                return self.no_match(node, "the candidate is not in the default ONNX domain")
             previous = graph.node_before(node.input[0])
-            if previous is None or previous.op_type != "Neg":
+            if previous is None or previous.op_type != "Neg" or previous.domain not in ("", "ai.onnx"):
                 return self.no_match(node, "the input is not produced by Neg")
             return self.result([previous, node], insert_at=node)
 
@@ -69,6 +71,12 @@ the statistics shown in :ref:`l-example-plot-pattern-optimization`.
 A ``None``/``nullptr`` entry may reserve an optional positional role;
 the optimizer passes it to ``apply`` but ignores it for positioning,
 marking, removal, and replay.
+
+Primitive patterns check the domain and operator type of the candidate and
+secondary nodes. Model verification and builder registration reject functions
+that reuse a registered operator's domain and name, regardless of ``overload``.
+Patterns intentionally matching functions check their expected identities and
+semantics before returning the usual ``self.result(...)``.
 
 Select the pattern for one optimizer
 ------------------------------------

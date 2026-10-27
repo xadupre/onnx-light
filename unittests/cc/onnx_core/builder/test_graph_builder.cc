@@ -49,6 +49,79 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, RejectsOperatorFunctionDefinitionsBeforeMutation) {
+  onnx_shapes::RegisterShapeFunctions();
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string name : {"Add", "Constant", "Cast", "Identity", "Attention"}) {
+      for (const std::string overload : {"", "custom"}) {
+        SCOPED_TRACE(domain + "/" + name + "/" + overload);
+        core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+        const ModelProto original = builder.ToModel();
+        FunctionProto function;
+        function.set_name(name);
+        function.set_domain(domain);
+        function.set_overload(overload);
+        EXPECT_THROW(builder.MakeLocalFunction(function), core::builder::BuilderError);
+        EXPECT_THROW(builder.MakeLocalFunction(name, domain), core::builder::BuilderError);
+        EXPECT_FALSE(builder.HasLocalFunction(name));
+        EXPECT_FALSE(builder.HasName(name));
+        EXPECT_TRUE(builder.ToModel().Equals(original));
+        ModelProto model = original;
+        model.add_function(function);
+        EXPECT_THROW(core::builder::GraphBuilder(model, SchemaLookup()),
+                     core::builder::BuilderError);
+        core::shapes::ShapesContext shapes;
+        EXPECT_THROW(shapes.SetLocalFunction(&function), std::invalid_argument);
+        EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                     std::invalid_argument);
+        EXPECT_TRUE(shapes.LocalFunctions().empty());
+      }
+    }
+  }
+}
+
+TEST(GraphBuilder, PreservesNonCollidingFunctionNamesAndOverloads) {
+  for (const std::string domain : {"", "local"}) {
+    for (const std::string overload : {"", "custom"}) {
+      FunctionProto function;
+      function.set_name(domain.empty() ? "LocalAdd" : "Add");
+      function.set_domain(domain);
+      function.set_overload(overload);
+      function.add_input("X");
+      function.add_output("Y");
+      function.add_opset("", 18);
+      function.add_node(MakeNode("Identity", {"X"}, {"Y"}));
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+      builder.MakeLocalFunction(function);
+      builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      builder.MakeNode(function.name(), {"X"}, {"Y"}, domain, "",
+                       utils::RepeatedProtoField<AttributeProto>(), overload);
+      builder.MakeOutput("Y");
+      const auto model = builder.ToModel();
+      EXPECT_NO_THROW(core::builder::GraphBuilder(model, SchemaLookup()));
+      EXPECT_NO_THROW(checker::check_model(model));
+      EXPECT_EQ(model.graph().node(0).overload().value(), overload);
+    }
+  }
+}
+
+TEST(GraphBuilder, RejectsOperatorNodeOverloadsBeforeMutation) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  const auto original = builder.ToModel();
+  EXPECT_THROW(builder.MakeNode("Identity", {"X"}, {"Y"}, "", "",
+                                utils::RepeatedProtoField<AttributeProto>(), "custom"),
+               core::builder::BuilderError);
+  EXPECT_FALSE(builder.HasName("Y"));
+  EXPECT_TRUE(builder.ToModel().Equals(original));
+  builder.MakeNode("Identity", {"X"}, {"Y"});
+  builder.MakeOutput("Y");
+  auto model = builder.ToModel();
+  model.mutable_graph()->mutable_node(0)->set_overload("custom");
+  EXPECT_THROW(core::builder::GraphBuilder(model, SchemaLookup()), core::builder::BuilderError);
+  EXPECT_THROW(checker::check_model(model), checker::ValidationError);
+}
+
 TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
   constexpr char domain[] = "function_memory_test";
   core::shapes::RegisterComputeShapeFn(
@@ -4053,7 +4126,7 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsteadOfNativeFallback) {
       seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
       ModelProto model = seed.ToModel();
       FunctionProto callee;
-      callee.set_name("Neg");
+      callee.set_name("LocalNeg");
       callee.set_domain(domain);
       callee.set_overload("custom");
       callee.add_input("a");
@@ -4069,7 +4142,8 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsteadOfNativeFallback) {
       wrapper.set_overload("");
       wrapper.add_opset("local", 1);
       wrapper.ref_node().clear();
-      NodeProto call = MakeNode("Neg", {"a"}, {"r"}, domain == "ai.onnx" ? "" : domain.c_str());
+      NodeProto call =
+          MakeNode("LocalNeg", {"a"}, {"r"}, domain == "ai.onnx" ? "" : domain.c_str());
       call.set_overload("custom");
       wrapper.add_node(call);
       FunctionProto other_overload = callee;
@@ -4087,7 +4161,7 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsteadOfNativeFallback) {
           FAIL() << "Expected an explicit forward-call error";
         } catch (const core::builder::BuilderError &error) {
           EXPECT_NE(std::string(error.what()).find("not yet imported"), std::string::npos);
-          EXPECT_NE(std::string(error.what()).find("Neg"), std::string::npos);
+          EXPECT_NE(std::string(error.what()).find("LocalNeg"), std::string::npos);
           EXPECT_NE(std::string(error.what()).find("custom"), std::string::npos);
         }
       }
@@ -4095,7 +4169,7 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsteadOfNativeFallback) {
   }
 }
 
-TEST(GraphBuilder, ForwardLocalFunctionCheckUsesCompleteIdentity) {
+TEST(GraphBuilder, RejectsUnresolvedFunctionIdentitiesWithoutFalseForwardErrors) {
   for (const int different_field : {0, 1, 2}) {
     SCOPED_TRACE(different_field);
     core::builder::GraphBuilder seed("g", SchemaLookup(), {{"", 18}, {"local", 1}});
@@ -4107,20 +4181,25 @@ TEST(GraphBuilder, ForwardLocalFunctionCheckUsesCompleteIdentity) {
     wrapper.add_input("a");
     wrapper.add_output("r");
     wrapper.add_opset("", 18);
-    NodeProto call = MakeNode("Neg", {"a"}, {"r"});
+    NodeProto call = MakeNode("LocalNeg", {"a"}, {"r"});
     call.set_overload("custom");
     wrapper.add_node(call);
     model.add_function(wrapper);
     FunctionProto callee = wrapper;
     callee.set_domain(different_field == 0 ? "local" : "");
-    callee.set_name(different_field == 1 ? "Abs" : "Neg");
+    callee.set_name(different_field == 1 ? "LocalAbs" : "LocalNeg");
     callee.set_overload(different_field == 2 ? "other" : "custom");
     callee.ref_node().clear();
     callee.add_node(MakeNode("Identity", {"a"}, {"r"}));
     model.add_function(callee);
     model.mutable_graph()->add_node(MakeNode("Wrapper", {"X"}, {"Y"}, "local"));
-    core::builder::GraphBuilder imported(model, SchemaLookup());
-    EXPECT_EQ(imported.GetShape("Y").Shape(), MakeShape({2, 3}));
+    try {
+      core::builder::GraphBuilder imported(model, SchemaLookup());
+      FAIL() << "Expected an unsupported operator for the unresolved function identity";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("unsupported op_type 'LocalNeg'"),
+                std::string::npos);
+    }
   }
 }
 
@@ -4137,7 +4216,7 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsideNestedGraphAttributes) {
     wrapper.add_input("condition");
     wrapper.add_output("r");
     wrapper.add_opset("", 18);
-    NodeProto call = MakeNode("Neg", {"a"}, {"r"});
+    NodeProto call = MakeNode("LocalNeg", {"a"}, {"r"});
     call.set_overload("custom");
     for (int depth = 0; depth < 2; ++depth) {
       AttributeProto attribute;
@@ -4164,7 +4243,7 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsideNestedGraphAttributes) {
     wrapper.add_node(call);
     model.add_function(wrapper);
     FunctionProto callee = wrapper;
-    callee.set_name("Neg");
+    callee.set_name("LocalNeg");
     callee.set_domain("");
     callee.set_overload("custom");
     callee.ref_input().clear();
@@ -4205,14 +4284,14 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsideDefaultGraphAttributes) {
     attribute.set_type(repeated_graphs ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
     GraphProto *graph = repeated_graphs ? attribute.add_graphs() : attribute.mutable_g();
     graph->set_name("default_body");
-    NodeProto call = MakeNode("Neg", {"a"}, {"branch_result"});
+    NodeProto call = MakeNode("LocalNeg", {"a"}, {"branch_result"});
     call.set_overload("custom");
     graph->add_node(call);
     graph->add_output()->set_name("branch_result");
     wrapper.add_attribute_proto(attribute);
     model.add_function(wrapper);
     FunctionProto callee = wrapper;
-    callee.set_name("Neg");
+    callee.set_name("LocalNeg");
     callee.set_domain("");
     callee.set_overload("custom");
     callee.ref_attribute_proto().clear();

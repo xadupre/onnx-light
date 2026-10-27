@@ -158,9 +158,6 @@ public:
   /// The optimization driver caches this value once per optimization.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
-  /// Returns whether matching explicitly supports this model-local function call.
-  virtual bool SupportsLocalFunctions(const NodeProto &) const { return false; }
-
   /**
    * Returns whether Match may run concurrently on worker threads.
    *

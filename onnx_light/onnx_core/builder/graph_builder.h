@@ -606,7 +606,8 @@ public:
   /// local functions are emitted into the produced :cpp:class:`ModelProto`.
   /// Calls through :cpp:func:`MakeNode` infer their outputs natively, including
   /// nested calls, from owned snapshots of the current function definitions.
-  /// Throws when ``name`` is already used.
+  /// Throws when ``name`` is already used or the normalized domain/name
+  /// identifies a registered operator, regardless of overload.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
   /// Creates a local function with an independent set of opset imports.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain,
@@ -803,6 +804,8 @@ private:
   // validation is a map lookup rather than a linear scan on every call.
   const std::vector<LightOpSchema> &DomainSchemas(const std::string &op_type,
                                                   const std::string &normalised_domain);
+
+  void ValidateLocalFunctionName(const std::string &name, const std::string &domain);
 
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;

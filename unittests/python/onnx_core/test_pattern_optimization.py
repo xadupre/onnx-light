@@ -74,8 +74,14 @@ class NegNegPattern(optim.PatternOptimization):
         return {"Neg"}
 
     def match(self, graph, node):
+        if node.domain not in ("", "ai.onnx", "onnx.ai"):
+            return self.no_match(node, "the candidate is not a primitive Neg")
         previous = graph.node_before(node.input[0])
-        if previous is None or previous.op_type != "Neg":
+        if (
+            previous is None
+            or previous.op_type != "Neg"
+            or previous.domain not in ("", "ai.onnx", "onnx.ai")
+        ):
             return self.no_match(node, "the input is not produced by Neg")
         return self.result([previous, node], insert_at=node)
 
@@ -369,10 +375,21 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(actual.ctypes.data, pointer)
         self.assertEqualArray(actual, values)
 
-    def test_python_pattern_explicitly_supports_local_function_calls(self):
+    def test_python_pattern_resolves_local_function_calls(self):
         class LocalNegNegPattern(NegNegPattern):
-            def supports_local_functions(self, node):
-                return node.domain == "local"
+            def match(self, graph, node):
+                if node.domain != "local" or node.op_type != "Neg" or node.overload:
+                    return self.no_match(node, "the candidate is not the local Neg function")
+                previous = graph.node_before(node.input[0])
+                if previous is None:
+                    return self.no_match(node, "the input is not produced by a local call")
+                if (
+                    previous.domain != node.domain
+                    or previous.op_type != node.op_type
+                    or previous.overload != node.overload
+                ):
+                    return self.no_match(node, "the function identities differ")
+                return self.result([previous, node], insert_at=node)
 
         model = _double_neg_model()
         model.opset_import.append(oh.make_opsetid("local", 1))
@@ -404,9 +421,78 @@ class TestPatternOptimization(ExtTestCase):
         model.functions[0].node[0].op_type = "Identity"
         for node in model.graph.node:
             node.domain = ""
+        with self.assertRaisesRegex(ValueError, "cannot redefine a registered operator"):
+            optim.GraphBuilder(model)
+
+    def test_rejects_operator_function_definitions(self):
+        for domain in ("", "ai.onnx", "onnx.ai"):
+            for name in ("Neg", "Constant", "Identity"):
+                for overload in ("", "custom"):
+                    with self.subTest(domain=domain, name=name, overload=overload):
+                        model = _double_neg_model()
+                        function = oh.make_function(
+                            domain,
+                            name,
+                            ["X"],
+                            ["Y"],
+                            [oh.make_node("Abs", ["X"], ["Y"])],
+                            [oh.make_opsetid("", 18)],
+                        )
+                        function.overload = overload
+                        model.functions.append(function)
+                        with self.assertRaisesRegex(
+                            ValueError, "cannot redefine a registered operator"
+                        ):
+                            optim.GraphBuilder(model)
+
+    def test_unresolved_constant_producer_protects_function_body_matches(self):
+        producer = oh.make_node("Constant", [], ["constant"])
+        attribute = onnx.AttributeProto()
+        attribute.name = "value"
+        attribute.type = onnx.AttributeProto.TENSOR
+        attribute.ref_attr_name = "value"
+        producer.attribute.append(attribute)
+        function = oh.make_function(
+            "local",
+            "Parameterized",
+            [],
+            ["Y"],
+            [
+                producer,
+                oh.make_node("Neg", ["constant"], ["middle"]),
+                oh.make_node("Neg", ["middle"], ["Y"]),
+            ],
+            [oh.make_opsetid("", 18)],
+            attributes=["value"],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "Parameterized",
+                        [],
+                        ["y"],
+                        domain="local",
+                        value=onh.from_array(numpy.array([1, 2], dtype=numpy.float32)),
+                    )
+                ],
+                "g",
+                [],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            functions=[function],
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("local", 1)],
+        )
         builder = optim.GraphBuilder(model)
-        optim.GraphGraph(builder, [LocalNegNegPattern()]).optimize()
-        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Neg", "Neg"])
+        folding = ConstantFoldingOptions()
+        folding.enabled = False
+        rewrites = optim.GraphGraph(builder, [NegNegPattern()]).optimize(folding_options=folding)
+        self.assertEqual(len(rewrites.rewrites), 0)
+        self.assertEqual(len(rewrites.added_functions), 0)
+        optimized = builder.to_onnx()
+        self.assertEqual(
+            [node.op_type for node in optimized.functions[0].node], ["Constant", "Neg", "Neg"]
+        )
 
     def test_stale_batched_match_is_revalidated_before_apply(self):
         class OneShotNegNegPattern(NegNegPattern):

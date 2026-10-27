@@ -1786,23 +1786,17 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   }
 
   std::size_t priority_index = 0;
-  const auto is_function_call = [&](const NodeProto &node) {
-    return builder_.Shapes().HasLocalFunction(
-        ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
-  };
   const auto unsafe_match = [&](const MatchResult &match) {
     for (const NodeProto *node : match.nodes) {
       if (node == nullptr)
         continue;
-      if ((is_function_call(*node) && !match.pattern->SupportsLocalFunctions(*node)) ||
-          HasUnresolvedAttributeReferences(*node))
+      if (HasUnresolvedAttributeReferences(*node))
         return true;
       for (const auto &input : node->input()) {
         const NodeProto *producer = NodeBefore(input);
         if (producer != nullptr && producer->op_type() == "Constant" &&
             RewriteDomain(producer->domain()) == "ai.onnx" &&
-            (HasUnresolvedAttributeReferences(*producer) ||
-             (is_function_call(*producer) && !match.pattern->SupportsLocalFunctions(*producer))))
+            HasUnresolvedAttributeReferences(*producer))
           return true;
       }
     }
@@ -1819,12 +1813,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       matching_start = std::chrono::steady_clock::now();
     }
-    std::unordered_set<const NodeProto *> function_calls;
-    if (!builder_.Shapes().LocalFunctions().empty())
-      for (const auto &node : builder_.nodes_)
-        if (is_function_call(node))
-          function_calls.insert(&node);
-
     for (std::size_t pattern_index = 0; pattern_index < patterns_.size(); ++pattern_index) {
       const std::shared_ptr<PatternOptimization> &pattern = patterns_[pattern_index];
       if (pattern->priority > current_priority) {
@@ -1855,7 +1843,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         if (unsafe_match(match)) {
           if (report != nullptr) {
             RecordNoMatch(report->patterns[pattern_index], {}, 0,
-                          "The match depends on local-function calls or unresolved attributes.");
+                          "The match depends on unresolved function attributes.");
           }
           return;
         }
@@ -1905,7 +1893,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
             continue;
           }
-          if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
+          if (HasUnresolvedAttributeReferences(candidate))
             continue;
           candidates.push_back(&candidate);
         }
@@ -1950,7 +1938,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
               fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
             continue;
           }
-          if (function_calls.count(&candidate) != 0 && !pattern->SupportsLocalFunctions(candidate))
+          if (HasUnresolvedAttributeReferences(candidate))
             continue;
           const auto match_start = std::chrono::steady_clock::now();
           MatchResult match = pattern->Match(*this, candidate);
@@ -3497,12 +3485,15 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
     return init->second;
   }
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && node->domain().value().empty() && node->op_type().value() == "Constant") {
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
+      RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     const AttributeProto *value = FindAttribute(*node, "value");
     if (value != nullptr && value->has_t()) {
       return &value->t();
     }
   }
+  if (node != nullptr)
+    return nullptr;
   return parent_graph_ == nullptr || !parent_graph_->IsVisibleBefore(name, parent_position_limit_)
              ? nullptr
              : parent_graph_->GetComputedConstant(name);
@@ -3512,7 +3503,8 @@ const GraphGraph *GraphGraph::GetConstantScope(const std::string &name) const {
   if (computed_constants_.count(name) != 0 || initializers_.count(name) != 0)
     return this;
   if (const auto *node = NodeBefore(name)) {
-    if (!node->domain().value().empty() || node->op_type() != "Constant")
+    if (HasUnresolvedAttributeReferences(*node) || RewriteDomain(node->domain()) != "ai.onnx" ||
+        node->op_type() != "Constant")
       return nullptr;
     const auto *value = FindAttribute(*node, "value");
     return value != nullptr && value->has_t() ? this : nullptr;
@@ -3544,7 +3536,8 @@ bool GraphGraph::ConstantShape(const std::string &name, std::vector<int64_t> &di
   }
   // A ``Constant`` node using ``value_int`` / ``value_float`` is a scalar.
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && node->domain().value().empty() && node->op_type().value() == "Constant") {
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
+      RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     if (FindAttribute(*node, "value_int") != nullptr ||
         FindAttribute(*node, "value_float") != nullptr) {
       dims.clear();
@@ -3560,7 +3553,8 @@ bool GraphGraph::ConstantScalarValue(const std::string &name, double &out) const
     return ReadScalarAsDouble(*tensor, out);
   }
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && node->domain().value().empty() && node->op_type().value() == "Constant") {
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
+      RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     const AttributeProto *value_int = FindAttribute(*node, "value_int");
     if (value_int != nullptr && value_int->has_i()) {
       out = static_cast<double>(value_int->i());

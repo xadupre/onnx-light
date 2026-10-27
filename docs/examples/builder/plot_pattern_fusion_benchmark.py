@@ -145,11 +145,17 @@ class ChainFusionPattern(PatternOptimization):
 
     def match(self, graph, node):
         """Matches the chain and requires exclusive intermediate values."""
+        if node.domain not in ("", "ai.onnx"):
+            return self.no_match(node, "the candidate is not in the default ONNX domain")
         matched = [node]
         current = node
         for op_type in reversed(self.op_types[:-1]):
             previous = graph.node_before(current.input[0])
-            if previous is None or previous.op_type != op_type:
+            if (
+                previous is None
+                or previous.op_type != op_type
+                or previous.domain not in ("", "ai.onnx")
+            ):
                 return self.no_match(node, f"the chain does not contain {op_type}")
             if len(graph.next_nodes(previous.output[0])) != 1:
                 return self.no_match(node, f"the {op_type} output has multiple consumers")

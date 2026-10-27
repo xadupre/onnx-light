@@ -121,7 +121,6 @@ class RotaryEmbeddingPattern final : public core::builder::PatternOptimization {
 public:
   explicit RotaryEmbeddingPattern(int priority = 1)
       : PatternOptimization(priority, "RotaryEmbedding") {}
-  bool SupportsLocalFunctions(const NodeProto &node) const override;
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
@@ -1327,7 +1326,6 @@ class FunctionAttentionGQAPattern final : public core::builder::PatternOptimizat
 public:
   explicit FunctionAttentionGQAPattern(int priority = 1)
       : PatternOptimization(priority, "FunctionAttentionGQA") {}
-  bool SupportsLocalFunctions(const NodeProto &node) const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
   utils::RepeatedProtoField<NodeProto>
@@ -1470,7 +1468,6 @@ public:
 class AttentionGQAPattern final : public core::builder::PatternOptimization {
 public:
   explicit AttentionGQAPattern(int priority = 2) : PatternOptimization(priority, "AttentionGQA") {}
-  bool SupportsLocalFunctions(const NodeProto &node) const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
   utils::RepeatedProtoField<NodeProto>

@@ -1707,6 +1707,63 @@ TEST(CHECKER_COVERAGE, ModelMinimalValidAccepted) {
   EXPECT_NO_THROW(checker::check_model(m));
 }
 
+TEST(CHECKER_COVERAGE, RejectsOperatorFunctionDefinitionsRegardlessOfOverloadOrUse) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string name : {"Add", "Attention"}) {
+      for (const std::string overload : {"", "custom"}) {
+        for (const int ir : {7, static_cast<int>(IR_VERSION)}) {
+          SCOPED_TRACE(domain + "/" + name + "/" + overload + "/" + std::to_string(ir));
+          ModelProto model;
+          model.set_ir_version(ir);
+          model.add_opset("", 18);
+          model.mutable_graph()->set_name("unused_function");
+          auto *function = model.add_functions();
+          function->set_domain(domain);
+          function->set_name(name);
+          function->set_overload(overload);
+          function->add_opset("", 18);
+          EXPECT_NO_THROW(checker::check_function(*function, MakeCtx(ir), LexicalScopeContext{}));
+          EXPECT_THROW(checker::check_model(model), ValidationError);
+        }
+      }
+    }
+  }
+}
+
+TEST(CHECKER_COVERAGE, AcceptsNonCollidingFunctionsAndRejectsOverloadedOperators) {
+  for (const std::string domain : {"", "local"}) {
+    for (const std::string overload : {"", "custom"}) {
+      ModelProto model;
+      model.set_ir_version(IR_VERSION);
+      model.add_opset("", 18);
+      model.add_opset("local", 1);
+      model.mutable_graph()->set_name("functions");
+      auto *function = model.add_functions();
+      function->set_domain(domain);
+      function->set_name(domain.empty() ? "LocalAdd" : "Add");
+      function->set_overload(overload);
+      function->add_opset("", 18);
+      EXPECT_NO_THROW(checker::check_function(*function, MakeCtx(), LexicalScopeContext{}));
+      EXPECT_NO_THROW(checker::check_model(model));
+    }
+  }
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string import_domain : {"", "ai.onnx", "onnx.ai"}) {
+      SCOPED_TRACE(domain + "/" + import_domain);
+      auto context = MakeCtx();
+      context.set_opset_imports({{import_domain, 18}});
+      NodeProto node;
+      node.set_domain(domain);
+      node.set_op_type("Identity");
+      node.add_input("X");
+      node.add_output("Y");
+      EXPECT_NO_THROW(checker::check_node(node, context, LexicalScopeContext{}));
+      node.set_overload("custom");
+      EXPECT_THROW(checker::check_node(node, context, LexicalScopeContext{}), ValidationError);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // check_is_experimental_op
 // ---------------------------------------------------------------------------

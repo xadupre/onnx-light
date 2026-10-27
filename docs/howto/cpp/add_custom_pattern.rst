@@ -54,8 +54,11 @@ The running example collapses two consecutive ``Neg`` nodes into an
 
       builder::MatchResult Match(builder::GraphGraph &graph,
                                  const NodeProto &candidate) const override {
+        if (!candidate.domain().empty() && candidate.domain() != "ai.onnx")
+          return NoMatch(candidate, "the candidate is not in the default ONNX domain");
         const NodeProto *previous = graph.NodeBefore(candidate.input()[0].value());
-        if (previous == nullptr || previous->op_type().value() != "Neg") {
+        if (previous == nullptr || (!previous->domain().empty() && previous->domain() != "ai.onnx") ||
+            previous->op_type().value() != "Neg") {
           return NoMatch(candidate, "the input is not produced by Neg");
         }
         return builder::MatchResult{this, {previous, &candidate}, &candidate};
@@ -73,6 +76,11 @@ The running example collapses two consecutive ``Neg`` nodes into an
 ``NoMatch(candidate, reason)`` captures the call site (file and line)
 automatically through ``std::source_location``, so no explicit location
 needs to be passed.
+
+Primitive matchers check the domain and operator type of every interpreted node.
+Model verification and builder registration reject local functions that reuse a
+registered operator's domain and name, even with a different ``overload``.
+Patterns construct ``MatchResult`` directly; no function-support hook is needed.
 
 Select the pattern for one optimizer
 ------------------------------------

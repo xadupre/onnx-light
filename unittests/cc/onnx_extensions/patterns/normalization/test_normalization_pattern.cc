@@ -10,6 +10,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -197,6 +198,50 @@ TEST(LayerNormalizationPattern, PreservesFunctionEpsilonAttributeReferences) {
   EXPECT_TRUE(plan.added_functions().empty());
   for (const auto &node : function.Nodes())
     EXPECT_NE(node.op_type(), "LayerNormalization");
+}
+
+TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionRegistration) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 23}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddAxes(builder, "axes", {-1});
+  AddFloatInitializer(builder, "two", {1}, {2.0F});
+  builder.MakeNode("Constant", {}, {"epsilon"}, "", "", Attributes({}, {{"value_float", 1e-5F}}));
+  builder.MakeNode("ReduceMean", {"x", "axes"}, {"mean"}, "", "", Attributes({{"keepdims", 1}}));
+  builder.MakeNode("Sub", {"x", "mean"}, {"centered"});
+  builder.MakeNode("Pow", {"centered", "two"}, {"squared"});
+  builder.MakeNode("ReduceMean", {"squared", "axes"}, {"variance"});
+  builder.MakeNode("Add", {"variance", "epsilon"}, {"variance_epsilon"});
+  builder.MakeNode("Sqrt", {"variance_epsilon"}, {"standard_deviation"});
+  builder.MakeNode("Div", {"centered", "standard_deviation"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::LayerNormalizationPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[4]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  for (const std::string overload : {"", "custom"}) {
+    SCOPED_TRACE(overload);
+    for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+      SCOPED_TRACE(domain);
+      FunctionProto function;
+      function.set_name("Constant");
+      function.set_domain(domain);
+      function.set_overload(overload);
+      function.add_attribute("value_float");
+      function.add_output("result");
+      function.add_opset("", 23);
+      NodeProto epsilon = MakeNode("RandomUniform", {}, {"result"});
+      AddAttribute<std::vector<int64_t>>(epsilon, "shape", {});
+      AddAttribute<float>(epsilon, "low", 2.0F);
+      AddAttribute<float>(epsilon, "high", 3.0F);
+      function.ref_node().push_back(std::move(epsilon));
+      EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                   std::invalid_argument);
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, &pattern);
+    }
+  }
 }
 
 TEST(LayerNormalizationPattern, RejectsImplicitMeanKeepdims) {
@@ -558,10 +603,10 @@ TEST(CastLayerNormalizationCastPattern, HandlesDefaultDomainAliases) {
             function.add_opset("", 23);
             function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
             auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-            shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
-            EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
-            EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
-            shapes.ClearLocalFunctions();
+            EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                         std::invalid_argument);
+            EXPECT_TRUE(shapes.LocalFunctions().empty());
+            EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, &pattern);
           }
         }
       }
@@ -599,8 +644,12 @@ TEST(CastLayerNormalizationCastPattern, RejectsScalarConstantFunctionsAndOverloa
         SCOPED_TRACE("overload=" + overload);
         nodes[0].set_overload(overload);
         if (!overload.empty()) {
-          EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, nullptr);
+          const auto rejected = pattern.Match(graph, builder.Nodes()[2]);
+          EXPECT_EQ(rejected.pattern, nullptr);
           EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+          ASSERT_TRUE(rejected.no_match.has_value());
+          EXPECT_EQ(rejected.no_match->reason,
+                    "the scale constant has a nonstandard domain or overload");
         }
         for (const std::string function_domain : {"", "ai.onnx", "onnx.ai"}) {
           SCOPED_TRACE("function domain=" + function_domain);
@@ -616,14 +665,11 @@ TEST(CastLayerNormalizationCastPattern, RejectsScalarConstantFunctionsAndOverloa
           AddAttribute<float>(weights, "low", 2.0F);
           AddAttribute<float>(weights, "high", 3.0F);
           function.ref_node().push_back(std::move(weights));
-          shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
-          const auto rejected = pattern.Match(graph, builder.Nodes()[2]);
-          EXPECT_EQ(rejected.pattern, nullptr);
-          EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
-          ASSERT_TRUE(rejected.no_match.has_value());
-          EXPECT_EQ(rejected.no_match->reason,
-                    "the scale constant resolves to a local function or overload");
-          shapes.ClearLocalFunctions();
+          EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                       std::invalid_argument);
+          EXPECT_TRUE(shapes.LocalFunctions().empty());
+          EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern,
+                    overload.empty() ? &pattern : nullptr);
         }
       }
     }
@@ -786,7 +832,9 @@ TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
       function.add_opset("", 23);
       function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
       auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-      shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+      EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                   std::invalid_argument);
+      EXPECT_TRUE(shapes.LocalFunctions().empty());
     } else if (variant == "shared_output") {
       builder.MakeOutput("normalized");
     } else if (variant == "captured_output") {
@@ -798,10 +846,14 @@ TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
     }
     core::builder::GraphGraph graph(builder);
     onnx_patterns::CastLayerNormalizationCastPattern pattern;
-    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
-    EXPECT_THROW(
-        pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1], &builder.Nodes()[2]}),
-        core::builder::BuilderError);
+    if (variant == "local_normalization" || variant == "local_cast") {
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, &pattern);
+    } else {
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+      EXPECT_THROW(
+          pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1], &builder.Nodes()[2]}),
+          core::builder::BuilderError);
+    }
   }
 }
 

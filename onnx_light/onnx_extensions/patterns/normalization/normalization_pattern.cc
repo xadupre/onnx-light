@@ -228,16 +228,10 @@ bool CastTarget(const NodeProto &node, int64_t &target) {
   return true;
 }
 
-bool IsStandardPrimitive(const core::builder::GraphGraph &graph, const NodeProto &node) {
-  return NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.overload().empty() &&
-         !graph.Builder().Shapes().HasLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
-             node.domain(), node.op_type(), node.overload()));
-}
-
 const NodeProto *Float16Promotion(core::builder::GraphGraph &graph, const std::string &name) {
   const NodeProto *cast = graph.NodeBefore(name);
   int64_t target = 0;
-  if (cast == nullptr || !IsDefaultOp(*cast, "Cast") || !IsStandardPrimitive(graph, *cast) ||
+  if (cast == nullptr || !IsDefaultOp(*cast, "Cast") || !cast->overload().empty() ||
       cast->input_size() != 1 || cast->output_size() != 1 || !CastTarget(*cast, target) ||
       target != static_cast<int64_t>(TensorProto::DataType::FLOAT) ||
       !FindAttribute(*cast, "to")->ref_attr_name().empty() ||
@@ -736,8 +730,8 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
       !IsDefaultOp(candidate, "RMSNormalization")) {
     return NoMatch(candidate, "candidate is not a supported normalization operator");
   }
-  if (!IsStandardPrimitive(graph, candidate)) {
-    return NoMatch(candidate, "normalization resolves to a local function or overload");
+  if (!candidate.overload().empty()) {
+    return NoMatch(candidate, "normalization has a function overload");
   }
   const int opset = graph.Builder().OpsetVersion("");
   if (opset < (op_type == "LayerNormalization" ? 17 : 23)) {
@@ -786,8 +780,9 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
     scope = &graph;
   }
   const NodeProto *producer = scope->NodeBefore(constant_name);
-  if (producer != nullptr && !IsStandardPrimitive(*scope, *producer)) {
-    return NoMatch(candidate, "the scale constant resolves to a local function or overload");
+  if (producer != nullptr && (NormaliseDomain(producer->domain()) != kDefaultOnnxDomain ||
+                              !producer->overload().empty())) {
+    return NoMatch(candidate, "the scale constant has a nonstandard domain or overload");
   }
   if (!ReadConstantValues(graph, constant_name, scale) || !AllEqual(scale, 1.0)) {
     return NoMatch(candidate, "only a constant unit scale preserves intermediate rounding");
@@ -800,7 +795,7 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   }
   const NodeProto *cast_after = cast_after_nodes[0];
   int64_t cast_after_target = 0;
-  if (!IsDefaultOp(*cast_after, "Cast") || !IsStandardPrimitive(graph, *cast_after) ||
+  if (!IsDefaultOp(*cast_after, "Cast") || !cast_after->overload().empty() ||
       cast_after->input_size() != 1 || cast_after->output_size() != 1 ||
       !CastTarget(*cast_after, cast_after_target) ||
       !FindAttribute(*cast_after, "to")->ref_attr_name().empty()) {

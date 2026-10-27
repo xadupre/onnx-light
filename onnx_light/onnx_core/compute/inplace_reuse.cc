@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "onnx_core/compute/compute_context.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::compute {
@@ -73,8 +74,23 @@ std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
   if (!shape.IsFullyKnown()) {
     return std::nullopt;
   }
-  const int64_t num_elements = shape.NumElements();
-  return (num_elements * bits + 7) / 8;
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    EXT_ENFORCE_INVALID(shape[i].AsInt() >= 0, "Negative tensor allocation dimension.");
+  }
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    if (shape[i].AsInt() == 0)
+      return 0;
+  }
+  int64_t num_elements = 1;
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    num_elements = shapes::CheckedDimensionMultiply(num_elements, shape[i].AsInt());
+  }
+  if (bits % 8 == 0)
+    return shapes::CheckedDimensionMultiply(num_elements, bits / 8);
+  const int64_t complete_bytes = shapes::CheckedDimensionMultiply(num_elements / 8, bits);
+  const int64_t remaining_bits = shapes::CheckedDimensionMultiply(num_elements % 8, bits);
+  const int64_t remaining_bytes = remaining_bits / 8 + (remaining_bits % 8 != 0);
+  return shapes::CheckedDimensionAdd(complete_bytes, remaining_bytes);
 }
 
 std::optional<expressions::DimType>
@@ -86,16 +102,28 @@ ByteSizeExpr(const SymTensor &t, expressions::SimplifiedExpressionCache *cache =
   if (bits == 0) {
     return std::nullopt;
   }
-  expressions::DimType num_elements = int64_t{1};
+  if (t.Shape().IsFullyKnown())
+    return expressions::DimType{*ConcreteByteSize(t)};
   std::size_t symbolic_size = 0;
+  bool empty = false;
   for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
     const auto &dim = t.Shape()[i];
+    EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0, "Negative tensor allocation dimension.");
+    empty |= dim.IsInt() && dim.AsInt() == 0;
     if (!dim.IsInt()) {
+      if (dim.AsExpr().empty() || dim.AsExpr().find('?') != std::string::npos)
+        return std::nullopt;
       if (dim.AsExpr().size() > kMaxSymbolicSize - symbolic_size) {
         return std::nullopt;
       }
       symbolic_size += dim.AsExpr().size();
     }
+  }
+  if (empty)
+    return expressions::DimType{int64_t{0}};
+  expressions::DimType num_elements = int64_t{1};
+  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
+    const auto &dim = t.Shape()[i];
     num_elements = expressions::dim_mul(num_elements, ToDimType(dim), cache);
   }
   if (bits % 8 == 0) {

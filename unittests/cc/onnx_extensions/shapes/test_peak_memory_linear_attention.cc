@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -44,6 +45,28 @@ TEST(ComputePeakMemoryLinearAttention, PastStateReturnsExactStateBytes) {
   EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
                                                                       inputs),
             2 * 8 * 8 * 4 * 4);
+}
+
+TEST(ComputePeakMemoryLinearAttention, RejectsOverflowWithAndWithoutPastState) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  const int64_t large = int64_t{1} << 31;
+  std::vector<core::symbolic::SymShape> inputs = {Rank3(1, 1, large), Rank3(1, 1, large),
+                                                  Rank3(1, 1, large)};
+  EXPECT_THROW(
+      core::shapes::ComputePeakMemory("", "LinearAttention", core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
+  inputs.push_back(core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(1),
+                                            core::symbolic::SymDim(large),
+                                            core::symbolic::SymDim(large)});
+  EXPECT_THROW(
+      core::shapes::ComputePeakMemory("", "LinearAttention", core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
+  inputs[3] =
+      core::symbolic::SymShape{core::symbolic::SymDim(large), core::symbolic::SymDim(large),
+                               core::symbolic::SymDim(large), core::symbolic::SymDim(int64_t{0})};
+  EXPECT_EQ(
+      core::shapes::ComputePeakMemory("", "LinearAttention", core::symbolic::Device::kCPU, inputs),
+      0);
 }
 
 TEST(ComputePeakMemoryLinearAttention, IncompleteOrSymbolicInputsReturnZero) {

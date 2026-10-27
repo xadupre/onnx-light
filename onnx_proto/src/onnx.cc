@@ -3419,6 +3419,58 @@ public:
   }
 };
 
+class LayoutTensorVisitor {
+public:
+  explicit LayoutTensorVisitor(std::vector<utils::detail::LayoutTensor> &tensors, GraphProto *graph)
+      : tensors_(tensors), graph_(graph) {}
+
+  template <typename T> bool operator()(const char *, bool, bool present, const T &, T &value) {
+    if (present)
+      Visit(value);
+    return true;
+  }
+
+  template <typename T> void Visit(T &value) {
+    if constexpr (std::is_same_v<T, TensorProto>) {
+      tensors_.push_back({&value, graph_, embedded_only_});
+    } else if constexpr (std::is_same_v<T, StructTypeProto>) {
+      const bool parent = embedded_only_;
+      embedded_only_ = true;
+      VisitProtoFields(value, value, *this);
+      embedded_only_ = parent;
+    } else if constexpr (std::is_same_v<T, GraphProto> || std::is_same_v<T, FunctionProto>) {
+      GraphProto *parent = graph_;
+      if constexpr (std::is_same_v<T, GraphProto>)
+        graph_ = &value;
+      else
+        graph_ = nullptr;
+      VisitProtoFields(value, value, *this);
+      graph_ = parent;
+    } else if constexpr (requires { T::proto_id; }) {
+      VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      if (value.has_value())
+        Visit(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (auto &entry : value)
+        Visit(entry.second);
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (auto &element : value)
+          Visit(element);
+    }
+  }
+
+private:
+  std::vector<utils::detail::LayoutTensor> &tensors_;
+  GraphProto *graph_;
+  bool embedded_only_ = false;
+};
+
 class ParseScopeCallbackVisitor {
 public:
   explicit ParseScopeCallbackVisitor(const ParseOptions &options) : options_(options) {}
@@ -3536,6 +3588,28 @@ int64_t AttributeContentHash(const AttributeProto &attribute) {
 
 void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options) {
   ParseScopeCallbackVisitor(options).Visit(model);
+}
+
+void utils::detail::CollectLayoutTensors(void *source, uint16_t proto_id,
+                                         std::vector<LayoutTensor> &tensors, GraphProto *graph) {
+  ValidateDeferredSubmessageExport(source, proto_id);
+  LayoutTensorVisitor visitor(tensors, graph);
+  switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
+  case onnx_light::proto_serialization_detail::ProtoId::TypeProto:
+    visitor.Visit(*static_cast<TypeProto *>(source));
+    break;
+  case onnx_light::proto_serialization_detail::ProtoId::StructTypeProto:
+    visitor.Visit(*static_cast<StructTypeProto *>(source));
+    break;
+  case onnx_light::proto_serialization_detail::ProtoId::ValueInfoProto:
+    visitor.Visit(*static_cast<ValueInfoProto *>(source));
+    break;
+  case onnx_light::proto_serialization_detail::ProtoId::ExtendedInitializerProto:
+    visitor.Visit(*static_cast<ExtendedInitializerProto *>(source));
+    break;
+  default:
+    EXT_THROW("Unsupported proto type for layout tensor traversal: ", proto_id, ".");
+  }
 }
 
 void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id) {

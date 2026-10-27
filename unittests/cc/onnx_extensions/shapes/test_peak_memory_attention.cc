@@ -8,6 +8,8 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -35,6 +37,38 @@ TEST(ComputePeakMemoryAttention, StaticRank4ReturnsScoreBufferBytes) {
   EXPECT_EQ(
       onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
       expected);
+}
+
+TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  const int64_t large = int64_t{1} << 31;
+  std::vector<core::symbolic::SymShape> inputs = {Rank4(1, 1, large, 1), Rank4(1, 1, large, 1),
+                                                  Rank4(1, 1, large, 1)};
+  EXPECT_THROW(
+      core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
+  inputs[0] = Rank4(large, large, large, 1);
+  inputs[1] = Rank4(large, large, 0, 1);
+  EXPECT_EQ(core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
+            0);
+}
+
+TEST(ComputePeakMemoryAttention, NamesNegativeDimensionsEvenWithZeroFactors) {
+  const char *names[] = {"batch", "q_num_heads", "q_seq_len", "kv_seq_len"};
+  for (int i = 0; i < 4; ++i) {
+    SCOPED_TRACE(names[i]);
+    const std::vector<core::symbolic::SymShape> inputs = {
+        Rank4(i == 0 ? -7 : 0, i == 1 ? -7 : 1, i == 2 ? -7 : 1, 1),
+        Rank4(1, 1, i == 3 ? -7 : 0, 1),
+    };
+    try {
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs);
+      FAIL() << "A zero factor hid a negative Attention scratch dimension.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find(std::string("'") + names[i] + "': -7."),
+                std::string::npos);
+    }
+  }
 }
 
 // A symbolic contributing dimension yields no concrete estimate.

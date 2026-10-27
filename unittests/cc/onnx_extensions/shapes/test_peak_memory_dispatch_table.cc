@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,25 @@ TEST(CoreShapesPeakMemory, EmptyDomainNormalisedToOnnxDomain) {
   EXPECT_EQ(core::shapes::ComputePeakMemory("", "PeakMemoryEmptyDomainOp",
                                             core::shapes::Device::kCPU, input_shapes),
             123);
+}
+
+TEST(CoreShapesPeakMemory, NegativeEstimateOmitsEmptyDomainPrefix) {
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", "PeakMemoryNegativeEstimateOp", core::shapes::Device::kCPU,
+      [](core::shapes::Device, const std::vector<core::shapes::SymShape> &) -> int64_t {
+        return -1;
+      });
+
+  const std::vector<core::shapes::SymShape> input_shapes;
+  try {
+    core::shapes::ComputePeakMemory("", "PeakMemoryNegativeEstimateOp", core::shapes::Device::kCPU,
+                                    input_shapes);
+    FAIL() << "Expected a negative estimate to be rejected.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what())
+                  .find("Negative peak-memory estimate for PeakMemoryNegativeEstimateOp."),
+              std::string::npos);
+  }
 }
 
 // The device is part of a peak-memory function's identifier: a function

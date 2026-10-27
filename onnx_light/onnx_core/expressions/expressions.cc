@@ -4,6 +4,8 @@
 // Ported from yobx/xexpressions (https://github.com/xadupre/yet-another-onnx-builder).
 
 #include "expressions.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_lib/common/safe_math.h"
 
 #include <algorithm>
 #include <cassert>
@@ -45,6 +47,18 @@ struct Token {
 };
 
 namespace {
+
+int64_t checked_subtract_i64(int64_t a, int64_t b) {
+  int64_t result = 0;
+  EXT_ENFORCE_INVALID(!checked_sub_overflow(a, b, &result),
+                      "Integer overflow while subtracting expression values ", a, " and ", b, ".");
+  return result;
+}
+
+uint64_t unsigned_magnitude(int64_t value) {
+  const auto magnitude = static_cast<uint64_t>(value);
+  return value < 0 ? uint64_t{0} - magnitude : magnitude;
+}
 
 bool TryParseInt64Literal(const std::string &text, int64_t &value) {
   const char *begin = text.data();
@@ -585,7 +599,7 @@ public:
       NodePtr ndiv = std::move(n->args[1]);
       NodePtr n_minus_1;
       if (const auto *nc = dynamic_cast<const Constant *>(ndiv.get()))
-        n_minus_1 = std::make_unique<Constant>(nc->value - 1);
+        n_minus_1 = std::make_unique<Constant>(checked_subtract_i64(nc->value, 1));
       else
         n_minus_1 =
             std::make_unique<BinOp>(ndiv->clone(), BinOpKind::Sub, std::make_unique<Constant>(1));
@@ -789,13 +803,13 @@ public:
 
     for (auto &x : num) {
       if (const auto *c = dynamic_cast<const Constant *>(x.get()))
-        num_c *= c->value;
+        num_c = shapes::CheckedDimensionMultiply(num_c, c->value);
       else
         num_other.push_back(std::move(x));
     }
     for (auto &x : den) {
       if (const auto *c = dynamic_cast<const Constant *>(x.get()))
-        den_c *= c->value;
+        den_c = shapes::CheckedDimensionMultiply(den_c, c->value);
       else
         den_other.push_back(std::move(x));
     }
@@ -805,6 +819,8 @@ public:
     if (!den_other.empty())
       return n;
 
+    EXT_ENFORCE_INVALID(num_c != std::numeric_limits<int64_t>::min() || den_c != -1,
+                        "Integer overflow while dividing expression constants.");
     if (num_c % den_c == 0) {
       // Denominator divides the numerator constant exactly: fold completely.
       int64_t folded = num_c / den_c;
@@ -819,7 +835,8 @@ public:
     // Partial cancellation via GCD: collapse multiple floor-division constants
     // into one, e.g. d//5//2 → d//10, or 6*a//4 → 3*a//2.
     // The identity floor(floor(x/a)/b) == floor(x/(a*b)) makes this valid.
-    int64_t g = std::gcd(std::abs(num_c), std::abs(den_c));
+    int64_t g =
+        static_cast<int64_t>(std::gcd(unsigned_magnitude(num_c), unsigned_magnitude(den_c)));
     int64_t new_num_c = num_c / g;
     int64_t new_den_c = den_c / g;
 
@@ -941,7 +958,8 @@ bool try_split_for_division(const Node &x, int64_t d, NodePtr &quotient, int64_t
       if (!try_split_for_division(*b->right, d, rq, rr))
         return false;
       quotient = std::make_unique<BinOp>(std::move(lq), b->op, std::move(rq));
-      residual = (b->op == BinOpKind::Add) ? (lr + rr) : (lr - rr);
+      residual = (b->op == BinOpKind::Add) ? shapes::CheckedDimensionAdd(lr, rr)
+                                           : checked_subtract_i64(lr, rr);
       return true;
     }
   }
@@ -952,7 +970,7 @@ bool try_split_for_division(const Node &x, int64_t d, NodePtr &quotient, int64_t
       if (!try_split_for_division(*u->operand, d, q, r))
         return false;
       quotient = std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(q));
-      residual = -r;
+      residual = shapes::CheckedDimensionMultiply(r, -1);
       return true;
     }
     if (u->op == UnaryOpKind::UAdd)
@@ -1326,7 +1344,8 @@ void split_const_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
   offset = 0;
   std::function<void(const Node &, int)> walk = [&](const Node &n, int sign) {
     if (const auto *c = dynamic_cast<const Constant *>(&n)) {
-      offset += sign * c->value;
+      offset = sign > 0 ? shapes::CheckedDimensionAdd(offset, c->value)
+                        : checked_subtract_i64(offset, c->value);
       return;
     }
     if (const auto *b = dynamic_cast<const BinOp *>(&n)) {
@@ -1441,7 +1460,9 @@ private:
         int64_t base = infos[list[start]].offset;
         bool ok = true;
         for (int64_t i = 1; i < denom; ++i) {
-          if (infos[list[start + static_cast<size_t>(i)]].offset != base + i) {
+          int64_t expected_offset = 0;
+          if (!checked_add_i64(base, i, expected_offset) ||
+              infos[list[start + static_cast<size_t>(i)]].offset != expected_offset) {
             ok = false;
             break;
           }
@@ -1508,14 +1529,14 @@ struct AddVisitorResult {
   // ever inserted, so the expression is a pure constant).
   bool coeffs_empty() const { return coeffs.empty(); }
 
-  void add_coeff(const std::string &key, int64_t delta) {
+  void add_coeff(const std::string &key, int64_t delta, bool subtract = false) {
     for (auto &[k, v] : coeffs) {
       if (k == key) {
-        v += delta;
+        v = subtract ? checked_subtract_i64(v, delta) : shapes::CheckedDimensionAdd(v, delta);
         return;
       }
     }
-    coeffs.emplace_back(key, delta);
+    coeffs.emplace_back(key, subtract ? checked_subtract_i64(0, delta) : delta);
   }
 };
 
@@ -1544,7 +1565,7 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res);
 
 static void run_add_visitor(const Node &node, AddVisitorResult &res) {
   if (const auto *c = dynamic_cast<const Constant *>(&node)) {
-    res.const_term += c->value;
+    res.const_term = shapes::CheckedDimensionAdd(res.const_term, c->value);
     return;
   }
   if (const auto *n = dynamic_cast<const Name *>(&node)) {
@@ -1562,8 +1583,8 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
       AddVisitorResult neg;
       run_add_visitor(*b->right, neg);
       for (const auto &[k, v] : neg.coeffs)
-        res.add_coeff(k, -v);
-      res.const_term -= neg.const_term;
+        res.add_coeff(k, v, true);
+      res.const_term = checked_subtract_i64(res.const_term, neg.const_term);
       return;
     }
     if (b->op == BinOpKind::Mult) {
@@ -1575,8 +1596,9 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
         AddVisitorResult simp;
         run_add_visitor(*other, simp);
         for (const auto &[k, v] : simp.coeffs)
-          res.add_coeff(k, value * v);
-        res.const_term += simp.const_term * value;
+          res.add_coeff(k, shapes::CheckedDimensionMultiply(value, v));
+        res.const_term = shapes::CheckedDimensionAdd(
+            res.const_term, shapes::CheckedDimensionMultiply(simp.const_term, value));
         return;
       }
       // Neither direct child is a constant.  Flatten the whole multiplication
@@ -1598,14 +1620,14 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
           sym_keyed.reserve(num.size());
           for (auto &x : num) {
             if (const auto *c = dynamic_cast<const Constant *>(x.get()))
-              num_c *= c->value;
+              num_c = shapes::CheckedDimensionMultiply(num_c, c->value);
             else
               sym_keyed.emplace_back(unparse(*x), std::move(x));
           }
           if (sym_keyed.size() < num.size()) {
             // At least one constant factor was extracted.
             if (sym_keyed.empty()) {
-              res.const_term += num_c;
+              res.const_term = shapes::CheckedDimensionAdd(res.const_term, num_c);
               return;
             }
             // Sort symbolic factors by their pre-computed key for a canonical form.
@@ -1618,8 +1640,9 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
             AddVisitorResult simp;
             run_add_visitor(*symbolic, simp);
             for (const auto &[k, v] : simp.coeffs)
-              res.add_coeff(k, num_c * v);
-            res.const_term += simp.const_term * num_c;
+              res.add_coeff(k, shapes::CheckedDimensionMultiply(num_c, v));
+            res.const_term = shapes::CheckedDimensionAdd(
+                res.const_term, shapes::CheckedDimensionMultiply(simp.const_term, num_c));
             return;
           }
         }
@@ -1633,8 +1656,8 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
       AddVisitorResult neg;
       run_add_visitor(*u->operand, neg);
       for (const auto &[k, v] : neg.coeffs)
-        res.add_coeff(k, -v);
-      res.const_term -= neg.const_term;
+        res.add_coeff(k, v, true);
+      res.const_term = checked_subtract_i64(res.const_term, neg.const_term);
       return;
     }
     if (u->op == UnaryOpKind::UAdd) {
@@ -1656,7 +1679,12 @@ bool TryDifferenceLinearCombination(const std::string &expr1, const std::string 
     return false;
   }
   out = AddVisitorResult{};
-  run_add_visitor(*tree, out);
+  try {
+    run_add_visitor(*tree, out);
+  } catch (const std::invalid_argument &) {
+    out = AddVisitorResult{};
+    return false;
+  }
   return true;
 }
 
@@ -2149,33 +2177,36 @@ static DimType simplify_dim(const std::string &expr, SimplifiedExpressionCache *
 
 DimType dim_add(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) + std::get<int64_t>(b);
+    return shapes::CheckedDimensionAdd(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")+(" + dim_to_string(b) + ")", cache);
 }
 
 DimType dim_sub(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) - std::get<int64_t>(b);
+    return checked_subtract_i64(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")-(" + dim_to_string(b) + ")", cache);
 }
 
 DimType dim_mul(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) * std::get<int64_t>(b);
+    return shapes::CheckedDimensionMultiply(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")*(" + dim_to_string(b) + ")", cache);
 }
 
 DimType dim_multi_mul(const std::vector<DimType> &args, SimplifiedExpressionCache *cache) {
   bool all_int = true;
-  for (const auto &a : args)
-    if (!std::holds_alternative<int64_t>(a)) {
+  for (const auto &a : args) {
+    if (const auto *value = std::get_if<int64_t>(&a)) {
+      if (*value == 0)
+        return int64_t{0};
+    } else {
       all_int = false;
-      break;
     }
+  }
   if (all_int) {
     int64_t prod = 1;
     for (const auto &a : args)
-      prod *= std::get<int64_t>(a);
+      prod = shapes::CheckedDimensionMultiply(prod, std::get<int64_t>(a));
     return prod;
   }
   if (args.empty())

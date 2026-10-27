@@ -650,6 +650,19 @@ public:
   /// (:cpp:func:`ComputeInPlaceReuseGraph`) and per-node peak memory
   /// (:cpp:func:`ComputePeakMemory`).
   ///
+  /// Requires fixed-width dense tensor allocations and resolved shapes.
+  /// Expressions in declared input dimensions remain symbolic; new unresolved
+  /// output dimensions, strings, sparse and extended initializers are rejected.
+  /// Local-function bodies are validated recursively. Graph-valued attributes
+  /// are rejected because their internal allocations are not accounted for.
+  /// Unlike this complete-analysis entry point, the lower-level reuse analysis
+  /// permits partially inferred graphs for incremental graph construction.
+  /// Concrete allocation products, live sums and tensor-plus-scratch totals
+  /// must fit ``int64_t``; valid zero-byte allocations are preserved.
+  ///
+  /// @throws std::invalid_argument on unsupported or unresolved allocations
+  ///         or integer overflow.
+  ///
   /// @param graph  Graph whose nodes are analysed, in topological order.
   /// @param device  Logical device passed to the peak-memory dispatch function.
   /// @param allow_input_overwrite  Forwarded to
@@ -773,7 +786,8 @@ private:
   template <typename GraphOrFunction>
   void ComputeInPlaceReuseGraphImpl(const GraphOrFunction &graph, const ShapesContext &ctx,
                                     bool allow_input_overwrite,
-                                    const std::unordered_map<std::string, std::string> &value_tags);
+                                    const std::unordered_map<std::string, std::string> &value_tags,
+                                    bool validate_allocations = false);
 
   template <typename GraphOrFunction> void WriteToMetadataImpl(GraphOrFunction &graph) const;
 
@@ -803,6 +817,8 @@ private:
   std::vector<std::vector<std::string>> not_used_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
   std::vector<NodeMemoryProfile> memory_;
+  // Old profiles may be retained after shape inference is restarted for another scope.
+  bool memory_matches_shapes_ = false;
   ShapesContext shapes_;
   std::vector<int64_t> peak_memory_;
   ComputeEventLog events_;

@@ -9,7 +9,9 @@
 #include "onnx_core/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
+#include <limits>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -89,6 +91,22 @@ TEST(SimplifyExpressions, TrySimplifyTwoExpressionsRejectsMalformedInput) {
   std::map<std::string, int64_t> diff{{"stale", 1}};
   EXPECT_FALSE(try_simplify_two_expressions("a", "b +", diff));
   EXPECT_TRUE(diff.empty());
+}
+
+TEST(SimplifyExpressions, TrySimplifyTwoExpressionsRejectsArithmeticOverflow) {
+  std::map<std::string, int64_t> diff{{"stale", 1}};
+  EXPECT_FALSE(
+      try_simplify_two_expressions("4611686018427387904*x", "0-4611686018427387904*x", diff));
+  EXPECT_TRUE(diff.empty());
+  EXPECT_THROW(simplify_two_expressions("4611686018427387904*x", "0-4611686018427387904*x"),
+               std::invalid_argument);
+}
+
+TEST(SimplifyExpressions, OverflowingFloorDivisionRingProbeDoesNotRejectExpression) {
+  const auto simplified =
+      simplify_expression("(9223372036854775807-batch)//2+(9223372036854775807-batch)//2");
+  EXPECT_EQ(evaluate_expression(simplify_result_to_string(simplified), {{"batch", 0}}),
+            std::numeric_limits<int64_t>::max() - 1);
 }
 
 TEST(SimplifyExpressions, CompareExpressions) {
@@ -393,6 +411,15 @@ TEST(DimOperations, DimMultiMul_all_int) {
   EXPECT_EQ(std::get<int64_t>(
                 dim_multi_mul({DimType{int64_t{2}}, DimType{int64_t{3}}, DimType{int64_t{4}}})),
             24);
+}
+
+TEST(DimOperations, DimMultiMul_preserves_zero_after_large_factors) {
+  const DimType large{int64_t{1} << 31};
+  EXPECT_EQ(dim_multi_mul({large, large, large, DimType{int64_t{0}}}), DimType{int64_t{0}});
+  EXPECT_EQ(
+      dim_multi_mul({DimType{std::string{"batch"}}, large, large, large, DimType{int64_t{0}}}),
+      DimType{int64_t{0}});
+  EXPECT_THROW(dim_multi_mul({large, large, large}), std::invalid_argument);
 }
 
 TEST(DimOperations, DimMultiMul_single_int) {
@@ -771,4 +798,31 @@ TEST(DimSum, ByteIdenticalToDirectSum) {
     sum.Add(t);
   }
   EXPECT_EQ(sum.Build(), simplify_dim_type(direct));
+}
+
+TEST(SimplifyExpressions, RejectsOverflowingSymbolicConstantsAndCoefficients) {
+  for (const std::string expression :
+       {"4611686018427387904*batch*4", "batch//4611686018427387904//4",
+        "9223372036854775807*batch+batch", "4611686018427387904*(batch+batch)",
+        "batch+9223372036854775807+1", "0-9223372036854775807*batch-batch-batch"}) {
+    SCOPED_TRACE(expression);
+    EXPECT_THROW(simplify_expression(expression), std::invalid_argument);
+  }
+  EXPECT_EQ(get_str(simplify_expression("9223372036854775806*batch+batch")),
+            "9223372036854775807*batch");
+  EXPECT_EQ(get_str(simplify_expression("0-9223372036854775807*batch-batch")),
+            "-9223372036854775808*batch");
+  EXPECT_EQ(get_str(simplify_expression(
+                "(0-9223372036854775807*batch-batch)-(0-9223372036854775807*batch-batch)")),
+            "0");
+  EXPECT_EQ(dim_sub(DimType{std::numeric_limits<int64_t>::min()},
+                    DimType{std::numeric_limits<int64_t>::min()}),
+            DimType{int64_t{0}});
+}
+
+TEST(DimSum, RejectsOverflowingGroupedSymbolicCoefficients) {
+  DimSum sum;
+  sum.Add(DimType{std::string{"4611686018427387904*batch"}});
+  sum.Add(DimType{std::string{"4611686018427387904*batch"}});
+  EXPECT_THROW(sum.Build(), std::invalid_argument);
 }

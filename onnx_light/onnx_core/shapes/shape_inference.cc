@@ -117,6 +117,8 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     ~PopActive() { stack.pop_back(); }
   } pop_active{active};
   ShapesContext sub_ctx = ctx.MakeChildContext();
+  sub_ctx.set_events_enabled(false);
+  sub_ctx.clear_event_callback();
   // Let the function's own opset imports override the inherited caller opsets.
   for (std::size_t i = 0; i < func.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = func.opset_import()[i];

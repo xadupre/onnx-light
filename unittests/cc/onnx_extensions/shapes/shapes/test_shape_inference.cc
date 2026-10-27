@@ -1500,6 +1500,34 @@ TEST(OnnxOptimShapeInference, ChildContextsIsolateCountingCallbackRegistrations)
   EXPECT_EQ(parent.GetCustomShapeInferenceFunction("", "Abs"), nullptr);
 }
 
+TEST(OnnxOptimShapeInference, LocalFunctionCallbacksDoNotLeakBodyEvents) {
+  ModelProto model = MakeLocalFunctionAddModel();
+  core::shapes::ShapesContext ctx;
+  int calls = 0;
+  core::shapes::ShapeEventLog streamed;
+  ctx.SetCustomShapeInferenceFunction(
+      "", "Add", [&calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++calls;
+        EXPECT_FALSE(inner.events_enabled());
+        EXPECT_FALSE(inner.has_event_callback());
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+      });
+  ctx.set_events_enabled(true);
+  ctx.set_event_callback(
+      [&streamed](const core::shapes::ShapeEvent &event) { streamed.push_back(event); });
+  ctx.ComputeShapeModel(model);
+  EXPECT_EQ(calls, 1);
+  ASSERT_FALSE(streamed.empty());
+  ASSERT_EQ(streamed.size(), ctx.Events().size());
+  for (std::size_t i = 0; i < streamed.size(); ++i) {
+    EXPECT_EQ(streamed[i].name, ctx.Events()[i].name);
+    EXPECT_NE(streamed[i].name, "a");
+    EXPECT_NE(streamed[i].name, "b");
+    EXPECT_NE(streamed[i].name, "c");
+  }
+  EXPECT_TRUE(ctx.Has("Z"));
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeModelExpandsLocalFunctionCall) {
   // A node calling the model-local function ``local:func_add`` must be
   // expanded: the function body's ``Add`` is run in a sub-context that

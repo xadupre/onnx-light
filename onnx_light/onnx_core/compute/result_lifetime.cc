@@ -60,13 +60,13 @@ ResultLifetimeInfo ComputeResultLifetimeInfoImpl(const utils::RepeatedProtoField
   }
 
   for (int i = 0; i < num_nodes; ++i) {
-    std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
-    for (const auto &output : nodes[i].output()) {
+    std::vector<std::string> release_candidates = referenced_per_node[static_cast<std::size_t>(i)];
+    for (const std::string &output : nodes[i].output()) {
       if (!output.empty()) {
-        referenced.push_back(output.value());
+        release_candidates.push_back(output);
       }
     }
-    for (const std::string &name : referenced) {
+    for (const std::string &name : release_candidates) {
       auto use_it = info.last_use.find(name);
       if (use_it == info.last_use.end() || use_it->second != i) {
         continue;

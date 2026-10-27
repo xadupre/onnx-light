@@ -821,8 +821,7 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     }
     release_after.push_back(name);
   }
-  for (const auto &output : node.output()) {
-    const std::string name = output.value();
+  for (const std::string &name : node.output()) {
     if (!name.empty() && incr_keep_.count(name) == 0 && incr_producer_.at(name) == i &&
         incr_last_use_.at(name) == i) {
       release_after.push_back(name);
@@ -1046,9 +1045,10 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       changed_references.insert(incr_node_references_[index].begin(),
                                 incr_node_references_[index].end());
       if (new_indices[index] >= 0) {
-        for (const auto &output : nodes[static_cast<std::size_t>(new_indices[index])].output()) {
+        for (const std::string &output :
+             nodes[static_cast<std::size_t>(new_indices[index])].output()) {
           if (!output.empty()) {
-            changed_references.insert(output.value());
+            changed_references.insert(output);
           }
         }
       }
@@ -1121,12 +1121,12 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       node_tags_[index].clear();
       node_tag_custom_override_[index] = 0;
     }
-    for (const auto &output : nodes[index].output()) {
+    for (const std::string &output : nodes[index].output()) {
       if (!output.empty()) {
-        incr_producer_[output.value()] = static_cast<int>(index);
-        tag_producer_node_[output.value()] = static_cast<int>(index);
-        if (old_indices[index] == old_count || changed_values.count(output.value()) != 0) {
-          changed_references.insert(output.value());
+        incr_producer_[output] = static_cast<int>(index);
+        tag_producer_node_[output] = static_cast<int>(index);
+        if (old_indices[index] == old_count || changed_values.count(output) != 0) {
+          changed_references.insert(output);
         }
       }
     }
@@ -1141,9 +1141,9 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
     incr_last_use_.erase(name);
   }
   for (std::size_t index = 0; index < nodes.size(); ++index) {
-    for (const auto &output : nodes[index].output()) {
-      if (!output.empty() && changed_references.count(output.value()) != 0) {
-        incr_last_use_.emplace(output.value(), static_cast<int>(index));
+    for (const std::string &output : nodes[index].output()) {
+      if (!output.empty() && changed_references.count(output) != 0) {
+        incr_last_use_.emplace(output, static_cast<int>(index));
       }
     }
     for (const auto &name : references[index]) {
@@ -1165,16 +1165,16 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
                      [&](const auto &name) { return changed_references.count(name) != 0; }) &&
         std::none_of(
             nodes[index].output().begin(), nodes[index].output().end(),
-            [&](const auto &name) { return changed_references.count(name.value()) != 0; })) {
+            [&](const std::string &name) { return changed_references.count(name) != 0; })) {
       continue;
     }
     release_after_[index].clear();
     not_used_after_[index].clear();
     release_after_shape_tagged_[index].clear();
     std::vector<std::string> release_candidates = references[index];
-    for (const auto &output : nodes[index].output()) {
+    for (const std::string &output : nodes[index].output()) {
       if (!output.empty()) {
-        release_candidates.push_back(output.value());
+        release_candidates.push_back(output);
       }
     }
     for (const auto &name : release_candidates) {
@@ -1201,9 +1201,8 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
     if (old_indices[index] != index ||
         std::any_of(references[index].begin(), references[index].end(),
                     [&](const auto &name) { return changed_references.count(name) != 0; }) ||
-        std::any_of(
-            nodes[index].output().begin(), nodes[index].output().end(),
-            [&](const auto &name) { return changed_references.count(name.value()) != 0; })) {
+        std::any_of(nodes[index].output().begin(), nodes[index].output().end(),
+                    [&](const std::string &name) { return changed_references.count(name) != 0; })) {
       RefreshNodeReuse(nodes, index, shapes_);
       AppendNodePeakMemory(nodes[index], index, device, materialize);
       MarkMemoryRefresh(index);

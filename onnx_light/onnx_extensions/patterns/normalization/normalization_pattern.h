@@ -155,7 +155,7 @@ public:
 };
 
 /**
- * Moves a normalization from its stash type back to the original element type.
+ * Removes FP32 promotion around eligible standard FP16 normalization.
  *
  * @code
  * Before:
@@ -164,11 +164,11 @@ public:
  *          └──────┘                    └───────────────┘       └──────┘
  *                                          ↑
  *                                          │
- *                                    scale, bias, ...
+ *                                    unit scale (FP32)
  *
  * After:
  *                       ┌──────┐
- *    scale, bias, ... ─→│ Cast │
+ *    unit scale ───────→│ Cast │
  *                       └──────┘
  *                           │ converted parameters
  *                           ↓
@@ -177,11 +177,15 @@ public:
  *                        └───────────────┘
  * @endcode
  *
- * The normalization may be GroupNormalization, LayerNormalization,
- * RMSNormalization, or SimplifiedLayerNormalization in the ONNX or Microsoft
- * domain. A separate Cast is emitted for every non-data input. Optional
- * outputs must be unused, and both outer Cast results must be exclusive to the
- * chain.
+ * Supports only standard LayerNormalization (opset 17+) and RMSNormalization
+ * (opset 23+), with FLOAT stash_type, constant unit scale and no bias (an empty
+ * optional bias is allowed). Both schemas round normalized values to the I/O
+ * type before the affine stage, so even FP16-representable arbitrary weights
+ * are unsafe. Bias is conservatively rejected, including zero bias, to preserve
+ * signed-zero rounding. FP32 unit weights are converted exactly; existing
+ * FP16-to-FP32 scale casts are bypassed. Saved statistics retain their FP32
+ * computation and names, including live outputs. The FP32 data output must be
+ * exclusive to the output Cast; shared upstream casts are preserved.
  */
 class CastLayerNormalizationCastPattern final : public core::builder::PatternOptimization {
 public:

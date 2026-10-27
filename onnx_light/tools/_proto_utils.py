@@ -329,6 +329,7 @@ INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
 RELEASE_AFTER_METADATA_KEY = "onnx_light.release_after"
 NOT_USED_AFTER_METADATA_KEY = "onnx_light.not_used_after"
 RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = "onnx_light.release_after_shape_tag"
+LIFETIME_NAMES_ENCODING_METADATA_KEY = "onnx_light.lifetime_names_encoding"
 VALUE_TAGS = {"shape", "axes", "weight", "ambiguous"}
 VALUE_TAG_COLORS = {
     "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},
@@ -429,12 +430,38 @@ def _format_release_after(node: Any) -> str:
     neither metadata key.
     """
     parts: list[str] = []
+    encoded = _node_metadata_value(node, LIFETIME_NAMES_ENCODING_METADATA_KEY) == "percent"
+
+    def split_names(raw: str) -> list[str]:
+        names = [name.strip() for name in raw.split(";") if name.strip()]
+        if not encoded:
+            return names
+        decoded_names = []
+        for name in names:
+            decoded = []
+            index = 0
+            while index < len(name):
+                if name[index] == "%" and index + 2 < len(name):
+                    escape = name[index + 1 : index + 3]
+                    if escape == "25":
+                        decoded.append("%")
+                        index += 3
+                        continue
+                    if escape == "3B":
+                        decoded.append(";")
+                        index += 3
+                        continue
+                decoded.append(name[index])
+                index += 1
+            decoded_names.append("".join(decoded))
+        return decoded_names
+
     raw_release = _node_metadata_value(node, RELEASE_AFTER_METADATA_KEY)
-    names_release = [name.strip() for name in raw_release.split(";") if name.strip()]
+    names_release = split_names(raw_release)
     if names_release:
         parts.append("release: " + ", ".join(names_release))
     raw_not_used = _node_metadata_value(node, NOT_USED_AFTER_METADATA_KEY)
-    names_not_used = [name.strip() for name in raw_not_used.split(";") if name.strip()]
+    names_not_used = split_names(raw_not_used)
     if names_not_used:
         parts.append("not used after: " + ", ".join(names_not_used))
     return "; ".join(parts)

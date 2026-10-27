@@ -137,6 +137,26 @@ TEST(OnnxOptimInPlaceReuse, ResultLifetimeInfoGroupsPerNodeData) {
   EXPECT_EQ(lifetime.last_use.at("T"), 1);
 }
 
+TEST(OnnxOptimInPlaceReuse, UnusedOutputLifetimeProtectsDeclarationsAndSkipsEmptyNames) {
+  GraphProto graph;
+  AddInput(graph, "X", {1});
+  AddOutput(graph, "Y", {1});
+  *graph.add_node() = MakeNode("Custom", {"X"}, {"unused", "Y", ""});
+  const auto graph_lifetime = ComputeResultLifetimeInfo(graph, false);
+  EXPECT_EQ(graph_lifetime[0].release_after, (std::vector<std::string>{"unused"}));
+  EXPECT_EQ(graph_lifetime[0].not_used_after, (std::vector<std::string>{"X"}));
+  EXPECT_EQ(graph_lifetime.producer.count(""), 0u);
+  EXPECT_EQ(graph_lifetime.last_use.count(""), 0u);
+
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  *function.add_node() = graph.node(0);
+  const auto function_lifetime = ComputeResultLifetimeInfo(function, false);
+  EXPECT_EQ(function_lifetime[0].release_after, graph_lifetime[0].release_after);
+  EXPECT_EQ(function_lifetime[0].not_used_after, graph_lifetime[0].not_used_after);
+}
+
 // A linear chain of element-wise Abs nodes: every node but the first (whose
 // input is the declared graph input) may reuse its input buffer in place.
 TEST(OnnxOptimInPlaceReuse, AbsChainReusesIntermediates) {
@@ -333,6 +353,15 @@ TEST(OnnxOptimInPlaceReuse, LargerInputBufferIsReportedAsGreater) {
   // Node 1 reuses the larger intermediate A buffer for its smaller output.
   ASSERT_EQ(reuse[1].size(), 1u);
   EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+
+  ComputeContext compute;
+  compute.ComputeInPlaceReuseGraph(graph, ctx);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                compute.NodeMemory(1).at(core::compute::kNodeMemoryAfterBytesKey))),
+            48);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                compute.NodeMemory(1).at(core::compute::kNodeMemoryReleasedBytesKey))),
+            0);
 }
 
 // When both a same-sized and a strictly larger input are available for the
@@ -782,6 +811,70 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextDecisionEvents) {
   EXPECT_TRUE(inplace.Events().empty());
 }
 
+TEST(OnnxOptimInPlaceReuse, UnusedOutputsReleaseAtProducer) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {1});
+  AddOutput(graph, "Y", {1});
+  *graph.add_node() = MakeNode("Shape", {"X"}, {"dimensions"});
+  *graph.add_node() = MakeNode("Identity", {"X"}, {"unused"});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.ComputeShapes(graph);
+  ctx.ComputeValueAndNodeTags(graph);
+  ctx.set_events_enabled(true);
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes(), false, ctx.ValueTags());
+  ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
+
+  using core::compute::ComputeEventAction;
+  using core::runtime::ExecuteActionKind;
+  const auto lifetime = ComputeResultLifetimeInfo(graph, false);
+  const auto plan = ctx.BuildExecutionPlan(graph);
+  const std::vector<std::string> names{"dimensions", "unused"};
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    SCOPED_TRACE(names[i]);
+    EXPECT_EQ(lifetime[i].release_after, (std::vector<std::string>{names[i]}));
+    EXPECT_EQ(ctx.ReleaseAfterShapeTagged()[i],
+              (i == 0 ? std::vector<std::string>{names[i]} : std::vector<std::string>{}));
+    int releases = 0;
+    int shape_releases = 0;
+    for (const auto &event : ctx.Events()) {
+      if (event.name != names[i]) {
+        continue;
+      }
+      EXPECT_EQ(event.node_index, static_cast<int>(i));
+      releases += event.action == ComputeEventAction::kRelease;
+      shape_releases += event.action == ComputeEventAction::kReleaseShapeTag;
+    }
+    EXPECT_EQ(releases, 1);
+    EXPECT_EQ(shape_releases, i == 0 ? 1 : 0);
+
+    const auto total = std::get<int64_t>(std::get<core::expressions::DimType>(
+        ctx.NodeMemory(i).at(core::compute::kNodeMemoryTotalBytesKey)));
+    const auto retained = std::get<int64_t>(std::get<core::expressions::DimType>(
+        ctx.NodeMemory(i + 1).at(core::compute::kNodeMemoryAlreadyAllocatedBytesKey)));
+    EXPECT_EQ(total - retained, i == 0 ? 8 : 4);
+    int deletes = 0;
+    std::size_t executed_node = graph.node().size();
+    for (const auto &action : plan.actions()) {
+      if (action.kind() == ExecuteActionKind::kExecuteNode) {
+        executed_node = action.node_index();
+      }
+      if (action.name() == names[i] && (action.kind() == ExecuteActionKind::kDeleteBuffer ||
+                                        action.kind() == ExecuteActionKind::kDeleteShape)) {
+        ++deletes;
+        EXPECT_EQ(action.node_index(), i);
+        EXPECT_EQ(executed_node, i);
+        EXPECT_EQ(action.kind(),
+                  i == 0 ? ExecuteActionKind::kDeleteShape : ExecuteActionKind::kDeleteBuffer);
+      }
+    }
+    EXPECT_EQ(deletes, 1);
+  }
+  EXPECT_TRUE(lifetime[2].release_after.empty());
+}
+
 // WriteInPlaceReuseToMetadata free function also accepts value_tags and writes
 // kReleaseAfterShapeTagMetadataKey accordingly.
 TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
@@ -817,6 +910,40 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
   EXPECT_TRUE(found_shape_tag);
 }
 
+TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseEncodesRetainedLegacyShapeNames) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  *graph.add_node() = MakeNode("Shape", {"X"}, {"S%raw"});
+  *graph.add_node() = MakeNode("Reshape", {"X", "S%raw"}, {"Y"});
+  graph.node()[1].add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, "S%raw");
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  WriteInPlaceReuseToMetadata(graph, ctx);
+
+  const NodeProto &reshape = graph.node()[1];
+  std::string encoding;
+  std::string release_after;
+  std::string release_after_shape_tag;
+  for (const auto &entry : reshape.metadata_props()) {
+    if (entry.key() == core::compute::kLifetimeNamesEncodingMetadataKey) {
+      encoding = entry.value();
+    } else if (entry.key() == core::compute::kReleaseAfterMetadataKey) {
+      release_after = entry.value();
+    } else if (entry.key() == core::compute::kReleaseAfterShapeTagMetadataKey) {
+      release_after_shape_tag = entry.value();
+    }
+  }
+  EXPECT_EQ(encoding, "percent");
+  EXPECT_EQ(release_after, "S%25raw");
+  EXPECT_EQ(release_after_shape_tag, "S%25raw");
+  EXPECT_NO_THROW(core::runtime::ExecutionPlan{graph});
+}
+
 // ComputeContext::Compute runs shape inference, value tagging, in-place reuse
 // and peak memory in one call, holding every result alive in the context.
 TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
@@ -839,6 +966,98 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
   // Peak memory has one entry per node (Abs has no scratch, so all zero).
   ASSERT_EQ(ctx.PeakMemory().size(), 3u);
   EXPECT_EQ(ctx.NodePeakMemory(0), 0);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
+  GraphProto graph;
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+  ComputeContext ctx;
+  ctx.Compute(graph);
+
+  ASSERT_EQ(ctx.NodeReuse(1).size(), 1u);
+  EXPECT_EQ(ComputeResultLifetimeInfo(graph, false)[1].release_after,
+            (std::vector<std::string>{"A"}));
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryBeforeBytesKey), 48);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 0);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
+  core::shapes::RegisterComputePeakMemoryFn(
+      "test.memory_boundaries", "Scratch", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device, const std::vector<SymShape> &) { return int64_t{128}; });
+  GraphProto graph;
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 8});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Scratch", {"A"}, {"Y", "unused"});
+  graph.mutable_node()->at(1).set_domain("test.memory_boundaries");
+  ComputeContext ctx;
+  for (const char *name : {"X", "A"}) {
+    ctx.Shapes().Set(name, SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
+  }
+  for (const char *name : {"Y", "unused"}) {
+    ctx.Shapes().Set(name, SymTensor(nullptr, TensorType::kFloat, SymShape{3, 8}));
+  }
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  ASSERT_TRUE(ctx.NodeReuse(1).empty());
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey),
+            scalar(1, core::compute::kNodeMemoryBeforeBytesKey));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 144);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 416);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 144);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 272);
+    EXPECT_EQ(scalar(1, core::compute::kNodeMemoryTotalBytesKey), 288);
+  }
+  ctx.ComputePeakMemory(graph, core::symbolic::Device::kGPU0);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
+}
+
+TEST(OnnxOptimInPlaceReuse, MemoryBoundariesPreserveSymbolicSizes) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  *graph.add_node() = MakeCastNode("X", "A", TensorProto::DataType::DOUBLE);
+  *graph.add_node() = MakeNode("Copy", {"A"}, {"Y"});
+  graph.mutable_node()->at(1).set_domain("test.memory_boundaries");
+  ComputeContext ctx;
+  const SymShape shape{SymDim("N"), SymDim(4)};
+  ctx.Shapes().Set("X", SymTensor(nullptr, TensorType::kFloat, shape));
+  ctx.Shapes().Set("A", SymTensor(nullptr, TensorType::kDouble, shape));
+  ctx.Shapes().Set("Y", SymTensor(nullptr, TensorType::kFloat, shape));
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  const auto scalar = [&](std::size_t i, const char *key) {
+    return std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key));
+  };
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey),
+            scalar(1, core::compute::kNodeMemoryBeforeBytesKey));
+  const auto expected = [](const char *expression) {
+    return core::expressions::simplify_dim_type(
+        core::expressions::DimType{std::string(expression)});
+  };
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), expected("48*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), expected("64*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), expected("32*N"));
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), expected("32*N"));
 }
 
 // ComputeContext::WriteToGraph pushes inferred shapes into value_info and the
@@ -1016,6 +1235,120 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlan) {
   // Declared input / output are kept and never released.
   EXPECT_EQ(plan.keep().count("X"), 1u);
   EXPECT_EQ(plan.keep().count("Y"), 1u);
+}
+
+TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesLiteralNames) {
+  using core::runtime::ExecuteActionKind;
+  for (const std::string &name :
+       std::vector<std::string>{"shared;activation", ";shared;;activation;", "shared%3Bactivation",
+                                "shared%25;activation", std::string(1024, 'a') + ";activation"}) {
+    SCOPED_TRACE(name);
+    GraphProto graph;
+    graph.set_name("g");
+    const std::string input = "input;value%3B";
+    AddInput(graph, input, {3, 4});
+    AddOutput(graph, "Y", {3, 4});
+    *graph.add_node() = MakeNode("Abs", {input}, {name});
+    *graph.add_node() = MakeNode("Neg", {input}, {"other"});
+    *graph.add_node() = MakeNode("Add", {name, "other"}, {"Y"});
+
+    ComputeContext ctx;
+    ctx.set_events_enabled(true);
+    ctx.Compute(graph);
+    std::set<std::string> event_releases;
+    for (const auto &event : ctx.Events()) {
+      if (event.action == core::compute::ComputeEventAction::kRelease) {
+        EXPECT_EQ(event.node_index, 2);
+        event_releases.insert(event.name);
+      }
+    }
+    EXPECT_EQ(event_releases, (std::set<std::string>{name, "other"}));
+
+    // Repeated writes and standalone plans must use the same exact identities.
+    for (int pass = 0; pass < 2; ++pass) {
+      const auto computed_plan = ctx.BuildExecutionPlan(graph);
+      const core::runtime::ExecutionPlan standalone_plan(graph);
+      for (const auto *plan : {&computed_plan, &standalone_plan}) {
+        std::set<std::string> releases;
+        size_t release_count = 0;
+        size_t unlock_count = 0;
+        for (const auto &action : plan->actions()) {
+          if (action.kind() == ExecuteActionKind::kDeleteBuffer) {
+            EXPECT_EQ(action.node_index(), 2u);
+            releases.insert(action.name());
+            ++release_count;
+          } else if (action.kind() == ExecuteActionKind::kUnlockInput) {
+            EXPECT_EQ(action.name(), input);
+            ++unlock_count;
+          }
+        }
+        EXPECT_EQ(releases, event_releases);
+        EXPECT_EQ(release_count, 2u);
+        EXPECT_EQ(unlock_count, 1u);
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesShapeNames) {
+  using core::runtime::ExecuteActionKind;
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  const std::string name = "shared;activation%3B";
+  *graph.add_node() = MakeNode("Shape", {"X"}, {name});
+  *graph.add_node() = MakeNode("Reshape", {"X", name}, {"Y"});
+
+  ShapesContext shapes;
+  shapes.SetOpsetVersion("", 18);
+  shapes.ComputeShapeGraph(graph);
+  ComputeContext ctx;
+  ctx.ComputeInPlaceReuseGraph(graph, shapes, false, {{name, "shape"}});
+  const auto plan = ctx.BuildExecutionPlan(graph);
+  size_t created = 0;
+  size_t deleted = 0;
+  for (const auto &action : plan.actions()) {
+    if (action.kind() == ExecuteActionKind::kCreateShape) {
+      EXPECT_EQ(action.name(), name);
+      ++created;
+    } else if (action.kind() == ExecuteActionKind::kDeleteShape) {
+      EXPECT_EQ(action.name(), name);
+      EXPECT_EQ(action.node_index(), 1u);
+      ++deleted;
+    }
+    EXPECT_NE(action.kind(), ExecuteActionKind::kDeleteBuffer);
+  }
+  EXPECT_EQ(created, 1u);
+  EXPECT_EQ(deleted, 1u);
+}
+
+TEST(OnnxOptimInPlaceReuse, ExecutionPlanLifetimeEncodingCompatibilityAndValidation) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"literal%3Bname"});
+  *graph.add_node() = MakeNode("Abs", {"literal%3Bname"}, {"Y"});
+  auto &node = (*graph.mutable_node())[1];
+  node.add_metadata(core::compute::kReleaseAfterMetadataKey, "literal%3Bname");
+  const core::runtime::ExecutionPlan legacy_plan(graph);
+  size_t releases = 0;
+  for (const auto &action : legacy_plan.actions()) {
+    if (action.kind() == core::runtime::ExecuteActionKind::kDeleteBuffer) {
+      EXPECT_EQ(action.name(), "literal%3Bname");
+      ++releases;
+    }
+  }
+  EXPECT_EQ(releases, 1u);
+
+  node.add_metadata(core::compute::kLifetimeNamesEncodingMetadataKey, "percent");
+  for (const char *invalid : {"%", "%3", "%00", "%XY"}) {
+    node.add_metadata(core::compute::kReleaseAfterMetadataKey, invalid);
+    EXPECT_THROW(core::runtime::ExecutionPlan{graph}, std::invalid_argument);
+  }
+  node.add_metadata(core::compute::kLifetimeNamesEncodingMetadataKey, "unknown");
+  EXPECT_THROW(core::runtime::ExecutionPlan{graph}, std::invalid_argument);
 }
 
 } // namespace Test

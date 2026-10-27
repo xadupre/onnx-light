@@ -164,6 +164,7 @@ TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
   MemoryNode(first, "Identity", {"X"}, "Y");
   core::compute::ComputeContext ctx;
   ctx.Compute(first);
+  const auto original_profile = ctx.NodeMemory(0);
 
   onnx_shapes::RegisterPeakMemoryFunctions();
   GraphProto second;
@@ -173,6 +174,13 @@ TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
   ctx.ComputeShapes(second);
   ASSERT_NO_THROW(ctx.ComputePeakMemory(second));
   EXPECT_EQ(ctx.NodePeakMemory(0), int64_t{1} << 62);
+  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
+  ModelProto model;
+  *model.mutable_graph() = second;
+  ctx.Compute(first);
+  ctx.ComputeShapes(model);
+  EXPECT_NO_THROW(ctx.ComputePeakMemory(model.graph()));
+  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
   EXPECT_NO_THROW(ctx.Compute(second));
 }
 
@@ -329,6 +337,45 @@ TEST(MemoryAnalysis, RejectsSymbolicAllocationCoefficientOverflow) {
     } else {
       EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
     }
+  }
+}
+
+TEST(MemoryAnalysis, DoesNotDoubleCountAliasedLocalFunctionInputs) {
+  ModelProto model;
+  model.add_opset_import()->set_version(23);
+  auto *local_opset = model.add_opset_import();
+  local_opset->set_domain("memory_test");
+  local_opset->set_version(1);
+  MemoryInput(*model.mutable_graph(), "X", {int64_t{1} << 60});
+  MemoryNode(*model.mutable_graph(), "Body", {"X", "X"}, "Y").set_domain("memory_test");
+  model.mutable_graph()->add_output()->set_name("Y");
+  auto *body = model.add_functions();
+  body->set_domain("memory_test");
+  body->set_name("Body");
+  body->add_input("a");
+  body->add_input("b");
+  body->add_output("y");
+  body->add_opset_import()->set_version(23);
+  MemoryNode(*body, "Shape", {"a"}, "y");
+  core::compute::ComputeContext ctx;
+  ASSERT_NO_THROW(ctx.Compute(model));
+  EXPECT_EQ(MemoryTotal(ctx), (int64_t{1} << 62) + 8);
+}
+
+TEST(MemoryAnalysis, PreservesEmptyShapeInferenceBounds) {
+  for (const std::string op : {"NonZero", "Compress"}) {
+    SCOPED_TRACE(op);
+    GraphProto graph;
+    MemoryInput(graph, "X", {kLarge, kLarge, kLarge, 0});
+    std::vector<std::string> inputs{"X"};
+    if (op == "Compress") {
+      MemoryInput(graph, "condition", {0}, TensorProto::BOOL);
+      inputs.push_back("condition");
+    }
+    MemoryNode(graph, op, inputs, "Y");
+    core::compute::ComputeContext ctx;
+    EXPECT_NO_THROW(ctx.ComputeShapes(graph));
+    EXPECT_TRUE(ctx.Shapes().Has("Y"));
   }
 }
 

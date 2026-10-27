@@ -406,7 +406,8 @@ std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1
  * into @p out when both expressions can be parsed and reduced by the
  * linear-combination visitor. It returns ``false`` when the
  * expressions are malformed or use constructs that the visitor cannot
- * linearise.
+ * linearise, including reductions whose constants or coefficients overflow
+ * int64. On failure, @p out is cleared.
  *
  * @param expr1 The first expression string.
  * @param expr2 The second expression string.

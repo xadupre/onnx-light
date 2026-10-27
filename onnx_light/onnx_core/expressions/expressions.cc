@@ -1460,8 +1460,9 @@ private:
         int64_t base = infos[list[start]].offset;
         bool ok = true;
         for (int64_t i = 1; i < denom; ++i) {
-          if (infos[list[start + static_cast<size_t>(i)]].offset !=
-              shapes::CheckedDimensionAdd(base, i)) {
+          int64_t expected_offset = 0;
+          if (!checked_add_i64(base, i, expected_offset) ||
+              infos[list[start + static_cast<size_t>(i)]].offset != expected_offset) {
             ok = false;
             break;
           }
@@ -1678,7 +1679,12 @@ bool TryDifferenceLinearCombination(const std::string &expr1, const std::string 
     return false;
   }
   out = AddVisitorResult{};
-  run_add_visitor(*tree, out);
+  try {
+    run_add_visitor(*tree, out);
+  } catch (const std::invalid_argument &) {
+    out = AddVisitorResult{};
+    return false;
+  }
   return true;
 }
 
@@ -2189,11 +2195,14 @@ DimType dim_mul(const DimType &a, const DimType &b, SimplifiedExpressionCache *c
 
 DimType dim_multi_mul(const std::vector<DimType> &args, SimplifiedExpressionCache *cache) {
   bool all_int = true;
-  for (const auto &a : args)
-    if (!std::holds_alternative<int64_t>(a)) {
+  for (const auto &a : args) {
+    if (const auto *value = std::get_if<int64_t>(&a)) {
+      if (*value == 0)
+        return int64_t{0};
+    } else {
       all_int = false;
-      break;
     }
+  }
   if (all_int) {
     int64_t prod = 1;
     for (const auto &a : args)

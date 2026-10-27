@@ -51,8 +51,10 @@ The running example collapses two consecutive ``Neg`` nodes into an
             return {"Neg"}
 
         def match(self, graph, node):
+            if not graph.is_operator(node):
+                return self.no_match(node, "the candidate is a local call or overload")
             previous = graph.node_before(node.input[0])
-            if previous is None or previous.op_type != "Neg":
+            if previous is None or previous.op_type != "Neg" or not graph.is_operator(previous):
                 return self.no_match(node, "the input is not produced by Neg")
             return self.result([previous, node], insert_at=node)
 
@@ -69,6 +71,13 @@ the statistics shown in :ref:`l-example-plot-pattern-optimization`.
 A ``None``/``nullptr`` entry may reserve an optional positional role;
 the optimizer passes it to ``apply`` but ignores it for positioning,
 marking, removal, and replay.
+
+``graph.is_operator(node)`` excludes calls to functions defined in the model
+or added to the builder, including local overrides of standard operators.
+Primitive patterns must check both the candidate and secondary nodes.
+Patterns intentionally matching functions use ``graph.get_function(node)``,
+which resolves the normalized domain, name and overload, and then validate the
+intended function semantics before returning ``self.result(...)``.
 
 Select the pattern for one optimizer
 ------------------------------------

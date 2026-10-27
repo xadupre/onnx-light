@@ -84,7 +84,6 @@ public:
   std::set<std::string> FastOpType() const override;
 
   /// Returns true because repeated regions may contain model-local function calls.
-  bool SupportsLocalFunctions(const NodeProto &) const override { return true; }
 
   /// Finds occurrences from the first graph node and a dependency-safe rewrite interval.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,

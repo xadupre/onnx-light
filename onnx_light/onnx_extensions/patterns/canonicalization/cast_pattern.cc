@@ -83,6 +83,8 @@ std::set<std::string> CastPattern::FastOpType() const { return {"Cast"}; }
 
 core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultCast(candidate)) {
     return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
@@ -99,7 +101,7 @@ core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
   if (graph.Builder().Shapes().HasLocalFunction(
           core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
     return NoMatch(candidate, "the replacement Identity is overridden by a local function");
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -149,6 +151,8 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
 
 core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultCast(candidate)) {
     return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
@@ -180,10 +184,9 @@ core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &gra
       graph.Builder().Shapes().HasLocalFunction(
           core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
     return NoMatch(candidate, "the replacement Identity is overridden by a local function");
-  return core::builder::MatchResult{
-      this,
-      {inner, &candidate},
-      graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : &candidate};
+  return MatchOperators(graph, {inner, &candidate},
+                        graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr
+                                                                             : &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -233,6 +236,8 @@ std::set<std::string> CastCastBinaryPattern::FastOpType() const {
 
 core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsBinaryArithmetic(candidate)) {
     return NoMatch(candidate, "candidate is not a supported default-domain binary operation");
   }
@@ -274,7 +279,7 @@ core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGrap
   if (FloatWidth(left_target) > FloatWidth(left_source)) {
     return NoMatch(candidate, "moving the binary operation would lower its precision");
   }
-  return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};
+  return MatchOperators(graph, {left, right, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -317,6 +322,8 @@ std::set<std::string> CastOpCastPattern::FastOpType() const {
 
 core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsSupportedOperation(candidate)) {
     return NoMatch(candidate, "candidate is not a supported unary or binary operation");
   }
@@ -370,7 +377,7 @@ core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &g
 
   input_casts.push_back(&candidate);
   input_casts.push_back(output_cast);
-  return core::builder::MatchResult{this, std::move(input_casts), &candidate};
+  return MatchOperators(graph, std::move(input_casts), &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

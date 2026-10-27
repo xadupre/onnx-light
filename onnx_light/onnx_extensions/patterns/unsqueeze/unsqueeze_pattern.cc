@@ -117,6 +117,8 @@ std::set<std::string> UnsqueezeUnsqueezePattern::FastOpType() const { return {"U
 
 core::builder::MatchResult UnsqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Unsqueeze with two inputs");
@@ -151,7 +153,7 @@ core::builder::MatchResult UnsqueezeUnsqueezePattern::Match(core::builder::Graph
       return NoMatch(candidate, "the source rank is required to merge multi-axis Unsqueeze nodes");
     }
   }
-  return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
+  return MatchOperators(graph, {&candidate, next_node}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -304,6 +306,8 @@ AxesDiff DiffAxes(core::builder::GraphGraph &graph, const NodeProto &first,
 
 core::builder::MatchResult SqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsSqueezeOrUnsqueeze(candidate) || candidate.input_size() < 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Squeeze or Unsqueeze");
@@ -320,7 +324,7 @@ core::builder::MatchResult SqueezeUnsqueezePattern::Match(core::builder::GraphGr
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[0].value()) ? node_before : &candidate;
-  return core::builder::MatchResult{this, {node_before, &candidate}, insert_at};
+  return MatchOperators(graph, {node_before, &candidate}, insert_at);
 }
 
 utils::RepeatedProtoField<NodeProto>

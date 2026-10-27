@@ -344,6 +344,8 @@ std::set<std::string> LayerNormalizationPattern::FastOpType() const { return {"R
 
 core::builder::MatchResult LayerNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "ReduceMean") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a two-input default-domain ReduceMean");
@@ -470,11 +472,10 @@ core::builder::MatchResult LayerNormalizationPattern::Match(core::builder::Graph
   }
 
   if (reciprocal == nullptr) {
-    return core::builder::MatchResult{
-        this, {mean, sub, power, &candidate, add, sqrt, final}, &candidate};
+    return MatchOperators(graph, {mean, sub, power, &candidate, add, sqrt, final}, &candidate);
   }
-  return core::builder::MatchResult{
-      this, {mean, sub, power, &candidate, add, sqrt, reciprocal, final}, &candidate};
+  return MatchOperators(graph, {mean, sub, power, &candidate, add, sqrt, reciprocal, final},
+                        &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -568,6 +569,8 @@ std::set<std::string> LayerNormalizationScalePattern::FastOpType() const {
 
 core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "LayerNormalization") || candidate.input_size() < 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a single-output LayerNormalization");
@@ -596,11 +599,11 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
   }
   const std::vector<const NodeProto *> &after_mul = graph.NextNodes(mul->output()[0].value());
   if (after_mul.empty()) {
-    return core::builder::MatchResult{this, {&candidate, mul, nullptr}, mul};
+    return MatchOperators(graph, {&candidate, mul, nullptr}, mul);
   }
   if (after_mul.size() != 1 || !IsDefaultOp(*after_mul[0], "Add")) {
-    return core::builder::MatchResult{
-        this, {&candidate, mul, nullptr}, after_mul.empty() ? mul : after_mul[0]};
+    return MatchOperators(graph, {&candidate, mul, nullptr},
+                          after_mul.empty() ? mul : after_mul[0]);
   }
 
   const NodeProto *add = after_mul[0];
@@ -622,7 +625,7 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
   if (!HasOnlyConsumers(graph, *mul, {add})) {
     return NoMatch(candidate, "the scaled normalized value is externally used");
   }
-  return core::builder::MatchResult{this, {&candidate, mul, add}, add};
+  return MatchOperators(graph, {&candidate, mul, add}, add);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -712,6 +715,8 @@ std::set<std::string> CastLayerNormalizationCastPattern::FastOpType() const {
 core::builder::MatchResult
 CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const std::string &op_type = candidate.op_type().value();
   if (op_type != "GroupNormalization" && op_type != "LayerNormalization" &&
       op_type != "RMSNormalization" && op_type != "SimplifiedLayerNormalization") {
@@ -766,7 +771,7 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   if (!HasOnlyConsumers(graph, candidate.output()[0].value(), {cast_after})) {
     return NoMatch(candidate, "the normalization data output is externally used");
   }
-  return core::builder::MatchResult{this, {cast_before, &candidate, cast_after}, &candidate};
+  return MatchOperators(graph, {cast_before, &candidate, cast_after}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -824,6 +829,8 @@ std::set<std::string> BatchNormalizationPattern::FastOpType() const {
 
 core::builder::MatchResult BatchNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not a valid default-domain BatchNormalization");
@@ -863,7 +870,7 @@ core::builder::MatchResult BatchNormalizationPattern::Match(core::builder::Graph
       return NoMatch(candidate, "the scale or input variance is not uniformly one");
     }
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -896,6 +903,8 @@ std::set<std::string> BatchNormalizationTrainingPattern::FastOpType() const {
 core::builder::MatchResult
 BatchNormalizationTrainingPattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not a valid default-domain BatchNormalization");
@@ -925,7 +934,7 @@ BatchNormalizationTrainingPattern::Match(core::builder::GraphGraph &graph,
   if (training_mode != 1) {
     return NoMatch(candidate, "BatchNormalization is not in training mode");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1044,6 +1053,8 @@ std::set<std::string> RMSNormalizationPattern::FastOpType() const { return {"Red
 
 core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 23)) {
     return NoMatch(candidate, "the default-domain opset is below 23");
   }
@@ -1166,8 +1177,8 @@ core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGr
     return NoMatch(candidate, "the pre-output RMS value is externally used");
   }
 
-  return core::builder::MatchResult{
-      this, {cast_before, power, &candidate, add, sqrt, reciprocal, mul, cast_after}, &candidate};
+  return MatchOperators(
+      graph, {cast_before, power, &candidate, add, sqrt, reciprocal, mul, cast_after}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1263,6 +1274,8 @@ std::set<std::string> RMSNormalizationMulPattern::FastOpType() const {
 
 core::builder::MatchResult RMSNormalizationMulPattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 23)) {
     return NoMatch(candidate, "the default-domain opset is below 23");
   }
@@ -1297,7 +1310,7 @@ core::builder::MatchResult RMSNormalizationMulPattern::Match(core::builder::Grap
   if (left == nullptr || right == nullptr || !MultiplyConstants(*left, *right, "", product)) {
     return NoMatch(candidate, "the two constant scales cannot be multiplied");
   }
-  return core::builder::MatchResult{this, {&candidate, mul}, mul};
+  return MatchOperators(graph, {&candidate, mul}, mul);
 }
 
 utils::RepeatedProtoField<NodeProto>

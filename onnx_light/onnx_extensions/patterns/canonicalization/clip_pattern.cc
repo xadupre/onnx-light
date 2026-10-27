@@ -38,6 +38,8 @@ std::set<std::string> ReluClipFusionPattern::FastOpType() const { return {"Clip"
 
 core::builder::MatchResult ReluClipFusionPattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultClip(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Clip");
   }
@@ -81,7 +83,7 @@ core::builder::MatchResult ReluClipFusionPattern::Match(core::builder::GraphGrap
   if (std::isnan(minimum) || minimum < 0.0) {
     return NoMatch(candidate, "the Clip effective minimum is not non-negative");
   }
-  return core::builder::MatchResult{this, {relu, &candidate}, &candidate};
+  return MatchOperators(graph, {relu, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -119,6 +121,8 @@ std::set<std::string> ClipClipPattern::FastOpType() const { return {"Clip"}; }
 
 core::builder::MatchResult ClipClipPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultClip(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Clip");
   }
@@ -143,7 +147,7 @@ core::builder::MatchResult ClipClipPattern::Match(core::builder::GraphGraph &gra
   if (max1 == max2) {
     return NoMatch(candidate, "exactly one Clip must define the maximum bound");
   }
-  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
+  return MatchOperators(graph, {before, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

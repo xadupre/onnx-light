@@ -168,6 +168,8 @@ std::set<std::string> ConcatReshapePattern::FastOpType() const { return {"Reshap
 
 core::builder::MatchResult ConcatReshapePattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -208,7 +210,7 @@ core::builder::MatchResult ConcatReshapePattern::Match(core::builder::GraphGraph
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[1].value()) ? nullptr : &candidate;
-  return core::builder::MatchResult{this, {concat, &candidate}, insert_at};
+  return MatchOperators(graph, {concat, &candidate}, insert_at);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -270,6 +272,8 @@ std::set<std::string> StaticConcatReshapePattern::FastOpType() const { return {"
 
 core::builder::MatchResult StaticConcatReshapePattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -297,7 +301,7 @@ core::builder::MatchResult StaticConcatReshapePattern::Match(core::builder::Grap
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[1].value()) ? nullptr : &candidate;
-  return core::builder::MatchResult{this, {concat, &candidate}, insert_at};
+  return MatchOperators(graph, {concat, &candidate}, insert_at);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -351,6 +355,8 @@ std::set<std::string> ReshapePattern::FastOpType() const { return {"Reshape"}; }
 
 core::builder::MatchResult ReshapePattern::Match(core::builder::GraphGraph &graph,
                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -371,7 +377,7 @@ core::builder::MatchResult ReshapePattern::Match(core::builder::GraphGraph &grap
       return NoMatch(candidate, "the reshape target shape differs from the input shape");
     }
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -391,6 +397,8 @@ std::set<std::string> ShapedBasedReshapePattern::FastOpType() const { return {"R
 
 core::builder::MatchResult ShapedBasedReshapePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -406,7 +414,7 @@ core::builder::MatchResult ShapedBasedReshapePattern::Match(core::builder::Graph
       Rank(graph, candidate.input()[0].value()) != target.size()) {
     return NoMatch(candidate, "the reshape input rank does not equal the target rank");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -430,6 +438,8 @@ std::set<std::string> ReduceReshapePattern::FastOpType() const {
 
 core::builder::MatchResult ReduceReshapePattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (candidate.op_type().value().rfind("Reduce", 0) != 0 ||
       NormaliseDomain(candidate.domain().value()) != kDefaultOnnxDomain ||
       candidate.input_size() < 1 || candidate.output_size() != 1) {
@@ -484,7 +494,7 @@ core::builder::MatchResult ReduceReshapePattern::Match(core::builder::GraphGraph
       return NoMatch(candidate, "the reshape output does not equal the reduced input shape");
     }
   }
-  return core::builder::MatchResult{this, {&candidate, reshape}, &candidate};
+  return MatchOperators(graph, {&candidate, reshape}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -513,6 +523,8 @@ std::set<std::string> ReshapeReshapePattern::FastOpType() const { return {"Resha
 
 core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -532,12 +544,12 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
   const bool second_constant = ReadConstantInts(graph, next->input()[1].value(), second_shape);
 
   if (second_constant && !HasInt(second_shape, 0)) {
-    return core::builder::MatchResult{this, {&candidate, next}, next};
+    return MatchOperators(graph, {&candidate, next}, next);
   }
   if (first_constant && second_constant) {
     if (std::all_of(second_shape.begin(), second_shape.end(),
                     [](int64_t value) { return value > 0; })) {
-      return core::builder::MatchResult{this, {&candidate, next}, next};
+      return MatchOperators(graph, {&candidate, next}, next);
     }
     if (!first_shape.empty() && !second_shape.empty() && first_shape[0] == second_shape[0]) {
       std::size_t common = 0;
@@ -548,19 +560,19 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
       std::vector<int64_t> expected(common, 0);
       expected.push_back(-1);
       if (expected == second_shape && second_shape.size() <= first_shape.size()) {
-        return core::builder::MatchResult{this, {&candidate, next}, next};
+        return MatchOperators(graph, {&candidate, next}, next);
       }
       if (common < second_shape.size() &&
           std::all_of(
               second_shape.begin() + static_cast<std::ptrdiff_t>(common), second_shape.end(),
               [](int64_t value) { return value > 0; })) {
-        return core::builder::MatchResult{this, {&candidate, next}, next};
+        return MatchOperators(graph, {&candidate, next}, next);
       }
     }
     if (std::all_of(first_shape.begin(), first_shape.end(),
                     [](int64_t value) { return value > 0; }) &&
         HasInt(second_shape, 0) && second_shape.size() <= first_shape.size()) {
-      return core::builder::MatchResult{this, {&candidate, next}, next};
+      return MatchOperators(graph, {&candidate, next}, next);
     }
   }
   if (first_constant && HasInt(first_shape, -1) &&
@@ -602,7 +614,7 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
        Rank(graph, candidate.output()[0].value()) != Rank(graph, next->output()[0].value()))) {
     return NoMatch(candidate, "the second target cannot be safely applied to the original input");
   }
-  return core::builder::MatchResult{this, {&candidate, next}, next};
+  return MatchOperators(graph, {&candidate, next}, next);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -726,6 +738,8 @@ std::set<std::string> ReshapeReshapeBinaryPattern::FastOpType() const {
 
 core::builder::MatchResult ReshapeReshapeBinaryPattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsBinaryElementWise(candidate) || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain element-wise binary operator");
@@ -753,7 +767,7 @@ core::builder::MatchResult ReshapeReshapeBinaryPattern::Match(core::builder::Gra
           graph.GetShape(right->input()[0].value()).Shape()) {
     return NoMatch(candidate, "the binary inputs do not have equal source shapes");
   }
-  return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};
+  return MatchOperators(graph, {left, right, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -790,6 +804,8 @@ std::set<std::string> Reshape2Of3Pattern::FastOpType() const {
 
 core::builder::MatchResult Reshape2Of3Pattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsBinaryElementWise(candidate) || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain element-wise binary operator");
@@ -852,7 +868,7 @@ core::builder::MatchResult Reshape2Of3Pattern::Match(core::builder::GraphGraph &
                    [&](const SymShape *shape) { return *shape == *surrounding_shapes.front(); })) {
     return NoMatch(candidate, "the surrounding Reshapes do not have equal outer shapes");
   }
-  return core::builder::MatchResult{this, {left, right, next, &candidate}, nullptr};
+  return MatchOperators(graph, {left, right, next, &candidate}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1082,6 +1098,8 @@ std::set<std::string> ShapeBasedEditDistanceReshapePattern::FastOpType() const {
 core::builder::MatchResult
 ShapeBasedEditDistanceReshapePattern::Match(core::builder::GraphGraph &graph,
                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -1099,7 +1117,7 @@ ShapeBasedEditDistanceReshapePattern::Match(core::builder::GraphGraph &graph,
   if (producer == nullptr || !IsDefaultOp(*producer, "Concat")) {
     return NoMatch(candidate, "the reshape target is not produced by a Concat");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1139,6 +1157,8 @@ std::set<std::string> ShapeBasedReshapeIsSqueezePattern::FastOpType() const {
 core::builder::MatchResult
 ShapeBasedReshapeIsSqueezePattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 18)) {
     return NoMatch(candidate, "the model opset is below 18");
   }
@@ -1162,7 +1182,7 @@ ShapeBasedReshapeIsSqueezePattern::Match(core::builder::GraphGraph &graph,
            .has_value()) {
     return NoMatch(candidate, "the input and output shapes do not differ only by unit dimensions");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1195,6 +1215,8 @@ std::set<std::string> UnsqueezeReshapePattern::FastOpType() const { return {"Res
 
 core::builder::MatchResult UnsqueezeReshapePattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -1218,7 +1240,7 @@ core::builder::MatchResult UnsqueezeReshapePattern::Match(core::builder::GraphGr
     return NoMatch(candidate,
                    "the Unsqueeze axes and Reshape target are not the supported special case");
   }
-  return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
+  return MatchOperators(graph, {unsqueeze, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1246,6 +1268,8 @@ std::set<std::string> UnsqueezeOrSqueezeReshapePattern::FastOpType() const { ret
 core::builder::MatchResult
 UnsqueezeOrSqueezeReshapePattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsReshape(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
   }
@@ -1284,7 +1308,7 @@ UnsqueezeOrSqueezeReshapePattern::Match(core::builder::GraphGraph &graph,
                      "a zero-copy target dimension follows a squeezed or unsqueezed axis");
     }
   }
-  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
+  return MatchOperators(graph, {before, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1313,6 +1337,8 @@ std::set<std::string> ReshapeSqueezePattern::FastOpType() const { return {"Squee
 
 core::builder::MatchResult ReshapeSqueezePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Squeeze") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Squeeze with explicit axes");
@@ -1354,7 +1380,7 @@ core::builder::MatchResult ReshapeSqueezePattern::Match(core::builder::GraphGrap
       return NoMatch(candidate, "a copied Reshape dimension follows a removed axis");
     }
   }
-  return core::builder::MatchResult{this, {reshape, &candidate}, &candidate};
+  return MatchOperators(graph, {reshape, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

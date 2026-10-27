@@ -129,6 +129,8 @@ std::set<std::string> IdentityPattern::FastOpType() const { return SupportedOps(
 
 core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const std::string &op_type = candidate.op_type().value();
   if (!IsDefaultDomain(candidate) || SupportedOps().count(op_type) == 0) {
     return NoMatch(candidate, "candidate is not a supported default-domain operation");
@@ -160,7 +162,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
         return NoMatch(candidate, "the Slice ends do not select the full range");
       }
     }
-    return core::builder::MatchResult{this, {&candidate}, &candidate};
+    return MatchOperators(graph, {&candidate}, &candidate);
   }
 
   if (op_type == "Reshape") {
@@ -175,7 +177,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     if (!HasRank(graph, candidate.input()[0].value(), rank) || rank != shape.size()) {
       return NoMatch(candidate, "the Reshape shape rank differs from the input rank");
     }
-    return core::builder::MatchResult{this, {&candidate}, &candidate};
+    return MatchOperators(graph, {&candidate}, &candidate);
   }
 
   if (op_type == "Transpose") {
@@ -188,7 +190,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
         return NoMatch(candidate, "the Transpose perm is not the identity permutation");
       }
     }
-    return core::builder::MatchResult{this, {&candidate}, &candidate};
+    return MatchOperators(graph, {&candidate}, &candidate);
   }
 
   if (op_type == "Expand") {
@@ -206,7 +208,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     if (!AllEqual(shape, 1.0)) {
       return NoMatch(candidate, "the Expand shape is not all ones");
     }
-    return core::builder::MatchResult{this, {&candidate}, &candidate};
+    return MatchOperators(graph, {&candidate}, &candidate);
   }
 
   if (op_type == "BatchNormalization") {
@@ -236,7 +238,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
         return NoMatch(candidate, "the BatchNormalization parameters are not identity");
       }
     }
-    return core::builder::MatchResult{this, {&candidate}, &candidate};
+    return MatchOperators(graph, {&candidate}, &candidate);
   }
 
   // Binary arithmetic operations Add / Mul / Div / Sub.
@@ -254,11 +256,11 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     if (IsScalarShape(graph, input1)) {
       if (graph.IsConstantScalar(input1, 0.0, false) &&
           (op_type == "Add" || op_type == "Sub" || op_type == "Or")) {
-        return core::builder::MatchResult{this, {&candidate}, &candidate};
+        return MatchOperators(graph, {&candidate}, &candidate);
       }
       if (graph.IsConstantScalar(input1, 1.0, false) &&
           (op_type == "Mul" || op_type == "Div" || op_type == "And")) {
-        return core::builder::MatchResult{this, {&candidate}, &candidate};
+        return MatchOperators(graph, {&candidate}, &candidate);
       }
       return NoMatch(candidate, "the scalar constant operand is not a neutral element");
     }
@@ -283,7 +285,7 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
           shape[shape.Rank() - 1].AsInt() != constant->dims(0)) {
         return NoMatch(candidate, "the constant does not broadcast on the last dimension");
       }
-      return core::builder::MatchResult{this, {&candidate}, &candidate};
+      return MatchOperators(graph, {&candidate}, &candidate);
     }
     return NoMatch(candidate, "the constant operand is not a neutral element");
   }
@@ -295,10 +297,10 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     }
     if (IsScalarShape(graph, input0)) {
       if (graph.IsConstantScalar(input0, 0.0, false) && (op_type == "Add" || op_type == "Or")) {
-        return core::builder::MatchResult{this, {&candidate}, &candidate};
+        return MatchOperators(graph, {&candidate}, &candidate);
       }
       if (graph.IsConstantScalar(input0, 1.0, false) && (op_type == "Mul" || op_type == "And")) {
-        return core::builder::MatchResult{this, {&candidate}, &candidate};
+        return MatchOperators(graph, {&candidate}, &candidate);
       }
     }
     return NoMatch(candidate, "the scalar constant operand is not a neutral element");

@@ -338,6 +338,8 @@ std::set<std::string> ConvBiasNullPattern::FastOpType() const { return {"Conv"};
 
 core::builder::MatchResult ConvBiasNullPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultConv(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Conv");
   }
@@ -350,7 +352,7 @@ core::builder::MatchResult ConvBiasNullPattern::Match(core::builder::GraphGraph 
   if (!IsKnownAllZero(graph, candidate.input()[2].value())) {
     return NoMatch(candidate, "the Conv bias is not a known all-zero constant");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -388,6 +390,8 @@ std::set<std::string> PadConvPattern::FastOpType() const { return {"Conv"}; }
 
 core::builder::MatchResult PadConvPattern::Match(core::builder::GraphGraph &graph,
                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultConv(candidate) || candidate.input_size() < 1) {
     return NoMatch(candidate, "candidate is not a default-domain Conv");
   }
@@ -418,7 +422,7 @@ core::builder::MatchResult PadConvPattern::Match(core::builder::GraphGraph &grap
       return NoMatch(candidate, "the Pad node uses negative spatial padding");
     }
   }
-  return core::builder::MatchResult{this, {pad_node, &candidate}, &candidate};
+  return MatchOperators(graph, {pad_node, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -484,6 +488,8 @@ std::set<std::string> ConvAddFusionPattern::FastOpType() const { return {"Conv"}
 
 core::builder::MatchResult ConvAddFusionPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("") < 7) {
     return NoMatch(candidate, "the default-domain opset predates multidirectional broadcasting");
   }
@@ -516,7 +522,7 @@ core::builder::MatchResult ConvAddFusionPattern::Match(core::builder::GraphGraph
   if (!ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv bias is not finite in the source dtype");
   }
-  return core::builder::MatchResult{this, {&candidate, add}, &candidate};
+  return MatchOperators(graph, {&candidate, add}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -556,6 +562,8 @@ std::set<std::string> ConvMulFusionPattern::FastOpType() const { return {"Conv"}
 
 core::builder::MatchResult ConvMulFusionPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("") < 7) {
     return NoMatch(candidate, "the default-domain opset predates multidirectional broadcasting");
   }
@@ -594,7 +602,7 @@ core::builder::MatchResult ConvMulFusionPattern::Match(core::builder::GraphGraph
       !ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv constants are not finite in the source dtype");
   }
-  return core::builder::MatchResult{this, {&candidate, mul}, &candidate};
+  return MatchOperators(graph, {&candidate, mul}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -647,6 +655,8 @@ std::set<std::string> ConvBatchNormalizationFusionPattern::FastOpType() const { 
 core::builder::MatchResult
 ConvBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
                                            const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("") < 7) {
     return NoMatch(candidate, "the default-domain opset is unsupported for this fusion");
   }
@@ -720,7 +730,7 @@ ConvBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
       !ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv constants are not finite in the source dtype");
   }
-  return core::builder::MatchResult{this, {&candidate, bn}, &candidate};
+  return MatchOperators(graph, {&candidate, bn}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

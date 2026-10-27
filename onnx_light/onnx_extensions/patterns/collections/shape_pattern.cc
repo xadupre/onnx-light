@@ -67,6 +67,8 @@ std::set<std::string> GatherShapePattern::FastOpType() const { return {"Gather"}
 
 core::builder::MatchResult GatherShapePattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather")) {
     return NoMatch(candidate, "candidate is not a default-domain Gather");
   }
@@ -110,7 +112,7 @@ core::builder::MatchResult GatherShapePattern::Match(core::builder::GraphGraph &
   if ((negative_attr || negative_index) && !HasRank(graph, shape->input()[0].value())) {
     return NoMatch(candidate, "the shape origin rank is required to normalise negative bounds");
   }
-  return core::builder::MatchResult{this, {shape, &candidate}, &candidate};
+  return MatchOperators(graph, {shape, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -194,6 +196,8 @@ std::set<std::string> ShapeTransposePattern::FastOpType() const { return {"Shape
 
 core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Shape")) {
     return NoMatch(candidate, "candidate is not a default-domain Shape");
   }
@@ -211,7 +215,7 @@ core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGrap
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
   }
-  return core::builder::MatchResult{this, {transpose, &candidate}, transpose};
+  return MatchOperators(graph, {transpose, &candidate}, transpose);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -260,6 +264,8 @@ std::set<std::string> PreShapeNodeEliminationPattern::FastOpType() const { retur
 
 core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Cast")) {
     return NoMatch(candidate, "candidate is not a default-domain Cast");
   }
@@ -283,7 +289,7 @@ core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::
   if (shape->input_size() != 1) {
     return NoMatch(candidate, "the Shape node does not have exactly one input");
   }
-  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
+  return MatchOperators(graph, {&candidate, shape}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -320,6 +326,8 @@ std::set<std::string> UnsqueezeShapePattern::FastOpType() const { return {"Unsqu
 
 core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze")) {
     return NoMatch(candidate, "candidate is not a default-domain Unsqueeze");
   }
@@ -352,7 +360,7 @@ core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGrap
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
   }
-  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
+  return MatchOperators(graph, {&candidate, shape}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

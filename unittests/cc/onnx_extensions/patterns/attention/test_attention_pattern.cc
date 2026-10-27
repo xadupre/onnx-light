@@ -584,6 +584,17 @@ TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
   core::builder::GraphBuilder builder("positive", SchemaLookup());
   builder.SetOpsetVersion("", 23);
   builder.SetOpsetVersion("intermediate", 1);
+  auto &helper = builder.MakeLocalFunction("HalfRotaryEmbedding", "intermediate");
+  helper.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 2, 3, 8}));
+  helper.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({1, 1, 3, 8}));
+  helper.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({1, 1, 3, 8}));
+  helper.MakeNode("Split", {"X"}, {"left", "right"}, "", "", SplitAttrs(-1));
+  helper.MakeNode("Neg", {"right"}, {"negative"});
+  helper.MakeNode("Concat", {"negative", "left"}, {"rotated"}, "", "", IntAttr("axis", -1));
+  helper.MakeNode("Mul", {"rotated", "sin"}, {"scaled"});
+  helper.MakeNode("Mul", {"X", "cos"}, {"direct"});
+  helper.MakeNode("Add", {"scaled", "direct"}, {"Y"});
+  helper.MakeOutput("Y");
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 2, 3, 8}));
   builder.MakeInput("cos_half", core::symbolic::TensorType::kFloat, Shape({1, 1, 3, 4}));
   builder.MakeInput("sin_half", core::symbolic::TensorType::kFloat, Shape({1, 1, 3, 4}));
@@ -596,6 +607,18 @@ TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
   onnx_patterns::RotaryEmbeddingPattern pattern;
   const auto match = pattern.Match(graph, builder.Nodes()[2]);
   ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+  EXPECT_NE(graph.GetFunction(builder.Nodes()[2]), nullptr);
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  for (const std::string overload : {"custom", ""}) {
+    FunctionProto override;
+    override.set_name("Concat");
+    override.set_domain("onnx.ai");
+    override.set_overload(overload);
+    shapes.SetLocalFunction(std::make_shared<FunctionProto>(override));
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern != nullptr, !overload.empty());
+  }
+  shapes.ClearLocalFunctions();
+  shapes.SetLocalFunction(std::make_shared<FunctionProto>(helper.ToFunction("intermediate")));
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 7u);
   const NodeProto &rotary = replacement[replacement.size() - 1];
@@ -603,6 +626,8 @@ TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
   EXPECT_EQ(GetAttributeOr<int64_t>(rotary, "num_heads", 0), 2);
   EXPECT_EQ(FindAttribute(rotary, "rotary_embedding_dim"), nullptr);
   EXPECT_EQ(rotary.output()[0].value(), "Y");
+  OptimizeAndVerify<onnx_patterns::RotaryEmbeddingPattern>(builder);
+  EXPECT_NE(FindNode(builder, "RotaryEmbedding"), builder.Nodes().size());
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 22);

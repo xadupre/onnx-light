@@ -70,12 +70,20 @@ Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
 nodes whose attributes still contain unresolved function-attribute references,
 including Constant producers inspected outside the matched node set.
-Primitive patterns also skip model-local function overrides, both as candidates
-and as secondary matched nodes. Patterns intentionally handling local calls,
-such as ``RepeatedLayer``, explicitly override ``SupportsLocalFunctions(node)``
-(``supports_local_functions(node)`` in Python) to return true for supported calls.
-Attention and rotary second-stage patterns accept their intermediate helper
-identities, without allowing local overrides of the surrounding primitives.
+``GraphGraph::GetFunction(node)`` (``graph.get_function(node)`` in Python)
+resolves calls using the model's and builder's existing function definitions,
+by normalized domain, name and overload. ``IsOperator(node)``
+(``graph.is_operator(node)``) distinguishes primitives from these calls;
+nonempty overloads are not primitives. Primitive matchers check the candidate
+before interpreting it and use ``MatchOperators(graph, nodes, insert_at)`` in
+C++ to validate every matched primitive, including secondary nodes.
+Python primitive matchers check ``graph.is_operator`` for every node they
+interpret. A plain ``MatchResult`` / ``self.result`` does not assert primitive
+semantics. ``RepeatedLayer`` preserves calls as opaque nodes, while attention
+and rotary second-stage patterns recognize their intermediate helper identities
+and separately validate the surrounding primitives. There is no per-pattern
+function-support hook. Constant queries never read primitive Constant attributes
+from a resolved local call or an unresolved function-attribute reference.
 Cast elimination also rejects replacements that would introduce an overridden
 default-domain ``Identity``; default-domain function identity checks treat
 ``""``, ``ai.onnx``, and ``onnx.ai`` consistently.
@@ -328,8 +336,10 @@ the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
                   return {"Neg"}
 
               def match(self, graph, node):
+                  if not graph.is_operator(node):
+                      return self.no_match(node, "the candidate is a local call or overload")
                   previous = graph.node_before(node.input[0])
-                  if previous is None or previous.op_type != "Neg":
+                  if previous is None or previous.op_type != "Neg" or not graph.is_operator(previous):
                       return self.no_match(node, "the input is not produced by Neg")
                   return self.result([previous, node], insert_at=node)
 
@@ -360,11 +370,13 @@ the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
 
             builder::MatchResult Match(builder::GraphGraph &graph,
                                        const onnx_light::NodeProto &candidate) const override {
+              if (!graph.IsOperator(candidate))
+                return NoMatch(candidate, "the candidate is a local call or overload");
               const auto *previous = graph.NodeBefore(candidate.input()[0].value());
               if (previous == nullptr || previous->op_type().value() != "Neg") {
                 return NoMatch(candidate, "the input is not produced by Neg");
               }
-              return builder::MatchResult{this, {previous, &candidate}, &candidate};
+              return MatchOperators(graph, {previous, &candidate}, &candidate);
             }
 
             onnx_light::utils::RepeatedProtoField<onnx_light::NodeProto>

@@ -73,6 +73,8 @@ std::set<std::string> InitializerUnsqueezeCastPattern::FastOpType() const { retu
 core::builder::MatchResult
 InitializerUnsqueezeCastPattern::Match(core::builder::GraphGraph &graph,
                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsOp(candidate, "Cast", 1) || FindAttribute(candidate, "to") == nullptr ||
       FindAttribute(candidate, "to")->type() != AttributeProto::AttributeType::INT) {
     return NoMatch(candidate, "candidate is not a valid default-domain Cast");
@@ -113,7 +115,7 @@ InitializerUnsqueezeCastPattern::Match(core::builder::GraphGraph &graph,
   if (kernels.find("ai.onnx:Cast") == kernels.end()) {
     return NoMatch(candidate, "Cast runtime kernel is unavailable");
   }
-  return core::builder::MatchResult{this, {unsqueeze, &candidate, consumers[0]}, consumers[0]};
+  return MatchOperators(graph, {unsqueeze, &candidate, consumers[0]}, consumers[0]);
 }
 
 utils::RepeatedProtoField<NodeProto>

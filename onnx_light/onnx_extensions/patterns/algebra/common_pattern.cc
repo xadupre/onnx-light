@@ -231,11 +231,13 @@ SameChildrenPattern::MatchWithNodes(core::builder::GraphGraph &graph, const Node
       return {};
     }
   }
-  return core::builder::MatchResult{this, std::move(nodes), nullptr};
+  return MatchOperators(graph, std::move(nodes), nullptr);
 }
 
 core::builder::MatchResult SameChildrenPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   core::builder::MatchResult match;
   for (int output_index = 0; output_index < candidate.output_size(); ++output_index) {
     const std::vector<const NodeProto *> &next_nodes =
@@ -334,7 +336,7 @@ core::builder::MatchResult SameChildrenPattern::Match(core::builder::GraphGraph 
         }
       }
     }
-    match = core::builder::MatchResult{this, std::move(nodes), nullptr};
+    match = MatchOperators(graph, std::move(nodes), nullptr);
   }
   return match.pattern != nullptr ? match : NoMatch(candidate, "no equivalent sibling nodes found");
 }
@@ -379,6 +381,8 @@ SameChildrenPattern::Apply(core::builder::GraphGraph &,
 
 core::builder::MatchResult SameChildrenFromInputPattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (candidate.input_size() == 0 || graph.NodeBefore(candidate.input()[0].value()) != nullptr) {
     return NoMatch(candidate, "the candidate first input is not a graph input");
   }
@@ -398,6 +402,8 @@ std::set<std::string> ShapeBasedSameChildrenPattern::FastOpType() const {
 
 core::builder::MatchResult ShapeBasedSameChildrenPattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool is_expand = IsDefaultOp(candidate, "Expand");
   const bool is_reshape = IsDefaultOp(candidate, "Reshape");
   if ((!is_expand && !is_reshape) || candidate.input_size() < 1 || candidate.output_size() != 1) {
@@ -426,7 +432,7 @@ core::builder::MatchResult ShapeBasedSameChildrenPattern::Match(core::builder::G
           return graph.GetShape(node->output()[0].value()).Shape() == shape;
         });
     if (same_shapes) {
-      return core::builder::MatchResult{this, std::move(selected), nullptr};
+      return MatchOperators(graph, std::move(selected), nullptr);
     }
   }
   return NoMatch(candidate, "equivalent Expand or Reshape output shapes were not found");
@@ -457,6 +463,8 @@ std::set<std::string> ShapeBasedIdentityPattern::FastOpType() const {
 
 core::builder::MatchResult ShapeBasedIdentityPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if ((!IsDefaultOp(candidate, "Transpose") && !IsDefaultOp(candidate, "Slice")) ||
       candidate.input_size() < 1 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose or Slice");
@@ -482,7 +490,7 @@ core::builder::MatchResult ShapeBasedIdentityPattern::Match(core::builder::Graph
       graph.GetShape(candidate.output()[0].value()).Shape()) {
     return NoMatch(candidate, "the Slice input and output shapes differ");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -509,6 +517,8 @@ std::set<std::string> SwapUnaryPattern::FastOpType() const {
 
 core::builder::MatchResult SwapUnaryPattern::Match(core::builder::GraphGraph &graph,
                                                    const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool layout = IsDefaultOp(candidate, "Transpose") || IsDefaultOp(candidate, "Reshape") ||
                       IsDefaultOp(candidate, "Squeeze") || IsDefaultOp(candidate, "Unsqueeze");
   if (!layout || candidate.input_size() < 1 || candidate.output_size() != 1) {
@@ -534,7 +544,7 @@ core::builder::MatchResult SwapUnaryPattern::Match(core::builder::GraphGraph &gr
   if (!IsUnaryLike(next->op_type().value()) && !scalar_binary) {
     return NoMatch(candidate, "the layout consumer is not unary-like or binary with shape [1]");
   }
-  return core::builder::MatchResult{this, {&candidate, next}, nullptr};
+  return MatchOperators(graph, {&candidate, next}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>

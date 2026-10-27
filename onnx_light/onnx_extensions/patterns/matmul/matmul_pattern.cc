@@ -492,6 +492,8 @@ std::set<std::string> GemmSumFusionPattern::FastOpType() const { return {"Sum"};
 
 core::builder::MatchResult GemmSumFusionPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Sum") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a two-input default-domain Sum");
@@ -520,7 +522,7 @@ core::builder::MatchResult GemmSumFusionPattern::Match(core::builder::GraphGraph
                           graph.GetShape(candidate.input()[1 - gemm_input].value()).Shape())) {
     return NoMatch(candidate, "the Sum addend is not a valid Gemm bias");
   }
-  return core::builder::MatchResult{this, {gemm, &candidate}, &candidate};
+  return MatchOperators(graph, {gemm, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -555,6 +557,8 @@ std::set<std::string> MatMulAddPattern::FastOpType() const { return {"Gemm", "Ma
 
 core::builder::MatchResult MatMulAddPattern::Match(core::builder::GraphGraph &graph,
                                                    const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if ((!IsDefaultOp(candidate, "MatMul") && !IsDefaultOp(candidate, "Gemm")) ||
       candidate.input_size() < 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul or Gemm");
@@ -618,13 +622,13 @@ core::builder::MatchResult MatMulAddPattern::Match(core::builder::GraphGraph &gr
     return NoMatch(candidate, "the Add uses the matrix output twice");
   }
   if (IsDefaultOp(candidate, "MatMul") || candidate.input_size() == 2) {
-    return core::builder::MatchResult{this, {&candidate, &add}, &add};
+    return MatchOperators(graph, {&candidate, &add}, &add);
   }
   if (candidate.input_size() < 3 || !graph.HasShape(candidate.input()[2].value()) ||
       graph.GetShape(candidate.input()[2].value()).Shape() != bias_shape) {
     return NoMatch(candidate, "the two Gemm bias shapes differ");
   }
-  return core::builder::MatchResult{this, {&candidate, &add}, &add};
+  return MatchOperators(graph, {&candidate, &add}, &add);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -752,6 +756,8 @@ std::set<std::string> GemmTransposePattern::FastOpType() const { return {"Gemm"}
 
 core::builder::MatchResult GemmTransposePattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gemm") || candidate.input_size() < 2 ||
       candidate.output_size() == 0) {
     return NoMatch(candidate, "candidate is not a default-domain Gemm");
@@ -764,7 +770,7 @@ core::builder::MatchResult GemmTransposePattern::Match(core::builder::GraphGraph
       GetAttributeOr<int64_t>(candidate, "transB", 0) != 0) {
     return NoMatch(candidate, "the Gemm transpose or beta attributes are not supported");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -812,6 +818,8 @@ std::set<std::string> MatMulReshape2Of3Pattern::FastOpType() const {
 
 core::builder::MatchResult MatMulReshape2Of3Pattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool matmul = IsDefaultOp(candidate, "MatMul");
   const bool fused =
       candidate.op_type().value() == "FusedMatMul" && candidate.domain().value() == "com.microsoft";
@@ -910,7 +918,7 @@ core::builder::MatchResult MatMulReshape2Of3Pattern::Match(core::builder::GraphG
       rewritten_output.value() != final_shape) {
     return NoMatch(candidate, "the rewritten MatMul shapes do not produce the final result");
   }
-  return core::builder::MatchResult{this, {left, right, &candidate, next}, nullptr};
+  return MatchOperators(graph, {left, right, &candidate, next}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1004,6 +1012,8 @@ std::set<std::string> MulMulMatMulPattern::FastOpType() const { return {"MatMul"
 
 core::builder::MatchResult MulMulMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul");
@@ -1032,7 +1042,7 @@ core::builder::MatchResult MulMulMatMulPattern::Match(core::builder::GraphGraph 
                    [&](const std::string &name) { return graph.IsConstantScalar(name); })) {
     return NoMatch(candidate, "the two Mul nodes do not contain exactly two scalar constants");
   }
-  return core::builder::MatchResult{this, {left, right, &candidate}, nullptr};
+  return MatchOperators(graph, {left, right, &candidate}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1087,6 +1097,8 @@ std::set<std::string> MatMulBatchNormalizationFusionPattern::FastOpType() const 
 core::builder::MatchResult
 MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
                                              const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not an inference BatchNormalization");
@@ -1161,7 +1173,7 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
       return NoMatch(candidate, "the folded BatchNormalization parameters are non-finite");
     }
   }
-  return core::builder::MatchResult{this, {matmul, &candidate}, &candidate};
+  return MatchOperators(graph, {matmul, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1233,6 +1245,8 @@ std::set<std::string> MatMulScaleFusionPattern::FastOpType() const { return {"Ma
 
 core::builder::MatchResult MatMulScaleFusionPattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1 || !IsRankTwo(graph, candidate.input()[0].value()) ||
       !IsRankTwo(graph, candidate.input()[1].value())) {
@@ -1283,7 +1297,7 @@ core::builder::MatchResult MatMulScaleFusionPattern::Match(core::builder::GraphG
   } else if (!CanUseGemmAlpha(*scalar, scale.factor)) {
     return NoMatch(candidate, "the scalar cannot be represented safely as Gemm alpha");
   }
-  return core::builder::MatchResult{this, {&candidate, scale.node}, scale.node};
+  return MatchOperators(graph, {&candidate, scale.node}, scale.node);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1343,6 +1357,8 @@ std::set<std::string> ReshapeMatMulReshapePattern::FastOpType() const { return {
 
 core::builder::MatchResult ReshapeMatMulReshapePattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul");
@@ -1402,7 +1418,7 @@ core::builder::MatchResult ReshapeMatMulReshapePattern::Match(core::builder::Gra
   if (!direct_result.has_value() || direct_result.value() != final_shape) {
     return NoMatch(candidate, "the original batch prefixes do not broadcast to the final shape");
   }
-  return core::builder::MatchResult{this, {left, right, &candidate, successors[0]}, nullptr};
+  return MatchOperators(graph, {left, right, &candidate, successors[0]}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1441,6 +1457,8 @@ std::set<std::string> TransposeMatMulPattern::FastOpType() const { return {"Gemm
 
 core::builder::MatchResult TransposeMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if ((!IsDefaultOp(candidate, "MatMul") && !IsDefaultOp(candidate, "Gemm")) ||
       candidate.input_size() < 2 || candidate.output_size() == 0) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul or Gemm");
@@ -1495,7 +1513,7 @@ core::builder::MatchResult TransposeMatMulPattern::Match(core::builder::GraphGra
       return NoMatch(candidate, "the constant left transpose should be folded");
     }
   }
-  return core::builder::MatchResult{this, {left, right, &candidate}, nullptr};
+  return MatchOperators(graph, {left, right, &candidate}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1557,6 +1575,8 @@ std::set<std::string> TransposeReshapeMatMulPattern::FastOpType() const { return
 
 core::builder::MatchResult TransposeReshapeMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
       candidate.output_size() == 0) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul");
@@ -1577,12 +1597,12 @@ core::builder::MatchResult TransposeReshapeMatMulPattern::Match(core::builder::G
   if (!graph.HasShape(select_left ? candidate.input()[0].value() : candidate.input()[1].value())) {
     return NoMatch(candidate, "the selected MatMul input rank is unknown");
   }
-  return core::builder::MatchResult{this,
-                                    {&candidate, select_left ? selected->reshape : nullptr,
-                                     select_left ? selected->transpose : nullptr,
-                                     select_left ? nullptr : selected->reshape,
-                                     select_left ? nullptr : selected->transpose},
-                                    &candidate};
+  return MatchOperators(graph,
+                        {&candidate, select_left ? selected->reshape : nullptr,
+                         select_left ? selected->transpose : nullptr,
+                         select_left ? nullptr : selected->reshape,
+                         select_left ? nullptr : selected->transpose},
+                        &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1642,6 +1662,8 @@ std::set<std::string> SwitchReshapeActivationPattern::FastOpType() const {
 
 core::builder::MatchResult SwitchReshapeActivationPattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsActivation(candidate) || candidate.input_size() == 0 || candidate.output_size() == 0) {
     return NoMatch(candidate, "candidate is not a supported default-domain activation");
   }
@@ -1661,8 +1683,8 @@ core::builder::MatchResult SwitchReshapeActivationPattern::Match(core::builder::
   if (matmul == nullptr || (!IsDefaultOp(*matmul, "Gemm") && !IsDefaultOp(*matmul, "MatMul"))) {
     return NoMatch(candidate, "the layout is not preceded by default-domain Gemm or MatMul");
   }
-  return core::builder::MatchResult{
-      this, {matmul, layout, &candidate}, IsDefaultOp(*layout, "Reshape") ? layout : matmul};
+  return MatchOperators(graph, {matmul, layout, &candidate},
+                        IsDefaultOp(*layout, "Reshape") ? layout : matmul);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1745,6 +1767,8 @@ bool IsGroupedConstant(core::builder::GraphGraph &graph, const std::string &name
 
 core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   for (const char *op : {"Less", "Where", "Add", "GroupedMatMul"}) {
     if (HasGroupedFunction(graph.Builder(), "", op)) {
       return NoMatch(candidate, "a replacement operator resolves to a local function");
@@ -1844,8 +1868,8 @@ core::builder::MatchResult GroupedMatMulPattern::Match(core::builder::GraphGraph
       }
     }
   }
-  return core::builder::MatchResult{
-      this, {&candidate, matmul, unsqueeze, gather, bias_gather, add}, add ? add : &candidate};
+  return MatchOperators(graph, {&candidate, matmul, unsqueeze, gather, bias_gather, add},
+                        add ? add : &candidate);
 }
 
 namespace {
@@ -2158,7 +2182,7 @@ core::builder::MatchResult GroupedMatMulPattern::MatchConcat(core::builder::Grap
       }
     }
   }
-  return core::builder::MatchResult{this, nodes, &candidate};
+  return MatchOperators(graph, nodes, &candidate);
 }
 
 core::builder::MatchResult GroupedMatMulPattern::MatchLoop(core::builder::GraphGraph &graph,
@@ -2167,13 +2191,15 @@ core::builder::MatchResult GroupedMatMulPattern::MatchLoop(core::builder::GraphG
   if (!ReadGroupedLoop(graph, candidate, row)) {
     return NoMatch(candidate, "expected a stateless, fixed-trip per-token expert MatMul Loop");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 std::set<std::string> ShapeBasedMatMulToMulPattern::FastOpType() const { return {"MatMul"}; }
 
 core::builder::MatchResult ShapeBasedMatMulToMulPattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain MatMul");
@@ -2209,11 +2235,11 @@ core::builder::MatchResult ShapeBasedMatMulToMulPattern::Match(core::builder::Gr
           return NoMatch(candidate,
                          "the MatMul output has another consumer, output, or subgraph capture");
         }
-        return core::builder::MatchResult{this, {&candidate, successors[0]}, &candidate};
+        return MatchOperators(graph, {&candidate, successors[0]}, &candidate);
       }
     }
   }
-  return core::builder::MatchResult{this, {&candidate, nullptr}, &candidate};
+  return MatchOperators(graph, {&candidate, nullptr}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

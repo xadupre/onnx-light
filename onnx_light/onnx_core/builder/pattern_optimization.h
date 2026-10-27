@@ -158,9 +158,6 @@ public:
   /// The optimization driver caches this value once per optimization.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
-  /// Returns whether matching explicitly supports this model-local function call.
-  virtual bool SupportsLocalFunctions(const NodeProto &) const { return false; }
-
   /**
    * Returns whether Match may run concurrently on worker threads.
    *
@@ -185,6 +182,10 @@ public:
   symbolic::Device device;
 
 protected:
+  /// Builds a primitive-operator match, rejecting resolved local calls and overloads.
+  MatchResult MatchOperators(GraphGraph &graph, std::vector<const NodeProto *> nodes,
+                             const NodeProto *insert_at = nullptr) const;
+
   /**
    * Returns an empty match with a rejection reason and its call-site location.
    *

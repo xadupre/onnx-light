@@ -188,6 +188,8 @@ std::set<std::string> LabelEncoderFusionPattern::FastOpType() const { return {"L
 
 core::builder::MatchResult LabelEncoderFusionPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("ai.onnx.ml") < 2) {
     return NoMatch(candidate, "the ai.onnx.ml opset is older than 2");
   }
@@ -209,7 +211,7 @@ core::builder::MatchResult LabelEncoderFusionPattern::Match(core::builder::Graph
   if (first.keys == nullptr || second.keys == nullptr || first.value_kind != second.key_kind) {
     return NoMatch(candidate, "the LabelEncoder mappings or defaults are incompatible");
   }
-  return core::builder::MatchResult{this, {&candidate, next}, &candidate};
+  return MatchOperators(graph, {&candidate, next}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

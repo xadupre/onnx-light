@@ -224,6 +224,8 @@ std::set<std::string> SqueezeAddPattern::FastOpType() const { return {"Add"}; }
 
 core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Add") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not an opset-13 default-domain Add");
@@ -241,7 +243,7 @@ core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &g
       !ResolveSqueezeAxes(graph, *second, second_axes) || first_axes != second_axes) {
     return NoMatch(candidate, "the Squeeze axes are not equal");
   }
-  return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
+  return MatchOperators(graph, {first, second, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -283,6 +285,8 @@ std::set<std::string> MulUnsqueezeUnsqueezePattern::FastOpType() const { return 
 
 core::builder::MatchResult MulUnsqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Mul") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not an opset-13 default-domain Mul");
@@ -305,7 +309,7 @@ core::builder::MatchResult MulUnsqueezeUnsqueezePattern::Match(core::builder::Gr
       graph.IsUsedMoreThanOnce(candidate.input()[1].value())) {
     return NoMatch(candidate, "an Unsqueeze output is shared");
   }
-  return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
+  return MatchOperators(graph, {first, second, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -343,6 +347,8 @@ std::set<std::string> SqueezeBinaryUnsqueezePattern::FastOpType() const { return
 
 core::builder::MatchResult SqueezeBinaryUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1 ||
       !graph.IsConstantScalar(candidate.input()[1].value(), 0.0, false)) {
@@ -362,7 +368,7 @@ core::builder::MatchResult SqueezeBinaryUnsqueezePattern::Match(core::builder::G
       graph.GetShape(squeeze->input()[0].value()).Shape().Rank() != 1) {
     return NoMatch(candidate, "the binary left input is not produced from a rank-one value");
   }
-  return core::builder::MatchResult{this, {squeeze, binary, &candidate}, &candidate};
+  return MatchOperators(graph, {squeeze, binary, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -399,6 +405,8 @@ std::set<std::string> SwapUnsqueezeTransposePattern::FastOpType() const { return
 
 core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1 || !MainOpsetAtLeast(graph, 13) ||
       graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
@@ -435,7 +443,7 @@ core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::G
       return NoMatch(candidate, "the Unsqueeze axes contain duplicate dimensions");
     }
   }
-  return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
+  return MatchOperators(graph, {unsqueeze, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -504,6 +512,8 @@ std::set<std::string> TransposeEqualReshapePattern::FastOpType() const { return 
 
 core::builder::MatchResult TransposeEqualReshapePattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1 || !graph.HasShape(candidate.input()[0].value())) {
     return NoMatch(candidate, "candidate is not a Transpose with a known input shape");
@@ -534,7 +544,7 @@ core::builder::MatchResult TransposeEqualReshapePattern::Match(core::builder::Gr
   if (non_one > 1) {
     return NoMatch(candidate, "the Transpose moves more than one non-size-one dimension");
   }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return MatchOperators(graph, {&candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -583,6 +593,8 @@ std::set<std::string> TransposeReshapeTransposePattern::FastOpType() const { ret
 core::builder::MatchResult
 TransposeReshapeTransposePattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
@@ -603,7 +615,7 @@ TransposeReshapeTransposePattern::Match(core::builder::GraphGraph &graph,
   if (!MakeReshapeTransposePlan(graph, candidate, *reshape, *second_next[0], plan)) {
     return NoMatch(candidate, "the Reshape shape cannot be aligned with the Transposes");
   }
-  return core::builder::MatchResult{this, {&candidate, reshape, second_next[0]}, &candidate};
+  return MatchOperators(graph, {&candidate, reshape, second_next[0]}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

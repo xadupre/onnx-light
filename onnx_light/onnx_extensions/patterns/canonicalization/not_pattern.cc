@@ -27,6 +27,8 @@ std::set<std::string> NotNotPattern::FastOpType() const { return {"Not"}; }
 
 core::builder::MatchResult NotNotPattern::Match(core::builder::GraphGraph &graph,
                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultNot(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Not");
   }
@@ -34,7 +36,7 @@ core::builder::MatchResult NotNotPattern::Match(core::builder::GraphGraph &graph
   if (before == nullptr || !IsDefaultNot(*before)) {
     return NoMatch(candidate, "the preceding node is not a default-domain Not");
   }
-  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
+  return MatchOperators(graph, {before, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

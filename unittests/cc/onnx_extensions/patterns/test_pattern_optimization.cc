@@ -2834,6 +2834,115 @@ TEST(PatternOptimization, FunctionMatchersPreserveOverriddenPrimitivesAndSeconda
   }
 }
 
+TEST(PatternOptimization, PrimitiveMatchesResolveDomainAliasesAndOverloads) {
+  for (const std::string definition_domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string call_domain : {"", "ai.onnx"}) {
+      for (const std::string overload : {"", "custom"}) {
+        for (const bool secondary : {false, true}) {
+          SCOPED_TRACE(definition_domain);
+          SCOPED_TRACE(call_domain);
+          SCOPED_TRACE(overload);
+          SCOPED_TRACE(secondary);
+          core::builder::GraphBuilder definition(secondary ? "Relu" : "Cast", SchemaLookup(),
+                                                 {{"", 18}});
+          definition.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+          definition.MakeNode("Neg", {"X"}, {"Y"});
+          definition.MakeOutput("Y");
+          auto function = definition.ToFunction(definition_domain);
+          function.set_overload(overload);
+          if (!secondary)
+            function.add_attribute("to");
+          core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+          source.MakeLocalFunction(function);
+          source.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+          if (secondary) {
+            source.MakeInitializer(MakeInitializer<float>("minimum", {}, {0.0f}));
+            source.MakeNode("Relu", {"X"}, {"middle"}, call_domain);
+            source.MakeNode("Clip", {"middle", "minimum"}, {"Y"});
+          } else {
+            utils::RepeatedProtoField<AttributeProto> attributes;
+            auto &to = attributes.add();
+            to.set_name("to");
+            to.set_type(AttributeProto::INT);
+            to.set_i(TensorProto::FLOAT);
+            source.MakeNode("Cast", {"X"}, {"middle"}, call_domain, "", attributes);
+            source.MakeNode("Cast", {"middle"}, {"Y"}, call_domain, "", attributes);
+          }
+          source.MakeOutput("Y");
+          core::builder::GraphBuilder imported(source.ToModel(), SchemaLookup());
+          for (auto *builder : {&source, &imported}) {
+            std::shared_ptr<core::builder::PatternOptimization> pattern;
+            if (secondary)
+              pattern = std::make_shared<onnx_patterns::ReluClipFusionPattern>();
+            else
+              pattern = std::make_shared<onnx_patterns::CastCastPattern>();
+            core::builder::GraphGraph graph(*builder, {pattern});
+            const NodeProto &first = builder->Nodes()[0];
+            EXPECT_EQ(graph.IsOperator(first), !overload.empty());
+            EXPECT_EQ(graph.GetFunction(first) == nullptr, !overload.empty());
+            NodeProto alias = first;
+            alias.set_domain("onnx.ai");
+            EXPECT_EQ(graph.GetFunction(alias) == nullptr, !overload.empty());
+            NodeProto overloaded = first;
+            overloaded.set_overload("custom");
+            EXPECT_FALSE(graph.IsOperator(overloaded));
+            EXPECT_EQ(graph.GetFunction(overloaded) != nullptr, !overload.empty());
+            overloaded.set_overload("other");
+            EXPECT_FALSE(graph.IsOperator(overloaded));
+            EXPECT_EQ(graph.GetFunction(overloaded), nullptr);
+            EXPECT_EQ(pattern->Match(graph, builder->Nodes()[1]).pattern != nullptr,
+                      !overload.empty());
+            core::builder::ConstantFoldingOptions folding;
+            folding.enabled = false;
+            graph.Optimize(1, nullptr, folding);
+            EXPECT_EQ(builder->Nodes().size(), overload.empty() ? 2u : 1u);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(PatternOptimization, ConstantQueriesDoNotInterpretLocalCallsOrAttributeReferences) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const bool scalar_attribute : {false, true}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(scalar_attribute);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      auto &value = attributes.add();
+      value.set_name(scalar_attribute ? "value_float" : "value");
+      value.set_type(scalar_attribute ? AttributeProto::FLOAT : AttributeProto::TENSOR);
+      if (scalar_attribute)
+        value.set_f(1.0f);
+      else
+        *value.mutable_t() = MakeInitializer<float>("", {}, {1.0f});
+      builder.MakeNode("Constant", {}, {"minimum"}, "", "", attributes);
+      builder.MakeOutput("minimum");
+      core::builder::GraphGraph graph(builder);
+      EXPECT_TRUE(graph.IsConstantScalar("minimum", 1.0, false));
+      EXPECT_EQ(graph.GetConstantScope("minimum") != nullptr, !scalar_attribute);
+
+      FunctionProto function;
+      function.set_name("Constant");
+      function.set_domain(domain);
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+      EXPECT_EQ(graph.GetComputedConstant("minimum"), nullptr);
+      EXPECT_EQ(graph.GetConstantScope("minimum"), nullptr);
+      EXPECT_FALSE(graph.IsConstantScalar("minimum"));
+      EXPECT_FALSE(graph.IsConstantScalar("minimum", 1.0, false));
+      shapes.ClearLocalFunctions();
+
+      auto &node = const_cast<NodeProto &>(builder.Nodes()[0]);
+      node.mutable_attribute(0)->set_ref_attr_name("parameter");
+      EXPECT_EQ(graph.GetComputedConstant("minimum"), nullptr);
+      EXPECT_EQ(graph.GetConstantScope("minimum"), nullptr);
+      EXPECT_FALSE(graph.IsConstantScalar("minimum"));
+    }
+  }
+}
+
 TEST(PatternOptimization, CastMatchersRejectIntroducedIdentityOverrides) {
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     for (bool pair : {false, true}) {

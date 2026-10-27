@@ -54,11 +54,13 @@ The running example collapses two consecutive ``Neg`` nodes into an
 
       builder::MatchResult Match(builder::GraphGraph &graph,
                                  const NodeProto &candidate) const override {
+        if (!graph.IsOperator(candidate))
+          return NoMatch(candidate, "the candidate is a local call or overload");
         const NodeProto *previous = graph.NodeBefore(candidate.input()[0].value());
         if (previous == nullptr || previous->op_type().value() != "Neg") {
           return NoMatch(candidate, "the input is not produced by Neg");
         }
-        return builder::MatchResult{this, {previous, &candidate}, &candidate};
+        return MatchOperators(graph, {previous, &candidate}, &candidate);
       }
 
       onnx_light::utils::RepeatedProtoField<NodeProto>
@@ -73,6 +75,11 @@ The running example collapses two consecutive ``Neg`` nodes into an
 ``NoMatch(candidate, reason)`` captures the call site (file and line)
 automatically through ``std::source_location``, so no explicit location
 needs to be passed.
+
+``MatchOperators`` rejects local calls among all matched nodes, using the
+model's and builder's function definitions. A matcher intentionally handling
+functions resolves them with ``graph.GetFunction(node)`` and constructs a
+``MatchResult`` directly; it must still check any surrounding primitives.
 
 Select the pattern for one optimizer
 ------------------------------------

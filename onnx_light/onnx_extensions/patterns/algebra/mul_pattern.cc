@@ -240,6 +240,8 @@ std::set<std::string> DivMulPattern::FastOpType() const { return {"Div"}; }
 
 core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph,
                                                 const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Div") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain binary Div");
@@ -263,7 +265,7 @@ core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph
   if (one == nullptr || !IsSupportedSingleOne(*one)) {
     return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
   }
-  return core::builder::MatchResult{this, {&candidate, mul}, nullptr};
+  return MatchOperators(graph, {&candidate, mul}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -296,6 +298,8 @@ std::set<std::string> MulMulMulScalarPattern::FastOpType() const { return {"Div"
 
 core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool is_div = IsDefaultOp(candidate, "Div");
   const bool is_mul = IsDefaultOp(candidate, "Mul");
   if ((!is_div && !is_mul) || candidate.input_size() != 2 || candidate.output_size() != 1) {
@@ -326,7 +330,7 @@ core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGra
       (!IsFloatingForDiv(*left_constant) || !IsFloatingForDiv(*right_constant))) {
     return NoMatch(candidate, "Div constants are not float16, float, or double");
   }
-  return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
+  return MatchOperators(graph, {&candidate, left, right}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -372,6 +376,8 @@ std::set<std::string> SwitchOrderBinaryPattern::FastOpType() const { return {"Ad
 
 core::builder::MatchResult SwitchOrderBinaryPattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool is_add = IsDefaultOp(candidate, "Add");
   const bool is_mul = IsDefaultOp(candidate, "Mul");
   if ((!is_add && !is_mul) || candidate.input_size() != 2 || candidate.output_size() != 1) {
@@ -432,8 +438,8 @@ core::builder::MatchResult SwitchOrderBinaryPattern::Match(core::builder::GraphG
   if (graph.IsUsedMoreThanOnce(other->output()[0].value())) {
     return NoMatch(candidate, "the nested binary output has another use");
   }
-  return core::builder::MatchResult{
-      this, {&candidate, choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}, &candidate};
+  return MatchOperators(
+      graph, {&candidate, choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -132,6 +132,15 @@ public:
 
   // ── Structural queries ───────────────────────────────────────────────
 
+  /// Resolves a model- or builder-local call by normalized domain, name and overload.
+  /// Returns nullptr when no local function has that identity.
+  /// The borrowed definition is invalidated when local functions are refreshed.
+  const FunctionProto *GetFunction(const NodeProto &node) const;
+
+  /// Returns whether a node denotes a primitive operator rather than a local call.
+  /// Nonempty overloads are never primitive operators.
+  bool IsOperator(const NodeProto &node) const;
+
   /// Returns the node producing ``name``, or ``nullptr`` when ``name`` is a
   /// graph input, an initializer or otherwise not produced by any node.
   const NodeProto *NodeBefore(const std::string &name) const;

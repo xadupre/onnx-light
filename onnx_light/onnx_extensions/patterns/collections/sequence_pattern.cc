@@ -66,6 +66,8 @@ std::set<std::string> SequenceConstructAtPattern::FastOpType() const {
 
 core::builder::MatchResult SequenceConstructAtPattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "SequenceConstruct")) {
     return NoMatch(candidate, "candidate is not a default-domain SequenceConstruct");
   }
@@ -81,7 +83,7 @@ core::builder::MatchResult SequenceConstructAtPattern::Match(core::builder::Grap
   nodes.reserve(consumers.size() + 1);
   nodes.push_back(&candidate);
   nodes.insert(nodes.end(), consumers.begin(), consumers.end());
-  return core::builder::MatchResult{this, std::move(nodes), &candidate};
+  return MatchOperators(graph, std::move(nodes), &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -120,6 +122,8 @@ std::set<std::string> SplitToSequenceSequenceAtPattern::FastOpType() const {
 core::builder::MatchResult
 SplitToSequenceSequenceAtPattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "SplitToSequence")) {
     return NoMatch(candidate, "candidate is not a default-domain SplitToSequence");
   }
@@ -159,7 +163,7 @@ SplitToSequenceSequenceAtPattern::Match(core::builder::GraphGraph &graph,
   nodes.reserve(consumers.size() + 1);
   nodes.push_back(&candidate);
   nodes.insert(nodes.end(), consumers.begin(), consumers.end());
-  return core::builder::MatchResult{this, std::move(nodes), &candidate};
+  return MatchOperators(graph, std::move(nodes), &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

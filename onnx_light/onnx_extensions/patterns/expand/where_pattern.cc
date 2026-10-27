@@ -124,6 +124,8 @@ std::set<std::string> NotWherePattern::FastOpType() const { return {"Where"}; }
 
 core::builder::MatchResult NotWherePattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
   }
@@ -132,7 +134,7 @@ core::builder::MatchResult NotWherePattern::Match(core::builder::GraphGraph &gra
       not_node->output_size() != 1) {
     return NoMatch(candidate, "the condition is not produced by a default-domain Not");
   }
-  return core::builder::MatchResult{this, {not_node, &candidate}, &candidate};
+  return MatchOperators(graph, {not_node, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -164,6 +166,8 @@ std::set<std::string> UnsqueezeEqualPattern::FastOpType() const { return {"Equal
 
 core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Equal") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Equal with two inputs");
@@ -211,8 +215,7 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
     if (input_axes != equal_axes) {
       return NoMatch(candidate, "the sibling and result Unsqueeze axes differ");
     }
-    return core::builder::MatchResult{
-        this, {input_unsqueeze, &candidate, equal_unsqueeze}, nullptr};
+    return MatchOperators(graph, {input_unsqueeze, &candidate, equal_unsqueeze}, nullptr);
   }
 
   const NodeProto *left_unsqueeze = graph.NodeBefore(candidate.input()[0].value());
@@ -243,8 +246,7 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
     return NoMatch(candidate, "an Unsqueeze output is shared");
   }
 
-  return core::builder::MatchResult{
-      this, {left_unsqueeze, right_unsqueeze, &candidate}, &candidate};
+  return MatchOperators(graph, {left_unsqueeze, right_unsqueeze, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -304,6 +306,8 @@ std::set<std::string> WhereAddPattern::FastOpType() const { return {"Where"}; }
 
 core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
@@ -323,7 +327,7 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
           const std::string &addend =
               first_is_where ? add->input()[1].value() : add->input()[0].value();
           if (IsFiniteScalarConstant(graph, addend)) {
-            return core::builder::MatchResult{this, {&candidate, add}, add};
+            return MatchOperators(graph, {&candidate, add}, add);
           }
         }
       }
@@ -347,7 +351,7 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
     return NoMatch(candidate, "a branch Add output is shared");
   }
 
-  return core::builder::MatchResult{this, {then_add, else_add, &candidate}, &candidate};
+  return MatchOperators(graph, {then_add, else_add, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -41,6 +41,8 @@ std::set<std::string> ReduceArgTopKPattern::FastOpType() const { return {"ArgMax
 
 core::builder::MatchResult ReduceArgTopKPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 18)) {
     return NoMatch(candidate, "the default-domain opset is below 18");
   }
@@ -84,7 +86,7 @@ core::builder::MatchResult ReduceArgTopKPattern::Match(core::builder::GraphGraph
       GetAttributeOr<int64_t>(*reduce, "select_last_index", 0) == 1) {
     return NoMatch(candidate, "the Reduce attributes are not TopK-compatible");
   }
-  return core::builder::MatchResult{this, {reduce, &candidate}, nullptr};
+  return MatchOperators(graph, {reduce, &candidate}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -137,6 +139,8 @@ std::set<std::string> ReduceSumNormalizePattern::FastOpType() const { return {"R
 
 core::builder::MatchResult ReduceSumNormalizePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "ReduceSum") || candidate.input_size() < 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain ReduceSum with axes input");
@@ -177,7 +181,7 @@ core::builder::MatchResult ReduceSumNormalizePattern::Match(core::builder::Graph
   if (to == nullptr || to->type() != AttributeProto::AttributeType::INT) {
     return NoMatch(candidate, "the final Cast does not define an integer 'to' attribute");
   }
-  return core::builder::MatchResult{this, {cast, &candidate, mul, sub, cast2}, nullptr};
+  return MatchOperators(graph, {cast, &candidate, mul, sub, cast2}, nullptr);
 }
 
 utils::RepeatedProtoField<NodeProto>

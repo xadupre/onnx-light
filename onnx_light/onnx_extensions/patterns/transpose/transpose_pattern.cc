@@ -75,6 +75,8 @@ std::set<std::string> TransposeTransposePattern::FastOpType() const { return {"T
 
 core::builder::MatchResult TransposeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
@@ -108,7 +110,7 @@ core::builder::MatchResult TransposeTransposePattern::Match(core::builder::Graph
                    "the intermediate Transpose is shared and the perms do not cancel out");
   }
 
-  return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
+  return MatchOperators(graph, {&candidate, next_node}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -152,6 +154,8 @@ std::set<std::string> TransposeGatherPattern::FastOpType() const { return {"Gath
 
 core::builder::MatchResult TransposeGatherPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Gather with two inputs");
@@ -178,7 +182,7 @@ core::builder::MatchResult TransposeGatherPattern::Match(core::builder::GraphGra
   if (normalized_axis < 0 || normalized_axis >= rank) {
     return NoMatch(candidate, "the Gather axis is out of range for the Transpose rank");
   }
-  return core::builder::MatchResult{this, {transpose, &candidate}, &candidate};
+  return MatchOperators(graph, {transpose, &candidate}, &candidate);
 }
 
 utils::RepeatedProtoField<NodeProto>

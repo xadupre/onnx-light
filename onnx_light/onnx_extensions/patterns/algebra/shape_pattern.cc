@@ -22,6 +22,8 @@ std::set<std::string> ShapeBasedShapeShapeAddPattern::FastOpType() const { retur
 
 core::builder::MatchResult ShapeBasedShapeShapeAddPattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
+  if (!graph.IsOperator(candidate))
+    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Add") || candidate.input_size() != 2) {
     return NoMatch(candidate, "candidate is not a default-domain binary Add");
   }

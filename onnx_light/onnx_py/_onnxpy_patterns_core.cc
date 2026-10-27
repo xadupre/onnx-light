@@ -36,10 +36,6 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
-  bool SupportsLocalFunctions(const NodeProto &node) const override {
-    NB_OVERRIDE_NAME("supports_local_functions", SupportsLocalFunctions, node);
-  }
-
   bool CanMatchInParallel() const noexcept override { return false; }
 
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
@@ -126,7 +122,6 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def_rw("device", &PatternOptimization::device,
               "Exact target device, or Device.kUndefined for a device-independent pattern.")
       .def("fast_op_type", &PatternOptimization::FastOpType)
-      .def("supports_local_functions", &PatternOptimization::SupportsLocalFunctions)
       .def(
           "result",
           [](const PatternOptimization &pattern, const std::vector<const NodeProto *> &nodes,
@@ -190,6 +185,15 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                    nb::rv_policy::reference_internal)
       .def_prop_ro("name", [](const GraphGraph &graph) { return graph.Builder().name(); })
       .def_prop_ro("patterns", &GraphGraph::Patterns)
+      .def(
+          "get_function",
+          [](const GraphGraph &graph, const NodeProto &node) -> nb::object {
+            const FunctionProto *function = graph.GetFunction(node);
+            return function == nullptr ? nb::none()
+                                       : nb::cast(utils::CopyWithSharedTensorStorage(*function));
+          },
+          nb::arg("node"), "Returns a function snapshot, or None when no local function matches.")
+      .def("is_operator", &GraphGraph::IsOperator, nb::arg("node"))
       .def("set_target_device", &GraphGraph::SetTargetDevice, nb::arg("device"),
            "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
       .def(

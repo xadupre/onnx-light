@@ -485,15 +485,14 @@ TEST(LayerNormalizationScalePattern, RejectsNormalizedGraphOutput) {
   EXPECT_EQ(match.no_match->reason, "the normalized value is externally used");
 }
 
-TEST(CastLayerNormalizationCastPattern, MovesCastsToParameters) {
-  core::builder::GraphBuilder builder("g", SingleOutputNormalizationSchemaLookup());
+TEST(CastLayerNormalizationCastPattern, ConvertsUnitScaleExactly) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
   AddFloatInitializer(builder, "scale", {3}, {1.0F, 1.0F, 1.0F});
-  AddFloatInitializer(builder, "bias", {3}, {0.0F, 0.0F, 0.0F});
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
-  builder.MakeNode("LayerNormalization", {"cast_x", "scale", "bias"}, {"normalized"}, "", "layer",
-                   Attributes({{"axis", -1}, {"stash_type", 1}}));
+  builder.MakeNode("LayerNormalization", {"cast_x", "scale", ""}, {"normalized"}, "", "layer",
+                   Attributes({{"axis", -1}, {"stash_type", 1}}, {{"epsilon", 0.125F}}));
   AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
   builder.MakeOutput("y");
 
@@ -504,16 +503,18 @@ TEST(CastLayerNormalizationCastPattern, MovesCastsToParameters) {
   EXPECT_EQ(match.insert_at, &builder.Nodes()[1]);
 
   const auto replacements = pattern.Apply(graph, match.nodes);
-  ASSERT_EQ(replacements.size(), 3u);
+  ASSERT_EQ(replacements.size(), 2u);
   EXPECT_EQ(replacements[0].op_type().value(), "Cast");
   EXPECT_EQ(replacements[0].input()[0].value(), "scale");
   EXPECT_EQ(GetAttributeOr<int64_t>(replacements[0], "to", 0),
             static_cast<int64_t>(TensorProto::DataType::FLOAT16));
-  EXPECT_EQ(replacements[1].input()[0].value(), "bias");
-  EXPECT_EQ(replacements[2].op_type().value(), "LayerNormalization");
-  EXPECT_EQ(replacements[2].input()[0].value(), "x");
-  EXPECT_EQ(replacements[2].output()[0].value(), "y");
-  EXPECT_EQ(GetAttributeOr<int64_t>(replacements[2], "stash_type", 0), 1);
+  EXPECT_EQ(replacements[1].op_type().value(), "LayerNormalization");
+  EXPECT_EQ(replacements[1].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].input()[2].value(), "");
+  EXPECT_EQ(replacements[1].output()[0].value(), "y");
+  EXPECT_EQ(replacements[1].name().value(), "layer");
+  EXPECT_EQ(GetAttributeOr<int64_t>(replacements[1], "stash_type", 0), 1);
+  EXPECT_EQ(GetAttributeOr<float>(replacements[1], "epsilon", 0.0F), 0.125F);
 }
 
 TEST(CastLayerNormalizationCastPattern, PreservesUnusedOptionalOutputs) {
@@ -539,7 +540,7 @@ TEST(CastLayerNormalizationCastPattern, PreservesUnusedOptionalOutputs) {
   EXPECT_EQ(replacements[1].output()[2].value(), "inverse_standard_deviation");
 }
 
-TEST(CastLayerNormalizationCastPattern, RejectsUsedOptionalOutput) {
+TEST(CastLayerNormalizationCastPattern, PreservesLiveOptionalOutputs) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
@@ -554,29 +555,129 @@ TEST(CastLayerNormalizationCastPattern, RejectsUsedOptionalOutput) {
   core::builder::GraphGraph graph(builder);
   onnx_patterns::CastLayerNormalizationCastPattern pattern;
   const auto match = pattern.Match(graph, builder.Nodes()[1]);
-  EXPECT_EQ(match.pattern, nullptr);
-  ASSERT_TRUE(match.no_match.has_value());
-  EXPECT_EQ(match.no_match->reason, "an optional normalization output is used");
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[1].output()[1].value(), "mean");
+  EXPECT_EQ(replacements[1].output()[2].value(), "inverse_standard_deviation");
 }
 
-TEST(CastLayerNormalizationCastPattern, RejectsSharedInputCast) {
-  core::builder::GraphBuilder builder("g", SingleOutputNormalizationSchemaLookup());
-  builder.SetOpsetVersion("", 23);
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
-  AddFloatInitializer(builder, "scale", {3}, {1.0F, 1.0F, 1.0F});
-  AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
-  builder.MakeNode("LayerNormalization", {"cast_x", "scale"}, {"normalized"});
-  AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
-  builder.MakeNode("Identity", {"cast_x"}, {"shared"});
-  builder.MakeOutput("y");
-  builder.MakeOutput("shared");
+TEST(CastLayerNormalizationCastPattern, OptimizesAndPreservesSharedPromotions) {
+  for (const std::string op : {"LayerNormalization", "RMSNormalization"}) {
+    for (bool shared : {false, true}) {
+      SCOPED_TRACE(op + (shared ? " shared" : " unshared"));
+      core::builder::GraphBuilder builder("g", SchemaLookup());
+      builder.SetOpsetVersion("", 23);
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
+      TensorProto scale;
+      scale.set_name("scale");
+      scale.set_data_type(TensorProto::DataType::FLOAT16);
+      scale.add_dims(3);
+      for (int i = 0; i < 3; ++i) {
+        scale.add_int32_data(core::runtime::FloatToFloat16Bits(1.0F));
+      }
+      builder.MakeInitializer(scale);
+      AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
+      AddCast(builder, "scale", "cast_scale", TensorProto::DataType::FLOAT);
+      builder.MakeNode(op, {"cast_x", "cast_scale"}, {"normalized"});
+      AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
+      builder.MakeOutput("y");
+      if (shared) {
+        builder.MakeOutput("cast_x");
+        builder.MakeOutput("cast_scale");
+      }
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::CastLayerNormalizationCastPattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      graph.Optimize();
+      ASSERT_EQ(builder.Nodes().size(), shared ? 3u : 1u);
+      const auto &normalization = builder.Nodes()[shared ? 2 : 0];
+      EXPECT_EQ(normalization.op_type().value(), op);
+      EXPECT_EQ(normalization.input()[0].value(), "x");
+      EXPECT_EQ(normalization.input()[1].value(), "scale");
+      EXPECT_EQ(normalization.output()[0].value(), "y");
+      EXPECT_EQ(graph.GetType("y"), core::symbolic::TensorType::kFloat16);
+    }
+  }
+}
 
-  core::builder::GraphGraph graph(builder);
-  onnx_patterns::CastLayerNormalizationCastPattern pattern;
-  const auto match = pattern.Match(graph, builder.Nodes()[1]);
-  EXPECT_EQ(match.pattern, nullptr);
-  ASSERT_TRUE(match.no_match.has_value());
-  EXPECT_EQ(match.no_match->reason, "the input Cast output is externally used");
+TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
+  for (const std::string variant : {"nonunit",       "inexact",         "bias",
+                                    "zero_bias",     "dynamic",         "default_scale",
+                                    "bf16",          "double",          "stash",
+                                    "old_layer",     "old_rms",         "microsoft",
+                                    "simplified",    "group",           "attribute",
+                                    "shared_output", "captured_output", "output_cast",
+                                    "input_cast",    "overload",        "local_normalization",
+                                    "local_cast"}) {
+    SCOPED_TRACE(variant);
+    core::builder::GraphBuilder builder("g", SingleOutputNormalizationSchemaLookup());
+    builder.SetOpsetVersion("", variant == "old_layer" ? 16 : variant == "old_rms" ? 22 : 23);
+    const auto type = variant == "bf16"     ? core::symbolic::TensorType::kBfloat16
+                      : variant == "double" ? core::symbolic::TensorType::kDouble
+                                            : core::symbolic::TensorType::kFloat16;
+    builder.MakeInput("x", type, Shape({2, 3}));
+    if (variant == "dynamic") {
+      builder.MakeInput("scale", core::symbolic::TensorType::kFloat, Shape({3}));
+    } else {
+      if (variant == "default_scale") {
+        builder.MakeInput("scale", core::symbolic::TensorType::kFloat, Shape({3}));
+      }
+      const float scale = variant == "nonunit" ? 1.5F : variant == "inexact" ? 1.0001F : 1.0F;
+      AddFloatInitializer(builder, "scale", {3}, {scale, scale, scale});
+    }
+    AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
+    const std::string op = variant == "old_rms"      ? "RMSNormalization"
+                           : variant == "simplified" ? "SimplifiedLayerNormalization"
+                           : variant == "group"      ? "GroupNormalization"
+                                                     : "LayerNormalization";
+    std::vector<std::string> inputs = {"cast_x", "scale"};
+    if (variant == "bias" || variant == "zero_bias" || variant == "group") {
+      AddFloatInitializer(builder, "bias", {3},
+                          variant == "bias" ? std::vector<float>{1, 1, 1}
+                                            : std::vector<float>{0, 0, 0});
+      inputs.push_back("bias");
+    }
+    builder.MakeNode(op, inputs, {"normalized"}, "", "",
+                     variant == "group" ? Attributes({{"num_groups", 1}}) : Attributes());
+    AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
+    builder.MakeOutput("y");
+    if (variant == "stash" || variant == "attribute") {
+      SetNodeIntegerAttribute(builder, 1, variant == "stash" ? "stash_type" : "unsupported", 10);
+    } else if (variant == "microsoft") {
+      SetNodeDomain(builder, 1, "com.microsoft");
+    } else if (variant == "input_cast") {
+      SetNodeDomain(builder, 0, "custom");
+    } else if (variant == "output_cast") {
+      SetNodeDomain(builder, 2, "custom");
+    } else if (variant == "overload") {
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      nodes[1].set_overload("custom");
+    } else if (variant == "local_normalization" || variant == "local_cast") {
+      FunctionProto function;
+      function.set_name(variant == "local_cast" ? "Cast" : "LayerNormalization");
+      function.set_domain("");
+      function.add_input("arg");
+      function.add_output("result");
+      function.add_opset("", 23);
+      function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+    } else if (variant == "shared_output") {
+      builder.MakeOutput("normalized");
+    } else if (variant == "captured_output") {
+      auto &body = builder.MakeSubgraph("body");
+      body.MakeNode("Identity", {"normalized"}, {"captured"});
+      body.MakeOutput("captured");
+      AddSubgraphReference(builder, "body", "body_output");
+      builder.MakeOutput("body_output");
+    }
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::CastLayerNormalizationCastPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[1], &builder.Nodes()[2]}),
+                 core::builder::BuilderError);
+  }
 }
 
 TEST(BatchNormalizationPattern, ReplacesNeutralBatchNormalization) {

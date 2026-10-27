@@ -228,6 +228,26 @@ bool CastTarget(const NodeProto &node, int64_t &target) {
   return true;
 }
 
+bool IsStandardPrimitive(const core::builder::GraphGraph &graph, const NodeProto &node) {
+  return NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.overload().empty() &&
+         !graph.Builder().Shapes().HasLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+             node.domain(), node.op_type(), node.overload()));
+}
+
+const NodeProto *Float16Promotion(core::builder::GraphGraph &graph, const std::string &name) {
+  const NodeProto *cast = graph.NodeBefore(name);
+  int64_t target = 0;
+  if (cast == nullptr || !IsDefaultOp(*cast, "Cast") || !IsStandardPrimitive(graph, *cast) ||
+      cast->input_size() != 1 || cast->output_size() != 1 || !CastTarget(*cast, target) ||
+      target != static_cast<int64_t>(TensorProto::DataType::FLOAT) ||
+      !FindAttribute(*cast, "to")->ref_attr_name().empty() ||
+      !graph.HasType(cast->input()[0].value()) ||
+      graph.GetType(cast->input()[0].value()) != TensorType::kFloat16) {
+    return nullptr;
+  }
+  return cast;
+}
+
 bool HasRank(core::builder::GraphGraph &graph, const std::string &name, std::size_t &rank) {
   if (!graph.HasShape(name)) {
     return false;
@@ -705,46 +725,68 @@ LayerNormalizationScalePattern::Apply(core::builder::GraphGraph &graph,
 }
 
 std::set<std::string> CastLayerNormalizationCastPattern::FastOpType() const {
-  return {"GroupNormalization", "LayerNormalization", "RMSNormalization",
-          "SimplifiedLayerNormalization"};
+  return {"LayerNormalization", "RMSNormalization"};
 }
 
 core::builder::MatchResult
 CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
   const std::string &op_type = candidate.op_type().value();
-  if (op_type != "GroupNormalization" && op_type != "LayerNormalization" &&
-      op_type != "RMSNormalization" && op_type != "SimplifiedLayerNormalization") {
+  if (!IsDefaultOp(candidate, "LayerNormalization") &&
+      !IsDefaultOp(candidate, "RMSNormalization")) {
     return NoMatch(candidate, "candidate is not a supported normalization operator");
   }
-  const std::string normalized_domain = NormaliseDomain(candidate.domain().value());
-  if (normalized_domain != kDefaultOnnxDomain && candidate.domain().value() != "com.microsoft") {
-    return NoMatch(candidate, "candidate domain is neither ONNX nor com.microsoft");
+  if (!IsStandardPrimitive(graph, candidate)) {
+    return NoMatch(candidate, "normalization resolves to a local function or overload");
   }
-  if (candidate.input_size() < 1 || candidate.output_size() < 1) {
-    return NoMatch(candidate, "candidate has no data input or output");
+  const int opset = graph.Builder().OpsetVersion("");
+  if (opset < (op_type == "LayerNormalization" ? 17 : 23)) {
+    return NoMatch(candidate, "the standard normalization schema is unavailable");
   }
-  for (std::size_t index = 1; index < candidate.output().size(); ++index) {
-    if (!candidate.output()[index].value().empty() &&
-        graph.IsUsed(candidate.output()[index].value())) {
-      return NoMatch(candidate, "an optional normalization output is used");
+  if (candidate.input_size() < 2 || candidate.input_size() > 3 || candidate.output_size() < 1 ||
+      candidate.output_size() > (op_type == "LayerNormalization" ? 3 : 1) ||
+      (candidate.input_size() == 3 &&
+       (op_type != "LayerNormalization" || !candidate.input()[2].value().empty()))) {
+    return NoMatch(candidate, "only normalization without bias is supported");
+  }
+  for (const AttributeProto &attribute : candidate.attribute()) {
+    const std::string &name = attribute.name().value();
+    if (!attribute.ref_attr_name().empty() ||
+        (name != "axis" && name != "epsilon" && name != "stash_type") ||
+        (name == "epsilon" ? attribute.type() != AttributeProto::AttributeType::FLOAT
+                           : attribute.type() != AttributeProto::AttributeType::INT)) {
+      return NoMatch(candidate, "unsupported normalization attributes");
     }
   }
 
   const int64_t stash_type = GetAttributeOr<int64_t>(
       candidate, "stash_type", static_cast<int64_t>(TensorProto::DataType::FLOAT));
-  const NodeProto *cast_before = graph.NodeBefore(candidate.input()[0].value());
-  int64_t cast_before_target = 0;
-  if (cast_before == nullptr || !IsDefaultOp(*cast_before, "Cast") ||
-      cast_before->input_size() != 1 || cast_before->output_size() != 1 ||
-      !CastTarget(*cast_before, cast_before_target)) {
-    return NoMatch(candidate, "the data input is not produced by a default-domain Cast");
+  if (stash_type != static_cast<int64_t>(TensorProto::DataType::FLOAT)) {
+    return NoMatch(candidate, "only FP32 accumulation is supported");
   }
-  if (cast_before_target != stash_type) {
-    return NoMatch(candidate, "the input Cast target differs from stash_type");
+  if (Float16Promotion(graph, candidate.input()[0].value()) == nullptr) {
+    return NoMatch(candidate, "the data input is not a standard FP16-to-FP32 promotion");
   }
-  if (!HasOnlyConsumers(graph, *cast_before, {&candidate})) {
-    return NoMatch(candidate, "the input Cast output is externally used");
+  if (!graph.HasType(candidate.input()[0].value()) ||
+      graph.GetType(candidate.input()[0].value()) != TensorType::kFloat ||
+      !graph.HasType(candidate.input()[1].value()) ||
+      graph.GetType(candidate.input()[1].value()) != TensorType::kFloat) {
+    return NoMatch(candidate, "only FP16 data promoted to FP32 is supported");
+  }
+  // Both standard function bodies cast Normalized to the I/O type BEFORE
+  // scaling. Even exactly representable non-unit weights can double-round.
+  std::vector<double> scale;
+  const std::string &scale_name = candidate.input()[1].value();
+  const NodeProto *scale_cast = Float16Promotion(graph, scale_name);
+  const std::string &constant_name =
+      scale_cast == nullptr ? scale_name : scale_cast->input()[0].value();
+  const core::builder::GraphGraph *scope = graph.GetConstantScope(constant_name);
+  const NodeProto *producer = scope == nullptr ? nullptr : scope->NodeBefore(constant_name);
+  if (producer != nullptr && !IsStandardPrimitive(*scope, *producer)) {
+    return NoMatch(candidate, "the scale constant resolves to a local function or overload");
+  }
+  if (!ReadConstantValues(graph, constant_name, scale) || !AllEqual(scale, 1.0)) {
+    return NoMatch(candidate, "only a constant unit scale preserves intermediate rounding");
   }
 
   const std::vector<const NodeProto *> &cast_after_nodes =
@@ -754,36 +796,37 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   }
   const NodeProto *cast_after = cast_after_nodes[0];
   int64_t cast_after_target = 0;
-  if (!IsDefaultOp(*cast_after, "Cast") || cast_after->input_size() != 1 ||
-      cast_after->output_size() != 1 || !CastTarget(*cast_after, cast_after_target)) {
+  if (!IsDefaultOp(*cast_after, "Cast") || !IsStandardPrimitive(graph, *cast_after) ||
+      cast_after->input_size() != 1 || cast_after->output_size() != 1 ||
+      !CastTarget(*cast_after, cast_after_target) ||
+      !FindAttribute(*cast_after, "to")->ref_attr_name().empty()) {
     return NoMatch(candidate, "the data output is not consumed by a default-domain Cast");
   }
-  if (!graph.HasType(cast_before->input()[0].value()) ||
-      cast_after_target != static_cast<int64_t>(core::symbolic::TensorTypeToDataType(
-                               graph.GetType(cast_before->input()[0].value())))) {
+  if (cast_after_target != static_cast<int64_t>(TensorProto::DataType::FLOAT16)) {
     return NoMatch(candidate, "the output Cast does not restore the original element type");
   }
   if (!HasOnlyConsumers(graph, candidate.output()[0].value(), {cast_after})) {
     return NoMatch(candidate, "the normalization data output is externally used");
   }
-  return core::builder::MatchResult{this, {cast_before, &candidate, cast_after}, &candidate};
+  // Cleanup removes upstream casts only when no other consumer needs them.
+  return core::builder::MatchResult{this, {&candidate, cast_after}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
 CastLayerNormalizationCastPattern::Apply(core::builder::GraphGraph &graph,
                                          const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 3 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr) {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
     throw BuilderError(
-        "CastLayerNormalizationCastPattern::Apply expects Cast, normalization, Cast.");
+        "CastLayerNormalizationCastPattern::Apply expects normalization and output Cast.");
   }
-  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError(
         "CastLayerNormalizationCastPattern::Apply received an unsafe or inconsistent match.");
   }
-  const NodeProto &cast_before = *nodes[0];
-  const NodeProto &normalization = *nodes[1];
-  const NodeProto &cast_after = *nodes[2];
+  const NodeProto &normalization = *nodes[0];
+  const NodeProto &cast_before = *graph.NodeBefore(normalization.input()[0].value());
+  const NodeProto &cast_after = *nodes[1];
   core::builder::GraphBuilder &builder = graph.Builder();
   const int64_t input_type = static_cast<int64_t>(
       core::symbolic::TensorTypeToDataType(graph.GetType(cast_before.input()[0].value())));
@@ -792,6 +835,15 @@ CastLayerNormalizationCastPattern::Apply(core::builder::GraphGraph &graph,
   std::vector<std::string> inputs = {cast_before.input()[0].value()};
   for (std::size_t index = 1; index < normalization.input().size(); ++index) {
     const std::string &input = normalization.input()[index].value();
+    if (input.empty()) {
+      inputs.push_back(input);
+      continue;
+    }
+    const NodeProto *promote = Float16Promotion(graph, input);
+    if (promote != nullptr) {
+      inputs.push_back(promote->input()[0].value());
+      continue;
+    }
     const std::string output = builder.UniqueName("CastLayerNormalizationCastPattern_" + input +
                                                   "::C" + std::to_string(input_type));
     NodeProto cast = MakeNode(
@@ -802,18 +854,11 @@ CastLayerNormalizationCastPattern::Apply(core::builder::GraphGraph &graph,
     inputs.push_back(output);
   }
 
-  std::vector<std::string> outputs = {cast_after.output()[0].value()};
-  for (std::size_t index = 1; index < normalization.output().size(); ++index) {
-    outputs.push_back(normalization.output()[index].value());
+  NodeProto replacement = normalization;
+  for (std::size_t index = 0; index < inputs.size(); ++index) {
+    (*replacement.mutable_input())[index] = inputs[index];
   }
-  NodeProto replacement =
-      MakeNode(normalization.op_type().value().c_str(), inputs, outputs,
-               normalization.domain().value().c_str(),
-               ("CastLayerNormalizationCastPattern--" + normalization.name().value()).c_str());
-  CopyAttributes(normalization, replacement);
-  if (normalization.has_doc_string()) {
-    replacement.set_doc_string(normalization.doc_string().value());
-  }
+  (*replacement.mutable_output())[0] = cast_after.output()[0].value();
   replacements.push_back(std::move(replacement));
   return replacements;
 }

@@ -764,7 +764,8 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   if (stash_type != static_cast<int64_t>(TensorProto::DataType::FLOAT)) {
     return NoMatch(candidate, "only FP32 accumulation is supported");
   }
-  if (Float16Promotion(graph, candidate.input()[0].value()) == nullptr) {
+  const NodeProto *cast_before = Float16Promotion(graph, candidate.input()[0].value());
+  if (cast_before == nullptr) {
     return NoMatch(candidate, "the data input is not a standard FP16-to-FP32 promotion");
   }
   if (!graph.HasType(candidate.input()[0].value()) ||
@@ -808,30 +809,43 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   if (!HasOnlyConsumers(graph, candidate.output()[0].value(), {cast_after})) {
     return NoMatch(candidate, "the normalization data output is externally used");
   }
-  // Cleanup removes upstream casts only when no other consumer needs them.
-  return core::builder::MatchResult{this, {&candidate, cast_after}, &candidate};
+  // Reserve promotions as well: other matches must not retire the FP16 values
+  // that this replacement will use. Apply preserves shared promotions.
+  std::vector<const NodeProto *> nodes = {cast_before, &candidate, cast_after};
+  if (scale_cast != nullptr && scale_cast != cast_before) {
+    nodes.push_back(scale_cast);
+  }
+  return core::builder::MatchResult{this, nodes, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
 CastLayerNormalizationCastPattern::Apply(core::builder::GraphGraph &graph,
                                          const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+  if ((nodes.size() != 3 && nodes.size() != 4) ||
+      std::any_of(nodes.begin(), nodes.end(),
+                  [](const NodeProto *node) { return node == nullptr; })) {
     throw BuilderError(
-        "CastLayerNormalizationCastPattern::Apply expects normalization and output Cast.");
+        "CastLayerNormalizationCastPattern::Apply expects data Cast, normalization, output Cast "
+        "and optional scale Cast.");
   }
-  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError(
         "CastLayerNormalizationCastPattern::Apply received an unsafe or inconsistent match.");
   }
-  const NodeProto &normalization = *nodes[0];
-  const NodeProto &cast_before = *graph.NodeBefore(normalization.input()[0].value());
-  const NodeProto &cast_after = *nodes[1];
+  const NodeProto &cast_before = *nodes[0];
+  const NodeProto &normalization = *nodes[1];
+  const NodeProto &cast_after = *nodes[2];
   core::builder::GraphBuilder &builder = graph.Builder();
   const int64_t input_type = static_cast<int64_t>(
       core::symbolic::TensorTypeToDataType(graph.GetType(cast_before.input()[0].value())));
 
   utils::RepeatedProtoField<NodeProto> replacements;
+  for (std::size_t index : {std::size_t{0}, std::size_t{3}}) {
+    if (index < nodes.size() && !HasOnlyConsumers(graph, *nodes[index], {&normalization})) {
+      replacements.push_back(*nodes[index]);
+    }
+  }
   std::vector<std::string> inputs = {cast_before.input()[0].value()};
   for (std::size_t index = 1; index < normalization.input().size(); ++index) {
     const std::string &input = normalization.input()[index].value();

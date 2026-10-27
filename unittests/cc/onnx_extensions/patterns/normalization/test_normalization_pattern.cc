@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -578,6 +579,10 @@ TEST(CastLayerNormalizationCastPattern, OptimizesAndPreservesSharedPromotions) {
       }
       builder.MakeInitializer(scale);
       AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
+      if (shared) {
+        builder.MakeNode("Neg", {"cast_x"}, {"neg_x"});
+        builder.MakeOutput("neg_x");
+      }
       AddCast(builder, "scale", "cast_scale", TensorProto::DataType::FLOAT);
       builder.MakeNode(op, {"cast_x", "cast_scale"}, {"normalized"});
       AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
@@ -589,14 +594,21 @@ TEST(CastLayerNormalizationCastPattern, OptimizesAndPreservesSharedPromotions) {
       std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
       patterns.push_back(std::make_unique<onnx_patterns::CastLayerNormalizationCastPattern>());
       core::builder::GraphGraph graph(builder, std::move(patterns));
-      graph.Optimize();
-      ASSERT_EQ(builder.Nodes().size(), shared ? 3u : 1u);
-      const auto &normalization = builder.Nodes()[shared ? 2 : 0];
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = false;
+      graph.Optimize(-1, nullptr, folding);
+      ASSERT_EQ(builder.Nodes().size(), shared ? 4u : 1u);
+      const auto &normalization = builder.Nodes()[shared ? 3 : 0];
       EXPECT_EQ(normalization.op_type().value(), op);
       EXPECT_EQ(normalization.input()[0].value(), "x");
       EXPECT_EQ(normalization.input()[1].value(), "scale");
       EXPECT_EQ(normalization.output()[0].value(), "y");
       EXPECT_EQ(graph.GetType("y"), core::symbolic::TensorType::kFloat16);
+      if (shared) {
+        EXPECT_EQ(graph.GetType("cast_x"), core::symbolic::TensorType::kFloat);
+        EXPECT_EQ(graph.GetType("cast_scale"), core::symbolic::TensorType::kFloat);
+        EXPECT_NE(graph.NodeBefore("neg_x"), nullptr);
+      }
     }
   }
 }
@@ -675,9 +687,34 @@ TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
     core::builder::GraphGraph graph(builder);
     onnx_patterns::CastLayerNormalizationCastPattern pattern;
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
-    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[1], &builder.Nodes()[2]}),
-                 core::builder::BuilderError);
+    EXPECT_THROW(
+        pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1], &builder.Nodes()[2]}),
+        core::builder::BuilderError);
   }
+}
+
+TEST(CastLayerNormalizationCastPattern, ReservesPromotionsAgainstOtherCastRewrites) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 23);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
+  AddFloatInitializer(builder, "scale", {3}, {1, 1, 1});
+  AddCast(builder, "x", "half", TensorProto::DataType::FLOAT16);
+  AddCast(builder, "half", "cast_x", TensorProto::DataType::FLOAT);
+  builder.MakeNode("LayerNormalization", {"cast_x", "scale"}, {"normalized"});
+  AddCast(builder, "normalized", "y", TensorProto::DataType::FLOAT16);
+  builder.MakeOutput("y");
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastLayerNormalizationCastPattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  graph.Optimize(-1, nullptr, folding);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "half");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "LayerNormalization");
+  EXPECT_EQ(builder.Nodes()[2].input()[0].value(), "half");
+  EXPECT_EQ(builder.Nodes()[2].output()[0].value(), "y");
 }
 
 TEST(BatchNormalizationPattern, ReplacesNeutralBatchNormalization) {

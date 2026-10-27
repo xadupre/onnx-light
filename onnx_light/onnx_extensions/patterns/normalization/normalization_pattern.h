@@ -185,7 +185,7 @@ public:
  * signed-zero rounding. FP32 unit weights are converted exactly; existing
  * FP16-to-FP32 scale casts are bypassed. Saved statistics retain their FP32
  * computation and names, including live outputs. The FP32 data output must be
- * exclusive to the output Cast; shared upstream casts are retained by cleanup.
+ * exclusive to the output Cast; shared upstream casts are preserved.
  */
 class CastLayerNormalizationCastPattern final : public core::builder::PatternOptimization {
 public:

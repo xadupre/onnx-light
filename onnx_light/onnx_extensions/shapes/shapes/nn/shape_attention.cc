@@ -355,16 +355,22 @@ int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &i
     return 0;
   }
 
-  int64_t bytes = kScoreElementBytes;
-  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
-    EXT_ENFORCE_INVALID(dim->AsInt() >= 0, "Negative Attention scratch dimension.");
-  }
-  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
-    if (dim->AsInt() == 0)
+  const auto dimension = [](const char *name, const SymDim &dim) {
+    const int64_t value = dim.AsInt();
+    EXT_ENFORCE_INVALID(value >= 0, "Negative Attention scratch dimension '", name, "': ", value,
+                        ".");
+    return value;
+  };
+  const int64_t dimensions[] = {dimension("batch", batch), dimension("q_num_heads", q_num_heads),
+                                dimension("q_seq_len", q_seq_len),
+                                dimension("kv_seq_len", kv_seq_len)};
+  for (int64_t dim : dimensions) {
+    if (dim == 0)
       return 0;
   }
-  for (const SymDim *dim : {&batch, &q_num_heads, &q_seq_len, &kv_seq_len}) {
-    bytes = core::shapes::CheckedDimensionMultiply(bytes, dim->AsInt());
+  int64_t bytes = kScoreElementBytes;
+  for (int64_t dim : dimensions) {
+    bytes = core::shapes::CheckedDimensionMultiply(bytes, dim);
   }
   return bytes;
 }

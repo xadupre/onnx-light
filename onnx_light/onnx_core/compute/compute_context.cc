@@ -43,11 +43,23 @@ void ValidateScopeAllocations(const GraphOrFunction &scope,
                               const ShapesContext &ctx) {
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_sizes;
   const auto bytes = [&](const std::string &name) -> expressions::DimType {
+    EXT_ENFORCE_INVALID(!ctx.HasSequence(name) && !ctx.HasEncodedValue(name) &&
+                            (!ctx.HasType(name) || ctx.GetType(name).has_tensor_type()),
+                        "Memory analysis: unsupported non-tensor allocation for '", name,
+                        "'. Complete analysis requires fixed-width dense tensors.");
     EXT_ENFORCE_INVALID(ctx.Has(name), "Memory analysis: unresolved allocation for '", name, "'.");
     const auto &size = GetCachedByteSizeExpr(ctx, name, byte_sizes, &ctx.ExpressionCache());
     EXT_ENFORCE_INVALID(size.has_value(),
                         "Memory analysis: unsupported or unresolved allocation for '", name, "'.");
     return *size;
+  };
+  std::unordered_map<std::string, std::unordered_set<std::string>> dimension_tokens;
+  const auto tokens =
+      [&](const std::string &expression) -> const std::unordered_set<std::string> & {
+    const auto [it, inserted] = dimension_tokens.try_emplace(expression);
+    if (inserted)
+      it->second = expressions::parse_expression_tokens(expression);
+    return it->second;
   };
   expressions::DimSum initial_allocations;
   std::unordered_set<std::string> initial_names;
@@ -84,19 +96,22 @@ void ValidateScopeAllocations(const GraphOrFunction &scope,
     const SymShape &shape = ctx.Get(name).Shape();
     for (std::size_t i = 0; i < shape.Rank(); ++i) {
       if (!shape[i].IsInt()) {
-        const auto variables = expressions::parse_expression_tokens(shape[i].AsExpr());
+        const auto &variables = tokens(shape[i].AsExpr());
         input_dimensions.insert(variables.begin(), variables.end());
       }
     }
   }
   if constexpr (std::is_same_v<GraphOrFunction, GraphProto>)
     initial_allocations.Build(&ctx.ExpressionCache());
+  std::unordered_set<std::string> validated_values;
   const auto resolved_bytes = [&](const std::string &name) {
+    if (!validated_values.insert(name).second)
+      return;
     bytes(name);
     const SymShape &shape = ctx.Get(name).Shape();
     for (std::size_t i = 0; i < shape.Rank(); ++i) {
       if (!shape[i].IsInt()) {
-        for (const auto &variable : expressions::parse_expression_tokens(shape[i].AsExpr()))
+        for (const auto &variable : tokens(shape[i].AsExpr()))
           EXT_ENFORCE_INVALID(input_dimensions.count(variable) != 0,
                               "Memory analysis: unresolved dimension '", variable,
                               "' in allocation for '", name, "'.");

@@ -240,34 +240,89 @@ TEST(MemoryAnalysis, AllowsPartialLowLevelAnalysis) {
   EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(unknown_dimension, shapes));
 }
 
-TEST(MemoryAnalysis, RejectsUnaccountedSubgraphAllocations) {
-  for (const std::string allocation : {"valid", "overflow", "unsupported"}) {
-    SCOPED_TRACE(allocation);
-    GraphProto graph;
-    MemoryInput(graph, "condition", {}, TensorProto::BOOL);
-    MemoryInput(graph, "X", {1});
-    auto &node = MemoryNode(graph, "If", {"condition"}, "Y");
-    for (const char *name : {"then_branch", "else_branch"}) {
-      auto *attribute = node.add_attribute();
-      attribute->set_name(name);
-      attribute->set_type(AttributeProto::GRAPH);
-      auto &branch = *attribute->mutable_g();
-      MemoryInitializer(branch, "W",
-                        allocation == "overflow" ? std::vector<int64_t>{kLarge, kLarge}
-                                                 : std::vector<int64_t>{1});
-      if (allocation == "unsupported")
-        branch.mutable_initializer(0)->set_data_type(TensorProto::STRING);
-      MemoryNode(branch, "Identity", {"X"}, "result");
-      branch.add_output()->set_name("result");
+TEST(MemoryAnalysis, RejectsGraphValuedAttributesWithoutAnalysingTheirAllocations) {
+  GraphProto graph;
+  MemoryInput(graph, "condition", {}, TensorProto::BOOL);
+  MemoryInput(graph, "X", {1});
+  auto &node = MemoryNode(graph, "If", {"condition"}, "Y");
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto *attribute = node.add_attribute();
+    attribute->set_name(name);
+    attribute->set_type(AttributeProto::GRAPH);
+    auto &branch = *attribute->mutable_g();
+    MemoryNode(branch, "Identity", {"X"}, "result");
+    branch.add_output()->set_name("result");
+  }
+  graph.add_output()->set_name("Y");
+  core::compute::ComputeContext ctx;
+  ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+  EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes()));
+  ModelProto model;
+  *model.mutable_graph() = graph;
+  for (bool whole_model : {false, true}) {
+    try {
+      if (whole_model)
+        ctx.Compute(model);
+      else
+        ctx.Compute(graph);
+      FAIL() << "Complete analysis accepted an unaccounted graph-valued attribute.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("does not support graph-valued attributes on If"),
+                std::string::npos);
     }
-    graph.add_output()->set_name("Y");
-    core::compute::ComputeContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapes(graph));
-    EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes()));
-    EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
-    ModelProto model;
-    *model.mutable_graph() = graph;
-    EXPECT_THROW(ctx.Compute(model), std::invalid_argument);
+  }
+}
+
+TEST(MemoryAnalysis, RejectsNonTensorAllocationsConsistentlyAcrossScopes) {
+  for (bool local_function : {false, true}) {
+    for (bool optional : {false, true}) {
+      SCOPED_TRACE(::testing::Message()
+                   << "function=" << local_function << " optional=" << optional);
+      ModelProto model;
+      model.add_opset_import()->set_version(23);
+      MemoryInput(*model.mutable_graph(), "X", {2});
+      model.mutable_graph()->add_output()->set_name("Y");
+      const auto populate = [&](auto &scope, const std::string &input, const std::string &output) {
+        if (optional) {
+          auto *type = MemoryNode(scope, "Optional", {}, "container").add_attribute();
+          type->set_name("type");
+          type->set_type(AttributeProto::TYPE_PROTO);
+          auto *tensor = type->mutable_tp()->mutable_tensor_type();
+          tensor->set_elem_type(TensorProto::FLOAT);
+          tensor->mutable_shape()->add_dim()->set_dim_value(2);
+          MemoryNode(scope, "OptionalHasElement", {"container"}, output);
+        } else {
+          MemoryNode(scope, "SequenceConstruct", {input}, "container");
+          MemoryNode(scope, "SequenceLength", {"container"}, output);
+        }
+      };
+      if (local_function) {
+        auto *opset = model.add_opset_import();
+        opset->set_domain("memory_test");
+        opset->set_version(1);
+        MemoryNode(*model.mutable_graph(), "Body", {"X"}, "Y").set_domain("memory_test");
+        auto *body = model.add_functions();
+        body->set_domain("memory_test");
+        body->set_name("Body");
+        body->add_input("x");
+        body->add_output("y");
+        body->add_opset_import()->set_version(23);
+        populate(*body, "x", "y");
+      } else {
+        populate(*model.mutable_graph(), "X", "Y");
+      }
+      core::compute::ComputeContext ctx;
+      ASSERT_NO_THROW(ctx.ComputeShapes(model));
+      EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(model.graph(), ctx.Shapes()));
+      try {
+        ctx.Compute(model);
+        FAIL() << "Complete analysis accepted a non-tensor allocation.";
+      } catch (const std::invalid_argument &error) {
+        EXPECT_NE(
+            std::string(error.what()).find("unsupported non-tensor allocation for 'container'"),
+            std::string::npos);
+      }
+    }
   }
 }
 

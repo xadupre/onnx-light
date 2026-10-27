@@ -518,6 +518,57 @@ TEST(CastLayerNormalizationCastPattern, ConvertsUnitScaleExactly) {
   EXPECT_EQ(GetAttributeOr<float>(replacements[1], "epsilon", 0.0F), 0.125F);
 }
 
+TEST(CastLayerNormalizationCastPattern, HandlesDefaultDomainAliases) {
+  for (const std::string op : {"LayerNormalization", "RMSNormalization"}) {
+    for (const std::string opset_domain : {"", "ai.onnx"}) {
+      for (const std::string node_domain : {"", "ai.onnx"}) {
+        SCOPED_TRACE(op + " opset=" + opset_domain + " node=" + node_domain);
+        ModelProto model;
+        model.mutable_graph()->set_name("g");
+        model.add_opset(opset_domain, op == "LayerNormalization" ? 17 : 23);
+        core::builder::GraphBuilder builder(model, SchemaLookup());
+        builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2, 3}));
+        AddFloatInitializer(builder, "scale", {3}, {1.0F, 1.0F, 1.0F});
+        builder.MakeNode("Cast", {"x"}, {"cast_x"}, node_domain, "",
+                         Attributes({{"to", static_cast<int64_t>(TensorProto::DataType::FLOAT)}}));
+        builder.MakeNode(op, {"cast_x", "scale"}, {"normalized"}, node_domain);
+        builder.MakeNode(
+            "Cast", {"normalized"}, {"y"}, node_domain, "",
+            Attributes({{"to", static_cast<int64_t>(TensorProto::DataType::FLOAT16)}}));
+        builder.MakeOutput("y");
+
+        core::builder::GraphGraph graph(builder);
+        onnx_patterns::CastLayerNormalizationCastPattern pattern;
+        const auto match = pattern.Match(graph, builder.Nodes()[1]);
+        ASSERT_EQ(match.pattern, &pattern);
+        const auto replacements = pattern.Apply(graph, match.nodes);
+        ASSERT_EQ(replacements.size(), 2u);
+        EXPECT_EQ(replacements[1].domain().value(), node_domain);
+        EXPECT_EQ(replacements[1].input()[0].value(), "x");
+        EXPECT_EQ(replacements[1].output()[0].value(), "y");
+
+        for (const std::string function_domain : {"", "ai.onnx", "onnx.ai"}) {
+          for (const std::string &function_name : {op, std::string("Cast")}) {
+            SCOPED_TRACE("function=" + function_domain + ":" + function_name);
+            FunctionProto function;
+            function.set_name(function_name);
+            function.set_domain(function_domain);
+            function.add_input("arg");
+            function.add_output("result");
+            function.add_opset("", 23);
+            function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
+            auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+            shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
+            EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+            EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+            shapes.ClearLocalFunctions();
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST(CastLayerNormalizationCastPattern, PreservesUnusedOptionalOutputs) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);

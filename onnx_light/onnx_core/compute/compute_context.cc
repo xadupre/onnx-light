@@ -37,8 +37,10 @@ void ValidateInitializerAllocations(const GraphProto &graph) {
                       "Memory analysis does not support extended initializers.");
 }
 
-void ValidateGraphAllocations(const GraphProto &graph, const ShapesContext &ctx) {
-  ValidateInitializerAllocations(graph);
+template <typename GraphOrFunction>
+void ValidateScopeAllocations(const GraphOrFunction &scope,
+                              const utils::RepeatedProtoField<NodeProto> &nodes,
+                              const ShapesContext &ctx) {
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_sizes;
   const auto bytes = [&](const std::string &name) -> expressions::DimType {
     EXT_ENFORCE_INVALID(ctx.Has(name), "Memory analysis: unresolved allocation for '", name, "'.");
@@ -50,21 +52,33 @@ void ValidateGraphAllocations(const GraphProto &graph, const ShapesContext &ctx)
   expressions::DimSum initial_allocations;
   std::unordered_set<std::string> initial_names;
   std::unordered_set<std::string> input_dimensions;
-  for (const TensorProto &tensor : graph.initializer()) {
-    initial_allocations.Add(bytes(tensor.name()));
-    initial_names.insert(tensor.name());
+  if constexpr (std::is_same_v<GraphOrFunction, GraphProto>) {
+    ValidateInitializerAllocations(scope);
+    for (const TensorProto &tensor : scope.initializer()) {
+      initial_allocations.Add(bytes(tensor.name()));
+      initial_names.insert(tensor.name());
+    }
   }
-  for (const ValueInfoProto &input : graph.input()) {
-    if (initial_names.count(input.name()) != 0)
-      continue;
-    EXT_ENFORCE_INVALID(input.has_type() && input.type().has_tensor_type() &&
-                            input.type().tensor_type().has_shape(),
-                        "Memory analysis: unsupported or unresolved input allocation for '",
-                        input.name(), "'.");
-    const auto size = bytes(input.name());
-    if (initial_names.insert(input.name()).second)
+  for (const auto &input : scope.input()) {
+    std::string name;
+    if constexpr (std::is_same_v<GraphOrFunction, GraphProto>) {
+      name = input.name();
+      if (initial_names.count(name) != 0)
+        continue;
+      EXT_ENFORCE_INVALID(input.has_type() && input.type().has_tensor_type() &&
+                              input.type().tensor_type().has_shape(),
+                          "Memory analysis: unsupported or unresolved input allocation for '", name,
+                          "'.");
+    } else {
+      name = input;
+      if (!(ctx.Has(name) || ctx.HasType(name) || ctx.HasSequence(name) ||
+            ctx.HasEncodedValue(name)))
+        continue;
+    }
+    const auto size = bytes(name);
+    if (initial_names.insert(name).second)
       initial_allocations.Add(size);
-    const SymShape &shape = ctx.Get(input.name()).Shape();
+    const SymShape &shape = ctx.Get(name).Shape();
     for (std::size_t i = 0; i < shape.Rank(); ++i) {
       if (!shape[i].IsInt()) {
         const auto variables = expressions::parse_expression_tokens(shape[i].AsExpr());
@@ -85,7 +99,12 @@ void ValidateGraphAllocations(const GraphProto &graph, const ShapesContext &ctx)
       }
     }
   };
-  for (const NodeProto &node : graph.node()) {
+  for (const NodeProto &node : nodes) {
+    for (const AttributeProto &attribute : node.attribute()) {
+      EXT_ENFORCE_INVALID(!attribute.has_g() && attribute.graphs().empty(),
+                          "Memory analysis does not support graph-valued attributes on ",
+                          node.op_type(), ".");
+    }
     for (const std::string &name : node.input()) {
       if (!name.empty())
         resolved_bytes(name);
@@ -95,8 +114,12 @@ void ValidateGraphAllocations(const GraphProto &graph, const ShapesContext &ctx)
         resolved_bytes(name);
     }
   }
-  for (const ValueInfoProto &output : graph.output())
-    resolved_bytes(output.name());
+  for (const auto &output : scope.output()) {
+    if constexpr (std::is_same_v<GraphOrFunction, GraphProto>)
+      resolved_bytes(output.name());
+    else
+      resolved_bytes(output);
+  }
 }
 
 void ValidateScratchTotal(const NodeMemoryProfile &profile, int64_t scratch) {
@@ -218,11 +241,17 @@ void BindFunctionAttributes(GraphProto &graph, const FunctionAttributeMap &attri
 
 FunctionBodyMemoryEstimate
 EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Device device,
-                           std::unordered_set<std::string> &active_functions) {
+                           std::unordered_set<std::string> &active_functions,
+                           bool validate_allocations = false) {
   const std::string function_key =
       ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload());
   const FunctionProto *function = ctx.GetLocalFunction(function_key);
-  if (function == nullptr || !active_functions.insert(function_key).second)
+  if (function == nullptr)
+    return {};
+  const bool inserted = active_functions.insert(function_key).second;
+  EXT_ENFORCE_INVALID(!validate_allocations || inserted,
+                      "Memory analysis: recursive local function '", function_key, "'.");
+  if (!inserted)
     return {};
   struct PopFunction {
     std::unordered_set<std::string> &active;
@@ -252,6 +281,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
       continue;
     if (!(ctx.Has(actual) || ctx.HasType(actual) || ctx.HasSequence(actual) ||
           ctx.HasEncodedValue(actual))) {
+      EXT_ENFORCE_INVALID(!validate_allocations,
+                          "Memory analysis: unresolved local-function input '", actual, "'.");
       return {};
     }
     body_shapes.CopyValueFrom(function->input(i), ctx, actual);
@@ -283,6 +314,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
         body_shapes.Set(value_info.name().value(), std::move(descriptor));
     }
   }
+  if (validate_allocations)
+    ValidateScopeAllocations(*function, bound_nodes, body_shapes);
 
   std::unordered_set<std::string> formal_inputs(function->input().begin(), function->input().end());
   std::unordered_set<std::string> boundary_outputs(function->output().begin(),
@@ -341,8 +374,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
     }
     int64_t workspace =
         shapes::ComputePeakMemory(inner.domain(), inner.op_type(), device, input_shapes);
-    const FunctionBodyMemoryEstimate nested =
-        EstimateFunctionBodyMemory(inner, body_shapes, device, active_functions);
+    const FunctionBodyMemoryEstimate nested = EstimateFunctionBodyMemory(
+        inner, body_shapes, device, active_functions, validate_allocations);
     workspace = std::max(workspace, nested.workspace_peak);
     live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
                                 &expression_cache);
@@ -358,7 +391,8 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
 
 FunctionBodyMemoryEstimate EstimateFunctionBodyMemory(const NodeProto &node,
                                                       const ShapesContext &ctx, Device device,
-                                                      const NodeMaterializerFn &materialize = {}) {
+                                                      const NodeMaterializerFn &materialize = {},
+                                                      bool validate_allocations = false) {
   std::unordered_set<std::string> active_functions;
   if (materialize &&
       std::any_of(node.attribute().begin(), node.attribute().end(),
@@ -372,9 +406,10 @@ FunctionBodyMemoryEstimate EstimateFunctionBodyMemory(const NodeProto &node,
                                                            node.overload())) != nullptr) {
     NodeProto resolved = utils::CopyWithSharedTensorStorage(node);
     materialize(resolved);
-    return EstimateFunctionBodyMemory(resolved, ctx, device, active_functions);
+    return EstimateFunctionBodyMemory(resolved, ctx, device, active_functions,
+                                      validate_allocations);
   }
-  return EstimateFunctionBodyMemory(node, ctx, device, active_functions);
+  return EstimateFunctionBodyMemory(node, ctx, device, active_functions, validate_allocations);
 }
 
 void AddFunctionBodyMemory(NodeMemoryProfile &profile, const FunctionBodyMemoryEstimate &estimate,
@@ -1472,7 +1507,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 template <typename GraphOrFunction>
 void ComputeContext::ComputeInPlaceReuseGraphImpl(
     const GraphOrFunction &graph, const ShapesContext &ctx, bool allow_input_overwrite,
-    const std::unordered_map<std::string, std::string> &value_tags) {
+    const std::unordered_map<std::string, std::string> &value_tags, bool validate_allocations) {
   const int num_nodes = graph.node().size();
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
@@ -1615,8 +1650,10 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
-    AddFunctionBodyMemory(profile, EstimateFunctionBodyMemory(node, ctx, Device::kUndefined),
-                          &expression_cache);
+    AddFunctionBodyMemory(
+        profile,
+        EstimateFunctionBodyMemory(node, ctx, Device::kUndefined, {}, validate_allocations),
+        &expression_cache);
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
@@ -1845,10 +1882,10 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
 void ComputeContext::Compute(const GraphProto &graph, Device device, bool allow_input_overwrite) {
   ValidateInitializerAllocations(graph);
   ComputeShapes(graph);
-  ValidateGraphAllocations(graph, shapes_);
+  ValidateScopeAllocations(graph, graph.node(), shapes_);
   const auto tags = ComputeValueAndNodeTags(graph);
   ComputeConstants(graph);
-  ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
+  ComputeInPlaceReuseGraphImpl(graph, shapes_, allow_input_overwrite, tags.first, true);
   ComputePeakMemory(graph, device);
   for (std::size_t i = 0; i < memory_.size(); ++i)
     ValidateScratchTotal(memory_[i], peak_memory_[i]);
@@ -1859,10 +1896,10 @@ void ComputeContext::Compute(const ModelProto &model, Device device, bool allow_
   ValidateInitializerAllocations(model.graph());
   ComputeShapes(model, prefill_with_value_info_output);
   const GraphProto &graph = model.graph();
-  ValidateGraphAllocations(graph, shapes_);
+  ValidateScopeAllocations(graph, graph.node(), shapes_);
   const auto tags = ComputeValueAndNodeTags(graph);
   ComputeConstants(graph);
-  ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
+  ComputeInPlaceReuseGraphImpl(graph, shapes_, allow_input_overwrite, tags.first, true);
   ComputePeakMemory(graph, device);
   for (std::size_t i = 0; i < memory_.size(); ++i)
     ValidateScratchTotal(memory_[i], peak_memory_[i]);

@@ -30,7 +30,8 @@ void MemoryInput(GraphProto &graph, const std::string &name, const std::vector<i
     dims->add_dim()->set_dim_value(dim);
 }
 
-NodeProto &MemoryNode(GraphProto &graph, const std::string &op,
+template <typename GraphOrFunction>
+NodeProto &MemoryNode(GraphOrFunction &graph, const std::string &op,
                       const std::vector<std::string> &inputs, const std::string &output) {
   auto &node = *graph.add_node();
   node.set_op_type(op);
@@ -229,6 +230,106 @@ TEST(MemoryAnalysis, AllowsPartialLowLevelAnalysis) {
                       core::symbolic::SymShape{core::symbolic::SymDim(std::string{})}));
   core::compute::ComputeContext ctx;
   EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(unknown_dimension, shapes));
+}
+
+TEST(MemoryAnalysis, RejectsUnaccountedSubgraphAllocations) {
+  for (const std::string allocation : {"valid", "overflow", "unsupported"}) {
+    SCOPED_TRACE(allocation);
+    GraphProto graph;
+    MemoryInput(graph, "condition", {}, TensorProto::BOOL);
+    MemoryInput(graph, "X", {1});
+    auto &node = MemoryNode(graph, "If", {"condition"}, "Y");
+    for (const char *name : {"then_branch", "else_branch"}) {
+      auto *attribute = node.add_attribute();
+      attribute->set_name(name);
+      attribute->set_type(AttributeProto::GRAPH);
+      auto &branch = *attribute->mutable_g();
+      MemoryInitializer(branch, "W",
+                        allocation == "overflow" ? std::vector<int64_t>{kLarge, kLarge}
+                                                 : std::vector<int64_t>{1});
+      if (allocation == "unsupported")
+        branch.mutable_initializer(0)->set_data_type(TensorProto::STRING);
+      MemoryNode(branch, "Identity", {"X"}, "result");
+      branch.add_output()->set_name("result");
+    }
+    graph.add_output()->set_name("Y");
+    core::compute::ComputeContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+    EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes()));
+    EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
+    ModelProto model;
+    *model.mutable_graph() = graph;
+    EXPECT_THROW(ctx.Compute(model), std::invalid_argument);
+  }
+}
+
+TEST(MemoryAnalysis, ValidatesLocalFunctionBodyAllocationsRecursively) {
+  for (bool nested : {false, true}) {
+    for (auto dtype : {TensorProto::STRING, TensorProto::FLOAT}) {
+      SCOPED_TRACE(::testing::Message() << "nested=" << nested << " dtype=" << dtype);
+      ModelProto model;
+      model.add_opset_import()->set_version(23);
+      auto *local_opset = model.add_opset_import();
+      local_opset->set_domain("memory_test");
+      local_opset->set_version(1);
+      MemoryInput(*model.mutable_graph(), "X", {2});
+      auto &call = MemoryNode(*model.mutable_graph(), nested ? "Outer" : "Body", {"X", ""}, "Y");
+      call.set_domain("memory_test");
+      model.mutable_graph()->add_output()->set_name("Y");
+      auto *body = model.add_functions();
+      body->set_domain("memory_test");
+      body->set_name("Body");
+      body->add_input("x");
+      body->add_input("omitted");
+      body->add_output("y");
+      body->add_opset_import()->set_version(23);
+      auto *to = MemoryNode(*body, "Cast", {"x"}, "cast").add_attribute();
+      to->set_name("to");
+      to->set_type(AttributeProto::INT);
+      to->set_i(dtype);
+      MemoryNode(*body, "Shape", {"cast"}, "y");
+      if (nested) {
+        auto *outer = model.add_functions();
+        outer->set_domain("memory_test");
+        outer->set_name("Outer");
+        outer->add_input("x");
+        outer->add_input("omitted");
+        outer->add_output("y");
+        auto *opset = outer->add_opset_import();
+        opset->set_domain("memory_test");
+        opset->set_version(1);
+        MemoryNode(*outer, "Body", {"x", ""}, "y").set_domain("memory_test");
+      }
+      core::compute::ComputeContext ctx;
+      ASSERT_NO_THROW(ctx.ComputeShapes(model));
+      EXPECT_NO_THROW(ctx.ComputeInPlaceReuseGraph(model.graph(), ctx.Shapes()));
+      if (dtype == TensorProto::STRING)
+        EXPECT_THROW(ctx.Compute(model), std::invalid_argument);
+      else
+        EXPECT_NO_THROW(ctx.Compute(model));
+    }
+  }
+}
+
+TEST(MemoryAnalysis, RejectsSymbolicAllocationCoefficientOverflow) {
+  for (bool empty : {false, true}) {
+    GraphProto graph;
+    MemoryInput(graph, "X", {1, kLarge, kLarge, empty ? 0 : 1});
+    auto *dim =
+        graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(
+            0);
+    dim->clear_dim_value();
+    dim->set_dim_param("batch");
+    MemoryNode(graph, "Identity", {"X"}, "Y");
+    core::compute::ComputeContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+    if (empty) {
+      ASSERT_NO_THROW(ctx.Compute(graph));
+      EXPECT_EQ(MemoryTotal(ctx), 0);
+    } else {
+      EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
+    }
+  }
 }
 
 TEST(MemoryAnalysis, PreservesZeroAndLargeRepresentableAllocations) {

@@ -9,7 +9,9 @@
 #include "onnx_core/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
+#include <limits>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -771,4 +773,31 @@ TEST(DimSum, ByteIdenticalToDirectSum) {
     sum.Add(t);
   }
   EXPECT_EQ(sum.Build(), simplify_dim_type(direct));
+}
+
+TEST(SimplifyExpressions, RejectsOverflowingSymbolicConstantsAndCoefficients) {
+  for (const std::string expression :
+       {"4611686018427387904*batch*4", "batch//4611686018427387904//4",
+        "9223372036854775807*batch+batch", "4611686018427387904*(batch+batch)",
+        "batch+9223372036854775807+1", "0-9223372036854775807*batch-batch-batch"}) {
+    SCOPED_TRACE(expression);
+    EXPECT_THROW(simplify_expression(expression), std::invalid_argument);
+  }
+  EXPECT_EQ(get_str(simplify_expression("9223372036854775806*batch+batch")),
+            "9223372036854775807*batch");
+  EXPECT_EQ(get_str(simplify_expression("0-9223372036854775807*batch-batch")),
+            "-9223372036854775808*batch");
+  EXPECT_EQ(get_str(simplify_expression(
+                "(0-9223372036854775807*batch-batch)-(0-9223372036854775807*batch-batch)")),
+            "0");
+  EXPECT_EQ(dim_sub(DimType{std::numeric_limits<int64_t>::min()},
+                    DimType{std::numeric_limits<int64_t>::min()}),
+            DimType{int64_t{0}});
+}
+
+TEST(DimSum, RejectsOverflowingGroupedSymbolicCoefficients) {
+  DimSum sum;
+  sum.Add(DimType{std::string{"4611686018427387904*batch"}});
+  sum.Add(DimType{std::string{"4611686018427387904*batch"}});
+  EXPECT_THROW(sum.Build(), std::invalid_argument);
 }

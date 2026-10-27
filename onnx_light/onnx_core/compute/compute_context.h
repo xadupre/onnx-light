@@ -626,6 +626,8 @@ public:
   /// Requires fixed-width dense tensor allocations and resolved shapes.
   /// Expressions in declared input dimensions remain symbolic; new unresolved
   /// output dimensions, strings, sparse and extended initializers are rejected.
+  /// Local-function bodies are validated recursively. Graph-valued attributes
+  /// are rejected because their internal allocations are not accounted for.
   /// Unlike this complete-analysis entry point, the lower-level reuse analysis
   /// permits partially inferred graphs for incremental graph construction.
   /// Concrete allocation products, live sums and tensor-plus-scratch totals
@@ -752,7 +754,8 @@ private:
   template <typename GraphOrFunction>
   void ComputeInPlaceReuseGraphImpl(const GraphOrFunction &graph, const ShapesContext &ctx,
                                     bool allow_input_overwrite,
-                                    const std::unordered_map<std::string, std::string> &value_tags);
+                                    const std::unordered_map<std::string, std::string> &value_tags,
+                                    bool validate_allocations = false);
 
   template <typename GraphOrFunction> void WriteToMetadataImpl(GraphOrFunction &graph) const;
 

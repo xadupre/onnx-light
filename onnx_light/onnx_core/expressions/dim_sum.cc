@@ -40,7 +40,8 @@ void DimSum::Add(const DimType &term) {
   if (std::holds_alternative<int64_t>(term)) {
     constant_ = shapes::CheckedDimensionAdd(constant_, std::get<int64_t>(term));
   } else {
-    coefficients_[std::get<std::string>(term)] += 1;
+    auto &coefficient = coefficients_[std::get<std::string>(term)];
+    coefficient = shapes::CheckedDimensionAdd(coefficient, 1);
   }
 }
 

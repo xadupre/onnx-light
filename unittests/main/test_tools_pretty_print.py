@@ -310,6 +310,21 @@ class TestPrettyOnnx(ExtTestCase):
         text = pretty_onnx(node, include_release=True)
         self.assertIn("release: A, B", text)
 
+    def test_release_decodes_marked_lifetime_names_once(self) -> None:
+        node = _node(
+            "Abs",
+            ["shared%3Bactivation"],
+            ["Y"],
+            metadata={
+                "onnx_light.release_after": "shared%253Bactivation",
+                "onnx_light.not_used_after": "shared%253Bactivation",
+                "onnx_light.lifetime_names_encoding": "percent",
+            },
+        )
+        text = pretty_onnx(node, include_release=True)
+        self.assertIn("release: shared%3Bactivation", text)
+        self.assertIn("not used after: shared%3Bactivation", text)
+
     def test_release_absent_not_shown(self) -> None:
         node = _node("Add", ["X", "Y"], ["Z"])
         text = pretty_onnx(node, include_release=True)

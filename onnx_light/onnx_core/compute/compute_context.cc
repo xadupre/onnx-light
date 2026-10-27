@@ -30,6 +30,51 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 namespace {
 
+std::string EncodeLifetimeName(const std::string &name, bool encode) {
+  if (!encode) {
+    return name;
+  }
+  std::string result;
+  for (char c : name) {
+    if (c == '%') {
+      result += "%25";
+    } else if (c == ';') {
+      result += "%3B";
+    } else {
+      result += c;
+    }
+  }
+  return result;
+}
+
+void EncodeLifetimeNamesMetadata(NodeProto &node, const char *key) {
+  std::string raw;
+  for (const auto &entry : node.metadata_props()) {
+    if (entry.key() == key) {
+      raw = entry.value();
+      break;
+    }
+  }
+  if (raw.empty()) {
+    return;
+  }
+  std::string encoded;
+  std::size_t start = 0;
+  while (start <= raw.size()) {
+    const std::size_t end = raw.find(';', start);
+    if (!encoded.empty() || start != 0) {
+      encoded += ';';
+    }
+    encoded += EncodeLifetimeName(
+        raw.substr(start, end == std::string::npos ? std::string::npos : end - start), true);
+    if (end == std::string::npos) {
+      break;
+    }
+    start = end + 1;
+  }
+  node.add_metadata(key, encoded);
+}
+
 // ── Helpers for ComputeInPlaceReuseGraph ─────────────────────────────────────
 
 enum class MemoryValueSource : uint8_t {
@@ -1674,6 +1719,34 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
       continue;
     }
     NodeProto &node = (*graph.mutable_node())[i];
+    const auto needs_encoding = [](const std::vector<std::string> &names) {
+      return std::any_of(names.begin(), names.end(), [](const std::string &name) {
+        return name.find_first_of("%;") != std::string::npos;
+      });
+    };
+    bool encode_names = needs_encoding(release_after_[i]) || needs_encoding(not_used_after_[i]) ||
+                        (has_shape_tagged && needs_encoding(release_after_shape_tagged_[i]));
+    bool has_lifetime_encoding = false;
+    for (const auto &entry : node.metadata_props()) {
+      if (entry.key() == kLifetimeNamesEncodingMetadataKey) {
+        encode_names = true;
+        has_lifetime_encoding = true;
+      }
+    }
+    if (encode_names) {
+      if (!has_lifetime_encoding) {
+        if (release_after_[i].empty()) {
+          EncodeLifetimeNamesMetadata(node, kReleaseAfterMetadataKey);
+        }
+        if (not_used_after_[i].empty()) {
+          EncodeLifetimeNamesMetadata(node, kNotUsedAfterMetadataKey);
+        }
+        if (!has_shape_tagged) {
+          EncodeLifetimeNamesMetadata(node, kReleaseAfterShapeTagMetadataKey);
+        }
+      }
+      node.add_metadata(kLifetimeNamesEncodingMetadataKey, "percent");
+    }
     if (!reuse_[i].empty()) {
       std::ostringstream value;
       for (std::size_t j = 0; j < reuse_[i].size(); ++j) {
@@ -1692,7 +1765,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << release_after_[i][j];
+        value << EncodeLifetimeName(release_after_[i][j], encode_names);
       }
       node.add_metadata(kReleaseAfterMetadataKey, value.str());
     }
@@ -1702,7 +1775,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << not_used_after_[i][j];
+        value << EncodeLifetimeName(not_used_after_[i][j], encode_names);
       }
       node.add_metadata(kNotUsedAfterMetadataKey, value.str());
     }
@@ -1712,7 +1785,7 @@ void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
         if (j != 0) {
           value << ";";
         }
-        value << release_after_shape_tagged_[i][j];
+        value << EncodeLifetimeName(release_after_shape_tagged_[i][j], encode_names);
       }
       node.add_metadata(kReleaseAfterShapeTagMetadataKey, value.str());
     }

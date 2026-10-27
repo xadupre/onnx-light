@@ -708,6 +708,11 @@ public:
    * at least one shape-tagged releasable value; the value is a
    * ``;``-separated list of those names.
    *
+   * When names contain ``;`` or ``%``, all three name lists on that node
+   * percent-encode those characters and
+   * :cpp:var:`kLifetimeNamesEncodingMetadataKey` is set to ``"percent"``.
+   * Unmarked metadata retains the legacy literal name representation.
+   *
    * Nodes without in-place opportunities, without releasable names, and
    * without last-use input/initializer names are left untouched.
    *

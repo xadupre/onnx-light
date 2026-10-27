@@ -1054,6 +1054,22 @@ TEST(GraphBuilder, RepeatedInputsHaveOneReleaseAnnotation) {
   EXPECT_EQ(release->value(), "intermediate");
 }
 
+TEST(GraphBuilder, ExportClearsStaleLifetimeNameEncoding) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"result"});
+  builder.MakeOutput("result");
+  ModelProto model = builder.ToModel();
+  model.mutable_graph()->mutable_node(0)->add_metadata(
+      core::compute::kLifetimeNamesEncodingMetadataKey, "unknown");
+
+  core::builder::GraphBuilder copy(model, SchemaLookup());
+  const GraphProto graph = copy.ToGraph();
+  for (const auto &entry : graph.node(0).metadata_props()) {
+    EXPECT_NE(entry.key(), core::compute::kLifetimeNamesEncodingMetadataKey);
+  }
+}
+
 TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

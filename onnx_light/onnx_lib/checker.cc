@@ -837,12 +837,18 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   }
 
   // Resolve domain for node
+  const std::string domain = node.domain() == "ai.onnx" || node.domain() == "onnx.ai"
+                                 ? std::string()
+                                 : node.domain().value();
   const auto &opset_imports = ctx.get_opset_imports();
   auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
-    // Both "" (ONNX_DOMAIN) and "ai.onnx" refer to the default ONNX domain.
-    if (node.domain().sv() == ONNX_DOMAIN) {
-      dit = opset_imports.find("ai.onnx");
+    if (domain == ONNX_DOMAIN) {
+      for (const char *alias : {"", "ai.onnx", "onnx.ai"}) {
+        dit = opset_imports.find(alias);
+        if (dit != opset_imports.end())
+          break;
+      }
     }
     if (dit == opset_imports.end()) {
       fail_check("No opset import for domain '", node.domain(), "'");
@@ -871,14 +877,13 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   }
 
   const auto *const schema =
-      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, node.domain());
+      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, domain);
   if (schema != nullptr && !node.overload().empty()) {
     fail_check("Registered operator '", node.domain(), "::", node.op_type(),
                "' cannot specify a function overload.");
   }
   if (!schema) {
-    if (node.domain().sv() == ONNX_DOMAIN || node.domain().sv() == AI_ONNX_ML_DOMAIN ||
-        node.domain().sv() == "ai.onnx" || node.domain().sv() == AI_ONNX_TRAINING_DOMAIN ||
+    if (domain == ONNX_DOMAIN || domain == AI_ONNX_ML_DOMAIN || domain == AI_ONNX_TRAINING_DOMAIN ||
         ctx.check_custom_domain()) {
       // fail the checker if op is in built-in domains or if it has no schema when
       // `check_custom_domain` is true

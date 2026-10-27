@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/attention/attention_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
@@ -21,6 +22,7 @@
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/layout/layout_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
@@ -87,6 +89,19 @@ void AddOpsetImports(ModelProto &model, const core::builder::GraphBuilder &build
   for (const auto &[domain, version] : builder.OpsetVersions()) {
     model.add_opset(domain, version);
   }
+}
+
+FunctionProto PassthroughFunction(const std::string &name, const std::string &domain = "local.test",
+                                  const std::string &overload = "") {
+  FunctionProto function;
+  function.set_name(name);
+  function.set_domain(domain);
+  function.set_overload(overload);
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_opset("", 18);
+  function.ref_node().push_back(MakeNode("Identity", {"X"}, {"Y"}));
+  return function;
 }
 
 class ReplaceIdentityWithConstantAddPattern final : public core::builder::PatternOptimization {
@@ -1314,6 +1329,154 @@ TEST(PatternOptimization, RejectsModelLocalOperatorOverrides) {
   EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()), core::builder::BuilderError);
 }
 
+TEST(PatternOptimization, SwapUnaryPreservesCustomFunctionCalls) {
+  const utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string op_type : {"Neg", "ThresholdRelu", "Trunc"}) {
+    for (const std::string overload : {"", "custom"}) {
+      SCOPED_TRACE(op_type);
+      SCOPED_TRACE(overload);
+      const std::string domain = op_type == "Neg" ? "local.test" : "";
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.test", 1}});
+      auto function = PassthroughFunction(op_type, domain, overload);
+      if (domain.empty())
+        function.ref_node()[0].set_op_type("Softmax");
+      builder.MakeLocalFunction(function);
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+      builder.MakeNode("Transpose", {"x"}, {"transposed"});
+      builder.MakeNode(op_type, {"transposed"}, {"y"}, domain, "", attributes, overload);
+      builder.MakeOutput("y");
+
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::SwapUnaryPattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      EXPECT_TRUE(graph.Optimize().rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), 2u);
+      EXPECT_EQ(builder.Nodes()[1].domain().value(), domain);
+      EXPECT_EQ(builder.Nodes()[1].overload().value(), overload);
+    }
+  }
+}
+
+TEST(PatternOptimization, SameChildrenPreservesDistinctFunctionIdentities) {
+  const utils::RepeatedProtoField<AttributeProto> attributes;
+  for (bool different_overload : {false, true}) {
+    for (bool third_consumer : {false, true}) {
+      SCOPED_TRACE(different_overload);
+      SCOPED_TRACE(third_consumer);
+      const std::string overload = different_overload ? "first" : "";
+      core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}, {"local.test", 1}});
+      const auto function = PassthroughFunction("Neg", "local.test", overload);
+      source.MakeLocalFunction(function);
+      source.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+      source.MakeNode("Neg", {"x"}, {"left"}, different_overload ? "local.test" : "", "",
+                      attributes, overload);
+      source.MakeNode("Neg", {"x"}, {"right"}, "local.test", "", attributes, overload);
+      source.MakeOutput("left");
+      source.MakeOutput("right");
+      if (third_consumer) {
+        source.MakeNode("Abs", {"x"}, {"other"});
+        source.MakeOutput("other");
+      }
+      auto model = source.ToModel();
+      if (different_overload) {
+        auto second = function;
+        second.set_overload("second");
+        second.ref_node()[0].set_op_type("Neg");
+        model.add_function(second);
+        model.mutable_graph()->ref_node()[1].set_overload("second");
+      }
+      core::builder::GraphBuilder builder(model, SchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::SameChildrenFromInputPattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      EXPECT_TRUE(graph.Optimize().rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), third_consumer ? 3u : 2u);
+      EXPECT_EQ(builder.Nodes()[1].domain().value(), "local.test");
+      EXPECT_EQ(builder.Nodes()[1].overload().value(), different_overload ? "second" : "");
+    }
+  }
+}
+
+TEST(PatternOptimization, SameChildrenDoesNotAssumeCustomAddIsCommutative) {
+  ScopedIdentityKernel kernel;
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.test", 1}});
+  auto function = PassthroughFunction("Add");
+  function.add_input("Other");
+  builder.MakeLocalFunction(function);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Add", {"x", "y"}, {"left"}, "local.test");
+  builder.MakeNode("Add", {"y", "x"}, {"right"}, "local.test");
+  builder.MakeOutput("left");
+  builder.MakeOutput("right");
+  const auto original = builder.ToModel();
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::SameChildrenFromInputPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[1].input(0), "y");
+  for (const auto &model : {original, builder.ToModel()}) {
+    const auto outputs =
+        core::runtime::RunModel(model, {core::runtime::Tensor::FromFloat("x", {2}, {1, 2}),
+                                        core::runtime::Tensor::FromFloat("y", {2}, {3, 4})});
+    ASSERT_EQ(outputs.size(), 2u);
+    EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], 1);
+    EXPECT_FLOAT_EQ(outputs[1].AsFloat()[0], 3);
+  }
+}
+
+TEST(PatternOptimization, SqueezeAddPreservesCustomFunctionCalls) {
+  for (bool custom_first : {false, true}) {
+    SCOPED_TRACE(custom_first);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.test", 1}});
+    auto function = PassthroughFunction("Squeeze");
+    function.add_input("axes");
+    function.ref_node().clear();
+    function.ref_node().push_back(MakeNode("Neg", {"X"}, {"negative"}));
+    function.ref_node().push_back(MakeNode("Squeeze", {"negative", "axes"}, {"Y"}));
+    builder.MakeLocalFunction(function);
+    builder.MakeInitializer(MakeInitializerShape("axes", {0}));
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 2}));
+    builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({1, 2}));
+    builder.MakeNode("Squeeze", {"x", "axes"}, {"sx"}, custom_first ? "local.test" : "");
+    builder.MakeNode("Squeeze", {"y", "axes"}, {"sy"}, custom_first ? "" : "local.test");
+    builder.MakeNode("Add", {"sx", "sy"}, {"out"});
+    builder.MakeOutput("out");
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::SqueezeAddPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    EXPECT_TRUE(graph.Optimize().rewrites().empty());
+    ASSERT_EQ(builder.Nodes().size(), 3u);
+    EXPECT_EQ(builder.Nodes()[custom_first ? 0 : 1].domain().value(), "local.test");
+  }
+}
+
+TEST(PatternOptimization, CastOpCastPreservesCustomFunctionCalls) {
+  const utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string op_type : {"Neg", "Sigmoid", "Softmax", "MulSigmoid"}) {
+    for (const std::string overload : {"", "custom"}) {
+      SCOPED_TRACE(op_type);
+      SCOPED_TRACE(overload);
+      const std::string domain = op_type == "MulSigmoid" ? "" : "local.test";
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.test", 1}});
+      builder.MakeLocalFunction(PassthroughFunction(op_type, domain, overload));
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+      AddCast(builder, "x", "wide", TensorProto::FLOAT);
+      builder.MakeNode(op_type, {"wide"}, {"middle"}, domain, "", attributes, overload);
+      AddCast(builder, "middle", "y", TensorProto::FLOAT16);
+      builder.MakeOutput("y");
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::CastOpCastPattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      EXPECT_TRUE(graph.Optimize().rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), 3u);
+      EXPECT_EQ(builder.Nodes()[1].domain().value(), domain);
+      EXPECT_EQ(builder.Nodes()[1].overload().value(), overload);
+    }
+  }
+}
+
 TEST(PatternOptimization, RejectsLateFunctionOverridesOfCapturedRecipes) {
   ScopedAddKernel kernel;
   auto original = PreparationModel();
@@ -1457,7 +1620,8 @@ TEST(PatternOptimization, RejectsOperatorOverridesInsideNestedFunctionGraphs) {
 }
 
 TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
-  ScopedIdentityKernel kernel;
+  ScopedIdentityKernel identity_kernel;
+  ScopedAddKernel add_kernel;
   for (bool explicit_binding : {false, true}) {
     SCOPED_TRACE(explicit_binding);
     auto original = PreparationModel();
@@ -1486,8 +1650,10 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
       attribute.set_type(AttributeProto::GRAPH);
       auto &branch = *attribute.mutable_g();
       branch.set_name(name);
-      branch.ref_node().push_back(
-          MakeNode(explicit_binding ? "Identity" : "Neg", {"a"}, {"branch_result"}));
+      branch.ref_node().push_back(MakeNode(explicit_binding ? "Identity" : "Add",
+                                           explicit_binding ? std::vector<std::string>{"a"}
+                                                            : std::vector<std::string>{"a", "a"},
+                                           {"branch_result"}));
       auto output = original.graph().output(0);
       output.set_name("branch_result");
       branch.ref_output().push_back(output);
@@ -1499,8 +1665,8 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
       auto second = MakeNode("Wrapper", {"a", "condition"}, {"z"}, "wrapper.test");
       second.ref_attribute() = wrapper.attribute_proto();
       for (auto &attribute : second.ref_attribute()) {
-        attribute.mutable_g()->ref_node()[0].set_op_type("Neg");
-        attribute.mutable_g()->ref_node()[0].ref_input()[0] = "a";
+        attribute.mutable_g()->ref_node()[0].set_op_type("Add");
+        attribute.mutable_g()->ref_node()[0].add_input("a");
       }
       original.mutable_graph()->ref_node().push_back(std::move(second));
       auto output = original.graph().output(0);
@@ -1513,10 +1679,10 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
     const auto replayed =
         core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
     const auto outputs = core::runtime::RunModel(replayed, {});
-    EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], explicit_binding ? 1 : -1);
+    EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], explicit_binding ? 1 : 2);
     if (explicit_binding) {
       ASSERT_EQ(outputs.size(), 2u);
-      EXPECT_FLOAT_EQ(outputs[1].AsFloat()[0], -1);
+      EXPECT_FLOAT_EQ(outputs[1].AsFloat()[0], 2);
     }
   }
 }
@@ -2830,7 +2996,8 @@ TEST(PatternOptimization, ConstantQueriesDoNotInterpretUnresolvedAttributeRefere
 }
 
 TEST(PatternOptimization, ConstantFunctionOutputAllowsCustomDomainIdentity) {
-  ScopedConstantKernel kernel;
+  ScopedConstantKernel constant_kernel;
+  ScopedIdentityKernel identity_kernel;
   for (const std::string domain : {"local.test", "local.other"}) {
     SCOPED_TRACE(domain);
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"test.pattern", 1}});

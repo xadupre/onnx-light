@@ -230,8 +230,8 @@ core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &g
   }
   const NodeProto *first = graph.NodeBefore(candidate.input()[0].value());
   const NodeProto *second = graph.NodeBefore(candidate.input()[1].value());
-  if (first == nullptr || second == nullptr || first->op_type().value() != "Squeeze" ||
-      second->op_type().value() != "Squeeze") {
+  if (first == nullptr || second == nullptr || !IsDefaultOp(*first, "Squeeze") ||
+      !IsDefaultOp(*second, "Squeeze")) {
     return NoMatch(candidate, "both Add inputs are not produced by Squeeze nodes");
   }
 

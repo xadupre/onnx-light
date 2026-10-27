@@ -1747,12 +1747,21 @@ TEST(CHECKER_COVERAGE, AcceptsNonCollidingFunctionsAndRejectsOverloadedOperators
       EXPECT_NO_THROW(checker::check_model(model));
     }
   }
-  NodeProto node;
-  node.set_op_type("Identity");
-  node.set_overload("custom");
-  node.add_input("X");
-  node.add_output("Y");
-  EXPECT_THROW(checker::check_node(node, MakeCtx(), LexicalScopeContext{}), ValidationError);
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string import_domain : {"", "ai.onnx", "onnx.ai"}) {
+      SCOPED_TRACE(domain + "/" + import_domain);
+      auto context = MakeCtx();
+      context.set_opset_imports({{import_domain, 18}});
+      NodeProto node;
+      node.set_domain(domain);
+      node.set_op_type("Identity");
+      node.add_input("X");
+      node.add_output("Y");
+      EXPECT_NO_THROW(checker::check_node(node, context, LexicalScopeContext{}));
+      node.set_overload("custom");
+      EXPECT_THROW(checker::check_node(node, context, LexicalScopeContext{}), ValidationError);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

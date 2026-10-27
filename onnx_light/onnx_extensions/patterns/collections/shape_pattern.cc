@@ -67,8 +67,6 @@ std::set<std::string> GatherShapePattern::FastOpType() const { return {"Gather"}
 
 core::builder::MatchResult GatherShapePattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather")) {
     return NoMatch(candidate, "candidate is not a default-domain Gather");
   }
@@ -111,9 +109,6 @@ core::builder::MatchResult GatherShapePattern::Match(core::builder::GraphGraph &
   const bool negative_index = values.front() < 0;
   if ((negative_attr || negative_index) && !HasRank(graph, shape->input()[0].value())) {
     return NoMatch(candidate, "the shape origin rank is required to normalise negative bounds");
-  }
-  if (shape != nullptr && !graph.IsOperator(*shape)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {shape, &candidate}, &candidate};
 }
@@ -199,8 +194,6 @@ std::set<std::string> ShapeTransposePattern::FastOpType() const { return {"Shape
 
 core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Shape")) {
     return NoMatch(candidate, "candidate is not a default-domain Shape");
   }
@@ -217,9 +210,6 @@ core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGrap
   ResolveShapeStartEnd(candidate, static_cast<int64_t>(perm.size()), start, end);
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
-  }
-  if (transpose != nullptr && !graph.IsOperator(*transpose)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {transpose, &candidate}, transpose};
 }
@@ -270,8 +260,6 @@ std::set<std::string> PreShapeNodeEliminationPattern::FastOpType() const { retur
 
 core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Cast")) {
     return NoMatch(candidate, "candidate is not a default-domain Cast");
   }
@@ -294,9 +282,6 @@ core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::
   }
   if (shape->input_size() != 1) {
     return NoMatch(candidate, "the Shape node does not have exactly one input");
-  }
-  if (shape != nullptr && !graph.IsOperator(*shape)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
 }
@@ -335,8 +320,6 @@ std::set<std::string> UnsqueezeShapePattern::FastOpType() const { return {"Unsqu
 
 core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze")) {
     return NoMatch(candidate, "candidate is not a default-domain Unsqueeze");
   }
@@ -368,9 +351,6 @@ core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGrap
   ResolveShapeStartEnd(*shape, output_rank, start, end);
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
-  }
-  if (shape != nullptr && !graph.IsOperator(*shape)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
 }

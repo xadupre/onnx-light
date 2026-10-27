@@ -75,8 +75,6 @@ std::set<std::string> TransposeTransposePattern::FastOpType() const { return {"T
 
 core::builder::MatchResult TransposeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
@@ -110,9 +108,6 @@ core::builder::MatchResult TransposeTransposePattern::Match(core::builder::Graph
                    "the intermediate Transpose is shared and the perms do not cancel out");
   }
 
-  if (next_node != nullptr && !graph.IsOperator(*next_node)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
 }
 
@@ -157,8 +152,6 @@ std::set<std::string> TransposeGatherPattern::FastOpType() const { return {"Gath
 
 core::builder::MatchResult TransposeGatherPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Gather with two inputs");
@@ -184,9 +177,6 @@ core::builder::MatchResult TransposeGatherPattern::Match(core::builder::GraphGra
   const int64_t normalized_axis = axis < 0 ? axis + rank : axis;
   if (normalized_axis < 0 || normalized_axis >= rank) {
     return NoMatch(candidate, "the Gather axis is out of range for the Transpose rank");
-  }
-  if (transpose != nullptr && !graph.IsOperator(*transpose)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {transpose, &candidate}, &candidate};
 }

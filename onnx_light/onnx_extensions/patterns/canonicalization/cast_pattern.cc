@@ -83,8 +83,6 @@ std::set<std::string> CastPattern::FastOpType() const { return {"Cast"}; }
 
 core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultCast(candidate)) {
     return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
@@ -98,9 +96,6 @@ core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
   if (target_type != graph.GetType(candidate.input()[0].value())) {
     return NoMatch(candidate, "the input and target element types differ");
   }
-  if (graph.Builder().Shapes().HasLocalFunction(
-          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
-    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
@@ -151,8 +146,6 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
 
 core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultCast(candidate)) {
     return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
@@ -179,13 +172,6 @@ core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &gra
   const TensorType replacement_type = OneCastType(input_type, middle_type, final_type);
   if (replacement_type == TensorType::kUndefined) {
     return NoMatch(candidate, "combining the Cast operations would change the result");
-  }
-  if (replacement_type == input_type &&
-      graph.Builder().Shapes().HasLocalFunction(
-          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
-    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
-  if (inner != nullptr && !graph.IsOperator(*inner)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{
       this,
@@ -240,8 +226,6 @@ std::set<std::string> CastCastBinaryPattern::FastOpType() const {
 
 core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsBinaryArithmetic(candidate)) {
     return NoMatch(candidate, "candidate is not a supported default-domain binary operation");
   }
@@ -282,10 +266,6 @@ core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGrap
   }
   if (FloatWidth(left_target) > FloatWidth(left_source)) {
     return NoMatch(candidate, "moving the binary operation would lower its precision");
-  }
-  if ((left != nullptr && !graph.IsOperator(*left)) ||
-      (right != nullptr && !graph.IsOperator(*right))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};
 }
@@ -330,8 +310,6 @@ std::set<std::string> CastOpCastPattern::FastOpType() const {
 
 core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsSupportedOperation(candidate)) {
     return NoMatch(candidate, "candidate is not a supported unary or binary operation");
   }
@@ -385,11 +363,6 @@ core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &g
 
   input_casts.push_back(&candidate);
   input_casts.push_back(output_cast);
-  for (const NodeProto *node : input_casts) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, std::move(input_casts), &candidate};
 }
 

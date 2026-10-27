@@ -27,17 +27,12 @@ std::set<std::string> NotNotPattern::FastOpType() const { return {"Not"}; }
 
 core::builder::MatchResult NotNotPattern::Match(core::builder::GraphGraph &graph,
                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultNot(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Not");
   }
   const NodeProto *before = graph.NodeBefore(candidate.input()[0].value());
   if (before == nullptr || !IsDefaultNot(*before)) {
     return NoMatch(candidate, "the preceding node is not a default-domain Not");
-  }
-  if (before != nullptr && !graph.IsOperator(*before)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }

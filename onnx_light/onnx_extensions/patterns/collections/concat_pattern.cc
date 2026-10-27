@@ -264,8 +264,6 @@ std::set<std::string> ConcatEmptyPattern::FastOpType() const { return {"Concat"}
 
 core::builder::MatchResult ConcatEmptyPattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Concat")) {
     return NoMatch(candidate, "candidate is not a default-domain Concat");
   }
@@ -321,8 +319,6 @@ std::set<std::string> ConcatSliceEliminationPattern::FastOpType() const { return
 
 core::builder::MatchResult ConcatSliceEliminationPattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Concat") || candidate.input_size() < 2) {
     return NoMatch(candidate, "candidate is not a multi-input default-domain Concat");
   }
@@ -386,11 +382,6 @@ core::builder::MatchResult ConcatSliceEliminationPattern::Match(core::builder::G
   }
   std::vector<const NodeProto *> nodes{&candidate};
   nodes.insert(nodes.end(), ordered.begin(), ordered.end());
-  for (const NodeProto *node : nodes) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, nodes, &candidate};
 }
 
@@ -420,8 +411,6 @@ std::set<std::string> SliceConcatToSpaceToDepthPattern::FastOpType() const { ret
 core::builder::MatchResult
 SliceConcatToSpaceToDepthPattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   int64_t concat_axis = GetAxis(candidate, 0);
   concat_axis = concat_axis < 0 ? concat_axis + 4 : concat_axis;
   if (!IsDefaultOp(candidate, "Concat") || candidate.input_size() != 4 || concat_axis != 1) {
@@ -468,11 +457,6 @@ SliceConcatToSpaceToDepthPattern::Match(core::builder::GraphGraph &graph,
     nodes.push_back(slice);
   }
   nodes.push_back(&candidate);
-  for (const NodeProto *node : nodes) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, nodes, &candidate};
 }
 
@@ -500,8 +484,6 @@ std::set<std::string> ConcatGatherPattern::FastOpType() const { return {"Gather"
 
 core::builder::MatchResult ConcatGatherPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather")) {
     return NoMatch(candidate, "candidate is not a default-domain Gather");
   }
@@ -530,9 +512,6 @@ core::builder::MatchResult ConcatGatherPattern::Match(core::builder::GraphGraph 
   int64_t input_size = 0;
   if (!ConcatInputBucket(graph, *concat, index_values[0], input_name, local_index, input_size)) {
     return NoMatch(candidate, "the index does not map to a statically-sized Concat input");
-  }
-  if (concat != nullptr && !graph.IsOperator(*concat)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
@@ -595,8 +574,6 @@ std::set<std::string> ConcatTwiceUnaryPattern::FastOpType() const { return {"Con
 
 core::builder::MatchResult ConcatTwiceUnaryPattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("") < 18) {
     return NoMatch(candidate, "the default opset is older than 18");
   }
@@ -608,9 +585,6 @@ core::builder::MatchResult ConcatTwiceUnaryPattern::Match(core::builder::GraphGr
   }
   for (const NodeProto *user : graph.NextNodes(candidate.output()[0].value())) {
     if (ValidUnaryConsumer(graph, candidate, *user)) {
-      if (user != nullptr && !graph.IsOperator(*user)) {
-        return NoMatch(candidate, "a matched node is a local function call or overload");
-      }
       return core::builder::MatchResult{this, {&candidate, user}, &candidate};
     }
   }

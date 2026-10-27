@@ -146,8 +146,6 @@ std::set<std::string> PadPadFusionPattern::FastOpType() const { return {"Pad"}; 
 
 core::builder::MatchResult PadPadFusionPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const int opset = graph.Builder().OpsetVersion("");
   if (opset == core::shapes::kUnknownOpsetVersion || opset < 1) {
     return NoMatch(candidate, "the Pad opset is unsupported or unknown");
@@ -178,9 +176,6 @@ core::builder::MatchResult PadPadFusionPattern::Match(core::builder::GraphGraph 
     if (first.pads[i] > std::numeric_limits<int64_t>::max() - second.pads[i]) {
       return NoMatch(candidate, "the summed Pad value overflows int64");
     }
-  }
-  if (before != nullptr && !graph.IsOperator(*before)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }

@@ -110,8 +110,6 @@ std::set<std::string> GeluPattern::FastOpType() const { return {"Mul"}; }
 
 core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, min_opset_)) {
     return NoMatch(candidate, "the default-domain opset is below the configured minimum");
   }
@@ -154,11 +152,6 @@ core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
       !IsScalar(graph, x_half->input()[1].value(), 0.5)) {
     return NoMatch(candidate, "one Gelu scalar constant has an unexpected value");
   }
-  for (const NodeProto *node : {power, cubic, add, scaled, tanh, tanh_one, x_half}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{
       this, {power, cubic, add, scaled, tanh, tanh_one, x_half, &candidate}, nullptr};
 }
@@ -188,8 +181,6 @@ std::set<std::string> LeakyReluPattern::FastOpType() const { return {"Where"}; }
 
 core::builder::MatchResult LeakyReluPattern::Match(core::builder::GraphGraph &graph,
                                                    const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, min_opset_)) {
     return NoMatch(candidate, "the default-domain opset is below the configured minimum");
   }
@@ -214,10 +205,6 @@ core::builder::MatchResult LeakyReluPattern::Match(core::builder::GraphGraph &gr
   if (!IsScalar(graph, greater->input()[1].value(), 0.0) ||
       !ReadScalar(graph, mul->input()[1].value(), slope)) {
     return NoMatch(candidate, "the threshold is not zero or the slope is not scalar");
-  }
-  if ((greater != nullptr && !graph.IsOperator(*greater)) ||
-      (mul != nullptr && !graph.IsOperator(*mul))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {greater, mul, &candidate}, nullptr};
 }
@@ -251,8 +238,6 @@ std::set<std::string> SoftmaxCrossEntropyLossCastPattern::FastOpType() const { r
 core::builder::MatchResult
 SoftmaxCrossEntropyLossCastPattern::Match(core::builder::GraphGraph &graph,
                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, min_opset_)) {
     return NoMatch(candidate, "the default-domain opset is below the configured minimum");
   }
@@ -365,14 +350,6 @@ SoftmaxCrossEntropyLossCastPattern::Match(core::builder::GraphGraph &graph,
     return NoMatch(candidate, "an intermediate loss result is externally used");
   }
 
-  for (const NodeProto *node :
-       {equal, not_node, where_indices, unsqueeze, log_softmax, gather, squeeze, negative,
-        where_loss, denominator_input_cast, denominator_reduce, denominator_cast,
-        numerator_input_cast, numerator_reduce, numerator_cast}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this,
                                     {equal, not_node, where_indices, unsqueeze, log_softmax, gather,
                                      squeeze, negative, where_loss, denominator_input_cast,
@@ -411,8 +388,6 @@ std::set<std::string> MaxReluPattern::FastOpType() const { return {"Max"}; }
 
 core::builder::MatchResult MaxReluPattern::Match(core::builder::GraphGraph &graph,
                                                  const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Max") || candidate.input_size() != 2 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not a two-input default-domain Max");

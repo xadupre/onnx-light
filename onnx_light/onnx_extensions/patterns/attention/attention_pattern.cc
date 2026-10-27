@@ -942,8 +942,6 @@ core::builder::MatchResult FunctionAttentionGQAPattern::Match(core::builder::Gra
                                                   &candidate};
   for (std::size_t index = 0; index + 1 < matched.size(); ++index) {
     const NodeProto *node = matched[index];
-    if (!graph.IsOperator(*node))
-      return NoMatch(candidate, "a repeat-interleave primitive is overridden by a local function");
     if (graph.IsUsedMoreThanOnce(node->output()[0].value())) {
       return NoMatch(candidate, "A GQA repeat-interleave intermediate is shared.");
     }
@@ -1088,8 +1086,6 @@ std::set<std::string> LinearAttentionPattern::FastOpType() const { return {"Mul"
 
 core::builder::MatchResult LinearAttentionPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsNode(&candidate, "Mul", 2, 1) || !MainOpsetAtLeast(graph, 27)) {
     return NoMatch(candidate, "LinearAttentionPattern expects a Mul at opset 27.");
   }
@@ -1243,11 +1239,6 @@ core::builder::MatchResult LinearAttentionPattern::Match(core::builder::GraphGra
       return NoMatch(candidate, "LinearAttentionPattern cannot remove shared intermediates.");
     }
   }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, std::move(matched), output_reshape};
 }
 
@@ -1342,7 +1333,7 @@ core::builder::MatchResult AttentionGQAPattern::Match(core::builder::GraphGraph 
       candidate.output_size() != 1) {
     return NoMatch(candidate, "AttentionGQAPattern requires opset 23 and one output.");
   }
-  const bool onnx_attention = graph.IsOperator(candidate) && IsNode(&candidate, "Attention", -1, 1);
+  const bool onnx_attention = IsNode(&candidate, "Attention", -1, 1);
   const bool local_attention = IsLocalAttentionGqaCall(candidate);
   if ((!onnx_attention && !local_attention) || candidate.input_size() < 3) {
     return NoMatch(candidate, "Candidate is neither ONNX Attention nor LocalAttentionGQA.");
@@ -1432,10 +1423,6 @@ core::builder::MatchResult AttentionGQAPattern::Match(core::builder::GraphGraph 
   const std::vector<const NodeProto *> matched = {concat_keys,  concat_values, gqa_nodes[0],
                                                   gqa_nodes[1], gqa_nodes[2],  gqa_nodes[3],
                                                   gqa_nodes[4], gqa_nodes[5],  &candidate};
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && node != &candidate && !graph.IsOperator(*node))
-      return NoMatch(candidate, "an attention primitive is overridden by a local function");
-  }
   const std::unordered_set<const NodeProto *> removed(matched.begin(), matched.end());
   if (HasUnsafeMovedOutput(graph, concat_keys->output()[0].value(), candidate, removed) ||
       HasUnsafeMovedOutput(graph, concat_values->output()[0].value(), candidate, removed)) {
@@ -1503,8 +1490,6 @@ std::set<std::string> RotaryConcatPartPattern::FastOpType() const { return {"Add
 
 core::builder::MatchResult RotaryConcatPartPattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Add") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "RotaryConcatPartPattern expects a default-domain Add.");
@@ -1721,12 +1706,6 @@ core::builder::MatchResult RotaryConcatPartPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "Concat dimensions do not prove the rotary cancellation.");
     }
 
-    for (const NodeProto *node : {cst_left, split_left, slice_left, neg_left, concat_left,
-                                  cst_right, slice_right, neg_right, concat_right}) {
-      if (node != nullptr && !graph.IsOperator(*node)) {
-        return NoMatch(candidate, "a matched node is a local function call or overload");
-      }
-    }
     return core::builder::MatchResult{this,
                                       {cst_left, split_left, slice_left, neg_left, concat_left,
                                        cst_right, slice_right, neg_right, concat_right, &candidate},
@@ -1901,11 +1880,6 @@ core::builder::MatchResult RotaryConcatPartPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "A removed ScatterND branch node has an external use.");
     }
   }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, matched, nullptr};
 }
 
@@ -1986,8 +1960,6 @@ std::set<std::string> FunctionHalfRotaryEmbeddingPattern::FastOpType() const {
 core::builder::MatchResult
 FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool split_form = IsNode(&candidate, "Split", -1, 2);
   const bool slice_form = IsNode(&candidate, "Slice", -1, 1);
   if (!MainOpsetAtLeast(graph, 18) || (!split_form && !slice_form) || candidate.input_size() == 0 ||
@@ -2126,11 +2098,6 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
   for (const NodeProto *node : matched) {
     if (node != add && NodeOutputHasExternalUse(graph, *node, matched_set, replaced)) {
       return NoMatch(candidate, "A half-rotary intermediate has an external use.");
-    }
-  }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
     }
   }
   return core::builder::MatchResult{this, matched, add};
@@ -2294,8 +2261,6 @@ core::builder::MatchResult RotaryEmbeddingPattern::Match(core::builder::GraphGra
       concat == nullptr ? candidate.output()[0].value() : concat->output()[0].value();
   const std::unordered_set<std::string> replaced{final_output};
   for (const NodeProto *node : matched) {
-    if (node != nullptr && node != &candidate && !graph.IsOperator(*node))
-      return NoMatch(candidate, "a rotary primitive is overridden by a local function");
     if (node != nullptr && NodeOutputHasExternalUse(graph, *node, matched_set, replaced)) {
       return NoMatch(candidate, "A rotary node removed by the rewrite has an external use.");
     }
@@ -2388,8 +2353,6 @@ std::set<std::string> FunctionCausalMaskPattern::FastOpType() const {
 
 core::builder::MatchResult FunctionCausalMaskPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool shifted = IsDefaultOp(candidate, "Greater");
   if ((!shifted && !IsDefaultOp(candidate, "LessOrEqual")) || candidate.input_size() != 2 ||
       candidate.output_size() != 1 || !MainOpsetAtLeast(graph, 13)) {
@@ -2445,11 +2408,6 @@ core::builder::MatchResult FunctionCausalMaskPattern::Match(core::builder::Graph
   for (const NodeProto *node : matched) {
     if (node != nullptr && preserved_set.count(node) == 0) {
       removed.push_back(node);
-    }
-  }
-  for (const NodeProto *node : removed) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
     }
   }
   return core::builder::MatchResult{this, removed, &candidate};
@@ -2509,8 +2467,6 @@ std::set<std::string> FunctionCausalMaskMulAddPattern::FastOpType() const { retu
 core::builder::MatchResult
 FunctionCausalMaskMulAddPattern::Match(core::builder::GraphGraph &graph,
                                        const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsNode(&candidate, "Add", 2, 1) || !MainOpsetAtLeast(graph, 13)) {
     return NoMatch(candidate, "FunctionCausalMaskMulAddPattern expects a default-domain Add.");
   }
@@ -2554,11 +2510,6 @@ FunctionCausalMaskMulAddPattern::Match(core::builder::GraphGraph &graph,
       return NoMatch(candidate, "A causal-mask mul-add intermediate has an external use.");
     }
   }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, matched, &candidate};
 }
 
@@ -2590,8 +2541,6 @@ std::set<std::string> FunctionCosSinCachePattern::FastOpType() const { return {"
 
 core::builder::MatchResult FunctionCosSinCachePattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsNode(&candidate, "Cos", 1, 1) || !MainOpsetAtLeast(graph, 13)) {
     return NoMatch(candidate, "FunctionCosSinCachePattern expects a default-domain Cos.");
   }
@@ -2718,11 +2667,6 @@ core::builder::MatchResult FunctionCosSinCachePattern::Match(core::builder::Grap
       return NoMatch(candidate, "A cos-sin cache intermediate has an external use.");
     }
   }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, matched, &candidate};
 }
 
@@ -2789,8 +2733,6 @@ std::set<std::string> FunctionAttentionPattern::FastOpType() const { return {"So
 
 core::builder::MatchResult FunctionAttentionPattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsNode(&candidate, "Softmax", 1, 1) || !MainOpsetAtLeast(graph, 18) ||
       GetAttributeOr<int64_t>(candidate, "axis", -1) != -1) {
     return NoMatch(candidate, "FunctionAttentionPattern expects last-axis Softmax at opset 18.");
@@ -3019,11 +2961,6 @@ core::builder::MatchResult FunctionAttentionPattern::Match(core::builder::GraphG
       AttentionFunctionName(type, gqa_reshape != nullptr, switch_where, fused_matmul);
   if (!CanEnsureFunction(graph.Builder(), function_name)) {
     return NoMatch(candidate, "The attention local-function name is already reserved.");
-  }
-  for (const NodeProto *node : matched) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{this, matched, mat_qkv};
 }

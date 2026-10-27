@@ -41,8 +41,6 @@ std::set<std::string> ReduceArgTopKPattern::FastOpType() const { return {"ArgMax
 
 core::builder::MatchResult ReduceArgTopKPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 18)) {
     return NoMatch(candidate, "the default-domain opset is below 18");
   }
@@ -85,9 +83,6 @@ core::builder::MatchResult ReduceArgTopKPattern::Match(core::builder::GraphGraph
   if (GetAttributeOr<int64_t>(*reduce, "noop_with_empty_axes", 0) != 0 ||
       GetAttributeOr<int64_t>(*reduce, "select_last_index", 0) == 1) {
     return NoMatch(candidate, "the Reduce attributes are not TopK-compatible");
-  }
-  if (reduce != nullptr && !graph.IsOperator(*reduce)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {reduce, &candidate}, nullptr};
 }
@@ -142,8 +137,6 @@ std::set<std::string> ReduceSumNormalizePattern::FastOpType() const { return {"R
 
 core::builder::MatchResult ReduceSumNormalizePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "ReduceSum") || candidate.input_size() < 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain ReduceSum with axes input");
@@ -183,11 +176,6 @@ core::builder::MatchResult ReduceSumNormalizePattern::Match(core::builder::Graph
   const AttributeProto *to = FindAttribute(*cast2, "to");
   if (to == nullptr || to->type() != AttributeProto::AttributeType::INT) {
     return NoMatch(candidate, "the final Cast does not define an integer 'to' attribute");
-  }
-  for (const NodeProto *node : {cast, mul, sub, cast2}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{this, {cast, &candidate, mul, sub, cast2}, nullptr};
 }

@@ -180,8 +180,6 @@ std::set<std::string> SplitConcatPattern::FastOpType() const { return {"Split"};
 
 core::builder::MatchResult SplitConcatPattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Split")) {
     return NoMatch(candidate, "candidate is not a default-domain Split");
   }
@@ -228,9 +226,6 @@ core::builder::MatchResult SplitConcatPattern::Match(core::builder::GraphGraph &
     }
   }
 
-  if (concat != nullptr && !graph.IsOperator(*concat)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, concat}, &candidate};
 }
 
@@ -258,8 +253,6 @@ std::set<std::string> GathersSplitPattern::FastOpType() const { return {"Gather"
 
 core::builder::MatchResult GathersSplitPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather")) {
     return NoMatch(candidate, "candidate is not a default-domain Gather");
   }
@@ -329,11 +322,6 @@ core::builder::MatchResult GathersSplitPattern::Match(core::builder::GraphGraph 
   if (!dim.IsInt() || dim.AsInt() != static_cast<int64_t>(indices.size())) {
     return NoMatch(candidate, "the axis dimension does not match the number of gathers");
   }
-  for (const NodeProto *node : kept) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{this, kept, nullptr};
 }
 
@@ -401,8 +389,6 @@ std::set<std::string> GatherSliceToSplitPattern::FastOpType() const { return {"G
 
 core::builder::MatchResult GatherSliceToSplitPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (graph.Builder().OpsetVersion("") < 13) {
     return NoMatch(candidate, "the default opset is older than 13");
   }
@@ -415,11 +401,6 @@ core::builder::MatchResult GatherSliceToSplitPattern::Match(core::builder::Graph
   nodes.reserve(ranges.size());
   for (const PartitionRange &range : ranges) {
     nodes.push_back(range.node);
-  }
-  for (const NodeProto *node : nodes) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{this, nodes, nullptr};
 }
@@ -485,8 +466,6 @@ std::set<std::string> SlicesSplitPattern::FastOpType() const { return {"Slice"};
 
 core::builder::MatchResult SlicesSplitPattern::Match(core::builder::GraphGraph &graph,
                                                      const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Slice")) {
     return NoMatch(candidate, "candidate is not a default-domain Slice");
   }
@@ -569,11 +548,6 @@ core::builder::MatchResult SlicesSplitPattern::Match(core::builder::GraphGraph &
   }
   if (std::find(users.begin(), users.end(), &candidate) == users.end()) {
     return NoMatch(candidate, "the candidate is not among the sibling slices");
-  }
-  for (const NodeProto *node : users) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{this, users, nullptr};
 }

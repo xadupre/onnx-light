@@ -129,8 +129,6 @@ std::set<std::string> IdentityPattern::FastOpType() const { return SupportedOps(
 
 core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const std::string &op_type = candidate.op_type().value();
   if (!IsDefaultDomain(candidate) || SupportedOps().count(op_type) == 0) {
     return NoMatch(candidate, "candidate is not a supported default-domain operation");

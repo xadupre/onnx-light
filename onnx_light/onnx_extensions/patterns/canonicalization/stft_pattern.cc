@@ -279,17 +279,9 @@ std::set<std::string> STFTFusionPattern::FastOpType() const { return {"Transpose
 
 core::builder::MatchResult STFTFusionPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   MatchInfo info;
   if (!Validate(graph, candidate, info)) {
     return NoMatch(candidate, "not a private canonical convolution-based DFT");
-  }
-  for (const NodeProto *node : {info.signal_transpose, info.real_conv, info.imag_conv,
-                                info.real_unsqueeze, info.imag_unsqueeze, info.concat}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{this,
                                     {info.signal_transpose, info.real_conv, info.imag_conv,

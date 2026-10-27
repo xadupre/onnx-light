@@ -499,8 +499,6 @@ std::set<std::string> GatherConcatPattern::FastOpType() const { return {"Gather"
 
 core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsAxis0Gather(candidate)) {
     return NoMatch(candidate, "candidate is not an axis=0 Gather");
   }
@@ -562,9 +560,6 @@ core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph 
     if (x_size >= 0 && value >= offset + x_size) {
       return NoMatch(candidate, "a requested index falls after the non-constant input");
     }
-  }
-  if (concat != nullptr && !graph.IsOperator(*concat)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
@@ -632,8 +627,6 @@ std::set<std::string> GatherGatherPattern::FastOpType() const { return {"Gather"
 
 core::builder::MatchResult GatherGatherPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsAxis0Gather(candidate)) {
     return NoMatch(candidate, "candidate is not an axis=0 Gather");
   }
@@ -668,9 +661,6 @@ core::builder::MatchResult GatherGatherPattern::Match(core::builder::GraphGraph 
     if (normalized < 0 || normalized >= length) {
       return NoMatch(candidate, "an outer index is out of range of the inner indices");
     }
-  }
-  if (inner != nullptr && !graph.IsOperator(*inner)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {inner, &candidate}, &candidate};
 }
@@ -731,8 +721,6 @@ std::set<std::string> GatherToSlicePattern::FastOpType() const { return {"Gather
 
 core::builder::MatchResult GatherToSlicePattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   GatherToSlicePlan plan;
   GatherToSliceReject reject = GatherToSliceReject::kNone;
   if (AnalyzeGatherToSlice(graph, candidate, plan, &reject)) {
@@ -852,8 +840,6 @@ std::set<std::string> GatherUpstreamPropagationPattern::FastOpType() const { ret
 core::builder::MatchResult
 GatherUpstreamPropagationPattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Gather") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Gather with two inputs");
@@ -938,9 +924,6 @@ GatherUpstreamPropagationPattern::Match(core::builder::GraphGraph &graph,
       PlanProducer(graph, *producer, axis, is_scalar, new_length, output_shape);
   if (!plan.has_value() || plan->propagate.empty()) {
     return NoMatch(candidate, "no producer input can be safely sliced at this axis");
-  }
-  if (producer != nullptr && !graph.IsOperator(*producer)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {producer, &candidate}, &candidate};
 }

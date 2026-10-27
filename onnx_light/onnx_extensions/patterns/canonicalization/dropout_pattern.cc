@@ -27,8 +27,6 @@ std::set<std::string> DropoutPattern::FastOpType() const { return {"Dropout"}; }
 
 core::builder::MatchResult DropoutPattern::Match(core::builder::GraphGraph &graph,
                                                  const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultDropout(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Dropout");
   }

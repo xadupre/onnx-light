@@ -271,7 +271,7 @@ core::builder::MatchResult
 MatchShapeBasedBroadcast(const core::builder::PatternOptimization *pattern,
                          core::builder::GraphGraph &graph, const NodeProto &candidate,
                          bool matmul) {
-  if (!graph.IsOperator(candidate) || candidate.input_size() != 2 || candidate.output_size() != 1 ||
+  if (candidate.input_size() != 2 || candidate.output_size() != 1 ||
       NormaliseDomain(candidate.domain().value()) != kDefaultOnnxDomain) {
     return {};
   }
@@ -283,9 +283,6 @@ MatchShapeBasedBroadcast(const core::builder::PatternOptimization *pattern,
 
   const NodeProto *left_expand = InputExpand(graph, candidate, 0);
   const NodeProto *right_expand = InputExpand(graph, candidate, 1);
-  if ((left_expand != nullptr && !graph.IsOperator(*left_expand)) ||
-      (right_expand != nullptr && !graph.IsOperator(*right_expand)))
-    return {};
   if (left_expand == nullptr && right_expand == nullptr) {
     return {};
   }
@@ -440,8 +437,6 @@ std::set<std::string> ExpandPattern::FastOpType() const { return {"Expand"}; }
 
 core::builder::MatchResult ExpandPattern::Match(core::builder::GraphGraph &graph,
                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -483,8 +478,6 @@ std::set<std::string> ExpandBroadcastPattern::FastOpType() const { return {"Expa
 
 core::builder::MatchResult ExpandBroadcastPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -531,9 +524,6 @@ core::builder::MatchResult ExpandBroadcastPattern::Match(core::builder::GraphGra
     }
   }
 
-  if (!graph.IsOperator(next_node)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, &next_node}, &candidate};
 }
 
@@ -568,8 +558,6 @@ std::set<std::string> ShapeBasedConcatExpandPattern::FastOpType() const { return
 
 core::builder::MatchResult ShapeBasedConcatExpandPattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -634,9 +622,6 @@ core::builder::MatchResult ShapeBasedConcatExpandPattern::Match(core::builder::G
     return NoMatch(candidate, "the unchanged target dimensions are already constant ones");
   }
 
-  if (concat != nullptr && !graph.IsOperator(*concat)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
 
@@ -694,8 +679,6 @@ std::set<std::string> ShapeBasedExpandBroadcastPattern::FastOpType() const {
 core::builder::MatchResult
 ShapeBasedExpandBroadcastPattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (BinaryOpTypes().find(candidate.op_type().value()) == BinaryOpTypes().end() ||
       candidate.attribute_size() != 0) {
     return NoMatch(candidate, "candidate is not an attribute-free broadcasting binary operator");
@@ -729,8 +712,6 @@ std::set<std::string> ShapeBasedExpandBroadcastMatMulPattern::FastOpType() const
 core::builder::MatchResult
 ShapeBasedExpandBroadcastMatMulPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "MatMul") || candidate.attribute_size() != 0) {
     return NoMatch(candidate, "candidate is not an attribute-free default-domain MatMul");
   }
@@ -762,8 +743,6 @@ std::set<std::string> ShapeBasedStaticExpandPattern::FastOpType() const { return
 
 core::builder::MatchResult ShapeBasedStaticExpandPattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -818,8 +797,6 @@ std::set<std::string> ShapeBasedExpandSwapPattern::FastOpType() const { return B
 
 core::builder::MatchResult ShapeBasedExpandSwapPattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (BinaryOpTypes().find(candidate.op_type().value()) == BinaryOpTypes().end() ||
       NormaliseDomain(candidate.domain().value()) != kDefaultOnnxDomain ||
       candidate.input_size() != 2 || candidate.output_size() != 1 ||
@@ -870,10 +847,6 @@ core::builder::MatchResult ShapeBasedExpandSwapPattern::Match(core::builder::Gra
       return NoMatch(candidate, "the two expansions cannot safely move after the binary operator");
     }
   }
-  if ((left_expand != nullptr && !graph.IsOperator(*left_expand)) ||
-      (right_expand != nullptr && !graph.IsOperator(*right_expand))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {left_expand, right_expand, &candidate}, nullptr};
 }
 
@@ -920,8 +893,6 @@ std::set<std::string> ShapeBasedExpandCastWhereSwapPattern::FastOpType() const {
 core::builder::MatchResult
 ShapeBasedExpandCastWhereSwapPattern::Match(core::builder::GraphGraph &graph,
                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
@@ -960,10 +931,6 @@ ShapeBasedExpandCastWhereSwapPattern::Match(core::builder::GraphGraph &graph,
                                  graph.GetShape(candidate.output()[0].value()).Shape(),
                                  graph.GetShape(expand->input()[0].value()).Shape())) {
     return NoMatch(candidate, "the pre-expansion Where does not preserve the output shape");
-  }
-  if ((expand != nullptr && !graph.IsOperator(*expand)) ||
-      (cast != nullptr && !graph.IsOperator(*cast))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {expand, cast, &candidate}, nullptr};
 }
@@ -1013,8 +980,6 @@ std::set<std::string> ExpandSwapPattern::FastOpType() const { return {"Expand"};
 
 core::builder::MatchResult ExpandSwapPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -1042,9 +1007,6 @@ core::builder::MatchResult ExpandSwapPattern::Match(core::builder::GraphGraph &g
     return NoMatch(candidate, "the consumer does not have a single output");
   }
 
-  if (!graph.IsOperator(next_node)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, &next_node}, &candidate};
 }
 
@@ -1088,8 +1050,6 @@ std::set<std::string> SwapExpandUnsqueezePattern::FastOpType() const { return {"
 
 core::builder::MatchResult SwapExpandUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -1123,9 +1083,6 @@ core::builder::MatchResult SwapExpandUnsqueezePattern::Match(core::builder::Grap
                    "neither the Expand target shape nor the Expand output shape is known");
   }
 
-  if (!graph.IsOperator(unsqueeze)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, &unsqueeze}, &candidate};
 }
 
@@ -1174,8 +1131,6 @@ std::set<std::string> ExpandUnsqueezeExpandPattern::FastOpType() const { return 
 
 core::builder::MatchResult ExpandUnsqueezeExpandPattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
@@ -1227,9 +1182,6 @@ core::builder::MatchResult ExpandUnsqueezeExpandPattern::Match(core::builder::Gr
                    "the unsqueezed first shape and the second shape have different ranks");
   }
 
-  if (!graph.IsOperator(unsqueeze) || !graph.IsOperator(expand2)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {&candidate, &unsqueeze, &expand2}, &candidate};
 }
 
@@ -1286,8 +1238,6 @@ std::set<std::string> SwapExpandReshapePattern::FastOpType() const { return {"Re
 
 core::builder::MatchResult SwapExpandReshapePattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Reshape") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
@@ -1316,9 +1266,6 @@ core::builder::MatchResult SwapExpandReshapePattern::Match(core::builder::GraphG
       !target.ValueAsShape()[1].IsInt() || target.ValueAsShape()[1].AsInt() != 1 ||
       !target.ValueAsShape()[2].IsInt() || target.ValueAsShape()[2].AsInt() != 1) {
     return NoMatch(candidate, "the Expand target does not end with [1, 1]");
-  }
-  if (expand != nullptr && !graph.IsOperator(*expand)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {expand, &candidate}, &candidate};
 }

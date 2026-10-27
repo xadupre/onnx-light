@@ -117,7 +117,7 @@ bool ReadConstantValues(core::builder::GraphGraph &graph, const std::string &nam
     return ReadNumericValues(*tensor, values);
   }
   const NodeProto *constant = graph.NodeBefore(name);
-  if (constant == nullptr || !graph.IsOperator(*constant) || !IsDefaultOp(*constant, "Constant")) {
+  if (constant == nullptr || !IsDefaultOp(*constant, "Constant")) {
     return false;
   }
   const AttributeProto *value_int = FindAttribute(*constant, "value_int");
@@ -344,8 +344,6 @@ std::set<std::string> LayerNormalizationPattern::FastOpType() const { return {"R
 
 core::builder::MatchResult LayerNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "ReduceMean") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a two-input default-domain ReduceMean");
@@ -471,11 +469,6 @@ core::builder::MatchResult LayerNormalizationPattern::Match(core::builder::Graph
     return NoMatch(candidate, "a LayerNormalization intermediate is externally used");
   }
 
-  for (const NodeProto *node : {mean, sub, power, add, sqrt, reciprocal, final}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   if (reciprocal == nullptr) {
     return core::builder::MatchResult{
         this, {mean, sub, power, &candidate, add, sqrt, final}, &candidate};
@@ -575,16 +568,13 @@ std::set<std::string> LayerNormalizationScalePattern::FastOpType() const {
 
 core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::GraphGraph &graph,
                                                                  const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "LayerNormalization") || candidate.input_size() < 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a single-output LayerNormalization");
   }
   const std::vector<const NodeProto *> &mul_nodes = graph.NextNodes(candidate.output()[0].value());
-  if (mul_nodes.size() != 1 || !graph.IsOperator(*mul_nodes[0]) ||
-      !IsDefaultOp(*mul_nodes[0], "Mul") || mul_nodes[0]->input_size() != 2 ||
-      mul_nodes[0]->output_size() != 1) {
+  if (mul_nodes.size() != 1 || !IsDefaultOp(*mul_nodes[0], "Mul") ||
+      mul_nodes[0]->input_size() != 2 || mul_nodes[0]->output_size() != 1) {
     return NoMatch(candidate, "LayerNormalization is not followed by one Mul");
   }
   const NodeProto *mul = mul_nodes[0];
@@ -614,7 +604,7 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
   }
 
   const NodeProto *add = after_mul[0];
-  if (!graph.IsOperator(*add) || add->input_size() != 2 || add->output_size() != 1) {
+  if (add->input_size() != 2 || add->output_size() != 1) {
     return NoMatch(candidate, "the following Add does not have two inputs and one output");
   }
   const bool first_is_mul = add->input()[0].value() == mul->output()[0].value();
@@ -722,8 +712,6 @@ std::set<std::string> CastLayerNormalizationCastPattern::FastOpType() const {
 core::builder::MatchResult
 CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const std::string &op_type = candidate.op_type().value();
   if (op_type != "GroupNormalization" && op_type != "LayerNormalization" &&
       op_type != "RMSNormalization" && op_type != "SimplifiedLayerNormalization") {
@@ -777,10 +765,6 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   }
   if (!HasOnlyConsumers(graph, candidate.output()[0].value(), {cast_after})) {
     return NoMatch(candidate, "the normalization data output is externally used");
-  }
-  if ((cast_before != nullptr && !graph.IsOperator(*cast_before)) ||
-      (cast_after != nullptr && !graph.IsOperator(*cast_after))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {cast_before, &candidate, cast_after}, &candidate};
 }
@@ -840,8 +824,6 @@ std::set<std::string> BatchNormalizationPattern::FastOpType() const {
 
 core::builder::MatchResult BatchNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not a valid default-domain BatchNormalization");
@@ -914,8 +896,6 @@ std::set<std::string> BatchNormalizationTrainingPattern::FastOpType() const {
 core::builder::MatchResult
 BatchNormalizationTrainingPattern::Match(core::builder::GraphGraph &graph,
                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
       candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not a valid default-domain BatchNormalization");
@@ -1064,8 +1044,6 @@ std::set<std::string> RMSNormalizationPattern::FastOpType() const { return {"Red
 
 core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 23)) {
     return NoMatch(candidate, "the default-domain opset is below 23");
   }
@@ -1188,11 +1166,6 @@ core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGr
     return NoMatch(candidate, "the pre-output RMS value is externally used");
   }
 
-  for (const NodeProto *node : {cast_before, power, add, sqrt, reciprocal, mul, cast_after}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
-  }
   return core::builder::MatchResult{
       this, {cast_before, power, &candidate, add, sqrt, reciprocal, mul, cast_after}, &candidate};
 }
@@ -1290,8 +1263,6 @@ std::set<std::string> RMSNormalizationMulPattern::FastOpType() const {
 
 core::builder::MatchResult RMSNormalizationMulPattern::Match(core::builder::GraphGraph &graph,
                                                              const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!MainOpsetAtLeast(graph, 23)) {
     return NoMatch(candidate, "the default-domain opset is below 23");
   }
@@ -1325,9 +1296,6 @@ core::builder::MatchResult RMSNormalizationMulPattern::Match(core::builder::Grap
   TensorProto product;
   if (left == nullptr || right == nullptr || !MultiplyConstants(*left, *right, "", product)) {
     return NoMatch(candidate, "the two constant scales cannot be multiplied");
-  }
-  if (mul != nullptr && !graph.IsOperator(*mul)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, mul}, mul};
 }

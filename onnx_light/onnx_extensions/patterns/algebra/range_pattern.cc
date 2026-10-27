@@ -32,8 +32,6 @@ std::set<std::string> SwapRangeAddScalarPattern::FastOpType() const { return {"R
 
 core::builder::MatchResult SwapRangeAddScalarPattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Range") || candidate.input_size() < 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Range");
@@ -45,9 +43,6 @@ core::builder::MatchResult SwapRangeAddScalarPattern::Match(core::builder::Graph
   }
   if (!HasOneElementShape(graph, next_nodes[0]->input()[1].value())) {
     return NoMatch(candidate, "the Add second input does not have shape [1]");
-  }
-  if (next_nodes[0] != nullptr && !graph.IsOperator(*next_nodes[0])) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, next_nodes[0]}, next_nodes[0]};
 }

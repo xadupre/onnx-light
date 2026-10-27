@@ -117,8 +117,6 @@ std::set<std::string> UnsqueezeUnsqueezePattern::FastOpType() const { return {"U
 
 core::builder::MatchResult UnsqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                             const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Unsqueeze with two inputs");
@@ -152,9 +150,6 @@ core::builder::MatchResult UnsqueezeUnsqueezePattern::Match(core::builder::Graph
     if (!GetRank(graph, candidate.input()[0].value(), rank)) {
       return NoMatch(candidate, "the source rank is required to merge multi-axis Unsqueeze nodes");
     }
-  }
-  if (next_node != nullptr && !graph.IsOperator(*next_node)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
 }
@@ -309,8 +304,6 @@ AxesDiff DiffAxes(core::builder::GraphGraph &graph, const NodeProto &first,
 
 core::builder::MatchResult SqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsSqueezeOrUnsqueeze(candidate) || candidate.input_size() < 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Squeeze or Unsqueeze");
@@ -327,9 +320,6 @@ core::builder::MatchResult SqueezeUnsqueezePattern::Match(core::builder::GraphGr
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[0].value()) ? node_before : &candidate;
-  if (node_before != nullptr && !graph.IsOperator(*node_before)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {node_before, &candidate}, insert_at};
 }
 

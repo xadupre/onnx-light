@@ -224,8 +224,6 @@ std::set<std::string> SqueezeAddPattern::FastOpType() const { return {"Add"}; }
 
 core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Add") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not an opset-13 default-domain Add");
@@ -242,10 +240,6 @@ core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &g
   if (!ResolveSqueezeAxes(graph, *first, first_axes) ||
       !ResolveSqueezeAxes(graph, *second, second_axes) || first_axes != second_axes) {
     return NoMatch(candidate, "the Squeeze axes are not equal");
-  }
-  if ((first != nullptr && !graph.IsOperator(*first)) ||
-      (second != nullptr && !graph.IsOperator(*second))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
 }
@@ -289,8 +283,6 @@ std::set<std::string> MulUnsqueezeUnsqueezePattern::FastOpType() const { return 
 
 core::builder::MatchResult MulUnsqueezeUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Mul") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not an opset-13 default-domain Mul");
@@ -312,10 +304,6 @@ core::builder::MatchResult MulUnsqueezeUnsqueezePattern::Match(core::builder::Gr
   if (graph.IsUsedMoreThanOnce(candidate.input()[0].value()) ||
       graph.IsUsedMoreThanOnce(candidate.input()[1].value())) {
     return NoMatch(candidate, "an Unsqueeze output is shared");
-  }
-  if ((first != nullptr && !graph.IsOperator(*first)) ||
-      (second != nullptr && !graph.IsOperator(*second))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
 }
@@ -355,8 +343,6 @@ std::set<std::string> SqueezeBinaryUnsqueezePattern::FastOpType() const { return
 
 core::builder::MatchResult SqueezeBinaryUnsqueezePattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Unsqueeze") || !MainOpsetAtLeast(graph, 13) ||
       candidate.input_size() != 2 || candidate.output_size() != 1 ||
       !graph.IsConstantScalar(candidate.input()[1].value(), 0.0, false)) {
@@ -375,10 +361,6 @@ core::builder::MatchResult SqueezeBinaryUnsqueezePattern::Match(core::builder::G
       !graph.HasShape(squeeze->input()[0].value()) ||
       graph.GetShape(squeeze->input()[0].value()).Shape().Rank() != 1) {
     return NoMatch(candidate, "the binary left input is not produced from a rank-one value");
-  }
-  if ((squeeze != nullptr && !graph.IsOperator(*squeeze)) ||
-      (binary != nullptr && !graph.IsOperator(*binary))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {squeeze, binary, &candidate}, &candidate};
 }
@@ -417,8 +399,6 @@ std::set<std::string> SwapUnsqueezeTransposePattern::FastOpType() const { return
 
 core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1 || !MainOpsetAtLeast(graph, 13) ||
       graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
@@ -454,9 +434,6 @@ core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::G
     if (!normalized_axes.insert(axis < 0 ? axis + rank : axis).second) {
       return NoMatch(candidate, "the Unsqueeze axes contain duplicate dimensions");
     }
-  }
-  if (unsqueeze != nullptr && !graph.IsOperator(*unsqueeze)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
 }
@@ -527,8 +504,6 @@ std::set<std::string> TransposeEqualReshapePattern::FastOpType() const { return 
 
 core::builder::MatchResult TransposeEqualReshapePattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1 || !graph.HasShape(candidate.input()[0].value())) {
     return NoMatch(candidate, "candidate is not a Transpose with a known input shape");
@@ -608,8 +583,6 @@ std::set<std::string> TransposeReshapeTransposePattern::FastOpType() const { ret
 core::builder::MatchResult
 TransposeReshapeTransposePattern::Match(core::builder::GraphGraph &graph,
                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
@@ -629,10 +602,6 @@ TransposeReshapeTransposePattern::Match(core::builder::GraphGraph &graph,
   ReshapeTransposePlan plan;
   if (!MakeReshapeTransposePlan(graph, candidate, *reshape, *second_next[0], plan)) {
     return NoMatch(candidate, "the Reshape shape cannot be aligned with the Transposes");
-  }
-  if ((reshape != nullptr && !graph.IsOperator(*reshape)) ||
-      (second_next[0] != nullptr && !graph.IsOperator(*second_next[0]))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, reshape, second_next[0]}, &candidate};
 }

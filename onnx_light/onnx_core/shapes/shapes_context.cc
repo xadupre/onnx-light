@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "onnx_core/graph/graph_manipulations.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
@@ -407,10 +408,21 @@ std::string ShapesContext::LocalFunctionKey(const std::string &domain, const std
          (overload.empty() ? std::string() : ":" + escape(overload));
 }
 
-void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) {
+void ShapesContext::SetLocalFunction(const FunctionProto *func) {
   EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
+  const std::string domain =
+      NormaliseDomain(func->domain() == "onnx.ai" ? std::string() : func->domain().value());
+  EXT_ENFORCE_INVALID(DispatchTable().count(domain + ":" + func->name().value()) == 0,
+                      "Local function '", func->domain(), "::", func->name(),
+                      "' cannot redefine a registered operator, regardless of overload.");
   const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
-  local_functions_[key] = func.get();
+  local_functions_[key] = func;
+  owned_local_functions_.erase(key);
+}
+
+void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) {
+  SetLocalFunction(func.get());
+  const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
   owned_local_functions_[key] = std::move(func);
 }
 

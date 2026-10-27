@@ -185,15 +185,6 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                    nb::rv_policy::reference_internal)
       .def_prop_ro("name", [](const GraphGraph &graph) { return graph.Builder().name(); })
       .def_prop_ro("patterns", &GraphGraph::Patterns)
-      .def(
-          "get_function",
-          [](const GraphGraph &graph, const NodeProto &node) -> nb::object {
-            const FunctionProto *function = graph.GetFunction(node);
-            return function == nullptr ? nb::none()
-                                       : nb::cast(utils::CopyWithSharedTensorStorage(*function));
-          },
-          nb::arg("node"), "Returns a function snapshot, or None when no local function matches.")
-      .def("is_operator", &GraphGraph::IsOperator, nb::arg("node"))
       .def("set_target_device", &GraphGraph::SetTargetDevice, nb::arg("device"),
            "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
       .def(

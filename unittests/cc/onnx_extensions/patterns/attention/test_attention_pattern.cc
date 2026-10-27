@@ -607,18 +607,17 @@ TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
   onnx_patterns::RotaryEmbeddingPattern pattern;
   const auto match = pattern.Match(graph, builder.Nodes()[2]);
   ASSERT_EQ(match.pattern, &pattern) << match.ToString();
-  EXPECT_NE(graph.GetFunction(builder.Nodes()[2]), nullptr);
+  EXPECT_TRUE(builder.HasLocalFunction("HalfRotaryEmbedding"));
   auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
   for (const std::string overload : {"custom", ""}) {
     FunctionProto override;
     override.set_name("Concat");
     override.set_domain("onnx.ai");
     override.set_overload(overload);
-    shapes.SetLocalFunction(std::make_shared<FunctionProto>(override));
-    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern != nullptr, !overload.empty());
+    EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(override)),
+                 std::invalid_argument);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, &pattern);
   }
-  shapes.ClearLocalFunctions();
-  shapes.SetLocalFunction(std::make_shared<FunctionProto>(helper.ToFunction("intermediate")));
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 7u);
   const NodeProto &rotary = replacement[replacement.size() - 1];

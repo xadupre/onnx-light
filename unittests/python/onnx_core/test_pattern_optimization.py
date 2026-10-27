@@ -74,14 +74,13 @@ class NegNegPattern(optim.PatternOptimization):
         return {"Neg"}
 
     def match(self, graph, node):
-        if not graph.is_operator(node) or node.domain not in ("", "ai.onnx", "onnx.ai"):
+        if node.domain not in ("", "ai.onnx", "onnx.ai"):
             return self.no_match(node, "the candidate is not a primitive Neg")
         previous = graph.node_before(node.input[0])
         if (
             previous is None
             or previous.op_type != "Neg"
             or previous.domain not in ("", "ai.onnx", "onnx.ai")
-            or not graph.is_operator(previous)
         ):
             return self.no_match(node, "the input is not produced by Neg")
         return self.result([previous, node], insert_at=node)
@@ -379,16 +378,10 @@ class TestPatternOptimization(ExtTestCase):
     def test_python_pattern_resolves_local_function_calls(self):
         class LocalNegNegPattern(NegNegPattern):
             def match(self, graph, node):
-                function = graph.get_function(node)
-                if (
-                    function is None
-                    or function.domain != "local"
-                    or function.name != "Neg"
-                    or function.overload
-                ):
+                if node.domain != "local" or node.op_type != "Neg" or node.overload:
                     return self.no_match(node, "the candidate is not the local Neg function")
                 previous = graph.node_before(node.input[0])
-                if previous is None or graph.get_function(previous) is None:
+                if previous is None:
                     return self.no_match(node, "the input is not produced by a local call")
                 if (
                     previous.domain != node.domain
@@ -428,23 +421,18 @@ class TestPatternOptimization(ExtTestCase):
         model.functions[0].node[0].op_type = "Identity"
         for node in model.graph.node:
             node.domain = ""
-        builder = optim.GraphBuilder(model)
-        optim.GraphGraph(builder, [LocalNegNegPattern()]).optimize()
-        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Neg", "Neg"])
+        with self.assertRaisesRegex(ValueError, "cannot redefine a registered operator"):
+            optim.GraphBuilder(model)
 
-    def test_primitive_resolution_uses_domain_aliases_and_overloads(self):
-        for definition_domain in ("", "ai.onnx", "onnx.ai"):
-            for call_domain in ("", "ai.onnx"):
+    def test_rejects_operator_function_definitions(self):
+        for domain in ("", "ai.onnx", "onnx.ai"):
+            for name in ("Neg", "Constant", "Identity"):
                 for overload in ("", "custom"):
-                    with self.subTest(
-                        definition_domain=definition_domain,
-                        call_domain=call_domain,
-                        overload=overload,
-                    ):
+                    with self.subTest(domain=domain, name=name, overload=overload):
                         model = _double_neg_model()
                         function = oh.make_function(
-                            definition_domain,
-                            "Neg",
+                            domain,
+                            name,
                             ["X"],
                             ["Y"],
                             [oh.make_node("Abs", ["X"], ["Y"])],
@@ -452,74 +440,10 @@ class TestPatternOptimization(ExtTestCase):
                         )
                         function.overload = overload
                         model.functions.append(function)
-                        for node in model.graph.node:
-                            node.domain = call_domain
-                        builder = optim.GraphBuilder(model)
-                        graph = optim.GraphGraph(builder, [NegNegPattern()])
-                        node = graph.node_before("middle")
-                        self.assertEqual(graph.is_operator(node), bool(overload))
-                        resolved = graph.get_function(node)
-                        alias = oh.make_node("Neg", [], [], domain="onnx.ai")
-                        self.assertEqual(graph.get_function(alias) is None, bool(overload))
-                        if overload:
-                            self.assertIsNone(resolved)
-                        else:
-                            self.assertEqual(resolved.name, "Neg")
-                        graph.optimize()
-                        optimized = builder.to_onnx()
-                        self.assertEqual(
-                            [node.op_type for node in optimized.graph.node],
-                            ["Identity"] if overload else ["Neg", "Neg"],
-                        )
-
-    def test_local_constant_producer_does_not_supply_primitive_attributes(self):
-        class ConstantNegNegPattern(NegNegPattern):
-            def match(self, graph, node):
-                match = super().match(graph, node)
-                if match.pattern is None:
-                    return match
-                previous = graph.node_before(node.input[0])
-                if graph.get_computed_constant(previous.input[0]) is None:
-                    return self.no_match(node, "a readable primitive Constant is required")
-                return match
-
-        for domain in ("", "ai.onnx", "onnx.ai"):
-            for overload in ("", "custom"):
-                with self.subTest(domain=domain, overload=overload):
-                    model = _double_neg_model()
-                    function = oh.make_function(
-                        domain,
-                        "Constant",
-                        ["X"],
-                        ["Y"],
-                        [oh.make_node("Abs", ["X"], ["Y"])],
-                        [oh.make_opsetid("", 18)],
-                        attributes=["value"],
-                    )
-                    function.overload = overload
-                    model.functions.append(function)
-                    producer = oh.make_node(
-                        "Constant",
-                        ["x"],
-                        ["constant"],
-                        value=onh.from_array(numpy.array([0, 0], dtype=numpy.float32)),
-                    )
-                    producer.overload = overload
-                    model.graph.node[:] = [
-                        producer,
-                        oh.make_node("Neg", ["constant"], ["middle"]),
-                        oh.make_node("Neg", ["middle"], ["y"]),
-                    ]
-                    builder = optim.GraphBuilder(model)
-                    graph = optim.GraphGraph(builder, [ConstantNegNegPattern()])
-                    self.assertIsNone(graph.get_computed_constant("constant"))
-                    rewrites = graph.optimize()
-                    self.assertEqual(len(rewrites.rewrites), 0)
-                    optimized = builder.to_onnx()
-                    self.assertEqual(
-                        [node.op_type for node in optimized.graph.node],
-                        ["Constant", "Neg", "Neg"],
-                    )
+                        with self.assertRaisesRegex(
+                            ValueError, "cannot redefine a registered operator"
+                        ):
+                            optim.GraphBuilder(model)
 
     def test_unresolved_constant_producer_protects_function_body_matches(self):
         producer = oh.make_node("Constant", [], ["constant"])

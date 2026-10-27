@@ -51,10 +51,10 @@ The running example collapses two consecutive ``Neg`` nodes into an
             return {"Neg"}
 
         def match(self, graph, node):
-            if not graph.is_operator(node):
-                return self.no_match(node, "the candidate is a local call or overload")
+            if node.domain not in ("", "ai.onnx"):
+                return self.no_match(node, "the candidate is not in the default ONNX domain")
             previous = graph.node_before(node.input[0])
-            if previous is None or previous.op_type != "Neg" or not graph.is_operator(previous):
+            if previous is None or previous.op_type != "Neg" or previous.domain not in ("", "ai.onnx"):
                 return self.no_match(node, "the input is not produced by Neg")
             return self.result([previous, node], insert_at=node)
 
@@ -72,12 +72,11 @@ A ``None``/``nullptr`` entry may reserve an optional positional role;
 the optimizer passes it to ``apply`` but ignores it for positioning,
 marking, removal, and replay.
 
-``graph.is_operator(node)`` excludes calls to functions defined in the model
-or added to the builder, including local overrides of standard operators.
-Primitive patterns must check both the candidate and secondary nodes.
-Patterns intentionally matching functions use ``graph.get_function(node)``,
-which resolves the normalized domain, name and overload, and then validate the
-intended function semantics before returning ``self.result(...)``.
+Primitive patterns check the domain and operator type of the candidate and
+secondary nodes. Model verification and builder registration reject functions
+that reuse a registered operator's domain and name, regardless of ``overload``.
+Patterns intentionally matching functions check their expected identities and
+semantics before returning the usual ``self.result(...)``.
 
 Select the pattern for one optimizer
 ------------------------------------

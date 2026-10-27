@@ -240,8 +240,6 @@ std::set<std::string> DivMulPattern::FastOpType() const { return {"Div"}; }
 
 core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph,
                                                 const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Div") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain binary Div");
@@ -264,9 +262,6 @@ core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph
   const TensorProto *one = graph.GetComputedConstant(candidate.input()[0].value());
   if (one == nullptr || !IsSupportedSingleOne(*one)) {
     return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
-  }
-  if (mul != nullptr && !graph.IsOperator(*mul)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, mul}, nullptr};
 }
@@ -301,8 +296,6 @@ std::set<std::string> MulMulMulScalarPattern::FastOpType() const { return {"Div"
 
 core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool is_div = IsDefaultOp(candidate, "Div");
   const bool is_mul = IsDefaultOp(candidate, "Mul");
   if ((!is_div && !is_mul) || candidate.input_size() != 2 || candidate.output_size() != 1) {
@@ -332,10 +325,6 @@ core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGra
   if ((IsDefaultOp(*left, "Div") || IsDefaultOp(*right, "Div")) &&
       (!IsFloatingForDiv(*left_constant) || !IsFloatingForDiv(*right_constant))) {
     return NoMatch(candidate, "Div constants are not float16, float, or double");
-  }
-  if ((left != nullptr && !graph.IsOperator(*left)) ||
-      (right != nullptr && !graph.IsOperator(*right))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }
@@ -383,8 +372,6 @@ std::set<std::string> SwitchOrderBinaryPattern::FastOpType() const { return {"Ad
 
 core::builder::MatchResult SwitchOrderBinaryPattern::Match(core::builder::GraphGraph &graph,
                                                            const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   const bool is_add = IsDefaultOp(candidate, "Add");
   const bool is_mul = IsDefaultOp(candidate, "Mul");
   if ((!is_add && !is_mul) || candidate.input_size() != 2 || candidate.output_size() != 1) {
@@ -444,11 +431,6 @@ core::builder::MatchResult SwitchOrderBinaryPattern::Match(core::builder::GraphG
   }
   if (graph.IsUsedMoreThanOnce(other->output()[0].value())) {
     return NoMatch(candidate, "the nested binary output has another use");
-  }
-  for (const NodeProto *node : {choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}) {
-    if (node != nullptr && !graph.IsOperator(*node)) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
   }
   return core::builder::MatchResult{
       this, {&candidate, choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}, &candidate};

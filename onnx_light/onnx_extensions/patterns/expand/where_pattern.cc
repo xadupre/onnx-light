@@ -63,7 +63,7 @@ bool IsRankZeroConstant(core::builder::GraphGraph &graph, const std::string &nam
     return tensor->dims_size() == 0;
   }
   const NodeProto *producer = graph.NodeBefore(name);
-  if (producer != nullptr && graph.IsOperator(*producer) && IsDefaultOp(*producer, "Constant") &&
+  if (producer != nullptr && IsDefaultOp(*producer, "Constant") &&
       (FindAttribute(*producer, "value_int") != nullptr ||
        FindAttribute(*producer, "value_float") != nullptr)) {
     return true;
@@ -124,8 +124,6 @@ std::set<std::string> NotWherePattern::FastOpType() const { return {"Where"}; }
 
 core::builder::MatchResult NotWherePattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
   }
@@ -133,9 +131,6 @@ core::builder::MatchResult NotWherePattern::Match(core::builder::GraphGraph &gra
   if (not_node == nullptr || !IsDefaultOp(*not_node, "Not") || not_node->input_size() != 1 ||
       not_node->output_size() != 1) {
     return NoMatch(candidate, "the condition is not produced by a default-domain Not");
-  }
-  if (not_node != nullptr && !graph.IsOperator(*not_node)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {not_node, &candidate}, &candidate};
 }
@@ -169,8 +164,6 @@ std::set<std::string> UnsqueezeEqualPattern::FastOpType() const { return {"Equal
 
 core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGraph &graph,
                                                         const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Equal") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Equal with two inputs");
@@ -218,10 +211,6 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
     if (input_axes != equal_axes) {
       return NoMatch(candidate, "the sibling and result Unsqueeze axes differ");
     }
-    if ((input_unsqueeze != nullptr && !graph.IsOperator(*input_unsqueeze)) ||
-        (equal_unsqueeze != nullptr && !graph.IsOperator(*equal_unsqueeze))) {
-      return NoMatch(candidate, "a matched node is a local function call or overload");
-    }
     return core::builder::MatchResult{
         this, {input_unsqueeze, &candidate, equal_unsqueeze}, nullptr};
   }
@@ -254,10 +243,6 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
     return NoMatch(candidate, "an Unsqueeze output is shared");
   }
 
-  if ((left_unsqueeze != nullptr && !graph.IsOperator(*left_unsqueeze)) ||
-      (right_unsqueeze != nullptr && !graph.IsOperator(*right_unsqueeze))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{
       this, {left_unsqueeze, right_unsqueeze, &candidate}, &candidate};
 }
@@ -319,8 +304,6 @@ std::set<std::string> WhereAddPattern::FastOpType() const { return {"Where"}; }
 
 core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
@@ -340,9 +323,6 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
           const std::string &addend =
               first_is_where ? add->input()[1].value() : add->input()[0].value();
           if (IsFiniteScalarConstant(graph, addend)) {
-            if (add != nullptr && !graph.IsOperator(*add)) {
-              return NoMatch(candidate, "a matched node is a local function call or overload");
-            }
             return core::builder::MatchResult{this, {&candidate, add}, add};
           }
         }
@@ -367,10 +347,6 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
     return NoMatch(candidate, "a branch Add output is shared");
   }
 
-  if ((then_add != nullptr && !graph.IsOperator(*then_add)) ||
-      (else_add != nullptr && !graph.IsOperator(*else_add))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
-  }
   return core::builder::MatchResult{this, {then_add, else_add, &candidate}, &candidate};
 }
 

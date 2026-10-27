@@ -198,7 +198,7 @@ TEST(LayerNormalizationPattern, PreservesFunctionEpsilonAttributeReferences) {
     EXPECT_NE(node.op_type(), "LayerNormalization");
 }
 
-TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionsAndOverloads) {
+TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionRegistration) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 23}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxes(builder, "axes", {-1});
@@ -218,15 +218,9 @@ TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionsAndOverloads) {
   const auto match = pattern.Match(graph, builder.Nodes()[4]);
   ASSERT_EQ(match.pattern, &pattern);
 
-  auto &constant = const_cast<NodeProto &>(builder.Nodes()[0]);
   auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
   for (const std::string overload : {"", "custom"}) {
     SCOPED_TRACE(overload);
-    constant.set_overload(overload);
-    if (!overload.empty()) {
-      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, nullptr);
-      EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
-    }
     for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
       SCOPED_TRACE(domain);
       FunctionProto function;
@@ -241,10 +235,9 @@ TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionsAndOverloads) {
       AddAttribute<float>(epsilon, "low", 2.0F);
       AddAttribute<float>(epsilon, "high", 3.0F);
       function.ref_node().push_back(std::move(epsilon));
-      shapes.SetLocalFunction(std::make_shared<FunctionProto>(function));
-      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, nullptr);
-      EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
-      shapes.ClearLocalFunctions();
+      EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
+                   std::invalid_argument);
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, &pattern);
     }
   }
 }

@@ -586,8 +586,6 @@ std::set<std::string> TreeEnsemblePattern::FastOpType() const {
 
 core::builder::MatchResult TreeEnsemblePattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   ParsedEnsemble parsed;
   if (!ParseLegacyEnsemble(graph, candidate, parsed)) {
     return NoMatch(candidate, "the classic tree ensemble is invalid or unsupported");

@@ -3376,17 +3376,6 @@ void GraphGraph::RebuildSuccessors() {
   }
 }
 
-const FunctionProto *GraphGraph::GetFunction(const NodeProto &node) const {
-  if (builder_.Shapes().LocalFunctions().empty())
-    return nullptr;
-  return builder_.Shapes().GetLocalFunction(
-      ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
-}
-
-bool GraphGraph::IsOperator(const NodeProto &node) const {
-  return node.overload().empty() && GetFunction(node) == nullptr;
-}
-
 const NodeProto *GraphGraph::NodeBefore(const std::string &name) const {
   auto it = predecessors_.find(name);
   return it == predecessors_.end() ? nullptr : it->second;
@@ -3496,7 +3485,7 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
     return init->second;
   }
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && IsOperator(*node) && !HasUnresolvedAttributeReferences(*node) &&
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
       RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     const AttributeProto *value = FindAttribute(*node, "value");
     if (value != nullptr && value->has_t()) {
@@ -3514,8 +3503,8 @@ const GraphGraph *GraphGraph::GetConstantScope(const std::string &name) const {
   if (computed_constants_.count(name) != 0 || initializers_.count(name) != 0)
     return this;
   if (const auto *node = NodeBefore(name)) {
-    if (!IsOperator(*node) || HasUnresolvedAttributeReferences(*node) ||
-        RewriteDomain(node->domain()) != "ai.onnx" || node->op_type() != "Constant")
+    if (HasUnresolvedAttributeReferences(*node) || RewriteDomain(node->domain()) != "ai.onnx" ||
+        node->op_type() != "Constant")
       return nullptr;
     const auto *value = FindAttribute(*node, "value");
     return value != nullptr && value->has_t() ? this : nullptr;
@@ -3547,7 +3536,7 @@ bool GraphGraph::ConstantShape(const std::string &name, std::vector<int64_t> &di
   }
   // A ``Constant`` node using ``value_int`` / ``value_float`` is a scalar.
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && IsOperator(*node) && !HasUnresolvedAttributeReferences(*node) &&
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
       RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     if (FindAttribute(*node, "value_int") != nullptr ||
         FindAttribute(*node, "value_float") != nullptr) {
@@ -3564,7 +3553,7 @@ bool GraphGraph::ConstantScalarValue(const std::string &name, double &out) const
     return ReadScalarAsDouble(*tensor, out);
   }
   const NodeProto *node = NodeBefore(name);
-  if (node != nullptr && IsOperator(*node) && !HasUnresolvedAttributeReferences(*node) &&
+  if (node != nullptr && !HasUnresolvedAttributeReferences(*node) &&
       RewriteDomain(node->domain()) == "ai.onnx" && node->op_type() == "Constant") {
     const AttributeProto *value_int = FindAttribute(*node, "value_int");
     if (value_int != nullptr && value_int->has_i()) {

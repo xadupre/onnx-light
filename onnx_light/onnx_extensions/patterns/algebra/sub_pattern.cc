@@ -142,8 +142,6 @@ std::set<std::string> Sub1MulPattern::FastOpType() const { return {"Mul"}; }
 
 core::builder::MatchResult Sub1MulPattern::Match(core::builder::GraphGraph &graph,
                                                  const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Mul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain binary Mul");
@@ -170,10 +168,6 @@ core::builder::MatchResult Sub1MulPattern::Match(core::builder::GraphGraph &grap
   if (!ConstantOfShapeRewritePreservesShape(graph, *one_minus, other, candidate)) {
     return NoMatch(candidate,
                    "removing ConstantOfShape would change or cannot prove the output shape");
-  }
-  if ((left != nullptr && !graph.IsOperator(*left)) ||
-      (right != nullptr && !graph.IsOperator(*right))) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }

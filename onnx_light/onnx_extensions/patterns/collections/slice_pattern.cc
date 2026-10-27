@@ -59,8 +59,6 @@ std::set<std::string> SliceEliminationPattern::FastOpType() const { return {"Sli
 
 core::builder::MatchResult SliceEliminationPattern::Match(core::builder::GraphGraph &graph,
                                                           const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Slice") || candidate.input_size() < 1 ||
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a unary-output default-domain Slice");
@@ -162,8 +160,6 @@ std::set<std::string> SliceSlicePattern::FastOpType() const { return {"Slice"}; 
 
 core::builder::MatchResult SliceSlicePattern::Match(core::builder::GraphGraph &graph,
                                                     const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultOp(candidate, "Slice")) {
     return NoMatch(candidate, "candidate is not a default-domain Slice");
   }
@@ -185,9 +181,6 @@ core::builder::MatchResult SliceSlicePattern::Match(core::builder::GraphGraph &g
     if (set1.count(axis) != 0) {
       return NoMatch(candidate, "the two slices share an axis");
     }
-  }
-  if (before != nullptr && !graph.IsOperator(*before)) {
-    return NoMatch(candidate, "a matched node is a local function call or overload");
   }
   return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }

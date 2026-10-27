@@ -90,26 +90,19 @@ TEST(ConstantToInitializerPattern, RejectsNonConstantNode) {
   EXPECT_EQ(match.no_match->reason, "candidate is not a default-domain Constant");
 }
 
-TEST(ConstantToInitializerPattern, RejectsIntroducedIdentityOverridesBeforeMutation) {
+TEST(ConstantToInitializerPattern, RejectsIdentityFunctionRegistrationBeforeMutation) {
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     SCOPED_TRACE(domain);
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
-    auto &identity = builder.MakeLocalFunction("Identity", domain);
-    core::symbolic::SymShape shape;
-    shape.PushBack(core::symbolic::SymDim(2));
-    identity.MakeInput("X", core::symbolic::TensorType::kFloat, shape);
-    identity.MakeNode("Neg", {"X"}, {"Y"});
-    identity.MakeOutput("Y");
     AddConstant(builder, "Y");
     builder.MakeOutput("Y");
     const auto original = builder.ToModel();
+    EXPECT_THROW(builder.MakeLocalFunction("Identity", domain), core::builder::BuilderError);
+    EXPECT_FALSE(builder.HasLocalFunction("Identity"));
+    EXPECT_TRUE(builder.ToModel().Equals(original));
     core::builder::GraphGraph graph(builder);
     onnx_patterns::ConstantToInitializerPattern pattern;
-
-    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
-    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0]}), core::builder::BuilderError);
-    EXPECT_TRUE(builder.Initializers().empty());
-    EXPECT_TRUE(builder.ToModel().Equals(original));
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
   }
 }
 

@@ -54,14 +54,8 @@ std::set<std::string> ConstantToInitializerPattern::FastOpType() const { return 
 
 core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::GraphGraph &graph,
                                                                const NodeProto &candidate) const {
-  if (!graph.IsOperator(candidate))
-    return NoMatch(candidate, "candidate is a local function call or an overloaded operator");
   if (!IsDefaultConstant(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Constant");
-  }
-  if (graph.Builder().Shapes().HasLocalFunction(
-          core::shapes::ShapesContext::LocalFunctionKey("", "Identity"))) {
-    return NoMatch(candidate, "the replacement Identity is overridden by a local function");
   }
   if (graph.GetComputedConstant(candidate.output()[0].value()) == nullptr) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");

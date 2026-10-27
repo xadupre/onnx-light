@@ -1338,7 +1338,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                 oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
                 oh.make_node(
                     "LayerNormalization",
-                    ["X32", "scale", "bias"],
+                    ["X32", "scale"],
                     ["normalized"],
                     stash_type=TensorProto.FLOAT,
                 ),
@@ -1346,10 +1346,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ],
             [("X", TensorProto.FLOAT16, [3, 3])],
             [("Y", TensorProto.FLOAT16, [3, 3])],
-            [
-                self._initializer("scale", [0.5, 0.6, 0.7], np.float32),
-                self._initializer("bias", [-0.5, -0.6, -0.7], np.float32),
-            ],
+            [self._initializer("scale", [1, 1, 1], np.float32)],
             opset=18,
         )
         self._optimize_and_check(
@@ -1358,9 +1355,9 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["CastLayerNormalizationCast"],
             ["LayerNormalization"],
             required_pattern="CastLayerNormalizationCast",
-            initializer_count=2,
-            atol=1e-2,
-            rtol=1e-2,
+            initializer_count=1,
+            atol=0,
+            rtol=0,
             schema_lookup=False,
         )
 
@@ -1377,7 +1374,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ],
             [("X", TensorProto.FLOAT16, [3, 3])],
             [("Y", TensorProto.FLOAT16, [3, 3])],
-            [self._initializer("scale", [0.5, 0.6, 0.7], np.float32)],
+            [self._initializer("scale", [1, 1, 1], np.float32)],
             opset=24,
         )
         self._optimize_and_check(
@@ -1387,9 +1384,162 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["RMSNormalization"],
             required_pattern="CastLayerNormalizationCast",
             initializer_count=1,
-            atol=1e-2,
-            rtol=1e-2,
+            atol=0,
+            rtol=0,
         )
+
+    @classmethod
+    def _standard_normalization_kernel(cls, node, x, scale, bias=None):
+        """Computes the standard function body's FP32 and I/O rounding stages."""
+        axis = int(cls._attribute(node, "axis", -1))
+        axes = tuple(range(axis % x.ndim, x.ndim))
+        compute = x.astype(np.float32)
+        epsilon = np.float32(cls._attribute(node, "epsilon", 1e-5))
+        mean = np.mean(compute, axis=axes, keepdims=True)
+        square_mean = np.mean(compute * compute, axis=axes, keepdims=True)
+        is_layer = node.op_type == "LayerNormalization"
+        variance = square_mean - mean * mean if is_layer else square_mean
+        std = np.sqrt(variance + epsilon)
+        normalized = (compute - mean if is_layer else compute) / std
+        scaled = (normalized.astype(x.dtype) * scale).astype(scale.dtype)
+        if bias is not None:
+            scaled = (scaled + bias).astype(scale.dtype)
+        values = [scaled]
+        if len(node.output) > 1:
+            values.append(mean)
+        if len(node.output) > 2:
+            values.append(np.reciprocal(std))
+        return tuple(values)
+
+    def _evaluate_standard_normalization(self, model, feeds):
+        """Evaluates standard normalization without the legacy test callback."""
+        evaluator = ReferenceEvaluator(model)
+        for op in ("LayerNormalization", "RMSNormalization"):
+            evaluator.register_custom_kernel("", op, self._standard_normalization_kernel)
+        return evaluator.run(None, feeds)
+
+    def _make_cast_standard_normalization(
+        self, op, *, scale=(1, 1, 1), bias=None, promoted_scale=False, statistics=False
+    ):
+        """Creates a standard FP32 normalization surrounded by FP16 casts."""
+        nodes = [oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT)]
+        if promoted_scale:
+            nodes.append(oh.make_node("Cast", ["scale16"], ["scale"], to=TensorProto.FLOAT))
+        initializers = [
+            self._initializer(
+                "scale16" if promoted_scale else "scale",
+                scale,
+                np.float16 if promoted_scale else np.float32,
+            )
+        ]
+        inputs = ["X32", "scale"]
+        if bias is not None:
+            inputs.append("bias")
+            initializers.append(self._initializer("bias", bias, np.float32))
+        outputs = ["Y"]
+        norm_outputs = ["normalized"]
+        output_info = [("Y", TensorProto.FLOAT16, [3, 3])]
+        if statistics:
+            norm_outputs += ["mean", "inv_std"]
+            output_info += [
+                ("mean", TensorProto.FLOAT, [3, 1]),
+                ("inv_std", TensorProto.FLOAT, [3, 1]),
+            ]
+        nodes += [
+            oh.make_node(
+                op, inputs, norm_outputs, axis=1, epsilon=0.125, stash_type=TensorProto.FLOAT
+            ),
+            oh.make_node("Cast", ["normalized"], outputs, to=TensorProto.FLOAT16),
+        ]
+        return self._make_model(
+            nodes, [("X", TensorProto.FLOAT16, [3, 3])], output_info, initializers, opset=23
+        )
+
+    def test_cast_standard_normalization_exact_rounding(self):
+        data = np.array(
+            [[0, 0.0001, -0.0001], [1000, 1000.5, 999.5], [60000, -60000, 60032]],
+            dtype=np.float16,
+        )
+        for op in ("LayerNormalization", "RMSNormalization"):
+            for promoted_scale in (False, True):
+                for statistics in ((False, True) if op == "LayerNormalization" else (False,)):
+                    with self.subTest(op=op, promoted=promoted_scale, statistics=statistics):
+                        model = self._make_cast_standard_normalization(
+                            op, promoted_scale=promoted_scale, statistics=statistics
+                        )
+                        optimized, rewrites, _ = self._optimize(
+                            model, ["CastLayerNormalizationCast"]
+                        )
+                        self.assertTrue(rewrites)
+                        self.assertEqual([op], [n.op_type for n in optimized.graph.node])
+                        node = optimized.graph.node[0]
+                        self.assertEqual("X", node.input[0])
+                        self.assertEqual("Y", node.output[0])
+                        self.assertEqual(1, self._attribute(node, "axis", None))
+                        self.assertEqual(0.125, self._attribute(node, "epsilon", None))
+                        self.assertEqual(
+                            TensorProto.FLOAT, self._attribute(node, "stash_type", None)
+                        )
+                        expected = self._evaluate_standard_normalization(model, {"X": data})
+                        got = self._evaluate_standard_normalization(optimized, {"X": data})
+                        for before, after in zip(expected, got):
+                            self.assertEqual(before.dtype, after.dtype)
+                            np.testing.assert_array_equal(before, after)
+                            np.testing.assert_array_equal(np.signbit(before), np.signbit(after))
+
+    def test_cast_standard_normalization_rejects_affine_rounding(self):
+        data = np.array([[1, 2, 4], [1000, 1000.5, 999.5], [0.001, -1, 2]], dtype=np.float16)
+        for op in ("LayerNormalization", "RMSNormalization"):
+            for scale, bias in (
+                ((1.5, 1.5, 1.5), None),
+                ((1.0001, 1.0001, 1.0001), None),
+                ((1, 1, 1), (0.25, 0.25, 0.25)),
+                ((1, 1, 1), (0, 0, 0)),
+            ):
+                if op == "RMSNormalization" and bias is not None:
+                    continue
+                with self.subTest(op=op, scale=scale, bias=bias):
+                    model = self._make_cast_standard_normalization(op, scale=scale, bias=bias)
+                    optimized, rewrites, _ = self._optimize(model, ["CastLayerNormalizationCast"])
+                    self.assertFalse(rewrites)
+                    expected = self._evaluate_standard_normalization(model, {"X": data})[0]
+                    got = self._evaluate_standard_normalization(optimized, {"X": data})[0]
+                    np.testing.assert_array_equal(expected, got)
+                    if scale[0] == 1.5:
+                        # Exactly representable weights still change intermediate rounding.
+                        unsafe = self._make_model(
+                            [
+                                oh.make_node(
+                                    op, ["X", "scale"], ["Y"], axis=1, epsilon=0.125, stash_type=1
+                                )
+                            ],
+                            [("X", TensorProto.FLOAT16, [3, 3])],
+                            [("Y", TensorProto.FLOAT16, [3, 3])],
+                            [self._initializer("scale", scale, np.float16)],
+                            opset=23,
+                        )
+                        rounded = self._evaluate_standard_normalization(unsafe, {"X": data})[0]
+                        self.assertTrue(np.any(expected != rounded))
+
+    def test_cast_standard_normalization_zero_bias_signed_zero(self):
+        data = np.tile(np.array([-(2**-24), 65504, -65504], dtype=np.float16), (3, 1))
+        model = self._make_cast_standard_normalization("LayerNormalization", bias=(0, 0, 0))
+        optimized, rewrites, _ = self._optimize(model, ["CastLayerNormalizationCast"])
+        self.assertFalse(rewrites)
+        expected = self._evaluate_standard_normalization(model, {"X": data})[0]
+        got = self._evaluate_standard_normalization(optimized, {"X": data})[0]
+        np.testing.assert_array_equal(np.signbit(expected), np.signbit(got))
+        # Rounding a tiny negative normalized value before adding +0 loses its sign.
+        promoted = data.astype(np.float32)
+        node = model.graph.node[1]
+        original = self._standard_normalization_kernel(
+            node, promoted, np.ones(3, dtype=np.float32), np.zeros(3, dtype=np.float32)
+        )[0].astype(np.float16)
+        unsafe = self._standard_normalization_kernel(
+            node, data, np.ones(3, dtype=np.float16), np.zeros(3, dtype=np.float16)
+        )[0]
+        self.assertTrue(np.all(np.signbit(original[:, 0])))
+        self.assertFalse(np.any(np.signbit(unsafe[:, 0])))
 
     def test_cast_layer_normalization_cast_no_match(self):
         model = self._make_model(

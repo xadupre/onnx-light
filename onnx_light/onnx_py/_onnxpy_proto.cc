@@ -70,11 +70,13 @@ struct ImportedBufferOwnerDeleter {
   }
 };
 
-bool IsFileMappedOwner(const std::shared_ptr<void> &owner);
+bool MayBeFileMappedOwner(const std::shared_ptr<void> &owner);
 
 bool MayBeFileMappedPythonBuffer(nb::handle array) {
-  if (nb::isinstance<TensorProto>(array))
-    return IsFileMappedOwner(nb::cast<const TensorProto &>(array).raw_data().owner());
+  if (nb::isinstance<TensorProto>(array)) {
+    const auto &raw_data = nb::cast<const TensorProto &>(array).raw_data();
+    return raw_data.is_borrowed() && MayBeFileMappedOwner(raw_data.owner());
+  }
   const auto numpy = nb::module_::import_("numpy");
   const auto ndarray = numpy.attr("ndarray");
   const auto memmap = numpy.attr("memmap");
@@ -362,15 +364,19 @@ struct RawDataCallback {
   nb::object on_tensor;
 };
 
-bool IsFileMappedOwner(const std::shared_ptr<void> &owner) {
-  const auto *dlpack = std::get_deleter<ImportedDLPackOwnerDeleter>(owner);
-  const auto *buffer = std::get_deleter<ImportedBufferOwnerDeleter>(owner);
-  return utils::detail::IsFileMappedOwner(owner) || (dlpack != nullptr && dlpack->file_mapped) ||
-         (buffer != nullptr && buffer->file_mapped);
+bool MayBeFileMappedOwner(const std::shared_ptr<void> &owner) {
+  if (utils::detail::IsFileMappedOwner(owner))
+    return true;
+  if (const auto *dlpack = std::get_deleter<ImportedDLPackOwnerDeleter>(owner))
+    return dlpack->file_mapped;
+  if (const auto *buffer = std::get_deleter<ImportedBufferOwnerDeleter>(owner))
+    return buffer->file_mapped;
+  // Cleanup callbacks can hide a retained mapping behind an unrecognized owner token.
+  return true;
 }
 
 void SnapshotBorrowedRawData(utils::ByteSpan &raw_data) {
-  if (!raw_data.is_borrowed() || !IsFileMappedOwner(raw_data.owner()))
+  if (!raw_data.is_borrowed() || !MayBeFileMappedOwner(raw_data.owner()))
     return;
   const auto &bytes = std::as_const(raw_data);
   utils::ByteSpan snapshot;

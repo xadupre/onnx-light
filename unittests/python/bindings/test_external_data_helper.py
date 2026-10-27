@@ -103,6 +103,27 @@ class TestExternalDataHelper(ExtTestCase):
                     gc.collect()
                     self.assertIsNone(source())
 
+    def test_owned_native_dlpack_external_save_shares_payload(self):
+        values = np.arange(128, dtype=np.float32)
+        source = _make_model(values)
+        address = np.from_dlpack(source.graph.initializer[0]).ctypes.data
+        model = _make_model(values)
+        model.graph.initializer[0].CopyFrom(
+            onnxl.TensorProto.from_dlpack(source.graph.initializer[0], name="W")
+        )
+
+        def callback(node, graph):
+            self.assertEqual(np.from_dlpack(graph.initializer[0]).ctypes.data, address)
+
+        options = onnxl.SerializeOptions()
+        options.raw_data_threshold = 0
+        options.node_callback = callback
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.onnx")
+            model.SerializeToFile(path, options, os.path.join(tmp, "weights.bin"))
+            loaded = onnxl.load(path, load_external_data=True)
+            np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+
     def test_external_save_retains_borrowed_owner_after_source_clear(self):
         for source_kind in ("numpy", "dlpack"):
             with self.subTest(source_kind=source_kind), tempfile.TemporaryDirectory() as tmp:
@@ -255,6 +276,63 @@ class TestExternalDataHelper(ExtTestCase):
             self.assertEqual(model.SerializeToString(), before)
             loaded = onnxl.load(path, load_external_data=True)
             np.testing.assert_array_equal(to_array(loaded.graph.initializer[0]), values)
+
+    def test_parse_cleanup_retaining_mapping_resaves_to_same_path(self):
+        for external in (False, True):
+            for reimport in (False, True):
+                for num_threads in (1, 2):
+                    with (
+                        self.subTest(
+                            external=external, reimport=reimport, num_threads=num_threads
+                        ),
+                        tempfile.TemporaryDirectory() as tmp,
+                    ):
+                        values = np.arange(2048, dtype=np.float32)
+                        path = os.path.join(tmp, "model.onnx")
+                        weights = os.path.join(tmp, "weights.bin")
+                        onnxl.save_model(
+                            _make_model(values),
+                            path,
+                            save_as_external_data=external,
+                            location="weights.bin" if external else None,
+                            size_threshold=0,
+                        )
+                        released = []
+
+                        def callback(tensor, graph):
+                            retained = onnxl.TensorProto()
+                            retained.CopyFrom(tensor)
+                            return lambda: released.append(retained.name)
+
+                        parse_options = onnxl.ParseOptions()
+                        parse_options.no_copy = True
+                        parse_options.file_load_mode = onnxl.FileLoadMode.MMAP
+                        parse_options.raw_data_callback = callback
+                        model = onnxl.ModelProto()
+                        model.ParseFromFile(
+                            path, parse_options, external_data_file=weights if external else ""
+                        )
+                        if reimport:
+                            tensor = onnxl.TensorProto.from_dlpack(
+                                model.graph.initializer[0], name="W"
+                            )
+                            reimported = _make_model(values)
+                            reimported.graph.initializer[0].CopyFrom(tensor)
+                            del model, tensor
+                            model = reimported
+                        self.assertEqual(released, [])
+                        before = model.SerializeToString()
+                        options = onnxl.SerializeOptions()
+                        options.raw_data_threshold = 0
+                        options.num_threads = num_threads
+                        options.min_parallel_block_size = 1
+                        model.SerializeToFile(path, options, weights)
+                        self.assertEqual(model.SerializeToString(), before)
+                        self.assertEqual(released, ["W"])
+                        loaded = onnxl.load(path, load_external_data=True)
+                        np.testing.assert_array_equal(
+                            to_array(loaded.graph.initializer[0]), values
+                        )
 
     def test_mapped_mixed_initializers_resave_same_model_path(self):
         with tempfile.TemporaryDirectory() as tmp:

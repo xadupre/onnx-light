@@ -196,7 +196,9 @@ mappings are first snapshotted into owned buffers, since output files may
 overwrite their backing files. This also keeps the caller's tensor contents valid
 after an in-place file rewrite. Mapping provenance survives native tensor DLPack
 reimports. Snapshots also cover affine parameters, struct constants and nested
-type declarations; ordinary in-memory NumPy and DLPack buffers are not materialized.
+type declarations. Unknown native owner tokens, including cleanup closures returned
+by parse callbacks, are also snapshotted because they may retain a file mapping.
+Buffers known to use ordinary in-memory NumPy or DLPack storage are not materialized.
 Callers must not mutate borrowed source arrays while saving.
 
 A synthetic 28-tensor FP32 model (21,474,836 elements per tensor, 2,405,181,632

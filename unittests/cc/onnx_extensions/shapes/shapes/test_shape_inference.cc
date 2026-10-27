@@ -4,6 +4,7 @@
 
 #include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/compute/compute_context.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -1384,6 +1385,148 @@ ModelProto MakeLocalFunctionAddModel() {
 }
 
 } // namespace
+
+TEST(OnnxOptimShapeInference, ComputeShapesPreservesCountingCallbackAcrossEntryPoints) {
+  ModelProto model = MakeLocalFunctionAddModel();
+  *model.mutable_graph()->mutable_node(0) = MakeNode("Add", {"X", "Y"}, {"Z"});
+  core::compute::ComputeContext ctx;
+  int calls = 0;
+  ctx.Shapes().SetCustomShapeInferenceFunction(
+      "", "Add", [&calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++calls;
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+      });
+  ctx.Shapes().Set("stale",
+                   core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.ComputeShapes(model);
+  EXPECT_EQ(calls, 1);
+  EXPECT_FALSE(ctx.Shapes().Has("stale"));
+  EXPECT_TRUE(ctx.Shapes().HasLocalFunction("local:func_add"));
+
+  ctx.ComputeShapes(model.graph());
+  EXPECT_EQ(calls, 2);
+  EXPECT_FALSE(ctx.Shapes().HasLocalFunction("local:func_add"));
+  EXPECT_EQ(ctx.Shapes().OpsetVersion("local"), core::shapes::kUnknownOpsetVersion);
+
+  core::compute::ComputeContext::InputShapes inputs;
+  inputs.emplace("a",
+                 core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                           {core::symbolic::SymDim(3), core::symbolic::SymDim(4)}));
+  inputs.emplace("b", core::symbolic::SymTensor(inputs.at("a")));
+  ctx.ComputeShapes(model.functions(0), inputs);
+  EXPECT_EQ(calls, 3);
+  ctx.ComputeShapes(model.functions(0).node(), inputs);
+  EXPECT_EQ(calls, 4);
+  EXPECT_EQ(ctx.Shapes().Get("c").Shape(), inputs.at("a").Shape());
+
+  ctx.Shapes().Clear();
+  EXPECT_TRUE(ctx.Shapes().Empty());
+  EXPECT_NE(ctx.Shapes().GetCustomShapeInferenceFunction("", "Add"), nullptr);
+  ctx.Shapes().ClearCustomShapeInferenceFunctions();
+  EXPECT_EQ(ctx.Shapes().GetCustomShapeInferenceFunction("", "Add"), nullptr);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapesPropagatesCountingCallbackIntoNestedLocalFunctions) {
+  ModelProto model = MakeLocalFunctionAddModel();
+  FunctionProto outer = model.functions(0);
+  outer.set_name("outer");
+  *outer.mutable_node(0) = MakeNode("func_add", {"a", "b"}, {"c"}, "local");
+  *model.add_functions() = std::move(outer);
+  model.mutable_graph()->mutable_node(0)->set_op_type("outer");
+  *model.mutable_graph()->add_node() = MakeNode("Add", {"Z", "Y"}, {"result"});
+  model.mutable_graph()->mutable_output(0)->set_name("result");
+
+  core::compute::ComputeContext ctx;
+  int calls = 0;
+  ctx.Shapes().SetCustomShapeInferenceFunction(
+      "", "Add", [&calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++calls;
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+        if (node.output(0) == "c") {
+          EXPECT_FALSE(inner.Has("X"));
+          inner.SetCustomShapeInferenceFunction(
+              "", "Abs", [](core::shapes::ShapesContext &, const NodeProto &) {});
+        }
+      });
+  ctx.ComputeShapes(model);
+  EXPECT_EQ(calls, 2);
+  EXPECT_FALSE(ctx.Shapes().Has("a"));
+  EXPECT_FALSE(ctx.Shapes().Has("c"));
+  EXPECT_EQ(ctx.Shapes().GetCustomShapeInferenceFunction("", "Abs"), nullptr);
+  ASSERT_TRUE(ctx.Shapes().Has("result"));
+  EXPECT_EQ(ctx.Shapes().Get("result").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(4)}));
+  ctx.ComputeShapes(model);
+  EXPECT_EQ(calls, 4);
+  EXPECT_TRUE(ctx.Shapes().RemoveCustomShapeInferenceFunction("", "Add"));
+  ctx.ComputeShapes(model);
+  EXPECT_EQ(calls, 4);
+  ctx.Shapes().SetCustomShapeInferenceFunction(
+      "", "Add", [&calls](core::shapes::ShapesContext &, const NodeProto &) {
+        ++calls;
+        throw std::invalid_argument("Rejected by context-local inference callback.");
+      });
+  EXPECT_THROW(ctx.ComputeShapes(model), std::invalid_argument);
+  EXPECT_EQ(calls, 5);
+}
+
+TEST(OnnxOptimShapeInference, ChildContextsIsolateCountingCallbackRegistrations) {
+  core::shapes::ShapesContext parent;
+  int parent_calls = 0;
+  int child_calls = 0;
+  parent.SetCustomShapeInferenceFunction(
+      "", "Abs", [&parent_calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++parent_calls;
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+      });
+  parent.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                            {core::symbolic::SymDim(3)}));
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  auto child = parent.MakeChildContext(graph);
+  auto nested = child.MakeChildContext(graph);
+  parent.ClearCustomShapeInferenceFunctions();
+  child.SetCustomShapeInferenceFunction(
+      "", "Abs", [&child_calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++child_calls;
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+      });
+  const auto node = MakeNode("Abs", {"X"}, {"Y"});
+  nested.ComputeShapeNode(node);
+  child.ComputeShapeNode(node);
+  parent.ComputeShapeNode(node);
+  EXPECT_EQ(parent_calls, 1);
+  EXPECT_EQ(child_calls, 1);
+  EXPECT_EQ(parent.GetCustomShapeInferenceFunction("", "Abs"), nullptr);
+}
+
+TEST(OnnxOptimShapeInference, LocalFunctionCallbacksDoNotLeakBodyEvents) {
+  ModelProto model = MakeLocalFunctionAddModel();
+  core::shapes::ShapesContext ctx;
+  int calls = 0;
+  core::shapes::ShapeEventLog streamed;
+  ctx.SetCustomShapeInferenceFunction(
+      "", "Add", [&calls](core::shapes::ShapesContext &inner, const NodeProto &node) {
+        ++calls;
+        EXPECT_FALSE(inner.events_enabled());
+        EXPECT_FALSE(inner.has_event_callback());
+        inner.Set(node.output(0), core::symbolic::SymTensor(inner.Get(node.input(0))));
+      });
+  ctx.set_events_enabled(true);
+  ctx.set_event_callback(
+      [&streamed](const core::shapes::ShapeEvent &event) { streamed.push_back(event); });
+  ctx.ComputeShapeModel(model);
+  EXPECT_EQ(calls, 1);
+  ASSERT_FALSE(streamed.empty());
+  ASSERT_EQ(streamed.size(), ctx.Events().size());
+  for (std::size_t i = 0; i < streamed.size(); ++i) {
+    EXPECT_EQ(streamed[i].name, ctx.Events()[i].name);
+    EXPECT_NE(streamed[i].name, "a");
+    EXPECT_NE(streamed[i].name, "b");
+    EXPECT_NE(streamed[i].name, "c");
+  }
+  EXPECT_TRUE(ctx.Has("Z"));
+}
 
 TEST(OnnxOptimShapeInference, ComputeShapeModelExpandsLocalFunctionCall) {
   // A node calling the model-local function ``local:func_add`` must be

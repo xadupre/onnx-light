@@ -67,10 +67,19 @@ struct InPlaceReuse {
 constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
 
 /**
+ * Marks percent-encoded names in this node's release-after, not-used-after and
+ * shape-tag release lists. With value ``"percent"``, literal ``%`` and ``;``
+ * in names are encoded as ``%25`` and ``%3B`` before joining with ``;``.
+ * Without this marker, names retain the legacy literal representation.
+ */
+constexpr const char *kLifetimeNamesEncodingMetadataKey = "onnx_light.lifetime_names_encoding";
+
+/**
  * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
  * records, for every node, which referenced values reach their last use at
  * this node and can therefore be released after the node runs. The associated
- * value is a ``;``-separated list of value names.
+ * value is a ``;``-separated list of value names, encoded when
+ * :cpp:var:`kLifetimeNamesEncodingMetadataKey` is present.
  */
 constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 
@@ -80,7 +89,8 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
  * their last use at that node. Those names are not released by the runtime
  * (their lifetime is owned by the caller / model) but this key still exposes
  * the "last read" information. The associated value is a ``;``-separated list
- * of value names.
+ * of value names, encoded when :cpp:var:`kLifetimeNamesEncodingMetadataKey`
+ * is present.
  */
 constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
 
@@ -92,6 +102,7 @@ constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
  * list of value names — a strict subset of the
  * :cpp:var:`kReleaseAfterMetadataKey` entry for the same node. The key is
  * omitted for nodes that have no shape-tagged releasable values.
+ * Names are encoded when :cpp:var:`kLifetimeNamesEncodingMetadataKey` is present.
  */
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 

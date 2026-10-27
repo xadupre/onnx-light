@@ -294,7 +294,8 @@ public:
   ShapesContext MakeChildContext(const GraphProto &graph) const;
 
   /// Creates an inference context containing configuration but no inferred values
-  /// or expression-cache entries.
+  /// or expression-cache entries. Callback registrations are copied; changes to
+  /// either context's registrations do not affect the other context.
   ShapesContext MakeChildContext() const;
 
   /// Copies and validates model-local structured declarations.
@@ -385,12 +386,12 @@ public:
   /// ``true`` when no entries are stored.
   bool Empty() const noexcept { return tensors_.empty() && types_.empty() && sequences_.empty(); }
 
-  /// Removes inferred values and opsets while preserving the owned structured catalogue.
+  /// Removes inferred values, opsets, and local functions while preserving the owned
+  /// structured catalogue and custom shape-inference callbacks.
   void Clear() noexcept {
     ClearValues();
     opsets_.clear();
     ClearLocalFunctions();
-    custom_shape_inference_.clear();
     ClearConstraints();
     subgraph_contexts_.clear();
     topk_k_dims_.clear();
@@ -634,7 +635,11 @@ public:
 
   /// Registers or replaces a custom shape-inference callback for the
   /// ``(domain, op_type)`` pair. ``domain == ""`` is normalized to
-  /// :cpp:var:`kOnnxDomain`.
+  /// :cpp:var:`kOnnxDomain`. Registrations survive :cpp:func:`Clear` and
+  /// ``ComputeContext::ComputeShapes`` and are copied into subgraph and
+  /// local-function contexts. Captured callback state follows ``std::function``
+  /// copy semantics. Use :cpp:func:`RemoveCustomShapeInferenceFunction` or
+  /// :cpp:func:`ClearCustomShapeInferenceFunctions` to unregister callbacks.
   void SetCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type,
                                        CustomComputeShapeFn fn);
 

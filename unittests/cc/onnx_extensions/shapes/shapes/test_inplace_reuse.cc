@@ -137,6 +137,26 @@ TEST(OnnxOptimInPlaceReuse, ResultLifetimeInfoGroupsPerNodeData) {
   EXPECT_EQ(lifetime.last_use.at("T"), 1);
 }
 
+TEST(OnnxOptimInPlaceReuse, UnusedOutputLifetimeProtectsDeclarationsAndSkipsEmptyNames) {
+  GraphProto graph;
+  AddInput(graph, "X", {1});
+  AddOutput(graph, "Y", {1});
+  *graph.add_node() = MakeNode("Custom", {"X"}, {"unused", "Y", ""});
+  const auto graph_lifetime = ComputeResultLifetimeInfo(graph, false);
+  EXPECT_EQ(graph_lifetime[0].release_after, (std::vector<std::string>{"unused"}));
+  EXPECT_EQ(graph_lifetime[0].not_used_after, (std::vector<std::string>{"X"}));
+  EXPECT_EQ(graph_lifetime.producer.count(""), 0u);
+  EXPECT_EQ(graph_lifetime.last_use.count(""), 0u);
+
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  *function.add_node() = graph.node(0);
+  const auto function_lifetime = ComputeResultLifetimeInfo(function, false);
+  EXPECT_EQ(function_lifetime[0].release_after, graph_lifetime[0].release_after);
+  EXPECT_EQ(function_lifetime[0].not_used_after, graph_lifetime[0].not_used_after);
+}
+
 // A linear chain of element-wise Abs nodes: every node but the first (whose
 // input is the declared graph input) may reuse its input buffer in place.
 TEST(OnnxOptimInPlaceReuse, AbsChainReusesIntermediates) {
@@ -780,6 +800,70 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextDecisionEvents) {
 
   inplace.ClearEvents();
   EXPECT_TRUE(inplace.Events().empty());
+}
+
+TEST(OnnxOptimInPlaceReuse, UnusedOutputsReleaseAtProducer) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {1});
+  AddOutput(graph, "Y", {1});
+  *graph.add_node() = MakeNode("Shape", {"X"}, {"dimensions"});
+  *graph.add_node() = MakeNode("Identity", {"X"}, {"unused"});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.ComputeShapes(graph);
+  ctx.ComputeValueAndNodeTags(graph);
+  ctx.set_events_enabled(true);
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes(), false, ctx.ValueTags());
+  ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
+
+  using core::compute::ComputeEventAction;
+  using core::runtime::ExecuteActionKind;
+  const auto lifetime = ComputeResultLifetimeInfo(graph, false);
+  const auto plan = ctx.BuildExecutionPlan(graph);
+  const std::vector<std::string> names{"dimensions", "unused"};
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    SCOPED_TRACE(names[i]);
+    EXPECT_EQ(lifetime[i].release_after, (std::vector<std::string>{names[i]}));
+    EXPECT_EQ(ctx.ReleaseAfterShapeTagged()[i],
+              (i == 0 ? std::vector<std::string>{names[i]} : std::vector<std::string>{}));
+    int releases = 0;
+    int shape_releases = 0;
+    for (const auto &event : ctx.Events()) {
+      if (event.name != names[i]) {
+        continue;
+      }
+      EXPECT_EQ(event.node_index, static_cast<int>(i));
+      releases += event.action == ComputeEventAction::kRelease;
+      shape_releases += event.action == ComputeEventAction::kReleaseShapeTag;
+    }
+    EXPECT_EQ(releases, 1);
+    EXPECT_EQ(shape_releases, i == 0 ? 1 : 0);
+
+    const auto total = std::get<int64_t>(std::get<core::expressions::DimType>(
+        ctx.NodeMemory(i).at(core::compute::kNodeMemoryTotalBytesKey)));
+    const auto retained = std::get<int64_t>(std::get<core::expressions::DimType>(
+        ctx.NodeMemory(i + 1).at(core::compute::kNodeMemoryAlreadyAllocatedBytesKey)));
+    EXPECT_EQ(total - retained, i == 0 ? 8 : 4);
+    int deletes = 0;
+    std::size_t executed_node = graph.node().size();
+    for (const auto &action : plan.actions()) {
+      if (action.kind() == ExecuteActionKind::kExecuteNode) {
+        executed_node = action.node_index();
+      }
+      if (action.name() == names[i] && (action.kind() == ExecuteActionKind::kDeleteBuffer ||
+                                        action.kind() == ExecuteActionKind::kDeleteShape)) {
+        ++deletes;
+        EXPECT_EQ(action.node_index(), i);
+        EXPECT_EQ(executed_node, i);
+        EXPECT_EQ(action.kind(),
+                  i == 0 ? ExecuteActionKind::kDeleteShape : ExecuteActionKind::kDeleteBuffer);
+      }
+    }
+    EXPECT_EQ(deletes, 1);
+  }
+  EXPECT_TRUE(lifetime[2].release_after.empty());
 }
 
 // WriteInPlaceReuseToMetadata free function also accepts value_tags and writes

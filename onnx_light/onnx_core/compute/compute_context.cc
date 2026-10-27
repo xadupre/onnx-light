@@ -793,6 +793,7 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     const std::string name = node.output(o);
     if (!name.empty()) {
       incr_producer_.emplace(name, i);
+      incr_last_use_.emplace(name, i);
     }
   }
 
@@ -819,6 +820,12 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
       continue;
     }
     release_after.push_back(name);
+  }
+  for (const std::string &name : node.output()) {
+    if (!name.empty() && incr_keep_.count(name) == 0 && incr_producer_.at(name) == i &&
+        incr_last_use_.at(name) == i) {
+      release_after.push_back(name);
+    }
   }
 
   // Shape-tagged subset of the release list, from the tags computed so far.
@@ -904,7 +911,8 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     if (old != incr_last_use_.end() && old->second >= 0) {
       refresh_from = std::min(refresh_from, static_cast<std::size_t>(old->second));
     }
-    int last = -1;
+    const auto value_producer = incr_producer_.find(name);
+    int last = value_producer == incr_producer_.end() ? -1 : value_producer->second;
     for (std::size_t index = 0; index < incr_node_references_.size(); ++index) {
       const auto &node_references = updated_references(index);
       if (std::find(node_references.begin(), node_references.end(), name) !=
@@ -954,7 +962,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     }
     const auto producer = incr_producer_.find(name);
     if (incr_keep_.count(name) == 0 && producer != incr_producer_.end() && producer->second >= 0 &&
-        producer->second < last) {
+        producer->second <= last) {
       release_after_[index].push_back(name);
       const auto tag = value_tags_.find(name);
       if (tag != value_tags_.end() && tag->second == "shape") {
@@ -1037,9 +1045,10 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       changed_references.insert(incr_node_references_[index].begin(),
                                 incr_node_references_[index].end());
       if (new_indices[index] >= 0) {
-        for (const auto &output : nodes[static_cast<std::size_t>(new_indices[index])].output()) {
+        for (const std::string &output :
+             nodes[static_cast<std::size_t>(new_indices[index])].output()) {
           if (!output.empty()) {
-            changed_references.insert(output.value());
+            changed_references.insert(output);
           }
         }
       }
@@ -1112,10 +1121,13 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       node_tags_[index].clear();
       node_tag_custom_override_[index] = 0;
     }
-    for (const auto &output : nodes[index].output()) {
+    for (const std::string &output : nodes[index].output()) {
       if (!output.empty()) {
-        incr_producer_[output.value()] = static_cast<int>(index);
-        tag_producer_node_[output.value()] = static_cast<int>(index);
+        incr_producer_[output] = static_cast<int>(index);
+        tag_producer_node_[output] = static_cast<int>(index);
+        if (old_indices[index] == old_count || changed_values.count(output) != 0) {
+          changed_references.insert(output);
+        }
       }
     }
     incr_node_references_[index] = references[index];
@@ -1129,6 +1141,11 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
     incr_last_use_.erase(name);
   }
   for (std::size_t index = 0; index < nodes.size(); ++index) {
+    for (const std::string &output : nodes[index].output()) {
+      if (!output.empty() && changed_references.count(output) != 0) {
+        incr_last_use_.emplace(output, static_cast<int>(index));
+      }
+    }
     for (const auto &name : references[index]) {
       if (changed_references.count(name) != 0) {
         incr_last_use_[name] = static_cast<int>(index);
@@ -1145,13 +1162,22 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
   for (std::size_t index = 0; index < nodes.size(); ++index) {
     if (old_indices[index] != old_count &&
         std::none_of(references[index].begin(), references[index].end(),
-                     [&](const auto &name) { return changed_references.count(name) != 0; })) {
+                     [&](const auto &name) { return changed_references.count(name) != 0; }) &&
+        std::none_of(
+            nodes[index].output().begin(), nodes[index].output().end(),
+            [&](const std::string &name) { return changed_references.count(name) != 0; })) {
       continue;
     }
     release_after_[index].clear();
     not_used_after_[index].clear();
     release_after_shape_tagged_[index].clear();
-    for (const auto &name : references[index]) {
+    std::vector<std::string> release_candidates = references[index];
+    for (const std::string &output : nodes[index].output()) {
+      if (!output.empty()) {
+        release_candidates.push_back(output);
+      }
+    }
+    for (const auto &name : release_candidates) {
       const auto last = incr_last_use_.find(name);
       if (last == incr_last_use_.end() || last->second != static_cast<int>(index)) {
         continue;
@@ -1161,7 +1187,7 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       }
       const auto producer = incr_producer_.find(name);
       if (incr_keep_.count(name) == 0 && producer != incr_producer_.end() &&
-          producer->second >= 0 && producer->second < last->second) {
+          producer->second >= 0 && producer->second <= last->second) {
         release_after_[index].push_back(name);
         const auto tag = value_tags_.find(name);
         if (tag != value_tags_.end() && tag->second == "shape") {
@@ -1174,7 +1200,9 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
   for (std::size_t index = 0; index < nodes.size(); ++index) {
     if (old_indices[index] != index ||
         std::any_of(references[index].begin(), references[index].end(),
-                    [&](const auto &name) { return changed_references.count(name) != 0; })) {
+                    [&](const auto &name) { return changed_references.count(name) != 0; }) ||
+        std::any_of(nodes[index].output().begin(), nodes[index].output().end(),
+                    [&](const std::string &name) { return changed_references.count(name) != 0; })) {
       RefreshNodeReuse(nodes, index, shapes_);
       AppendNodePeakMemory(nodes[index], index, device, materialize);
       MarkMemoryRefresh(index);
@@ -1202,16 +1230,16 @@ void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodePr
   }
   for (std::size_t position = end_exclusive; position-- > incr_memory_refresh_from_;) {
     const NodeProto &node = nodes[position];
-    for (const std::string &output : node.output()) {
-      if (!output.empty()) {
-        incr_memory_alive_before_refresh_.erase(output);
-      }
-    }
     if (position < release_after_.size()) {
       for (const std::string &name : release_after_[position]) {
         if (incr_allocation_bytes_.count(name) != 0) {
           incr_memory_alive_before_refresh_.insert(name);
         }
+      }
+    }
+    for (const std::string &output : node.output()) {
+      if (!output.empty()) {
+        incr_memory_alive_before_refresh_.erase(output);
       }
     }
   }

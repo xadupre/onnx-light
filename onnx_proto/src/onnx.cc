@@ -3432,7 +3432,12 @@ public:
 
   template <typename T> void Visit(T &value) {
     if constexpr (std::is_same_v<T, TensorProto>) {
-      tensors_.push_back({&value, graph_});
+      tensors_.push_back({&value, graph_, embedded_only_});
+    } else if constexpr (std::is_same_v<T, StructTypeProto>) {
+      const bool parent = embedded_only_;
+      embedded_only_ = true;
+      VisitProtoFields(value, value, *this);
+      embedded_only_ = parent;
     } else if constexpr (std::is_same_v<T, GraphProto> || std::is_same_v<T, FunctionProto>) {
       GraphProto *parent = graph_;
       if constexpr (std::is_same_v<T, GraphProto>)
@@ -3463,6 +3468,7 @@ public:
 private:
   std::vector<utils::detail::LayoutTensor> &tensors_;
   GraphProto *graph_;
+  bool embedded_only_ = false;
 };
 
 class ParseScopeCallbackVisitor {

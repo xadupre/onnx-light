@@ -53,6 +53,31 @@ std::vector<std::string> SplitNames(const std::string &value) {
   return names;
 }
 
+std::vector<std::string> ReadLifetimeNames(const NodeProto &node, const char *key) {
+  std::vector<std::string> names = SplitNames(ReadNodeMetadata(node, key));
+  const std::string encoding = ReadNodeMetadata(node, compute::kLifetimeNamesEncodingMetadataKey);
+  if (encoding.empty()) {
+    return names;
+  }
+  EXT_ENFORCE_INVALID(encoding == "percent", "ExecutionPlan: unknown lifetime name encoding.");
+  for (std::string &name : names) {
+    std::string decoded;
+    for (size_t i = 0; i < name.size(); ++i) {
+      if (name[i] != '%') {
+        decoded += name[i];
+        continue;
+      }
+      const std::string escape = name.substr(i, 3);
+      EXT_ENFORCE_INVALID(escape == "%25" || escape == "%3B",
+                          "ExecutionPlan: invalid encoded lifetime name.");
+      decoded += escape == "%25" ? '%' : ';';
+      i += 2;
+    }
+    name = std::move(decoded);
+  }
+  return names;
+}
+
 /// Parses the ``kInPlaceReuseMetadataKey`` value (``;``-separated
 /// ``output_index:input_index:kind`` triplets, ``kind`` being ``equal`` or
 /// ``greater``) into a list of :cpp:class:`InPlaceReuse` decisions. Malformed
@@ -396,11 +421,11 @@ void ExecutionPlan::BuildActions() {
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
     for (const std::string &name :
-         SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey))) {
+         ReadLifetimeNames(*node_ptr, compute::kReleaseAfterMetadataKey)) {
       explicit_releases.insert(name);
     }
     const std::vector<std::string> not_used_after =
-        SplitNames(ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey));
+        ReadLifetimeNames(*node_ptr, compute::kNotUsedAfterMetadataKey);
     if (!not_used_after.empty()) {
       strict = true;
     }
@@ -429,7 +454,7 @@ void ExecutionPlan::BuildActions() {
     std::unordered_set<std::string> valid_explicit_unlocks;
     for (size_t i = 0; i < n; ++i) {
       for (const std::string &name :
-           SplitNames(ReadNodeMetadata(*nodes_[i], compute::kNotUsedAfterMetadataKey))) {
+           ReadLifetimeNames(*nodes_[i], compute::kNotUsedAfterMetadataKey)) {
         const auto it = last_use.find(name);
         if (it == last_use.end() || i >= it->second) {
           valid_explicit_unlocks.insert(name);
@@ -462,7 +487,7 @@ void ExecutionPlan::BuildActions() {
   std::unordered_set<std::string> shape_tagged;
   for (const NodeProto *node_ptr : nodes_) {
     for (const std::string &name :
-         SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterShapeTagMetadataKey))) {
+         ReadLifetimeNames(*node_ptr, compute::kReleaseAfterShapeTagMetadataKey)) {
       shape_tagged.insert(name);
     }
   }
@@ -566,8 +591,7 @@ void ExecutionPlan::BuildActions() {
     // fallback for names absent from all release metadata. Both are tagged with
     // the releasing node index ``i`` so :cpp:func:`ReleaseAfter` can read them
     // back from :cpp:func:`actions`.
-    for (const std::string &name :
-         SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
+    for (const std::string &name : ReadLifetimeNames(node, compute::kReleaseAfterMetadataKey)) {
       const auto last_use_it = last_use.find(name);
       EXT_ENFORCE_INVALID(last_use_it == last_use.end() || i >= last_use_it->second,
                           "ExecutionPlan: release_after for '", name,
@@ -591,8 +615,7 @@ void ExecutionPlan::BuildActions() {
                             name, i);
       released.insert(name);
     }
-    for (const std::string &name :
-         SplitNames(ReadNodeMetadata(node, compute::kNotUsedAfterMetadataKey))) {
+    for (const std::string &name : ReadLifetimeNames(node, compute::kNotUsedAfterMetadataKey)) {
       const auto last_use_it = last_use.find(name);
       if (last_use_it != last_use.end() && i < last_use_it->second) {
         continue;

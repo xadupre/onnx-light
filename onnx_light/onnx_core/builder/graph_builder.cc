@@ -4145,10 +4145,15 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   // Rewrites can carry old annotations onto new nodes. In particular, an
   // empty release list must clear, rather than retain, the old schedule.
   const std::unordered_set<std::string> computed_keys = {
-      core::compute::kInPlaceReuseMetadataKey,   core::compute::kReleaseAfterMetadataKey,
-      core::compute::kNotUsedAfterMetadataKey,   core::compute::kReleaseAfterShapeTagMetadataKey,
-      core::compute::kNodePeakMemoryMetadataKey, core::compute::kConstantMetadataKey,
-      core::compute::kNodeTagMetadataKey,        core::compute::kValueTagMetadataKey};
+      core::compute::kInPlaceReuseMetadataKey,
+      core::compute::kReleaseAfterMetadataKey,
+      core::compute::kNotUsedAfterMetadataKey,
+      core::compute::kReleaseAfterShapeTagMetadataKey,
+      core::compute::kNodePeakMemoryMetadataKey,
+      core::compute::kConstantMetadataKey,
+      core::compute::kNodeTagMetadataKey,
+      core::compute::kValueTagMetadataKey,
+      core::compute::kLifetimeNamesEncodingMetadataKey};
   for (std::size_t i = 0; i < graph.node().size(); ++i) {
     NodeProto &node = graph.ref_node()[i];
     auto &metadata = node.ref_metadata_props();

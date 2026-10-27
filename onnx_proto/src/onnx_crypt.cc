@@ -672,6 +672,8 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
   ModelProto copy = utils::CopyWithSharedTensorStorage(model);
   IteratorTensorProto check(&copy);
   while (check.next()) {
+    if (check.requires_embedded_storage())
+      continue;
     TensorProto &tensor = *check;
     if (tensor.has_data_location() &&
         tensor.data_location() == TensorProto::DataLocation::EXTERNAL) {
@@ -714,6 +716,8 @@ void SaveEncryptedModelWithExternalData(ModelProto &model, const std::string &fi
   };
   IteratorTensorProto iterator(&copy);
   while (iterator.next()) {
+    if (iterator.requires_embedded_storage())
+      continue;
     TensorProto &tensor = *iterator;
     const size_t size = tensor.raw_data().size();
     if (size == 0 || size < size_threshold)

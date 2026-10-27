@@ -23,6 +23,7 @@ void ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options);
 struct LayoutTensor {
   TensorProto *tensor;
   GraphProto *graph;
+  bool embedded_only = false;
 };
 
 /** Collects tensors nested in a layout-owning submessage in serialization order. */
@@ -503,6 +504,14 @@ public:
     const auto &pos = positions_.back();
     return pos.layout_tensor_index == 0 ? pos.graph
                                         : pos.layout_tensors[pos.layout_tensor_index - 1].graph;
+  }
+  /** Returns whether the current tensor belongs to a struct declaration or codec. */
+  inline bool requires_embedded_storage() const {
+    if (positions_.empty())
+      return false;
+    const auto &pos = positions_.back();
+    return pos.layout_tensor_index != 0 &&
+           pos.layout_tensors[pos.layout_tensor_index - 1].embedded_only;
   }
   /**
    * Advances to the next tensor.

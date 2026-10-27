@@ -1398,6 +1398,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       onnx_compute::kNodeMemoryAlreadyAllocatedBytesKey;
   shape_mod.attr("NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY") =
       onnx_compute::kNodeMemoryOutputAllocationBytesKey;
+  shape_mod.attr("NODE_MEMORY_BEFORE_BYTES_KEY") = onnx_compute::kNodeMemoryBeforeBytesKey;
+  shape_mod.attr("NODE_MEMORY_DURING_BYTES_KEY") = onnx_compute::kNodeMemoryDuringBytesKey;
+  shape_mod.attr("NODE_MEMORY_AFTER_BYTES_KEY") = onnx_compute::kNodeMemoryAfterBytesKey;
+  shape_mod.attr("NODE_MEMORY_RELEASED_BYTES_KEY") = onnx_compute::kNodeMemoryReleasedBytesKey;
   shape_mod.attr("NODE_MEMORY_INPUTS_KEY") = onnx_compute::kNodeMemoryInputsKey;
   shape_mod.attr("NODE_MEMORY_INITIALIZERS_KEY") = onnx_compute::kNodeMemoryInitializersKey;
   shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_compute::kNodeMemoryIntermediatesKey;
@@ -1607,7 +1611,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "The per-node memory snapshots as a list (one entry per node, same order as "
           "``graph.node``). Each entry is a ``dict[str, int | str | dict[str, int | str]]`` "
           "describing the live input/initializer/intermediate buffers plus the extra output "
-          "allocation needed by that node.")
+          "allocation needed by that node, with before_bytes, during_bytes (including scratch), "
+          "after_bytes and released_bytes execution boundaries.")
       .def(
           "node_memory",
           [](const onnx_compute::ComputeContext &self, std::size_t node_index) {

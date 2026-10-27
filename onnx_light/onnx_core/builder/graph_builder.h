@@ -165,7 +165,7 @@ struct ConstantFoldingOptions {
 class GraphBuilder {
 public:
   // The pattern optimizer's read-only index needs access to the private
-  // subgraph-reference helpers (ReferencedSubgraphs / CollectImplicitInputs)
+  // subgraph-reference helper (ReferencedSubgraphs)
   // to compute the set of values captured by nested subgraphs.
   friend class GraphGraph;
 
@@ -211,6 +211,26 @@ public:
 
   /// Name given to the produced graph / function.
   const std::string &name() const noexcept { return name_; }
+
+  /// Returns ``true`` when this builder represents the identified local function.
+  bool IsLocalFunction(const std::string &name, const std::string &domain,
+                       const std::string &overload = "") const noexcept {
+    const bool same_domain = function_domain_ == domain ||
+                             ((function_domain_.empty() || function_domain_ == "ai.onnx" ||
+                               function_domain_ == "onnx.ai") &&
+                              (domain.empty() || domain == "ai.onnx" || domain == "onnx.ai"));
+    return is_local_function_ && name_ == name && same_domain &&
+           function_template_.overload().value() == overload;
+  }
+
+  /// Returns ``true`` inside the identified local function, including its subgraphs.
+  bool IsInsideLocalFunction(const std::string &name, const std::string &domain,
+                             const std::string &overload = "") const noexcept {
+    for (const GraphBuilder *scope = this; scope != nullptr; scope = scope->parent_)
+      if (scope->IsLocalFunction(name, domain, overload))
+        return true;
+    return false;
+  }
 
   // ── Opset management ─────────────────────────────────────────────────
 
@@ -713,6 +733,7 @@ public:
   GraphProto ToGraph();
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
+  /// Exports local functions from the builder and its nested scopes.
   ///
   /// @param ir_version IR version to write; ``0`` selects the library default.
   ModelProto ToModel(int64_t ir_version = 0);
@@ -729,6 +750,11 @@ public:
   ///
   /// @param domain Function domain.
   FunctionProto ToFunction(const std::string &domain = "");
+
+  /// Collects referenced names not defined by graph inputs, dense, extended or
+  /// sparse initializers, or node outputs into ``out``. Resolves nested-subgraph
+  /// captures relative to this scope and propagates those still undefined here.
+  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
 
 private:
   void InvalidateRewritings();
@@ -766,7 +792,8 @@ private:
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
   static TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
-                                            const std::string &name);
+                                            const std::string &name,
+                                            const TensorProto *shared_storage = nullptr);
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
                                const std::unordered_set<std::string> *included_outputs);
 
@@ -783,12 +810,6 @@ private:
   // Returns the nested subgraph builders referenced by ``node`` through its
   // ``*_ref`` STRING / STRINGS attributes.
   std::vector<GraphBuilder *> ReferencedSubgraphs(const NodeProto &node) const;
-
-  // Collects the implicit inputs of this builder (value names it references but
-  // does not itself define as an input, initializer or node output) into
-  // ``out``. Implicit inputs of nested subgraphs are resolved relative to this
-  // scope and propagated when they remain undefined here.
-  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
 
   // Appends to ``refs`` the value names ``node`` depends on: its explicit
   // inputs plus the implicit inputs of any nested subgraph it references.

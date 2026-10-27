@@ -36,6 +36,10 @@ public:
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
+  bool SupportsLocalFunctions(const NodeProto &node) const override {
+    NB_OVERRIDE_NAME("supports_local_functions", SupportsLocalFunctions, node);
+  }
+
   bool CanMatchInParallel() const noexcept override { return false; }
 
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
@@ -122,6 +126,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def_rw("device", &PatternOptimization::device,
               "Exact target device, or Device.kUndefined for a device-independent pattern.")
       .def("fast_op_type", &PatternOptimization::FastOpType)
+      .def("supports_local_functions", &PatternOptimization::SupportsLocalFunctions)
       .def(
           "result",
           [](const PatternOptimization &pattern, const std::vector<const NodeProto *> &nodes,

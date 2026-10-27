@@ -72,7 +72,7 @@ struct ImportedBufferOwnerDeleter {
 
 bool IsFileMappedOwner(const std::shared_ptr<void> &owner);
 
-bool IsFileMappedPythonBuffer(nb::handle array) {
+bool MayBeFileMappedPythonBuffer(nb::handle array) {
   if (nb::isinstance<TensorProto>(array))
     return IsFileMappedOwner(nb::cast<const TensorProto &>(array).raw_data().owner());
   const auto numpy = nb::module_::import_("numpy");
@@ -102,6 +102,7 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   const auto device = nb::cast<std::pair<int, int>>(array.attr("__dlpack_device__")());
   if (device != std::make_pair(1, 0))
     throw nb::buffer_error("TensorProto.from_dlpack supports only CPU device (1, 0).");
+  const bool file_mapped = MayBeFileMappedPythonBuffer(array);
   nb::object capsule;
   try {
     capsule = array.attr("__dlpack__")(nb::arg("stream") = nb::none(),
@@ -197,7 +198,6 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   static const uint8_t empty_data = 0;
   const auto *data =
       size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
-  const bool file_mapped = IsFileMappedPythonBuffer(array);
   std::shared_ptr<void> owner_token(owner.release(), ImportedDLPackOwnerDeleter{file_mapped});
   result.ref_raw_data().assign_borrowed(data, size, std::move(owner_token));
   try {
@@ -2639,7 +2639,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "_set_raw_data_from_buffer",
           [](TensorProto &self, nb::handle array) {
-            const bool file_mapped = IsFileMappedPythonBuffer(array);
+            const bool file_mapped = MayBeFileMappedPythonBuffer(array);
             auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{},
                                                      ImportedBufferOwnerDeleter{file_mapped});
             if (PyObject_GetBuffer(array.ptr(), buffer.get(), PyBUF_CONTIG_RO) < 0)
@@ -3648,7 +3648,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(RewritingProto, rewrites)
       .PYFIELD(RewritingProto, required_opset_imports)
       .PYFIELD(RewritingProto, metadata_props)
-      .PYFIELD(RewritingProto, added_functions);
+      .PYFIELD(RewritingProto, added_functions)
+      .PYFIELD(RewritingProto, replaced_function_ids);
   PYADD_PROTO_SERIALIZATION(RewritingProto);
   nb_RewritingProto
       .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })

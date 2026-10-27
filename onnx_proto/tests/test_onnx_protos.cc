@@ -84,6 +84,7 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   auto &function = *source.add_added_functions();
   function.set_name("Prepare");
   function.set_domain("custom");
+  source.add_replaced_function_ids("custom:Prepare");
   std::string bytes;
   ASSERT_TRUE(source.SerializeToString(bytes));
   RewritingProto loaded;
@@ -91,6 +92,7 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   std::string difference;
   EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
   EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
+  EXPECT_EQ(loaded.replaced_function_ids(0), "custom:Prepare");
   EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(0), 1u);
   EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(1), UINT64_MAX);
   RewritingProto copied;

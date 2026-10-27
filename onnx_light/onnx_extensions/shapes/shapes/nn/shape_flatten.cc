@@ -38,7 +38,7 @@ SymDim MultiplyDimRange(const SymShape &shape, size_t begin, size_t end) {
       all_int = false;
       break;
     }
-    product *= shape[i].AsInt();
+    product = core::shapes::CheckedDimensionMultiply(product, shape[i].AsInt());
   }
   if (all_int) {
     return SymDim(product);

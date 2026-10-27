@@ -7,7 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
-- Added incremental native `GraphLayout` with local mutations, nested graph support, persisted layout metadata, and opt-in layout during model loading ([#5515](https://github.com/xadupre/onnx-light/pull/5515)).
 - Added C++ and Python tensor statistics for numeric and quantized values, including histograms, quantiles, median, and area-averaged rectangle maps. Output allocations share a configurable `max_output_bytes` budget, defaulting to 64 MiB ([#5508](https://github.com/xadupre/onnx-light/pull/5508), [#5531](https://github.com/xadupre/onnx-light/pull/5531), [#5543](https://github.com/xadupre/onnx-light/pull/5543)).
 - Added opt-in repeated-layer extraction, with extracted regions represented as model-local `ai.rt::Layer`, `Layer_1`, and subsequent functions rather than a dedicated Layer operator ([#5516](https://github.com/xadupre/onnx-light/pull/5516), [#5571](https://github.com/xadupre/onnx-light/pull/5571)).
 - Added opt-in `load(path, defer_weights=True)` and native `ParseOptions.defer_weights`, with per-name and bulk weight loading/unloading and loaded-state queries. Deferred loading supports validated inline raw and ordinary external weights; unsupported payload types, input modes, and unsafe exports are rejected explicitly ([#5561](https://github.com/xadupre/onnx-light/pull/5561)).
@@ -30,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
-- Added graph-layout and tensor-statistics gallery examples and expanded the Python tensor-statistics API documentation ([#5515](https://github.com/xadupre/onnx-light/pull/5515), [#5530](https://github.com/xadupre/onnx-light/pull/5530), [#5532](https://github.com/xadupre/onnx-light/pull/5532)).
+- Added tensor-statistics gallery examples and expanded the Python tensor-statistics API documentation ([#5530](https://github.com/xadupre/onnx-light/pull/5530), [#5532](https://github.com/xadupre/onnx-light/pull/5532)).
 - Moved Sphinx and Doxygen builds to weekly schedules with manual dispatch and automatic failure issues ([#5548](https://github.com/xadupre/onnx-light/pull/5548)).
 - Ran native shape inference on every backend case, added native `WhereInPlaceTyped` and sequence-state `Loop` reachability coverage, and corrected optional ONNX Runtime dependency handling and quantization selection in Pixi tests ([#5522](https://github.com/xadupre/onnx-light/pull/5522), [#5577](https://github.com/xadupre/onnx-light/pull/5577), [#5575](https://github.com/xadupre/onnx-light/pull/5575), [#5581](https://github.com/xadupre/onnx-light/pull/5581)).
 - Bumped the release version to `0.2.1`.

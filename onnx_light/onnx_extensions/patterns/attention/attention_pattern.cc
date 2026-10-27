@@ -7,16 +7,19 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_extensions/patterns/collections/collections_utils.h"
 #include "onnx_proto/onnx_helper.h"
@@ -422,23 +425,236 @@ NodeProto &AddFunctionNode(FunctionProto &function, const char *op_type,
 }
 
 bool CanEnsureFunction(core::builder::GraphBuilder &builder, const std::string &name) {
-  return builder.HasLocalFunction(name) || !builder.HasName(name);
+  const auto &model_builder = builder.ModelBuilder();
+  if (&builder == &model_builder &&
+      (model_builder.HasName(name) || model_builder.HasLocalFunction(name)) &&
+      (!model_builder.HasLocalFunction(name) ||
+       !model_builder.LocalFunction(name).IsLocalFunction(name, kIntermediateDomain)))
+    return false;
+  return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
+         (builder.Shapes().HasLocalFunction(
+              core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, name)) ||
+          !model_builder.HasName(name));
 }
 
-void EnsureFunction(core::builder::GraphBuilder &builder, const FunctionProto &function) {
+std::string ModelScopedHelperName(core::builder::GraphBuilder &builder, const std::string &name) {
+  auto &model_builder = builder.ModelBuilder();
+  for (std::size_t suffix = 0;; ++suffix) {
+    const std::string candidate = suffix == 0 ? name : name + "_" + std::to_string(suffix - 1);
+    const bool exists_at_model_scope =
+        std::any_of(model_builder.LocalFunctions().begin(), model_builder.LocalFunctions().end(),
+                    [&](const auto &function) {
+                      return function->IsLocalFunction(candidate, kIntermediateDomain);
+                    });
+    const bool occupied =
+        model_builder.HasName(candidate) || model_builder.HasLocalFunction(candidate);
+    if (exists_at_model_scope || (!occupied && builder.Shapes().HasLocalFunction(
+                                                   core::shapes::ShapesContext::LocalFunctionKey(
+                                                       kIntermediateDomain, candidate)))) {
+      return candidate;
+    }
+    if (!occupied &&
+        !builder.Shapes().HasLocalFunction(
+            core::shapes::ShapesContext::LocalFunctionKey(kIntermediateDomain, candidate))) {
+      return candidate;
+    }
+  }
+}
+
+bool CanEnsureHalfRotaryFunction(core::builder::GraphBuilder &builder) {
+  constexpr const char *name = "HalfRotaryEmbedding";
+  const std::string model_scoped_name = ModelScopedHelperName(builder, name);
+  return !builder.IsInsideLocalFunction(name, kIntermediateDomain) &&
+         !builder.IsInsideLocalFunction(model_scoped_name, kIntermediateDomain);
+}
+
+template <typename Fields> bool SameHelperProtos(const Fields &left, const Fields &right) {
+  return std::equal(left.begin(), left.end(), right.begin(), right.end(),
+                    [](const auto &a, const auto &b) { return a.Equals(b); });
+}
+
+struct HelperBody {
+  explicit HelperBody(const FunctionProto &function) {
+    for (const auto &node : function.node()) {
+      if (NormaliseDomain(node.domain()) == kDefaultOnnxDomain && node.overload().empty()) {
+        if (node.op_type() == "Constant" && node.input().empty() && node.output_size() == 1 &&
+            node.attribute_size() == 1 && node.attribute(0).name() == "value" &&
+            node.attribute(0).type() == AttributeProto::TENSOR && node.attribute(0).has_t()) {
+          constants.emplace(node.output(0).value(), &node);
+          continue;
+        }
+        if (node.op_type() == "Identity" && node.input_size() == 1 && node.output_size() == 1 &&
+            node.attribute().empty() && node.device_configurations().empty()) {
+          const std::string source = Resolve(node.input(0).value());
+          if (constants.contains(source)) {
+            aliases.emplace(node.output(0).value(), source);
+            continue;
+          }
+        }
+      }
+      nodes.push_back(&node);
+    }
+  }
+
+  std::string Resolve(const std::string &name) const {
+    const auto found = aliases.find(name);
+    return found == aliases.end() ? name : found->second;
+  }
+
+  std::unordered_map<std::string, const NodeProto *> constants;
+  std::unordered_map<std::string, std::string> aliases;
+  std::vector<const NodeProto *> nodes;
+};
+
+bool SameHelperConstants(const NodeProto &left, const NodeProto &right) {
+  if (!SameHelperProtos(left.device_configurations(), right.device_configurations()))
+    return false;
+  auto a = utils::CopyWithSharedTensorStorage(left.attribute(0));
+  auto b = utils::CopyWithSharedTensorStorage(right.attribute(0));
+  const auto &ta = left.attribute(0).t();
+  const auto &tb = right.attribute(0).t();
+  a.ref_t() = TensorProto{};
+  b.ref_t() = TensorProto{};
+  if (!a.Equals(b) || ta.data_type() != tb.data_type() ||
+      !std::equal(ta.dims().begin(), ta.dims().end(), tb.dims().begin(), tb.dims().end()) ||
+      ta.has_segment() || tb.has_segment() || !ta.external_data().empty() ||
+      !tb.external_data().empty() || ta.data_location() == TensorProto::EXTERNAL ||
+      tb.data_location() == TensorProto::EXTERNAL)
+    return false;
+  if (ta.data_type() == TensorProto::STRING)
+    return std::equal(ta.string_data().begin(), ta.string_data().end(), tb.string_data().begin(),
+                      tb.string_data().end());
+  const auto va = core::runtime::TensorFromProto(ta);
+  const auto vb = core::runtime::TensorFromProto(tb);
+  return va.size_bytes() == vb.size_bytes() &&
+         (va.size_bytes() == 0 || std::memcmp(va.bytes(), vb.bytes(), va.size_bytes()) == 0);
+}
+
+bool SameNormalizedHelperBody(const FunctionProto &left, const FunctionProto &right) {
+  const HelperBody a(left), b(right);
+  if (a.nodes.size() != b.nodes.size())
+    return false;
+  std::unordered_set<const NodeProto *> used_a, used_b;
+  const auto same_values = [&](const auto &values_a, const auto &values_b) {
+    return std::equal(values_a.begin(), values_a.end(), values_b.begin(), values_b.end(),
+                      [&](const auto &value_a, const auto &value_b) {
+                        const auto name_a = a.Resolve(value_a.value()),
+                                   name_b = b.Resolve(value_b.value());
+                        const auto constant_a = a.constants.find(name_a),
+                                   constant_b = b.constants.find(name_b);
+                        if (constant_a == a.constants.end() || constant_b == b.constants.end())
+                          return constant_a == a.constants.end() &&
+                                 constant_b == b.constants.end() && name_a == name_b;
+                        used_a.insert(constant_a->second);
+                        used_b.insert(constant_b->second);
+                        return SameHelperConstants(*constant_a->second, *constant_b->second);
+                      });
+  };
+  for (std::size_t index = 0; index < a.nodes.size(); ++index) {
+    const auto &na = *a.nodes[index], &nb = *b.nodes[index];
+    if (na.op_type() != nb.op_type() ||
+        NormaliseDomain(na.domain()) != NormaliseDomain(nb.domain()) ||
+        na.overload() != nb.overload() || !same_values(na.input(), nb.input()) ||
+        !same_values(na.output(), nb.output()) ||
+        !SameHelperProtos(na.attribute(), nb.attribute()) ||
+        !SameHelperProtos(na.device_configurations(), nb.device_configurations()))
+      return false;
+  }
+  return same_values(left.output(), right.output()) && used_a.size() == a.constants.size() &&
+         used_b.size() == b.constants.size();
+}
+
+bool CompatibleHelper(const core::builder::GraphBuilder &builder, const FunctionProto &existing,
+                      const FunctionProto &function) {
+  const auto same_strings = [](const auto &left, const auto &right) {
+    return std::equal(left.begin(), left.end(), right.begin(), right.end());
+  };
+  bool same_body =
+      std::equal(existing.node().begin(), existing.node().end(), function.node().begin(),
+                 function.node().end(), [&](const NodeProto &a, const NodeProto &b) {
+                   return a.op_type() == b.op_type() &&
+                          NormaliseDomain(a.domain()) == NormaliseDomain(b.domain()) &&
+                          a.overload() == b.overload() && same_strings(a.input(), b.input()) &&
+                          same_strings(a.output(), b.output()) &&
+                          SameHelperProtos(a.attribute(), b.attribute()) &&
+                          SameHelperProtos(a.device_configurations(), b.device_configurations());
+                 });
+  if (!same_body &&
+      builder.Shapes().GetLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey("", "Constant")) == nullptr &&
+      builder.Shapes().GetLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey("", "Identity")) == nullptr) {
+    // Initializer export moves constants ahead of the body and may rename their aliases.
+    same_body = SameNormalizedHelperBody(existing, function);
+  }
+  bool compatible = existing.attribute().empty() && existing.attribute_proto().empty() &&
+                    same_strings(existing.input(), function.input()) &&
+                    same_strings(existing.output(), function.output()) && same_body;
+  for (const auto &required : function.opset_import()) {
+    const auto found = std::find_if(
+        existing.opset_import().begin(), existing.opset_import().end(), [&](const auto &import) {
+          return NormaliseDomain(import.domain()) == NormaliseDomain(required.domain());
+        });
+    compatible &= found != existing.opset_import().end() && found->version() == required.version();
+  }
+  return compatible;
+}
+
+void EnsureFunction(core::builder::GraphGraph &graph, const FunctionProto &function) {
+  auto &builder = graph.Builder();
   const std::string name = function.name().value();
   const std::string domain = function.domain().value();
   const int opset = builder.OpsetVersion(domain);
-  if (opset == core::shapes::kUnknownOpsetVersion) {
-    builder.SetOpsetVersion(domain, 1);
-  } else if (opset != 1) {
+  if (opset != core::shapes::kUnknownOpsetVersion && opset != 1) {
     throw BuilderError("Attention function '" + name + "' requires opset 1 for domain '" + domain +
                        "', but the calling builder imports version " + std::to_string(opset) + ".");
   }
-  if (builder.HasLocalFunction(name)) {
+  const auto *existing = builder.Shapes().GetLocalFunction(
+      core::shapes::ShapesContext::LocalFunctionKey(domain, name, function.overload()));
+  const bool reuse = existing != nullptr;
+  if (reuse) {
+    if (!CompatibleHelper(builder, *existing, function)) {
+      const auto *original = graph.FunctionBeforeOptimization(domain, name, function.overload());
+      if (original == nullptr || !CompatibleHelper(builder, *original, function))
+        throw BuilderError("Attention function '" + name + "' has an incompatible definition.");
+    }
+  }
+  if (opset == core::shapes::kUnknownOpsetVersion)
+    builder.SetOpsetVersion(domain, 1);
+  auto &model_builder = builder.ModelBuilder();
+  auto &owner = (model_builder.HasName(name) || model_builder.HasLocalFunction(name)) &&
+                        (!model_builder.HasLocalFunction(name) ||
+                         !model_builder.LocalFunction(name).IsLocalFunction(name, domain,
+                                                                            function.overload()))
+                    ? builder
+                    : model_builder;
+  if (reuse) {
+    if (owner.HasLocalFunction(name) &&
+        owner.LocalFunction(name).IsLocalFunction(name, domain, function.overload()))
+      return;
+    const auto find_owner =
+        [&](const auto &self,
+            const core::builder::GraphBuilder &scope) -> const core::builder::GraphBuilder * {
+      for (const auto &local : scope.LocalFunctions()) {
+        if (local->IsLocalFunction(name, domain, function.overload()))
+          return local.get();
+        if (const auto *found = self(self, *local))
+          return found;
+      }
+      for (const auto &subgraph : scope.Subgraphs()) {
+        if (const auto *found = self(self, *subgraph))
+          return found;
+      }
+      return nullptr;
+    };
+    const auto *source = find_owner(find_owner, model_builder);
+    const FunctionProto retained = utils::CopyWithSharedTensorStorage(*existing);
+    auto &helper = owner.MakeLocalFunction(retained);
+    if (source != nullptr)
+      helper.CopyDeviceTargetsFrom(*source);
     return;
   }
-  builder.MakeLocalFunction(function);
+  owner.MakeLocalFunction(function);
 }
 
 FunctionProto MakeHalfRotaryFunction(core::builder::GraphBuilder &builder) {
@@ -703,6 +919,12 @@ ApplyRotaryTranspose(core::builder::GraphGraph &graph, const std::vector<const N
 
 } // namespace
 
+bool FunctionAttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() && NormaliseDomain(node.domain().value()) == kIntermediateDomain &&
+         node.op_type().value().starts_with("LocalAttention") &&
+         !node.op_type().value().starts_with("LocalAttentionGQA");
+}
+
 core::builder::MatchResult FunctionAttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                               const NodeProto &candidate) const {
   const std::string &op_type = candidate.op_type().value();
@@ -783,7 +1005,7 @@ FunctionAttentionGQAPattern::Apply(core::builder::GraphGraph &graph,
   result.push_back(MakePatternNode(function_name.c_str(), inputs, {attention.output()[0].value()},
                                    kIntermediateDomain,
                                    "FunctionAttentionGQAPattern--" + attention.name().value()));
-  EnsureFunction(graph.Builder(),
+  EnsureFunction(graph,
                  MakeAttentionFunction(graph.Builder(), function_name, type, true,
                                        attention.op_type().value().find("SW") != std::string::npos,
                                        IsDefaultOp(value_reshape, "Squeeze")));
@@ -1109,6 +1331,10 @@ bool IsLocalAttentionGqaCall(const NodeProto &node) {
 }
 
 } // namespace
+
+bool AttentionGQAPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() && IsLocalAttentionGqaCall(node);
+}
 
 core::builder::MatchResult AttentionGQAPattern::Match(core::builder::GraphGraph &graph,
                                                       const NodeProto &candidate) const {
@@ -1868,7 +2094,7 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
       }
     }
   }
-  if (caches.size() != 2 || !CanEnsureFunction(graph.Builder(), "HalfRotaryEmbedding")) {
+  if (caches.size() != 2 || !CanEnsureHalfRotaryFunction(graph.Builder())) {
     return NoMatch(candidate, "The cache inputs or local-function name are not usable.");
   }
   const std::vector<const NodeProto *> matched =
@@ -1937,15 +2163,23 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
     throw BuilderError("FunctionHalfRotaryEmbeddingPattern::Apply could not identify both caches.");
   }
   utils::RepeatedProtoField<NodeProto> result;
+  const std::string function_name = ModelScopedHelperName(graph.Builder(), "HalfRotaryEmbedding");
   result.push_back(
-      MakePatternNode("HalfRotaryEmbedding", {first.input()[0].value(), cos_cache, sin_cache},
+      MakePatternNode(function_name.c_str(), {first.input()[0].value(), cos_cache, sin_cache},
                       {add.output()[0].value()}, kIntermediateDomain,
                       "FunctionHalfRotaryEmbeddingPattern--" + add.output()[0].value()));
-  EnsureFunction(graph.Builder(), MakeHalfRotaryFunction(graph.Builder()));
+  FunctionProto function = MakeHalfRotaryFunction(graph.Builder());
+  function.set_name(function_name);
+  EnsureFunction(graph, function);
   return result;
 }
 
 std::set<std::string> RotaryEmbeddingPattern::FastOpType() const { return {"HalfRotaryEmbedding"}; }
+
+bool RotaryEmbeddingPattern::SupportsLocalFunctions(const NodeProto &node) const {
+  return node.overload().empty() &&
+         IsDomainNode(&node, "HalfRotaryEmbedding", kIntermediateDomain, 3, 1);
+}
 
 core::builder::MatchResult RotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                                          const NodeProto &candidate) const {
@@ -2237,7 +2471,7 @@ FunctionCausalMaskPattern::Apply(core::builder::GraphGraph &graph,
   result.push_back(MakePatternNode(function_name.c_str(), inputs, {comparison->output()[0].value()},
                                    kIntermediateDomain,
                                    "FunctionCausalMaskPattern--" + comparison->name().value()));
-  EnsureFunction(graph.Builder(), MakeCausalMaskFunction(graph.Builder(), shifted));
+  EnsureFunction(graph, MakeCausalMaskFunction(graph.Builder(), shifted));
   return result;
 }
 
@@ -2312,7 +2546,7 @@ FunctionCausalMaskMulAddPattern::Apply(core::builder::GraphGraph &graph,
       {squeeze1.input()[0].value(), squeeze2.input()[0].value(), mul.input()[1].value()},
       {add.output()[0].value()}, kIntermediateDomain,
       "FunctionCausalMaskMulAddPattern--" + add.name().value()));
-  EnsureFunction(graph.Builder(), MakeCausalMaskMulAddFunction(graph.Builder()));
+  EnsureFunction(graph, MakeCausalMaskMulAddFunction(graph.Builder()));
   return result;
 }
 
@@ -2503,8 +2737,8 @@ FunctionCosSinCachePattern::Apply(core::builder::GraphGraph &graph,
   result.push_back(MakePatternNode(function_name.c_str(), inputs, {cos_output, sin_output},
                                    kIntermediateDomain,
                                    "FunctionCosSinCachePattern--" + mul.name().value()));
-  EnsureFunction(graph.Builder(), MakeCosSinCacheFunction(graph.Builder(), function_name, to,
-                                                          position_axes, range != nullptr));
+  EnsureFunction(graph, MakeCosSinCacheFunction(graph.Builder(), function_name, to, position_axes,
+                                                range != nullptr));
   return result;
 }
 
@@ -2825,8 +3059,8 @@ FunctionAttentionPattern::Apply(core::builder::GraphGraph &graph,
   result.push_back(MakePatternNode(function_name.c_str(), inputs, {mat_qkv.output()[0].value()},
                                    kIntermediateDomain,
                                    "FunctionAttentionPattern--" + softmax.name().value()));
-  EnsureFunction(graph.Builder(), MakeAttentionFunction(graph.Builder(), function_name, type, gqa,
-                                                        switch_where, false));
+  EnsureFunction(
+      graph, MakeAttentionFunction(graph.Builder(), function_name, type, gqa, switch_where, false));
   return result;
 }
 

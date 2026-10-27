@@ -1645,6 +1645,9 @@ FIELD_REPEATED_PROTO(LocalRewritingProto, rewrites, 1, "Edits in application ord
 FIELD_REPEATED_PROTO(OperatorSetIdProto, required_opset_imports, 2, "Required additional imports.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 3, "Descriptive metadata.")
 FIELD_REPEATED_PROTO(FunctionProto, added_functions, 4, "Shared additional functions.")
+FIELD_REPEATED_STR(
+    utils::String, replaced_function_ids, 5,
+    "Escaped domain:name[:overload] identities explicitly replaced by added_functions.")
 END_PROTO()
 
 // ModelProto

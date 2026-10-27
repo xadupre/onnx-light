@@ -4,6 +4,7 @@
 
 #include "onnx_proto/onnx.h"
 
+#include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
@@ -11,6 +12,7 @@
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
+#include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
 
@@ -50,6 +52,75 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFunctionsPopulatesCoreDispatchTable
   EXPECT_GT(table.size(), 200u);
   EXPECT_NE(table.find("ai.onnx:Add"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:Binarizer"), table.end());
+}
+
+TEST(OnnxKernelsDispatchTable, ConstantFoldingRunsRegisteredIdentityFactory) {
+  struct IdentityState {
+    int factory_calls = 0;
+    int runs = 0;
+  };
+  struct RestoreIdentityFactory {
+    core::runtime::NodeKernelFn original =
+        core::runtime::KernelDispatchTable().at("ai.onnx:Identity");
+    ~RestoreIdentityFactory() {
+      core::runtime::RegisterKernelFn("", "Identity", core::symbolic::Device::kCPU,
+                                      std::move(original));
+    }
+  };
+
+  for (const std::string mode : {"transform", "copy", "forward"}) {
+    SCOPED_TRACE(mode);
+    RestoreIdentityFactory restore;
+    const auto state = std::make_shared<IdentityState>();
+    auto factory = core::runtime::MakeCustomKernelFactory(
+        [state, mode](const NodeProto &node, core::runtime::RuntimeContext &rt) {
+          ++state->runs;
+          const auto &input = rt.Get(node.input(0));
+          EXPECT_NE(input.borrowed_owner().use_count(), 0);
+          if (mode == "forward") {
+            rt.Put(node.output(0), input.BorrowView());
+          } else {
+            const float offset = mode == "transform" ? 10.0f : 0.0f;
+            rt.Put(node.output(0), core::runtime::Tensor::FromFloat(
+                                       node.output(0), input.shape,
+                                       {input.AsFloat()[0] + offset, input.AsFloat()[1] + offset}));
+          }
+        });
+    core::runtime::RegisterKernelFn("", "Identity", core::symbolic::Device::kCPU,
+                                    [state, factory](const NodeProto &node,
+                                                     core::runtime::RuntimeContext &rt,
+                                                     const core::runtime::KernelContext &ctx) {
+                                      ++state->factory_calls;
+                                      EXPECT_EQ(rt.device(), core::symbolic::Device::kCPU);
+                                      return factory(node, rt, ctx);
+                                    });
+
+    core::builder::GraphBuilder builder(
+        "identity_factory",
+        [](const std::string &op) { return onnx_op::GetAllOnnxOpSchemasWithHistory(op, false); },
+        {{"", 22}});
+    builder.set_device(core::symbolic::Device::kCPU);
+    const std::array<float, 2> values{1.0f, 2.0f};
+    TensorProto weight;
+    weight.set_name("weight");
+    weight.set_data_type(TensorProto::DataType::FLOAT);
+    weight.add_dims(2);
+    weight.set_raw_data(values.data(), sizeof(values));
+    builder.MakeInitializer(std::move(weight));
+    const auto *original_bytes = builder.Initializers()[0].ref_raw_data().data();
+    builder.MakeNode("Identity", {"weight"}, {"Y"});
+    builder.MakeOutput("Y");
+
+    ASSERT_EQ(builder.ConstantFold(), 1u);
+    EXPECT_EQ(state->factory_calls, 1);
+    EXPECT_EQ(state->runs, 1);
+    ASSERT_EQ(builder.Initializers().size(), 2u);
+    const auto &folded = builder.Initializers()[1];
+    const auto actual = core::runtime::TensorFromProto(folded);
+    EXPECT_FLOAT_EQ(actual.AsFloat()[0], mode == "transform" ? 11.0f : 1.0f);
+    EXPECT_FLOAT_EQ(actual.AsFloat()[1], mode == "transform" ? 12.0f : 2.0f);
+    EXPECT_EQ(folded.ref_raw_data().data() == original_bytes, mode == "forward");
+  }
 }
 
 TEST(OnnxKernelsDispatchTable, RegistersAbsCalibrationFunctions) {

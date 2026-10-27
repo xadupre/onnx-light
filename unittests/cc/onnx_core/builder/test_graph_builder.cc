@@ -344,6 +344,160 @@ TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
     EXPECT_EQ(child->device(), Device::kCPU);
 }
 
+TEST(GraphBuilder, CopyDeviceTargetsAcceptsCompatibleDuplicateFunctionIdentities) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  const auto make_source = [](Device second_function_device) {
+    GraphBuilder source("root", SchemaLookup(), {{"", 18}});
+    source.MakeInput("condition", TensorType::kBool, MakeShape({}));
+    source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+    for (const auto &[scope_name, device] : {std::pair<const char *, Device>{"then", Device::kCPU},
+                                             {"else", second_function_device}}) {
+      auto &scope = source.MakeSubgraph(scope_name);
+      scope.MakeNode("Identity", {"x"}, {"result"});
+      scope.MakeOutput("result");
+      auto &function = scope.MakeLocalFunction("F", "local");
+      function.MakeInput("a", TensorType::kFloat, MakeShape({2}));
+      function.MakeNode("Identity", {"a"}, {"b"});
+      function.MakeOutput("b");
+      function.set_device(device);
+    }
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &[name, scope] :
+         {std::pair<const char *, const char *>("then_branch_ref", "then"),
+          {"else_branch_ref", "else"}}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(scope);
+    }
+    source.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+    source.MakeOutput("y");
+    return source;
+  };
+
+  GraphBuilder source = make_source(Device::kCPU);
+  GraphBuilder target(source.ToModel(), SchemaLookup());
+  ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+  EXPECT_EQ(target.LocalFunction("F").device(), Device::kCPU);
+
+  GraphBuilder incompatible_source = make_source(Device::kGPU0);
+  GraphBuilder incompatible_target(incompatible_source.ToModel(), SchemaLookup());
+  EXPECT_THROW(incompatible_target.CopyDeviceTargetsFrom(incompatible_source),
+               core::builder::BuilderError);
+  EXPECT_EQ(incompatible_target.LocalFunction("F").device(), Device::kUndefined);
+}
+
+TEST(GraphBuilder, ExportAndDeviceTargetsUseCanonicalFunctionIdentities) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  for (const std::string source_domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string target_domain : {"", "ai.onnx", "onnx.ai"}) {
+      for (const std::string overload : {"", "variant:one%"}) {
+        SCOPED_TRACE(source_domain + "/" + target_domain + "/" + overload);
+        GraphBuilder source("root", SchemaLookup(), {{"", 18}, {"onnx.ai", 18}});
+        FunctionProto definition;
+        definition.set_name("F");
+        definition.set_domain(source_domain);
+        definition.set_overload(overload);
+        definition.add_opset("", 18);
+        definition.add_input("a");
+        definition.add_output("b");
+        definition.add_node(MakeNode("Neg", {"a"}, {"b"}));
+        source.MakeLocalFunction(definition).set_device(Device::kCPU);
+        source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+        source.MakeNode("F", {"x"}, {"y"}, source_domain, "",
+                        utils::RepeatedProtoField<AttributeProto>(), overload);
+        source.MakeOutput("y");
+
+        auto model = source.ToModel();
+        ASSERT_EQ(model.functions().size(), 1u);
+        model.ref_functions()[0].set_domain(target_domain);
+        GraphBuilder target(model, SchemaLookup());
+        ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+        EXPECT_EQ(target.LocalFunction("F").device(), Device::kCPU);
+        EXPECT_EQ(target.InlineLocalFunctions(), 1u);
+        ASSERT_EQ(target.Nodes().size(), 1u);
+        EXPECT_EQ(target.Nodes()[0].op_type(), "Neg");
+
+        auto duplicate = model.functions(0);
+        duplicate.set_domain(source_domain);
+        model.ref_functions().push_back(std::move(duplicate));
+        EXPECT_THROW((GraphBuilder(model, SchemaLookup())), core::builder::BuilderError);
+        model.ref_functions()[1].set_overload(overload + "different");
+        EXPECT_NO_THROW((GraphBuilder(model, SchemaLookup())));
+      }
+    }
+  }
+}
+
+TEST(GraphBuilder, CopyDeviceTargetsAlignsDuplicateFunctionBranchesByReference) {
+  using core::builder::GraphBuilder;
+  using core::symbolic::Device;
+  using core::symbolic::TensorType;
+  for (const bool compatible : {false, true}) {
+    SCOPED_TRACE(compatible);
+    GraphBuilder source("root", SchemaLookup(), {{"", 18}});
+    source.MakeInput("condition", TensorType::kBool, MakeShape({}));
+    source.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+    for (const bool reverse : {false, true}) {
+      GraphBuilder isolated("isolated", SchemaLookup(), {{"", 18}});
+      isolated.MakeInput("x", TensorType::kFloat, MakeShape({2}));
+      auto &scope = isolated.MakeSubgraph(reverse ? "right" : "left");
+      scope.MakeNode("Identity", {"x"}, {"result"});
+      scope.MakeOutput("result");
+      auto &function = scope.MakeLocalFunction("F", "local");
+      function.MakeInput("flag", TensorType::kBool, MakeShape({}));
+      function.MakeInput("a", TensorType::kFloat, MakeShape({2}));
+      function.set_device(Device::kCPU);
+      for (int index = 0; index < 2; ++index) {
+        const bool then_branch = reverse ? index == 1 : index == 0;
+        auto &branch = function.MakeSubgraph(then_branch ? "then" : "else");
+        branch.MakeNode("Identity", {"a"}, {"out"});
+        branch.MakeOutput("out");
+        const bool cpu = reverse && !compatible ? !then_branch : then_branch;
+        branch.set_device(cpu ? Device::kCPU : Device::kGPU0);
+      }
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const auto &[name, branch] :
+           {std::pair<const char *, const char *>{"then_branch_ref", "then"},
+            {"else_branch_ref", "else"}}) {
+        auto &attribute = attributes.add();
+        attribute.set_name(name);
+        attribute.set_type(AttributeProto::STRING);
+        attribute.set_s(branch);
+      }
+      function.MakeNode("If", {"flag"}, {"b"}, "", "", attributes);
+      function.MakeOutput("b");
+      source.MakeSubgraph(scope.name()) = std::move(scope);
+    }
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &[name, branch] :
+         {std::pair<const char *, const char *>{"then_branch_ref", "left"},
+          {"else_branch_ref", "right"}}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(branch);
+    }
+    source.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+    source.MakeOutput("y");
+    GraphBuilder target(source.ToModel(), SchemaLookup());
+    if (compatible) {
+      ASSERT_NO_THROW(target.CopyDeviceTargetsFrom(source));
+      EXPECT_EQ(target.LocalFunction("F").Subgraph("then").device(), Device::kCPU);
+      EXPECT_EQ(target.LocalFunction("F").Subgraph("else").device(), Device::kGPU0);
+    } else {
+      EXPECT_THROW(target.CopyDeviceTargetsFrom(source), core::builder::BuilderError);
+      EXPECT_EQ(target.LocalFunction("F").device(), Device::kUndefined);
+      for (const auto &branch : target.LocalFunction("F").Subgraphs())
+        EXPECT_EQ(branch->device(), Device::kUndefined);
+    }
+  }
+}
+
 TEST(GraphBuilder, ConstructorOpsets) {
   for (const std::string domain : {"", "ai.onnx"}) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});
@@ -2960,6 +3114,42 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
   EXPECT_FALSE(builder.HasLocalFunction("Inner"));
 }
 
+TEST(GraphBuilder, ExportsNestedFunctionsInDependencyOrder) {
+  for (const bool nested_call : {false, true}) {
+    SCOPED_TRACE(nested_call);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+    auto &base = builder.MakeLocalFunction("Base", "custom");
+    base.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    base.MakeNode("Neg", {"value"}, {"result"});
+    base.MakeOutput("result");
+
+    auto &wrapper = builder.MakeSubgraph("scope").MakeLocalFunction("Wrapper", "custom");
+    wrapper.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    if (nested_call) {
+      wrapper.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      for (const std::string name : {"then_branch", "else_branch"}) {
+        auto &branch = wrapper.MakeSubgraph(name);
+        branch.MakeNode("Base", {"value"}, {"Y"}, "custom");
+        branch.MakeOutput("Y");
+        auto &reference = attributes.add();
+        reference.set_name(name + "_ref");
+        reference.set_type(AttributeProto::AttributeType::STRING);
+        reference.set_s(name);
+      }
+      wrapper.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+    } else {
+      wrapper.MakeNode("Base", {"value"}, {"result"}, "custom");
+    }
+    wrapper.MakeOutput("result");
+    const auto model = builder.ToModel();
+    ASSERT_EQ(model.functions().size(), 2u);
+    EXPECT_EQ(model.functions(0).name(), "Base");
+    EXPECT_EQ(model.functions(1).name(), "Wrapper");
+    EXPECT_NO_THROW(core::builder::GraphBuilder(model, SchemaLookup()));
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);
@@ -3490,6 +3680,36 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
   EXPECT_EQ(resolved.name().value(), "alpha");
   EXPECT_TRUE(resolved.ref_attr_name().empty());
   EXPECT_FLOAT_EQ(resolved.f(), 0.25f);
+}
+
+TEST(GraphBuilder, LocalFunctionIdentityNormalizesAllDefaultDomainAliases) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    SCOPED_TRACE(domain);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    FunctionProto definition;
+    definition.set_name("Alias");
+    definition.set_domain(domain);
+    definition.set_overload("typed");
+    definition.add_opset("", 28);
+    definition.add_input("X");
+    definition.add_output("Y");
+    definition.add_node("Neg", {"X"}, {"Y"});
+    auto &function = builder.MakeLocalFunction(definition);
+    auto &branch = function.MakeSubgraph("branch");
+    auto &nested = branch.MakeSubgraph("nested");
+    for (const std::string query_domain : {"", "ai.onnx", "onnx.ai"}) {
+      EXPECT_TRUE(builder.Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey(query_domain, "Alias", "typed")));
+      EXPECT_TRUE(function.IsLocalFunction("Alias", query_domain, "typed"));
+      EXPECT_TRUE(nested.IsInsideLocalFunction("Alias", query_domain, "typed"));
+      EXPECT_FALSE(function.IsLocalFunction("Alias", query_domain));
+      EXPECT_FALSE(nested.IsInsideLocalFunction("Alias", query_domain, "other"));
+      EXPECT_FALSE(branch.IsLocalFunction("Alias", query_domain, "typed"));
+    }
+    EXPECT_FALSE(function.IsLocalFunction("Alias", "custom", "typed"));
+    EXPECT_FALSE(nested.IsInsideLocalFunction("Other", domain, "typed"));
+    EXPECT_FALSE(builder.IsInsideLocalFunction("Alias", domain, "typed"));
+  }
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {

@@ -1,17 +1,13 @@
 import os
-import warnings
 from pathlib import Path
 from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
-    AttributeProto,
     FileLoadMode,
-    GraphLayout,
     ModelProto,
     ParseOptions,
     PipelineProto,
     SerializeOptions,
     TensorProto,
-    enable_graph_layout,
 )
 
 # Serialization formats understood by :func:`load` and :func:`save`. ``"protobuf"``
@@ -320,7 +316,6 @@ def load(
     touch_raw_data_pages: bool = False,
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
-    layout: bool = False,
     defer_weights: bool = False,
 ) -> ModelProto | PipelineProto:
     """
@@ -408,9 +403,6 @@ def load(
         or ``"textproto"`` (protobuf text format). When it is not specified, it is
         inferred from the file extension (``.textproto`` selects ``"textproto"``,
         otherwise ``"protobuf"``). Text-format inputs are decoded as "utf-8".
-    :param layout: enables native incremental layout while loading. Binary graph and function
-        bodies are placed at their parse-completion hooks, children first, and persisted in
-        metadata. Text scopes are placed before returning. The default leaves metadata untouched.
     :param defer_weights: retains file ranges without materializing raw weight payloads,
         ignoring ``raw_data_threshold``. Enables ``model.load_weight(name)`` and
         ``model.unload_weight(name)``. Requires a binary ONNX file path, immutable backing
@@ -456,39 +448,6 @@ def load(
             with open(f, encoding="utf-8") as handle:
                 text = handle.read()
         model = parse_from_textproto(text, proto_type())
-        if layout:
-            models = (
-                [
-                    getattr(model, stage)
-                    for stage in ("embedding", "prefill", "decode")
-                    if model.HasField(stage)
-                ]
-                if isinstance(model, PipelineProto)
-                else [model]
-            )
-            scopes = [
-                (scope, False)
-                for part in models
-                for scope in reversed([part.graph, *part.functions])
-            ]
-            while scopes:
-                scope, ready = scopes.pop()
-                if not ready:
-                    scopes.append((scope, True))
-                    for node in reversed(scope.node):
-                        for attribute in reversed(node.attribute):
-                            if attribute.type == AttributeProto.GRAPH and attribute.HasField("g"):
-                                scopes.append((attribute.g, False))
-                            elif attribute.type == AttributeProto.GRAPHS:
-                                scopes.extend(
-                                    (child, False) for child in reversed(attribute.graphs)
-                                )
-                    continue
-                placement = GraphLayout(scope)
-                placement.load(recursive=False)
-                placement.persist(recursive=False)
-                for diagnostic in placement.diagnostics:
-                    warnings.warn(diagnostic, RuntimeWarning, stacklevel=2)
         return model
     if isinstance(file_load_mode, str):
         try:
@@ -519,7 +478,6 @@ def load(
         or no_copy
         or touch_raw_data_pages
         or file_load_mode != FileLoadMode.AUTO
-        or layout
         or defer_weights
     ):
         opts = ParseOptions()
@@ -532,8 +490,6 @@ def load(
         opts.no_copy = no_copy
         opts._touch_raw_data_pages = touch_raw_data_pages
         opts.file_load_mode = file_load_mode
-        if layout:
-            enable_graph_layout(opts)
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

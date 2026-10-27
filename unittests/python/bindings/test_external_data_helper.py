@@ -509,7 +509,12 @@ class TestExternalDataHelper(ExtTestCase):
             def base(self):
                 return self
 
+            def __dlpack__(self, **kwargs):
+                self.exported = True
+                return super().__dlpack__(**kwargs)
+
         values = np.arange(8, dtype=np.float32).view(CyclicArray)
+        values.exported = False
         source = weakref.ref(values)
         tensor = onnxl.TensorProto(raw_data=b"unchanged")
         with self.assertRaisesRegex(BufferError, "cyclic ownership chain"):
@@ -517,6 +522,7 @@ class TestExternalDataHelper(ExtTestCase):
         self.assertEqual(tensor.raw_data, b"unchanged")
         with self.assertRaisesRegex(BufferError, "cyclic ownership chain"):
             onnxl.TensorProto.from_dlpack(values)
+        self.assertFalse(values.exported)
         del values
         gc.collect()
         self.assertIsNone(source())

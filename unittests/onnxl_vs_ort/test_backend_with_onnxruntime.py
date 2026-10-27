@@ -250,9 +250,16 @@ if platform.system() == "Darwin":
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
 
-# Keep these ORT 1.29 limitations executable: an unexpected success must fail
+# Keep these known ORT limitations executable: an unexpected success must fail
 # so the marker is removed when ORT catches up with the ONNX reference.
 for _case_name in (
+    # ORT 1.30 overflows intermediate sums despite finite ReduceMean outputs.
+    # Keep the correct expectations executable and track separately from #5626
+    # (xadupre/onnx-light#5636).
+    "reducemean_finite_range_float_17",
+    "reducemean_finite_range_float_18",
+    "reducemean_finite_range_double_17",
+    "reducemean_finite_range_double_18",
     # ORT 1.30 fails to normalize negative reduction axes when another input
     # dimension is empty (microsoft/onnxruntime#33230).
     "reducemean_empty_negative_axis_keepdims",

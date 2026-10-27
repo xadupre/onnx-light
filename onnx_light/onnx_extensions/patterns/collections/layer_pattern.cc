@@ -43,9 +43,12 @@ constexpr std::size_t kMaxSeedGroups = 32;
 using Region = std::vector<const NodeProto *>;
 using Regions = std::vector<Region>;
 
+bool IsLayerName(const std::string &domain, const std::string &name) {
+  return domain == "ai.rt" && (name == "Layer" || name.rfind("Layer_", 0) == 0);
+}
+
 bool IsLayer(const NodeProto &node) {
-  const std::string &name = node.op_type().value();
-  return node.domain().value() == "ai.rt" && (name == "Layer" || name.rfind("Layer_", 0) == 0);
+  return IsLayerName(node.domain().value(), node.op_type().value());
 }
 
 bool IsPrimitiveAnchor(const NodeProto &node) {
@@ -1429,6 +1432,16 @@ core::builder::MatchResult RepeatedLayerPattern::Match(GraphGraph &graph,
                                                        const NodeProto &candidate) const {
   if (graph.Builder().Nodes().empty() || &candidate != &graph.Builder().Nodes()[0])
     return NoMatch(candidate, "whole-graph detection runs only at the first graph node");
+  if (IsLayerName("ai.rt", graph.Builder().name()) &&
+      graph.Builder().IsLocalFunction(graph.Builder().name(), "ai.rt"))
+    return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
+  for (const auto &entry : graph.Builder().ModelBuilder().Shapes().LocalFunctions()) {
+    const auto &function = entry.second;
+    if (IsLayerName(function->domain().value(), function->name().value()) &&
+        graph.Builder().IsInsideLocalFunction(function->name().value(), function->domain().value(),
+                                              function->overload().value()))
+      return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
+  }
   const int version = graph.Builder().OpsetVersion("ai.rt");
   if (version > 0 && version != 1)
     return NoMatch(candidate, "RepeatedLayer requires ai.rt opset 1 for its local functions");

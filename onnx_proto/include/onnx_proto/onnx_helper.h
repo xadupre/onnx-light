@@ -19,6 +19,17 @@ namespace utils::detail {
 /** Applies node, graph, and function parse callbacks to live scopes in child-first order. */
 void ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options);
 
+/** Associates a layout tensor with its owning graph. */
+struct LayoutTensor {
+  TensorProto *tensor;
+  GraphProto *graph;
+  bool embedded_only = false;
+};
+
+/** Collects tensors nested in a layout-owning submessage in serialization order. */
+void CollectLayoutTensors(void *source, uint16_t proto_id, std::vector<LayoutTensor> &tensors,
+                          GraphProto *graph = nullptr);
+
 } // namespace utils::detail
 
 namespace tensor_values_detail {
@@ -416,6 +427,14 @@ protected:
    * Tracks traversal indices for one scope in the DFS stack.
    */
   struct Position {
+    Position(utils::RepeatedProtoField<NodeProto> *nodes = nullptr,
+             utils::RepeatedProtoField<TensorProto> *initializers = nullptr,
+             utils::RepeatedProtoField<AttributeProto> *attributes = nullptr,
+             utils::RepeatedProtoField<SparseTensorProto> *sparse_initializers = nullptr,
+             GraphProto *graph = nullptr)
+        : nodes(nodes), initializers(initializers), attributes(attributes),
+          sparse_initializers(sparse_initializers), graph(graph) {}
+
     /**
      * Points to the nodes traversed at this stack level.
      */
@@ -445,11 +464,15 @@ protected:
     size_t attr_tensor_index = 0;
     size_t attr_sparse_tensor_index = 0;
     size_t attr_graph_index = 0;
+    bool attr_repeated_fields = false;
     /**
      * Stores the current initializer index.
      */
     size_t node_initializer_index = 0;
     size_t sparse_initializer_index = 0;
+    std::vector<utils::detail::LayoutTensor> layout_tensors;
+    size_t layout_tensor_index = 0;
+    bool collected_layouts = false;
   };
 
 public:
@@ -476,7 +499,19 @@ public:
   inline TensorProto *operator->() { return tp_; }
   /** Returns the current tensor's owning graph, or nullptr for function-level tensors. */
   inline GraphProto *graph() const {
-    return positions_.empty() ? nullptr : positions_.back().graph;
+    if (positions_.empty())
+      return nullptr;
+    const auto &pos = positions_.back();
+    return pos.layout_tensor_index == 0 ? pos.graph
+                                        : pos.layout_tensors[pos.layout_tensor_index - 1].graph;
+  }
+  /** Returns whether the current tensor belongs to a struct declaration or codec. */
+  inline bool requires_embedded_storage() const {
+    if (positions_.empty())
+      return false;
+    const auto &pos = positions_.back();
+    return pos.layout_tensor_index != 0 &&
+           pos.layout_tensors[pos.layout_tensor_index - 1].embedded_only;
   }
   /**
    * Advances to the next tensor.

@@ -42,8 +42,13 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
       auto &function = functions[i - 1];
       for (const auto &value : function.value_info())
         utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id);
-      positions_.push_back(Position{nullptr, nullptr, &function.ref_attribute_proto()});
+      Position layouts;
+      for (auto &value : function.ref_value_info())
+        utils::detail::CollectLayoutTensors(&value, ValueInfoProto::proto_id,
+                                            layouts.layout_tensors);
+      positions_.push_back(std::move(layouts));
       positions_.push_back(Position{&function.ref_node()});
+      positions_.push_back(Position{nullptr, nullptr, &function.ref_attribute_proto()});
     }
   };
   for (auto entry = model->ref_rewritings().rbegin(); entry != model->ref_rewritings().rend();
@@ -57,6 +62,10 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
       positions_.push_back(Position{&edit.ref_added_nodes(), &edit.ref_added_initializers()});
     }
   }
+  Position layouts;
+  for (auto &type : model->ref_struct_types())
+    utils::detail::CollectLayoutTensors(&type, StructTypeProto::proto_id, layouts.layout_tensors);
+  positions_.push_back(std::move(layouts));
   add_functions(model->ref_functions());
   if (model->has_graph())
     positions_.push_back(
@@ -87,23 +96,24 @@ bool IteratorTensorProto::next() {
                                                      : (*pos.nodes)[pos.node_index].ref_attribute();
         while (pos.attr_index < attributes.size()) {
           AttributeProto &att = attributes[pos.attr_index];
-          if (pos.attr_tensor_index == 0 && pos.attr_sparse_tensor_index == 0 &&
-              pos.attr_graph_index == 0) {
+          if (!pos.attr_repeated_fields && pos.attr_tensor_index == 0 &&
+              pos.attr_sparse_tensor_index == 0 && pos.attr_graph_index == 0) {
             if (att.has_tp())
               utils::detail::ValidateDeferredSubmessageExport(&att.tp(), TypeProto::proto_id);
             for (const auto &type : att.type_protos())
               utils::detail::ValidateDeferredSubmessageExport(&type, TypeProto::proto_id);
           }
-          const size_t single_tensor = att.has_t() ? 1 : 0;
-          if (pos.attr_tensor_index < single_tensor + att.ref_tensors().size()) {
+          const size_t single_tensor = !pos.attr_repeated_fields && att.has_t() ? 1 : 0;
+          const size_t repeated_tensors = pos.attr_repeated_fields ? att.tensors().size() : 0;
+          if (pos.attr_tensor_index < single_tensor + repeated_tensors) {
             const size_t index = pos.attr_tensor_index++;
             tp_ = single_tensor != 0 && index == 0 ? &att.ref_t()
                                                    : &att.ref_tensors()[index - single_tensor];
             return true;
           }
-          const size_t single_sparse = att.has_sparse_tensor() ? 1 : 0;
-          while (pos.attr_sparse_tensor_index / 2 <
-                 single_sparse + att.ref_sparse_tensors().size()) {
+          const size_t single_sparse = !pos.attr_repeated_fields && att.has_sparse_tensor() ? 1 : 0;
+          const size_t repeated_sparse = pos.attr_repeated_fields ? att.sparse_tensors().size() : 0;
+          while (pos.attr_sparse_tensor_index / 2 < single_sparse + repeated_sparse) {
             const size_t index = pos.attr_sparse_tensor_index++;
             const size_t sparse_index = index / 2;
             auto &sparse = single_sparse != 0 && sparse_index == 0
@@ -118,8 +128,9 @@ bool IteratorTensorProto::next() {
               return true;
             }
           }
-          const size_t single_graph = att.has_g() ? 1 : 0;
-          if (pos.attr_graph_index < single_graph + att.ref_graphs().size()) {
+          const size_t single_graph = !pos.attr_repeated_fields && att.has_g() ? 1 : 0;
+          const size_t repeated_graphs = pos.attr_repeated_fields ? att.graphs().size() : 0;
+          if (pos.attr_graph_index < single_graph + repeated_graphs) {
             const size_t index = pos.attr_graph_index++;
             GraphProto *subgraph = single_graph != 0 && index == 0
                                        ? &att.ref_g()
@@ -130,10 +141,28 @@ bool IteratorTensorProto::next() {
             break_loop = true;
             break;
           }
-          ++pos.attr_index;
+          Position layouts;
+          layouts.graph = pos.graph;
+          if (!pos.attr_repeated_fields && att.has_tp())
+            utils::detail::CollectLayoutTensors(&att.ref_tp(), TypeProto::proto_id,
+                                                layouts.layout_tensors, pos.graph);
+          if (pos.attr_repeated_fields) {
+            for (auto &type : att.ref_type_protos())
+              utils::detail::CollectLayoutTensors(&type, TypeProto::proto_id,
+                                                  layouts.layout_tensors, pos.graph);
+            ++pos.attr_index;
+          }
+          pos.attr_repeated_fields = !pos.attr_repeated_fields;
           pos.attr_tensor_index = 0;
           pos.attr_sparse_tensor_index = 0;
           pos.attr_graph_index = 0;
+          if (!layouts.layout_tensors.empty()) {
+            layouts.validated_extensions = true;
+            layouts.collected_layouts = true;
+            positions_.push_back(std::move(layouts));
+            break_loop = true;
+            break;
+          }
         }
         if (break_loop)
           break;
@@ -164,6 +193,21 @@ bool IteratorTensorProto::next() {
           return true;
         }
       }
+    }
+    if (pos.graph != nullptr && !pos.collected_layouts) {
+      for (auto *values :
+           {&pos.graph->ref_input(), &pos.graph->ref_output(), &pos.graph->ref_value_info()})
+        for (auto &value : *values)
+          utils::detail::CollectLayoutTensors(&value, ValueInfoProto::proto_id, pos.layout_tensors,
+                                              pos.graph);
+      for (auto &initializer : pos.graph->ref_extended_initializer())
+        utils::detail::CollectLayoutTensors(&initializer, ExtendedInitializerProto::proto_id,
+                                            pos.layout_tensors, pos.graph);
+      pos.collected_layouts = true;
+    }
+    if (pos.layout_tensor_index < pos.layout_tensors.size()) {
+      tp_ = pos.layout_tensors[pos.layout_tensor_index++].tensor;
+      return true;
     }
     positions_.pop_back();
   }

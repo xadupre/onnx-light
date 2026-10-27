@@ -791,17 +791,35 @@ TEST_F(EncryptedExternalTest, RejectsExternalStructCodecDefaultsAndNestedPayload
 }
 
 TEST_F(EncryptedExternalTest, PreservesEmbeddedStructCodecTensors) {
-  ModelProto model = make_test_model();
-  for (bool encoder : {false, true}) {
-    auto *codec = add_struct_codec(model, encoder ? 1 : 0, encoder);
-    auto *attribute = codec->add_node()->add_attribute();
-    attribute->set_type(AttributeProto::TENSOR);
-    *attribute->mutable_t() = model.graph().initializer()[0];
+  for (size_t scope = 0; scope < 8; ++scope) {
+    for (bool encoder : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "scope=" << scope << " encoder=" << encoder);
+      ModelProto model = make_test_model();
+      auto *codec = add_struct_codec(model, scope, encoder);
+      auto *attribute = codec->add_node()->add_attribute();
+      attribute->set_type(AttributeProto::TENSOR);
+      TensorProto tensor = model.graph().initializer()[0];
+      tensor.ref_dims()[0] = 8;
+      tensor.ref_raw_data().resize(32);
+      std::memset(tensor.ref_raw_data().data(), 0x3c, 32);
+      *attribute->mutable_t() = tensor;
+      attribute = codec->add_attribute_proto();
+      attribute->set_type(AttributeProto::GRAPH);
+      *attribute->mutable_g()->add_initializer() = tensor;
+      auto *declaration = model.add_struct_types();
+      declaration->set_type_id(2);
+      *declaration->mutable_structure()->add_field()->mutable_constant() = tensor;
+      SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
+      ModelProto stored = metadata();
+      EXPECT_EQ(stored.graph().initializer()[0].data_location(), TensorProto::EXTERNAL);
+      const auto &constant = stored.struct_types().back().structure().field()[0].constant();
+      EXPECT_EQ(constant.raw_data(), tensor.raw_data());
+      EXPECT_FALSE(constant.has_external_data());
+      ModelProto loaded;
+      LoadEncryptedModel(loaded, path, "secret");
+      expect_same(model, loaded);
+    }
   }
-  SaveEncryptedModelWithExternalData(model, path, "secret", 68, 0);
-  ModelProto loaded;
-  LoadEncryptedModel(loaded, path, "secret");
-  expect_same(model, loaded);
 }
 
 TEST_F(EncryptedExternalTest, HonorsAlignmentAndCallbacksForEmbeddedAndExternalTensors) {

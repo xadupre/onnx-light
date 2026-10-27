@@ -87,8 +87,10 @@ std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
   }
   if (bits % 8 == 0)
     return shapes::CheckedDimensionMultiply(num_elements, bits / 8);
-  const int64_t elements_per_byte = 8 / bits;
-  return num_elements / elements_per_byte + (num_elements % elements_per_byte != 0);
+  const int64_t complete_bytes = shapes::CheckedDimensionMultiply(num_elements / 8, bits);
+  const int64_t remaining_bits = shapes::CheckedDimensionMultiply(num_elements % 8, bits);
+  const int64_t remaining_bytes = remaining_bits / 8 + (remaining_bits % 8 != 0);
+  return shapes::CheckedDimensionAdd(complete_bytes, remaining_bytes);
 }
 
 std::optional<expressions::DimType>

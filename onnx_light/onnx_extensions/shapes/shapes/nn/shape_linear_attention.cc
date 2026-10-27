@@ -194,7 +194,7 @@ int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymSha
   }
 
   if (input_shapes.size() > 3 && input_shapes[3].Rank() == 4) {
-    int64_t state_elements = kStateElementBytes;
+    int64_t state_bytes = kStateElementBytes;
     bool empty = false;
     for (std::size_t index = 0; index < 4; ++index) {
       if (!input_shapes[3][index].IsInt()) {
@@ -207,10 +207,10 @@ int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymSha
     if (empty)
       return 0;
     for (std::size_t index = 0; index < 4; ++index) {
-      state_elements =
-          core::shapes::CheckedDimensionMultiply(state_elements, input_shapes[3][index].AsInt());
+      state_bytes =
+          core::shapes::CheckedDimensionMultiply(state_bytes, input_shapes[3][index].AsInt());
     }
-    return state_elements;
+    return state_bytes;
   }
 
   const SymDim &batch = input_shapes[0][0];

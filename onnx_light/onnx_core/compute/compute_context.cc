@@ -103,7 +103,8 @@ void ValidateScratchTotal(const NodeMemoryProfile &profile, int64_t scratch) {
   EXT_ENFORCE_INVALID(scratch >= 0, "Memory analysis: negative scratch allocation.");
   const auto &total = std::get<expressions::DimType>(profile.at(kNodeMemoryTotalBytesKey));
   // Checks the combined footprint without changing the tensor-only profile.
-  expressions::dim_add(total, expressions::DimType{scratch});
+  if (std::holds_alternative<int64_t>(total))
+    expressions::dim_add(total, expressions::DimType{scratch});
 }
 
 // ── Helpers for ComputeInPlaceReuseGraph ─────────────────────────────────────

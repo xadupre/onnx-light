@@ -120,7 +120,8 @@ int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type,
     return 0;
   }
   const int64_t bytes = it->second(device, input_shapes);
-  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", domain, ":", op_type, ".");
+  const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
+  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", identifier, ".");
   return bytes;
 }
 

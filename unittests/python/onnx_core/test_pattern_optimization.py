@@ -466,8 +466,9 @@ class TestPatternOptimization(ExtTestCase):
                         else:
                             self.assertEqual(resolved.name, "Neg")
                         graph.optimize()
+                        optimized = builder.to_onnx()
                         self.assertEqual(
-                            [node.op_type for node in builder.to_onnx().graph.node],
+                            [node.op_type for node in optimized.graph.node],
                             ["Identity"] if overload else ["Neg", "Neg"],
                         )
 
@@ -514,8 +515,9 @@ class TestPatternOptimization(ExtTestCase):
                     self.assertIsNone(graph.get_computed_constant("constant"))
                     rewrites = graph.optimize()
                     self.assertEqual(len(rewrites.rewrites), 0)
+                    optimized = builder.to_onnx()
                     self.assertEqual(
-                        [node.op_type for node in builder.to_onnx().graph.node],
+                        [node.op_type for node in optimized.graph.node],
                         ["Constant", "Neg", "Neg"],
                     )
 
@@ -563,9 +565,9 @@ class TestPatternOptimization(ExtTestCase):
         rewrites = optim.GraphGraph(builder, [NegNegPattern()]).optimize(folding_options=folding)
         self.assertEqual(len(rewrites.rewrites), 0)
         self.assertEqual(len(rewrites.added_functions), 0)
+        optimized = builder.to_onnx()
         self.assertEqual(
-            [node.op_type for node in builder.to_onnx().functions[0].node],
-            ["Constant", "Neg", "Neg"],
+            [node.op_type for node in optimized.functions[0].node], ["Constant", "Neg", "Neg"]
         )
 
     def test_stale_batched_match_is_revalidated_before_apply(self):

@@ -99,6 +99,17 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
   context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes());
   EXPECT_EQ(total_bytes(context), 8240);
   EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 1234);
+  const core::compute::ComputeContext *contexts[] = {&builder.Compute(), &context};
+  for (const auto *computed : contexts) {
+    const auto scalar = [&](const char *key) {
+      return std::get<int64_t>(
+          std::get<core::expressions::DimType>(computed->NodeMemory(0).at(key)));
+    };
+    EXPECT_EQ(scalar(core::compute::kNodeMemoryBeforeBytesKey), 24);
+    EXPECT_EQ(scalar(core::compute::kNodeMemoryDuringBytesKey), 9474);
+    EXPECT_EQ(scalar(core::compute::kNodeMemoryAfterBytesKey), 48);
+    EXPECT_EQ(scalar(core::compute::kNodeMemoryReleasedBytesKey), 9426);
+  }
 }
 
 TEST(GraphBuilder, LocalFunctionMemoryKeepsConstantsLiveUntilTheirLastUse) {
@@ -263,8 +274,8 @@ TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) 
   context.ComputeShapes(model);
   context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false,
                                    context.ComputeValueAndNodeTags(model.graph()).first);
-  EXPECT_EQ(builder.Compute().NodeMemory(0), context.NodeMemory(0));
   EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0), 37);
+  EXPECT_EQ(builder.Compute().NodeMemory(0), context.NodeMemory(0));
 }
 
 TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {

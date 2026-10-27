@@ -79,6 +79,26 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(reuse, [[], [(0, 0)]])
         self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
 
+    def test_memory_boundaries_retain_larger_reused_allocation(self):
+        model = self._build_model(
+            [
+                oh.make_node("Cast", ["X"], ["A"], to=onnxl.TensorProto.INT64),
+                oh.make_node("Cast", ["A"], ["Y"], to=onnxl.TensorProto.INT32),
+            ],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, [4])],
+        )
+        ctx = si.ComputeContext()
+        ctx.compute(model)
+        first, final = ctx.memory
+        self.assertEqual(first[si.NODE_MEMORY_BEFORE_BYTES_KEY], 16)
+        self.assertEqual(first[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
+        self.assertEqual(final[si.NODE_MEMORY_BEFORE_BYTES_KEY], 48)
+        self.assertEqual(final[si.NODE_MEMORY_DURING_BYTES_KEY], 48)
+        self.assertEqual(final[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
+        self.assertEqual(final[si.NODE_MEMORY_RELEASED_BYTES_KEY], 0)
+        self.assertEqual(final, ctx.node_memory(1))
+
     def test_value_read_twice_reused_only_at_last_use(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),
@@ -432,12 +452,16 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(
             list(mem0.keys()),
             [
+                "after_bytes",
                 "already_allocated_bytes",
+                "before_bytes",
+                "during_bytes",
                 "initializers",
                 "inputs",
                 "intermediates",
                 "output_allocation_bytes",
                 "outputs",
+                "released_bytes",
                 "total_bytes",
             ],
         )
@@ -467,6 +491,11 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(mem2["initializers"], {"shape": 8})
         self.assertEqual(mem2["intermediates"], {"": 32})
         self.assertEqual(mem2["outputs"], {})
+        self.assertEqual(mem0[si.NODE_MEMORY_AFTER_BYTES_KEY], 40)
+        self.assertEqual(mem1[si.NODE_MEMORY_AFTER_BYTES_KEY], 56)
+        self.assertEqual(mem1[si.NODE_MEMORY_RELEASED_BYTES_KEY], 16)
+        self.assertEqual(mem2[si.NODE_MEMORY_AFTER_BYTES_KEY], 56)
+        self.assertEqual(mem2[si.NODE_MEMORY_RELEASED_BYTES_KEY], 0)
 
         with self.assertRaises(IndexError):
             inplace.node_memory(3)

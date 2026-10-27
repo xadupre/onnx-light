@@ -86,7 +86,10 @@ core::builder::MatchResult ReduceArgTopKPattern::Match(core::builder::GraphGraph
       GetAttributeOr<int64_t>(*reduce, "select_last_index", 0) == 1) {
     return NoMatch(candidate, "the Reduce attributes are not TopK-compatible");
   }
-  return MatchOperators(graph, {reduce, &candidate}, nullptr);
+  if (reduce != nullptr && !graph.IsOperator(*reduce)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {reduce, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -181,7 +184,12 @@ core::builder::MatchResult ReduceSumNormalizePattern::Match(core::builder::Graph
   if (to == nullptr || to->type() != AttributeProto::AttributeType::INT) {
     return NoMatch(candidate, "the final Cast does not define an integer 'to' attribute");
   }
-  return MatchOperators(graph, {cast, &candidate, mul, sub, cast2}, nullptr);
+  for (const NodeProto *node : {cast, mul, sub, cast2}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, {cast, &candidate, mul, sub, cast2}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -276,7 +276,7 @@ core::builder::MatchResult ConcatEmptyPattern::Match(core::builder::GraphGraph &
   if (static_cast<int>(empty.size()) >= candidate.input_size()) {
     return NoMatch(candidate, "every Concat input is empty along the axis");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -386,7 +386,12 @@ core::builder::MatchResult ConcatSliceEliminationPattern::Match(core::builder::G
   }
   std::vector<const NodeProto *> nodes{&candidate};
   nodes.insert(nodes.end(), ordered.begin(), ordered.end());
-  return MatchOperators(graph, nodes, &candidate);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, nodes, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -463,7 +468,12 @@ SliceConcatToSpaceToDepthPattern::Match(core::builder::GraphGraph &graph,
     nodes.push_back(slice);
   }
   nodes.push_back(&candidate);
-  return MatchOperators(graph, nodes, &candidate);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, nodes, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -521,7 +531,10 @@ core::builder::MatchResult ConcatGatherPattern::Match(core::builder::GraphGraph 
   if (!ConcatInputBucket(graph, *concat, index_values[0], input_name, local_index, input_size)) {
     return NoMatch(candidate, "the index does not map to a statically-sized Concat input");
   }
-  return MatchOperators(graph, {concat, &candidate}, &candidate);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -595,7 +608,10 @@ core::builder::MatchResult ConcatTwiceUnaryPattern::Match(core::builder::GraphGr
   }
   for (const NodeProto *user : graph.NextNodes(candidate.output()[0].value())) {
     if (ValidUnaryConsumer(graph, candidate, *user)) {
-      return MatchOperators(graph, {&candidate, user}, &candidate);
+      if (user != nullptr && !graph.IsOperator(*user)) {
+        return NoMatch(candidate, "a matched node is a local function call or overload");
+      }
+      return core::builder::MatchResult{this, {&candidate, user}, &candidate};
     }
   }
   return NoMatch(candidate, "the Concat is not consumed by a shape-preserving unary op");

@@ -592,7 +592,7 @@ core::builder::MatchResult TreeEnsemblePattern::Match(core::builder::GraphGraph 
   if (!ParseLegacyEnsemble(graph, candidate, parsed)) {
     return NoMatch(candidate, "the classic tree ensemble is invalid or unsupported");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

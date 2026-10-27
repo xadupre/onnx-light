@@ -83,7 +83,12 @@ core::builder::MatchResult SequenceConstructAtPattern::Match(core::builder::Grap
   nodes.reserve(consumers.size() + 1);
   nodes.push_back(&candidate);
   nodes.insert(nodes.end(), consumers.begin(), consumers.end());
-  return MatchOperators(graph, std::move(nodes), &candidate);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(nodes), &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -163,7 +168,12 @@ SplitToSequenceSequenceAtPattern::Match(core::builder::GraphGraph &graph,
   nodes.reserve(consumers.size() + 1);
   nodes.push_back(&candidate);
   nodes.insert(nodes.end(), consumers.begin(), consumers.end());
-  return MatchOperators(graph, std::move(nodes), &candidate);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(nodes), &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

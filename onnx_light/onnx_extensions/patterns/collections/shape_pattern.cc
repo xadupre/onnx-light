@@ -112,7 +112,10 @@ core::builder::MatchResult GatherShapePattern::Match(core::builder::GraphGraph &
   if ((negative_attr || negative_index) && !HasRank(graph, shape->input()[0].value())) {
     return NoMatch(candidate, "the shape origin rank is required to normalise negative bounds");
   }
-  return MatchOperators(graph, {shape, &candidate}, &candidate);
+  if (shape != nullptr && !graph.IsOperator(*shape)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {shape, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -215,7 +218,10 @@ core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGrap
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
   }
-  return MatchOperators(graph, {transpose, &candidate}, transpose);
+  if (transpose != nullptr && !graph.IsOperator(*transpose)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {transpose, &candidate}, transpose};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -289,7 +295,10 @@ core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::
   if (shape->input_size() != 1) {
     return NoMatch(candidate, "the Shape node does not have exactly one input");
   }
-  return MatchOperators(graph, {&candidate, shape}, &candidate);
+  if (shape != nullptr && !graph.IsOperator(*shape)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -360,7 +369,10 @@ core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGrap
   if (start >= end) {
     return NoMatch(candidate, "the Shape start/end range is empty");
   }
-  return MatchOperators(graph, {&candidate, shape}, &candidate);
+  if (shape != nullptr && !graph.IsOperator(*shape)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

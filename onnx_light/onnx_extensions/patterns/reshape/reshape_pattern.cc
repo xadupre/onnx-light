@@ -210,7 +210,10 @@ core::builder::MatchResult ConcatReshapePattern::Match(core::builder::GraphGraph
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[1].value()) ? nullptr : &candidate;
-  return MatchOperators(graph, {concat, &candidate}, insert_at);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {concat, &candidate}, insert_at};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -301,7 +304,10 @@ core::builder::MatchResult StaticConcatReshapePattern::Match(core::builder::Grap
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[1].value()) ? nullptr : &candidate;
-  return MatchOperators(graph, {concat, &candidate}, insert_at);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {concat, &candidate}, insert_at};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -377,7 +383,7 @@ core::builder::MatchResult ReshapePattern::Match(core::builder::GraphGraph &grap
       return NoMatch(candidate, "the reshape target shape differs from the input shape");
     }
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -414,7 +420,7 @@ core::builder::MatchResult ShapedBasedReshapePattern::Match(core::builder::Graph
       Rank(graph, candidate.input()[0].value()) != target.size()) {
     return NoMatch(candidate, "the reshape input rank does not equal the target rank");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -466,8 +472,9 @@ core::builder::MatchResult ReduceReshapePattern::Match(core::builder::GraphGraph
     }
   }
   const std::vector<const NodeProto *> &next_nodes = graph.NextNodes(candidate.output()[0].value());
-  if (next_nodes.size() != 1 || next_nodes[0] == nullptr || !IsReshape(*next_nodes[0]) ||
-      next_nodes[0]->input_size() != 2 || next_nodes[0]->output_size() != 1 ||
+  if (next_nodes.size() != 1 || next_nodes[0] == nullptr || !graph.IsOperator(*next_nodes[0]) ||
+      !IsReshape(*next_nodes[0]) || next_nodes[0]->input_size() != 2 ||
+      next_nodes[0]->output_size() != 1 ||
       next_nodes[0]->input()[0].value() != candidate.output()[0].value()) {
     return NoMatch(candidate, "the reduction is not followed by exactly one Reshape");
   }
@@ -494,7 +501,7 @@ core::builder::MatchResult ReduceReshapePattern::Match(core::builder::GraphGraph
       return NoMatch(candidate, "the reshape output does not equal the reduced input shape");
     }
   }
-  return MatchOperators(graph, {&candidate, reshape}, &candidate);
+  return core::builder::MatchResult{this, {&candidate, reshape}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -532,8 +539,9 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
     return NoMatch(candidate, "the first Reshape output is shared");
   }
   const std::vector<const NodeProto *> &next_nodes = graph.NextNodes(candidate.output()[0].value());
-  if (next_nodes.size() != 1 || next_nodes[0] == nullptr || !IsReshape(*next_nodes[0]) ||
-      next_nodes[0]->input_size() != 2 || next_nodes[0]->output_size() != 1 ||
+  if (next_nodes.size() != 1 || next_nodes[0] == nullptr || !graph.IsOperator(*next_nodes[0]) ||
+      !IsReshape(*next_nodes[0]) || next_nodes[0]->input_size() != 2 ||
+      next_nodes[0]->output_size() != 1 ||
       next_nodes[0]->input()[0].value() != candidate.output()[0].value()) {
     return NoMatch(candidate, "the first Reshape is not followed by exactly one Reshape");
   }
@@ -544,12 +552,12 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
   const bool second_constant = ReadConstantInts(graph, next->input()[1].value(), second_shape);
 
   if (second_constant && !HasInt(second_shape, 0)) {
-    return MatchOperators(graph, {&candidate, next}, next);
+    return core::builder::MatchResult{this, {&candidate, next}, next};
   }
   if (first_constant && second_constant) {
     if (std::all_of(second_shape.begin(), second_shape.end(),
                     [](int64_t value) { return value > 0; })) {
-      return MatchOperators(graph, {&candidate, next}, next);
+      return core::builder::MatchResult{this, {&candidate, next}, next};
     }
     if (!first_shape.empty() && !second_shape.empty() && first_shape[0] == second_shape[0]) {
       std::size_t common = 0;
@@ -560,19 +568,19 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
       std::vector<int64_t> expected(common, 0);
       expected.push_back(-1);
       if (expected == second_shape && second_shape.size() <= first_shape.size()) {
-        return MatchOperators(graph, {&candidate, next}, next);
+        return core::builder::MatchResult{this, {&candidate, next}, next};
       }
       if (common < second_shape.size() &&
           std::all_of(
               second_shape.begin() + static_cast<std::ptrdiff_t>(common), second_shape.end(),
               [](int64_t value) { return value > 0; })) {
-        return MatchOperators(graph, {&candidate, next}, next);
+        return core::builder::MatchResult{this, {&candidate, next}, next};
       }
     }
     if (std::all_of(first_shape.begin(), first_shape.end(),
                     [](int64_t value) { return value > 0; }) &&
         HasInt(second_shape, 0) && second_shape.size() <= first_shape.size()) {
-      return MatchOperators(graph, {&candidate, next}, next);
+      return core::builder::MatchResult{this, {&candidate, next}, next};
     }
   }
   if (first_constant && HasInt(first_shape, -1) &&
@@ -614,7 +622,7 @@ core::builder::MatchResult ReshapeReshapePattern::Match(core::builder::GraphGrap
        Rank(graph, candidate.output()[0].value()) != Rank(graph, next->output()[0].value()))) {
     return NoMatch(candidate, "the second target cannot be safely applied to the original input");
   }
-  return MatchOperators(graph, {&candidate, next}, next);
+  return core::builder::MatchResult{this, {&candidate, next}, next};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -767,7 +775,11 @@ core::builder::MatchResult ReshapeReshapeBinaryPattern::Match(core::builder::Gra
           graph.GetShape(right->input()[0].value()).Shape()) {
     return NoMatch(candidate, "the binary inputs do not have equal source shapes");
   }
-  return MatchOperators(graph, {left, right, &candidate}, &candidate);
+  if ((left != nullptr && !graph.IsOperator(*left)) ||
+      (right != nullptr && !graph.IsOperator(*right))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -868,7 +880,12 @@ core::builder::MatchResult Reshape2Of3Pattern::Match(core::builder::GraphGraph &
                    [&](const SymShape *shape) { return *shape == *surrounding_shapes.front(); })) {
     return NoMatch(candidate, "the surrounding Reshapes do not have equal outer shapes");
   }
-  return MatchOperators(graph, {left, right, next, &candidate}, nullptr);
+  if ((left != nullptr && !graph.IsOperator(*left)) ||
+      (right != nullptr && !graph.IsOperator(*right)) ||
+      (next != nullptr && !graph.IsOperator(*next))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {left, right, next, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1117,7 +1134,7 @@ ShapeBasedEditDistanceReshapePattern::Match(core::builder::GraphGraph &graph,
   if (producer == nullptr || !IsDefaultOp(*producer, "Concat")) {
     return NoMatch(candidate, "the reshape target is not produced by a Concat");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1182,7 +1199,7 @@ ShapeBasedReshapeIsSqueezePattern::Match(core::builder::GraphGraph &graph,
            .has_value()) {
     return NoMatch(candidate, "the input and output shapes do not differ only by unit dimensions");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1240,7 +1257,10 @@ core::builder::MatchResult UnsqueezeReshapePattern::Match(core::builder::GraphGr
     return NoMatch(candidate,
                    "the Unsqueeze axes and Reshape target are not the supported special case");
   }
-  return MatchOperators(graph, {unsqueeze, &candidate}, &candidate);
+  if (unsqueeze != nullptr && !graph.IsOperator(*unsqueeze)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1308,7 +1328,10 @@ UnsqueezeOrSqueezeReshapePattern::Match(core::builder::GraphGraph &graph,
                      "a zero-copy target dimension follows a squeezed or unsqueezed axis");
     }
   }
-  return MatchOperators(graph, {before, &candidate}, &candidate);
+  if (before != nullptr && !graph.IsOperator(*before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1380,7 +1403,10 @@ core::builder::MatchResult ReshapeSqueezePattern::Match(core::builder::GraphGrap
       return NoMatch(candidate, "a copied Reshape dimension follows a removed axis");
     }
   }
-  return MatchOperators(graph, {reshape, &candidate}, &candidate);
+  if (reshape != nullptr && !graph.IsOperator(*reshape)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {reshape, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

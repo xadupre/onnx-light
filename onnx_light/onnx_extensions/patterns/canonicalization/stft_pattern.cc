@@ -285,10 +285,17 @@ core::builder::MatchResult STFTFusionPattern::Match(core::builder::GraphGraph &g
   if (!Validate(graph, candidate, info)) {
     return NoMatch(candidate, "not a private canonical convolution-based DFT");
   }
-  return MatchOperators(graph,
-                        {info.signal_transpose, info.real_conv, info.imag_conv, info.real_unsqueeze,
-                         info.imag_unsqueeze, info.concat, &candidate},
-                        &candidate);
+  for (const NodeProto *node : {info.signal_transpose, info.real_conv, info.imag_conv,
+                                info.real_unsqueeze, info.imag_unsqueeze, info.concat}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this,
+                                    {info.signal_transpose, info.real_conv, info.imag_conv,
+                                     info.real_unsqueeze, info.imag_unsqueeze, info.concat,
+                                     &candidate},
+                                    &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

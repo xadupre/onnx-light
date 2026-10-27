@@ -83,7 +83,10 @@ core::builder::MatchResult ReluClipFusionPattern::Match(core::builder::GraphGrap
   if (std::isnan(minimum) || minimum < 0.0) {
     return NoMatch(candidate, "the Clip effective minimum is not non-negative");
   }
-  return MatchOperators(graph, {relu, &candidate}, &candidate);
+  if (relu != nullptr && !graph.IsOperator(*relu)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {relu, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -147,7 +150,10 @@ core::builder::MatchResult ClipClipPattern::Match(core::builder::GraphGraph &gra
   if (max1 == max2) {
     return NoMatch(candidate, "exactly one Clip must define the maximum bound");
   }
-  return MatchOperators(graph, {before, &candidate}, &candidate);
+  if (before != nullptr && !graph.IsOperator(*before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

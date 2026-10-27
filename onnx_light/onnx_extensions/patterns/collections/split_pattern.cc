@@ -228,7 +228,10 @@ core::builder::MatchResult SplitConcatPattern::Match(core::builder::GraphGraph &
     }
   }
 
-  return MatchOperators(graph, {&candidate, concat}, &candidate);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, concat}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -326,7 +329,12 @@ core::builder::MatchResult GathersSplitPattern::Match(core::builder::GraphGraph 
   if (!dim.IsInt() || dim.AsInt() != static_cast<int64_t>(indices.size())) {
     return NoMatch(candidate, "the axis dimension does not match the number of gathers");
   }
-  return MatchOperators(graph, kept, nullptr);
+  for (const NodeProto *node : kept) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, kept, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -408,7 +416,12 @@ core::builder::MatchResult GatherSliceToSplitPattern::Match(core::builder::Graph
   for (const PartitionRange &range : ranges) {
     nodes.push_back(range.node);
   }
-  return MatchOperators(graph, nodes, nullptr);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, nodes, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -557,7 +570,12 @@ core::builder::MatchResult SlicesSplitPattern::Match(core::builder::GraphGraph &
   if (std::find(users.begin(), users.end(), &candidate) == users.end()) {
     return NoMatch(candidate, "the candidate is not among the sibling slices");
   }
-  return MatchOperators(graph, users, nullptr);
+  for (const NodeProto *node : users) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, users, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>

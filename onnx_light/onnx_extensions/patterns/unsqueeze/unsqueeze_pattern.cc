@@ -153,7 +153,10 @@ core::builder::MatchResult UnsqueezeUnsqueezePattern::Match(core::builder::Graph
       return NoMatch(candidate, "the source rank is required to merge multi-axis Unsqueeze nodes");
     }
   }
-  return MatchOperators(graph, {&candidate, next_node}, &candidate);
+  if (next_node != nullptr && !graph.IsOperator(*next_node)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -324,7 +327,10 @@ core::builder::MatchResult SqueezeUnsqueezePattern::Match(core::builder::GraphGr
   }
   const NodeProto *insert_at =
       graph.IsUsedMoreThanOnce(candidate.input()[0].value()) ? node_before : &candidate;
-  return MatchOperators(graph, {node_before, &candidate}, insert_at);
+  if (node_before != nullptr && !graph.IsOperator(*node_before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {node_before, &candidate}, insert_at};
 }
 
 utils::RepeatedProtoField<NodeProto>

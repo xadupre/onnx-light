@@ -265,7 +265,10 @@ core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph
   if (one == nullptr || !IsSupportedSingleOne(*one)) {
     return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
   }
-  return MatchOperators(graph, {&candidate, mul}, nullptr);
+  if (mul != nullptr && !graph.IsOperator(*mul)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, mul}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -330,7 +333,11 @@ core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGra
       (!IsFloatingForDiv(*left_constant) || !IsFloatingForDiv(*right_constant))) {
     return NoMatch(candidate, "Div constants are not float16, float, or double");
   }
-  return MatchOperators(graph, {&candidate, left, right}, nullptr);
+  if ((left != nullptr && !graph.IsOperator(*left)) ||
+      (right != nullptr && !graph.IsOperator(*right))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -438,8 +445,13 @@ core::builder::MatchResult SwitchOrderBinaryPattern::Match(core::builder::GraphG
   if (graph.IsUsedMoreThanOnce(other->output()[0].value())) {
     return NoMatch(candidate, "the nested binary output has another use");
   }
-  return MatchOperators(
-      graph, {&candidate, choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}, &candidate);
+  for (const NodeProto *node : {choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{
+      this, {&candidate, choose == 0 ? left : nullptr, choose == 1 ? right : nullptr}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

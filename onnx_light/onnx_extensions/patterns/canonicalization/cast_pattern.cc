@@ -101,7 +101,7 @@ core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
   if (graph.Builder().Shapes().HasLocalFunction(
           core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
     return NoMatch(candidate, "the replacement Identity is overridden by a local function");
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -184,9 +184,13 @@ core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &gra
       graph.Builder().Shapes().HasLocalFunction(
           core::shapes::ShapesContext::LocalFunctionKey("", "Identity")))
     return NoMatch(candidate, "the replacement Identity is overridden by a local function");
-  return MatchOperators(graph, {inner, &candidate},
-                        graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr
-                                                                             : &candidate);
+  if (inner != nullptr && !graph.IsOperator(*inner)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{
+      this,
+      {inner, &candidate},
+      graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -279,7 +283,11 @@ core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGrap
   if (FloatWidth(left_target) > FloatWidth(left_source)) {
     return NoMatch(candidate, "moving the binary operation would lower its precision");
   }
-  return MatchOperators(graph, {left, right, &candidate}, &candidate);
+  if ((left != nullptr && !graph.IsOperator(*left)) ||
+      (right != nullptr && !graph.IsOperator(*right))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -377,7 +385,12 @@ core::builder::MatchResult CastOpCastPattern::Match(core::builder::GraphGraph &g
 
   input_casts.push_back(&candidate);
   input_casts.push_back(output_cast);
-  return MatchOperators(graph, std::move(input_casts), &candidate);
+  for (const NodeProto *node : input_casts) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(input_casts), &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -171,7 +171,11 @@ core::builder::MatchResult Sub1MulPattern::Match(core::builder::GraphGraph &grap
     return NoMatch(candidate,
                    "removing ConstantOfShape would change or cannot prove the output shape");
   }
-  return MatchOperators(graph, {&candidate, left, right}, nullptr);
+  if ((left != nullptr && !graph.IsOperator(*left)) ||
+      (right != nullptr && !graph.IsOperator(*right))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>

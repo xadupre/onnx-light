@@ -1243,7 +1243,12 @@ core::builder::MatchResult LinearAttentionPattern::Match(core::builder::GraphGra
       return NoMatch(candidate, "LinearAttentionPattern cannot remove shared intermediates.");
     }
   }
-  return MatchOperators(graph, std::move(matched), output_reshape);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(matched), output_reshape};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1716,10 +1721,16 @@ core::builder::MatchResult RotaryConcatPartPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "Concat dimensions do not prove the rotary cancellation.");
     }
 
-    return MatchOperators(graph,
-                          {cst_left, split_left, slice_left, neg_left, concat_left, cst_right,
-                           slice_right, neg_right, concat_right, &candidate},
-                          nullptr);
+    for (const NodeProto *node : {cst_left, split_left, slice_left, neg_left, concat_left,
+                                  cst_right, slice_right, neg_right, concat_right}) {
+      if (node != nullptr && !graph.IsOperator(*node)) {
+        return NoMatch(candidate, "a matched node is a local function call or overload");
+      }
+    }
+    return core::builder::MatchResult{this,
+                                      {cst_left, split_left, slice_left, neg_left, concat_left,
+                                       cst_right, slice_right, neg_right, concat_right, &candidate},
+                                      nullptr};
   }
 
   if (!IsNode(left, "Transpose", 1, 1) || !IsNode(right, "Transpose", 1, 1) ||
@@ -1890,7 +1901,12 @@ core::builder::MatchResult RotaryConcatPartPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "A removed ScatterND branch node has an external use.");
     }
   }
-  return MatchOperators(graph, matched, nullptr);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, matched, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -2112,7 +2128,12 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
       return NoMatch(candidate, "A half-rotary intermediate has an external use.");
     }
   }
-  return MatchOperators(graph, matched, add);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, matched, add};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -2426,7 +2447,12 @@ core::builder::MatchResult FunctionCausalMaskPattern::Match(core::builder::Graph
       removed.push_back(node);
     }
   }
-  return MatchOperators(graph, removed, &candidate);
+  for (const NodeProto *node : removed) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, removed, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -2528,7 +2554,12 @@ FunctionCausalMaskMulAddPattern::Match(core::builder::GraphGraph &graph,
       return NoMatch(candidate, "A causal-mask mul-add intermediate has an external use.");
     }
   }
-  return MatchOperators(graph, matched, &candidate);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, matched, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -2687,7 +2718,12 @@ core::builder::MatchResult FunctionCosSinCachePattern::Match(core::builder::Grap
       return NoMatch(candidate, "A cos-sin cache intermediate has an external use.");
     }
   }
-  return MatchOperators(graph, matched, &candidate);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, matched, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -2984,7 +3020,12 @@ core::builder::MatchResult FunctionAttentionPattern::Match(core::builder::GraphG
   if (!CanEnsureFunction(graph.Builder(), function_name)) {
     return NoMatch(candidate, "The attention local-function name is already reserved.");
   }
-  return MatchOperators(graph, matched, mat_qkv);
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, matched, mat_qkv};
 }
 
 utils::RepeatedProtoField<NodeProto>

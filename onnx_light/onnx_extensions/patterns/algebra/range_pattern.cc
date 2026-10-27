@@ -46,7 +46,10 @@ core::builder::MatchResult SwapRangeAddScalarPattern::Match(core::builder::Graph
   if (!HasOneElementShape(graph, next_nodes[0]->input()[1].value())) {
     return NoMatch(candidate, "the Add second input does not have shape [1]");
   }
-  return MatchOperators(graph, {&candidate, next_nodes[0]}, next_nodes[0]);
+  if (next_nodes[0] != nullptr && !graph.IsOperator(*next_nodes[0])) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, next_nodes[0]}, next_nodes[0]};
 }
 
 utils::RepeatedProtoField<NodeProto>

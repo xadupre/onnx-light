@@ -182,10 +182,6 @@ public:
   symbolic::Device device;
 
 protected:
-  /// Builds a primitive-operator match, rejecting resolved local calls and overloads.
-  MatchResult MatchOperators(GraphGraph &graph, std::vector<const NodeProto *> nodes,
-                             const NodeProto *insert_at = nullptr) const;
-
   /**
    * Returns an empty match with a rejection reason and its call-site location.
    *

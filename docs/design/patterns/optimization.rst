@@ -74,12 +74,11 @@ including Constant producers inspected outside the matched node set.
 resolves calls using the model's and builder's existing function definitions,
 by normalized domain, name and overload. ``IsOperator(node)``
 (``graph.is_operator(node)``) distinguishes primitives from these calls;
-nonempty overloads are not primitives. Primitive matchers check the candidate
-before interpreting it and use ``MatchOperators(graph, nodes, insert_at)`` in
-C++ to validate every matched primitive, including secondary nodes.
-Python primitive matchers check ``graph.is_operator`` for every node they
-interpret. A plain ``MatchResult`` / ``self.result`` does not assert primitive
-semantics. ``RepeatedLayer`` preserves calls as opaque nodes, while attention
+nonempty overloads are not primitives. Primitive matchers check
+``graph.IsOperator`` in C++ or ``graph.is_operator`` in Python for every node
+they interpret, including secondary nodes, then construct the usual
+``MatchResult`` / ``self.result``. Constructing a result does not perform
+semantic validation. ``RepeatedLayer`` preserves calls as opaque nodes, while attention
 and rotary second-stage patterns recognize their intermediate helper identities
 and separately validate the surrounding primitives. There is no per-pattern
 function-support hook. Constant queries never read primitive Constant attributes
@@ -373,10 +372,11 @@ the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
               if (!graph.IsOperator(candidate))
                 return NoMatch(candidate, "the candidate is a local call or overload");
               const auto *previous = graph.NodeBefore(candidate.input()[0].value());
-              if (previous == nullptr || previous->op_type().value() != "Neg") {
+              if (previous == nullptr || !graph.IsOperator(*previous) ||
+                  previous->op_type().value() != "Neg") {
                 return NoMatch(candidate, "the input is not produced by Neg");
               }
-              return MatchOperators(graph, {previous, &candidate}, &candidate);
+              return builder::MatchResult{this, {previous, &candidate}, &candidate};
             }
 
             onnx_light::utils::RepeatedProtoField<onnx_light::NodeProto>

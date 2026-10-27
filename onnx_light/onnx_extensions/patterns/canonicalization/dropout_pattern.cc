@@ -45,7 +45,7 @@ core::builder::MatchResult DropoutPattern::Match(core::builder::GraphGraph &grap
       return NoMatch(candidate, "the Dropout training mode is enabled");
     }
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

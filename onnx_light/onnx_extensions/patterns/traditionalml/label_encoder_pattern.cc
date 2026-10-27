@@ -211,7 +211,10 @@ core::builder::MatchResult LabelEncoderFusionPattern::Match(core::builder::Graph
   if (first.keys == nullptr || second.keys == nullptr || first.value_kind != second.key_kind) {
     return NoMatch(candidate, "the LabelEncoder mappings or defaults are incompatible");
   }
-  return MatchOperators(graph, {&candidate, next}, &candidate);
+  if (next != nullptr && !graph.IsOperator(*next)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, next}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

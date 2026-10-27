@@ -177,7 +177,6 @@ bool SameChildrenPattern::SameNodeWithAliases(
 core::builder::MatchResult
 SameChildrenPattern::MatchWithNodes(core::builder::GraphGraph &graph, const NodeProto &candidate,
                                     const std::vector<const NodeProto *> &next_nodes) const {
-  (void)candidate;
   std::vector<const NodeProto *> nodes;
   if (next_nodes.size() == 2) {
     const NodeProto *first = next_nodes[0];
@@ -231,7 +230,12 @@ SameChildrenPattern::MatchWithNodes(core::builder::GraphGraph &graph, const Node
       return {};
     }
   }
-  return MatchOperators(graph, std::move(nodes), nullptr);
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(nodes), nullptr};
 }
 
 core::builder::MatchResult SameChildrenPattern::Match(core::builder::GraphGraph &graph,
@@ -336,7 +340,12 @@ core::builder::MatchResult SameChildrenPattern::Match(core::builder::GraphGraph 
         }
       }
     }
-    match = MatchOperators(graph, std::move(nodes), nullptr);
+    for (const NodeProto *node : nodes) {
+      if (node != nullptr && !graph.IsOperator(*node)) {
+        return NoMatch(candidate, "a matched node is a local function call or overload");
+      }
+    }
+    match = core::builder::MatchResult{this, std::move(nodes), nullptr};
   }
   return match.pattern != nullptr ? match : NoMatch(candidate, "no equivalent sibling nodes found");
 }
@@ -432,7 +441,12 @@ core::builder::MatchResult ShapeBasedSameChildrenPattern::Match(core::builder::G
           return graph.GetShape(node->output()[0].value()).Shape() == shape;
         });
     if (same_shapes) {
-      return MatchOperators(graph, std::move(selected), nullptr);
+      for (const NodeProto *node : selected) {
+        if (node != nullptr && !graph.IsOperator(*node)) {
+          return NoMatch(candidate, "a matched node is a local function call or overload");
+        }
+      }
+      return core::builder::MatchResult{this, std::move(selected), nullptr};
     }
   }
   return NoMatch(candidate, "equivalent Expand or Reshape output shapes were not found");
@@ -490,7 +504,7 @@ core::builder::MatchResult ShapeBasedIdentityPattern::Match(core::builder::Graph
       graph.GetShape(candidate.output()[0].value()).Shape()) {
     return NoMatch(candidate, "the Slice input and output shapes differ");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -544,7 +558,10 @@ core::builder::MatchResult SwapUnaryPattern::Match(core::builder::GraphGraph &gr
   if (!IsUnaryLike(next->op_type().value()) && !scalar_binary) {
     return NoMatch(candidate, "the layout consumer is not unary-like or binary with shape [1]");
   }
-  return MatchOperators(graph, {&candidate, next}, nullptr);
+  if (next != nullptr && !graph.IsOperator(*next)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, next}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>

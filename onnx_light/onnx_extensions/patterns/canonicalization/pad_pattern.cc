@@ -179,7 +179,10 @@ core::builder::MatchResult PadPadFusionPattern::Match(core::builder::GraphGraph 
       return NoMatch(candidate, "the summed Pad value overflows int64");
     }
   }
-  return MatchOperators(graph, {before, &candidate}, &candidate);
+  if (before != nullptr && !graph.IsOperator(*before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

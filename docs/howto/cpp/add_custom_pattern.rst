@@ -57,10 +57,11 @@ The running example collapses two consecutive ``Neg`` nodes into an
         if (!graph.IsOperator(candidate))
           return NoMatch(candidate, "the candidate is a local call or overload");
         const NodeProto *previous = graph.NodeBefore(candidate.input()[0].value());
-        if (previous == nullptr || previous->op_type().value() != "Neg") {
+        if (previous == nullptr || !graph.IsOperator(*previous) ||
+            previous->op_type().value() != "Neg") {
           return NoMatch(candidate, "the input is not produced by Neg");
         }
-        return MatchOperators(graph, {previous, &candidate}, &candidate);
+        return builder::MatchResult{this, {previous, &candidate}, &candidate};
       }
 
       onnx_light::utils::RepeatedProtoField<NodeProto>
@@ -76,10 +77,11 @@ The running example collapses two consecutive ``Neg`` nodes into an
 automatically through ``std::source_location``, so no explicit location
 needs to be passed.
 
-``MatchOperators`` rejects local calls among all matched nodes, using the
-model's and builder's function definitions. A matcher intentionally handling
-functions resolves them with ``graph.GetFunction(node)`` and constructs a
-``MatchResult`` directly; it must still check any surrounding primitives.
+Primitive matchers check ``graph.IsOperator(node)`` before interpreting a node,
+including secondary nodes, using the model's and builder's function definitions.
+A matcher intentionally handling functions resolves them with
+``graph.GetFunction(node)``; it must still check any surrounding primitives.
+Both construct ``MatchResult`` directly, without changing the pattern interface.
 
 Select the pattern for one optimizer
 ------------------------------------

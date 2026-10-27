@@ -110,7 +110,10 @@ core::builder::MatchResult TransposeTransposePattern::Match(core::builder::Graph
                    "the intermediate Transpose is shared and the perms do not cancel out");
   }
 
-  return MatchOperators(graph, {&candidate, next_node}, &candidate);
+  if (next_node != nullptr && !graph.IsOperator(*next_node)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -182,7 +185,10 @@ core::builder::MatchResult TransposeGatherPattern::Match(core::builder::GraphGra
   if (normalized_axis < 0 || normalized_axis >= rank) {
     return NoMatch(candidate, "the Gather axis is out of range for the Transpose rank");
   }
-  return MatchOperators(graph, {transpose, &candidate}, &candidate);
+  if (transpose != nullptr && !graph.IsOperator(*transpose)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {transpose, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

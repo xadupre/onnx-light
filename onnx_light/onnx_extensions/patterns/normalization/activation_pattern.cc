@@ -154,8 +154,13 @@ core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
       !IsScalar(graph, x_half->input()[1].value(), 0.5)) {
     return NoMatch(candidate, "one Gelu scalar constant has an unexpected value");
   }
-  return MatchOperators(graph, {power, cubic, add, scaled, tanh, tanh_one, x_half, &candidate},
-                        nullptr);
+  for (const NodeProto *node : {power, cubic, add, scaled, tanh, tanh_one, x_half}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{
+      this, {power, cubic, add, scaled, tanh, tanh_one, x_half, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -210,7 +215,11 @@ core::builder::MatchResult LeakyReluPattern::Match(core::builder::GraphGraph &gr
       !ReadScalar(graph, mul->input()[1].value(), slope)) {
     return NoMatch(candidate, "the threshold is not zero or the slope is not scalar");
   }
-  return MatchOperators(graph, {greater, mul, &candidate}, nullptr);
+  if ((greater != nullptr && !graph.IsOperator(*greater)) ||
+      (mul != nullptr && !graph.IsOperator(*mul))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {greater, mul, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -356,12 +365,20 @@ SoftmaxCrossEntropyLossCastPattern::Match(core::builder::GraphGraph &graph,
     return NoMatch(candidate, "an intermediate loss result is externally used");
   }
 
-  return MatchOperators(graph,
-                        {equal, not_node, where_indices, unsqueeze, log_softmax, gather, squeeze,
-                         negative, where_loss, denominator_input_cast, denominator_reduce,
-                         denominator_cast, numerator_input_cast, numerator_reduce, numerator_cast,
-                         &candidate},
-                        nullptr);
+  for (const NodeProto *node :
+       {equal, not_node, where_indices, unsqueeze, log_softmax, gather, squeeze, negative,
+        where_loss, denominator_input_cast, denominator_reduce, denominator_cast,
+        numerator_input_cast, numerator_reduce, numerator_cast}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{this,
+                                    {equal, not_node, where_indices, unsqueeze, log_softmax, gather,
+                                     squeeze, negative, where_loss, denominator_input_cast,
+                                     denominator_reduce, denominator_cast, numerator_input_cast,
+                                     numerator_reduce, numerator_cast, &candidate},
+                                    nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -421,7 +438,7 @@ core::builder::MatchResult MaxReluPattern::Match(core::builder::GraphGraph &grap
   if (zero_inputs != 1) {
     return NoMatch(candidate, "Max does not have exactly one scalar zero input");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

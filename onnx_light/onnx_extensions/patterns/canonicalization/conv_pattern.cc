@@ -352,7 +352,7 @@ core::builder::MatchResult ConvBiasNullPattern::Match(core::builder::GraphGraph 
   if (!IsKnownAllZero(graph, candidate.input()[2].value())) {
     return NoMatch(candidate, "the Conv bias is not a known all-zero constant");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -422,7 +422,10 @@ core::builder::MatchResult PadConvPattern::Match(core::builder::GraphGraph &grap
       return NoMatch(candidate, "the Pad node uses negative spatial padding");
     }
   }
-  return MatchOperators(graph, {pad_node, &candidate}, &candidate);
+  if (pad_node != nullptr && !graph.IsOperator(*pad_node)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {pad_node, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -522,7 +525,10 @@ core::builder::MatchResult ConvAddFusionPattern::Match(core::builder::GraphGraph
   if (!ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv bias is not finite in the source dtype");
   }
-  return MatchOperators(graph, {&candidate, add}, &candidate);
+  if (add != nullptr && !graph.IsOperator(*add)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, add}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -602,7 +608,10 @@ core::builder::MatchResult ConvMulFusionPattern::Match(core::builder::GraphGraph
       !ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv constants are not finite in the source dtype");
   }
-  return MatchOperators(graph, {&candidate, mul}, &candidate);
+  if (mul != nullptr && !graph.IsOperator(*mul)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, mul}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -730,7 +739,10 @@ ConvBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
       !ValuesRepresentable(*weights, bias_values)) {
     return NoMatch(candidate, "the folded Conv constants are not finite in the source dtype");
   }
-  return MatchOperators(graph, {&candidate, bn}, &candidate);
+  if (bn != nullptr && !graph.IsOperator(*bn)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, bn}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

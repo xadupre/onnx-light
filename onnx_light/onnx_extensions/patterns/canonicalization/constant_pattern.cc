@@ -66,7 +66,7 @@ core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::Gr
   if (graph.GetComputedConstant(candidate.output()[0].value()) == nullptr) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -115,7 +115,11 @@ InitializerUnsqueezeCastPattern::Match(core::builder::GraphGraph &graph,
   if (kernels.find("ai.onnx:Cast") == kernels.end()) {
     return NoMatch(candidate, "Cast runtime kernel is unavailable");
   }
-  return MatchOperators(graph, {unsqueeze, &candidate, consumers[0]}, consumers[0]);
+  if ((unsqueeze != nullptr && !graph.IsOperator(*unsqueeze)) ||
+      (consumers[0] != nullptr && !graph.IsOperator(*consumers[0]))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {unsqueeze, &candidate, consumers[0]}, consumers[0]};
 }
 
 utils::RepeatedProtoField<NodeProto>

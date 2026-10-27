@@ -36,7 +36,10 @@ core::builder::MatchResult NotNotPattern::Match(core::builder::GraphGraph &graph
   if (before == nullptr || !IsDefaultNot(*before)) {
     return NoMatch(candidate, "the preceding node is not a default-domain Not");
   }
-  return MatchOperators(graph, {before, &candidate}, &candidate);
+  if (before != nullptr && !graph.IsOperator(*before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

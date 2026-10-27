@@ -563,7 +563,10 @@ core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph 
       return NoMatch(candidate, "a requested index falls after the non-constant input");
     }
   }
-  return MatchOperators(graph, {concat, &candidate}, &candidate);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -666,7 +669,10 @@ core::builder::MatchResult GatherGatherPattern::Match(core::builder::GraphGraph 
       return NoMatch(candidate, "an outer index is out of range of the inner indices");
     }
   }
-  return MatchOperators(graph, {inner, &candidate}, &candidate);
+  if (inner != nullptr && !graph.IsOperator(*inner)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {inner, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -730,7 +736,7 @@ core::builder::MatchResult GatherToSlicePattern::Match(core::builder::GraphGraph
   GatherToSlicePlan plan;
   GatherToSliceReject reject = GatherToSliceReject::kNone;
   if (AnalyzeGatherToSlice(graph, candidate, plan, &reject)) {
-    return MatchOperators(graph, {&candidate}, &candidate);
+    return core::builder::MatchResult{this, {&candidate}, &candidate};
   }
   switch (reject) {
   case GatherToSliceReject::kNotGather:
@@ -933,7 +939,10 @@ GatherUpstreamPropagationPattern::Match(core::builder::GraphGraph &graph,
   if (!plan.has_value() || plan->propagate.empty()) {
     return NoMatch(candidate, "no producer input can be safely sliced at this axis");
   }
-  return MatchOperators(graph, {producer, &candidate}, &candidate);
+  if (producer != nullptr && !graph.IsOperator(*producer)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {producer, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

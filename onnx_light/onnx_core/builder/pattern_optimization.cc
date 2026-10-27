@@ -6,8 +6,6 @@
 
 #include <sstream>
 
-#include "onnx_core/builder/graph_graph.h"
-
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 namespace {
@@ -140,26 +138,6 @@ MatchResult PatternOptimization::NoMatchImpl(const NodeProto &candidate, std::st
   result.no_match =
       PatternNoMatch{&candidate, location.file_name(), location.line(), std::string(reason)};
   return result;
-}
-
-MatchResult PatternOptimization::MatchOperators(GraphGraph &graph,
-                                                std::vector<const NodeProto *> nodes,
-                                                const NodeProto *insert_at) const {
-  for (const NodeProto *node : nodes) {
-    if (node == nullptr)
-      continue;
-    if (!graph.IsOperator(*node))
-      return NoMatch(*node, "a primitive operator was expected, not a local call or overload");
-    for (const auto &input : node->input()) {
-      const NodeProto *producer = graph.NodeBefore(input);
-      if (producer != nullptr && producer->op_type() == "Constant" &&
-          (producer->domain().empty() || producer->domain() == "ai.onnx" ||
-           producer->domain() == "onnx.ai") &&
-          !graph.IsOperator(*producer))
-        return NoMatch(*node, "a Constant producer is a local call or overload");
-    }
-  }
-  return MatchResult{this, std::move(nodes), insert_at};
 }
 
 std::string PatternOptimization::ToString() const {

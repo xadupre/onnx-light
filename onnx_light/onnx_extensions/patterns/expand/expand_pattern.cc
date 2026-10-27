@@ -457,7 +457,7 @@ core::builder::MatchResult ExpandPattern::Match(core::builder::GraphGraph &graph
   if (shape != new_shape) {
     return NoMatch(candidate, "the Expand changes the input shape");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -531,7 +531,10 @@ core::builder::MatchResult ExpandBroadcastPattern::Match(core::builder::GraphGra
     }
   }
 
-  return MatchOperators(graph, {&candidate, &next_node}, &candidate);
+  if (!graph.IsOperator(next_node)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, &next_node}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -631,7 +634,10 @@ core::builder::MatchResult ShapeBasedConcatExpandPattern::Match(core::builder::G
     return NoMatch(candidate, "the unchanged target dimensions are already constant ones");
   }
 
-  return MatchOperators(graph, {concat, &candidate}, &candidate);
+  if (concat != nullptr && !graph.IsOperator(*concat)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -774,7 +780,7 @@ core::builder::MatchResult ShapeBasedStaticExpandPattern::Match(core::builder::G
                           graph.GetShape(candidate.output()[0].value()).Shape(), target)) {
     return NoMatch(candidate, "the effective Expand target is not fully static");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -864,7 +870,11 @@ core::builder::MatchResult ShapeBasedExpandSwapPattern::Match(core::builder::Gra
       return NoMatch(candidate, "the two expansions cannot safely move after the binary operator");
     }
   }
-  return MatchOperators(graph, {left_expand, right_expand, &candidate}, nullptr);
+  if ((left_expand != nullptr && !graph.IsOperator(*left_expand)) ||
+      (right_expand != nullptr && !graph.IsOperator(*right_expand))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {left_expand, right_expand, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -951,7 +961,11 @@ ShapeBasedExpandCastWhereSwapPattern::Match(core::builder::GraphGraph &graph,
                                  graph.GetShape(expand->input()[0].value()).Shape())) {
     return NoMatch(candidate, "the pre-expansion Where does not preserve the output shape");
   }
-  return MatchOperators(graph, {expand, cast, &candidate}, nullptr);
+  if ((expand != nullptr && !graph.IsOperator(*expand)) ||
+      (cast != nullptr && !graph.IsOperator(*cast))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {expand, cast, &candidate}, nullptr};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1028,7 +1042,10 @@ core::builder::MatchResult ExpandSwapPattern::Match(core::builder::GraphGraph &g
     return NoMatch(candidate, "the consumer does not have a single output");
   }
 
-  return MatchOperators(graph, {&candidate, &next_node}, &candidate);
+  if (!graph.IsOperator(next_node)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, &next_node}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1106,7 +1123,10 @@ core::builder::MatchResult SwapExpandUnsqueezePattern::Match(core::builder::Grap
                    "neither the Expand target shape nor the Expand output shape is known");
   }
 
-  return MatchOperators(graph, {&candidate, &unsqueeze}, &candidate);
+  if (!graph.IsOperator(unsqueeze)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, &unsqueeze}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1207,7 +1227,10 @@ core::builder::MatchResult ExpandUnsqueezeExpandPattern::Match(core::builder::Gr
                    "the unsqueezed first shape and the second shape have different ranks");
   }
 
-  return MatchOperators(graph, {&candidate, &unsqueeze, &expand2}, &candidate);
+  if (!graph.IsOperator(unsqueeze) || !graph.IsOperator(expand2)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, &unsqueeze, &expand2}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1294,7 +1317,10 @@ core::builder::MatchResult SwapExpandReshapePattern::Match(core::builder::GraphG
       !target.ValueAsShape()[2].IsInt() || target.ValueAsShape()[2].AsInt() != 1) {
     return NoMatch(candidate, "the Expand target does not end with [1, 1]");
   }
-  return MatchOperators(graph, {expand, &candidate}, &candidate);
+  if (expand != nullptr && !graph.IsOperator(*expand)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {expand, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

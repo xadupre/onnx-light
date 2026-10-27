@@ -133,7 +133,7 @@ core::builder::MatchResult SliceEliminationPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "the Slice does not select the full range");
     }
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -186,7 +186,10 @@ core::builder::MatchResult SliceSlicePattern::Match(core::builder::GraphGraph &g
       return NoMatch(candidate, "the two slices share an axis");
     }
   }
-  return MatchOperators(graph, {before, &candidate}, &candidate);
+  if (before != nullptr && !graph.IsOperator(*before)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {before, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

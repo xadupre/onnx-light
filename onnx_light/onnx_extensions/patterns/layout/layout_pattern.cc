@@ -243,7 +243,11 @@ core::builder::MatchResult SqueezeAddPattern::Match(core::builder::GraphGraph &g
       !ResolveSqueezeAxes(graph, *second, second_axes) || first_axes != second_axes) {
     return NoMatch(candidate, "the Squeeze axes are not equal");
   }
-  return MatchOperators(graph, {first, second, &candidate}, &candidate);
+  if ((first != nullptr && !graph.IsOperator(*first)) ||
+      (second != nullptr && !graph.IsOperator(*second))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -309,7 +313,11 @@ core::builder::MatchResult MulUnsqueezeUnsqueezePattern::Match(core::builder::Gr
       graph.IsUsedMoreThanOnce(candidate.input()[1].value())) {
     return NoMatch(candidate, "an Unsqueeze output is shared");
   }
-  return MatchOperators(graph, {first, second, &candidate}, &candidate);
+  if ((first != nullptr && !graph.IsOperator(*first)) ||
+      (second != nullptr && !graph.IsOperator(*second))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {first, second, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -368,7 +376,11 @@ core::builder::MatchResult SqueezeBinaryUnsqueezePattern::Match(core::builder::G
       graph.GetShape(squeeze->input()[0].value()).Shape().Rank() != 1) {
     return NoMatch(candidate, "the binary left input is not produced from a rank-one value");
   }
-  return MatchOperators(graph, {squeeze, binary, &candidate}, &candidate);
+  if ((squeeze != nullptr && !graph.IsOperator(*squeeze)) ||
+      (binary != nullptr && !graph.IsOperator(*binary))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {squeeze, binary, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -443,7 +455,10 @@ core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::G
       return NoMatch(candidate, "the Unsqueeze axes contain duplicate dimensions");
     }
   }
-  return MatchOperators(graph, {unsqueeze, &candidate}, &candidate);
+  if (unsqueeze != nullptr && !graph.IsOperator(*unsqueeze)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -544,7 +559,7 @@ core::builder::MatchResult TransposeEqualReshapePattern::Match(core::builder::Gr
   if (non_one > 1) {
     return NoMatch(candidate, "the Transpose moves more than one non-size-one dimension");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -615,7 +630,11 @@ TransposeReshapeTransposePattern::Match(core::builder::GraphGraph &graph,
   if (!MakeReshapeTransposePlan(graph, candidate, *reshape, *second_next[0], plan)) {
     return NoMatch(candidate, "the Reshape shape cannot be aligned with the Transposes");
   }
-  return MatchOperators(graph, {&candidate, reshape, second_next[0]}, &candidate);
+  if ((reshape != nullptr && !graph.IsOperator(*reshape)) ||
+      (second_next[0] != nullptr && !graph.IsOperator(*second_next[0]))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, reshape, second_next[0]}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

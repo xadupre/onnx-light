@@ -117,7 +117,7 @@ bool ReadConstantValues(core::builder::GraphGraph &graph, const std::string &nam
     return ReadNumericValues(*tensor, values);
   }
   const NodeProto *constant = graph.NodeBefore(name);
-  if (constant == nullptr || !IsDefaultOp(*constant, "Constant")) {
+  if (constant == nullptr || !graph.IsOperator(*constant) || !IsDefaultOp(*constant, "Constant")) {
     return false;
   }
   const AttributeProto *value_int = FindAttribute(*constant, "value_int");
@@ -471,11 +471,17 @@ core::builder::MatchResult LayerNormalizationPattern::Match(core::builder::Graph
     return NoMatch(candidate, "a LayerNormalization intermediate is externally used");
   }
 
-  if (reciprocal == nullptr) {
-    return MatchOperators(graph, {mean, sub, power, &candidate, add, sqrt, final}, &candidate);
+  for (const NodeProto *node : {mean, sub, power, add, sqrt, reciprocal, final}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
   }
-  return MatchOperators(graph, {mean, sub, power, &candidate, add, sqrt, reciprocal, final},
-                        &candidate);
+  if (reciprocal == nullptr) {
+    return core::builder::MatchResult{
+        this, {mean, sub, power, &candidate, add, sqrt, final}, &candidate};
+  }
+  return core::builder::MatchResult{
+      this, {mean, sub, power, &candidate, add, sqrt, reciprocal, final}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -576,8 +582,9 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
     return NoMatch(candidate, "candidate is not a single-output LayerNormalization");
   }
   const std::vector<const NodeProto *> &mul_nodes = graph.NextNodes(candidate.output()[0].value());
-  if (mul_nodes.size() != 1 || !IsDefaultOp(*mul_nodes[0], "Mul") ||
-      mul_nodes[0]->input_size() != 2 || mul_nodes[0]->output_size() != 1) {
+  if (mul_nodes.size() != 1 || !graph.IsOperator(*mul_nodes[0]) ||
+      !IsDefaultOp(*mul_nodes[0], "Mul") || mul_nodes[0]->input_size() != 2 ||
+      mul_nodes[0]->output_size() != 1) {
     return NoMatch(candidate, "LayerNormalization is not followed by one Mul");
   }
   const NodeProto *mul = mul_nodes[0];
@@ -599,15 +606,15 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
   }
   const std::vector<const NodeProto *> &after_mul = graph.NextNodes(mul->output()[0].value());
   if (after_mul.empty()) {
-    return MatchOperators(graph, {&candidate, mul, nullptr}, mul);
+    return core::builder::MatchResult{this, {&candidate, mul, nullptr}, mul};
   }
   if (after_mul.size() != 1 || !IsDefaultOp(*after_mul[0], "Add")) {
-    return MatchOperators(graph, {&candidate, mul, nullptr},
-                          after_mul.empty() ? mul : after_mul[0]);
+    return core::builder::MatchResult{
+        this, {&candidate, mul, nullptr}, after_mul.empty() ? mul : after_mul[0]};
   }
 
   const NodeProto *add = after_mul[0];
-  if (add->input_size() != 2 || add->output_size() != 1) {
+  if (!graph.IsOperator(*add) || add->input_size() != 2 || add->output_size() != 1) {
     return NoMatch(candidate, "the following Add does not have two inputs and one output");
   }
   const bool first_is_mul = add->input()[0].value() == mul->output()[0].value();
@@ -625,7 +632,7 @@ core::builder::MatchResult LayerNormalizationScalePattern::Match(core::builder::
   if (!HasOnlyConsumers(graph, *mul, {add})) {
     return NoMatch(candidate, "the scaled normalized value is externally used");
   }
-  return MatchOperators(graph, {&candidate, mul, add}, add);
+  return core::builder::MatchResult{this, {&candidate, mul, add}, add};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -771,7 +778,11 @@ CastLayerNormalizationCastPattern::Match(core::builder::GraphGraph &graph,
   if (!HasOnlyConsumers(graph, candidate.output()[0].value(), {cast_after})) {
     return NoMatch(candidate, "the normalization data output is externally used");
   }
-  return MatchOperators(graph, {cast_before, &candidate, cast_after}, &candidate);
+  if ((cast_before != nullptr && !graph.IsOperator(*cast_before)) ||
+      (cast_after != nullptr && !graph.IsOperator(*cast_after))) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {cast_before, &candidate, cast_after}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -870,7 +881,7 @@ core::builder::MatchResult BatchNormalizationPattern::Match(core::builder::Graph
       return NoMatch(candidate, "the scale or input variance is not uniformly one");
     }
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -934,7 +945,7 @@ BatchNormalizationTrainingPattern::Match(core::builder::GraphGraph &graph,
   if (training_mode != 1) {
     return NoMatch(candidate, "BatchNormalization is not in training mode");
   }
-  return MatchOperators(graph, {&candidate}, &candidate);
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1177,8 +1188,13 @@ core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGr
     return NoMatch(candidate, "the pre-output RMS value is externally used");
   }
 
-  return MatchOperators(
-      graph, {cast_before, power, &candidate, add, sqrt, reciprocal, mul, cast_after}, &candidate);
+  for (const NodeProto *node : {cast_before, power, add, sqrt, reciprocal, mul, cast_after}) {
+    if (node != nullptr && !graph.IsOperator(*node)) {
+      return NoMatch(candidate, "a matched node is a local function call or overload");
+    }
+  }
+  return core::builder::MatchResult{
+      this, {cast_before, power, &candidate, add, sqrt, reciprocal, mul, cast_after}, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1310,7 +1326,10 @@ core::builder::MatchResult RMSNormalizationMulPattern::Match(core::builder::Grap
   if (left == nullptr || right == nullptr || !MultiplyConstants(*left, *right, "", product)) {
     return NoMatch(candidate, "the two constant scales cannot be multiplied");
   }
-  return MatchOperators(graph, {&candidate, mul}, mul);
+  if (mul != nullptr && !graph.IsOperator(*mul)) {
+    return NoMatch(candidate, "a matched node is a local function call or overload");
+  }
+  return core::builder::MatchResult{this, {&candidate, mul}, mul};
 }
 
 utils::RepeatedProtoField<NodeProto>

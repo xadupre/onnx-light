@@ -17,6 +17,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * replacement may reference that capture, including under another attribute name.
  * Repeated references must capture equal values of the declared type.
  *
+ * @code
  * Before:
  *   inputs ──→ ┌──────────────────┐ ──→ outputs
  *              │ template body    │
@@ -25,6 +26,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   inputs ──→ ┌──────────────────┐ ──→ outputs
  *              │ replacement body │
  *              └──────────────────┘
+ * @endcode
  *
  * Bodies must be topologically sorted SSA graphs without graph-valued
  * attributes. Template inputs must be used, and template outputs must be

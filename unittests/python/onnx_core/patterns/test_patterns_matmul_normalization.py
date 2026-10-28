@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import unittest
+from itertools import product
 
 import numpy as np
 
@@ -262,21 +263,53 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         return optimized
 
     def test_gemm_transpose_variants(self):
-        for with_bias in (False, True):
-            with self.subTest(with_bias=with_bias):
-                inputs = [("X", TensorProto.FLOAT, [2, 3])]
-                initializers = [self._initializer("B", self._range(2, 3), np.float32)]
-                gemm_inputs = ["X", "B"]
-                feeds = {"X": self._range(2, 3)}
+        for sides, trans_a, trans_b, with_bias, constant in product(
+            (1, 2, 3), (0, 1), (0, 1), (False, True), (False, True)
+        ):
+            with self.subTest(
+                sides=sides,
+                trans_a=trans_a,
+                trans_b=trans_b,
+                with_bias=with_bias,
+                constant=constant,
+            ):
+                left_flag = trans_a ^ (sides & 1)
+                right_flag = trans_b ^ ((sides >> 1) & 1)
+                left_shape = [3, 2] if left_flag else [2, 3]
+                right_shape = [4, 3] if right_flag else [3, 4]
+                inputs = [("X", TensorProto.FLOAT, left_shape)]
+                feeds = {"X": self._range(*left_shape)}
+                initializers = []
+                if constant:
+                    initializers.append(
+                        self._initializer("B", self._range(*right_shape), np.float32)
+                    )
+                else:
+                    inputs.append(("B", TensorProto.FLOAT, right_shape))
+                    feeds["B"] = self._range(*right_shape)
+                nodes = []
+                if sides & 1:
+                    nodes.append(oh.make_node("Transpose", ["X"], ["Xt"], perm=[1, 0]))
+                if sides & 2:
+                    nodes.append(oh.make_node("Transpose", ["B"], ["Bt"], perm=[1, 0]))
+                gemm_inputs = ["Xt" if sides & 1 else "X", "Bt" if sides & 2 else "B"]
                 if with_bias:
-                    inputs.append(("C", TensorProto.FLOAT, [2]))
+                    inputs.append(("C", TensorProto.FLOAT, [4]))
                     gemm_inputs.append("C")
-                    feeds["C"] = self._range(2, bias=0.25)
+                    feeds["C"] = self._range(4, bias=0.25)
+                nodes.append(
+                    oh.make_node(
+                        "Gemm",
+                        gemm_inputs,
+                        ["Y"],
+                        alpha=0.75,
+                        beta=0.5,
+                        transA=trans_a,
+                        transB=trans_b,
+                    )
+                )
                 model = self._make_model(
-                    [oh.make_node("Gemm", gemm_inputs, ["Y"], alpha=0.75, transB=1)],
-                    inputs,
-                    [("Y", TensorProto.FLOAT, [2, 2])],
-                    initializers,
+                    nodes, inputs, [("Y", TensorProto.FLOAT, [2, 4])], initializers
                 )
                 optimized = self._optimize_and_check(
                     model,
@@ -284,16 +317,19 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["GemmTranspose"],
                     ["Gemm"],
                     required_pattern="GemmTranspose",
-                    initializer_count=1,
+                    initializer_count=int(constant),
                 )
                 attributes = {
                     attribute.name: attribute for attribute in optimized.graph.node[-1].attribute
                 }
-                self.assertEqual(0, attributes["transB"].i)
+                self.assertEqual(left_flag, attributes["transA"].i)
+                self.assertEqual(right_flag, attributes["transB"].i)
                 self.assertAlmostEqual(0.75, attributes["alpha"].f)
+                self.assertAlmostEqual(0.5, attributes["beta"].f)
                 self.assertEqual(["Y"], list(optimized.graph.node[-1].output))
-                self.assertEqualArray(
-                    self._range(2, 3).T, onh.to_array(optimized.graph.initializer[0])
+                self.assertEqual(
+                    ["X", "B", "C"] if with_bias else ["X", "B"],
+                    list(optimized.graph.node[-1].input),
                 )
                 self._assert_no_match(optimized, feeds, "GemmTranspose")
 

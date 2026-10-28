@@ -752,57 +752,29 @@ std::set<std::string> GemmTransposePattern::FastOpType() const { return {"Gemm"}
 
 core::builder::MatchResult GemmTransposePattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
-  if (!IsDefaultOp(candidate, "Gemm") || candidate.input_size() < 2 ||
-      candidate.output_size() == 0) {
+  if (!IsDefaultOp(candidate, "Gemm")) {
     return NoMatch(candidate, "candidate is not a default-domain Gemm");
   }
-  if (!graph.IsConstant(candidate.input()[1].value())) {
-    return NoMatch(candidate, "the Gemm right input is not constant");
+  const TransposeMatMulPattern transpose_matmul;
+  auto match = transpose_matmul.Match(graph, candidate);
+  if (match.pattern != nullptr) {
+    match.pattern = this;
   }
-  if (GetAttributeOr<float>(candidate, "beta", 1.0F) != 1.0F ||
-      GetAttributeOr<int64_t>(candidate, "transA", 0) != 0 ||
-      GetAttributeOr<int64_t>(candidate, "transB", 0) != 1) {
-    return NoMatch(candidate, "the Gemm transpose or beta attributes are not supported");
-  }
-  return core::builder::MatchResult{this, {&candidate}, &candidate};
+  return match;
 }
 
 utils::RepeatedProtoField<NodeProto>
 GemmTransposePattern::Apply(core::builder::GraphGraph &graph,
                             const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 1 || nodes[0] == nullptr) {
-    throw BuilderError("GemmTransposePattern::Apply expects one Gemm node.");
+  if (nodes.size() != 3 || nodes[2] == nullptr) {
+    throw BuilderError("GemmTransposePattern::Apply expects optional Transposes and one Gemm.");
   }
-  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  const core::builder::MatchResult verified = Match(graph, *nodes[2]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError("GemmTransposePattern::Apply received an unsafe or inconsistent match.");
   }
-  const NodeProto &gemm = *nodes[0];
-  core::builder::GraphBuilder &builder = graph.Builder();
-  const std::string transposed =
-      builder.UniqueName("GemmTransposePattern--" + gemm.input()[1].value());
-  const std::string name = "GemmTransposePattern--" + gemm.name().value();
-  NodeProto transpose =
-      MakePatternNode("Transpose", {gemm.input()[1].value()}, {transposed}, "", name);
-  AddAttribute(transpose, "perm", std::vector<int64_t>{1, 0});
-  transpose.set_doc_string(gemm.doc_string().value());
-
-  std::vector<std::string> inputs = {gemm.input()[0].value(), transposed};
-  for (int i = 2; i < gemm.input_size(); ++i) {
-    inputs.push_back(gemm.input()[i].value());
-  }
-  NodeProto replacement = MakePatternNode("Gemm", inputs, Outputs(gemm), "", name);
-  AddAttribute<int64_t>(replacement, "transB", 0);
-  for (const char *attribute_name : {"alpha", "beta"}) {
-    const AttributeProto *attribute = FindAttribute(gemm, attribute_name);
-    if (attribute != nullptr) {
-      *replacement.add_attribute() = *attribute;
-    }
-  }
-  replacement.set_doc_string(gemm.doc_string().value());
-  utils::RepeatedProtoField<NodeProto> replacements;
-  replacements.push_back(std::move(transpose));
-  replacements.push_back(std::move(replacement));
+  auto replacements = TransposeMatMulPattern().Apply(graph, nodes);
+  replacements[0].set_name("GemmTransposePattern--" + nodes[2]->name().value());
   return replacements;
 }
 
@@ -1478,22 +1450,13 @@ core::builder::MatchResult TransposeMatMulPattern::Match(core::builder::GraphGra
       continue;
     }
     std::vector<int64_t> perm;
-    if (!GetAttributeInts(*transpose, "perm", perm) || perm != std::vector<int64_t>({1, 0})) {
+    if (FindAttribute(*transpose, "perm") != nullptr &&
+        (!GetAttributeInts(*transpose, "perm", perm) || perm != std::vector<int64_t>({1, 0}))) {
       return NoMatch(candidate, "an input Transpose does not swap the two dimensions");
     }
   }
   if (left == nullptr && right == nullptr) {
     return NoMatch(candidate, "all input Transpose nodes are shared on GPU");
-  }
-  if (IsDefaultOp(candidate, "Gemm")) {
-    const int64_t trans_a = GetAttributeOr<int64_t>(candidate, "transA", 0);
-    const int64_t trans_b = GetAttributeOr<int64_t>(candidate, "transB", 0);
-    if (right != nullptr && trans_b == 0 && graph.IsConstant(candidate.input()[1].value())) {
-      return NoMatch(candidate, "the constant right transpose should be folded");
-    }
-    if (left != nullptr && trans_b != trans_a && graph.IsConstant(candidate.input()[0].value())) {
-      return NoMatch(candidate, "the constant left transpose should be folded");
-    }
   }
   return core::builder::MatchResult{this, {left, right, &candidate}, nullptr};
 }
@@ -1527,9 +1490,9 @@ TransposeMatMulPattern::Apply(core::builder::GraphGraph &graph,
     if (attribute.name().value() == "alpha" || attribute.name().value() == "beta") {
       kept.push_back(attribute);
     } else if (attribute.name().value() == "transA") {
-      trans_a = (attribute.i() + trans_a) % 2;
+      trans_a = (attribute.i() != 0) != (trans_a != 0);
     } else if (attribute.name().value() == "transB") {
-      trans_b = (attribute.i() + trans_b) % 2;
+      trans_b = (attribute.i() != 0) != (trans_b != 0);
     } else {
       throw BuilderError("TransposeMatMulPattern::Apply found an unexpected Gemm attribute.");
     }

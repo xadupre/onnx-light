@@ -81,26 +81,31 @@ private:
 };
 
 /**
- * Exposes a constant Gemm weight transpose while preserving Gemm semantics.
+ * Absorbs one or both matrix input Transposes into Gemm transpose flags.
  *
  * @code
  * Before:
- *                                  ┌───────────────┐
- *   A, B constant, optional C ────→│ Gemm transB=1 │────→ y
- *                                  └───────────────┘
- *
- * After:
+ *          ┌─────────────────┐
+ *   A ────→│ Transpose [1,0] │────→ At
+ *          └─────────────────┘
  *          ┌─────────────────┐
  *   B ────→│ Transpose [1,0] │────→ Bt
  *          └─────────────────┘
+ *                         ┌─────────────────┐
+ *   At, Bt, optional C ──→│ Gemm transA/B   │────→ y
+ *                         └─────────────────┘
  *
- *                        ┌───────────────┐
- *   A, Bt, optional C ──→│ Gemm transB=0 │────→ y
- *                        └───────────────┘
+ * After:
+ *                       ┌───────────────────────┐
+ *   A, B, optional C ──→│ Gemm toggled transA/B │────→ y
+ *                       └───────────────────────┘
  * @endcode
  *
- * The original Gemm must have ``transA=0``, ``transB=1``, and ``beta=1``.
- * The explicit transpose can subsequently be folded into the constant.
+ * At least one input must be produced by a rank-two Transpose with ``perm=[1,0]``
+ * or the equivalent default permutation.
+ * Only flags for absorbed sides are toggled. Inputs may be dynamic or constant;
+ * alpha, beta, bias and output names are preserved. Shared Transposes are retained,
+ * and on GPU a shared side is not absorbed.
  */
 class GemmTransposePattern final : public core::builder::PatternOptimization {
 public:

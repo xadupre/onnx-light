@@ -55,6 +55,25 @@ def _double_neg():
 
 
 class TestFunctionPattern(ExtTestCase):
+    def test_selects_anchor(self):
+        template = _function(
+            ["a"], ["c"], [oh.make_node("Neg", ["a"], ["b"]), oh.make_node("Abs", ["b"], ["c"])]
+        )
+        model = _model(
+            [oh.make_node("Neg", ["x"], ["middle"]), oh.make_node("Abs", ["middle"], ["y"])]
+        )
+        for anchor, op_type in ((-1, "Abs"), (0, "Neg"), (1, "Abs")):
+            with self.subTest(anchor=anchor):
+                pattern = FunctionPattern(template, template, anchor=anchor)
+                self.assertEqual(pattern.fast_op_type(), {op_type})
+                builder = GraphBuilder(model)
+                rewrites = GraphGraph(builder, patterns=[pattern]).optimize(max_iter=1)
+                self.assertEqual(len(rewrites.rewrites), 1)
+                self.assertEqual(builder.to_onnx().graph.output[0].name, "y")
+        for anchor in (-2, 2):
+            with self.assertRaisesRegex(ValueError, "anchor"):
+                FunctionPattern(template, template, anchor=anchor)
+
     def test_rejected_match_keeps_standalone_candidate_alive(self):
         template, replacement, model = _double_neg()
         pattern = FunctionPattern(template, replacement)

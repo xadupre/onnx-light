@@ -315,6 +315,13 @@ TEST(RepeatedLayerPattern, DynamicMatMulLayersKeepDistinctWeightsExternalAndAreI
   EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
   const ModelProto model = builder.ToModel();
   EXPECT_EQ(model.functions().size(), 1u);
+  for (const auto &info : model.functions()[0].value_info())
+    for (const auto &metadata : info.metadata_props()) {
+      EXPECT_NE(metadata.key(), core::symbolic::kValueInfoMinMetadataKey);
+      EXPECT_NE(metadata.key(), core::symbolic::kValueInfoMaxMetadataKey);
+    }
+  for (std::size_t index = 0; index < before.initializer().size(); ++index)
+    EXPECT_TRUE(after.initializer(index).Equals(before.initializer(index)));
   for (const auto &node : after.node())
     if (IsLayer(node)) {
       EXPECT_EQ(node.op_type(), "Layer");

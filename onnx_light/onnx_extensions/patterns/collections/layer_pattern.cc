@@ -1306,6 +1306,43 @@ ValueInfoProto ValueInfo(Index &index, const std::string &name) {
   return value;
 }
 
+void ClearLayerAnalysis(GraphProto &scope) {
+  const auto clear_range = [](ValueInfoProto &value) {
+    auto &metadata = value.ref_metadata_props();
+    for (auto it = metadata.begin(); it != metadata.end();) {
+      if (it->key() == core::symbolic::kValueInfoMinMetadataKey ||
+          it->key() == core::symbolic::kValueInfoMaxMetadataKey)
+        it = metadata.erase(it);
+      else
+        ++it;
+    }
+  };
+  // Ranges describe caller values, not every invocation of a shared body.
+  for (auto &input : scope.ref_input())
+    clear_range(input);
+  for (auto &output : scope.ref_output())
+    clear_range(output);
+  for (auto &info : scope.ref_value_info())
+    clear_range(info);
+  const std::unordered_set<std::string> computed_keys = {
+      core::compute::kInPlaceReuseMetadataKey,
+      core::compute::kReleaseAfterMetadataKey,
+      core::compute::kNotUsedAfterMetadataKey,
+      core::compute::kReleaseAfterShapeTagMetadataKey,
+      core::compute::kNodePeakMemoryMetadataKey,
+      core::compute::kConstantMetadataKey,
+      core::compute::kLifetimeNamesEncodingMetadataKey};
+  for (auto &node : scope.ref_node()) {
+    auto &metadata = node.ref_metadata_props();
+    for (auto it = metadata.begin(); it != metadata.end();) {
+      if (computed_keys.contains(it->key().value()))
+        it = metadata.erase(it);
+      else
+        ++it;
+    }
+  }
+}
+
 void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
   const auto visit = [](const auto &self, GraphProto &scope, const auto &action) -> void {
     action(scope);
@@ -1351,6 +1388,7 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
     names.emplace(body.input(i).name().value(), std::move(name));
   }
   visit(visit, body, [&](GraphProto &scope) {
+    ClearLayerAnalysis(scope);
     const auto rename_value = [&](auto &value) {
       const auto found = names.find(value.name().value());
       if (found != names.end())
@@ -1377,6 +1415,7 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
       !body.extended_initializer().empty() || !body.quantization_annotation().empty() ||
       !body.persistent_bindings().empty() || !SafeGraphDeclarations(body))
     return false;
+  ClearLayerAnalysis(body);
   body.clear_name();
   const std::string scope = "scope" + std::to_string(depth) + ":";
   std::unordered_set<std::string> formal_inputs;

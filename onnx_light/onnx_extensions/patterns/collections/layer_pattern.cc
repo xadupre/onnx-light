@@ -1371,6 +1371,101 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
   });
 }
 
+bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t depth,
+                        std::size_t &work) {
+  if (depth >= kMaxScopeDepth || !body.sparse_initializer().empty() ||
+      !body.extended_initializer().empty() || !body.quantization_annotation().empty() ||
+      !body.persistent_bindings().empty() || !SafeGraphDeclarations(body))
+    return false;
+  body.clear_name();
+  const std::string scope = "scope" + std::to_string(depth) + ":";
+  std::unordered_set<std::string> formal_inputs;
+  for (std::size_t i = 0; i < body.input().size(); ++i)
+    formal_inputs.insert(body.input(i).name().value());
+  for (std::size_t i = 0; i < body.input().size(); ++i)
+    names[body.input(i).name().value()] = scope + "input" + std::to_string(i);
+  for (std::size_t i = 0; i < body.initializer().size(); ++i) {
+    auto &initializer = *body.mutable_initializer(static_cast<int>(i));
+    const std::string name = initializer.name().value();
+    if (!formal_inputs.contains(name))
+      names[name] = scope + "weight" + std::to_string(i);
+    initializer.set_name(names.at(name));
+  }
+  const auto rename = [&](auto &value) {
+    const auto found = names.find(value.name().value());
+    if (found == names.end())
+      return false;
+    value.set_name(found->second);
+    return true;
+  };
+  for (auto &input : body.ref_input())
+    if (!rename(input))
+      return false;
+  for (std::size_t i = 0; i < body.node().size(); ++i) {
+    if (++work > kMaxFunctionWork)
+      return false;
+    auto &node = *body.mutable_node(static_cast<int>(i));
+    // Device annotations may themselves refer to value names.
+    if (!node.device_configurations().empty())
+      return false;
+    node.clear_name();
+    for (auto &input : node.ref_input()) {
+      if (input.value().empty())
+        continue;
+      const auto found = names.find(input.value());
+      if (found == names.end())
+        return false;
+      input = found->second;
+    }
+    for (auto &attribute : node.ref_attribute()) {
+      if (attribute.has_g() && !NormalizeLayerBody(attribute.ref_g(), names, depth + 1, work))
+        return false;
+      for (auto &nested : attribute.ref_graphs())
+        if (!NormalizeLayerBody(nested, names, depth + 1, work))
+          return false;
+    }
+    for (std::size_t port = 0; port < node.output().size(); ++port) {
+      auto &output = *node.mutable_output(static_cast<int>(port));
+      if (!output.value().empty()) {
+        const std::string name = scope + "node" + std::to_string(i) + ":" + std::to_string(port);
+        names[output.value()] = name;
+        output = name;
+      }
+    }
+  }
+  for (auto &output : body.ref_output())
+    if (!rename(output))
+      return false;
+  for (auto &info : body.ref_value_info())
+    if (!rename(info))
+      return false;
+  return true;
+}
+
+std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
+  GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
+  std::size_t work = 0;
+  if (!NormalizeLayerBody(normalized, {}, 0, work))
+    return {};
+  GraphBuilder &builder = source.ModelBuilder();
+  for (const auto &local : builder.LocalFunctions()) {
+    if (!IsLayerName("ai.rt", local->name()) || local->Nodes().size() != body.node().size() ||
+        local->Inputs().size() != body.input().size() ||
+        local->Outputs().size() != body.output().size())
+      continue;
+    const auto *definition = builder.Shapes().GetLocalFunction(
+        core::shapes::ShapesContext::LocalFunctionKey("ai.rt", local->name(), ""));
+    if (definition == nullptr || !definition->attribute().empty() ||
+        !definition->attribute_proto().empty() || local->OpsetVersions() != source.OpsetVersions())
+      continue;
+    GraphProto candidate = local->BuildGraph();
+    work = 0;
+    if (NormalizeLayerBody(candidate, {}, 0, work) && normalized.Equals(candidate))
+      return local->name();
+  }
+  return {};
+}
+
 NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary,
                     std::size_t occurrence) {
   GraphProto body;
@@ -1397,6 +1492,10 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
   core::builder::GraphBuilder &source = index.graph.Builder();
   source.SetOpsetVersion("ai.rt", 1);
   core::builder::GraphBuilder &builder = source.ModelBuilder();
+  const std::string name =
+      "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
+  if (const std::string existing = FindLayerFunction(source, body); !existing.empty())
+    return MakeNode(existing.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
   std::string function_name = "Layer";
   for (std::size_t suffix = 1;
        builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
@@ -1422,8 +1521,6 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
     *definition.add_value_info() = value_info;
   definition.ref_node() = utils::CopyWithSharedTensorStorage(body.node());
   builder.MakeLocalFunction(definition);
-  const std::string name =
-      "RepeatedLayer_" + std::to_string(boundary.first) + "_" + std::to_string(occurrence);
   return MakeNode(function_name.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
 }
 

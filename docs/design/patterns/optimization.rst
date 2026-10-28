@@ -167,11 +167,11 @@ or changes the process-global registry; ``registered_pattern_names()`` in
 ``onnx_core.optimization`` lists only that registry's active entries.
 The C++ ``RegisteredPatternNames()`` enumeration default remains unchanged.
 
-For example, two corresponding regions become two separate bodies, with their
-own parameters passed explicitly::
+For example, two corresponding regions share a body, with their own parameters
+passed explicitly::
 
     Before:  x, w0 → MatMul → Relu → h;  h, w1 → MatMul → Relu → y
-    After:   x, w0 → Layer(...) → h;     h, w1 → Layer_1(...) → y
+    After:   x, w0 → Layer(...) → h;     h, w1 → Layer(...) → y
 
 This is encapsulation, not weight tying: ``w0`` and ``w1`` need not be equal.
 Each call references a local function stored in ``ModelProto.functions``.
@@ -186,7 +186,13 @@ Layer function contract
 The extracted regions are represented by local functions in domain ``ai.rt``
 with an ``ai.rt`` opset import of version 1. The first function is named
 ``Layer``; subsequent functions use an index suffix (``Layer_1``, ``Layer_2``,
-...), so each body has a unique definition. Calls bind inputs and outputs
+...), so each distinct body has a unique definition. Equivalent bodies reuse
+the same definition, including across extraction batches and nested scopes.
+Local value and node names may differ, but interfaces, types, metadata, attributes
+(including nested constants), and source opsets must agree. Device-annotated
+bodies retain separate definitions. A uniform stack therefore needs only one
+function; distinct boundary cuts may require two or three, rather than one per
+occurrence. Calls bind inputs and outputs
 positionally to the function's formal inputs and outputs. Outputs must be
 nonempty and unique; omitted positional inputs are not permitted. ``Layer`` is
 a function identity, not an operator schema.

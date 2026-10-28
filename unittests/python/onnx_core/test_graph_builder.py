@@ -50,6 +50,39 @@ class TestGraphBuilder(ExtTestCase):
         other = GraphBuilder("other", opsets={"custom": 4})
         self.assertIsNone(other.find_schema("TreeEnsemble", "custom"))
 
+    def test_import_slice_opset_histories(self):
+        for opset in (10, 11, 12, 13):
+            for with_steps in (False, True):
+                with self.subTest(opset=opset, with_steps=with_steps):
+                    parameters = [("starts", 1), ("ends", 5)]
+                    if with_steps:
+                        parameters.extend([("axes", 0), ("steps", 2)])
+                    model = oh.make_model(
+                        oh.make_graph(
+                            [
+                                oh.make_node(
+                                    "Slice", ["x"] + [name for name, _ in parameters], ["y"]
+                                )
+                            ],
+                            "slice",
+                            [oh.make_tensor_value_info("x", FLOAT, [6])],
+                            [oh.make_tensor_value_info("y", FLOAT, [2 if with_steps else 4])],
+                            initializer=[
+                                oh.make_tensor(name, onnxl.TensorProto.INT64, [1], [value])
+                                for name, value in parameters
+                            ],
+                        ),
+                        opset_imports=[oh.make_opsetid("", opset)],
+                    )
+                    checker.check_model(model)
+                    builder = GraphBuilder(model)
+                    self.assertEqual(
+                        builder.find_schema("Slice").since_version,
+                        10 if opset == 10 else 11 if opset < 13 else 13,
+                    )
+                    self.assertEqual(list(builder.get_shape("y").shape), [2 if with_steps else 4])
+                    checker.check_model(builder.to_onnx())
+
     def test_local_shape_registry_precedes_global_and_is_snapshotted(self):
         calls = []
 

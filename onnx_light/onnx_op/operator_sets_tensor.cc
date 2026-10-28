@@ -611,6 +611,21 @@ LightOpSchema MakeIdentitySchema(int since_version, const std::vector<TensorType
 }
 
 LightOpSchema MakeSliceSchema(int since_version, const std::vector<TensorType> &types) {
+  std::string axes_description = "1-D tensor of axes that `starts` and `ends` apply to.";
+  if (since_version >= 11) {
+    axes_description += " Negative value means counting dimensions from the back. Accepted "
+                        "range is [-r, r-1] where r = rank(data).";
+  }
+  if (since_version >= 13) {
+    axes_description += " Behavior is undefined if an axis is repeated.";
+  }
+  std::string steps_description = "1-D tensor of slice step of corresponding axis in `axes`. ";
+  if (since_version == 10) {
+    steps_description += "Default to 1. ";
+  } else {
+    steps_description += "Negative value means slicing backward. 'steps' cannot be 0. Defaults to ";
+    steps_description += since_version == 11 ? "1." : "1s.";
+  }
   return LightOpSchema(
       "Slice", kOnnxDomain, since_version,
       "Produces a slice of the input tensor along multiple axes.",
@@ -619,15 +634,8 @@ LightOpSchema MakeSliceSchema(int since_version, const std::vector<TensorType> &
           {"starts", "1-D tensor of starting indices of corresponding axis in `axes`", "Tind"},
           {"ends", "1-D tensor of ending indices (exclusive) of corresponding axis in `axes`",
            "Tind"},
-          {"axes",
-           "1-D tensor of axes that `starts` and `ends` apply to. Negative value means counting "
-           "dimensions from the back. Accepted range is [-r, r-1] where r = rank(data). Behavior "
-           "is undefined if an axis is repeated.",
-           "Tind"},
-          {"steps",
-           "1-D tensor of slice step of corresponding axis in `axes`. Negative value means "
-           "slicing backward. 'steps' cannot be 0. Defaults to 1s.",
-           "Tind"},
+          {"axes", axes_description, "Tind"},
+          {"steps", steps_description, "Tind"},
       },
       {
           {"output", "Sliced data tensor.", "T"},
@@ -1928,6 +1936,8 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeSliceSchema(13, ConcatTypesVer13()),
+             MakeSliceSchema(11, AllTensorTypes()),
+             MakeSliceSchema(10, AllTensorTypes()),
          };
        }},
       {"Pad",

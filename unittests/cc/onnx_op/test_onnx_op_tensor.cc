@@ -147,7 +147,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 141u);
+  EXPECT_EQ(schemas.size(), 143u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -358,7 +358,18 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsReshapeSchemasWithoutShapeInference) {
 TEST(OnnxOpTensorRegistrationTest, ReturnsSliceSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> slice_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Slice");
-  ASSERT_EQ(slice_schemas.size(), 1u);
+  ASSERT_EQ(slice_schemas.size(), 3u);
+  for (int version : {10, 11}) {
+    const auto *schema = FindByVersion(slice_schemas, version);
+    ASSERT_NE(schema, nullptr);
+    ASSERT_EQ(schema->inputs().size(), 5u);
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    ASSERT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs, core::schema::AllTensorTypes());
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs,
+              (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                     core::schema::TensorType::kInt64}));
+  }
   const core::schema::LightOpSchema &slice_v13 = slice_schemas[0];
 
   EXPECT_EQ(slice_v13.name(), "Slice");

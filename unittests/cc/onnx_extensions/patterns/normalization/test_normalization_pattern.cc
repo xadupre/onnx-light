@@ -781,7 +781,14 @@ TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
                                     "input_cast",    "overload",        "local_normalization",
                                     "local_cast"}) {
     SCOPED_TRACE(variant);
-    core::builder::GraphBuilder builder("g", SingleOutputNormalizationSchemaLookup());
+    auto schema_lookup = SingleOutputNormalizationSchemaLookup();
+    if (variant == "old_rms") {
+      core::builder::GraphBuilder validated("validated", schema_lookup, {{"", 22}});
+      EXPECT_THROW(validated.FindSchema("RMSNormalization"), core::builder::BuilderError);
+      // Exercises the pattern guard on a deliberately invalid old-opset graph.
+      schema_lookup = {};
+    }
+    core::builder::GraphBuilder builder("g", schema_lookup);
     builder.SetOpsetVersion("", variant == "old_layer" ? 16 : variant == "old_rms" ? 22 : 23);
     const auto type = variant == "bf16"     ? core::symbolic::TensorType::kBfloat16
                       : variant == "double" ? core::symbolic::TensorType::kDouble

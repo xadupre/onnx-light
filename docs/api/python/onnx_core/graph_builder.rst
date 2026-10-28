@@ -89,7 +89,8 @@ changing process-wide registrations::
 the newest applicable local schema before consulting the configured global
 provider. A local history containing only newer versions falls back to a
 compatible global schema; if neither applies, it raises instead of bypassing
-validation. The compact ``builder.op`` API uses the same lookup.
+validation. Global-only histories with no applicable version also raise before
+node creation. The compact ``builder.op`` API uses the same lookup.
 
 Shape resolution prioritizes model-local functions, then local callbacks,
 then global inference. A local callback failure propagates without retrying

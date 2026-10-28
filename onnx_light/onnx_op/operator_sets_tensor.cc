@@ -1889,6 +1889,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeReshapeSchema(25, TransposeTypesVer25()),
              MakeReshapeSchema(13, ConcatTypesVer13()),
+             MakeReshapeSchema(5, AllTensorTypes()),
          };
        }},
       {"Shape",

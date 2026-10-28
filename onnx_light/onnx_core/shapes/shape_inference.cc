@@ -808,8 +808,8 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
 
 } // namespace
 
-bool TrySeedAnnotatedOutputsForUnknownCustomOp(
-    ShapesContext &ctx, const NodeProto &node,
+bool CanSeedAnnotatedOutputsForUnknownCustomOp(
+    const ShapesContext &ctx, const NodeProto &node,
     const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
   if (IsSupportedDomain(node) || HasShapeInference(ctx, node)) {
     return false;
@@ -826,7 +826,13 @@ bool TrySeedAnnotatedOutputsForUnknownCustomOp(
       return false;
     }
   }
-  if (!has_output)
+  return has_output;
+}
+
+bool TrySeedAnnotatedOutputsForUnknownCustomOp(
+    ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
+  if (!CanSeedAnnotatedOutputsForUnknownCustomOp(ctx, node, declared_outputs))
     return false;
   ctx.CheckInputsAvailable(node);
   ctx.CheckOutputsNotAvailable(node);

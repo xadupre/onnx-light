@@ -147,7 +147,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 140u);
+  EXPECT_EQ(schemas.size(), 141u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -330,8 +330,10 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsReshapeSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> reshape_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Reshape");
 
+  const core::schema::LightOpSchema *const reshape_v5 = FindByVersion(reshape_schemas, 5);
   const core::schema::LightOpSchema *const reshape_v13 = FindByVersion(reshape_schemas, 13);
   const core::schema::LightOpSchema *const reshape_v25 = FindByVersion(reshape_schemas, 25);
+  ASSERT_NE(nullptr, reshape_v5);
   ASSERT_NE(nullptr, reshape_v13);
   ASSERT_NE(nullptr, reshape_v25);
 
@@ -342,6 +344,9 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsReshapeSchemasWithoutShapeInference) {
   ASSERT_EQ(reshape_v25->outputs().size(), 1u);
   EXPECT_EQ(reshape_v25->outputs()[0].name, "reshaped");
   ASSERT_EQ(reshape_v25->type_constraints().size(), 1u);
+  ASSERT_EQ(reshape_v5->type_constraints().size(), 1u);
+  EXPECT_EQ(reshape_v5->type_constraints()[0].allowed_type_strs, core::schema::AllTensorTypes());
+  EXPECT_TRUE(reshape_v5->attributes().empty());
   EXPECT_EQ(reshape_v13->type_constraints()[0].allowed_type_strs, core::schema::ConcatTypesVer13());
   EXPECT_GT(reshape_v25->type_constraints()[0].allowed_type_strs.size(),
             reshape_v13->type_constraints()[0].allowed_type_strs.size());

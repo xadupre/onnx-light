@@ -20,6 +20,7 @@
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -467,6 +468,9 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
   return true;
 }
 
+struct Index;
+ValueInfoProto ValueInfo(Index &index, const std::string &name);
+
 struct Index {
   GraphGraph &graph;
   std::unordered_map<const NodeProto *, NodeData> data;
@@ -512,11 +516,17 @@ struct Index {
                                   safety_work);
       }
       if (entry.usable && !core::shapes::HasShapeInference(graph.Builder().Shapes(), node)) {
-        entry.usable =
-            std::any_of(node.output().begin(), node.output().end(),
-                        [](const auto &name) { return !name.empty(); }) &&
-            std::all_of(node.output().begin(), node.output().end(),
-                        [&](const auto &name) { return name.empty() || graph.HasType(name); });
+        std::vector<ValueInfoProto> outputs;
+        outputs.reserve(node.output().size());
+        for (const auto &name : node.output()) {
+          if (!name.empty())
+            outputs.push_back(ValueInfo(*this, name));
+        }
+        std::unordered_map<std::string, const ValueInfoProto *> annotations;
+        for (const auto &output : outputs)
+          annotations.emplace(output.name(), &output);
+        entry.usable = core::shapes::CanSeedAnnotatedOutputsForUnknownCustomOp(
+            graph.Builder().Shapes(), node, annotations);
       }
       if (entry.usable) {
         std::vector<std::string> attributes;

@@ -1321,6 +1321,39 @@ TEST(RepeatedLayerPattern, UsesBuilderLocalShapeInferenceRegardlessOfDomain) {
   EXPECT_FALSE(isolated.HasShape("y"));
 }
 
+TEST(RepeatedLayerPattern, RejectsAnnotationsUnsupportedByInferenceFallback) {
+  for (bool map_output : {false, true}) {
+    SCOPED_TRACE(map_output);
+    const std::string domain = map_output ? "test.layer.opaque" : "ai.rt";
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {domain, 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+      builder.MakeNode("Opaque", {"m" + suffix}, {"y" + suffix}, domain, "opaque" + suffix);
+      if (map_output) {
+        ValueInfoProto output;
+        output.set_name("y" + suffix);
+        auto *type = output.mutable_type()->mutable_map_type();
+        type->set_key_type(TensorProto::INT64);
+        *type->mutable_value_type() = builder.Inputs()[0].type();
+        builder.MakeOutput(output);
+      } else {
+        builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      }
+    }
+    core::builder::GraphGraph graph(builder);
+    ASSERT_TRUE(graph.HasType("y0"));
+    const GraphProto before = builder.BuildGraph();
+    EXPECT_NO_THROW({
+      EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+      EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+      EXPECT_TRUE(builder.LocalFunctions().empty());
+    });
+  }
+}
+
 TEST(RepeatedLayerPattern, RejectsContribWithoutInternalOutputShapes) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"com.microsoft", 1}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));

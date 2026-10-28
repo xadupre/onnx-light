@@ -39,6 +39,14 @@
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 /**
+ * Returns whether complete tensor annotations can seed an unknown custom operator's outputs.
+ * Does not mutate the context or check input/output availability.
+ */
+bool CanSeedAnnotatedOutputsForUnknownCustomOp(
+    const ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs);
+
+/**
  * Seeds declared tensor outputs for a custom operator without an inference handler.
  * Requires a tensor dtype and shape for every non-empty output and validates input
  * and output availability. Returns false without changing the context

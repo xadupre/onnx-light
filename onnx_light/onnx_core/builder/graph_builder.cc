@@ -2024,7 +2024,7 @@ const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
         (selected == nullptr || candidate.since_version() > selected->since_version()))
       selected = &candidate;
   }
-  if (selected == nullptr && known)
+  if (selected == nullptr && (known || !global.empty()))
     throw BuilderError("GraphBuilder: operator '" + domain + "::" + op_type +
                        "' is unavailable at opset " + std::to_string(opset) + ".");
   return selected;

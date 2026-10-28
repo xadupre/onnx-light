@@ -277,8 +277,8 @@ public:
   const std::unordered_map<std::string, int> &OpsetVersions() const noexcept { return opsets_; }
 
   /// Returns the selected local schema, then the global schema, at the selected opset.
-  /// Returns nullptr for unknown operators; rejects unavailable local histories
-  /// without a matching global fallback.
+  /// Returns nullptr for unknown operators; rejects known histories without
+  /// an applicable local or global schema.
   const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "") const;
 
   /// Returns an independent copy of the constructor's local registry snapshot.

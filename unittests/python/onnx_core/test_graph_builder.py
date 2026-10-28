@@ -32,6 +32,24 @@ FLOAT = onnxl.TensorProto.FLOAT
 
 
 class TestGraphBuilder(ExtTestCase):
+    def test_unavailable_global_schema_rejects_before_mutation(self):
+        builder = GraphBuilder("g", opsets={"ai.onnx.ml": 4})
+        with self.assertRaisesRegex(ValueError, "unavailable at opset 4"):
+            builder.op.TreeEnsemble(
+                numpy.ones((2, 3), dtype=numpy.float32), domain="ai.onnx.ml", outputs="y"
+            )
+        self.assertEqual(len(builder.build_graph().node), 0)
+        self.assertEqual(len(builder.build_graph().initializer), 0)
+        self.assertFalse(builder.has_name("y"))
+        builder.inp("x", FLOAT, [2, 3])
+        with self.assertRaisesRegex(ValueError, "unavailable at opset 4"):
+            builder.make_node("TreeEnsemble", ["x"], ["y"], domain="ai.onnx.ml")
+        self.assertFalse(builder.has_name("y"))
+        builder.set_opset_version("ai.onnx.ml", 5)
+        self.assertEqual(builder.find_schema("TreeEnsemble", "ai.onnx.ml").since_version, 5)
+        other = GraphBuilder("other", opsets={"custom": 4})
+        self.assertIsNone(other.find_schema("TreeEnsemble", "custom"))
+
     def test_local_shape_registry_precedes_global_and_is_snapshotted(self):
         calls = []
 

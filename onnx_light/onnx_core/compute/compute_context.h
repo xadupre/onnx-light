@@ -196,7 +196,15 @@ public:
       std::function<void(ComputeContext &, const NodeProto &, std::size_t node_index)>;
   using CustomValueTagMap = std::unordered_map<std::string, CustomValueTagFn>;
 
-  ComputeContext() = default;
+  /// Selects whether incremental mutations also maintain optional memory profiles.
+  enum class MemoryProfiling { kIncremental, kExplicit };
+
+  explicit ComputeContext(MemoryProfiling profiling = MemoryProfiling::kIncremental)
+      : memory_profiling_(profiling) {}
+
+  /// Discards optional memory profiles without changing shapes, tags or lifetimes.
+  /// Empty profile vectors explicitly indicate that no current profile is available.
+  void ClearMemoryProfiles() noexcept;
 
   /// Preserves existing value tags during a rewrite while allowing new tags to converge.
   class ValueTagPreservationGuard {
@@ -441,8 +449,8 @@ public:
   /// shapes already inferred into ``ctx``. ``references`` includes direct
   /// inputs and lexical captures of nested graphs. Only this node and the
   /// previous last-users of those values are touched — no whole-graph loop — via
-  /// :cpp:func:`ComputeSingleNodeReuse`. Appends exactly one entry to each of
-  /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
+  /// :cpp:func:`ComputeSingleNodeReuse`. Appends exactly one entry to each
+  /// lifetime vector so they stay aligned with :cpp:func:`Size`.
   void AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                        const ShapesContext &ctx, const std::vector<std::string> &references);
 
@@ -454,7 +462,8 @@ public:
 
   /// Refreshes changed node references and descriptors as one batch. Preserves
   /// unchanged lifetimes, invalidates byte sizes for ``changed_values``, and
-  /// recomputes the affected reuse and memory suffix once after shape propagation.
+  /// recomputes affected reuse after shape propagation. Memory profiles are
+  /// refreshed incrementally or discarded according to the profiling policy.
   void RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                     const std::map<std::size_t, std::vector<std::string>> &references,
                     const ShapesContext &ctx, const std::unordered_set<std::string> &changed_values,
@@ -475,6 +484,7 @@ public:
 
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
+  /// Explicit-profiling contexts compute the complete profile when this is called.
   void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
                                 const ShapesContext &ctx, Device device = Device::kUndefined,
                                 const NodeMaterializerFn &materialize = {});
@@ -533,6 +543,7 @@ public:
 
   /// Read-only access to the per-node memory snapshots. Entry ``i`` describes
   /// the memory footprint observed while running ``graph.node()[i]``.
+  /// Explicit-profiling contexts leave this empty after mutations until analysis is requested.
   const std::vector<NodeMemoryProfile> &Memory() const noexcept { return memory_; }
 
   /// Memory snapshot for the node at ``node_index``.
@@ -774,6 +785,7 @@ public:
   void ResetMetadata() noexcept;
 
 private:
+  MemoryProfiling memory_profiling_;
   void PropagateNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
                          const std::vector<int> &seeds,
                          const std::vector<std::string> &initial_changes = {});

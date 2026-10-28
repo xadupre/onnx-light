@@ -826,3 +826,22 @@ TEST(DimSum, RejectsOverflowingGroupedSymbolicCoefficients) {
   sum.Add(DimType{std::string{"4611686018427387904*batch"}});
   EXPECT_THROW(sum.Build(), std::invalid_argument);
 }
+
+TEST(DimSum, RemovesTermsWithoutLeavingSymbolicResidues) {
+  DimSum sum;
+  sum.Add(int64_t{7});
+  sum.Add(std::string{"batch"});
+  sum.Add(std::string{"batch"});
+  sum.Add(std::string{"sequence"});
+  sum.Remove(std::string{"batch"});
+  sum.Remove(int64_t{3});
+  EXPECT_EQ(sum.Build(), simplify_dim_type(std::string{"batch+sequence+4"}));
+  sum.Remove(std::string{"batch"});
+  sum.Remove(std::string{"sequence"});
+  sum.Remove(int64_t{4});
+  EXPECT_EQ(sum.Build(), DimType{int64_t{0}});
+  EXPECT_THROW(sum.Remove(std::string{"batch"}), std::invalid_argument);
+  sum.Add(std::numeric_limits<int64_t>::max());
+  EXPECT_THROW(sum.Remove(int64_t{-1}), std::invalid_argument);
+  EXPECT_EQ(sum.Build(), DimType{std::numeric_limits<int64_t>::max()});
+}

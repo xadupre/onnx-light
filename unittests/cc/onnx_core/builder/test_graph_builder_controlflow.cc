@@ -232,10 +232,10 @@ TEST(GraphBuilderControlflow, OpsetRefreshSynchronizesLoopFormalInputsAndConsume
     for (auto *nested : {&scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
       EXPECT_EQ(nested->GetShape("next_state").Shape(), expected_shape);
     }
-    for (const auto *current :
-         {&scope, &scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
+    EXPECT_TRUE(scope.Compute().Memory().empty());
+    for (auto *current : {&scope, &scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
       core::compute::ComputeContext expected;
-      const GraphProto graph = current->BuildGraph();
+      const GraphProto graph = current->ToGraph();
       const auto tags = expected.ComputeValueAndNodeTags(graph);
       expected.ComputeInPlaceReuseGraph(graph, current->Shapes(), false, tags.first);
       EXPECT_EQ(current->Compute().Reuse(), expected.Reuse());

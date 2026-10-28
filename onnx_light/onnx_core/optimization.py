@@ -18,6 +18,7 @@ from .graph_builder import (
 from .shape_inference import Device
 
 PatternOptimization: TypeAlias = _C.PatternOptimization
+FunctionPattern: TypeAlias = _patterns.FunctionPattern
 RepeatedLayerPattern: TypeAlias = _patterns.RepeatedLayerPattern
 MatchResult: TypeAlias = _C.MatchResult
 OptimizationReport: TypeAlias = _C.OptimizationReport
@@ -486,6 +487,7 @@ __all__ = [
     "FunctionCausalMaskPattern",
     "FunctionCosSinCachePattern",
     "FunctionHalfRotaryEmbeddingPattern",
+    "FunctionPattern",
     "GatherConcatPattern",
     "GatherGatherPattern",
     "GatherShapePattern",

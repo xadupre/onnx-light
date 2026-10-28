@@ -1844,6 +1844,7 @@ TEST(custom_values, ValidatesTypedAttributesFunctionsAndSubgraphs) {
   FunctionProto *function = function_model.add_functions();
   function->set_name("Decode");
   function->set_domain("local");
+  function->add_opset("", 18);
   function->add_input("a");
   function->add_output("b");
   function->add_node("Identity", {"a"}, {"b"});

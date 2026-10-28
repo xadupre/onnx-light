@@ -253,7 +253,8 @@ void ExpectCoherentLayerMetadata(const core::builder::GraphBuilder &builder) {
   EXPECT_EQ(builder.Compute().ValueTags(), expected.ValueTags());
   EXPECT_EQ(builder.Compute().NodeTags(), expected.NodeTags());
   EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  EXPECT_TRUE(builder.Compute().PeakMemory().empty());
   ASSERT_EQ(builder.Compute().Size(), builder.Nodes().size());
 
   std::set<std::string> inputs;
@@ -731,14 +732,14 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
     }
     EXPECT_EQ(wrapped_nodes, static_cast<std::size_t>(count * 2));
     EXPECT_EQ(builder.Initializers().size(), 1u);
-    EXPECT_LE(builder.ToModel().functions().size(), 3u);
     ExpectCoherentLayerMetadata(builder);
+    EXPECT_LE(builder.ToModel().functions().size(), 3u);
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
     EXPECT_TRUE(after.Equals(builder.BuildGraph()));
   }
 }
 
-TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfiles) {
+TEST(ComputeContext, IncludesLocalFunctionActivationsInExportedAndFullProfiles) {
   constexpr int64_t width = 16;
   constexpr int64_t expanded_width = 1024;
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
@@ -756,6 +757,8 @@ TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfile
                     LayerShape({expanded_width, width}));
   builder.MakeNode("Projection", {"caller_x", "caller_w1", "caller_w2"}, {"result"}, "ai.rt");
   builder.MakeOutput("result");
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  const ModelProto model = builder.ToModel();
 
   const auto internal_bytes = [](const core::compute::ComputeContext &context) {
     return std::get<int64_t>(std::get<core::expressions::DimType>(
@@ -763,7 +766,6 @@ TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfile
   };
   EXPECT_EQ(internal_bytes(builder.Compute()), 135232);
 
-  const ModelProto model = builder.ToModel();
   core::compute::ComputeContext context;
   context.ComputeShapes(model);
   const auto tags = context.ComputeValueAndNodeTags(model.graph());
@@ -801,6 +803,8 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
   builder.MakeInput("caller_condition", core::symbolic::TensorType::kBool, LayerShape({}));
   builder.MakeNode("BranchFunction", {"caller_x", "caller_condition"}, {"result"}, "ai.rt");
   builder.MakeOutput("result");
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  const ModelProto model = builder.ToModel();
 
   const auto internal_bytes = [](const core::compute::ComputeContext &context) {
     return std::get<int64_t>(
@@ -810,7 +814,6 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
   };
   EXPECT_EQ(internal_bytes(builder.Compute()), 8192);
 
-  const ModelProto model = builder.ToModel();
   core::compute::ComputeContext context;
   context.ComputeShapes(model);
   const auto tags = context.ComputeValueAndNodeTags(model.graph());
@@ -1619,6 +1622,7 @@ TEST(RepeatedLayerPattern, ExtractsRenamedIfBranchesWithExplicitNestedCaptureInp
   EXPECT_EQ(builder.GetShape(input), shape);
   const GraphProto after = builder.BuildGraph();
   ASSERT_EQ(ExpectLayerContracts(after), 2u);
+  ExpectCoherentLayerMetadata(builder);
   EXPECT_EQ(builder.ToModel().functions().size(), 1u);
   ExpectOriginalOperators(before, after);
   for (const auto &node : after.node()) {
@@ -1652,7 +1656,6 @@ TEST(RepeatedLayerPattern, ExtractsRenamedIfBranchesWithExplicitNestedCaptureInp
       EXPECT_TRUE(found) << "Missing explicit captured input " << capture;
     }
   }
-  ExpectCoherentLayerMetadata(builder);
   EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
   EXPECT_TRUE(after.Equals(builder.BuildGraph()));
 }

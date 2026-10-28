@@ -413,7 +413,10 @@ ONNX_LIGHT_PROTO_API void VerifyGraph(const StructTypeCatalogue *struct_types,
 /**
  * Validates a FunctionProto: ``name`` is set, inputs are uniquely named,
  * nodes are topologically sorted with respect to the function's inputs, and
- * every declared output is produced.
+ * every declared output is produced. Opset imports have positive versions and
+ * unique normalized domains; every body operator, including nested graphs,
+ * has an imported domain. Attribute references are declared by ``attribute`` or
+ * ``attribute_proto`` and use consistent types throughout the body.
  *
  * @param function Function to validate.
  *

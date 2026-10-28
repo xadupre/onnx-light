@@ -31,6 +31,19 @@ ModelProto MakeValidModel() {
   return model;
 }
 
+FunctionProto MakeValidFunction() {
+  FunctionProto function;
+  function.set_name("f");
+  function.add_opset("", 18);
+  function.add_input("a");
+  function.add_output("b");
+  auto *node = function.add_node();
+  node->set_op_type("Identity");
+  node->add_input("a");
+  node->add_output("b");
+  return function;
+}
+
 ModelProto MakePersistentModel() {
   ModelProto model = MakeValidModel();
   auto *binding = model.mutable_graph()->add_persistent_bindings();
@@ -525,6 +538,7 @@ TEST(onnx_verify, PersistentBindings_CountsFunctionCallArgumentsWithoutExpanding
   auto *function = model.add_functions();
   function->set_name("UseTwice");
   function->set_domain("custom");
+  function->add_opset("", 18);
   function->add_input("state");
   function->add_output("result");
   auto *body = function->add_node();
@@ -934,15 +948,87 @@ TEST(onnx_verify, VerifyAttribute_TypeMismatch) {
 }
 
 TEST(onnx_verify, VerifyFunction_Valid) {
-  FunctionProto function;
-  function.set_name("f");
-  function.add_input("a");
-  function.add_output("b");
-  NodeProto &node = *function.add_node();
-  node.set_op_type("Identity");
-  node.add_input("a");
-  node.add_output("b");
+  const FunctionProto function = MakeValidFunction();
   EXPECT_NO_THROW(VerifyFunction(function));
+}
+
+TEST(onnx_verify, VerifyFunction_OpsetImports) {
+  auto function = MakeValidFunction();
+  function.mutable_node(0)->set_domain("ai.onnx");
+  EXPECT_NO_THROW(VerifyFunction(function));
+  function.clear_opset_import();
+  EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+
+  for (int version : {-1, 0}) {
+    function = MakeValidFunction();
+    function.ref_opset_import()[0].set_version(version);
+    EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+  }
+  for (const std::string domain : {"", "ai.onnx"}) {
+    function = MakeValidFunction();
+    function.add_opset(domain, 18);
+    EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+  }
+}
+
+TEST(onnx_verify, VerifyFunction_AttributeReferences) {
+  auto function = MakeValidFunction();
+  auto *reference = function.mutable_node(0)->add_attribute();
+  reference->set_name("alpha");
+  reference->set_type(AttributeProto::FLOAT);
+  reference->set_ref_attr_name("scale");
+  EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+  function.add_attribute("scale");
+  EXPECT_NO_THROW(VerifyFunction(function));
+
+  function.clear_attribute();
+  auto *fallback = function.add_attribute_proto();
+  fallback->set_name("scale");
+  fallback->set_type(AttributeProto::FLOAT);
+  fallback->set_f(1.0f);
+  EXPECT_NO_THROW(VerifyFunction(function));
+
+  auto *second = function.mutable_node(0)->add_attribute();
+  second->set_name("beta");
+  second->set_type(AttributeProto::INT);
+  second->set_ref_attr_name("scale");
+  EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+  second->set_type(AttributeProto::FLOAT);
+  EXPECT_NO_THROW(VerifyFunction(function));
+}
+
+TEST(onnx_verify, VerifyFunction_NestedImportsAndAttributeReferences) {
+  for (bool repeated : {false, true}) {
+    SCOPED_TRACE(repeated);
+    auto function = MakeValidFunction();
+    auto *graph = AddNestedGraph(*function.mutable_node(0), repeated);
+    graph->set_name("nested");
+    auto *nested = graph->add_node();
+    nested->set_op_type("Identity");
+    nested->set_domain("custom");
+    nested->add_input("a");
+    nested->add_output("inner");
+    graph->add_output()->set_name("inner");
+    EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+    function.add_opset("custom", 1);
+    EXPECT_NO_THROW(VerifyFunction(function));
+
+    auto *reference = nested->add_attribute();
+    reference->set_name("alpha");
+    reference->set_type(AttributeProto::FLOAT);
+    reference->set_ref_attr_name("scale");
+    EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+    function.add_attribute("scale");
+    EXPECT_NO_THROW(VerifyFunction(function));
+
+    auto *outer = function.mutable_node(0)->add_attribute();
+    outer->set_name("alpha");
+    outer->set_type(AttributeProto::INT);
+    outer->set_ref_attr_name("scale");
+    EXPECT_THROW(VerifyFunction(function), std::invalid_argument);
+    outer->set_type(AttributeProto::FLOAT);
+    EXPECT_NO_THROW(VerifyFunction(function));
+  }
 }
 
 TEST(onnx_verify, VerifyFunction_UnproducedOutput) {

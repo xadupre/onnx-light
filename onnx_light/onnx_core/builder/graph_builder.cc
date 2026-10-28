@@ -790,7 +790,7 @@ void GraphBuilder::set_device(Device device) {
     return;
   }
   device_ = device;
-  compute_.ComputePeakMemory(BuildGraph(), device_);
+  compute_.ClearMemoryProfiles();
 }
 
 void GraphBuilder::CopyDeviceTargetsFrom(const GraphBuilder &source) {
@@ -1209,7 +1209,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
 }
 
 void GraphBuilder::RefreshAfterMutation() {
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_, MemoryNodeMaterializer());
+  compute_.ClearMemoryProfiles();
   RefreshAncestors();
 }
 
@@ -1255,7 +1255,6 @@ void GraphBuilder::RebuildMetadata() {
     CollectNodeReferences(node, references);
     compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
     compute_.AppendNodeConstant(node, node_index);
-    compute_.AppendNodePeakMemory(node, node_index, device_, MemoryNodeMaterializer());
   }
   for (const auto &output : outputs_) {
     const std::string name = output.name().value();
@@ -1265,11 +1264,8 @@ void GraphBuilder::RebuildMetadata() {
 
   GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false,
                                     /*share_initializers=*/true);
-  const auto tags = compute_.ComputeValueAndNodeTags(graph);
+  compute_.ComputeValueAndNodeTags(graph);
   compute_.ComputeConstants(graph);
-  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                    tags.first);
-  compute_.ComputePeakMemory(graph, device_);
 }
 
 void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
@@ -2257,12 +2253,10 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
     CollectNodeReferences(missing, missing_references);
     compute_.AppendNodeReuse(nodes_, missing_index, compute_.Shapes(), missing_references);
     compute_.AppendNodeConstant(missing, missing_index);
-    compute_.AppendNodePeakMemory(missing, missing_index, device_, MemoryNodeMaterializer());
   }
   if (compute_.Size() != nodes_.size()) {
     throw BuilderError("GraphBuilder: incremental metadata is not aligned with the node list.");
   }
-  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes(), device_, MemoryNodeMaterializer());
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
@@ -2303,7 +2297,6 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
   CollectNodeReferences(stored, references);
   compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
-  compute_.AppendNodePeakMemory(materialized, node_index, device_);
   RefreshAfterMutation();
 
   return resolved_outputs;
@@ -4291,6 +4284,9 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   }
   EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
                       "GraphBuilder::Finalize: metadata is not aligned with the graph.");
+  compute_.ClearMemoryProfiles();
+  compute_.ComputePeakMemory(graph, device_);
+  compute_.RefreshIncrementalMemory(graph.node(), compute_.Shapes(), device_);
   EXT_ENFORCE_INVALID(
       compute_.PeakMemory().size() == graph.node().size(),
       "GraphBuilder::Finalize: peak-memory metadata is not aligned with the graph.");

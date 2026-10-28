@@ -50,6 +50,8 @@ class TestCMakeVersion(unittest.TestCase):
 
     def test_ci_installs_persistent_cmake_before_package_builds(self):
         workflows = self.root / ".github/workflows"
+        core = (workflows / "ci_core.yml").read_text(encoding="utf-8")
+        self.assertIn("run: pip install --no-build-isolation -C build-dir=build", core)
         for name in (
             "ci_core.yml",
             "ci_debug.yml",

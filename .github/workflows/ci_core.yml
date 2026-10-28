@@ -232,13 +232,13 @@ jobs:
       # sccache caches compiled objects in the GitHub Actions cache so repeated
       # runs that do not touch C++ sources are near-instant, matching the
       # macOS/Windows core builds that already use sccache.
-      - name: Install CMake
-        run: python -m pip install "cmake>=4.0"
+      - name: Install CMake and build dependencies
+        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
 
       - name: Build and Install package without kernels/backend
         env:
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: pip freeze
         run: pip freeze

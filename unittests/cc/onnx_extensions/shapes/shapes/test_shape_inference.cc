@@ -1607,6 +1607,62 @@ TEST(OnnxOptimShapeInference, InferShapesModelPreservesAnnotatedCustomOperatorOu
   EXPECT_EQ(output.shape().dim(1).dim_value(), 3);
 }
 
+TEST(OnnxOptimShapeInference, LocalFunctionPreservesAnnotatedCustomOutputsAndOptionalSlots) {
+  ModelProto model = MakeLocalFunctionAddModel();
+  auto &function = model.ref_functions()[0];
+  auto &custom = function.ref_node()[0];
+  custom.set_op_type("Opaque");
+  custom.set_domain("com.acme");
+  custom.ref_output()[0] = "annotated";
+  custom.add_output("");
+  function.add_opset("com.acme", 1);
+  auto &annotation = *function.add_value_info();
+  annotation.set_name("annotated");
+  SetValueInfoTensorType(annotation, TensorProto::FLOAT, {3, 4});
+  function.add_node(MakeNode("Abs", {"annotated"}, {"c"}));
+
+  core::shapes::ShapesContext ctx;
+  ASSERT_NO_THROW(ctx.ComputeShapeModel(model));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(4)}));
+
+  ModelProto unannotated = model;
+  unannotated.ref_functions()[0].clear_value_info();
+  EXPECT_THROW(core::shapes::InferShapesModel(unannotated), std::invalid_argument);
+
+  ModelProto type_only = model;
+  type_only.ref_functions()[0]
+      .ref_value_info()[0]
+      .mutable_type()
+      ->mutable_tensor_type()
+      ->clear_shape();
+  EXPECT_THROW(core::shapes::InferShapesModel(type_only), std::invalid_argument);
+
+  ModelProto missing_dtype = model;
+  missing_dtype.ref_functions()[0]
+      .ref_value_info()[0]
+      .mutable_type()
+      ->mutable_tensor_type()
+      ->clear_elem_type();
+  EXPECT_THROW(core::shapes::InferShapesModel(missing_dtype), std::invalid_argument);
+
+  ModelProto invalid_standard = model;
+  auto &invalid = invalid_standard.ref_functions()[0].ref_node()[0];
+  invalid.set_domain("");
+  invalid.set_op_type("Add");
+  invalid.clear_input();
+  invalid.add_input("a");
+  EXPECT_THROW(core::shapes::InferShapesModel(invalid_standard), std::invalid_argument);
+
+  core::shapes::ShapesContext custom_ctx;
+  custom_ctx.SetCustomShapeInferenceFunction(
+      "com.acme", "Opaque", [](core::shapes::ShapesContext &, const NodeProto &) {
+        throw std::invalid_argument("custom inference failure");
+      });
+  EXPECT_THROW(custom_ctx.ComputeShapeModel(model), std::invalid_argument);
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback) {
   NodeProto node = MakeNode("CustomIdentity", {"X"}, {"Y"}, "com.acme");
   core::shapes::ShapesContext ctx;

@@ -18,9 +18,9 @@
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
-#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -459,17 +459,6 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
     }
     if (!cached->second)
       return false;
-  } else {
-    const bool standard_domain =
-        node.domain().value().empty() || node.domain().value() == "ai.onnx";
-    const bool recognized_standard =
-        standard_domain &&
-        core::shapes::DispatchTable().count("ai.onnx:" + node.op_type().value()) != 0;
-    if (!node.overload().value().empty() || node.op_type().value() == "Dropout" ||
-        (!IsPrimitiveAnchor(node) &&
-         (!recognized_standard ||
-          core::compute::IsNonDeterministicOp(node.domain().value(), node.op_type().value()))))
-      return false;
   }
   for (const auto &attribute : node.attribute()) {
     if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth, work,
@@ -478,6 +467,9 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
   }
   return true;
 }
+
+struct Index;
+ValueInfoProto ValueInfo(Index &index, const std::string &name);
 
 struct Index {
   GraphGraph &graph;
@@ -522,6 +514,19 @@ struct Index {
         std::set<std::string> visiting;
         entry.usable = IsSafeNode(entry.materialized, graph.Builder(), safe_functions, visiting, 0,
                                   safety_work);
+      }
+      if (entry.usable && !core::shapes::HasShapeInference(graph.Builder().Shapes(), node)) {
+        std::vector<ValueInfoProto> outputs;
+        outputs.reserve(node.output().size());
+        for (const auto &name : node.output()) {
+          if (!name.empty())
+            outputs.push_back(ValueInfo(*this, name));
+        }
+        std::unordered_map<std::string, const ValueInfoProto *> annotations;
+        for (const auto &output : outputs)
+          annotations.emplace(output.name(), &output);
+        entry.usable = core::shapes::CanSeedAnnotatedOutputsForUnknownCustomOp(
+            graph.Builder().Shapes(), node, annotations);
       }
       if (entry.usable) {
         std::vector<std::string> attributes;
@@ -923,19 +928,17 @@ bool Schedule(Index &index, Plan &plan) {
       }
     }
   }
-  // Unwrapped stochastic or opaque calls must keep their original relative
-  // execution order, even when contraction would otherwise move one earlier.
-  const NodeProto *previous_boundary = nullptr;
+  // Encapsulation does not assume purity: every original operation keeps its
+  // execution order, including calls inside contracted regions.
+  const NodeProto *previous = nullptr;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
     const NodeProto *node = &nodes[position];
-    if (index.data.at(node).usable)
-      continue;
-    if (previous_boundary != nullptr) {
-      const std::size_t from = owner.at(previous_boundary), to = owner.at(node);
+    if (previous != nullptr) {
+      const std::size_t from = owner.at(previous), to = owner.at(node);
       if (from != to && successors[from].insert(to).second)
         ++indegree[to];
     }
-    previous_boundary = node;
+    previous = node;
   }
   using Ready = std::pair<std::size_t, std::size_t>;
   std::priority_queue<Ready, std::vector<Ready>, std::greater<Ready>> ready;

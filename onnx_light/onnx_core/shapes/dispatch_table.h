@@ -76,6 +76,9 @@ bool AcceptsTypeOnlyTensorShapeInputs(const std::string &domain, const std::stri
 /** Returns whether all node inputs satisfy its shape function's descriptor requirements. */
 bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node);
 
+/** Returns whether model-local, context-local or global shape inference is available. */
+bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node);
+
 /**
  * Signature of every per-operator peak-memory function registered in
  * :cpp:func:`PeakMemoryDispatchTable`. Mirroring :cpp:type:`ComputeShapeFn`,

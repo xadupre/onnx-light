@@ -23,6 +23,7 @@
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_proto/simple_span.h"
 
@@ -378,10 +379,15 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
     }
     return false;
   };
+  std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+  for (const ValueInfoProto &value_info : function->value_info())
+    declared_outputs[value_info.name()] = &value_info;
   for (const NodeProto &inner : bound_nodes) {
     if (shapes::ShapeInputsAvailable(body_shapes, inner) &&
-        !contains_unbound_attributes(contains_unbound_attributes, inner))
-      body_shapes.ComputeShapeNode(inner);
+        !contains_unbound_attributes(contains_unbound_attributes, inner)) {
+      if (!shapes::TrySeedAnnotatedOutputsForUnknownCustomOp(body_shapes, inner, declared_outputs))
+        body_shapes.ComputeShapeNode(inner);
+    }
   }
   for (const ValueInfoProto &value_info : function->value_info()) {
     if (!body_shapes.Has(value_info.name().value()) && value_info.has_type() &&

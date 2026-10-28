@@ -38,6 +38,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -153,6 +154,30 @@ struct ConstantFoldingOptions {
   bool raise_on_missing_weight_kernel = false;
 };
 
+/// Collects builder-local operator schemas and shape-inference functions.
+/// Builders snapshot these registrations at construction; later registry edits
+/// affect only subsequently constructed builders. Nested builders inherit the snapshot.
+class OperatorRegistry {
+public:
+  /// Registers or replaces one domain/name/version schema.
+  void RegisterSchema(LightOpSchema schema);
+
+  /// Registers or replaces a domain/operator shape-inference function.
+  void RegisterShapeInference(const std::string &domain, const std::string &op_type,
+                              ShapesContext::CustomComputeShapeFn fn);
+
+  /// Returns the registered schema histories.
+  const std::vector<LightOpSchema> &Schemas() const noexcept { return schemas_; }
+
+  /// Installs local callbacks without changing global registrations.
+  void ConfigureShapes(ShapesContext &shapes) const;
+
+private:
+  std::vector<LightOpSchema> schemas_;
+  std::map<std::pair<std::string, std::string>, ShapesContext::CustomComputeShapeFn>
+      shape_inference_;
+};
+
 /**
  * Incrementally builds an ONNX graph, model or function while keeping the
  * associated compute metadata up to date.
@@ -185,7 +210,8 @@ public:
   /// @param schema_lookup Optional schema provider used to validate nodes at the selected opset.
   /// @param opsets        Explicit domain-to-version imports, applied before adding nodes.
   explicit GraphBuilder(std::string name = "graph", SchemaLookupFn schema_lookup = {},
-                        const std::unordered_map<std::string, int> &opsets = {});
+                        const std::unordered_map<std::string, int> &opsets = {},
+                        const OperatorRegistry &local_registry = {});
 
   /// Constructs a builder from an existing model by replaying every graph and
   /// function node through :cpp:func:`MakeNode`.
@@ -200,7 +226,8 @@ public:
   /// are available; an unspecified formal-input rank is never treated as scalar.
   /// Requires callees before callers in the function definitions; a forward call,
   /// including one in a nested graph attribute, throws :cpp:class:`BuilderError`.
-  explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
+  explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {},
+                        const OperatorRegistry &local_registry = {});
 
   ~GraphBuilder();
 
@@ -248,6 +275,14 @@ public:
 
   /// Read-only access to the recorded ``domain -> opset version`` map.
   const std::unordered_map<std::string, int> &OpsetVersions() const noexcept { return opsets_; }
+
+  /// Returns the selected local schema, then the global schema, at the selected opset.
+  /// Returns nullptr for unknown operators; rejects known histories without
+  /// an applicable local or global schema.
+  const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "") const;
+
+  /// Returns an independent copy of the constructor's local registry snapshot.
+  OperatorRegistry LocalRegistry() const { return local_registry_; }
 
   // ── Name management ──────────────────────────────────────────────────
 
@@ -622,6 +657,10 @@ public:
     return FindNamedBuilder(local_functions_, name) != nullptr;
   }
 
+  /// Returns whether an exact function identity is visible from this builder.
+  bool HasLocalFunction(const std::string &name, const std::string &domain,
+                        const std::string &overload = "") const;
+
   /// Returns the nested local-function builder named ``name``. Throws when it
   /// does not exist.
   GraphBuilder &LocalFunction(const std::string &name) {
@@ -803,9 +842,16 @@ private:
   // is queried at most once per operator; results are grouped by domain so node
   // validation is a map lookup rather than a linear scan on every call.
   const std::vector<LightOpSchema> &DomainSchemas(const std::string &op_type,
-                                                  const std::string &normalised_domain);
+                                                  const std::string &normalised_domain) const;
 
   void ValidateLocalFunctionName(const std::string &name, const std::string &domain);
+
+  std::vector<std::string> MakeNodeImpl(const std::string &op_type,
+                                        const std::vector<std::string> &inputs,
+                                        const std::vector<std::string> &outputs,
+                                        const std::string &domain, const std::string &name,
+                                        const utils::RepeatedProtoField<AttributeProto> &attributes,
+                                        const std::string &overload, bool preserve_empty_outputs);
 
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
@@ -977,8 +1023,10 @@ private:
   std::optional<std::string> doc_string_;
   GraphBuilder *parent_ = nullptr;
   SchemaLookupFn schema_lookup_;
+  OperatorRegistry local_registry_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
-  std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
+  mutable std::unordered_map<std::string,
+                             std::unordered_map<std::string, std::vector<LightOpSchema>>>
       schema_table_;
   ComputeContext compute_;
   utils::RepeatedProtoField<ValueInfoProto> inputs_;

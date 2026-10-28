@@ -1883,12 +1883,15 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         self._assert_no_match(wrong_branch, {"X": self._range(3, 3, bias=-0.5)}, "LeakyRelu")
 
         old_opset = self._make_leaky_relu_decomposition(dtype=np.float32, slope=0.75, opset=5)
+        with self.assertRaisesRegex(ValueError, "Where.*unavailable at opset 5"):
+            optimization.GraphBuilder(old_opset)
         self._assert_no_match(
             old_opset,
             {"X": self._range(3, 3, bias=-0.5)},
             "LeakyRelu",
             check_model=False,
             evaluate=False,
+            schema_lookup=False,
         )
 
     def test_max_relu_types_and_commutation(self):

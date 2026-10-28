@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -30,12 +33,28 @@
  * :cpp:func:`ShapesContext::ApplyInferredShapesToModel`,
  * :cpp:func:`ShapesContext::CheckInputsAvailable` and
  * :cpp:func:`ShapesContext::CheckOutputsNotAvailable`) are defined as
- * methods of :cpp:class:`ShapesContext`. The only free function left
- * in this header is :cpp:func:`InferShapesModel`, a convenience helper
- * that does not need a caller-supplied context.
+ * methods of :cpp:class:`ShapesContext`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
+
+/**
+ * Returns whether complete tensor annotations can seed an unknown custom operator's outputs.
+ * Does not mutate the context or check input/output availability.
+ */
+bool CanSeedAnnotatedOutputsForUnknownCustomOp(
+    const ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs);
+
+/**
+ * Seeds declared tensor outputs for a custom operator without an inference handler.
+ * Requires a tensor dtype and shape for every non-empty output and validates input
+ * and output availability. Returns false without changing the context
+ * for supported domains, registered handlers or incomplete annotations.
+ */
+bool TrySeedAnnotatedOutputsForUnknownCustomOp(
+    ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs);
 
 /**
  * Convenience helper: constructs a fresh :cpp:class:`ShapesContext`,

@@ -429,17 +429,48 @@ TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &te
   return proto;
 }
 
+void OperatorRegistry::RegisterSchema(LightOpSchema schema) {
+  if (schema.name().empty() || schema.since_version() <= 0)
+    throw BuilderError("OperatorRegistry: schemas require a name and a positive version.");
+  for (auto &existing : schemas_) {
+    if (existing.name() == schema.name() &&
+        NormaliseDomain(existing.domain()) == NormaliseDomain(schema.domain()) &&
+        existing.since_version() == schema.since_version()) {
+      existing = std::move(schema);
+      return;
+    }
+  }
+  schemas_.push_back(std::move(schema));
+}
+
+void OperatorRegistry::RegisterShapeInference(const std::string &domain, const std::string &op_type,
+                                              ShapesContext::CustomComputeShapeFn fn) {
+  if (op_type.empty() || !fn)
+    throw BuilderError("OperatorRegistry: shape inference requires an operator and a callback.");
+  shape_inference_[{NormaliseDomain(domain), op_type}] = std::move(fn);
+}
+
+void OperatorRegistry::ConfigureShapes(ShapesContext &shapes) const {
+  for (const auto &[identity, fn] : shape_inference_)
+    shapes.SetCustomShapeInferenceFunction(identity.first, identity.second, fn);
+}
+
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup,
-                           const std::unordered_map<std::string, int> &opsets)
-    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {
+                           const std::unordered_map<std::string, int> &opsets,
+                           const OperatorRegistry &local_registry)
+    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)),
+      local_registry_(local_registry) {
+  local_registry_.ConfigureShapes(compute_.Shapes());
   for (const auto &[domain, version] : opsets) {
     SetOpsetVersion(domain, version);
   }
 }
 
-GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
+GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup,
+                           const OperatorRegistry &local_registry)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
-      schema_lookup_(std::move(schema_lookup)) {
+      schema_lookup_(std::move(schema_lookup)), local_registry_(local_registry) {
+  local_registry_.ConfigureShapes(compute_.Shapes());
   // Copy only metadata: copying the optional graph would serialize its payload
   // before discarding it. Graphs, functions, types and opsets are imported below.
   model_template_.ir_version_ = model.ir_version_;
@@ -506,7 +537,8 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     const std::string function_domain = function.domain().value();
     // ONNX functions have an independent namespace and are identified by all
     // three fields, not by graph value names or the bare function name.
-    auto child = std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_);
+    auto child =
+        std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_, local_registry_);
     child->is_local_function_ = true;
     child->function_domain_ = function_domain;
     child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
@@ -539,6 +571,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   metadata_ = std::move(other.metadata_);
   doc_string_ = std::move(other.doc_string_);
   schema_lookup_ = std::move(other.schema_lookup_);
+  local_registry_ = std::move(other.local_registry_);
   schema_table_ = std::move(other.schema_table_);
   compute_ = std::move(other.compute_);
   inputs_ = std::move(other.inputs_);
@@ -1776,10 +1809,10 @@ void GraphBuilder::ImportNode(const NodeProto &node) {
   outputs.reserve(node.output().size());
   for (std::size_t i = 0; i < node.output().size(); ++i)
     outputs.push_back(node.output(i));
-  MakeNode(node.op_type().value(), inputs, outputs,
-           node.domain().empty() ? std::string() : node.domain().value(),
-           node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
-           node.overload().value());
+  MakeNodeImpl(node.op_type().value(), inputs, outputs,
+               node.domain().empty() ? std::string() : node.domain().value(),
+               node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+               node.overload().value(), /*preserve_empty_outputs=*/true);
   NodeProto &imported_node = nodes_.back();
   imported_node.name_ = node.name_;
   imported_node.op_type_ = node.op_type_;
@@ -1950,7 +1983,8 @@ void GraphBuilder::MaterializeGraphReferences(NodeProto &node, bool share_initia
 // ── Nodes ──────────────────────────────────────────────────────────────
 
 const std::vector<LightOpSchema> &
-GraphBuilder::DomainSchemas(const std::string &op_type, const std::string &normalised_domain) {
+GraphBuilder::DomainSchemas(const std::string &op_type,
+                            const std::string &normalised_domain) const {
   static const std::vector<LightOpSchema> kEmpty;
   auto table_it = schema_table_.find(op_type);
   if (table_it == schema_table_.end()) {
@@ -1966,13 +2000,57 @@ GraphBuilder::DomainSchemas(const std::string &op_type, const std::string &norma
   return domain_it == table_it->second.end() ? kEmpty : domain_it->second;
 }
 
+const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
+                                              const std::string &domain) const {
+  const int opset = OpsetVersion(domain);
+  if (opset <= 0)
+    throw BuilderError("GraphBuilder: schema lookup requires an explicit positive opset.");
+  const std::string normalized = NormaliseDomain(domain);
+  const LightOpSchema *selected = nullptr;
+  bool known = false;
+  for (const auto &candidate : local_registry_.Schemas()) {
+    if (candidate.name() != op_type || NormaliseDomain(candidate.domain()) != normalized)
+      continue;
+    known = true;
+    if (candidate.since_version() <= opset &&
+        (selected == nullptr || candidate.since_version() > selected->since_version()))
+      selected = &candidate;
+  }
+  if (selected != nullptr)
+    return selected;
+  const auto &global = DomainSchemas(op_type, normalized);
+  for (const auto &candidate : global) {
+    if (candidate.since_version() <= opset &&
+        (selected == nullptr || candidate.since_version() > selected->since_version()))
+      selected = &candidate;
+  }
+  if (selected == nullptr && (known || !global.empty()))
+    throw BuilderError("GraphBuilder: operator '" + domain + "::" + op_type +
+                       "' is unavailable at opset " + std::to_string(opset) + ".");
+  return selected;
+}
+
+bool GraphBuilder::HasLocalFunction(const std::string &name, const std::string &domain,
+                                    const std::string &overload) const {
+  const std::string key = ShapesContext::LocalFunctionKey(domain, name, overload);
+  const auto contains = [&](const auto &self, const GraphBuilder &builder) -> bool {
+    for (const auto &function : builder.local_functions_) {
+      if (ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                          function->function_template_.overload()) == key ||
+          self(self, *function))
+        return true;
+    }
+    for (const auto &subgraph : builder.subgraphs_) {
+      if (self(self, *subgraph))
+        return true;
+    }
+    return false;
+  };
+  return Shapes().HasLocalFunction(key) || contains(contains, ModelBuilder());
+}
+
 bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
-  const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
-  const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
-  const auto &table = core::shapes::DispatchTable();
-  return table.find(key) != table.end() ||
-         compute_.Shapes().HasLocalFunction(
-             ShapesContext::LocalFunctionKey(domain, node.op_type(), node.overload()));
+  return core::shapes::HasShapeInference(compute_.Shapes(), node);
 }
 
 void GraphBuilder::RefreshLocalFunctions() {
@@ -2016,6 +2094,16 @@ std::vector<std::string> GraphBuilder::MakeNode(
     const std::string &op_type, const std::vector<std::string> &inputs,
     const std::vector<std::string> &outputs, const std::string &domain, const std::string &name,
     const utils::RepeatedProtoField<AttributeProto> &attributes, const std::string &overload) {
+  return MakeNodeImpl(op_type, inputs, outputs, domain, name, attributes, overload,
+                      /*preserve_empty_outputs=*/false);
+}
+
+std::vector<std::string>
+GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::string> &inputs,
+                           const std::vector<std::string> &outputs, const std::string &domain,
+                           const std::string &name,
+                           const utils::RepeatedProtoField<AttributeProto> &attributes,
+                           const std::string &overload, bool preserve_empty_outputs) {
   const int opset = OpsetVersion(domain);
   if (opset <= 0) {
     throw BuilderError("GraphBuilder: node '" + op_type + "' has no explicit opset for domain '" +
@@ -2024,12 +2112,6 @@ std::vector<std::string> GraphBuilder::MakeNode(
                        "opsets to the constructor.");
   }
   const std::string normalised_domain = NormaliseDomain(domain);
-  if (!overload.empty() &&
-      (!DomainSchemas(op_type, normalised_domain).empty() ||
-       core::shapes::DispatchTable().count(normalised_domain + ":" + op_type) != 0)) {
-    throw BuilderError("GraphBuilder: registered operator '" + domain + "::" + op_type +
-                       "' cannot specify a function overload.");
-  }
   {
     GraphBuilder *root = this;
     while (root->parent_ != nullptr) {
@@ -2080,11 +2162,13 @@ std::vector<std::string> GraphBuilder::MakeNode(
       ShapesContext::LocalFunctionKey(domain, op_type, overload));
   const LightOpSchema *schema = nullptr;
   if (local_function == nullptr) {
-    for (const LightOpSchema &candidate : DomainSchemas(op_type, normalised_domain)) {
-      if (candidate.since_version() <= opset &&
-          (schema == nullptr || candidate.since_version() > schema->since_version())) {
-        schema = &candidate;
-      }
+    schema = FindSchema(op_type, domain);
+    if (!overload.empty() &&
+        (schema != nullptr || !DomainSchemas(op_type, normalised_domain).empty() ||
+         core::shapes::DispatchTable().count(normalised_domain + ":" + op_type) != 0 ||
+         compute_.Shapes().GetCustomShapeInferenceFunction(domain, op_type) != nullptr)) {
+      throw BuilderError("GraphBuilder: registered operator '" + domain + "::" + op_type +
+                         "' cannot specify a function overload.");
     }
   }
 
@@ -2114,6 +2198,8 @@ std::vector<std::string> GraphBuilder::MakeNode(
   for (std::size_t i = 0; i < num_outputs; ++i) {
     if (i < outputs.size() && !outputs[i].empty()) {
       resolved_outputs.push_back(ReserveName(outputs[i]));
+    } else if (preserve_empty_outputs && i < outputs.size()) {
+      resolved_outputs.emplace_back();
     } else {
       resolved_outputs.push_back(UniqueName(op_type));
     }
@@ -3684,7 +3770,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   }
   ValidateLocalFunctionName(name, domain);
   ReserveName(name);
-  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets, local_registry_);
   child->is_local_function_ = true;
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
@@ -3716,7 +3802,8 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
     throw BuilderError("GraphBuilder: a subgraph named '" + name + "' already exists.");
   }
   ReserveName(name);
-  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  auto child = std::make_unique<GraphBuilder>(
+      name, schema_lookup_, std::unordered_map<std::string, int>{}, local_registry_);
   child->parent_ = this;
   child->compute_.Shapes() = Shapes().MakeChildContext();
   for (const auto &entry : opsets_) {
@@ -4435,15 +4522,7 @@ void GraphBuilder::ValidateInitializerConstants() const {
   if (opset <= 0)
     throw BuilderError(
         "GraphBuilder: exporting initializer constants requires a default-domain opset.");
-  const auto schemas = schema_lookup_ ? schema_lookup_("Constant") : std::vector<LightOpSchema>{};
-  const LightOpSchema *schema = nullptr;
-  for (const auto &candidate : schemas) {
-    if (NormaliseDomain(candidate.domain()) == NormaliseDomain("") &&
-        candidate.since_version() <= opset &&
-        (schema == nullptr || candidate.since_version() > schema->since_version())) {
-      schema = &candidate;
-    }
-  }
+  const LightOpSchema *schema = FindSchema("Constant");
   for (const auto &initializer : initializers_) {
     const auto &name = initializer.name().value();
     if (std::any_of(inputs_.begin(), inputs_.end(),

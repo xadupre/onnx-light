@@ -49,6 +49,149 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, LocalSchemasOverrideApplicableGlobalVersionsWithoutLeaking) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::OperatorRegistry registry;
+  core::schema::LightOpSchema local("Identity", "", 1, "local", {{"x", "", "tensor(float)"}},
+                                    {{"left", "", "tensor(float)"}, {"right", "", "tensor(float)"}},
+                                    {});
+  registry.RegisterSchema(local);
+  registry.RegisterShapeInference("", "Identity",
+                                  [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                    for (const auto &output : node.output())
+                                      ctx.CopyValueFrom(output, ctx, node.input(0));
+                                  });
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}}, registry);
+  ASSERT_NE(builder.FindSchema("Identity"), nullptr);
+  EXPECT_EQ(builder.FindSchema("Identity")->doc(), "local");
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  EXPECT_THROW(builder.MakeNode("Identity", {"x"}, {"invalid"}), core::builder::BuilderError);
+  EXPECT_FALSE(builder.HasName("invalid"));
+  builder.MakeNode("Identity", {"x"}, {"left", "right"});
+  EXPECT_EQ(builder.GetShape("right").Shape(), MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"right"}, {"fallback"});
+  EXPECT_EQ(builder.GetShape("fallback").Shape(), MakeShape({2, 3}));
+
+  core::builder::GraphBuilder independent("other", SchemaLookup(), {{"", 18}});
+  EXPECT_EQ(independent.FindSchema("Identity")->max_output(), 1);
+  independent.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  independent.MakeNode("Identity", {"x"}, {"y"});
+  EXPECT_EQ(independent.GetShape("y").Shape(), MakeShape({2, 3}));
+
+  core::builder::OperatorRegistry future;
+  future.RegisterSchema(core::schema::LightOpSchema("Identity", "ai.onnx", 30, "future",
+                                                    {{"x", "", "tensor(float)"}},
+                                                    {{"y", "", "tensor(float)"}}, {}));
+  core::builder::GraphBuilder older("older", SchemaLookup(), {{"", 18}}, future);
+  EXPECT_LE(older.FindSchema("Identity")->since_version(), 18);
+  EXPECT_NE(older.FindSchema("Identity")->doc(), "future");
+  future.RegisterSchema(core::schema::LightOpSchema(
+      "Future", "custom", 2, "", {{"x", "", "tensor(float)"}}, {{"y", "", "tensor(float)"}}, {}));
+  core::builder::GraphBuilder unavailable("unavailable", SchemaLookup(), {{"custom", 1}}, future);
+  unavailable.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  EXPECT_THROW(unavailable.MakeNode("Future", {"x"}, {"y"}, "custom"), core::builder::BuilderError);
+  EXPECT_FALSE(unavailable.HasName("y"));
+  EXPECT_THROW(future.RegisterShapeInference("", "Identity", {}), core::builder::BuilderError);
+}
+
+TEST(GraphBuilder, LocalShapeSnapshotsReachNestedBuildersAndMemoryInference) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::OperatorRegistry registry;
+  registry.RegisterShapeInference("local.registry", "Project",
+                                  [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                    ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                  });
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.registry", 1}},
+                                      registry);
+  registry.RegisterShapeInference("local.registry", "Project",
+                                  [](core::shapes::ShapesContext &, const NodeProto &) {
+                                    throw std::invalid_argument("local registry failure");
+                                  });
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Project", {"x"}, {"projected"}, "local.registry");
+  auto &body = builder.MakeSubgraph("body");
+  body.MakeNode("Project", {"projected"}, {"captured"}, "local.registry");
+  EXPECT_EQ(body.GetShape("captured").Shape(), MakeShape({2, 3}));
+  auto &function = builder.MakeLocalFunction("F", "local.registry");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Project", {"a"}, {"b"}, "local.registry");
+  function.MakeOutput("b");
+  builder.MakeNode("F", {"projected"}, {"y"}, "local.registry");
+  builder.MakeOutput("y");
+  EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2, 3}));
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  builder.SetOpsetVersion("local.registry", 2);
+  EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2, 3}));
+
+  core::builder::GraphBuilder imported(builder.ToModel(), SchemaLookup(), builder.LocalRegistry());
+  EXPECT_EQ(imported.GetShape("y").Shape(), MakeShape({2, 3}));
+  core::builder::GraphBuilder failing("failing", SchemaLookup(), {{"local.registry", 1}}, registry);
+  failing.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  EXPECT_THROW(failing.MakeNode("Project", {"x"}, {"y"}, "local.registry"), std::invalid_argument);
+  core::builder::GraphBuilder isolated("isolated", SchemaLookup(), {{"local.registry", 1}});
+  isolated.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  isolated.MakeNode("Project", {"x"}, {"y"}, "local.registry");
+  EXPECT_FALSE(isolated.HasShape("y"));
+}
+
+TEST(GraphBuilder, ModelFunctionsPrecedeLocalSchemasAndShapeCallbacks) {
+  onnx_shapes::RegisterShapeFunctions();
+  core::builder::OperatorRegistry registry;
+  registry.RegisterSchema(core::schema::LightOpSchema(
+      "F", "local.registry", 1, "", {{"x", "", "tensor(float)"}},
+      {{"left", "", "tensor(float)"}, {"right", "", "tensor(float)"}}, {}));
+  registry.RegisterShapeInference(
+      "local.registry", "F", [](core::shapes::ShapesContext &, const NodeProto &) {
+        throw std::invalid_argument("must not replace a model-local function");
+      });
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.registry", 1}},
+                                      registry);
+  auto &function = builder.MakeLocalFunction("F", "local.registry");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Abs", {"a"}, {"b"});
+  function.MakeOutput("b");
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"x"}, {"y"}, "local.registry");
+  builder.MakeOutput("y");
+  EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2, 3}));
+  core::builder::GraphBuilder imported(builder.ToModel(), SchemaLookup(), registry);
+  EXPECT_EQ(imported.GetShape("y").Shape(), MakeShape({2, 3}));
+  ModelProto overloaded = builder.ToModel();
+  overloaded.ref_functions()[0].set_overload("special");
+  overloaded.mutable_graph()->ref_node()[0].set_overload("special");
+  core::builder::GraphBuilder imported_overload(overloaded, SchemaLookup(), registry);
+  EXPECT_EQ(imported_overload.GetShape("y").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, PreservesImportedOptionalOutputsWithoutChangingGeneratedNames) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  const auto generated =
+      builder.MakeNode("OptionalOutputs", {"x"}, {"y", "", "", "side"}, "custom");
+  ASSERT_EQ(generated.size(), 4u);
+  EXPECT_FALSE(generated[1].empty());
+  EXPECT_FALSE(generated[2].empty());
+  builder.MakeOutput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  builder.MakeOutput("side", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  ModelProto model = builder.ToModel();
+  model.mutable_graph()->ref_node()[0].ref_output()[1] = "";
+  model.mutable_graph()->ref_node()[0].ref_output()[2] = "";
+
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  const auto &node = imported.Nodes()[0];
+  ASSERT_EQ(node.output_size(), 4);
+  EXPECT_EQ(node.output(0), "y");
+  EXPECT_TRUE(node.output(1).empty());
+  EXPECT_TRUE(node.output(2).empty());
+  EXPECT_EQ(node.output(3), "side");
+  EXPECT_TRUE(imported.ToModel().graph().node(0).output(1).empty());
+  EXPECT_FALSE(imported.MakeNode("Identity", {"y"}, {""})[0].empty());
+}
+
 TEST(GraphBuilder, RejectsOperatorFunctionDefinitionsBeforeMutation) {
   onnx_shapes::RegisterShapeFunctions();
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {

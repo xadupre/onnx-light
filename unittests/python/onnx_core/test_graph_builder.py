@@ -26,11 +26,159 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 # schema library it relies on) is unavailable.
 GraphBuilder = import_or_skip("onnx_light.onnx_core.graph_builder", "GraphBuilder")
 ProtoKind = import_or_skip("onnx_light.onnx_core.graph_builder", "ProtoKind")
+OperatorRegistry = import_or_skip("onnx_light.onnx_core.graph_builder", "OperatorRegistry")
 
 FLOAT = onnxl.TensorProto.FLOAT
 
 
 class TestGraphBuilder(ExtTestCase):
+    def test_unavailable_global_schema_rejects_before_mutation(self):
+        builder = GraphBuilder("g", opsets={"ai.onnx.ml": 4})
+        with self.assertRaisesRegex(ValueError, "unavailable at opset 4"):
+            builder.op.TreeEnsemble(
+                numpy.ones((2, 3), dtype=numpy.float32), domain="ai.onnx.ml", outputs="y"
+            )
+        self.assertEqual(len(builder.build_graph().node), 0)
+        self.assertEqual(len(builder.build_graph().initializer), 0)
+        self.assertFalse(builder.has_name("y"))
+        builder.inp("x", FLOAT, [2, 3])
+        with self.assertRaisesRegex(ValueError, "unavailable at opset 4"):
+            builder.make_node("TreeEnsemble", ["x"], ["y"], domain="ai.onnx.ml")
+        self.assertFalse(builder.has_name("y"))
+        builder.set_opset_version("ai.onnx.ml", 5)
+        self.assertEqual(builder.find_schema("TreeEnsemble", "ai.onnx.ml").since_version, 5)
+        other = GraphBuilder("other", opsets={"custom": 4})
+        self.assertIsNone(other.find_schema("TreeEnsemble", "custom"))
+
+    def test_import_slice_opset_histories(self):
+        for opset in (10, 11, 12, 13):
+            for with_steps in (False, True):
+                with self.subTest(opset=opset, with_steps=with_steps):
+                    parameters = [("starts", 1), ("ends", 5)]
+                    if with_steps:
+                        parameters.extend([("axes", 0), ("steps", 2)])
+                    model = oh.make_model(
+                        oh.make_graph(
+                            [
+                                oh.make_node(
+                                    "Slice", ["x"] + [name for name, _ in parameters], ["y"]
+                                )
+                            ],
+                            "slice",
+                            [oh.make_tensor_value_info("x", FLOAT, [6])],
+                            [oh.make_tensor_value_info("y", FLOAT, [2 if with_steps else 4])],
+                            initializer=[
+                                oh.make_tensor(name, onnxl.TensorProto.INT64, [1], [value])
+                                for name, value in parameters
+                            ],
+                        ),
+                        opset_imports=[oh.make_opsetid("", opset)],
+                    )
+                    checker.check_model(model)
+                    builder = GraphBuilder(model)
+                    self.assertEqual(
+                        builder.find_schema("Slice").since_version,
+                        10 if opset == 10 else 11 if opset < 13 else 13,
+                    )
+                    self.assertEqual(list(builder.get_shape("y").shape), [2 if with_steps else 4])
+                    checker.check_model(builder.to_onnx())
+
+    def test_local_shape_registry_precedes_global_and_is_snapshotted(self):
+        calls = []
+
+        def infer(ctx, node):
+            calls.append(node.name)
+            ctx.set(str(node.output[0]), ctx.get(str(node.input[0])))
+
+        registry = OperatorRegistry()
+        registry.register_shape_inference("", "Neg", infer)
+        builder = GraphBuilder("g", opsets=18, local_registry=registry)
+        x = builder.inp("x", FLOAT, [2, 3])
+        builder.op.Neg(x, outputs="y", name="local")
+        builder.op.Abs("y", outputs="z")
+        builder.out("z")
+        self.assertIn("local", calls)
+        self.assertEqual(list(builder.get_shape("z").shape), [2, 3])
+        before = len(calls)
+        isolated = GraphBuilder("isolated", opsets=18)
+        isolated.inp("x", FLOAT, [2, 3])
+        isolated.op.Neg("x", outputs="y")
+        self.assertEqual(len(calls), before)
+
+        def failing(ctx, node):
+            raise ValueError("local shape failure")
+
+        registry.register_shape_inference("ai.onnx", "Neg", failing)
+        builder.op.Neg("z", outputs="snapshot")
+        failing_builder = GraphBuilder("failing", opsets=18, local_registry=registry)
+        failing_builder.inp("x", FLOAT, [2, 3])
+        with self.assertRaisesRegex(ValueError, "local shape failure"):
+            failing_builder.op.Neg("x", outputs="y")
+        del registry, infer
+
+        imported = GraphBuilder(builder.to_onnx(), local_registry=builder.local_registry())
+        self.assertEqual(list(imported.get_shape("z").shape), [2, 3])
+        optimization = import_or_skip("onnx_light.onnx_core.graph_builder", "OptimizationMode")
+        before = len(calls)
+        imported.to_onnx(optimize=optimization.kOptimize)
+        self.assertGreater(len(calls), before)
+
+    def test_local_schema_registry_is_used_by_compact_authoring(self):
+        from onnx_light.onnx_op import FormalParameter, LightOpSchema
+
+        parameter = FormalParameter()
+        parameter.name = "X"
+        parameter.type = "tensor(float)"
+        registry = OperatorRegistry()
+        registry.register_schema(
+            LightOpSchema("LocalOp", "custom", 1, "", [parameter], [parameter, parameter], [])
+        )
+
+        def infer(ctx, node):
+            for output in node.output:
+                ctx.set(str(output), ctx.get(str(node.input[0])))
+
+        registry.register_shape_inference("custom", "LocalOp", infer)
+        builder = GraphBuilder("g", opsets={"": 18, "custom": 1}, local_registry=registry)
+        x = builder.inp("x", FLOAT, [2, 3])
+        with self.assertRaisesRegex(ValueError, "Unknown attribute"):
+            builder.op.LocalOp(x, domain="custom", bogus=1)
+        with self.assertRaisesRegex(ValueError, "outputs"):
+            builder.make_node("LocalOp", [x], ["bad"], domain="custom")
+        self.assertFalse(builder.has_name("bad"))
+        outputs = builder.op.LocalOp(x, domain="custom")
+        self.assertEqual(len(outputs), 2)
+        for output in outputs:
+            self.assertEqual(list(builder.get_shape(output).shape), [2, 3])
+
+        registry.register_schema(
+            LightOpSchema("LocalOp", "custom", 1, "", [parameter], [parameter], [])
+        )
+        self.assertEqual(builder.find_schema("LocalOp", "custom").max_output, 2)
+        future = GraphBuilder("future", opsets={"custom": 1}, local_registry=registry)
+        self.assertEqual(future.find_schema("LocalOp", "custom").max_output, 1)
+
+        function = oh.make_function(
+            "custom",
+            "LocalOp",
+            ["a"],
+            ["b"],
+            [oh.make_node("Identity", ["a"], ["b"])],
+            [oh.make_opsetid("", 18)],
+            attributes=["alpha"],
+        )
+        value = oh.make_tensor_value_info("x", FLOAT, [2, 3])
+        model = oh.make_model(
+            oh.make_graph([], "functions", [value], [value]),
+            functions=[function],
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("custom", 1)],
+        )
+        imported = GraphBuilder(model, local_registry=builder.local_registry())
+        self.assertTrue(imported.has_local_function("LocalOp", "custom"))
+        self.assertFalse(imported.has_local_function("LocalOp", "other"))
+        imported.op.LocalOp("x", domain="custom", outputs="result", alpha=1)
+        self.assertEqual(list(imported.get_shape("result").shape), [2, 3])
+
     def test_missing_opset_rejects_node_before_mutation(self):
         for with_schema in (False, True):
             builder = (

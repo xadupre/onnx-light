@@ -155,10 +155,14 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   }
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
+  std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+  for (const auto &value_info : func.value_info())
+    declared_outputs[value_info.name()] = &value_info;
   for (const auto &fn_node : func.node()) {
     NodeProto bound_node = utils::CopyWithSharedTensorStorage(fn_node);
     BindNodeAttributes(bound_node, attr_map);
-    sub_ctx.ComputeShapeNode(bound_node);
+    if (!TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
+      sub_ctx.ComputeShapeNode(bound_node);
   }
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
@@ -243,31 +247,6 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
     return true;
   }
   return false;
-}
-
-bool TrySeedAnnotatedOutputsForUnknownCustomOp(
-    ShapesContext &ctx, const NodeProto &node,
-    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
-  if (IsSupportedDomain(node) ||
-      ctx.HasLocalFunction(
-          ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
-      ctx.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
-      DispatchTable().find(ShapeDispatchKey(node)) != DispatchTable().end() ||
-      node.output_size() == 0) {
-    return false;
-  }
-  for (const auto &name : node.output()) {
-    auto it = declared_outputs.find(name);
-    if (name.empty() || it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second)) {
-      return false;
-    }
-  }
-  ctx.CheckInputsAvailable(node);
-  ctx.CheckOutputsNotAvailable(node);
-  for (const auto &name : node.output()) {
-    SeedInputValueInfo(*declared_outputs.at(name), ctx);
-  }
-  return true;
 }
 
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
@@ -828,6 +807,41 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
 }
 
 } // namespace
+
+bool CanSeedAnnotatedOutputsForUnknownCustomOp(
+    const ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
+  if (IsSupportedDomain(node) || HasShapeInference(ctx, node)) {
+    return false;
+  }
+  bool has_output = false;
+  for (const auto &name : node.output()) {
+    if (name.empty())
+      continue;
+    has_output = true;
+    auto it = declared_outputs.find(name);
+    if (it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second) ||
+        DataTypeToTensorType(it->second->type().tensor_type().elem_type()) ==
+            TensorType::kUndefined) {
+      return false;
+    }
+  }
+  return has_output;
+}
+
+bool TrySeedAnnotatedOutputsForUnknownCustomOp(
+    ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
+  if (!CanSeedAnnotatedOutputsForUnknownCustomOp(ctx, node, declared_outputs))
+    return false;
+  ctx.CheckInputsAvailable(node);
+  ctx.CheckOutputsNotAvailable(node);
+  for (const auto &name : node.output()) {
+    if (!name.empty())
+      SeedInputValueInfo(*declared_outputs.at(name), ctx);
+  }
+  return true;
+}
 
 void ShapesContext::RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
                                             ShapesContext context) {

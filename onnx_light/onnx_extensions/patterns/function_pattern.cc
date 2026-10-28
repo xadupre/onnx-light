@@ -316,6 +316,9 @@ FunctionPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto *> &
       }
       copy.ref_output()[i] = values.at(formal);
     }
+    for (auto &configuration : copy.ref_device_configurations())
+      for (auto &spec : configuration.ref_sharding_spec())
+        spec.set_tensor_name(values.at(spec.tensor_name().value()));
     for (auto &attribute : copy.ref_attribute()) {
       if (!attribute.ref_attr_name().empty()) {
         const std::string name = attribute.name().value();

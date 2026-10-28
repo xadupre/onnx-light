@@ -2967,7 +2967,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
           utils::CopyWithSharedTensorStorage(*planned_functions.at(key));
     comparison.ref_functions() =
         GraphBuilder::DependencyOrderFunctions(std::move(comparison.ref_functions()));
-    GraphBuilder normalized(comparison, schema_lookup_);
+    GraphBuilder normalized(comparison, schema_lookup_, local_registry_);
     for (const auto &candidate : normalized.local_functions_) {
       const FunctionKey key{RewriteDomain(candidate->function_domain_), candidate->name_,
                             candidate->function_template_.overload().value()};
@@ -2995,7 +2995,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
         original.ref_functions().push_back(source->BuildFunction(source->function_domain_));
       }
       original.ref_functions() = DependencyOrderFunctions(std::move(original.ref_functions()));
-      GraphBuilder normalized_original(original, schema_lookup_);
+      GraphBuilder normalized_original(original, schema_lookup_, local_registry_);
       const auto expected = normalized_original.ToModel();
       auto actual = normalized.ToModel();
       FunctionIndex expected_functions;
@@ -3031,7 +3031,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
       ValidateFunctionCalls(defaults, functions);
     }
   }
-  GraphBuilder result(model, schema_lookup_);
+  GraphBuilder result(model, schema_lookup_, local_registry_);
   const auto validate_tags = [&](const auto &self, const GraphBuilder &source,
                                  const GraphBuilder &reconstructed, const std::string &path,
                                  bool allow_node_changes) -> void {
@@ -3301,7 +3301,7 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   model.ref_struct_types() = undo.original_struct_types;
   RestoreGraphHeaders(*model.mutable_graph(), undo.original_graph_headers);
   model.clr_rewritings();
-  GraphBuilder result(model, schema_lookup_);
+  GraphBuilder result(model, schema_lookup_, local_registry_);
   const auto restore_devices = [&](const auto &self, GraphBuilder &scope,
                                    const UndoState::ScopeDevices &devices) -> void {
     if (scope.subgraphs_.size() != devices.subgraphs.size())

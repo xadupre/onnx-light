@@ -103,6 +103,13 @@ bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
   return true;
 }
 
+bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node) {
+  return shapes.HasLocalFunction(
+             ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
+         shapes.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
+         DispatchTable().count(DispatchKey(node.domain(), node.op_type())) != 0;
+}
+
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {
   return MutablePeakMemoryDispatchTable();
 }

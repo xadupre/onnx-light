@@ -1275,13 +1275,17 @@ TEST(RepeatedLayerPattern, ExtractsArbitraryDomainsAndStochasticOperatorsWithout
   }
 }
 
-TEST(RepeatedLayerPattern, UsesRegisteredShapeInferenceRegardlessOfDomain) {
+TEST(RepeatedLayerPattern, UsesBuilderLocalShapeInferenceRegardlessOfDomain) {
   const std::string domain = "test.layer.custom";
-  core::shapes::RegisterComputeShapeFn(domain, "CustomProjection",
-                                       [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
-                                         ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
-                                       });
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {domain, 1}});
+  int calls = 0;
+  core::builder::OperatorRegistry registry;
+  registry.RegisterShapeInference(
+      domain, "CustomProjection",
+      [&calls](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ++calls;
+        ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+      });
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {domain, 1}}, registry);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
   for (int index = 0; index < 2; ++index) {
     const std::string suffix = std::to_string(index);
@@ -1294,13 +1298,27 @@ TEST(RepeatedLayerPattern, UsesRegisteredShapeInferenceRegardlessOfDomain) {
     builder.MakeOutput("y" + suffix);
   }
   const GraphProto before = builder.BuildGraph();
-  EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  const auto rewrites = OptimizeLayers(builder);
+  ASSERT_FALSE(rewrites.rewrites().empty());
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
   ExpectOriginalOperators(before, builder.BuildGraph());
   ExpectCoherentLayerMetadata(builder);
   EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
-  core::builder::GraphBuilder reimported(builder.ToModel(), LayerSchemaLookup());
+  core::builder::GraphBuilder reimported(builder.ToModel(), LayerSchemaLookup(), registry);
   EXPECT_EQ(reimported.GetShape("y0").Shape(), LayerShape({2, 4}));
+  const int before_undo = calls;
+  auto restored = builder.UndoRewritings(rewrites);
+  EXPECT_GT(calls, before_undo);
+  EXPECT_EQ(restored.GetShape("custom0").Shape(), LayerShape({2, 4}));
+  const int before_replay = calls;
+  auto replayed = restored.ApplyRewritings(rewrites);
+  EXPECT_GT(calls, before_replay);
+  EXPECT_EQ(replayed.GetShape("y0").Shape(), LayerShape({2, 4}));
+  ExpectCoherentLayerMetadata(replayed);
+  core::builder::GraphBuilder isolated("isolated", LayerSchemaLookup(), {{domain, 1}});
+  isolated.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  isolated.MakeNode("CustomProjection", {"x"}, {"y"}, domain);
+  EXPECT_FALSE(isolated.HasShape("y"));
 }
 
 TEST(RepeatedLayerPattern, RejectsContribWithoutInternalOutputShapes) {

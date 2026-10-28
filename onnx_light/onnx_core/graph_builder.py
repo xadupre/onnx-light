@@ -54,6 +54,7 @@ if importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None:
 ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
 ProtoKind: TypeAlias = _C.ProtoKind
 PatternOptimization: TypeAlias = _C.PatternOptimization
+OperatorRegistry: TypeAlias = _C.OperatorRegistry
 
 SchemaLookup: TypeAlias = Callable[[str], "list[LightOpSchema]"]
 
@@ -102,19 +103,9 @@ class _OperatorProxy:
                     f"Domain {domain!r} has no explicit opset; "
                     "supply opsets to the constructor or call set_opset_version() first."
                 )
-            schemas = [
-                schema
-                for schema in _default_schema_lookup(op_type)
-                if ("ai.onnx" if schema.domain in ("", "ai.onnx") else schema.domain)
-                == normalized_domain
-            ]
-            if schemas:
-                matching = [schema for schema in schemas if schema.since_version <= version]
-                if not matching:
-                    raise ValueError(
-                        f"Standard ONNX operator {op_type!r} is unavailable at opset {version}."
-                    )
-                schema = max(matching, key=lambda candidate: candidate.since_version)
+            is_function = self._builder.has_local_function(op_type, domain)
+            schema = None if is_function else self._builder.find_schema(op_type, domain)
+            if schema is not None:
                 attribute_names = {attribute.name for attribute in schema.attributes}
                 unknown = sorted(set(kwargs) - attribute_names)
                 if unknown:
@@ -122,7 +113,11 @@ class _OperatorProxy:
                         f"Unknown attribute(s) for standard ONNX operator {op_type!r}: "
                         f"{', '.join(unknown)}."
                     )
-            elif normalized_domain == "ai.onnx":
+            elif (
+                not is_function
+                and normalized_domain == "ai.onnx"
+                and self._builder._schema_lookup is not None
+            ):
                 raise ValueError(f"Unknown standard ONNX operator {op_type!r}.")
 
             resolved_inputs = []
@@ -172,6 +167,10 @@ class GraphBuilder(_C.GraphBuilder):
     or explicit domain-to-version imports (a dictionary). The default ``None``
     selects ``{"": onnx_opset_version()}``; an empty dictionary selects no imports.
     When importing a model, ``None`` preserves its declared imports.
+    ``local_registry`` snapshots operator schemas and shape callbacks before
+    importing any node. Model-local functions take precedence over local
+    registrations, which take precedence over global registrations. Nested
+    builders and optimization/replay copies retain this snapshot.
     """
 
     def __init__(
@@ -180,14 +179,20 @@ class GraphBuilder(_C.GraphBuilder):
         schema_lookup: SchemaLookup | None = _default_schema_lookup,
         *,
         opsets: int | dict[str, int] | None = None,
+        local_registry: OperatorRegistry | None = None,
     ) -> None:
+        if local_registry is None:
+            local_registry = OperatorRegistry()
         if opsets is None and isinstance(name, str):
             opsets = {"": onnx_opset_version()}
         if opsets is None:
-            super().__init__(name, schema_lookup)
+            super().__init__(name, schema_lookup, local_registry)
         else:
             super().__init__(
-                name, schema_lookup, {"": opsets} if isinstance(opsets, int) else opsets
+                name,
+                schema_lookup,
+                {"": opsets} if isinstance(opsets, int) else opsets,
+                local_registry,
             )
         self._registered_patterns: dict[str, PatternOptimization] = {}
         self._schema_lookup = schema_lookup
@@ -336,7 +341,9 @@ class GraphBuilder(_C.GraphBuilder):
         canonical = super().to_model(ir_version)
         if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
             raise ValueError("A rewriting plan named 'optimized' already exists.")
-        working = GraphBuilder(canonical, self._schema_lookup)
+        working = GraphBuilder(
+            canonical, self._schema_lookup, local_registry=self.local_registry()
+        )
         del canonical
         working.copy_device_targets_from(self)
         for pattern in self.registered_patterns():
@@ -354,6 +361,7 @@ class GraphBuilder(_C.GraphBuilder):
 __all__ = [
     "ConstantFoldingOptions",
     "GraphBuilder",
+    "OperatorRegistry",
     "OptimizationMode",
     "PatternOptimization",
     "ProtoKind",

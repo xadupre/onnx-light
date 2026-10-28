@@ -67,6 +67,44 @@ alignment also cover function defaults and rewrite payloads, including tensors
 in repeated tensor and graph attributes.
 See :ref:`l-example-plot-pattern-replay` for a save/load/replay example.
 
+Builder-local operator registries
+--------------------------------
+
+``OperatorRegistry`` supplies local schemas and shape-inference callbacks without
+changing process-wide registrations::
+
+    from onnx_light.onnx_core.graph_builder import GraphBuilder, OperatorRegistry
+
+    def infer_custom(ctx, node):
+        ctx.set(str(node.output[0]), ctx.get(str(node.input[0])))
+
+    registry = OperatorRegistry()
+    registry.register_shape_inference("custom", "CustomOp", infer_custom)
+    builder = GraphBuilder(
+        "g", opsets={"": 18, "custom": 1}, local_registry=registry
+    )
+
+``registry.register_schema(schema)`` adds or replaces a
+``LightOpSchema`` identified by domain, name and version. Schema lookup chooses
+the newest applicable local schema before consulting the configured global
+provider. A local history containing only newer versions falls back to a
+compatible global schema; if neither applies, it raises instead of bypassing
+validation. The compact ``builder.op`` API uses the same lookup.
+
+Shape resolution prioritizes model-local functions, then local callbacks,
+then global inference. A local callback failure propagates without retrying
+the global implementation. Callbacks receive the current ``ShapesContext``
+and node, so they can inspect the selected opset.
+
+Builders snapshot the registry before importing any nodes. Subgraphs, local
+functions, optimization copies and replay/undo copies inherit that snapshot.
+Editing the original registry affects only builders constructed afterwards;
+``builder.local_registry()`` returns an independent copy. Callback captures
+retain ordinary Python callable / C++ ``std::function`` ownership semantics.
+Registrations are not serialized into ONNX: pass the registry again when
+importing a saved model. The standalone ONNX checker keeps its own schema
+registry and is not modified by these builder-local registrations.
+
 .. automodule:: onnx_light.onnx_core.graph_builder
     :members:
     :imported-members:

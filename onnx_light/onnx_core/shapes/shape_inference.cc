@@ -811,11 +811,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
 bool TrySeedAnnotatedOutputsForUnknownCustomOp(
     ShapesContext &ctx, const NodeProto &node,
     const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
-  if (IsSupportedDomain(node) ||
-      ctx.HasLocalFunction(
-          ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
-      ctx.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
-      DispatchTable().find(ShapeDispatchKey(node)) != DispatchTable().end()) {
+  if (IsSupportedDomain(node) || HasShapeInference(ctx, node)) {
     return false;
   }
   bool has_output = false;

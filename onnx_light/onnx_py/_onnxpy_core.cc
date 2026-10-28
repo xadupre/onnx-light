@@ -2021,6 +2021,28 @@ void AddOnnxPyBuilder(nb::module_ &m) {
               "instead of being left untouched. Shape-tagged results always raise when their "
               "kernel is missing, regardless of this flag.");
 
+  using core::builder::OperatorRegistry;
+  nb::class_<OperatorRegistry>(builder_mod, "OperatorRegistry",
+                               "Collects local operator registrations snapshotted by builders.")
+      .def(nb::init<>())
+      .def("register_schema", &OperatorRegistry::RegisterSchema, nb::arg("schema"),
+           "Registers or replaces a local domain/name/version schema.")
+      .def(
+          "register_shape_inference",
+          [](OperatorRegistry &registry, const std::string &domain, const std::string &op_type,
+             nb::callable fn) {
+            registry.RegisterShapeInference(
+                domain, op_type,
+                [py_fn = std::move(fn)](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                  nb::gil_scoped_acquire lock;
+                  py_fn(nb::cast(&ctx, nb::rv_policy::reference),
+                        nb::cast(&node, nb::rv_policy::reference));
+                });
+          },
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          "Registers local shape inference receiving (ctx, node). Errors propagate; "
+          "global inference is consulted only when no local registration exists.");
+
   // The built-in ONNX operator schemas live in the ``onnx_op`` library, which
   // this extension deliberately does not link against. When the caller wants
   // schema-based node validation, it injects a schema
@@ -2030,35 +2052,50 @@ void AddOnnxPyBuilder(nb::module_ &m) {
                            "Incrementally builds an ONNX graph, model or function.")
       .def(
           "__init__",
-          [](GraphBuilder *self, const ModelProto &model, nb::object schema_lookup) {
+          [](GraphBuilder *self, const ModelProto &model, nb::object schema_lookup,
+             const OperatorRegistry &local_registry) {
             if (schema_lookup.is_none()) {
-              new (self) GraphBuilder(model, GraphBuilder::SchemaLookupFn{});
+              new (self) GraphBuilder(model, GraphBuilder::SchemaLookupFn{}, local_registry);
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
-            new (self) GraphBuilder(model, std::move(fn));
+            new (self) GraphBuilder(model, std::move(fn), local_registry);
           },
           nb::arg("model"), nb::arg("schema_lookup") = nb::none(),
+          nb::arg("local_registry") = OperatorRegistry{},
           "Constructs a builder by importing ``model`` node-by-node. GRAPH/GRAPHS attributes "
           "are represented in-builder as ``*_ref`` attributes that point to nested subgraph "
           "builders, and are materialized back on export.")
       .def(
           "__init__",
           [](GraphBuilder *self, const std::string &name, nb::object schema_lookup,
-             const std::unordered_map<std::string, int> &opsets) {
+             const std::unordered_map<std::string, int> &opsets,
+             const OperatorRegistry &local_registry) {
             if (schema_lookup.is_none()) {
-              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{}, opsets);
+              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{}, opsets, local_registry);
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
-            new (self) GraphBuilder(name, std::move(fn), opsets);
+            new (self) GraphBuilder(name, std::move(fn), opsets, local_registry);
           },
           nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
           nb::arg("opsets") = std::unordered_map<std::string, int>{},
+          nb::arg("local_registry") = OperatorRegistry{},
           "Constructs an empty builder. ``schema_lookup`` is an optional callable "
           "``op_type -> list[LightOpSchema]`` used to validate nodes at explicit opsets; "
           "when omitted no schema-based validation is performed. ``opsets`` maps domains "
           "to explicit versions.")
+      .def("local_registry", &GraphBuilder::LocalRegistry,
+           "Returns an independent copy of the builder-local registry snapshot.")
+      .def(
+          "find_schema",
+          [](const GraphBuilder &self, const std::string &op_type,
+             const std::string &domain) -> nb::object {
+            const auto *schema = self.FindSchema(op_type, domain);
+            return schema == nullptr ? nb::none() : nb::cast(*schema, nb::rv_policy::copy);
+          },
+          nb::arg("op_type"), nb::arg("domain") = "",
+          "Returns a copy of the local-first schema at the selected opset, or None.")
       .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),
            nb::arg("version"),
            "Records the opset version to use for ``domain`` (empty string for the default "
@@ -2268,8 +2305,14 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("name"), nb::arg("domain") = "", nb::rv_policy::reference_internal,
           "Creates and returns a nested builder for a local function; local functions are "
           "emitted into the produced ModelProto.")
-      .def("has_local_function", &GraphBuilder::HasLocalFunction, nb::arg("name"),
-           "Returns True when a local function named ``name`` exists.")
+      .def("has_local_function",
+           nb::overload_cast<const std::string &>(&GraphBuilder::HasLocalFunction, nb::const_),
+           nb::arg("name"), "Returns True when a local function named ``name`` exists.")
+      .def("has_local_function",
+           nb::overload_cast<const std::string &, const std::string &, const std::string &>(
+               &GraphBuilder::HasLocalFunction, nb::const_),
+           nb::arg("name"), nb::arg("domain"), nb::arg("overload") = "",
+           "Returns True when the exact function identity is visible from this builder.")
       .def(
           "make_subgraph",
           [](GraphBuilder &self, const std::string &name) -> GraphBuilder & {

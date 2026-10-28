@@ -511,13 +511,7 @@ struct Index {
         entry.usable = IsSafeNode(entry.materialized, graph.Builder(), safe_functions, visiting, 0,
                                   safety_work);
       }
-      if (entry.usable &&
-          graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
-              node.domain(), node.op_type(), node.overload())) == nullptr &&
-          graph.Builder().Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) ==
-              nullptr &&
-          core::shapes::DispatchTable().count(NormaliseDispatchDomain(node) + ":" +
-                                              node.op_type()) == 0) {
+      if (entry.usable && !core::shapes::HasShapeInference(graph.Builder().Shapes(), node)) {
         entry.usable =
             std::any_of(node.output().begin(), node.output().end(),
                         [](const auto &name) { return !name.empty(); }) &&

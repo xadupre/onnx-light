@@ -251,9 +251,44 @@ TaggedMemory &NodeMemoryProfileBucket(NodeMemoryProfile &profile, const std::str
 
 void FillTaggedMemory(TaggedMemory &dst, const std::map<ShapeTag, expressions::DimSum> &sums,
                       expressions::SimplifiedExpressionCache *cache) {
+  dst.clear();
   for (const auto &kv : sums) {
     dst[kv.first] = kv.second.Build(cache);
   }
+}
+
+struct LiveMemorySum {
+  expressions::DimSum sum;
+  std::size_t count = 0;
+  mutable std::optional<expressions::DimType> built;
+
+  void Add(const expressions::DimType &bytes) {
+    sum.Add(bytes);
+    ++count;
+    built.reset();
+  }
+
+  void Remove(const expressions::DimType &bytes) {
+    EXT_ENFORCE_INVALID(count != 0, "Cannot remove an absent live allocation.");
+    sum.Remove(bytes);
+    --count;
+    built.reset();
+  }
+
+  const expressions::DimType &Build(expressions::SimplifiedExpressionCache *cache) const {
+    if (!built)
+      built = sum.Build(cache);
+    return *built;
+  }
+};
+
+using LiveTaggedMemory = std::map<ShapeTag, LiveMemorySum>;
+
+void FillTaggedMemory(TaggedMemory &dst, const LiveTaggedMemory &sums,
+                      expressions::SimplifiedExpressionCache *cache) {
+  dst.clear();
+  for (const auto &[tag, sum] : sums)
+    dst[tag] = sum.Build(cache);
 }
 
 NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
@@ -900,10 +935,10 @@ void ComputeContext::SeedReuseOutput(const std::string &name,
   if (name.empty()) {
     return;
   }
-  const auto producer = incr_producer_.find(name);
-  MarkMemoryRefresh(producer == incr_producer_.end() || producer->second < 0
+  const auto last_use = incr_last_use_.find(name);
+  MarkMemoryRefresh(last_use == incr_last_use_.end() || last_use->second < 0
                         ? 0
-                        : static_cast<std::size_t>(producer->second));
+                        : static_cast<std::size_t>(last_use->second));
   PrepareMemoryRefresh(nodes, nodes.size());
   incr_keep_.insert(name);
   incr_graph_outputs_.insert(name);
@@ -1100,6 +1135,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     return updated == references.end() ? incr_node_references_[index] : updated->second;
   };
   std::unordered_map<std::string, int> updated_last_use;
+  std::unordered_set<std::size_t> changed_last_use_nodes;
   for (const std::string &name : changed_references) {
     if (name.empty()) {
       continue;
@@ -1107,6 +1143,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     const auto old = incr_last_use_.find(name);
     if (old != incr_last_use_.end() && old->second >= 0) {
       refresh_from = std::min(refresh_from, static_cast<std::size_t>(old->second));
+      changed_last_use_nodes.insert(static_cast<std::size_t>(old->second));
     }
     const auto value_producer = incr_producer_.find(name);
     int last = value_producer == incr_producer_.end() ? -1 : value_producer->second;
@@ -1120,6 +1157,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     updated_last_use.emplace(name, last);
     if (last >= 0) {
       refresh_from = std::min(refresh_from, static_cast<std::size_t>(last));
+      changed_last_use_nodes.insert(static_cast<std::size_t>(last));
     }
     const auto producer = incr_producer_.find(name);
     if (producer != incr_producer_.end() && producer->second >= 0) {
@@ -1191,6 +1229,12 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
   }
 
   for (std::size_t index = refresh_from; index < nodes.size(); ++index) {
+    if (references.count(index) == 0 && changed_last_use_nodes.count(index) == 0 &&
+        std::none_of(incr_node_references_[index].begin(), incr_node_references_[index].end(),
+                     [&](const auto &name) { return changed_values.count(name) != 0; }) &&
+        std::none_of(nodes[index].output().begin(), nodes[index].output().end(),
+                     [&](const std::string &name) { return changed_values.count(name) != 0; }))
+      continue;
     RefreshNodeReuse(nodes, index, ctx);
     AppendNodePeakMemory(nodes[index], index, device, materialize);
   }
@@ -1485,28 +1529,43 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
   if (memory_.size() < nodes.size()) {
     memory_.resize(nodes.size(), MakeEmptyNodeMemoryProfile());
   }
-  for (std::size_t index = start; index < nodes.size(); ++index) {
-    NodeMemoryProfile profile = MakeEmptyNodeMemoryProfile();
-    expressions::DimSum already_sum;
-    std::map<ShapeTag, expressions::DimSum> inputs_bucket;
-    std::map<ShapeTag, expressions::DimSum> initializers_bucket;
-    std::map<ShapeTag, expressions::DimSum> intermediates_bucket;
-    for (const std::string &name : alive) {
-      const auto allocation = incr_allocation_bytes_.find(name);
-      if (allocation == incr_allocation_bytes_.end()) {
-        continue;
-      }
-      const expressions::DimType &bytes = allocation->second;
+  // Replay allocation events, not the complete live set at every node. In
+  // particular, hoisted weight transforms can remain alive for hundreds of nodes.
+  LiveMemorySum already_sum;
+  LiveTaggedMemory inputs_bucket;
+  LiveTaggedMemory initializers_bucket;
+  LiveTaggedMemory intermediates_bucket;
+  const auto update_sum = [&](const std::string &name, bool add) {
+    const auto allocation = incr_allocation_bytes_.find(name);
+    if (allocation == incr_allocation_bytes_.end())
+      return;
+    const auto &bytes = allocation->second;
+    if (expressions::is_zero_dim(bytes))
+      return;
+    auto &bucket = incr_graph_initializers_.count(name) != 0 ? initializers_bucket
+                   : incr_graph_inputs_.count(name) != 0     ? inputs_bucket
+                                                             : intermediates_bucket;
+    const auto tag = ValueTag(value_tags_, name);
+    if (add) {
       already_sum.Add(bytes);
-      if (expressions::is_zero_dim(bytes)) {
-        continue;
-      }
-      auto &bucket = incr_graph_initializers_.count(name) != 0 ? initializers_bucket
-                     : incr_graph_inputs_.count(name) != 0     ? inputs_bucket
-                                                               : intermediates_bucket;
-      bucket[ValueTag(value_tags_, name)].Add(bytes);
+      bucket[tag].Add(bytes);
+    } else {
+      already_sum.Remove(bytes);
+      const auto found = bucket.find(tag);
+      EXT_ENFORCE_INVALID(found != bucket.end(), "Missing live allocation tag bucket.");
+      found->second.Remove(bytes);
+      if (found->second.count == 0)
+        bucket.erase(found);
     }
-
+  };
+  for (const auto &name : alive)
+    update_sum(name, true);
+  const auto release = [&](const std::string &name) {
+    if (alive.erase(name) != 0)
+      update_sum(name, false);
+  };
+  for (std::size_t index = start; index < nodes.size(); ++index) {
+    NodeMemoryProfile &profile = memory_[index];
     const NodeProto &node = nodes[index];
     std::unordered_map<int, int> reuse_by_output;
     if (index < reuse_.size()) {
@@ -1569,24 +1628,19 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
       ValidateScratchTotal(profile, peak_memory_[index]);
     if (index < release_after_.size()) {
       for (const std::string &name : release_after_[index]) {
-        alive.erase(name);
+        release(name);
       }
     }
     for (const std::string &output : node.output()) {
-      alive.erase(output);
+      release(output);
     }
-    alive.insert(outputs_to_add.begin(), outputs_to_add.end());
-    expressions::DimSum after_sum;
-    for (const std::string &name : alive) {
-      const auto allocation = incr_allocation_bytes_.find(name);
-      if (allocation != incr_allocation_bytes_.end()) {
-        after_sum.Add(allocation->second);
-      }
-    }
-    NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) = after_sum.Build(&expression_cache);
+    for (const auto &name : outputs_to_add)
+      if (alive.insert(name).second)
+        update_sum(name, true);
+    NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) =
+        already_sum.Build(&expression_cache);
     UpdateNodeMemoryBoundaries(profile, index < peak_memory_.size() ? peak_memory_[index] : 0,
                                &expression_cache);
-    memory_[index] = std::move(profile);
   }
   incr_memory_alive_ = std::move(alive);
   memory_matches_shapes_ = true;

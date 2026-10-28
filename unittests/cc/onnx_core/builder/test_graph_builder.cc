@@ -1896,6 +1896,114 @@ TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
   EXPECT_EQ(final_last_use->value(), "weight");
 }
 
+TEST(GraphBuilder, DeferredExternalWeightsAndLateOutputsKeepMemoryCoherent) {
+  onnx_shapes::RegisterShapeFunctions();
+  for (const bool dependency_first : {false, true}) {
+    for (const int64_t sequence : {-1, 0}) {
+      SCOPED_TRACE(dependency_first);
+      SCOPED_TRACE(sequence);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 23}, {"custom", 1}});
+      core::symbolic::SymShape shape;
+      shape.PushBack(core::symbolic::SymDim("batch"));
+      shape.PushBack(sequence < 0 ? core::symbolic::SymDim("sequence")
+                                  : core::symbolic::SymDim(sequence));
+      shape.PushBack(core::symbolic::SymDim(int64_t{8}));
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+      const auto expect_reference = [&]() {
+        const GraphProto graph = builder.BuildGraph();
+        core::compute::ComputeContext expected;
+        const auto tags = expected.ComputeValueAndNodeTags(graph);
+        expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+        EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+        EXPECT_EQ(builder.Compute().ReleaseAfterShapeTagged(), expected.ReleaseAfterShapeTagged());
+        EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+        GraphProto incremental = graph;
+        GraphProto reference = graph;
+        builder.Compute().WriteToMetadata(incremental);
+        expected.WriteToMetadata(reference);
+        EXPECT_EQ(incremental.SerializeAsString(), reference.SerializeAsString());
+      };
+      const auto append = [&](const NodeProto &node) {
+        builder.ImportNode(node);
+        expect_reference();
+      };
+      const auto transform = [&](const std::string &name) {
+        builder.MakeExternalInitializer(name, core::symbolic::TensorType::kBfloat16, {8, 8},
+                                        "#metadata-only", 0, 128);
+        expect_reference();
+        NodeProto cast = MakeNode("Cast", {name}, {name + "_float"});
+        auto *to = cast.add_attribute();
+        to->set_name("to");
+        to->set_type(AttributeProto::INT);
+        to->set_i(TensorProto::FLOAT);
+        append(cast);
+        append(MakeNode("Transpose", {name + "_float"}, {name + "_transposed"}));
+      };
+      transform("tied");
+      if (!dependency_first)
+        for (int layer = 0; layer < 8; ++layer)
+          transform("w" + std::to_string(layer));
+      append(MakeNode("MatMul", {"x", "tied_transposed"}, {"embedding"}));
+      std::string activation = "embedding";
+      for (int layer = 0; layer < 8; ++layer) {
+        const std::string weight = "w" + std::to_string(layer);
+        if (dependency_first)
+          transform(weight);
+        append(MakeNode("MatMul", {activation, weight + "_transposed"}, {weight + "_product"}));
+        activation = weight + "_activation";
+        append(MakeNode("Abs", {weight + "_product"}, {activation}));
+        builder.MakeNode("Unknown", {activation}, {weight + "_cache"}, "custom");
+        append(MakeNode("Abs", {weight + "_cache"}, {weight + "_cache_copy"}));
+      }
+      append(MakeNode("MatMul", {activation, "tied_transposed"}, {"logits"}));
+      for (int layer = 0; layer < 8; ++layer) {
+        builder.MakeOutput("w" + std::to_string(layer) + "_cache",
+                           core::symbolic::TensorType::kFloat, shape);
+        expect_reference();
+        builder.MakeOutput("w" + std::to_string(layer) + "_product");
+        expect_reference();
+      }
+      builder.MakeOutput("logits");
+      expect_reference();
+      const auto memory = builder.Compute().Memory();
+      const ModelProto model = builder.ToModel();
+      EXPECT_EQ(builder.Compute().Memory(), memory);
+      core::builder::GraphBuilder imported(model, SchemaLookup());
+      EXPECT_EQ(imported.Compute().Memory(), memory);
+      EXPECT_EQ(imported.ToModel().graph().SerializeAsString(), model.graph().SerializeAsString());
+    }
+  }
+}
+
+TEST(GraphBuilder, LateOutputRefinementDoesNotRecomputeUnrelatedScratch) {
+  const auto peak_calls = std::make_shared<std::size_t>(0);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "late_output_memory_test", "Probe", core::symbolic::Device::kCPU,
+      [peak_calls](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &inputs) {
+        ++*peak_calls;
+        return inputs[0].Rank() == 1 ? inputs[0][0].AsInt() : int64_t{0};
+      });
+  core::builder::OperatorRegistry registry;
+  registry.RegisterShapeInference("late_output_memory_test", "Probe",
+                                  [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                    ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                  });
+  core::builder::GraphBuilder builder("g", {}, {{"late_output_memory_test", 1}}, registry);
+  builder.set_device(core::symbolic::Device::kCPU);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Unknown", {}, {"late"}, "late_output_memory_test");
+  builder.MakeNode("Probe", {"late"}, {"dependent"}, "late_output_memory_test");
+  std::string previous = "x";
+  for (int i = 0; i < 32; ++i)
+    previous = builder.MakeNode("Probe", {previous}, {}, "late_output_memory_test")[0];
+  *peak_calls = 0;
+  builder.MakeOutput("late", core::symbolic::TensorType::kFloat, MakeShape({7}));
+  EXPECT_EQ(*peak_calls, 1u);
+  EXPECT_EQ(builder.Compute().PeakMemory()[1], 7);
+  EXPECT_EQ(builder.Compute().PeakMemory().back(), 2);
+  EXPECT_EQ(builder.GetShape("dependent").Shape(), MakeShape({7}));
+}
+
 TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);

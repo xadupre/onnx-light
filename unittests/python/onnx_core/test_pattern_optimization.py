@@ -92,6 +92,20 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestPatternSelection(ExtTestCase):
+    def test_builtin_pattern_priorities(self):
+        for pattern_type in (
+            optim.GroupedMatMulPattern,
+            optim.GemmSumFusionPattern,
+            optim.MatMulAddPattern,
+            optim.MatMulBatchNormalizationFusionPattern,
+            optim.MatMulScaleFusionPattern,
+        ):
+            with self.subTest(pattern=pattern_type.__name__):
+                self.assertEqual(pattern_type().priority, 2)
+                self.assertEqual(pattern_type(priority=3).priority, 3)
+        self.assertEqual(optim.CastPattern().priority, 0)
+        self.assertEqual(optim.CastCastPattern().priority, 1)
+
     def test_standard_pattern_sets_overlap_without_changing_defaults(self):
         pattern_sets = optim.standard_pattern_sets()
         all_names = set(pattern_sets["all"])

@@ -556,9 +556,8 @@ void ComputeContext::ClearMemoryProfiles() noexcept {
   incr_allocation_bytes_.clear();
   incr_memory_alive_.clear();
   incr_memory_alive_before_refresh_.clear();
-  incr_memory_refresh_from_ = memory_profiling_ == MemoryProfiling::kIncremental
-                                  ? 0
-                                  : static_cast<std::size_t>(-1);
+  incr_memory_refresh_from_ =
+      memory_profiling_ == MemoryProfiling::kIncremental ? 0 : static_cast<std::size_t>(-1);
   incr_memory_refresh_prepared_ = false;
 }
 

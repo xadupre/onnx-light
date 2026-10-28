@@ -1281,6 +1281,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
   nb::class_<core::runtime::QuantizationPlan>(rt_mod, "QuantizationPlan")
       .def(nb::init<>())
+      .def_rw("reconstruction_dtype", &core::runtime::QuantizationPlan::reconstruction_dtype)
       .def_rw("format", &core::runtime::QuantizationPlan::format,
               nb::for_setter(nb::arg("value").noconvert()))
       .def_rw("runs", &core::runtime::QuantizationPlan::runs, nb::rv_policy::copy)

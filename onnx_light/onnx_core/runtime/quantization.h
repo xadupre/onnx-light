@@ -176,7 +176,8 @@ struct QuantizationRun {
  * 3. Multiplies consecutive row vectors by forward.
  * 4. Encodes the resulting consecutive blocks.
  *
- * Decoding applies inverse, scatters through permutation, then restores outliers exactly.
+ * Decoding applies inverse, scatters through permutation, then restores outliers
+ * (rounded to reconstruction_dtype for v2).
  * An empty permutation is identity; otherwise it contains every source index exactly once.
  * Outlier indices are unique, in range, and refer to the original source before reordering.
  * They need not be sorted. With transform_size=N>0, forward and inverse each contain N*N
@@ -355,7 +356,9 @@ struct QuantizationRun {
  * codebooks, required transforms, invalid coverage/indices/parameters, nonfinite values
  * and cast overflow raise std::invalid_argument (ValueError in Python).
  * The factory can therefore return a plan that is not yet ready to encode.
- * The selected profile name is saved after the prefix @c onnx_light.quantization.v1/;
+ * The selected profile name is saved after the prefix @c onnx_light.quantization.v1/
+ * (DOUBLE reconstruction, the default) or @c onnx_light.quantization.v2/ (FLOAT).
+ * This choice is independent of the logical/output dtype and preserved in shared parameters;
  * changing format alone does not update existing block parameters.
  * Encoding rejects invalid QuantizationFormat values. Decoding uses ParseQuantizationFormat
  * to reject unknown profile names. QuantizationFormatName supplies each enum's stable wire name.
@@ -371,6 +374,23 @@ struct QuantizationRun {
  * codebook indices, not vendor float bit patterns, and their first-entry tie rule may
  * differ from vendor rounding. Parameters/codebooks occupy payload space; consecutive
  * blocks with identical layouts share a descriptor, not their parameter values.
+ *
+ * @par Reconstruction precision
+ * All portable profiles use the selected contract for affine, codebook and cast blocks.
+ * v1 retains DOUBLE operands and block arithmetic, with long-double inverse-transform
+ * accumulation rounded to DOUBLE per component. ORT MatMulNBits retains its v1 DOUBLE
+ * decoder; this is not a promise about ORT kernel arithmetic.
+ * v2 converts each operand to FLOAT, rounds each subtraction, multiplication and addition
+ * separately to FLOAT (no fused multiply-add), and accumulates codebooks in book order.
+ * Inverse transforms accumulate in increasing row index with separate FLOAT products
+ * and sums. Outliers round once to FLOAT; permutations do not change values.
+ * Under IEEE round-to-nearest-even with gradual underflow, subnormals are retained;
+ * conversions may round tiny operands to zero. Nonfinite operands/results and overflow
+ * are rejected, including overflow when converting to the requested output dtype.
+ * Output conversion follows reconstruction; FLOAT16/BFLOAT16 convert via FLOAT as in v1.
+ * v2 uses float-valued reconstruction/permutation/transform workspaces, even for DOUBLE
+ * outputs. Parameter serialization and encoding/calibration arithmetic remain unchanged.
+ * Neither version claims GGUF numerical or binary compatibility.
  *
  * @see MakeQuantizationPlan, QuantizationRun, QuantizationBlockLayout,
  * QuantizationBlockParameters, QuantizationFormats, QuantizeTensor,
@@ -393,6 +413,9 @@ struct QuantizationPlan {
   std::vector<double> inverse;
   /// Selects unique original flattened indices whose exact values bypass quantization.
   std::vector<int64_t> outliers;
+  /// Selects reconstruction independently of output dtype: DOUBLE (v1) or FLOAT (v2).
+  /// ORT-compatible profiles retain their v1 DOUBLE decoder and reject FLOAT.
+  int32_t reconstruction_dtype = TensorProto::DOUBLE;
 };
 
 /** Returns the portable profiles as a compile-time array without dynamic allocation. */

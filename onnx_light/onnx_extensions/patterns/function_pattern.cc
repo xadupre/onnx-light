@@ -262,7 +262,11 @@ core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
     for (const auto *node : choices) {
       if (std::find(bindings.nodes.begin(), bindings.nodes.end(), node) != bindings.nodes.end())
         continue;
-      Bindings next = bindings;
+      Bindings next;
+      next.values = bindings.values;
+      next.nodes = bindings.nodes;
+      for (const auto &[name, value] : bindings.attributes)
+        next.attributes.emplace(name, utils::CopyWithSharedTensorStorage(value));
       if (!BindNode(formal, *node, next))
         continue;
       next.nodes[index] = node;

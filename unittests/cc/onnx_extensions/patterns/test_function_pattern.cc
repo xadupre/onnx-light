@@ -212,7 +212,7 @@ TEST(FunctionPattern, RejectsInvalidDefinitions) {
   EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
   replacement = Identity();
   replacement.add_output("output");
-  EXPECT_THROW(FunctionPattern(body, replacement), std::invalid_argument);
+  EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
   body.ref_node()[0].ref_input()[0] = "undefined";
   EXPECT_THROW(FunctionPattern(body, Identity()), std::invalid_argument);
   body = DoubleNeg();

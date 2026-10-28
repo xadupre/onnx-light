@@ -489,6 +489,23 @@ ModelProto PreparationModel() {
 
 } // namespace
 
+TEST(PatternOptimization, BuiltInPatternPriorities) {
+  onnx_patterns::RegisterPatterns();
+  for (const char *name : {"GroupedMatMul", "GemmSumFusion", "MatMulAdd",
+                           "MatMulBatchNormalizationFusion", "MatMulScaleFusion"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(core::builder::CreateRegisteredPattern(name)->priority, 2);
+    EXPECT_EQ(core::builder::CreateRegisteredPattern(name, 3)->priority, 3);
+  }
+  for (const auto &pattern : core::builder::CreateRegisteredPatterns()) {
+    SCOPED_TRACE(pattern->Name());
+    EXPECT_GE(pattern->priority, 0);
+    EXPECT_LE(pattern->priority, 2);
+  }
+  EXPECT_EQ(core::builder::CreateRegisteredPattern("Cast")->priority, 0);
+  EXPECT_EQ(core::builder::CreateRegisteredPattern("CastCast")->priority, 1);
+}
+
 TEST(PatternOptimization, RegistersNamedBuiltInPatternSets) {
   onnx_patterns::RegisterPatterns();
   const auto sets = core::builder::RegisteredPatternSets();

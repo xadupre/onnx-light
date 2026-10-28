@@ -296,7 +296,11 @@ TEST(GroupedMatMulPattern, DefaultOptimizerConvergence) {
           EXPECT_EQ(node.output()[0].value(), "out");
         }
       }
-      EXPECT_EQ(grouped, 1) << form << bias;
+      // GathersSplit runs before GroupedMatMul on the unrolled Concat form.
+      EXPECT_EQ(grouped, form == 1 ? 0 : 1) << form << bias;
+      if (form == 1) {
+        EXPECT_EQ(Last(builder).op_type().value(), "Concat");
+      }
       EXPECT_EQ(builder.GetShape("out").Shape(), Dims({2, 2, 5}));
       EXPECT_TRUE(graph.Optimize().rewrites().empty());
     }

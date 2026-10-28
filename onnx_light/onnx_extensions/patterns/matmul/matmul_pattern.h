@@ -64,7 +64,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  */
 class GroupedMatMulPattern final : public core::builder::PatternOptimization {
 public:
-  explicit GroupedMatMulPattern(int priority = -1)
+  explicit GroupedMatMulPattern(int priority = 2)
       : PatternOptimization(priority, "GroupedMatMul") {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -137,7 +137,7 @@ public:
  */
 class GemmSumFusionPattern final : public core::builder::PatternOptimization {
 public:
-  explicit GemmSumFusionPattern(int priority = 4)
+  explicit GemmSumFusionPattern(int priority = 2)
       : PatternOptimization(priority, "GemmSumFusion") {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -197,7 +197,7 @@ public:
  */
 class MatMulAddPattern final : public core::builder::PatternOptimization {
 public:
-  explicit MatMulAddPattern(int priority = 3, bool allow_reshape = false)
+  explicit MatMulAddPattern(int priority = 2, bool allow_reshape = false)
       : PatternOptimization(priority, "MatMulAdd"), allow_reshape_(allow_reshape) {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -322,7 +322,7 @@ public:
  */
 class MatMulBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {
 public:
-  explicit MatMulBatchNormalizationFusionPattern(int priority = 5)
+  explicit MatMulBatchNormalizationFusionPattern(int priority = 2)
       : PatternOptimization(priority, "MatMulBatchNormalizationFusion") {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -357,7 +357,7 @@ public:
  */
 class MatMulScaleFusionPattern final : public core::builder::PatternOptimization {
 public:
-  explicit MatMulScaleFusionPattern(int priority = 4)
+  explicit MatMulScaleFusionPattern(int priority = 2)
       : PatternOptimization(priority, "MatMulScaleFusion") {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,

@@ -15,6 +15,9 @@
 #include "onnx_proto/onnx_verify.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <set>
@@ -427,6 +430,68 @@ TEST(RepeatedLayerPattern, ReusesOnlyMatchingBodiesInterfacesAndSourceOpsets) {
   EXPECT_NE(layer_names[0], layer_names[4]);
   EXPECT_EQ(builder.LocalFunctions().size(), 9u);
   EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+}
+
+TEST(RepeatedLayerPattern, ReusesBodiesWithSourceOpsetsNarrowerThanModel) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                      {{"", 28}, {"ai.rt", 1}, {"unused.domain", 7}});
+  std::vector<std::string> layer_names;
+  for (int variant = 0; variant < 2; ++variant) {
+    auto &source = builder.MakeLocalFunction("Source" + std::to_string(variant), "source.local",
+                                             {{"", 28}, {"ai.rt", 1}});
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    for (int index = 0; index < 3; ++index) {
+      const std::string suffix = std::to_string(index);
+      source.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+      AddMatMulLayer(source, index == 0 ? "x" : "h" + std::to_string(index - 1), "w" + suffix,
+                     "h" + suffix);
+    }
+    source.MakeOutput("h2");
+    EXPECT_FALSE(OptimizeLayers(source).rewrites().empty());
+    ASSERT_EQ(source.Nodes().size(), 3u);
+    layer_names.push_back(source.Nodes()[0].op_type().value());
+    for (const auto &node : source.Nodes())
+      EXPECT_EQ(node.op_type(), layer_names.back());
+  }
+  EXPECT_EQ(layer_names[0], layer_names[1]);
+  EXPECT_EQ(builder.LocalFunctions().size(), 3u);
+}
+
+TEST(RepeatedLayerPattern, DoesNotReuseSpecialLayerOverloadAsDefault) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  auto &source = builder.MakeLocalFunction("Source", "source.local");
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 3; ++index) {
+    const std::string suffix = std::to_string(index);
+    source.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    AddMatMulLayer(source, index == 0 ? "x" : "h" + std::to_string(index - 1), "w" + suffix,
+                   "h" + suffix);
+  }
+  source.MakeOutput("h2");
+
+  FunctionProto special;
+  special.set_name("Layer");
+  special.set_domain("ai.rt");
+  special.set_overload("special");
+  special.add_input("x");
+  special.add_input("w");
+  special.add_output("y");
+  special.add_opset("", 28);
+  special.add_node(MakeNode("MatMul", {"x", "w"}, {"mm"}));
+  special.add_node(MakeNode("Relu", {"mm"}, {"y"}));
+  FunctionProto ordinary = special;
+  ordinary.clear_overload();
+  ordinary.mutable_node(1)->set_op_type("Sigmoid");
+
+  ModelProto model = builder.ToModel();
+  *model.add_functions() = special;
+  *model.add_functions() = ordinary;
+  core::builder::GraphBuilder imported(model, LayerSchemaLookup());
+  auto &imported_source = imported.LocalFunction("Source");
+  ASSERT_FALSE(OptimizeLayers(imported_source).rewrites().empty());
+  ASSERT_EQ(imported_source.Nodes().size(), 3u);
+  EXPECT_EQ(imported_source.Nodes()[0].op_type(), "Layer_1");
+  EXPECT_TRUE(imported_source.Nodes()[0].overload().empty());
 }
 
 TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNodeMetadata) {
@@ -1625,6 +1690,71 @@ TEST(RepeatedLayerPattern, ReusePreservesNestedInitializerValues) {
     EXPECT_NO_THROW(VerifyModel(model));
     EXPECT_NO_THROW(checker::check_model(model));
   }
+}
+
+TEST(RepeatedLayerPattern, DoesNotReuseBodiesWithUnloadedDeferredInitializers) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  std::string input = "x";
+  for (int layer = 0; layer < 2; ++layer) {
+    const std::string prefix = "h" + std::to_string(layer);
+    builder.MakeNode("MatMul", {input, "w"}, {prefix + "_mm"});
+    GraphProto branch;
+    branch.set_name(prefix + "_branch");
+    TensorProto bias;
+    bias.set_name(prefix + "_bias");
+    bias.set_data_type(TensorProto::FLOAT);
+    const float value = static_cast<float>(layer + 1);
+    std::vector<uint8_t> raw_data(sizeof(value));
+    std::memcpy(raw_data.data(), &value, sizeof(value));
+    bias.set_raw_data(raw_data.data(), raw_data.size());
+    *branch.add_initializer() = std::move(bias);
+    branch.add_node(MakeNode("Add", {prefix + "_mm", prefix + "_bias"}, {prefix + "_result"}));
+    auto *output = branch.add_output();
+    output->set_name(prefix + "_result");
+    auto *tensor = output->mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    tensor->mutable_shape()->add_dim()->set_dim_value(2);
+    tensor->mutable_shape()->add_dim()->set_dim_value(4);
+    builder.MakeNode("If", {"condition"}, {prefix}, "", "", LayerBranches(branch));
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+
+  const auto model_path =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_layer_deferred_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx");
+  ASSERT_TRUE(builder.ToModel().SerializeToFile(model_path.string()));
+  ParseOptions options;
+  options.defer_weights = true;
+  options.num_threads = 1;
+  ModelProto deferred_model;
+  {
+    utils::FileStream stream(model_path.string());
+    ASSERT_TRUE(deferred_model.ParseFromStream(stream, options));
+  }
+  std::error_code remove_error;
+  std::filesystem::remove(model_path, remove_error);
+  std::size_t unloaded_branch_weights = 0;
+  for (const auto &node : deferred_model.graph().node())
+    for (const auto &attribute : node.attribute())
+      if (attribute.has_g())
+        for (const auto &initializer : attribute.g().initializer())
+          unloaded_branch_weights += initializer.HasDeferredWeight() && !initializer.is_raw_data();
+  ASSERT_EQ(unloaded_branch_weights, 4u);
+
+  core::builder::GraphBuilder imported(deferred_model, LayerSchemaLookup());
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+  core::builder::GraphGraph optimizer(imported, std::move(patterns));
+  const auto match = optimizer.Patterns().front()->Match(optimizer, imported.Nodes()[0]);
+  ASSERT_NE(match.pattern, nullptr) << match.ToString();
+  const auto replacement = optimizer.Patterns().front()->Apply(optimizer, match.nodes);
+  EXPECT_EQ(replacement.size(), 2u);
+  EXPECT_EQ(imported.LocalFunctions().size(), 2u);
 }
 
 TEST(RepeatedLayerPattern, EqualEdgeCutsPreferSmallerKnownTensors) {

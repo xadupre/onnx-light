@@ -1425,6 +1425,8 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
     names[body.input(i).name().value()] = scope + "input" + std::to_string(i);
   for (std::size_t i = 0; i < body.initializer().size(); ++i) {
     auto &initializer = *body.mutable_initializer(static_cast<int>(i));
+    if (initializer.HasDeferredWeight() && !initializer.is_raw_data())
+      return false;
     const std::string name = initializer.name().value();
     if (!formal_inputs.contains(name))
       names[name] = scope + "weight" + std::to_string(i);
@@ -1481,6 +1483,43 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
   return true;
 }
 
+bool CollectLayerDomains(const GraphProto &body, std::unordered_set<std::string> &domains,
+                         std::size_t depth, std::size_t &work) {
+  if (depth >= kMaxScopeDepth)
+    return false;
+  for (const auto &node : body.node()) {
+    if (++work > kMaxFunctionWork)
+      return false;
+    domains.insert(node.domain().value());
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g() && !CollectLayerDomains(attribute.g(), domains, depth + 1, work))
+        return false;
+      for (const auto &nested : attribute.graphs())
+        if (!CollectLayerDomains(nested, domains, depth + 1, work))
+          return false;
+    }
+  }
+  return true;
+}
+
+bool CompatibleLayerOpsets(const GraphBuilder &candidate, const GraphBuilder &source,
+                           const GraphProto &body) {
+  std::unordered_set<std::string> used_domains;
+  std::size_t work = 0;
+  if (!CollectLayerDomains(body, used_domains, 0, work))
+    return false;
+  for (const auto &[domain, version] : source.OpsetVersions()) {
+    const auto found = candidate.OpsetVersions().find(domain);
+    if (found == candidate.OpsetVersions().end() || found->second != version)
+      return false;
+  }
+  for (const auto &[domain, version] : candidate.OpsetVersions()) {
+    if (!source.OpsetVersions().contains(domain) && used_domains.contains(domain))
+      return false;
+  }
+  return true;
+}
+
 std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
   GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
   std::size_t work = 0;
@@ -1488,18 +1527,20 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
     return {};
   GraphBuilder &builder = source.ModelBuilder();
   for (const auto &local : builder.LocalFunctions()) {
-    if (!IsLayerName("ai.rt", local->name()) || local->Nodes().size() != body.node().size() ||
+    if (!local->IsLocalFunction(local->name(), "ai.rt", "") ||
+        !IsLayerName("ai.rt", local->name()) || local->Nodes().size() != body.node().size() ||
         local->Inputs().size() != body.input().size() ||
         local->Outputs().size() != body.output().size())
       continue;
     const auto *definition = builder.Shapes().GetLocalFunction(
         core::shapes::ShapesContext::LocalFunctionKey("ai.rt", local->name(), ""));
     if (definition == nullptr || !definition->attribute().empty() ||
-        !definition->attribute_proto().empty() || local->OpsetVersions() != source.OpsetVersions())
+        !definition->attribute_proto().empty())
       continue;
     GraphProto candidate = local->BuildGraph();
     work = 0;
-    if (NormalizeLayerBody(candidate, {}, 0, work) && normalized.Equals(candidate))
+    if (NormalizeLayerBody(candidate, {}, 0, work) &&
+        CompatibleLayerOpsets(*local, source, candidate) && normalized.Equals(candidate))
       return local->name();
   }
   return {};

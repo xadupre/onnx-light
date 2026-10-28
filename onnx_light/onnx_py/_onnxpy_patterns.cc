@@ -89,7 +89,7 @@ NB_MODULE(_onnxpypatterns, m) {
            nb::arg("name") = "FunctionPattern",
            nb::arg("device") = core::symbolic::Device::kUndefined)
       .def("match", &onnx_patterns::FunctionPattern::Match, nb::arg("graph"), nb::arg("candidate"),
-           nb::keep_alive<0, 1>(), nb::keep_alive<0, 2>())
+           nb::keep_alive<0, 1>(), nb::keep_alive<0, 2>(), nb::keep_alive<0, 3>())
       .def("apply", &onnx_patterns::FunctionPattern::Apply, nb::arg("graph"), nb::arg("nodes"));
 
   BindPattern<onnx_patterns::RepeatedLayerPattern>(

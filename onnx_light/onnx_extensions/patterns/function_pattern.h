@@ -30,7 +30,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * Bodies must be topologically sorted SSA graphs without graph-valued
  * attributes. Template inputs must be used, and template outputs must be
- * distinct node results. Replacement outputs may alias inputs or each other.
+ * distinct node results. Template nodes must be connected through nonempty
+ * values (including shared inputs). Matching follows local producers and
+ * consumers, never scans unrelated graph nodes. Replacement outputs may alias
+ * inputs or each other. Configured target nodes are conservatively rejected.
  * Intermediates may not escape the match. Subgraph captures and matches needing
  * interleaved external consumers are conservatively rejected. Function definitions
  * are copied. Forwarded or aliased outputs need a default ONNX opset for Identity.
@@ -55,6 +58,7 @@ public:
 private:
   FunctionProto pattern_;
   FunctionProto replacement_;
+  std::vector<std::size_t> match_order_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

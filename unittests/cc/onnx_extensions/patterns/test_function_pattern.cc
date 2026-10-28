@@ -229,20 +229,19 @@ TEST(FunctionPattern, RejectsInvalidDefinitions) {
   EXPECT_THROW(FunctionPattern(body, Identity()), BuilderError);
 }
 
-TEST(FunctionPattern, MatchesIndependentBranchesInEitherOrder) {
-  const auto body = Function({"x", "z"}, {"a", "b"},
-                             {MakeNode("Neg", {"x"}, {"a"}), MakeNode("Abs", {"z"}, {"b"})});
+TEST(FunctionPattern, MatchesSiblingBranchesInEitherOrder) {
+  const auto body =
+      Function({"x"}, {"a", "b"}, {MakeNode("Neg", {"x"}, {"a"}), MakeNode("Abs", {"x"}, {"b"})});
   FunctionPattern pattern(body, body);
   for (const bool reverse : {false, true}) {
     GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
     AddInput(builder, "input");
-    AddInput(builder, "other");
     if (reverse) {
-      builder.MakeNode("Abs", {"other"}, {"positive"});
+      builder.MakeNode("Abs", {"input"}, {"positive"});
       builder.MakeNode("Neg", {"input"}, {"negative"});
     } else {
       builder.MakeNode("Neg", {"input"}, {"negative"});
-      builder.MakeNode("Abs", {"other"}, {"positive"});
+      builder.MakeNode("Abs", {"input"}, {"positive"});
     }
     builder.MakeOutput("negative");
     builder.MakeOutput("positive");
@@ -253,7 +252,71 @@ TEST(FunctionPattern, MatchesIndependentBranchesInEitherOrder) {
     const auto result = pattern.Apply(graph, match.nodes);
     ASSERT_EQ(result.size(), 2u);
     EXPECT_EQ(result[0].input(0), "input");
-    EXPECT_EQ(result[1].input(0), "other");
+    EXPECT_EQ(result[1].input(0), "input");
+  }
+}
+
+TEST(FunctionPattern, RejectsDisconnectedTemplatesIncludingEmptyOptionalSlots) {
+  const auto disconnected = Function(
+      {"x", "z"}, {"a", "b"}, {MakeNode("Neg", {"x"}, {"a"}), MakeNode("Abs", {"z"}, {"b"})});
+  EXPECT_THROW(FunctionPattern(disconnected, disconnected), BuilderError);
+  const auto optional =
+      Function({"x", "z"}, {"a", "b"},
+               {MakeNode("Clip", {"x", ""}, {"a"}), MakeNode("Clip", {"z", ""}, {"b"})});
+  EXPECT_THROW(FunctionPattern(optional, optional), BuilderError);
+}
+
+TEST(FunctionPattern, MatchesForwardBranchesAndBacktracksLocally) {
+  const auto body =
+      Function({"x"}, {"left_output", "right_output"},
+               {MakeNode("Neg", {"x"}, {"left"}), MakeNode("Abs", {"left"}, {"left_output"}),
+                MakeNode("Neg", {"x"}, {"right"}), MakeNode("Relu", {"right"}, {"right_output"})});
+  FunctionPattern pattern(body, body);
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  AddInput(builder, "input");
+  AddInput(builder, "unrelated");
+  for (int i = 0; i < 128; ++i)
+    builder.MakeNode("Abs", {"unrelated"}, {"noise_" + std::to_string(i)});
+  builder.MakeNode("Neg", {"input"}, {"dead_end"});
+  builder.MakeNode("Neg", {"input"}, {"left"});
+  builder.MakeNode("Abs", {"left"}, {"left_output"});
+  builder.MakeNode("Neg", {"input"}, {"right"});
+  builder.MakeNode("Relu", {"right"}, {"right_output"});
+  builder.MakeOutput("left_output");
+  builder.MakeOutput("right_output");
+  GraphGraph graph(builder);
+  const auto match = pattern.Match(graph, *graph.NodeBefore("right_output"));
+  ASSERT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.nodes.size(), 4u);
+  EXPECT_EQ(match.nodes[0], graph.NodeBefore("left"));
+  EXPECT_EQ(match.nodes[1], graph.NodeBefore("left_output"));
+  EXPECT_EQ(match.nodes[2], graph.NodeBefore("right"));
+  EXPECT_EQ(match.nodes[3], graph.NodeBefore("right_output"));
+  const auto replacement = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacement.size(), 4u);
+  EXPECT_EQ(replacement[1].output(0), "left_output");
+  EXPECT_EQ(replacement[3].output(0), "right_output");
+}
+
+TEST(FunctionPattern, RejectsConfiguredAnchorsAndPredecessors) {
+  FunctionPattern pattern(DoubleNeg(), Identity());
+  for (const int configured : {0, 1}) {
+    GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    AddInput(builder, "input");
+    for (int index = 0; index < 2; ++index) {
+      auto node =
+          MakeNode("Neg", {index == 0 ? "input" : "middle"}, {index == 0 ? "middle" : "output"});
+      if (index == configured) {
+        auto *configuration = node.add_device_configurations();
+        configuration->set_configuration_id("sharded");
+        configuration->set_pipeline_stage(2);
+        configuration->add_sharding_spec()->set_tensor_name(index == 0 ? "middle" : "output");
+      }
+      builder.ImportNode(node);
+    }
+    GraphGraph graph(builder);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}), BuilderError);
   }
 }
 

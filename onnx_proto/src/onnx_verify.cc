@@ -2006,19 +2006,24 @@ void VerifyFunction(const StructTypeCatalogue *struct_types, const FunctionProto
     declared_attributes.insert(ToStdString(attribute));
   for (const auto &attribute : function.attribute_proto())
     declared_attributes.insert(ToStdString(attribute.name()));
-  std::unordered_map<std::string, AttributeProto::AttributeType> reference_types;
+  // Keeps verification-only map instantiations out of the shared library's public symbols.
+  struct ReferenceType {
+    AttributeProto::AttributeType type;
+  };
+  std::unordered_map<std::string, ReferenceType> reference_types;
   const auto verify_imports_and_references = [&](const auto &self, const NodeProto &node) -> void {
-    EXT_ENFORCE_INVALID(opsets.contains(NormaliseDomain(node.domain())), "FunctionProto '",
+    EXT_ENFORCE_INVALID(opsets.count(NormaliseDomain(node.domain())) > 0, "FunctionProto '",
                         function.name(), "': operator '", node.op_type(), "' uses domain '",
                         node.domain(), "' without an opset import.");
     for (const auto &attribute : node.attribute()) {
       if (!attribute.ref_attr_name().empty()) {
         const std::string reference = ToStdString(attribute.ref_attr_name());
-        EXT_ENFORCE_INVALID(declared_attributes.contains(reference), "FunctionProto '",
+        EXT_ENFORCE_INVALID(declared_attributes.count(reference) > 0, "FunctionProto '",
                             function.name(), "': attribute reference '", reference,
                             "' is not declared.");
-        const auto [it, inserted] = reference_types.emplace(reference, attribute.type());
-        EXT_ENFORCE_INVALID(inserted || it->second == attribute.type(), "FunctionProto '",
+        const auto [it, inserted] =
+            reference_types.emplace(reference, ReferenceType{attribute.type()});
+        EXT_ENFORCE_INVALID(inserted || it->second.type == attribute.type(), "FunctionProto '",
                             function.name(), "': attribute reference '", reference,
                             "' has inconsistent types.");
       }

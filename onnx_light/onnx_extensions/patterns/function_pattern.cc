@@ -78,7 +78,7 @@ bool BindValue(Bindings &bindings, const std::string &formal, const std::string 
 }
 
 bool BindNode(const NodeProto &formal, const NodeProto &actual, Bindings &bindings) {
-  if (formal.op_type() != actual.op_type() ||
+  if (!actual.device_configurations().empty() || formal.op_type() != actual.op_type() ||
       NormaliseDomain(formal.domain()) != NormaliseDomain(actual.domain()) ||
       formal.overload().sv() != actual.overload().sv() ||
       formal.input_size() != actual.input_size() || formal.output_size() != actual.output_size() ||
@@ -188,6 +188,38 @@ FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionPro
       throw BuilderError(
           "FunctionPattern: replacement references must be captured by the template.");
   }
+  std::unordered_map<std::string, std::vector<std::size_t>> adjacent;
+  for (std::size_t index = 0; index < pattern_.node().size(); ++index) {
+    for (const auto &input : pattern_.node()[index].input())
+      if (!input.empty())
+        adjacent[input.value()].push_back(index);
+    for (const auto &output : pattern_.node()[index].output())
+      if (!output.empty())
+        adjacent[output.value()].push_back(index);
+  }
+  std::vector<bool> visited(pattern_.node().size(), false);
+  match_order_.push_back(pattern_.node().size() - 1);
+  visited[match_order_.front()] = true;
+  const auto visit = [&](const auto &value) {
+    const auto found = adjacent.find(value.value());
+    if (found == adjacent.end())
+      return;
+    for (const auto index : found->second)
+      if (!visited[index]) {
+        visited[index] = true;
+        match_order_.push_back(index);
+      }
+    adjacent.erase(found);
+  };
+  for (std::size_t position = 0; position < match_order_.size(); ++position) {
+    const auto &node = pattern_.node()[match_order_[position]];
+    for (const auto &input : node.input())
+      visit(input);
+    for (const auto &output : node.output())
+      visit(output);
+  }
+  if (match_order_.size() != pattern_.node().size())
+    throw BuilderError("FunctionPattern: template nodes must be connected through values.");
 }
 
 std::set<std::string> FunctionPattern::FastOpType() const {
@@ -206,37 +238,42 @@ core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
   if (!BindNode(pattern_.node(last), candidate, initial))
     return NoMatch(candidate, "candidate differs from the template anchor");
   initial.nodes[last] = &candidate;
-  std::function<bool(int, Bindings &)> search = [&](int index, Bindings &bindings) {
-    if (index < 0)
+  std::function<bool(std::size_t, Bindings &)> search = [&](std::size_t position,
+                                                            Bindings &bindings) {
+    if (position == match_order_.size())
       return SafeMatch(graph, pattern_, bindings);
-    const NodeProto &formal = pattern_.node(index);
-    std::vector<const NodeProto *> choices;
-    bool constrained = false;
+    const std::size_t index = match_order_[position];
+    const NodeProto &formal = pattern_.node()[index];
+    std::vector<const NodeProto *> producer_choice;
+    const std::vector<const NodeProto *> *choices = nullptr;
     for (const auto &output : formal.output()) {
+      if (output.empty())
+        continue;
       const auto it = bindings.values.find(output.value());
       if (it != bindings.values.end()) {
         const NodeProto *producer = graph.NodeBefore(it->second);
         if (producer == nullptr)
           return false;
-        choices.push_back(producer);
-        constrained = true;
+        producer_choice.push_back(producer);
+        choices = &producer_choice;
         break;
       }
     }
-    if (!constrained) {
+    if (choices == nullptr) {
       for (const auto &input : formal.input()) {
+        if (input.empty())
+          continue;
         const auto it = bindings.values.find(input.value());
         if (it != bindings.values.end()) {
-          choices = graph.NextNodes(it->second);
-          constrained = true;
-          break;
+          const auto &consumers = graph.NextNodes(it->second);
+          if (choices == nullptr || consumers.size() < choices->size())
+            choices = &consumers;
         }
       }
     }
-    if (!constrained)
-      for (const auto &node : graph.Builder().Nodes())
-        choices.push_back(&node);
-    for (const auto *node : choices) {
+    if (choices == nullptr)
+      throw BuilderError("FunctionPattern: local matching order has no bound value.");
+    for (const auto *node : *choices) {
       if (std::find(bindings.nodes.begin(), bindings.nodes.end(), node) != bindings.nodes.end())
         continue;
       Bindings next;
@@ -247,14 +284,14 @@ core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
       if (!BindNode(formal, *node, next))
         continue;
       next.nodes[index] = node;
-      if (search(index - 1, next)) {
+      if (search(position + 1, next)) {
         bindings = std::move(next);
         return true;
       }
     }
     return false;
   };
-  if (!search(last - 1, initial))
+  if (!search(1, initial))
     return NoMatch(candidate, "template structure, attributes or use constraints differ");
   const NodeProto *insert_at = LastNode(graph, initial.nodes);
   return {this, std::move(initial.nodes), insert_at};

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests fixed-arity rewrites defined with ONNX functions."""
 
+import gc
+import sys
 import unittest
 
 import numpy
@@ -53,6 +55,19 @@ def _double_neg():
 
 
 class TestFunctionPattern(ExtTestCase):
+    def test_rejected_match_keeps_standalone_candidate_alive(self):
+        template, replacement, model = _double_neg()
+        pattern = FunctionPattern(template, replacement)
+        graph = GraphGraph(GraphBuilder(model), patterns=[pattern])
+        candidate = oh.make_node("Abs", ["x"], ["y"])
+        references = sys.getrefcount(candidate)
+        match = pattern.match(graph, candidate)
+        self.assertFalse(match.matched)
+        self.assertGreater(sys.getrefcount(candidate), references)
+        del candidate
+        gc.collect()
+        self.assertIn("Abs", str(match))
+
     def test_double_neg_and_registration(self):
         template, replacement, model = _double_neg()
         pattern = FunctionPattern(template, replacement, name="DoubleNeg", priority=0)

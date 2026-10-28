@@ -129,6 +129,12 @@ Bodies must be topologically sorted, use SSA names, and contain no graph-valued
 attributes. Template inputs must be used; its outputs must be distinct node
 results. The replacement may return inputs directly or return a value more than
 once. Output names are preserved and replacement intermediates get fresh names.
+Template nodes must be connected through nonempty values, including shared
+function inputs. Multi-output branches are matched by following local producers
+and consumers from the last template node; unrelated graph nodes are never
+scanned. Templates with completely disconnected components are rejected.
+Target nodes with device configurations are rejected rather than losing their
+sharding or pipeline-stage assignments.
 Removed intermediates cannot be graph outputs, subgraph captures or inputs to
 unmatched nodes. Captured node outputs and matches requiring interleaved external
 consumers are conservatively rejected, even when the captured value is a template

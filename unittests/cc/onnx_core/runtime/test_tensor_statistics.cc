@@ -8,11 +8,15 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
+#include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <gtest/gtest.h>
 #include <numeric>
 #include <set>
+#include <thread>
+#include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -294,6 +298,275 @@ TEST(TensorStatistics, QuantilesAndMedian) {
       ComputeTensorStatistics(Tensor::FromDouble("S", {}, {7}), 0, {0, 0.5, 1}, true);
   EXPECT_EQ(scalar.quantiles, std::vector<double>({7, 7, 7}));
   EXPECT_DOUBLE_EQ(*scalar.median, 7);
+}
+
+TEST(TensorStatistics, SelectedQuantilesMatchFullSortAndPreserveInput) {
+  const std::vector<double> quantiles{
+      1, 0.5, 0, 0.25, 0.75, 0.5, 0.1234567, std::nextafter(1.0, 0.0), 0.001};
+  for (int64_t count : {1, 2, 3, 31, 1025, 65539}) {
+    SCOPED_TRACE(count);
+    std::vector<float> values(static_cast<size_t>(count));
+    uint32_t state = 42;
+    for (float &value : values) {
+      state = state * 1664525u + 1013904223u;
+      value = static_cast<float>(static_cast<int32_t>(state % 257) - 128) / 7;
+    }
+    const auto tensor = Tensor::FromFloat("X", {count}, values);
+    const auto stats = ComputeTensorStatistics(tensor, 0, quantiles, true, {1, count});
+    EXPECT_EQ(std::memcmp(tensor.bytes(), values.data(), values.size() * sizeof(float)), 0);
+    EXPECT_EQ(stats.rectangle_map, std::vector<double>(values.begin(), values.end()));
+    std::vector<long double> sorted(values.begin(), values.end());
+    std::sort(sorted.begin(), sorted.end());
+    for (size_t i = 0; i < quantiles.size(); ++i) {
+      const long double position = static_cast<long double>(quantiles[i]) * (count - 1);
+      const size_t lower = static_cast<size_t>(position);
+      const size_t upper = std::min(lower + 1, sorted.size() - 1);
+      EXPECT_DOUBLE_EQ(stats.quantiles[i], static_cast<double>(std::lerp(
+                                               sorted[lower], sorted[upper], position - lower)));
+    }
+    EXPECT_EQ(stats.median, stats.quantiles[1]);
+  }
+}
+
+TEST(TensorStatistics, SelectionPreservesWideIntegersAndDoublePrecision) {
+  const uint64_t base = uint64_t{1} << 63;
+  const uint64_t largest = std::numeric_limits<uint64_t>::max();
+  const std::vector<uint64_t> values{largest, base + 4097, base + 1, base, base + 8193, base + 2};
+  const auto tensor = Tensor::FromUint64("X", {6}, values);
+  std::vector<uint8_t> unaligned(tensor.size_bytes() + 1);
+  std::memcpy(unaligned.data() + 1, tensor.bytes(), tensor.size_bytes());
+  const auto borrowed = Tensor::Borrow("X", tensor.data_type, tensor.shape, unaligned.data() + 1,
+                                       tensor.size_bytes());
+  auto sorted = values;
+  std::sort(sorted.begin(), sorted.end());
+  const std::vector<double> quantiles{0, 0.2, 0.5, 0.6, 0.9, 1};
+  const auto stats = ComputeTensorStatistics(borrowed, 0, quantiles, true);
+  for (size_t i = 0; i < quantiles.size(); ++i) {
+    const long double position = static_cast<long double>(quantiles[i]) * 5;
+    const size_t lower = static_cast<size_t>(position);
+    EXPECT_DOUBLE_EQ(stats.quantiles[i],
+                     static_cast<double>(
+                         std::lerp(static_cast<long double>(sorted[lower]),
+                                   static_cast<long double>(sorted[std::min(lower + 1, size_t{5})]),
+                                   position - lower)));
+  }
+  const int64_t small = std::numeric_limits<int64_t>::min();
+  const int64_t large = std::numeric_limits<int64_t>::max();
+  const auto signed_stats = ComputeTensorStatistics(
+      Tensor::FromInt64("X", {4}, {large, small, small + 4097, large - 4097}), 0, {0, 0.5, 1},
+      true);
+  const double signed_median = static_cast<double>(std::lerp(
+      static_cast<long double>(small + 4097), static_cast<long double>(large - 4097), 0.5L));
+  EXPECT_EQ(signed_stats.quantiles, std::vector<double>({static_cast<double>(small), signed_median,
+                                                         static_cast<double>(large)}));
+  const double next = std::nextafter(1.0, 2.0);
+  const auto precise =
+      ComputeTensorStatistics(Tensor::FromDouble("X", {3}, {next, 1, next}), 0, {0, 0.5, 1}, true);
+  EXPECT_EQ(precise.quantiles, std::vector<double>({1, next, next}));
+}
+
+TEST(TensorStatistics, LargeFloatHistogramQuantilesMatchFullSort) {
+  const int64_t count = 65539;
+  const float largest = std::numeric_limits<float>::max();
+  const float smallest = std::numeric_limits<float>::denorm_min();
+  const float inf = std::numeric_limits<float>::infinity();
+  const std::vector<std::vector<float>> palettes{
+      {-largest, largest, -smallest, smallest, -0.0f, 0.0f, -inf, inf},
+      {largest, std::nextafter(largest, 0.0f)},
+      {-smallest, -0.0f, 0.0f, smallest},
+      {-inf, inf},
+      {2.5f}};
+  const std::vector<double> quantiles{
+      0, 0.00001, 0.1, 0.25, 0.5, 0.75, 0.9, std::nextafter(1.0, 0.0), 1};
+  for (size_t dataset = 0; dataset <= palettes.size(); ++dataset) {
+    SCOPED_TRACE(dataset);
+    std::vector<float> values(static_cast<size_t>(count));
+    uint32_t state = 42;
+    for (size_t i = 0; i < values.size(); ++i) {
+      state = state * 1664525u + 1013904223u;
+      values[i] = dataset < palettes.size()
+                      ? palettes[dataset][state % palettes[dataset].size()]
+                      : std::bit_cast<float>((state & 0x807fffffu) | ((state >> 24) % 255) << 23);
+    }
+    const auto tensor = Tensor::FromFloat("X", {count}, values);
+    std::vector<long double> sorted(values.begin(), values.end());
+    std::sort(sorted.begin(), sorted.end());
+    for (int64_t bins : {1, 3, 50, 257, 65537}) {
+      SCOPED_TRACE(bins);
+      const auto stats = ComputeTensorStatistics(tensor, bins, quantiles, true);
+      for (size_t i = 0; i < quantiles.size(); ++i) {
+        const long double position = static_cast<long double>(quantiles[i]) * (count - 1);
+        const size_t lower = static_cast<size_t>(position);
+        const long double weight = position - lower;
+        const long double low = sorted[lower],
+                          high = sorted[std::min(lower + 1, sorted.size() - 1)];
+        const double expected = static_cast<double>(weight == 0 || low == high ? low
+                                                    : std::isfinite(low) && std::isfinite(high)
+                                                        ? std::lerp(low, high, weight)
+                                                        : (1 - weight) * low + weight * high);
+        if (std::isnan(expected)) {
+          EXPECT_TRUE(std::isnan(stats.quantiles[i]));
+        } else {
+          EXPECT_DOUBLE_EQ(stats.quantiles[i], expected);
+        }
+      }
+      EXPECT_EQ(stats.median, stats.quantiles[4]);
+    }
+    EXPECT_EQ(std::memcmp(tensor.bytes(), values.data(), values.size() * sizeof(float)), 0);
+  }
+}
+
+TEST(TensorStatistics, LargeFloatHistogramCancellationAndManyRanksFallback) {
+  const int64_t count = 65539;
+  std::vector<float> values(static_cast<size_t>(count));
+  for (int64_t i = 0; i < count; ++i)
+    values[static_cast<size_t>(i)] = static_cast<float>((i * 197) % count);
+  const auto tensor = Tensor::FromFloat("X", {count}, values);
+  for (int64_t stop : {0, 1, 2, 3}) {
+    int64_t completed_passes = -1;
+    const TensorStatisticsProgressCallback cancel = [&](TensorStatisticsPhase phase,
+                                                        int64_t completed, int64_t total) {
+      if (phase == TensorStatisticsPhase::kQuantiles) {
+        EXPECT_EQ(total, 3);
+        EXPECT_EQ(completed, completed_passes + 1);
+        completed_passes = completed;
+        return completed != stop;
+      }
+      EXPECT_NE(phase, TensorStatisticsPhase::kComplete);
+      return true;
+    };
+    EXPECT_THROW(ComputeTensorStatistics(tensor, 0, {0.25, 0.5, 0.75}, true, {},
+                                         kTensorStatisticsMaxOutputBytes, cancel),
+                 std::runtime_error);
+    EXPECT_EQ(completed_passes, stop);
+  }
+  std::vector<double> quantiles(130);
+  for (size_t i = 0; i < quantiles.size(); ++i)
+    quantiles[i] = static_cast<double>(i) / (quantiles.size() - 1);
+  const auto stats = ComputeTensorStatistics(tensor, 0, quantiles, true);
+  for (size_t i = 0; i < quantiles.size(); ++i)
+    EXPECT_DOUBLE_EQ(stats.quantiles[i],
+                     static_cast<double>(static_cast<long double>(quantiles[i]) * (count - 1)));
+  EXPECT_EQ(std::memcmp(tensor.bytes(), values.data(), values.size() * sizeof(float)), 0);
+}
+
+TEST(TensorStatistics, SelectionHandlesRepeatedInfinitiesAndMedianOnly) {
+  const double inf = std::numeric_limits<double>::infinity();
+  const auto tensor = Tensor::FromDouble("X", {6}, {inf, -inf, 2, inf, -inf, 2});
+  const auto stats = ComputeTensorStatistics(tensor, 0, {0, 0.1, 0.2, 0.5, 0.8, 0.9, 1}, true);
+  EXPECT_EQ(stats.quantiles, std::vector<double>({-inf, -inf, -inf, 2, inf, inf, inf}));
+  EXPECT_EQ(stats.median, 2);
+  EXPECT_EQ(ComputeTensorStatistics(tensor, 0, {}, true).median, 2);
+  const auto mixed = ComputeTensorStatistics(Tensor::FromDouble("X", {2}, {inf, -inf}), 0,
+                                             {0, 0.25, 0.5, 0.75, 1}, true);
+  EXPECT_EQ(mixed.quantiles.front(), -inf);
+  EXPECT_EQ(mixed.quantiles.back(), inf);
+  for (size_t i = 1; i < 4; ++i)
+    EXPECT_TRUE(std::isnan(mixed.quantiles[i]));
+  EXPECT_TRUE(std::isnan(*mixed.median));
+}
+
+TEST(TensorStatistics, ProgressPhasesAndCancellationAcrossOverloads) {
+  const auto tensor = Tensor::FromFloat("X", {12}, {9, 3, 6, 2, 5, 8, 1, 4, 7, 0, 10, 11});
+  const auto encoded = QuantizeTensor(tensor, MakeQuantizationPlan(QuantizationFormat::kInt8, 12));
+  const auto caller = std::this_thread::get_id();
+  const auto check = [&](const auto &value, bool expect_decode) {
+    const auto compute = [&](const TensorStatisticsProgressCallback &progress) {
+      if constexpr (std::is_same_v<std::decay_t<decltype(value)>, EncodedValueProto>)
+        return ComputeTensorStatistics(value, 3, {0.25, 0.5, 0.75, 0.5}, true, {2, 2}, {},
+                                       kTensorStatisticsMaxOutputBytes, progress);
+      else
+        return ComputeTensorStatistics(value, 3, {0.25, 0.5, 0.75, 0.5}, true, {2, 2},
+                                       kTensorStatisticsMaxOutputBytes, progress);
+    };
+    std::vector<TensorStatisticsPhase> phases;
+    int64_t previous = -1;
+    const TensorStatisticsProgressCallback progress = [&](TensorStatisticsPhase phase,
+                                                          int64_t completed, int64_t total) {
+      EXPECT_EQ(std::this_thread::get_id(), caller);
+      EXPECT_GT(total, 0);
+      EXPECT_GE(completed, 0);
+      EXPECT_LE(completed, total);
+      if (phases.empty() || phases.back() != phase) {
+        if (phase != TensorStatisticsPhase::kComplete) {
+          EXPECT_EQ(completed, 0);
+        }
+        phases.push_back(phase);
+        previous = -1;
+      }
+      EXPECT_GT(completed, previous);
+      previous = completed;
+      return true;
+    };
+    const auto stats = compute(progress);
+    const auto plain = ComputeTensorStatistics(value, 3, {0.25, 0.5, 0.75, 0.5}, true, {2, 2});
+    EXPECT_EQ(stats.quantiles, plain.quantiles);
+    EXPECT_EQ(stats.rectangle_map, plain.rectangle_map);
+    EXPECT_EQ(stats.distribution, plain.distribution);
+    EXPECT_EQ(stats.mean, plain.mean);
+    EXPECT_EQ(phases.front(),
+              expect_decode ? TensorStatisticsPhase::kDecode : TensorStatisticsPhase::kSummary);
+    EXPECT_EQ(phases.back(), TensorStatisticsPhase::kComplete);
+    for (auto cancel_phase : phases) {
+      bool cancelled = false;
+      const TensorStatisticsProgressCallback cancel = [&](TensorStatisticsPhase phase, int64_t,
+                                                          int64_t) {
+        EXPECT_FALSE(cancelled);
+        cancelled = phase == cancel_phase;
+        return !cancelled;
+      };
+      EXPECT_THROW(compute(cancel), std::runtime_error);
+      EXPECT_TRUE(cancelled);
+    }
+  };
+  check(tensor, false);
+  check(RuntimeValue(tensor), false);
+  check(encoded, true);
+  check(encoded.Encoded(), true);
+}
+
+TEST(TensorStatistics, CancelsBetweenSelectionsAndPropagatesCallbackErrors) {
+  const auto tensor = Tensor::FromFloat("X", {10}, {9, 1, 8, 2, 7, 3, 6, 4, 5, 0});
+  int64_t selected = 0;
+  const TensorStatisticsProgressCallback cancel = [&](TensorStatisticsPhase phase,
+                                                      int64_t completed, int64_t total) {
+    if (phase == TensorStatisticsPhase::kQuantiles) {
+      EXPECT_EQ(total, 6); // Q2 and median share the same two ranks.
+      selected = completed;
+      return completed == 0;
+    }
+    EXPECT_NE(phase, TensorStatisticsPhase::kComplete);
+    return true;
+  };
+  EXPECT_THROW(ComputeTensorStatistics(tensor, 0, {0.25, 0.5, 0.75, 0.5}, true, {},
+                                       kTensorStatisticsMaxOutputBytes, cancel),
+               std::runtime_error);
+  EXPECT_EQ(selected, 1);
+  const TensorStatisticsProgressCallback fail = [](TensorStatisticsPhase, int64_t,
+                                                   int64_t) -> bool {
+    throw std::logic_error("callback failure");
+  };
+  EXPECT_THROW(
+      ComputeTensorStatistics(tensor, 0, {}, false, {}, kTensorStatisticsMaxOutputBytes, fail),
+      std::logic_error);
+  EXPECT_THROW(
+      ComputeTensorStatistics(tensor, -1, {}, false, {}, kTensorStatisticsMaxOutputBytes, fail),
+      std::invalid_argument);
+  const Tensor malformed;
+  EXPECT_THROW(
+      ComputeTensorStatistics(malformed, 0, {}, false, {}, kTensorStatisticsMaxOutputBytes, fail),
+      std::invalid_argument);
+  const auto empty = Tensor::FromFloat("X", {0}, {});
+  std::vector<TensorStatisticsPhase> phases;
+  ComputeTensorStatistics(empty, 0, {}, false, {}, kTensorStatisticsMaxOutputBytes,
+                          [&](TensorStatisticsPhase phase, int64_t completed, int64_t total) {
+                            phases.push_back(phase);
+                            EXPECT_EQ(completed, 1);
+                            EXPECT_EQ(total, 1);
+                            return true;
+                          });
+  EXPECT_EQ(phases, std::vector<TensorStatisticsPhase>{TensorStatisticsPhase::kComplete});
+  EXPECT_EQ(ComputeTensorStatistics(tensor, 0, {}, true).median, 4.5);
 }
 
 TEST(TensorStatistics, AreaAverageRectangle) {

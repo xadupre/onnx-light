@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/runtime_value.h"
+#include <functional>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -48,6 +49,35 @@ struct TensorStatistics {
   std::vector<int64_t> rectangle_shape;
 };
 
+/** Identifies the current standalone tensor statistics operation. */
+enum class TensorStatisticsPhase {
+  kDecode,
+  kSummary,
+  kMean,
+  kDistinct,
+  kHistogram,
+  kRectangle,
+  kQuantiles,
+  kComplete
+};
+
+/**
+ * Receives (phase, completed, total) synchronously on the calling thread.
+ *
+ * Defaults to an empty callback, disabling notifications and callback-driven cancellation.
+ * Returning false cancels with std::runtime_error; callback exceptions propagate unchanged.
+ * Reductions and decoding report phase boundaries (0/1 and 1/1). Quantiles report distribution
+ * refinement passes for large FLOAT tensors, otherwise selected unique ranks, or 0/1 and 1/1
+ * for constant FLOAT data. These are per-phase
+ * work units, not an overall percentage or a wall-clock estimate. Completion reports 1/1.
+ * Unneeded phases are omitted. Cancellation is cooperative between phases and selections:
+ * an individual reduction, refinement pass, decode or nth_element is not interrupted.
+ * The input is never mutated,
+ * and cancellation returns no partial statistics. Callbacks must not mutate the input.
+ */
+using TensorStatisticsProgressCallback =
+    std::function<bool(TensorStatisticsPhase phase, int64_t completed, int64_t total)>;
+
 /**
  * Computes standalone numeric statistics; rejects strings, complex types and malformed storage.
  *
@@ -73,12 +103,18 @@ struct TensorStatistics {
  * quantile, and NaN median
  * only when requested. Rectangle metadata is empty when no map is produced.
  * Applies ValidateTensorStatisticsOptions and its output budget before reading input.
+ * Large FLOAT tensors (count >= 32768, at most 128 unique requested ranks) reuse the histogram
+ * and refine selected bins exactly, with at most 8 MiB of private histogram counters and no
+ * tensor-sized selection copy. Other calls use a private FLOAT/DOUBLE/native 64-bit integer
+ * workspace (DOUBLE for other numeric types), selecting only requested ranks instead of sorting.
+ * Rectangle-only calls read the tensor directly without a full-size numeric copy.
  */
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins = 0,
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 /**
  * Computes tensor or encoded RuntimeValue statistics, rejecting structures and sequences.
@@ -94,7 +130,8 @@ TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 /**
  * Computes encoded statistics, resolving named storage types through catalogue.
@@ -106,6 +143,7 @@ TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
                                          const StructTypeCatalogue &catalogue = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

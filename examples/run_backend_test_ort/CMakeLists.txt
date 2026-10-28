@@ -60,7 +60,7 @@
 #   LD_LIBRARY_PATH=/opt/onnxruntime-linux-x64-1.19.2/lib \
 #     ./build-run-backend-test-ort/run_backend_test_ort
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(run_backend_test_ort LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

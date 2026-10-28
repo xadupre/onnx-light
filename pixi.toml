@@ -14,10 +14,10 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 python = ">=3.12"
 numpy = ">=2.2"
 ml_dtypes = ">=0.5.0"
-cmake = ">=3.27"
+cmake = ">=4.0"
 ninja = "*"
 cxx-compiler = "*"
-scikit-build-core = ">=0.3.3"
+scikit-build-core = ">=0.8"
 pip = "*"
 
 [pypi-dependencies]

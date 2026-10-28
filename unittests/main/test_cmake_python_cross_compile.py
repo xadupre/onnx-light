@@ -20,7 +20,7 @@ class TestCMakePythonCrossCompile(ExtTestCase):
         end = content.index("  # Find nanobind", start)
         discovery = content[start:end] + "endif()\n"
         project = (
-            """cmake_minimum_required(VERSION 3.15)
+            """cmake_minimum_required(VERSION 4.0)
 project(PythonDiscovery NONE)
 set(ONNX_LIGHT_BUILD_PYTHON ON)
 set(ONNX_LIGHT_PYTHON_STABLE_ABI @STABLE_ABI@)
@@ -47,7 +47,6 @@ else()
 endif()
 message(STATUS "test_module_alias=${module_alias}")
 message(STATUS "test_sabi_alias=${sabi_alias}")
-message(STATUS "test_cmake_version=${CMAKE_VERSION}")
 """
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -73,10 +72,7 @@ message(STATUS "test_cmake_version=${CMAKE_VERSION}")
             abi = f"ANY;ANY;ANY;{'ON' if gil_disabled else 'OFF'}"
             with self.subTest(abi=abi):
                 values = self._configure(abi)
-                cmake_version = tuple(
-                    int(part) for part in values["cmake_version"][0].split(".")[:2]
-                )
-                has_stable_abi = not gil_disabled and cmake_version >= (3, 26)
+                has_stable_abi = not gil_disabled
                 components = "Development.Module"
                 if has_stable_abi:
                     components += ";Development.SABIModule"

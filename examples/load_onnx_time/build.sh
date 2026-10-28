@@ -56,7 +56,7 @@ _cmake_pkg_found() {
     local pkg="$1" tmpdir rc
     tmpdir=$(mktemp -d)
     {
-        printf 'cmake_minimum_required(VERSION 3.15)\n'
+        printf 'cmake_minimum_required(VERSION 4.0)\n'
         printf 'project(probe)\n'
         printf 'find_package(%s QUIET)\n' "${pkg}"
         printf 'if(NOT %s_FOUND)\n' "${pkg}"

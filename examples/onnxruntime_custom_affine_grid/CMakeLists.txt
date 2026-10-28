@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(onnxruntime_custom_affine_grid LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

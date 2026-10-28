@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 
 # Default to a Release build when no build type is specified. Without this,
 # single-config generators (Makefiles, Ninja) fall back to an empty build type
@@ -192,9 +192,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
       message(FATAL_ERROR "Failed to query Python's free-threaded status: "
                           "${python_gil_query_error}")
     endif()
-    if(python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.30")
+    if(python_gil_disabled)
       if(NOT WIN32 AND CMAKE_VERSION VERSION_LESS "4.1")
-        # FindPython in CMake 3.30-4.0 rejects Development.Module on POSIX
+        # FindPython in CMake 4.0 rejects Development.Module on POSIX
         # whenever *_FIND_ABI is set (including by scikit-build-core >= 1.1).
         # It can find the free-threaded headers through the interpreter instead.
         unset(Python3_FIND_ABI)
@@ -224,7 +224,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
           endif()
         endif()
       else()
-        # CMake 3.30+ only searches for free-threaded development files when
+        # FindPython only searches for free-threaded development files when
         # asked to. Request exactly this ABI so regular development files
         # installed alongside them cannot be selected instead.
         if(NOT DEFINED Python3_FIND_ABI)
@@ -241,7 +241,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     if(DEFINED SKBUILD_SABI_COMPONENT)
       # scikit-build-core requests the stable ABI exactly when the wheel is abi3.
       list(APPEND python_dev_component ${SKBUILD_SABI_COMPONENT})
-    elseif(NOT python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.26")
+    elseif(NOT python_gil_disabled)
       # Plain CMake builds use nanobind's STABLE_ABI mode when supported.
       # Free-threaded CPython has no stable ABI.
       list(APPEND python_dev_component Development.SABIModule)

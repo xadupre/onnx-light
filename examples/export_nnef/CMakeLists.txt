@@ -28,7 +28,7 @@
 # ---
 #   ./build-export-nnef/export_nnef path/to/model.onnx path/to/out_nnef
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(export_nnef LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

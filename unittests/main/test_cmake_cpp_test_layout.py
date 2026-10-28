@@ -52,7 +52,7 @@ class TestCMakeCppTestLayout(ExtTestCase):
             directory = Path(temporary)
             package = self._write_gtest_package(directory)
             (directory / "CMakeLists.txt").write_text(
-                "cmake_minimum_required(VERSION 3.15)\n"
+                "cmake_minimum_required(VERSION 4.0)\n"
                 "project(ProtoRuntimeLayout LANGUAGES C CXX)\n"
                 "set(WIN32 TRUE)\n"
                 "set(ONNX_PROTO_BUILD_SHARED ON)\n"

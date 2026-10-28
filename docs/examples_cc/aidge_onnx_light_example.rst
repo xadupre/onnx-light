@@ -108,7 +108,7 @@ optional unless ``-DAIDGE_ONNX_LIGHT_REQUIRE_AIDGE=ON`` is passed:
 
 .. code-block:: cmake
 
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 4.0)
     project(aidge_onnx_light LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 20)

@@ -29,9 +29,10 @@
  *
  * :cpp:func:`GraphBuilder::ToModel`, :cpp:func:`GraphBuilder::ToGraph` and
  * :cpp:func:`GraphBuilder::ToFunction` finalize the accumulated graph: they
- * run the whole-graph compute analyses and write the inferred shapes, the
- * in-place / release-after metadata, the value tags and the peak-memory
- * estimates into the produced proto.
+ * compute optional memory profiles and write the incrementally maintained
+ * shapes, in-place / release-after metadata, value tags and final peak-memory
+ * estimates into the produced proto. Memory profiles are unavailable during
+ * construction and are discarded on mutation after an export.
  */
 
 #pragma once
@@ -744,6 +745,8 @@ public:
   GraphBuilder ApplyRewritings(const std::string &name) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
+  /// Shapes, tags and lifetimes are current during construction. Memory and
+  /// peak-memory profiles are empty until export and are discarded on mutation.
   const ComputeContext &Compute() const noexcept { return compute_; }
 
   /// Read-only access to the :cpp:class:`ShapesContext` holding the inferred
@@ -1028,7 +1031,7 @@ private:
   mutable std::unordered_map<std::string,
                              std::unordered_map<std::string, std::vector<LightOpSchema>>>
       schema_table_;
-  ComputeContext compute_;
+  ComputeContext compute_{ComputeContext::MemoryProfiling::kExplicit};
   utils::RepeatedProtoField<ValueInfoProto> inputs_;
   utils::RepeatedProtoField<ValueInfoProto> outputs_;
   utils::RepeatedProtoField<ValueInfoProto> value_infos_;

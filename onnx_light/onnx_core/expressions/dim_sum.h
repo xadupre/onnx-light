@@ -46,6 +46,9 @@ public:
   /// Adds a single term to the running sum.
   void Add(const DimType &term);
 
+  /// Removes a previously added term, checking integer subtraction for overflow.
+  void Remove(const DimType &term);
+
   /// Returns the simplified sum of every added term (`0` when empty).
   DimType Build(SimplifiedExpressionCache *cache = nullptr) const;
 

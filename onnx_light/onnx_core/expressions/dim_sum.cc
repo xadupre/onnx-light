@@ -4,6 +4,7 @@
 
 #include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/shapes/shape_check.h"
+#include "onnx_lib/common/safe_math.h"
 
 #include <string>
 #include <variant>
@@ -42,6 +43,21 @@ void DimSum::Add(const DimType &term) {
   } else {
     auto &coefficient = coefficients_[std::get<std::string>(term)];
     coefficient = shapes::CheckedDimensionAdd(coefficient, 1);
+  }
+}
+
+void DimSum::Remove(const DimType &term) {
+  if (const auto *value = std::get_if<int64_t>(&term)) {
+    int64_t result = 0;
+    EXT_ENFORCE_INVALID(!checked_sub_overflow(constant_, *value, &result),
+                        "Integer overflow while removing a dimension sum term.");
+    constant_ = result;
+  } else {
+    const auto found = coefficients_.find(std::get<std::string>(term));
+    EXT_ENFORCE_INVALID(found != coefficients_.end(),
+                        "Cannot remove an absent symbolic dimension sum term.");
+    if (--found->second == 0)
+      coefficients_.erase(found);
   }
 }
 

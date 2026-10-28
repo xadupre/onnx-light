@@ -549,6 +549,17 @@ void AddFunctionBodyMemory(NodeMemoryProfile &profile, const FunctionBodyMemoryE
 
 // ── ComputeContext method implementations ────────────────────────────────────
 
+void ComputeContext::ClearMemoryProfiles() noexcept {
+  memory_.clear();
+  memory_matches_shapes_ = false;
+  peak_memory_.clear();
+  incr_allocation_bytes_.clear();
+  incr_memory_alive_.clear();
+  incr_memory_alive_before_refresh_.clear();
+  incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  incr_memory_refresh_prepared_ = false;
+}
+
 void ComputeContext::Clear() noexcept {
   value_tags_.clear();
   node_tags_.clear();
@@ -891,7 +902,8 @@ void ComputeContext::RestoreTagState(const TagState &state,
   }
   // Empty seeds update tag-dependent bookkeeping without re-inferring captured tags.
   PropagateNodeTags(nodes, {}, changed);
-  RefreshIncrementalMemory(nodes, shapes_, Device::kUndefined, materialize);
+  if (memory_profiling_ == MemoryProfiling::kIncremental)
+    RefreshIncrementalMemory(nodes, shapes_, Device::kUndefined, materialize);
 }
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
@@ -1069,14 +1081,14 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     }
   }
 
-  // Append exactly one entry to every per-node vector so they stay aligned with
-  // reuse_ (Size()). GraphBuilder refreshes complete memory profiles before the
-  // mutating method returns.
+  // Keep the eager lifetime annotations aligned. Optional profiles are absent
+  // in explicit-profiling contexts until an analysis is requested.
   reuse_.push_back(std::move(matches));
   release_after_.push_back(std::move(release_after));
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
-  memory_.push_back(MakeEmptyNodeMemoryProfile());
+  if (memory_profiling_ == MemoryProfiling::kIncremental)
+    memory_.push_back(MakeEmptyNodeMemoryProfile());
   incr_node_references_.push_back(referenced);
 }
 
@@ -1236,9 +1248,11 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
                      [&](const std::string &name) { return changed_values.count(name) != 0; }))
       continue;
     RefreshNodeReuse(nodes, index, ctx);
-    AppendNodePeakMemory(nodes[index], index, device, materialize);
+    if (memory_profiling_ == MemoryProfiling::kIncremental)
+      AppendNodePeakMemory(nodes[index], index, device, materialize);
   }
-  RefreshIncrementalMemory(nodes, ctx, device, materialize);
+  if (memory_profiling_ == MemoryProfiling::kIncremental)
+    RefreshIncrementalMemory(nodes, ctx, device, materialize);
 }
 
 void ComputeContext::EraseValue(const std::string &name) {
@@ -1267,6 +1281,8 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
                                  const std::unordered_set<std::string> &changed_values,
                                  Device device, const NodeMaterializerFn &materialize) {
   const std::size_t old_count = Size();
+  if (memory_profiling_ == MemoryProfiling::kExplicit)
+    ClearMemoryProfiles();
   EXT_ENFORCE_INVALID(old_indices.size() == nodes.size() && references.size() == nodes.size(),
                       "UpdateNodes: inconsistent node coordinates.");
   EXT_ENFORCE_INVALID(nodes.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
@@ -1312,8 +1328,10 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
   remap(release_after_);
   remap(not_used_after_);
   remap(release_after_shape_tagged_);
-  remap(memory_);
-  remap(peak_memory_);
+  if (memory_profiling_ == MemoryProfiling::kIncremental) {
+    remap(memory_);
+    remap(peak_memory_);
+  }
   remap(incr_node_references_);
   const auto remap_producers = [&](auto &producers) {
     for (auto it = producers.begin(); it != producers.end();) {
@@ -1445,13 +1463,18 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
         std::any_of(nodes[index].output().begin(), nodes[index].output().end(),
                     [&](const std::string &name) { return changed_references.count(name) != 0; })) {
       RefreshNodeReuse(nodes, index, shapes_);
-      AppendNodePeakMemory(nodes[index], index, device, materialize);
+      if (memory_profiling_ == MemoryProfiling::kIncremental)
+        AppendNodePeakMemory(nodes[index], index, device, materialize);
       MarkMemoryRefresh(index);
     }
   }
 }
 
 void ComputeContext::MarkMemoryRefresh(std::size_t node_index) {
+  if (memory_profiling_ == MemoryProfiling::kExplicit) {
+    ClearMemoryProfiles();
+    return;
+  }
   if (node_index < incr_memory_refresh_from_) {
     incr_memory_refresh_from_ = node_index;
     incr_memory_refresh_prepared_ = false;
@@ -1490,6 +1513,10 @@ void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodePr
 void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
                                               const ShapesContext &ctx, Device device,
                                               const NodeMaterializerFn &materialize) {
+  if (memory_profiling_ == MemoryProfiling::kExplicit) {
+    incr_memory_refresh_from_ = 0;
+    incr_memory_refresh_prepared_ = false;
+  }
   if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1)) {
     return;
   }

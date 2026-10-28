@@ -9,6 +9,19 @@ protection is scoped to rewriting and does not change ordinary tag propagation.
 Memory timeline boundaries
 --------------------------
 
+``GraphBuilder`` maintains shapes, tags, lifetimes and reuse decisions during
+construction, but does not compute memory or scratch profiles. Its
+``Compute().Memory()`` and ``Compute().PeakMemory()`` vectors remain empty.
+``ToGraph``, ``ToModel`` and ``ToFunction`` compute profiles at export, including
+nested graphs and local functions. A subsequent mutation discards those optional
+profiles immediately, so callers never observe an outdated profile.
+
+Standalone ``ComputeContext`` keeps its incremental behavior by default.
+The explicit C++ ``MemoryProfiling::kExplicit`` constructor policy disables
+automatic profiling during mutations without changing eager annotations;
+``RefreshIncrementalMemory`` and ``ComputePeakMemory`` explicitly compute the
+requested profiles. No query triggers analysis.
+
 ``ComputeContext::NodeMemory(i)`` (also ``Memory()[i]``) exposes symbolic or
 concrete ``before_bytes``, ``during_bytes``, ``after_bytes`` and
 ``released_bytes`` scalars for every node, including the final node.

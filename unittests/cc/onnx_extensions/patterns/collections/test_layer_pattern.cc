@@ -616,7 +616,7 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
   }
 }
 
-TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfiles) {
+TEST(ComputeContext, IncludesLocalFunctionActivationsInExportedAndFullProfiles) {
   constexpr int64_t width = 16;
   constexpr int64_t expanded_width = 1024;
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
@@ -634,6 +634,8 @@ TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfile
                     LayerShape({expanded_width, width}));
   builder.MakeNode("Projection", {"caller_x", "caller_w1", "caller_w2"}, {"result"}, "ai.rt");
   builder.MakeOutput("result");
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  const ModelProto model = builder.ToModel();
 
   const auto internal_bytes = [](const core::compute::ComputeContext &context) {
     return std::get<int64_t>(std::get<core::expressions::DimType>(
@@ -641,7 +643,6 @@ TEST(ComputeContext, IncludesLocalFunctionActivationsInIncrementalAndFullProfile
   };
   EXPECT_EQ(internal_bytes(builder.Compute()), 135232);
 
-  const ModelProto model = builder.ToModel();
   core::compute::ComputeContext context;
   context.ComputeShapes(model);
   const auto tags = context.ComputeValueAndNodeTags(model.graph());
@@ -679,6 +680,8 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
   builder.MakeInput("caller_condition", core::symbolic::TensorType::kBool, LayerShape({}));
   builder.MakeNode("BranchFunction", {"caller_x", "caller_condition"}, {"result"}, "ai.rt");
   builder.MakeOutput("result");
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  const ModelProto model = builder.ToModel();
 
   const auto internal_bytes = [](const core::compute::ComputeContext &context) {
     return std::get<int64_t>(
@@ -688,7 +691,6 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
   };
   EXPECT_EQ(internal_bytes(builder.Compute()), 8192);
 
-  const ModelProto model = builder.ToModel();
   core::compute::ComputeContext context;
   context.ComputeShapes(model);
   const auto tags = context.ComputeValueAndNodeTags(model.graph());

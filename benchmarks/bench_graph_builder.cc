@@ -220,9 +220,12 @@ int main(int argc, char **argv) {
   // are populated before timing.
   {
     core::builder::GraphBuilder warmup(model);
+    if (synthetic_layers)
+      warmup.ToModel();
   }
 
   double total_ms = 0.0;
+  double export_ms = 0.0;
   for (int i = 0; i < iters; ++i) {
     const auto start = std::chrono::steady_clock::now();
     core::builder::GraphBuilder builder(model);
@@ -230,9 +233,22 @@ int main(int argc, char **argv) {
     const double ms = std::chrono::duration<double, std::milli>(stop - start).count();
     total_ms += ms;
     std::cout << "iter " << i << ": " << ms << " ms\n";
+    if (synthetic_layers) {
+      const auto export_start = std::chrono::steady_clock::now();
+      builder.ToModel();
+      const auto exported = std::chrono::steady_clock::now();
+      const double elapsed =
+          std::chrono::duration<double, std::milli>(exported - export_start).count();
+      export_ms += elapsed;
+      std::cout << "export " << i << ": " << elapsed << " ms\n";
+    }
   }
 
   std::cout << "GraphBuilder construction: " << (total_ms / iters) << " ms/build (avg over "
             << iters << " iters)\n";
+  if (synthetic_layers) {
+    std::cout << "Export: " << export_ms / iters << " ms/export\n";
+    std::cout << "Construction + export: " << (total_ms + export_ms) / iters << " ms/model\n";
+  }
   return 0;
 }

@@ -104,8 +104,8 @@ private:
  * At least one input must be produced by a rank-two Transpose with ``perm=[1,0]``
  * or the equivalent default permutation.
  * Only flags for absorbed sides are toggled. Inputs may be dynamic or constant;
- * alpha, beta, bias and output names are preserved. Shared Transposes are retained,
- * and on GPU a shared side is not absorbed.
+ * alpha, beta, legacy broadcast, bias and output names are preserved. Shared Transposes are
+ * retained, and on GPU a shared side is not absorbed.
  */
 class GemmTransposePattern final : public core::builder::PatternOptimization {
 public:

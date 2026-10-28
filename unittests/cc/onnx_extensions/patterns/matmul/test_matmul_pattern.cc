@@ -631,6 +631,76 @@ TEST(GemmTransposePattern, PreservesSharedExportedAndCapturedTransposes) {
   }
 }
 
+TEST(GemmTransposePattern, RetainsAliasedTransposeProducerOnlyOnce) {
+  for (const auto *name : {"GemmTranspose", "TransposeMatMul"}) {
+    SCOPED_TRACE(name);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 2}));
+    builder.MakeNode("Transpose", {"x"}, {"xt"}, "", "", PermAttr({1, 0}));
+    builder.MakeNode("Gemm", {"xt", "xt"}, {"out"});
+    builder.MakeOutput("xt");
+    builder.MakeOutput("out");
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(onnx_patterns::CreatePattern(name));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    ASSERT_FALSE(graph.Optimize().rewrites().empty());
+    ASSERT_EQ(builder.Nodes().size(), 2u);
+    for (const auto &node : builder.Nodes()) {
+      if (node.op_type() == "Transpose") {
+        EXPECT_EQ(node.output(0), "xt");
+      } else {
+        EXPECT_EQ(node.op_type(), "Gemm");
+        EXPECT_EQ(node.input(0), "x");
+        EXPECT_EQ(node.input(1), "x");
+        EXPECT_EQ(node.output(0), "out");
+        EXPECT_EQ(GetAttributeOr<int64_t>(node, "transA", 0), 1);
+        EXPECT_EQ(GetAttributeOr<int64_t>(node, "transB", 0), 1);
+      }
+    }
+    EXPECT_EQ(builder.Outputs()[0].name(), "xt");
+    EXPECT_EQ(builder.Outputs()[1].name(), "out");
+    EXPECT_TRUE(graph.Optimize().rewrites().empty());
+  }
+}
+
+TEST(GemmTransposePattern, PreservesLegacyBroadcastWithDynamicInputs) {
+  for (const auto *name : {"GemmTranspose", "TransposeMatMul"}) {
+    for (const int broadcast : {0, 1}) {
+      SCOPED_TRACE(std::string(name) + ":" + std::to_string(broadcast));
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 6}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 2}));
+      builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({4, 3}));
+      builder.MakeInput("bias", core::symbolic::TensorType::kFloat,
+                        broadcast ? Shape({4}) : Shape({2, 4}));
+      builder.MakeNode("Transpose", {"x"}, {"xt"}, "", "", PermAttr({1, 0}));
+      builder.MakeNode("Transpose", {"w"}, {"wt"}, "", "", PermAttr({1, 0}));
+      auto attributes = IntAttr("broadcast", broadcast);
+      attributes.add() = FloatAttr("alpha", 2.0F)[0];
+      attributes.add() = FloatAttr("beta", 0.5F)[0];
+      builder.MakeNode("Gemm", {"xt", "wt", "bias"}, {"out"}, "", "", attributes);
+      builder.MakeOutput("out");
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(onnx_patterns::CreatePattern(name));
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      ASSERT_FALSE(graph.Optimize().rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), 1u);
+      const auto &gemm = builder.Nodes()[0];
+      EXPECT_EQ(gemm.op_type(), "Gemm");
+      EXPECT_EQ(gemm.input(0), "x");
+      EXPECT_EQ(gemm.input(1), "w");
+      EXPECT_EQ(gemm.input(2), "bias");
+      EXPECT_EQ(gemm.output(0), "out");
+      EXPECT_EQ(GetAttributeOr<int64_t>(gemm, "broadcast", -1), broadcast);
+      EXPECT_EQ(GetAttributeOr<int64_t>(gemm, "transA", 0), 1);
+      EXPECT_EQ(GetAttributeOr<int64_t>(gemm, "transB", 0), 1);
+      EXPECT_FLOAT_EQ(GetAttributeOr<float>(gemm, "alpha", 1.0F), 2.0F);
+      EXPECT_FLOAT_EQ(GetAttributeOr<float>(gemm, "beta", 1.0F), 0.5F);
+      EXPECT_EQ(builder.OpsetVersion(""), 6);
+      EXPECT_TRUE(graph.Optimize().rewrites().empty());
+    }
+  }
+}
+
 TEST(GemmTransposePattern, RejectsInvalidPermutationAndForeignDomains) {
   for (int variant = 0; variant < 4; ++variant) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});

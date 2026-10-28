@@ -1487,7 +1487,8 @@ TransposeMatMulPattern::Apply(core::builder::GraphGraph &graph,
   std::vector<AttributeProto> kept;
   for (int i = 0; i < matmul.attribute_size(); ++i) {
     const AttributeProto &attribute = matmul.attribute(i);
-    if (attribute.name().value() == "alpha" || attribute.name().value() == "beta") {
+    if (attribute.name().value() == "alpha" || attribute.name().value() == "beta" ||
+        attribute.name().value() == "broadcast") {
       kept.push_back(attribute);
     } else if (attribute.name().value() == "transA") {
       trans_a = (attribute.i() != 0) != (trans_a != 0);
@@ -1510,7 +1511,7 @@ TransposeMatMulPattern::Apply(core::builder::GraphGraph &graph,
   if (left != nullptr && graph.IsUsedMoreThanOnce(left->output()[0].value())) {
     replacements.push_back(*left);
   }
-  if (right != nullptr && graph.IsUsedMoreThanOnce(right->output()[0].value())) {
+  if (right != nullptr && right != left && graph.IsUsedMoreThanOnce(right->output()[0].value())) {
     replacements.push_back(*right);
   }
   return replacements;

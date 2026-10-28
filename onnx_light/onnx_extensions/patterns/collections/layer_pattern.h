@@ -19,12 +19,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * - Indexes producers, consumers, declared types and lexical subgraph captures.
  *   Runs detection only at the first graph node of each optimizer scan.
  * - Finds exact attention/MatMul anchors, including recursively inspected local
- *   functions. Excludes existing layer-function calls and their bodies,
- *   stochastic operators, Dropout and opaque custom calls from candidate regions.
- *   Allows the deterministic com.microsoft operators Gelu, BiasGelu, FastGelu,
- *   SkipLayerNormalization, SkipSimplifiedLayerNormalization, RotaryEmbedding,
- *   CausalConvWithState and LinearAttention, retaining explicit state/cache ports.
- *   Requires known output types/shapes for these contrib calls without a local body.
+ *   functions. Excludes existing layer-function calls and their bodies.
+ *   Accepts operators independently of their domain or determinism when shape
+ *   inference is available, including context-local shape callbacks. Otherwise
+ *   requires complete output tensor annotations to preserve function inference.
  *   Does not change the conservative custom-operator constant-folding policy.
  *   Keeps nodes referencing enclosing-function attributes, including references
  *   inside graph attributes, outside extracted regions.
@@ -42,8 +40,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Supports tensors, structured values, sequences of supported values and
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
- *   contraction cycles and preserves the relative order of unwrapped stochastic
- *   or opaque calls. Uses original topological position to break scheduling ties.
+ *   contraction cycles and preserves the original execution order of every node,
+ *   without assuming that any operator is pure or deterministic.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
  *   and original positions. Ranks seed families by total anchor coverage, total

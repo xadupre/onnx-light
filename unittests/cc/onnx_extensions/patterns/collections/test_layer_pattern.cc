@@ -6,6 +6,7 @@
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_lib/checker.h"
@@ -18,7 +19,7 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -190,6 +191,7 @@ std::size_t ExpectLayerContracts(const GraphProto &graph, std::set<std::string> 
 
 void CollectOriginalOperators(const GraphProto &graph,
                               std::map<std::string, std::string> &operators,
+                              std::vector<std::string> &order,
                               const std::map<std::string, std::string> &bindings = {}) {
   auto resolve = [&](const std::string &name) {
     const auto found = bindings.find(name);
@@ -206,10 +208,12 @@ void CollectOriginalOperators(const GraphProto &graph,
         arguments[body->input()[index].name().value()] = resolve(node.input()[index].value());
       for (std::size_t index = 0; index < body->output().size(); ++index)
         arguments[body->output()[index].name().value()] = resolve(node.output()[index].value());
-      CollectOriginalOperators(*body, operators, arguments);
+      CollectOriginalOperators(*body, operators, order, arguments);
     } else {
       ASSERT_FALSE(node.name().value().empty());
-      std::string signature = node.domain().value() + ":" + node.op_type().value();
+      order.push_back(node.name());
+      std::string signature =
+          node.domain().value() + ":" + node.op_type().value() + ":" + node.overload().value();
       for (const auto &input : node.input())
         signature += "|in:" + resolve(input.value());
       for (const auto &output : node.output())
@@ -223,9 +227,11 @@ void CollectOriginalOperators(const GraphProto &graph,
 void ExpectOriginalOperators(const GraphProto &before, const GraphProto &after) {
   std::map<std::string, std::string> expected;
   std::map<std::string, std::string> actual;
-  CollectOriginalOperators(before, expected);
-  CollectOriginalOperators(after, actual);
+  std::vector<std::string> expected_order, actual_order;
+  CollectOriginalOperators(before, expected, expected_order);
+  CollectOriginalOperators(after, actual, actual_order);
   EXPECT_EQ(actual, expected);
+  EXPECT_EQ(actual_order, expected_order);
 }
 
 void ExpectCoherentLayerMetadata(const core::builder::GraphBuilder &builder) {
@@ -1241,16 +1247,14 @@ TEST(RepeatedLayerPattern, ExtractsMicrosoftAttentionHelpersWithExplicitState) {
   }
 }
 
-TEST(RepeatedLayerPattern, KeepsOpaqueStochasticAndOverloadedContribCallsOutsideLayers) {
-  for (const auto &[domain, op, overload] :
-       std::vector<std::tuple<std::string, std::string, std::string>>{
-           {"other", "Gelu", ""},
-           {"com.microsoft", "Opaque", ""},
-           {"com.microsoft", "Dropout", ""},
-           {"", "Dropout", ""},
-           {"", "RandomNormalLike", ""},
-           {"com.microsoft", "Gelu", "custom"}}) {
-    SCOPED_TRACE(domain + "/" + op + "/" + overload);
+TEST(RepeatedLayerPattern, ExtractsArbitraryDomainsAndStochasticOperatorsWithoutReordering) {
+  for (const auto &[domain, op] :
+       std::vector<std::pair<std::string, std::string>>{{"other", "Gelu"},
+                                                        {"com.microsoft", "Opaque"},
+                                                        {"com.microsoft", "Dropout"},
+                                                        {"", "Dropout"},
+                                                        {"", "RandomNormalLike"}}) {
+    SCOPED_TRACE(domain + "/" + op);
     core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
                                         {{"", 24}, {"com.microsoft", 1}, {"other", 1}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
@@ -1258,14 +1262,45 @@ TEST(RepeatedLayerPattern, KeepsOpaqueStochasticAndOverloadedContribCallsOutside
       const std::string suffix = std::to_string(index);
       AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
       builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
-      builder.MakeNode(op, {"m" + suffix}, {"y" + suffix}, domain, "barrier" + suffix,
-                       utils::RepeatedProtoField<AttributeProto>(), overload);
+      builder.MakeNode(op, {"m" + suffix}, {"y" + suffix}, domain, "custom" + suffix);
       builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
     }
     const GraphProto before = builder.BuildGraph();
+    EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+    ExpectOriginalOperators(before, builder.BuildGraph());
+    ExpectCoherentLayerMetadata(builder);
+    EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
-    EXPECT_TRUE(before.Equals(builder.BuildGraph()));
   }
+}
+
+TEST(RepeatedLayerPattern, UsesRegisteredShapeInferenceRegardlessOfDomain) {
+  const std::string domain = "test.layer.custom";
+  core::shapes::RegisterComputeShapeFn(domain, "CustomProjection",
+                                       [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                         ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                       });
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {domain, 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+    builder.MakeNode("CustomProjection", {"m" + suffix}, {"custom" + suffix}, domain,
+                     "custom_node" + suffix);
+    ASSERT_TRUE(builder.HasShape("custom" + suffix));
+    builder.MakeNode("Relu", {"custom" + suffix}, {"y" + suffix}, "", "relu" + suffix);
+    builder.MakeOutput("y" + suffix);
+  }
+  const GraphProto before = builder.BuildGraph();
+  EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+  ExpectOriginalOperators(before, builder.BuildGraph());
+  ExpectCoherentLayerMetadata(builder);
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+  core::builder::GraphBuilder reimported(builder.ToModel(), LayerSchemaLookup());
+  EXPECT_EQ(reimported.GetShape("y0").Shape(), LayerShape({2, 4}));
 }
 
 TEST(RepeatedLayerPattern, RejectsContribWithoutInternalOutputShapes) {
@@ -1284,7 +1319,7 @@ TEST(RepeatedLayerPattern, RejectsContribWithoutInternalOutputShapes) {
   EXPECT_TRUE(before.Equals(builder.BuildGraph()));
 }
 
-TEST(RepeatedLayerPattern, ContribExtractionPreservesInterleavedOpaqueCallOrder) {
+TEST(RepeatedLayerPattern, ExtractsOpaqueSideCallsWithoutChangingExecutionOrder) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
                                       {{"", 24}, {"com.microsoft", 1}, {"other", 1}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
@@ -1292,7 +1327,7 @@ TEST(RepeatedLayerPattern, ContribExtractionPreservesInterleavedOpaqueCallOrder)
     const std::string suffix = std::to_string(index);
     AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
     builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
-    builder.MakeNode("Opaque", {"x"}, {"side" + suffix}, "other", "opaque" + suffix);
+    builder.MakeNode("Opaque", {"m" + suffix}, {"side" + suffix}, "other", "opaque" + suffix);
     builder.MakeNode("Gelu", {"m" + suffix}, {"y" + suffix}, "com.microsoft", "gelu" + suffix);
     builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
     builder.MakeOutput("side" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
@@ -1301,11 +1336,24 @@ TEST(RepeatedLayerPattern, ContribExtractionPreservesInterleavedOpaqueCallOrder)
   EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
   ExpectOriginalOperators(before, builder.BuildGraph());
-  std::vector<std::string> opaque_calls;
-  for (const auto &node : builder.Nodes())
-    if (node.domain() == "other")
-      opaque_calls.push_back(node.name());
-  EXPECT_EQ(opaque_calls, (std::vector<std::string>{"opaque0", "opaque1"}));
+  EXPECT_EQ(builder.Nodes().size(), 2u);
+}
+
+TEST(RepeatedLayerPattern, RejectsContractionThatWouldReorderIndependentCalls) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+    builder.MakeNode(index == 0 ? "Neg" : "Abs", {"x"}, {"side" + suffix}, "", "side" + suffix);
+    builder.MakeNode("Relu", {"m" + suffix}, {"y" + suffix}, "", "relu" + suffix);
+    builder.MakeOutput("y" + suffix);
+    builder.MakeOutput("side" + suffix);
+  }
+  const GraphProto before = builder.BuildGraph();
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_TRUE(before.Equals(builder.BuildGraph()));
 }
 
 GraphProto CapturingLayerBranch(const std::string &capture) {

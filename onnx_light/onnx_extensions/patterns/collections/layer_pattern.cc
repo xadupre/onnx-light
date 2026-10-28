@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
-#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
@@ -58,22 +57,6 @@ bool IsPrimitiveAnchor(const NodeProto &node) {
          (((domain.empty() || domain == "ai.onnx") && (op == "MatMul" || op == "Attention")) ||
           (domain == "com.microsoft" && op == "GroupQueryAttention") ||
           (domain == "ai.rt" && op == "PagedAttention"));
-}
-
-bool IsDeterministicContrib(const NodeProto &node) {
-  if (node.domain().value() != "com.microsoft")
-    return false;
-  // State and caches are explicit inputs/outputs for these operators.
-  static const std::unordered_set<std::string> kDeterministic = {
-      "BiasGelu",
-      "CausalConvWithState",
-      "FastGelu",
-      "Gelu",
-      "LinearAttention",
-      "RotaryEmbedding",
-      "SkipLayerNormalization",
-      "SkipSimplifiedLayerNormalization"};
-  return kDeterministic.count(node.op_type().value()) != 0;
 }
 
 // The key includes domain and overload: similarly named user operators are not anchors.
@@ -475,17 +458,6 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
     }
     if (!cached->second)
       return false;
-  } else {
-    const bool standard_domain =
-        node.domain().value().empty() || node.domain().value() == "ai.onnx";
-    const bool recognized_standard =
-        standard_domain &&
-        core::shapes::DispatchTable().count("ai.onnx:" + node.op_type().value()) != 0;
-    if (!node.overload().value().empty() || node.op_type().value() == "Dropout" ||
-        (!IsPrimitiveAnchor(node) && !IsDeterministicContrib(node) &&
-         (!recognized_standard ||
-          core::compute::IsNonDeterministicOp(node.domain().value(), node.op_type().value()))))
-      return false;
   }
   for (const auto &attribute : node.attribute()) {
     if (!SafeAttributeGraphs(attribute, builder, functions, visiting, depth, work,
@@ -539,10 +511,16 @@ struct Index {
         entry.usable = IsSafeNode(entry.materialized, graph.Builder(), safe_functions, visiting, 0,
                                   safety_work);
       }
-      if (entry.usable && IsDeterministicContrib(node) &&
+      if (entry.usable &&
           graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
-              node.domain(), node.op_type(), node.overload())) == nullptr) {
+              node.domain(), node.op_type(), node.overload())) == nullptr &&
+          graph.Builder().Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) ==
+              nullptr &&
+          core::shapes::DispatchTable().count(NormaliseDispatchDomain(node) + ":" +
+                                              node.op_type()) == 0) {
         entry.usable =
+            std::any_of(node.output().begin(), node.output().end(),
+                        [](const auto &name) { return !name.empty(); }) &&
             std::all_of(node.output().begin(), node.output().end(),
                         [&](const auto &name) { return name.empty() || graph.HasType(name); });
       }
@@ -946,19 +924,17 @@ bool Schedule(Index &index, Plan &plan) {
       }
     }
   }
-  // Unwrapped stochastic or opaque calls must keep their original relative
-  // execution order, even when contraction would otherwise move one earlier.
-  const NodeProto *previous_boundary = nullptr;
+  // Encapsulation does not assume purity: every original operation keeps its
+  // execution order, including calls inside contracted regions.
+  const NodeProto *previous = nullptr;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
     const NodeProto *node = &nodes[position];
-    if (index.data.at(node).usable)
-      continue;
-    if (previous_boundary != nullptr) {
-      const std::size_t from = owner.at(previous_boundary), to = owner.at(node);
+    if (previous != nullptr) {
+      const std::size_t from = owner.at(previous), to = owner.at(node);
       if (from != to && successors[from].insert(to).second)
         ++indegree[to];
     }
-    previous_boundary = node;
+    previous = node;
   }
   using Ready = std::pair<std::size_t, std::size_t>;
   std::priority_queue<Ready, std::vector<Ready>, std::greater<Ready>> ready;

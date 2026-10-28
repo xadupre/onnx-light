@@ -71,12 +71,19 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
                   21.0 / 46.0 *
                       std::cos(2.0 * pi * (static_cast<double>(i) / (periodic ? size : size - 1))));
             }
-            Tensor y = dtype == DataType::FLOAT16
-                           ? core::runtime::MakeFloat16Tensor("", {size}, values)
-                       : dtype == DataType::BFLOAT16
-                           ? core::runtime::MakeBfloat16Tensor("", {size}, values)
-                           : Tensor::FromInt8("", {size},
-                                              std::vector<int8_t>(values.begin(), values.end()));
+            Tensor y;
+            if (dtype == DataType::INT8) {
+              std::vector<int8_t> integers;
+              integers.reserve(values.size());
+              for (float value : values) {
+                integers.push_back(static_cast<int8_t>(value));
+              }
+              y = Tensor::FromInt8("", {size}, integers);
+            } else {
+              y = dtype == DataType::FLOAT16
+                      ? core::runtime::MakeFloat16Tensor("", {size}, values)
+                      : core::runtime::MakeBfloat16Tensor("", {size}, values);
+            }
             return IoData{{std::move(x)}, {std::move(y)}};
           });
     }

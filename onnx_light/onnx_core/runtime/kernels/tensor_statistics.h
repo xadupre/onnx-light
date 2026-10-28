@@ -64,6 +64,7 @@ enum class TensorStatisticsPhase {
 /**
  * Receives (phase, completed, total) synchronously on the calling thread.
  *
+ * Defaults to an empty callback, disabling notifications and callback-driven cancellation.
  * Returning false cancels with std::runtime_error; callback exceptions propagate unchanged.
  * Reductions and decoding report phase boundaries (0/1 and 1/1). Quantiles report distribution
  * refinement passes for large FLOAT tensors, otherwise selected unique ranks, or 0/1 and 1/1
@@ -112,14 +113,8 @@ TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins = 0,
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
-
-/** Computes tensor statistics with optional progress and cooperative cancellation. */
-TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
-                                         const std::vector<double> &quantiles, bool median,
-                                         const std::vector<int64_t> &rectangle_shape,
-                                         size_t max_output_bytes,
-                                         const TensorStatisticsProgressCallback &progress);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 /**
  * Computes tensor or encoded RuntimeValue statistics, rejecting structures and sequences.
@@ -135,14 +130,8 @@ TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins
                                          const std::vector<double> &quantiles = {},
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
-
-/** Computes RuntimeValue statistics with optional progress and cooperative cancellation. */
-TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins,
-                                         const std::vector<double> &quantiles, bool median,
-                                         const std::vector<int64_t> &rectangle_shape,
-                                         size_t max_output_bytes,
-                                         const TensorStatisticsProgressCallback &progress);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 /**
  * Computes encoded statistics, resolving named storage types through catalogue.
@@ -154,14 +143,7 @@ TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t
                                          bool median = false,
                                          const std::vector<int64_t> &rectangle_shape = {},
                                          const StructTypeCatalogue &catalogue = {},
-                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes);
-
-/** Computes encoded statistics with optional progress and cooperative cancellation. */
-TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t bins,
-                                         const std::vector<double> &quantiles, bool median,
-                                         const std::vector<int64_t> &rectangle_shape,
-                                         const StructTypeCatalogue &catalogue,
-                                         size_t max_output_bytes,
-                                         const TensorStatisticsProgressCallback &progress);
+                                         size_t max_output_bytes = kTensorStatisticsMaxOutputBytes,
+                                         const TensorStatisticsProgressCallback &progress = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

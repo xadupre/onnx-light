@@ -35,9 +35,18 @@ remains unchanged.
 Progress and cancellation
 -------------------------
 
-The original overloads remain available, including their existing binary
-symbols. New overloads accept a trailing ``TensorStatisticsProgressCallback``
-after the output budget (and after the catalogue for encoded values):
+Each overload accepts an optional trailing ``TensorStatisticsProgressCallback``
+after the output budget (and after the catalogue for encoded values).
+It defaults to ``{}``, so existing calls need no callback and receive no
+notifications. The callback-free binary symbols are retained for existing SDK
+consumers.
+
+.. code-block:: cpp
+
+    const auto stats = onnx_light::core::runtime::ComputeTensorStatistics(
+        tensor, 0, {0.25, 0.5, 0.75}, true, {32, 32});
+
+To receive progress and enable cooperative cancellation:
 
 .. code-block:: cpp
 

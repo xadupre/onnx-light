@@ -750,6 +750,7 @@ TensorStatistics ComputeStatistics(const Tensor &tensor, int64_t bins,
 
 } // namespace
 
+// Keeps the callback-free ABI for already compiled SDK consumers.
 TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape,
@@ -773,6 +774,7 @@ TensorStatistics ComputeTensorStatistics(const Tensor &tensor, int64_t bins,
                            progress);
 }
 
+// Keeps the callback-free ABI for already compiled SDK consumers.
 TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape,
@@ -803,6 +805,7 @@ TensorStatistics ComputeTensorStatistics(const RuntimeValue &value, int64_t bins
   return result;
 }
 
+// Keeps the callback-free ABI for already compiled SDK consumers.
 TensorStatistics ComputeTensorStatistics(const EncodedValueProto &value, int64_t bins,
                                          const std::vector<double> &quantiles, bool median,
                                          const std::vector<int64_t> &rectangle_shape,

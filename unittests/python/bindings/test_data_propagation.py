@@ -1,7 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/data_propagation_test.py
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
+from shape_inference_test_utils import TestShapeInferenceHelper
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
@@ -10,7 +10,7 @@ import onnx_light.onnx.shape_inference as shape_inference
 _TEST_OPSET_VERSION = 23
 
 
-class TestDataPropagation(ExtTestCase):
+class TestDataPropagation(TestShapeInferenceHelper):
     @classmethod
     def setUpClass(cls):
         import onnx_light.onnx.defs as defs

@@ -8,7 +8,7 @@ from __future__ import annotations
 import unittest
 from typing import TYPE_CHECKING
 
-from onnx_light.ext_test_case import ExtTestCase
+from shape_inference_test_utils import TestShapeInferenceHelper
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
@@ -42,7 +42,7 @@ def _infer_function_output_types(
     return shape_inference.infer_function_output_types(function, input_types, attributes)
 
 
-class TestFunctionInference(ExtTestCase):
+class TestFunctionInference(TestShapeInferenceHelper):
     @classmethod
     def setUpClass(cls) -> None:
         """Registers test op schemas needed for function-level shape inference."""

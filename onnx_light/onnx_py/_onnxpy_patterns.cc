@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/builder/pattern_optimization.h"
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/algebra/mul_pattern.h"
@@ -31,6 +31,7 @@
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
+#include "onnx_extensions/patterns/function_pattern.h"
 #include "onnx_extensions/patterns/layout/layout_pattern.h"
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
@@ -78,6 +79,18 @@ NB_MODULE(_onnxpypatterns, m) {
   onnx_patterns::RegisterPatterns();
 
   m.doc() = "Concrete ONNX graph-rewriting patterns.";
+
+  nb::class_<onnx_patterns::FunctionPattern, core::builder::PatternOptimization>(
+      m, "FunctionPattern",
+      "Creates a fixed-arity rewrite from template and replacement ONNX functions.")
+      .def(nb::init<const FunctionProto &, const FunctionProto &, int, std::string,
+                    core::symbolic::Device>(),
+           nb::arg("pattern"), nb::arg("replacement"), nb::arg("priority") = 1,
+           nb::arg("name") = "FunctionPattern",
+           nb::arg("device") = core::symbolic::Device::kUndefined)
+      .def("match", &onnx_patterns::FunctionPattern::Match, nb::arg("graph"), nb::arg("candidate"),
+           nb::keep_alive<0, 1>(), nb::keep_alive<0, 2>(), nb::keep_alive<0, 3>())
+      .def("apply", &onnx_patterns::FunctionPattern::Apply, nb::arg("graph"), nb::arg("nodes"));
 
   BindPattern<onnx_patterns::RepeatedLayerPattern>(
       m, "RepeatedLayerPattern",

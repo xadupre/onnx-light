@@ -7,6 +7,7 @@ This module documents the C++ optimization-pattern headers used by
 .. rubric:: Core
 
 .. doxygenfile:: onnx_extensions/patterns/dispatch_table.h
+.. doxygenfile:: onnx_extensions/patterns/function_pattern.h
 
 .. rubric:: Algebra
 

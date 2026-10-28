@@ -78,6 +78,76 @@ that reuse a registered operator's domain and name, regardless of ``overload``.
 Patterns intentionally matching functions check their expected identities and
 semantics before returning the usual ``self.result(...)``.
 
+Define a pattern with two ONNX functions
+---------------------------------------
+
+:class:`~onnx_light.onnx_core.optimization.FunctionPattern` builds the matcher
+and replacement automatically from two ``FunctionProto`` bodies:
+
+.. code-block:: python
+
+    import onnx_light.onnx.helper as oh
+    from onnx_light.onnx_core.optimization import FunctionPattern
+
+    opsets = [oh.make_opsetid("", 18)]
+    template = oh.make_function(
+        "patterns", "DoubleNeg", ["x"], ["y"],
+        [oh.make_node("Neg", ["x"], ["middle"]),
+         oh.make_node("Neg", ["middle"], ["y"])],
+        opsets,
+    )
+    replacement = oh.make_function(
+        "patterns", "Identity", ["input"], ["output"],
+        [oh.make_node("Identity", ["input"], ["output"])],
+        opsets,
+    )
+    pattern = FunctionPattern(template, replacement, name="DoubleNeg")
+
+Function inputs and outputs correspond **by position** and must have equal,
+fixed counts. Every node also matches an exact input/output count (including
+empty optional slots), domain, overload, literal attributes and opset version.
+Input order is significant; commutative permutations are not inferred.
+
+Reference attributes created with ``oh.make_attribute_ref`` capture attributes
+instead of comparing a literal value. Declare their ``ref_attr_name`` in the
+function's ``attributes`` list. A replacement reference uses the same capture
+name and type, but may have a different node-attribute name. Repeated template
+references must match equal values. All replacement references must be captured
+by the template; missing candidate attributes are not filled from schema defaults.
+
+For example, these nodes capture and reuse a transpose permutation::
+
+    from onnx_light.onnx import AttributeProto
+
+    node = oh.make_node("Transpose", ["x"], ["y"])
+    node.attribute.append(
+        oh.make_attribute_ref("perm", AttributeProto.INTS, ref_attr_name="permutation")
+    )
+    # Use attributes=["permutation"] in both function definitions.
+
+Bodies must be topologically sorted, use SSA names, and contain no graph-valued
+attributes. Template inputs must be used; its outputs must be distinct node
+results. The replacement may return inputs directly or return a value more than
+once. Output names are preserved and replacement intermediates get fresh names.
+Template nodes must be connected through nonempty values, including shared
+function inputs. Multi-output branches are matched by following local producers
+and consumers from the last template node; unrelated graph nodes are never
+scanned. Templates with completely disconnected components are rejected.
+Target nodes with device configurations are rejected rather than losing their
+sharding or pipeline-stage assignments.
+Removed intermediates cannot be graph outputs, subgraph captures or inputs to
+unmatched nodes. Captured node outputs and matches requiring interleaved external
+consumers are conservatively rejected, even when the captured value is a template
+output.
+The target graph must already import the functions' operator opsets; the pattern
+does not upgrade opsets or install local function definitions. Forwarding an input
+or an aliased output also requires a default ONNX opset for ``Identity``.
+As with handwritten patterns, the author is responsible for semantic equivalence,
+including supported types, shapes and broadcasting.
+
+This class requires function arguments, so it has no built-in registry factory.
+Pass the instance to ``GraphGraph`` or register it with ``register_pattern``.
+
 Select the pattern for one optimizer
 ------------------------------------
 

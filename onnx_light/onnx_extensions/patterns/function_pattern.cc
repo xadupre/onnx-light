@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_verify.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 namespace {
@@ -21,7 +23,12 @@ using AttributeType = AttributeProto::AttributeType;
 using References = std::unordered_map<std::string, AttributeType>;
 
 References Validate(const FunctionProto &function, bool is_template) {
-  std::unordered_set<std::string> values, inputs, used, declared;
+  try {
+    VerifyFunction(function);
+  } catch (const std::invalid_argument &error) {
+    throw BuilderError(error.what());
+  }
+  std::unordered_set<std::string> inputs, used, declared;
   std::unordered_map<std::string, int64_t> opsets;
   References references;
   for (const auto &opset : function.opset_import()) {
@@ -34,28 +41,15 @@ References Validate(const FunctionProto &function, bool is_template) {
     declared.insert(attribute.value());
   for (const auto &attribute : function.attribute_proto())
     declared.insert(attribute.name().value());
-  for (const auto &input : function.input()) {
-    if (input.empty() || !values.insert(input.value()).second)
-      throw BuilderError("FunctionPattern: inputs must be non-empty and distinct.");
+  for (const auto &input : function.input())
     inputs.insert(input.value());
-  }
   for (const auto &node : function.node()) {
-    if (node.op_type().empty() || !opsets.contains(NormaliseDomain(node.domain())))
+    if (!opsets.contains(NormaliseDomain(node.domain())))
       throw BuilderError("FunctionPattern: every operator needs an explicit opset import.");
-    for (const auto &input : node.input()) {
-      if (!input.empty() && !values.contains(input.value()))
-        throw BuilderError("FunctionPattern: undefined input or non-topological function body.");
-      used.insert(input.value());
-    }
-    for (const auto &output : node.output()) {
-      if (!output.empty() && !values.insert(output.value()).second)
-        throw BuilderError("FunctionPattern: node outputs must obey SSA.");
-    }
-    std::unordered_set<std::string> names;
+    for (const auto &input : node.input())
+      if (!input.empty())
+        used.insert(input.value());
     for (const auto &attribute : node.attribute()) {
-      if (attribute.name().empty() || !names.insert(attribute.name().value()).second ||
-          attribute.type() == AttributeType::UNDEFINED)
-        throw BuilderError("FunctionPattern: invalid or duplicate node attribute.");
       if (attribute.type() == AttributeType::GRAPH || attribute.type() == AttributeType::GRAPHS ||
           attribute.has_g() || attribute.graphs_size() != 0)
         throw BuilderError("FunctionPattern: graph-valued attributes are not supported.");
@@ -69,16 +63,13 @@ References Validate(const FunctionProto &function, bool is_template) {
       }
     }
   }
-  std::unordered_set<std::string> outputs;
-  for (const auto &output : function.output()) {
-    if (output.empty() || !values.contains(output.value()) ||
-        (is_template &&
-         (inputs.contains(output.value()) || !outputs.insert(output.value()).second)))
-      throw BuilderError("FunctionPattern: invalid function output.");
-  }
   if (function.output_size() == 0 || (is_template && function.node_size() == 0))
     throw BuilderError("FunctionPattern: a template needs nodes and functions need outputs.");
   if (is_template) {
+    std::unordered_set<std::string> outputs;
+    for (const auto &output : function.output())
+      if (inputs.contains(output.value()) || !outputs.insert(output.value()).second)
+        throw BuilderError("FunctionPattern: template outputs must be distinct node results.");
     for (const auto &input : inputs)
       if (!used.contains(input))
         throw BuilderError("FunctionPattern: template inputs must be used.");

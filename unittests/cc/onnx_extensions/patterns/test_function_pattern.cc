@@ -204,6 +204,9 @@ TEST(FunctionPattern, MatchesBranchesAndMultipleOutputs) {
 TEST(FunctionPattern, RejectsInvalidDefinitions) {
   auto body = DoubleNeg();
   auto replacement = Identity();
+  body.clear_name();
+  EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
+  body = DoubleNeg();
   replacement.add_input("extra");
   EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
   replacement = Identity();

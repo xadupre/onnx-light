@@ -8,7 +8,7 @@ import onnx_light.onnx.helper as oh
 
 
 class TestChecker(ExtTestCase):
-    def test_operator_function_definitions_are_rejected(self):
+    def test_operator_function_definitions_are_accepted(self):
         for domain in ("", "ai.onnx", "onnx.ai", "ai.onnx.ml"):
             for overload in ("", "custom"):
                 with self.subTest(domain=domain, overload=overload):
@@ -27,10 +27,7 @@ class TestChecker(ExtTestCase):
                         functions=[function],
                         opset_imports=[oh.make_opsetid("", 18)],
                     )
-                    with self.assertRaisesRegex(
-                        checker.ValidationError, "cannot redefine a registered operator"
-                    ):
-                        checker.check_model(model)
+                    checker.check_model(model)
 
     def test_maximum_protobuf_matches_cpp_parser_limit(self) -> None:
         """Checks that the exported protobuf size limit matches the C++ parser boundary."""

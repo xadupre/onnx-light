@@ -174,17 +174,17 @@ inline bool IsSafeExternalDataLocation(std::string_view location) {
 inline const std::string kDefaultOnnxDomain = "ai.onnx";
 
 inline const std::string &NormaliseDispatchDomain(const NodeProto &node) {
-  if (node.domain().empty())
+  if (node.domain().empty() || node.domain() == "onnx.ai")
     return kDefaultOnnxDomain;
   return node.domain().value();
 }
 
 /// Returns ``domain`` with the empty (default) domain normalised to the
-/// canonical ``ai.onnx`` (:cpp:var:`kDefaultOnnxDomain`), so that ``""`` and
-/// ``"ai.onnx"`` compare equal. Shared by the opset, dispatch and builder
-/// lookups.
+/// canonical ``ai.onnx`` (:cpp:var:`kDefaultOnnxDomain`), so that ``""``,
+/// ``"ai.onnx"`` and ``"onnx.ai"`` compare equal. Shared by the opset, dispatch
+/// and builder lookups.
 inline std::string NormaliseDomain(const std::string &domain) {
-  return domain.empty() ? kDefaultOnnxDomain : domain;
+  return domain.empty() || domain == "onnx.ai" ? kDefaultOnnxDomain : domain;
 }
 
 /**

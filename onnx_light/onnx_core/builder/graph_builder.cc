@@ -488,7 +488,6 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
   }
   std::set<FunctionIdentifier> model_functions;
   for (const auto &function : model.functions()) {
-    ValidateLocalFunctionName(function.name(), function.domain());
     if (function.name().empty() ||
         !model_functions
              .insert(
@@ -2154,12 +2153,12 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
 
   // Select the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
-  const FunctionProto *local_function = compute_.Shapes().GetLocalFunction(
-      ShapesContext::LocalFunctionKey(domain, op_type, overload));
-  const LightOpSchema *schema = nullptr;
+  const std::string local_key = ShapesContext::LocalFunctionKey(domain, op_type, overload);
+  const LightOpSchema *schema = FindSchema(op_type, domain);
+  const FunctionProto *local_function =
+      schema == nullptr ? compute_.Shapes().GetLocalFunction(local_key) : nullptr;
   if (local_function == nullptr) {
-    schema = FindSchema(op_type, domain);
-    if (!overload.empty() &&
+    if (!overload.empty() && !compute_.Shapes().HasLocalFunction(local_key) &&
         (schema != nullptr || !DomainSchemas(op_type, normalised_domain).empty() ||
          core::shapes::DispatchTable().count(normalised_domain + ":" + op_type) != 0 ||
          compute_.Shapes().GetCustomShapeInferenceFunction(domain, op_type) != nullptr)) {
@@ -3223,7 +3222,18 @@ std::size_t GraphBuilder::InlineLocalFunctions(
   std::vector<GraphBuilder *> functions;
   functions.reserve(local_functions_.size());
   for (const auto &function : local_functions_) {
-    if (selected(function->function_domain_, function->name())) {
+    const std::string domain = NormaliseDomain(function->function_domain_);
+    const bool registered_schema =
+        !DomainSchemas(function->name(), domain).empty() ||
+        std::any_of(local_registry_.Schemas().begin(), local_registry_.Schemas().end(),
+                    [&](const LightOpSchema &schema) {
+                      return schema.name() == function->name() &&
+                             NormaliseDomain(schema.domain()) == domain;
+                    });
+    if (selected(function->function_domain_, function->name()) && !registered_schema &&
+        compute_.Shapes().GetLocalFunction(
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name(),
+                                            function->function_template_.overload())) != nullptr) {
       functions.push_back(function.get());
     }
   }
@@ -3387,10 +3397,9 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // initializer carrying that name, which remains a valid graph output.
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
-    if (candidate && compute_.Shapes().HasLocalFunction(
-                         ShapesContext::LocalFunctionKey(domain, op_type, node.overload()))) {
-      // Native-only folding must not evaluate a model-local override as the
-      // primitive kernel; recipe replay resolves model functions first.
+    if (candidate && compute_.Shapes().GetLocalFunction(ShapesContext::LocalFunctionKey(
+                         domain, op_type, node.overload())) != nullptr) {
+      // Native-only folding must not evaluate a model-local call as a primitive kernel.
       candidate = false;
     }
     if (candidate && included_outputs != nullptr) {
@@ -3761,7 +3770,6 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   if (FindNamedBuilder(local_functions_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
-  ValidateLocalFunctionName(name, domain);
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets, local_registry_);
   child->is_local_function_ = true;
@@ -3773,15 +3781,6 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   RefreshLocalFunctionDefinition(ref);
   InvalidateRewritings();
   return ref;
-}
-
-void GraphBuilder::ValidateLocalFunctionName(const std::string &name, const std::string &domain) {
-  const std::string normalized = NormaliseDomain(domain == "onnx.ai" ? std::string() : domain);
-  if (!DomainSchemas(name, normalized).empty() ||
-      core::shapes::DispatchTable().count(normalized + ":" + name) != 0) {
-    throw BuilderError("GraphBuilder: local function '" + domain + "::" + name +
-                       "' cannot redefine a registered operator, regardless of overload.");
-  }
 }
 
 GraphBuilder &GraphBuilder::MakeLocalFunction(const FunctionProto &function) {

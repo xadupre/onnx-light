@@ -374,6 +374,90 @@ TEST(MemoryAnalysis, ValidatesLocalFunctionBodyAllocationsRecursively) {
   }
 }
 
+TEST(MemoryAnalysis, RegisteredContribOperatorPrecedesLocalFunction) {
+  const std::string domain = "com.microsoft";
+  const std::string name = "CollisionMemoryTest";
+  for (const std::string &registration_domain : {domain, std::string("onnx.ai")}) {
+    core::shapes::RegisterComputeShapeFn(
+        registration_domain, name, [](core::shapes::ShapesContext &shapes, const NodeProto &node) {
+          shapes.Set(node.output(0), core::symbolic::SymTensor(shapes.Get(node.input(0))));
+        });
+    core::shapes::RegisterComputePeakMemoryFn(
+        registration_domain, name, core::symbolic::Device::kCPU,
+        [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) { return 16; });
+  }
+  const auto shape_count = core::shapes::DispatchTable().size();
+  const auto memory_count = core::shapes::PeakMemoryDispatchTable().size();
+  for (const std::string overload : {"", "special"}) {
+    for (const std::string call_domain :
+         {"com.microsoft", "local.control", "", "ai.onnx", "onnx.ai"}) {
+      SCOPED_TRACE(call_domain + "/" + overload);
+      ModelProto model;
+      model.add_opset("", 18);
+      if (call_domain == domain || call_domain == "local.control")
+        model.add_opset(call_domain, 1);
+      auto &graph = *model.mutable_graph();
+      MemoryInput(graph, "X", {2, 3});
+      auto &call = MemoryNode(graph, name, {"X"}, "Y");
+      call.set_domain(call_domain);
+      call.set_overload(overload);
+      graph.add_output()->set_name("Y");
+      auto *function = model.add_functions();
+      function->set_domain(call_domain);
+      function->set_name(name);
+      function->set_overload(overload);
+      function->add_opset("", 18);
+      function->add_input("x");
+      function->add_output("y");
+      MemoryNode(*function, "Add", {"x", "x"}, "temporary");
+      MemoryNode(*function, "Transpose", {"temporary"}, "y");
+      const auto original = model.SerializeAsString();
+      core::compute::ComputeContext ctx;
+      ASSERT_NO_THROW(ctx.Compute(model));
+      EXPECT_FALSE(ctx.Shapes().Has("temporary"));
+      EXPECT_EQ(model.SerializeAsString(), original);
+      EXPECT_EQ(ctx.Shapes().Get("Y").Shape()[0].AsInt(), call_domain == "local.control" ? 3 : 2);
+      if (call_domain != "local.control") {
+        const auto collision_memory = MemoryTotal(ctx);
+        const auto collision_peak = ctx.NodePeakMemory(0);
+        model.ref_functions().clear();
+        core::compute::ComputeContext native;
+        ASSERT_NO_THROW(native.Compute(model));
+        EXPECT_EQ(collision_memory, MemoryTotal(native));
+        EXPECT_EQ(collision_peak, native.NodePeakMemory(0));
+        EXPECT_EQ(native.NodePeakMemory(0), 16);
+      }
+      EXPECT_EQ(core::shapes::DispatchTable().size(), shape_count);
+      EXPECT_EQ(core::shapes::PeakMemoryDispatchTable().size(), memory_count);
+      core::shapes::ShapesContext unrelated;
+      EXPECT_TRUE(unrelated.LocalFunctions().empty());
+    }
+  }
+}
+
+TEST(MemoryAnalysis, RegisteredShapeFailureDoesNotRetryLocalFunction) {
+  const std::string domain = "collision.failure";
+  core::shapes::RegisterComputeShapeFn(domain, "Body",
+                                       [](core::shapes::ShapesContext &, const NodeProto &) {
+                                         throw std::invalid_argument("selected operator failed");
+                                       });
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset(domain, 1);
+  MemoryInput(*model.mutable_graph(), "X", {2});
+  MemoryNode(*model.mutable_graph(), "Body", {"X"}, "Y").set_domain(domain);
+  auto *function = model.add_functions();
+  function->set_domain(domain);
+  function->set_name("Body");
+  function->add_opset("", 18);
+  function->add_input("x");
+  function->add_output("y");
+  MemoryNode(*function, "Identity", {"x"}, "y");
+  core::compute::ComputeContext ctx;
+  EXPECT_THROW(ctx.ComputeShapes(model), std::invalid_argument);
+  EXPECT_FALSE(ctx.Shapes().Has("Y"));
+}
+
 TEST(MemoryAnalysis, RejectsSymbolicAllocationCoefficientOverflow) {
   for (bool empty : {false, true}) {
     GraphProto graph;

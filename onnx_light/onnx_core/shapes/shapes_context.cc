@@ -410,11 +410,6 @@ std::string ShapesContext::LocalFunctionKey(const std::string &domain, const std
 
 void ShapesContext::SetLocalFunction(const FunctionProto *func) {
   EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-  const std::string domain =
-      NormaliseDomain(func->domain() == "onnx.ai" ? std::string() : func->domain().value());
-  EXT_ENFORCE_INVALID(DispatchTable().count(domain + ":" + func->name().value()) == 0,
-                      "Local function '", func->domain(), "::", func->name(),
-                      "' cannot redefine a registered operator, regardless of overload.");
   const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
   local_functions_[key] = func;
   owned_local_functions_.erase(key);
@@ -424,6 +419,17 @@ void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) 
   SetLocalFunction(func.get());
   const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
   owned_local_functions_[key] = std::move(func);
+}
+
+const FunctionProto *ShapesContext::GetLocalFunction(const std::string &key) const {
+  const auto it = local_functions_.find(key);
+  if (it == local_functions_.end())
+    return nullptr;
+  const auto &function = *it->second;
+  if (DispatchTable().count(NormaliseDomain(function.domain()) + ":" + function.name().value()) ||
+      GetCustomShapeInferenceFunction(function.domain(), function.name()) != nullptr)
+    return nullptr;
+  return it->second;
 }
 
 void ShapesContext::CopyLocalFunctions(const ShapesContext &context) {

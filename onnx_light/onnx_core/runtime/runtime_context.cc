@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
 #include <chrono>
@@ -624,7 +625,7 @@ void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); 
 
 bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::string &op_type,
                                       symbolic::Device device, NodeKernelFn fn, bool overwrite) {
-  const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
+  const std::string d = NormaliseDomain(domain);
   const std::string key = d + ":" + op_type + symbolic::DeviceKeySuffix(device);
   if (!overwrite && custom_kernels_.find(key) != custom_kernels_.end()) {
     return false;

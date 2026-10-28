@@ -421,10 +421,11 @@ class TestPatternOptimization(ExtTestCase):
         model.functions[0].node[0].op_type = "Identity"
         for node in model.graph.node:
             node.domain = ""
-        with self.assertRaisesRegex(ValueError, "cannot redefine a registered operator"):
-            optim.GraphBuilder(model)
+        builder = optim.GraphBuilder(model)
+        optim.GraphGraph(builder, [NegNegPattern()]).optimize()
+        self.assertEqual([node.op_type for node in builder.to_onnx().graph.node], ["Identity"])
 
-    def test_rejects_operator_function_definitions(self):
+    def test_accepts_operator_function_definitions(self):
         for domain in ("", "ai.onnx", "onnx.ai"):
             for name in ("Neg", "Constant", "Identity"):
                 for overload in ("", "custom"):
@@ -440,10 +441,8 @@ class TestPatternOptimization(ExtTestCase):
                         )
                         function.overload = overload
                         model.functions.append(function)
-                        with self.assertRaisesRegex(
-                            ValueError, "cannot redefine a registered operator"
-                        ):
-                            optim.GraphBuilder(model)
+                        builder = optim.GraphBuilder(model)
+                        self.assertEqual(len(builder.to_onnx().functions), 1)
 
     def test_unresolved_constant_producer_protects_function_body_matches(self):
         producer = oh.make_node("Constant", [], ["constant"])

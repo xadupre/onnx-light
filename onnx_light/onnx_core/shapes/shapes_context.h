@@ -590,8 +590,8 @@ public:
   /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
   /// lifetime of the shape-inference pass. Replaces any previous entry
   /// registered under the same domain/name/overload key. ``func`` must
-  /// not be ``nullptr``. Rejects domain/name collisions with registered
-  /// operators, regardless of overload.
+  /// not be ``nullptr``. Registered operators take precedence over matching
+  /// normalized domain/name definitions, regardless of overload.
   void SetLocalFunction(const FunctionProto *func);
 
   /// Registers an owned definition whose lifetime also covers copied contexts.
@@ -611,12 +611,10 @@ public:
   void ClearLocalFunctions() noexcept;
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
-  /// ``nullptr`` when none is registered. ``key`` is expected to be the
+  /// ``nullptr`` when none is registered or a registered operator takes
+  /// precedence. ``key`` is expected to be the
   /// identifier produced by LocalFunctionKey.
-  const FunctionProto *GetLocalFunction(const std::string &key) const {
-    auto it = local_functions_.find(key);
-    return it == local_functions_.end() ? nullptr : it->second;
-  }
+  const FunctionProto *GetLocalFunction(const std::string &key) const;
 
   /// Read-only access to the function-identity → FunctionProto* map.
   const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {

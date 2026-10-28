@@ -2462,6 +2462,96 @@ TEST(RunModel, NoGraphThrows) {
 // Model-local function dispatch tests
 // ---------------------------------------------------------------------------
 
+TEST(RunModel, RegisteredOperatorsPrecedeLocalFunctionsRegardlessOfOverload) {
+  const std::string contrib = "com.microsoft";
+  const std::string name = "CollisionRuntimeTest";
+  core::runtime::RegisterKernelFn(
+      contrib, name, core::symbolic::Device::kCPU,
+      [](const NodeProto &node, RuntimeContext &,
+         const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        return std::make_unique<TestLambdaKernel>(
+            node, [](const NodeProto &call, RuntimeContext &rt) {
+              rt.Put(call.output(0), rt.Get(call.input(0)).BorrowView());
+            });
+      });
+  const auto registrations = KernelDispatchTable().size();
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai", "com.microsoft", "local.control"}) {
+    for (const std::string overload : {"", "special"}) {
+      SCOPED_TRACE(domain + "/" + overload);
+      ModelProto model;
+      model.set_ir_version(10);
+      model.add_opset("", 18);
+      if (domain == contrib || domain == "local.control")
+        model.add_opset(domain, 1);
+      const std::string op = domain == contrib || domain == "local.control" ? name : "Identity";
+      auto *function = model.add_functions();
+      function->set_domain(domain);
+      function->set_name(op);
+      function->set_overload(overload);
+      function->add_opset("", 18);
+      function->add_input("a");
+      function->add_output("b");
+      *function->add_node() = MakeNode("Neg", {"a"}, {"b"});
+      *model.mutable_graph()->add_node() = MakeNode(op, {"x"}, {"y"}, domain);
+      model.mutable_graph()->mutable_node(0)->set_overload(overload);
+      model.mutable_graph()->add_output()->set_name("y");
+      const auto original = model.SerializeAsString();
+      RuntimeContext rt(KernelContext(DefaultOpset(18)));
+      FunctionProto sentinel;
+      rt.functions().emplace("unrelated:Sentinel:", &sentinel);
+      rt.Set("x", Tensor::FromFloat("x", {1}, {2}));
+      RuntimeSession session(model);
+      ASSERT_NO_THROW(session.Run(rt));
+      EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], domain == "local.control" ? -2 : 2);
+      EXPECT_FALSE(rt.Has("a"));
+      EXPECT_FALSE(rt.Has("b"));
+      EXPECT_EQ(rt.functions().size(), 1u);
+      EXPECT_EQ(rt.functions().at("unrelated:Sentinel:"), &sentinel);
+      EXPECT_EQ(model.SerializeAsString(), original);
+      EXPECT_EQ(KernelDispatchTable().size(), registrations);
+      if (domain != "local.control") {
+        model.ref_functions().clear();
+        RuntimeContext native(KernelContext(DefaultOpset(18)));
+        native.Set("x", Tensor::FromFloat("x", {1}, {2}));
+        ASSERT_NO_THROW(RunModelViaSession(model, native));
+        EXPECT_FLOAT_EQ(native.Get("y").AsFloat()[0], 2);
+      }
+    }
+  }
+}
+
+TEST(RunModel, RegisteredKernelFailureDoesNotRetryLocalFunction) {
+  for (bool fail_resolution : {false, true}) {
+    const std::string name = fail_resolution ? "ResolveFailure" : "RunFailure";
+    core::runtime::RegisterKernelFn(
+        "collision.failure", name, core::symbolic::Device::kCPU,
+        [fail_resolution](const NodeProto &node, RuntimeContext &,
+                          const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+          if (fail_resolution)
+            throw std::invalid_argument("selected operator failed to resolve");
+          return std::make_unique<TestLambdaKernel>(node, [](const NodeProto &, RuntimeContext &) {
+            throw std::invalid_argument("selected operator failed to run");
+          });
+        });
+    ModelProto model;
+    model.set_ir_version(10);
+    model.add_opset("", 18);
+    model.add_opset("collision.failure", 1);
+    auto *function = model.add_functions();
+    function->set_domain("collision.failure");
+    function->set_name(name);
+    function->add_input("a");
+    function->add_output("b");
+    *function->add_node() = MakeNode("Identity", {"a"}, {"b"});
+    *model.mutable_graph()->add_node() = MakeNode(name, {"x"}, {"y"}, "collision.failure");
+    model.mutable_graph()->add_output()->set_name("y");
+    RuntimeContext rt(KernelContext(DefaultOpset(18)));
+    rt.Set("x", Tensor::FromFloat("x", {1}, {2}));
+    EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
+    EXPECT_FALSE(rt.Has("y"));
+  }
+}
+
 TEST(RunModel, NodeDispatchedToModelLocalFunction) {
   // Define a model-local function "MyAddMul" in domain "custom":
   //   inputs:  a, b, c
@@ -2908,27 +2998,29 @@ TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
   EXPECT_FLOAT_EQ(run(unchanged), 2);
   EXPECT_FLOAT_EQ(run(negated), -2);
   bool fallback_called = false;
-  context.RegisterCustomKernel(
-      "custom", "Leaf", [&](const NodeProto &, RuntimeContext &) { fallback_called = true; });
+  context.RegisterCustomKernel("custom", "Leaf", [&](const NodeProto &node, RuntimeContext &rt) {
+    fallback_called = true;
+    rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+  });
   negated.mutable_functions(0)->add_input("missing");
-  EXPECT_THROW(run(negated), std::invalid_argument);
-  EXPECT_FALSE(fallback_called);
+  EXPECT_FLOAT_EQ(run(negated), 2);
+  EXPECT_TRUE(fallback_called);
   EXPECT_EQ(context.functions(), original);
   context.functions().clear();
 }
 
 TEST(RunModel, ConcurrentSessionsIsolateConflictingFunctionsAndGlobalFallback) {
   const std::string domain = "test.concurrent.function";
-  ASSERT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 0u);
+  ASSERT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Fallback"), 0u);
   std::atomic<int> fallback_calls{0};
   core::runtime::RegisterGlobalCustomKernel(
-      domain, "Leaf", [&](const NodeProto &node, RuntimeContext &rt) {
+      domain, "Fallback", [&](const NodeProto &node, RuntimeContext &rt) {
         ++fallback_calls;
         rt.Put(node.output(0), Tensor::FromFloat("", {1}, {99}, rt.allocator()));
       });
   struct GlobalKernelCleanup {
     const std::string &domain;
-    ~GlobalKernelCleanup() { core::runtime::UnregisterGlobalCustomKernel(domain, "Leaf"); }
+    ~GlobalKernelCleanup() { core::runtime::UnregisterGlobalCustomKernel(domain, "Fallback"); }
   } cleanup{domain};
 
   const auto make_model = [&](const std::string &leaf_op, bool fail) {
@@ -3009,11 +3101,11 @@ TEST(RunModel, ConcurrentSessionsIsolateConflictingFunctionsAndGlobalFallback) {
     EXPECT_EQ(contexts[i]->functions().at(domain + ":Sentinel:"), &sentinel);
     EXPECT_EQ(contexts[i]->custom_kernels().size(), custom_kernel_counts[i]);
   }
-  EXPECT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 1u);
+  EXPECT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Fallback"), 1u);
 
   RuntimeContext fallback_context;
   fallback_context.Set("x", Tensor::FromFloat("x", {1}, {2}));
-  RunNode(MakeNode("Leaf", {"x"}, {"y"}, domain), fallback_context);
+  RunNode(MakeNode("Fallback", {"x"}, {"y"}, domain), fallback_context);
   EXPECT_EQ(fallback_calls.load(), 1);
   EXPECT_FLOAT_EQ(fallback_context.Get("y").AsFloat()[0], 99);
 }

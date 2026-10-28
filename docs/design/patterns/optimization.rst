@@ -70,12 +70,14 @@ Model export and replay place callees before callers, including dependencies
 inside graph attributes and function attribute defaults. Matchers do not rewrite
 nodes whose attributes still contain unresolved function-attribute references,
 including Constant producers inspected outside the matched node set.
-Local functions cannot redefine a registered operator with the same normalized
-domain and name, regardless of ``overload`` or the imported opset version.
-The schema-aware model checker rejects these definitions, even when unused;
-the builder rejects them before importing or registering a function.
-Schema-free core contexts enforce collisions against their registered shape
-functions; the structural ``onnx_proto`` verifier remains schema-independent.
+Local functions may share a normalized domain and name with a registered
+operator. The registered operator takes precedence for shape inference, memory
+analysis, and execution, regardless of the local definition's ``overload``.
+The local body is used only when no matching operator is registered; errors
+from the selected operator propagate without retrying the local body.
+Definitions remain model-local and resolution never modifies global registries.
+The schema-aware checker validates calls against an available operator schema;
+the structural ``onnx_proto`` verifier remains schema-independent.
 Default-domain function identities treat ``""``, ``ai.onnx``, and ``onnx.ai``
 consistently. Custom-domain functions may reuse standard operator names, and
 noncolliding default-domain functions remain supported.

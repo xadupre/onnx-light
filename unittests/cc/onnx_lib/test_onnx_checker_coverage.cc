@@ -1707,7 +1707,7 @@ TEST(CHECKER_COVERAGE, ModelMinimalValidAccepted) {
   EXPECT_NO_THROW(checker::check_model(m));
 }
 
-TEST(CHECKER_COVERAGE, RejectsOperatorFunctionDefinitionsRegardlessOfOverloadOrUse) {
+TEST(CHECKER_COVERAGE, AcceptsOperatorFunctionDefinitionsRegardlessOfOverloadOrUse) {
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     for (const std::string name : {"Add", "Attention"}) {
       for (const std::string overload : {"", "custom"}) {
@@ -1723,7 +1723,7 @@ TEST(CHECKER_COVERAGE, RejectsOperatorFunctionDefinitionsRegardlessOfOverloadOrU
           function->set_overload(overload);
           function->add_opset("", 18);
           EXPECT_NO_THROW(checker::check_function(*function, MakeCtx(ir), LexicalScopeContext{}));
-          EXPECT_THROW(checker::check_model(model), ValidationError);
+          EXPECT_NO_THROW(checker::check_model(model));
         }
       }
     }

@@ -21,7 +21,7 @@ namespace {
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
 // domain to :cpp:var:`kOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
-  return (domain.empty() ? std::string(kOnnxDomain) : domain) + ":" + op_type;
+  return NormaliseDomain(domain) + ":" + op_type;
 }
 
 // Returns the device-qualified dispatch key. The identifier of a peak-memory

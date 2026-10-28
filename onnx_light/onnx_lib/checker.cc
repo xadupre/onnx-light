@@ -857,6 +857,8 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   auto domain_version = dit->second;
   const bool is_local_function =
       ctx.get_model_functions().find(GetCalleeId(node)) != ctx.get_model_functions().end();
+  const auto *const schema =
+      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, domain);
 
   // for ops referencing local functions, there is no schema to verify it.
   // will add a check to verify consistency between these ops and local functions.
@@ -868,7 +870,7 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
 
     check_attribute(attr, ctx, lex_ctx);
   }
-  if (is_local_function)
+  if (is_local_function && schema == nullptr)
     return;
 
   // This issue will be caught by check_graph instead
@@ -876,9 +878,7 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
     return;
   }
 
-  const auto *const schema =
-      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, domain);
-  if (schema != nullptr && !node.overload().empty()) {
+  if (schema != nullptr && !node.overload().empty() && !is_local_function) {
     fail_check("Registered operator '", node.domain(), "::", node.op_type(),
                "' cannot specify a function overload.");
   }
@@ -1258,15 +1258,6 @@ void check_model_local_functions(const ModelProto &model, const CheckerContext &
   ctx_copy.set_opset_imports(model_opset_imports);
 
   for (const auto &function_proto : model.functions()) {
-    const std::string domain =
-        function_proto.domain() == "ai.onnx" || function_proto.domain() == "onnx.ai"
-            ? std::string()
-            : function_proto.domain().value();
-    if (ctx.get_schema_registry()->GetSchema(function_proto.name(), std::numeric_limits<int>::max(),
-                                             domain) != nullptr) {
-      fail_check("Local function '", function_proto.domain(), "::", function_proto.name(),
-                 "' cannot redefine a registered operator, regardless of overload.");
-    }
     check_function(function_proto, ctx_copy, parent_lex);
   }
 }

@@ -1571,7 +1571,11 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   for (const auto &rewrite : result.rewrites()) {
     for (const auto &call : rewrite.initializer_calls()) {
       for (const auto &node : functions.at(Identity(call))->node()) {
-        if (functions.count(Identity(node)) != 0)
+        if (functions.count(Identity(node)) != 0 &&
+            core::shapes::DispatchTable().count(NormaliseDomain(node.domain()) + ":" +
+                                                node.op_type().value()) == 0 &&
+            root->Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) ==
+                nullptr)
           throw BuilderError("GraphGraph::Optimize: a later function overrides a captured "
                              "initializer operation '" +
                              node.op_type().value() + "'.");
@@ -2913,7 +2917,10 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
   }
   if (!new_functions.empty()) {
     const auto check_overrides = [&](const auto &self, const NodeProto &node) -> void {
-      if (new_functions.count(Identity(node)) != 0)
+      if (new_functions.count(Identity(node)) != 0 &&
+          core::shapes::DispatchTable().count(NormaliseDomain(node.domain()) + ":" +
+                                              node.op_type().value()) == 0 &&
+          Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) == nullptr)
         throw BuilderError("ApplyRewritings: an added function overrides an operation in an "
                            "existing function body.");
       for (const auto &attribute : node.attribute()) {

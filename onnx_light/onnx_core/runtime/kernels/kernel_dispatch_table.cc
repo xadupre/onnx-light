@@ -31,7 +31,7 @@ private:
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
 // domain to :cpp:var:`kDefaultOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
-  return (domain.empty() ? std::string(kDefaultOnnxDomain) : domain) + ":" + op_type;
+  return NormaliseDomain(domain) + ":" + op_type;
 }
 
 // Returns the device-qualified dispatch key. The identifier of a kernel is
@@ -72,7 +72,7 @@ CustomKernelMap &MutableGlobalCustomKernels() {
 // by :cpp:func:`RuntimeContext::RegisterCustomKernel` and the resolution logic
 // in ``run_nodes.cc``).
 std::string CustomKernelKey(const std::string &domain, const std::string &op_type) {
-  return (domain.empty() ? kDefaultOnnxDomain : domain) + ":" + op_type;
+  return NormaliseDomain(domain) + ":" + op_type;
 }
 
 } // namespace

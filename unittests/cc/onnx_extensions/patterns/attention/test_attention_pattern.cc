@@ -614,8 +614,7 @@ TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
     override.set_name("Concat");
     override.set_domain("onnx.ai");
     override.set_overload(overload);
-    EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(override)),
-                 std::invalid_argument);
+    EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(override)));
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, &pattern);
   }
   const auto replacement = pattern.Apply(graph, match.nodes);

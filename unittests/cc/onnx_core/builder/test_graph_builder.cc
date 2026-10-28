@@ -140,16 +140,17 @@ TEST(GraphBuilder, LocalShapeSnapshotsReachNestedBuildersAndMemoryInference) {
   EXPECT_FALSE(isolated.HasShape("y"));
 }
 
-TEST(GraphBuilder, ModelFunctionsPrecedeLocalSchemasAndShapeCallbacks) {
+TEST(GraphBuilder, LocalSchemasAndShapeCallbacksPrecedeModelFunctions) {
   onnx_shapes::RegisterShapeFunctions();
   core::builder::OperatorRegistry registry;
   registry.RegisterSchema(core::schema::LightOpSchema(
       "F", "local.registry", 1, "", {{"x", "", "tensor(float)"}},
       {{"left", "", "tensor(float)"}, {"right", "", "tensor(float)"}}, {}));
-  registry.RegisterShapeInference(
-      "local.registry", "F", [](core::shapes::ShapesContext &, const NodeProto &) {
-        throw std::invalid_argument("must not replace a model-local function");
-      });
+  registry.RegisterShapeInference("local.registry", "F",
+                                  [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                    ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                    ctx.CopyValueFrom(node.output(1), ctx, node.input(0));
+                                  });
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local.registry", 1}},
                                       registry);
   auto &function = builder.MakeLocalFunction("F", "local.registry");
@@ -157,9 +158,10 @@ TEST(GraphBuilder, ModelFunctionsPrecedeLocalSchemasAndShapeCallbacks) {
   function.MakeNode("Abs", {"a"}, {"b"});
   function.MakeOutput("b");
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  builder.MakeNode("F", {"x"}, {"y"}, "local.registry");
+  builder.MakeNode("F", {"x"}, {"y", "right"}, "local.registry");
   builder.MakeOutput("y");
   EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.GetShape("right").Shape(), MakeShape({2, 3}));
   core::builder::GraphBuilder imported(builder.ToModel(), SchemaLookup(), registry);
   EXPECT_EQ(imported.GetShape("y").Shape(), MakeShape({2, 3}));
   ModelProto overloaded = builder.ToModel();
@@ -194,7 +196,7 @@ TEST(GraphBuilder, PreservesImportedOptionalOutputsWithoutChangingGeneratedNames
   EXPECT_FALSE(imported.MakeNode("Identity", {"y"}, {""})[0].empty());
 }
 
-TEST(GraphBuilder, RejectsOperatorFunctionDefinitionsBeforeMutation) {
+TEST(GraphBuilder, AcceptsOperatorFunctionDefinitionsRegardlessOfOverload) {
   onnx_shapes::RegisterShapeFunctions();
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     for (const std::string name : {"Add", "Constant", "Cast", "Identity", "Attention"}) {
@@ -206,21 +208,47 @@ TEST(GraphBuilder, RejectsOperatorFunctionDefinitionsBeforeMutation) {
         function.set_name(name);
         function.set_domain(domain);
         function.set_overload(overload);
-        EXPECT_THROW(builder.MakeLocalFunction(function), core::builder::BuilderError);
-        EXPECT_THROW(builder.MakeLocalFunction(name, domain), core::builder::BuilderError);
-        EXPECT_FALSE(builder.HasLocalFunction(name));
-        EXPECT_FALSE(builder.HasName(name));
-        EXPECT_TRUE(builder.ToModel().Equals(original));
+        EXPECT_NO_THROW(builder.MakeLocalFunction(function));
+        EXPECT_TRUE(builder.HasLocalFunction(name));
+        EXPECT_TRUE(builder.HasName(name));
         ModelProto model = original;
         model.add_function(function);
-        EXPECT_THROW(core::builder::GraphBuilder(model, SchemaLookup()),
-                     core::builder::BuilderError);
+        EXPECT_NO_THROW(core::builder::GraphBuilder(model, SchemaLookup()));
         core::shapes::ShapesContext shapes;
-        EXPECT_THROW(shapes.SetLocalFunction(&function), std::invalid_argument);
-        EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
-                     std::invalid_argument);
-        EXPECT_TRUE(shapes.LocalFunctions().empty());
+        EXPECT_NO_THROW(shapes.SetLocalFunction(&function));
+        EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)));
+        EXPECT_EQ(shapes.LocalFunctions().size(), 1u);
+        EXPECT_EQ(shapes.GetLocalFunction(
+                      core::shapes::ShapesContext::LocalFunctionKey(domain, name, overload)),
+                  nullptr);
       }
+    }
+  }
+}
+
+TEST(GraphBuilder, RegisteredOperatorPreventsLocalFunctionExpansion) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string overload : {"", "custom"}) {
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+      FunctionProto function;
+      function.set_domain(domain);
+      function.set_name("Identity");
+      function.set_overload(overload);
+      function.add_input("x");
+      function.add_output("y");
+      function.add_opset("", 18);
+      function.add_node(MakeNode("Neg", {"x"}, {"y"}));
+      builder.MakeLocalFunction(function);
+      builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      builder.MakeNode("Identity", {"X"}, {"Y"}, domain, "",
+                       utils::RepeatedProtoField<AttributeProto>(), overload);
+      builder.MakeOutput("Y");
+      EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2}));
+      EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
+      const auto model = builder.ToModel();
+      EXPECT_EQ(model.graph().node(0).op_type(), "Identity");
+      EXPECT_NO_THROW(checker::check_model(model));
+      EXPECT_NO_THROW(core::builder::GraphBuilder(model, SchemaLookup()));
     }
   }
 }

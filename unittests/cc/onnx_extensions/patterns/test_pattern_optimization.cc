@@ -1333,7 +1333,7 @@ TEST(PatternOptimization, ModelReplayDistinguishesFunctionNamesFromOverloads) {
   EXPECT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kInt64);
 }
 
-TEST(PatternOptimization, RejectsModelLocalOperatorOverrides) {
+TEST(PatternOptimization, IgnoresModelLocalOperatorOverrides) {
   auto original = PreparationModel();
   FunctionProto function;
   function.set_name("Add");
@@ -1343,7 +1343,7 @@ TEST(PatternOptimization, RejectsModelLocalOperatorOverrides) {
   function.add_opset("", 18);
   function.ref_node().push_back(MakeNode("Mul", {"A", "B"}, {"C"}));
   original.add_function(function);
-  EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()), core::builder::BuilderError);
+  EXPECT_NO_THROW(core::builder::GraphBuilder(original, SchemaLookup()));
 }
 
 TEST(PatternOptimization, SwapUnaryPreservesCustomFunctionCalls) {
@@ -1494,7 +1494,7 @@ TEST(PatternOptimization, CastOpCastPreservesCustomFunctionCalls) {
   }
 }
 
-TEST(PatternOptimization, RejectsLateFunctionOverridesOfCapturedRecipes) {
+TEST(PatternOptimization, IgnoresLateFunctionOverridesOfCapturedRecipes) {
   ScopedAddKernel kernel;
   auto original = PreparationModel();
   original.mutable_graph()->ref_node()[0] = MakeNode("Identity", {"a"}, {"y"});
@@ -1507,15 +1507,15 @@ TEST(PatternOptimization, RejectsLateFunctionOverridesOfCapturedRecipes) {
       builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
                    std::make_shared<ReplaceIdentityWithConstantAddPattern>(),
                    std::make_shared<RegisterLateAddOverridePattern>()});
-  EXPECT_THROW(optimizer.Optimize(), core::builder::BuilderError);
-  EXPECT_FALSE(builder.HasLocalFunction("Add"));
+  EXPECT_NO_THROW(optimizer.Optimize());
+  EXPECT_TRUE(builder.HasLocalFunction("Add"));
   const auto folded = std::find_if(builder.Initializers().begin(), builder.Initializers().end(),
                                    [](const auto &tensor) { return tensor.name() == "y"; });
   ASSERT_NE(folded, builder.Initializers().end());
   EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(*folded).AsFloat()[0], 3);
 }
 
-TEST(PatternOptimization, RejectsOperatorOverridesInsideReachableFunctions) {
+TEST(PatternOptimization, IgnoresOperatorOverridesInsideReachableFunctions) {
   ScopedAddKernel kernel;
   for (bool reachable : {false, true}) {
     for (bool indirect : {false, true}) {
@@ -1550,15 +1550,14 @@ TEST(PatternOptimization, RejectsOperatorOverridesInsideReachableFunctions) {
       override.ref_node().push_back(MakeNode("Add", {"A", "A"}, {"C"}));
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded),
-                   core::builder::BuilderError);
+      EXPECT_NO_THROW(
+          core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded));
       const auto functions = original.functions();
       original.ref_functions().clear();
       original.add_function(override);
       for (const auto &function : functions)
         original.add_function(function);
-      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()),
-                   core::builder::BuilderError);
+      EXPECT_NO_THROW(core::builder::GraphBuilder(original, SchemaLookup()));
     }
   }
 }
@@ -1589,7 +1588,7 @@ TEST(PatternOptimization, GraphReplayKeepsReachableFunctionImportsIndependent) {
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph());
 }
 
-TEST(PatternOptimization, RejectsOperatorOverridesInsideNestedFunctionGraphs) {
+TEST(PatternOptimization, IgnoresOperatorOverridesInsideNestedFunctionGraphs) {
   auto original = PreparationModel();
   original.add_opset("wrapper.test", 1);
   TensorProto condition;
@@ -1626,14 +1625,13 @@ TEST(PatternOptimization, RejectsOperatorOverridesInsideNestedFunctionGraphs) {
   override.add_output("C");
   override.add_opset("", 18);
   override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
-  EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
-               core::builder::BuilderError);
+  EXPECT_NO_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan));
   const auto functions = original.functions();
   original.ref_functions().clear();
   original.add_function(override);
   for (const auto &function : functions)
     original.add_function(function);
-  EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()), core::builder::BuilderError);
+  EXPECT_NO_THROW(core::builder::GraphBuilder(original, SchemaLookup()));
 }
 
 TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {

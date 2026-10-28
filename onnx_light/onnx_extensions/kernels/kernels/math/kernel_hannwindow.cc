@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include <cmath>
 #include <stdexcept>
 
@@ -61,11 +62,22 @@ void HannWindow::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const int64_t output_datatype =
       GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
-  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
-                      "RunNode: op 'HannWindow' only supports output_datatype=FLOAT.");
+  EXT_ENFORCE_INVALID(
+      output_datatype == static_cast<int64_t>(DataType::FLOAT) ||
+          output_datatype == static_cast<int64_t>(DataType::FLOAT16) ||
+          output_datatype == static_cast<int64_t>(DataType::BFLOAT16) ||
+          output_datatype == static_cast<int64_t>(DataType::INT8),
+      "RunNode: op 'HannWindow' supports FLOAT, FLOAT16, BFLOAT16, or INT8 output.");
   const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
   const Tensor &size = GetInput(node, 0, rt);
-  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
+  if (output_datatype == static_cast<int64_t>(DataType::FLOAT)) {
+    SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
+  } else {
+    // Keep indices and arithmetic in wide precision; cast only the completed window.
+    Tensor window = (*this)(size, periodic);
+    const Cast cast{rt.kernel_ctx()};
+    SetOutput(node, 0, cast(window, static_cast<int32_t>(output_datatype), &rt), rt);
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -1994,6 +1994,43 @@ void VerifyFunction(const StructTypeCatalogue *struct_types, const FunctionProto
   EXT_ENFORCE_INVALID(!function.name().empty(),
                       "FunctionProto is missing a non-empty 'name' field.");
 
+  std::unordered_set<std::string> opsets, declared_attributes;
+  for (const auto &opset : function.opset_import()) {
+    EXT_ENFORCE_INVALID(opset.version() > 0, "FunctionProto '", function.name(),
+                        "' has a non-positive opset version.");
+    EXT_ENFORCE_INVALID(opsets.insert(NormaliseDomain(opset.domain())).second, "FunctionProto '",
+                        function.name(), "' has a duplicate opset import for domain '",
+                        opset.domain(), "'.");
+  }
+  for (const auto &attribute : function.attribute())
+    declared_attributes.insert(ToStdString(attribute));
+  for (const auto &attribute : function.attribute_proto())
+    declared_attributes.insert(ToStdString(attribute.name()));
+  std::unordered_map<std::string, AttributeProto::AttributeType> reference_types;
+  const auto verify_imports_and_references = [&](const auto &self, const NodeProto &node) -> void {
+    EXT_ENFORCE_INVALID(opsets.contains(NormaliseDomain(node.domain())), "FunctionProto '",
+                        function.name(), "': operator '", node.op_type(), "' uses domain '",
+                        node.domain(), "' without an opset import.");
+    for (const auto &attribute : node.attribute()) {
+      if (!attribute.ref_attr_name().empty()) {
+        const std::string reference = ToStdString(attribute.ref_attr_name());
+        EXT_ENFORCE_INVALID(declared_attributes.contains(reference), "FunctionProto '",
+                            function.name(), "': attribute reference '", reference,
+                            "' is not declared.");
+        const auto [it, inserted] = reference_types.emplace(reference, attribute.type());
+        EXT_ENFORCE_INVALID(inserted || it->second == attribute.type(), "FunctionProto '",
+                            function.name(), "': attribute reference '", reference,
+                            "' has inconsistent types.");
+      }
+      if (attribute.has_g())
+        for (const auto &nested : attribute.g().node())
+          self(self, nested);
+      for (const auto &graph : attribute.graphs())
+        for (const auto &nested : graph.node())
+          self(self, nested);
+    }
+  };
+
   std::unordered_set<std::string> defined;
   for (const auto &input : function.input()) {
     EXT_ENFORCE_INVALID(!input.empty(), "FunctionProto '", function.name(),
@@ -2013,6 +2050,7 @@ void VerifyFunction(const StructTypeCatalogue *struct_types, const FunctionProto
     }
 
     VerifyNode(struct_types, node, /*in_function_body=*/true, defined);
+    verify_imports_and_references(verify_imports_and_references, node);
 
     for (const auto &output : node.output()) {
       if (output.empty()) {

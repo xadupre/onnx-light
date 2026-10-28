@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -205,20 +206,20 @@ TEST(FunctionPattern, RejectsInvalidDefinitions) {
   auto body = DoubleNeg();
   auto replacement = Identity();
   body.clear_name();
-  EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
+  EXPECT_THROW(FunctionPattern(body, replacement), std::invalid_argument);
   body = DoubleNeg();
   replacement.add_input("extra");
   EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
   replacement = Identity();
   replacement.add_output("output");
-  EXPECT_THROW(FunctionPattern(body, replacement), BuilderError);
+  EXPECT_THROW(FunctionPattern(body, replacement), std::invalid_argument);
   body.ref_node()[0].ref_input()[0] = "undefined";
-  EXPECT_THROW(FunctionPattern(body, Identity()), BuilderError);
+  EXPECT_THROW(FunctionPattern(body, Identity()), std::invalid_argument);
   body = DoubleNeg();
   body.ref_node()[1].ref_output()[0] = "x";
-  EXPECT_THROW(FunctionPattern(body, Identity()), BuilderError);
+  EXPECT_THROW(FunctionPattern(body, Identity()), std::invalid_argument);
   body = Function({"x"}, {"y"}, {Transpose("x", "y", true)});
-  EXPECT_THROW(FunctionPattern(body, Identity()), BuilderError);
+  EXPECT_THROW(FunctionPattern(body, Identity()), std::invalid_argument);
   body.add_attribute("permutation");
   replacement = body;
   replacement.ref_node()[0].ref_attribute()[0].set_ref_attr_name("uncaptured");

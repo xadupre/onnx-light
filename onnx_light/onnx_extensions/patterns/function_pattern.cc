@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -23,29 +22,12 @@ using AttributeType = AttributeProto::AttributeType;
 using References = std::unordered_map<std::string, AttributeType>;
 
 References Validate(const FunctionProto &function, bool is_template) {
-  try {
-    VerifyFunction(function);
-  } catch (const std::invalid_argument &error) {
-    throw BuilderError(error.what());
-  }
-  std::unordered_set<std::string> inputs, used, declared;
-  std::unordered_map<std::string, int64_t> opsets;
+  VerifyFunction(function);
+  std::unordered_set<std::string> inputs, used;
   References references;
-  for (const auto &opset : function.opset_import()) {
-    if (opset.version() <= 0 ||
-        !opsets.emplace(NormaliseDomain(opset.domain()), opset.version()).second) {
-      throw BuilderError("FunctionPattern: invalid or duplicate opset import.");
-    }
-  }
-  for (const auto &attribute : function.attribute())
-    declared.insert(attribute.value());
-  for (const auto &attribute : function.attribute_proto())
-    declared.insert(attribute.name().value());
   for (const auto &input : function.input())
     inputs.insert(input.value());
   for (const auto &node : function.node()) {
-    if (!opsets.contains(NormaliseDomain(node.domain())))
-      throw BuilderError("FunctionPattern: every operator needs an explicit opset import.");
     for (const auto &input : node.input())
       if (!input.empty())
         used.insert(input.value());
@@ -54,12 +36,7 @@ References Validate(const FunctionProto &function, bool is_template) {
           attribute.has_g() || attribute.graphs_size() != 0)
         throw BuilderError("FunctionPattern: graph-valued attributes are not supported.");
       if (!attribute.ref_attr_name().empty()) {
-        const std::string reference = attribute.ref_attr_name().value();
-        if (!declared.contains(reference))
-          throw BuilderError("FunctionPattern: an attribute reference must be declared.");
-        const auto [it, inserted] = references.emplace(reference, attribute.type());
-        if (!inserted && it->second != attribute.type())
-          throw BuilderError("FunctionPattern: inconsistent reference attribute types.");
+        references.emplace(attribute.ref_attr_name().value(), attribute.type());
       }
     }
   }

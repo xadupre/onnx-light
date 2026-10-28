@@ -491,8 +491,8 @@ ModelProto PreparationModel() {
 
 TEST(PatternOptimization, BuiltInPatternPriorities) {
   onnx_patterns::RegisterPatterns();
-  for (const std::string &name : {"GroupedMatMul", "GemmSumFusion", "MatMulAdd",
-                                  "MatMulBatchNormalizationFusion", "MatMulScaleFusion"}) {
+  for (const char *name : {"GroupedMatMul", "GemmSumFusion", "MatMulAdd",
+                           "MatMulBatchNormalizationFusion", "MatMulScaleFusion"}) {
     SCOPED_TRACE(name);
     EXPECT_EQ(core::builder::CreateRegisteredPattern(name)->priority, 2);
     EXPECT_EQ(core::builder::CreateRegisteredPattern(name, 3)->priority, 3);

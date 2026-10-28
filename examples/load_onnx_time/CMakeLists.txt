@@ -23,7 +23,7 @@
 # ---
 #   ./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(load_onnx_time LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

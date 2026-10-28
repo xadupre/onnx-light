@@ -30,7 +30,7 @@ class TestCMakeHardening(ExtTestCase):
             source.mkdir()
             (source / "test.cc").write_text("int main() { return 0; }\n", encoding="utf-8")
             (source / "CMakeLists.txt").write_text(
-                "cmake_minimum_required(VERSION 3.15)\n"
+                "cmake_minimum_required(VERSION 4.0)\n"
                 "project(hardening_test LANGUAGES CXX)\n"
                 "if(ENABLE_HARDENING)\n"
                 f'  include("{(root / "cmake" / "Hardening.cmake").as_posix()}")\n'

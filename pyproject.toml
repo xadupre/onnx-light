@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.3.3", "nanobind>=3.0.1", "numpy>=2.2"]
+requires = ["scikit-build-core>=0.8", "nanobind>=3.0.1", "numpy>=2.2"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -36,6 +36,7 @@ dev = [
 ]
 dev-no-onnx = [
     "onnx-light[style]",
+    "cmake>=4.0",
     "matplotlib",
     "pandas",
     "pytest>=7",
@@ -64,6 +65,7 @@ docs = [
 ]
 
 [tool.scikit-build]
+cmake.version = ">=4.0"
 wheel.packages = ["onnx_light"]
 sdist.include = ["sbom.cdx.json"]
 # Keeps Release and MinSizeRel wheel artifacts free of static symbols. This is

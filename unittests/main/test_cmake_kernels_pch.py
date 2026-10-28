@@ -12,7 +12,7 @@ class TestCMakeKernelsPch(ExtTestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             (directory / "CMakeLists.txt").write_text(
-                "cmake_minimum_required(VERSION 3.15)\n"
+                "cmake_minimum_required(VERSION 4.0)\n"
                 "project(KernelsPch LANGUAGES CXX)\n"
                 f'add_subdirectory("{root.as_posix()}" onnx-light)\n'
                 'file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/pch.txt" CONTENT\n'

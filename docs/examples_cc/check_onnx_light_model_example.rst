@@ -79,7 +79,7 @@ linked so the program can call onnx_shapes shape inference:
 
 .. code-block:: cmake
 
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 4.0)
     project(check_onnx_light_model LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 17)

@@ -91,7 +91,7 @@ messages and does not need operator-aware APIs:
 
 .. code-block:: cmake
 
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 4.0)
     project(load_onnx_light_time LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 20)

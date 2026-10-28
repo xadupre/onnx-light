@@ -128,7 +128,7 @@ Minimal ``CMakeLists.txt``
 
 .. code-block:: cmake
 
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 4.0)
     project(my_project LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 20)
@@ -240,7 +240,7 @@ The matching ``CMakeLists.txt``:
 
 .. code-block:: cmake
 
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 4.0)
     project(load_model LANGUAGES CXX)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)

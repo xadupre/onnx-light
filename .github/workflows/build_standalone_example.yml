@@ -27,6 +27,9 @@ jobs:
       - name: Install onnx C++ library
         run: sudo apt-get install -y libonnx-dev libprotobuf-dev libssl-dev
 
+      - name: Install CMake
+        run: python3 -m pip install "cmake>=4.0"
+
       - name: Set parallel build level
         shell: bash
         run: |

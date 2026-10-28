@@ -69,6 +69,8 @@ jobs:
         shared: ["OFF", "ON"]
     steps:
       - uses: actions/checkout@v7
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
       - name: Build and consume the independent threading project
         shell: bash
         run: |
@@ -90,6 +92,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
       - name: Build, install and consume the isolated proto project
         run: |
           cp -r onnx_proto "$RUNNER_TEMP/onnx_proto"
@@ -136,7 +140,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cmake: ["3.30.9", "4.0.3", "4.1.0", "4.1.2"]
+        cmake: ["4.0.3", "4.1.0", "4.1.2"]
     steps:
       - uses: actions/checkout@v7
 
@@ -228,10 +232,13 @@ jobs:
       # sccache caches compiled objects in the GitHub Actions cache so repeated
       # runs that do not touch C++ sources are near-instant, matching the
       # macOS/Windows core builds that already use sccache.
+      - name: Install CMake and build dependencies
+        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
+
       - name: Build and Install package without kernels/backend
         env:
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: pip freeze
         run: pip freeze
@@ -280,6 +287,9 @@ jobs:
       # sccache caches compiled objects in the GitHub Actions cache so repeated
       # runs that do not touch C++ sources are near-instant, matching the
       # macOS/Windows core builds that already use sccache.
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
+
       - name: Build and Install package
         env:
           SCCACHE_GHA_ENABLED: "true"
@@ -325,10 +335,13 @@ jobs:
       # sccache caches compiled objects in the GitHub Actions cache so repeated
       # runs that do not touch C++ sources are near-instant, matching the
       # macOS/Windows core builds that already use sccache.
+      - name: Install CMake and build dependencies
+        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
+
       - name: Build and Install package (Linux)
         env:
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Report installed lib_onnx_proto size
         # Includes the native ORT codec and persistent-binding allowances documented in
@@ -479,18 +492,21 @@ jobs:
       # that repeated runs that do not touch C++ source are near-instant on both
       # Windows and macOS. This is especially effective for Windows where each
       # cold compilation takes ~24 minutes.
+      - name: Install CMake and build dependencies
+        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
+
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
         env:
           CMAKE_GENERATOR: Ninja
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Build and Install package (macOS)
         if: runner.os == 'macOS'
         env:
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Install ONNX weekly
         run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
@@ -558,6 +574,9 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1.13.0
         with:
           arch: x86
+
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
 
       - name: Configure 32-bit CMake build
         env:

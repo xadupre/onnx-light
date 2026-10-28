@@ -25,7 +25,7 @@
 # ---
 #   ./build-run-add-node-test/run_add_node_test
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(run_add_node_test LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

@@ -12,7 +12,7 @@ class TestCMakePch(ExtTestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             (directory / "CMakeLists.txt").write_text(
-                "cmake_minimum_required(VERSION 3.15)\n"
+                "cmake_minimum_required(VERSION 4.0)\n"
                 "project(PchPolicy LANGUAGES C CXX)\n"
                 "set(CMAKE_CXX_COMPILER_LAUNCHER ${TEST_LAUNCHER})\n"
                 "set(CMAKE_C_COMPILER_LAUNCHER ${TEST_C_LAUNCHER})\n"

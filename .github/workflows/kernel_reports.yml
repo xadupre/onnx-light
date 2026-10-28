@@ -47,7 +47,7 @@ jobs:
           echo "XDG_CACHE_HOME=$RUNNER_TEMP/kernel-reports-cache" >> "$GITHUB_ENV"
           sudo apt-get update
           sudo apt-get install -y libssl-dev
-          python -m pip install nanobind==3.1.0 numpy==2.5.3 ml-dtypes==0.6.0 pytest==9.1.1
+          python -m pip install "cmake>=4.0" nanobind==3.1.0 numpy==2.5.3 ml-dtypes==0.6.0 pytest==9.1.1
       - name: Build native extension and correctness tests
         run: python setup.py build_ext --inplace --parallel 4
       - name: Record provenance and reproduction recipe

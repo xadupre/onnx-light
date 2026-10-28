@@ -78,7 +78,7 @@ jobs:
         # nanobind is pulled in via CMakeLists.txt only when
         # ONNX_LIGHT_BUILD_PYTHON=ON; this job builds the C++ fuzz
         # harnesses only, so the dependency is intentionally omitted.
-        run: pip install --upgrade cmake
+        run: pip install --upgrade "cmake>=4.0"
 
       - name: Set parallel build level
         shell: bash

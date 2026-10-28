@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(onnx_proto_consumer LANGUAGES CXX)
 
 enable_testing()

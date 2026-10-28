@@ -8,7 +8,7 @@
 #         -DCMAKE_PREFIX_PATH=/path/to/onnx-light/install
 #   cmake --build build-register-custom-pattern
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(register_custom_pattern LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

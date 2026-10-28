@@ -26,7 +26,7 @@
 # ---
 #   ./build-save-onnx-light-time/save_onnx_light_time path/to/model.onnx /tmp/out 10 4
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 4.0)
 project(save_onnx_light_time LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

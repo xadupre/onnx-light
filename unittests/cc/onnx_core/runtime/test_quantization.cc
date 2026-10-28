@@ -126,6 +126,53 @@ ModelProto SharedModel(const QuantizationPlan &plan, const EncodedValueProto &en
 
 } // namespace
 
+TEST(Quantization, FloatReconstructionSurvivesSharedParametersAndOutputOverride) {
+  const auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 2.f));
+  for (auto format : QuantizationFormats()) {
+    if (format >= QuantizationFormat::kOrtMatmulnbitsInt2)
+      continue;
+    auto plan = WithTables(format, 16);
+    plan.reconstruction_dtype = TensorProto::FLOAT;
+    // Exercises inverse transforms, scattering and outlier restoration together.
+    plan.permutation = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+    plan.outliers = {0, 15};
+    const auto full = QuantizeTensor(source, plan);
+    EXPECT_TRUE(
+        full.Encoded().struct_type().name().value().starts_with("onnx_light.quantization.v2/"));
+    const auto decoded = DequantizeTensor(full);
+    const auto widened = DequantizeTensor(full.Encoded(), {}, nullptr, TensorProto::DOUBLE);
+    for (size_t i = 0; i < 16; ++i)
+      EXPECT_EQ(widened.AsDouble()[i], static_cast<double>(decoded.AsFloat()[i]));
+    const auto model = SharedModel(plan, full.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto shared =
+        QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    const auto materialized = MaterializeQuantizedValue(shared);
+    EXPECT_EQ(materialized.struct_type().name().value(),
+              full.Encoded().struct_type().name().value());
+    const auto restored = DequantizeTensor(shared);
+    for (size_t i = 0; i < 16; ++i)
+      EXPECT_EQ(restored.AsFloat()[i], decoded.AsFloat()[i]);
+  }
+}
+
+TEST(Quantization, FloatAffineWireGoldenIgnoresRequestedOutputPrecision) {
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 1, 1);
+  plan.reconstruction_dtype = TensorProto::FLOAT;
+  EncodedValueProto encoded;
+  *encoded.mutable_struct_type() = MakeQuantizationType(plan);
+  auto *logical = encoded.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(1);
+  // Independent little-endian wire: reserved, scale=1+2^-23, zero=0, offset=-3, code=3.
+  const std::array<uint8_t, 26> bytes = {0, 0, 0, 0, 0x20, 0, 0, 0xf0, 0x3f, 0, 0, 0,    0,
+                                         0, 0, 0, 0, 0,    0, 0, 0,    0,    0, 8, 0xc0, 3};
+  encoded.set_raw_data(bytes.data(), bytes.size());
+  const auto result = DequantizeTensor(encoded, {}, nullptr, TensorProto::DOUBLE);
+  EXPECT_EQ(result.AsDouble()[0], 0x1p-21);
+  EXPECT_NE(result.AsDouble()[0], 3 * 0x1p-23);
+}
+
 TEST(Quantization, PagedCacheRetainsSharedParametersAcrossSerialization) {
   RuntimeValue retained;
   Tensor expected;

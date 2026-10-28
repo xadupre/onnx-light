@@ -24,6 +24,22 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Reconstruction precision
+------------------------
+
+``QuantizationPlan::reconstruction_dtype`` defaults to ``TensorProto::DOUBLE``
+and preserves the existing ``onnx_light.quantization.v1/<profile>`` decoder.
+Set it to ``TensorProto::FLOAT`` to opt into the portable
+``onnx_light.quantization.v2/<profile>`` contract. Output dtype does not select
+reconstruction precision: even DOUBLE outputs use FLOAT arithmetic for v2.
+The three ORT-compatible profiles retain v1 and reject FLOAT.
+
+v2 rounds operands and every reconstruction operation separately to binary32,
+including ordered codebook sums and inverse transforms, before output conversion.
+It uses float-valued reconstruction workspaces rather than a full binary64 tensor.
+See :doc:`the precise rounding and validation rules in the Python guide
+<../python/quantized_values>`; both APIs use the same decoder.
+
 Graph operators
 ---------------
 

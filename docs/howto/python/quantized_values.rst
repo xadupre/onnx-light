@@ -25,6 +25,67 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Reconstruction precision
+------------------------
+
+Precision is a serialized codec contract, **not** the requested output dtype.
+For every portable profile (including affine, scalar/vector/additive codebooks,
+and cast storage), ``plan.reconstruction_dtype`` selects:
+
+* ``onnx.TensorProto.DOUBLE`` (default): the unchanged
+  ``onnx_light.quantization.v1/<profile>`` contract. Block operands and arithmetic
+  use binary64. Inverse transforms retain long-double accumulation, rounded to
+  binary64 per component; outliers retain their binary64 values.
+* ``onnx.TensorProto.FLOAT``: the opt-in
+  ``onnx_light.quantization.v2/<profile>`` contract. Parameters remain serialized
+  as binary64, but each reconstruction operand is converted to binary32 before
+  use. Each operation below rounds separately to binary32, with no fused
+  multiply-add:
+
+  * Affine: subtract the zero point from the signed/unsigned code, multiply by
+    scale, then add offset.
+  * Codebook: start at binary32 zero, add entries in increasing book order, then
+    multiply by scale. Each vector component follows the same rule.
+  * Cast: convert the stored value to binary32, then multiply by scale.
+  * Inverse transform: for each component, start at binary32 zero; in increasing
+    row-index order multiply the reconstructed component by the binary32 matrix
+    entry, then add the rounded product to the running sum.
+  * Scatter the permutation without arithmetic, then restore outliers converted
+    to binary32.
+
+The contracts assume IEEE round-to-nearest-even and gradual underflow, not
+flush-to-zero or fast-math. Subnormals are retained; underflow may round to zero,
+including when converting parameters. Nonfinite serialized parameters, nonfinite
+reconstruction operands/results, and overflow raise ``ValueError``. v2 also
+rejects finite binary64 operands that overflow during conversion to binary32.
+The encoder validates reconstruction using the selected contract.
+
+Only **after** these steps is the result converted to FLOAT16, BFLOAT16, FLOAT
+or DOUBLE. FLOAT16/BFLOAT16 conversion uses a FLOAT intermediate and
+round-to-nearest-even, unchanged from v1; finite values that overflow the output
+dtype are rejected. DOUBLE output for v2 is an exact widening of the FLOAT
+reconstruction, not a higher-precision recomputation.
+
+For example, set ``plan.reconstruction_dtype = onnx.TensorProto.FLOAT`` before
+calling ``make_quantization_type`` or ``quantize_tensor_proto``. The descriptor
+preserves this choice through wire serialization, graph operators, and shared
+parameter materialization. Unknown versions and unsupported precision values
+are rejected. Existing v1 values are never reinterpreted as v2.
+
+Native decoding remains available to graph/runtime consumers. v2 reconstructs
+into ``std::vector<float>``, including its permutation copy and transform row;
+it never allocates a full double-valued reconstruction tensor, even for DOUBLE
+outputs. Serialized parameter tables, transform matrices and sparse outlier
+payloads retain their existing binary64 storage. Encoding/calibration still
+uses the original arithmetic. The independent wire goldens in
+``unittests/python/backend/test_quantization_precision.py`` express rounding
+with explicit NumPy ``float32`` operands/results and check both native consumers.
+
+The three ``ORT_MATMULNBITS_INT*`` profiles retain their v1 DOUBLE decoder and
+reject FLOAT reconstruction. This documents the onnx-light decoder, not ORT's
+kernel arithmetic. Neither v1 nor v2 claims GGUF numerical compatibility;
+GGML/GGUF packing and its FLOAT arithmetic contract are separate codecs.
+
 Graph operators
 ---------------
 

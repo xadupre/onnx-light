@@ -10,11 +10,44 @@
 #include <cmath>
 #include <span>
 #include <unordered_set>
+#include <variant>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
 constexpr const char *kPrefix = "onnx_light.quantization.v1/";
+constexpr const char *kFloatPrefix = "onnx_light.quantization.v2/";
+
+int32_t ReconstructionType(std::string_view name) {
+  EXT_ENFORCE_INVALID(name.starts_with(kPrefix) || name.starts_with(kFloatPrefix),
+                      "Unsupported encoded quantization layout.");
+  return name.starts_with(kFloatPrefix) ? TensorProto::FLOAT : TensorProto::DOUBLE;
+}
+
+std::string_view ProfileName(std::string_view name) {
+  ReconstructionType(name);
+  return name.substr(std::strlen(kPrefix));
+}
+
+void ValidatePrecision(const QuantizationPlan &plan) {
+  EXT_ENFORCE_INVALID(plan.reconstruction_dtype == TensorProto::FLOAT ||
+                          plan.reconstruction_dtype == TensorProto::DOUBLE,
+                      "Reconstruction dtype must be FLOAT or DOUBLE.");
+}
+
+// Forces separate rounding even when the compiler permits multiply-add contraction.
+float RoundFloat(float value) {
+  volatile float rounded = value;
+  EXT_ENFORCE_INVALID(std::isfinite(rounded), "FLOAT reconstruction overflow or nonfinite value.");
+  return rounded;
+}
+
+template <typename T> T ReconstructionOperand(double value) {
+  if constexpr (std::is_same_v<T, float>)
+    return RoundFloat(static_cast<float>(value));
+  else
+    return value;
+}
 
 constexpr std::array<std::string_view, 43> kFormatNames = {"int8",
                                                            "int8_per_channel",
@@ -287,6 +320,7 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
 }
 
 void ValidatePlan(const QuantizationPlan &plan, size_t count) {
+  ValidatePrecision(plan);
   QuantizationFormatName(plan.format);
   EXT_ENFORCE_INVALID(plan.matrix_shape.empty(),
                       "Only ORT MatMulNBits profiles accept a matrix_shape.");
@@ -348,6 +382,22 @@ void Transform(std::vector<double> &values, const std::vector<double> &matrix, s
   }
 }
 
+void Transform(std::vector<float> &values, const std::vector<double> &matrix, size_t n) {
+  if (n == 0)
+    return;
+  std::vector<float> row(n);
+  for (size_t offset = 0; offset < values.size(); offset += n) {
+    for (size_t j = 0; j < n; ++j) {
+      float sum = 0;
+      for (size_t k = 0; k < n; ++k)
+        sum = RoundFloat(
+            sum + RoundFloat(values[offset + k] * ReconstructionOperand<float>(matrix[k * n + j])));
+      row[j] = sum;
+    }
+    std::copy(row.begin(), row.end(), values.begin() + offset);
+  }
+}
+
 using Field = StructTypeProto::Structure::Field;
 
 Field *AddField(StructTypeProto &type, const std::string &name) {
@@ -396,8 +446,11 @@ static_assert([] {
 }());
 
 StructTypeProto Schema(const QuantizationPlan &plan) {
+  ValidatePrecision(plan);
   StructTypeProto root;
-  root.set_name(std::string(kPrefix) + std::string(QuantizationFormatName(plan.format)));
+  root.set_name(
+      std::string(plan.reconstruction_dtype == TensorProto::FLOAT ? kFloatPrefix : kPrefix) +
+      std::string(QuantizationFormatName(plan.format)));
   Array(root, "reserved", TensorProto::UINT8, {1});
   Array(root, "permutation", TensorProto::INT64, {int64_t(plan.permutation.size())});
   Array(root, "forward", TensorProto::DOUBLE, {plan.transform_size, plan.transform_size});
@@ -594,8 +647,10 @@ void EncodeBlock(ByteWriter &payload, const QuantizationBlockLayout &layout,
   Pack(payload, codes, layout.bits, layout.base3);
 }
 
+template <typename T>
 void DecodeBlock(ByteReader &payload, const QuantizationBlockLayout &layout,
-                 const QuantizationBlockParameters &block, std::vector<double> &values) {
+                 const QuantizationBlockParameters &block, std::vector<T> &values) {
+  const T scale = ReconstructionOperand<T>(block.scale);
   if (layout.method == QuantizationMethod::kCast) {
     for (size_t i = 0; i < layout.count; ++i) {
       double value;
@@ -608,7 +663,10 @@ void DecodeBlock(ByteReader &payload, const QuantizationBlockLayout &layout,
         value = layout.cast_type == TensorProto::FLOAT16 ? Float16BitsToFloat(code)
                                                          : Bfloat16BitsToFloat(code);
       }
-      values.push_back(value * block.scale);
+      if constexpr (std::is_same_v<T, float>)
+        values.push_back(RoundFloat(ReconstructionOperand<T>(value) * scale));
+      else
+        values.push_back(value * scale);
     }
     return;
   }
@@ -618,24 +676,40 @@ void DecodeBlock(ByteReader &payload, const QuantizationBlockLayout &layout,
       int64_t signed_code = code;
       if (layout.signed_codes && (code & (uint32_t{1} << (layout.bits - 1))))
         signed_code -= int64_t{1} << layout.bits;
-      values.push_back((signed_code - block.zero_point) * block.scale + block.offset);
+      if constexpr (std::is_same_v<T, float>) {
+        const float centered = RoundFloat(static_cast<float>(signed_code) -
+                                          ReconstructionOperand<T>(block.zero_point));
+        values.push_back(
+            RoundFloat(RoundFloat(centered * scale) + ReconstructionOperand<T>(block.offset)));
+      } else {
+        values.push_back((signed_code - block.zero_point) * scale + block.offset);
+      }
     }
   } else {
     for (size_t i = 0, group = 0; i < layout.count; i += layout.vector_size, ++group) {
       for (size_t j = 0; j < std::min<size_t>(layout.vector_size, layout.count - i); ++j) {
-        double sum = 0;
+        T sum = 0;
         for (size_t book = 0; book < layout.books; ++book) {
           const uint32_t entry = codes[group * layout.books + book];
           EXT_ENFORCE_INVALID(entry < layout.entries, "Quantization codebook index out of range.");
-          sum += block.codebook[(book * layout.entries + entry) * layout.vector_size + j];
+          const T operand = ReconstructionOperand<T>(
+              block.codebook[(book * layout.entries + entry) * layout.vector_size + j]);
+          if constexpr (std::is_same_v<T, float>)
+            sum = RoundFloat(sum + operand);
+          else
+            sum += operand;
         }
-        values.push_back(sum * block.scale);
+        if constexpr (std::is_same_v<T, float>)
+          values.push_back(RoundFloat(sum * scale));
+        else
+          values.push_back(sum * scale);
       }
     }
   }
 }
 
-void RestoreValues(std::vector<double> &values, const QuantizationPlan &plan,
+template <typename T>
+void RestoreValues(std::vector<T> &values, const QuantizationPlan &plan,
                    const std::vector<double> &exceptions) {
   Transform(values, plan.inverse, plan.transform_size);
   if (!plan.permutation.empty()) {
@@ -644,7 +718,7 @@ void RestoreValues(std::vector<double> &values, const QuantizationPlan &plan,
       values[plan.permutation[i]] = reordered[i];
   }
   for (size_t i = 0; i < plan.outliers.size(); ++i)
-    values[plan.outliers[i]] = exceptions[i];
+    values[plan.outliers[i]] = ReconstructionOperand<T>(exceptions[i]);
 }
 
 const Field &GetField(const StructTypeProto &type, size_t index, const char *name) {
@@ -935,6 +1009,9 @@ struct OrtParameters {
 };
 
 OrtParameters PrepareOrtParameters(const Shape &shape, int32_t type, const QuantizationPlan &plan) {
+  ValidatePrecision(plan);
+  EXT_ENFORCE_INVALID(plan.reconstruction_dtype == TensorProto::DOUBLE,
+                      "ORT MatMulNBits requires its v1 DOUBLE reconstruction contract.");
   EXT_ENFORCE_INVALID(shape == plan.matrix_shape,
                       "ORT MatMulNBits source shape must match the plan's [K,N].");
   EXT_ENFORCE_INVALID(plan.runs.size() == 1, "ORT MatMulNBits requires one shared block layout.");
@@ -1043,6 +1120,22 @@ void WritePortableParameters(ByteWriter &payload, const QuantizationPlan &plan) 
     payload.Put(static_cast<uint64_t>(index), 8);
 }
 
+template <typename T>
+void CheckReconstruction(ByteReader payload, const QuantizationPlan &plan,
+                         const std::vector<double> &exceptions, int32_t output_type,
+                         std::vector<T> &values) {
+  values.clear();
+  for (const auto &run : plan.runs)
+    for (const auto &block : run.blocks) {
+      payload.position += 24 + Product(block.codebook.size(), sizeof(double));
+      DecodeBlock(payload, run.layout, block, values);
+    }
+  RestoreValues(values, plan, exceptions);
+  std::array<uint8_t, sizeof(double)> scratch;
+  for (T value : values)
+    WriteFloat(scratch.data(), output_type, value);
+}
+
 EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
   size_t count = 1;
   for (int64_t dim : tensor.shape) {
@@ -1083,18 +1176,14 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
       offset += run.layout.count;
     }
   payload.Finish();
-  // Reuses the numerical workspace and the decoder's arithmetic without copying the payload.
-  values.clear();
   ByteReader reconstruction{payload.data, blocks_start};
-  for (const auto &run : plan.runs)
-    for (const auto &block : run.blocks) {
-      reconstruction.position += 24 + Product(block.codebook.size(), sizeof(double));
-      DecodeBlock(reconstruction, run.layout, block, values);
-    }
-  RestoreValues(values, plan, exceptions);
-  std::array<uint8_t, sizeof(double)> scratch;
-  for (double value : values)
-    WriteFloat(scratch.data(), tensor.data_type, value);
+  if (plan.reconstruction_dtype == TensorProto::FLOAT) {
+    std::vector<double>().swap(values);
+    std::vector<float> float_values;
+    CheckReconstruction(reconstruction, plan, exceptions, tensor.data_type, float_values);
+  } else {
+    CheckReconstruction(reconstruction, plan, exceptions, tensor.data_type, values);
+  }
   *result.mutable_struct_type() = Schema(plan);
   SetLogicalTensor(result, tensor);
   return result;
@@ -1103,7 +1192,7 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
 struct DecodedValues {
   Shape shape;
   int32_t type;
-  std::vector<double> values;
+  std::variant<std::vector<float>, std::vector<double>> values;
 };
 
 struct QuantizationHeader {
@@ -1121,7 +1210,7 @@ QuantizationHeader ReadQuantizationHeader(const EncodedValueProto &encoded,
                       "Expected one loaded structured quantization record.");
   const auto &root = *layout.root;
   const std::string name = root.name().value();
-  EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported encoded quantization layout.");
+  ReconstructionType(name);
   EXT_ENFORCE_INVALID(encoded.has_logical_type() && encoded.logical_type().has_tensor_type(),
                       "Quantization logical type must be a concrete floating-point tensor.");
   const auto &logical = encoded.logical_type().tensor_type();
@@ -1135,8 +1224,8 @@ QuantizationHeader ReadQuantizationHeader(const EncodedValueProto &encoded,
     shape.push_back(dim.dim_value());
     count = Product(count, dim.dim_value());
   }
-  return {&root, ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix))),
-          std::move(shape), logical.elem_type(), count};
+  return {&root, ParseQuantizationFormat(ProfileName(name)), std::move(shape), logical.elem_type(),
+          count};
 }
 
 struct OrtPackedValue {
@@ -1211,8 +1300,8 @@ OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const Quantizatio
   return value;
 }
 
-DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
-  auto header = ReadQuantizationHeader(encoded, catalogue);
+template <typename T>
+DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader header) {
   if (OrtBits(header.format) != 0) {
     const auto packed = ParseOrtValue(encoded, header);
     const auto &storage = packed.storage;
@@ -1235,6 +1324,7 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   const size_t count = header.count;
   QuantizationPlan plan;
   plan.format = header.format;
+  plan.reconstruction_dtype = ReconstructionType(root.name().value());
   ByteReader payload{{encoded.raw_data().data(), encoded.raw_data().size()}};
   EXT_ENFORCE_INVALID(payload.Get(1) == 0, "Nonzero quantization reserved byte.");
   const size_t permutation_size = Extent(GetField(root, 1, "permutation"), TensorProto::INT64, 1);
@@ -1255,7 +1345,7 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   EXT_ENFORCE_INVALID(blocks_field.has_type() && blocks_field.type().has_struct_type() &&
                           blocks_field.type().struct_type().has_structure(),
                       "Invalid quantization block list.");
-  std::vector<double> values;
+  std::vector<T> values;
   const auto &block_fields = blocks_field.type().struct_type().structure().field();
   GetField(blocks_field.type().struct_type(), 0, "count");
   for (size_t block_index = 1; block_index < block_fields.size(); ++block_index) {
@@ -1299,6 +1389,16 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   EXT_ENFORCE_INVALID(payload.position == payload.data.size(), "Trailing quantization payload.");
   RestoreValues(values, plan, exceptions);
   return {std::move(header.shape), header.type, std::move(values)};
+}
+
+DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  auto header = ReadQuantizationHeader(encoded, catalogue);
+  if (ReconstructionType(header.root->name().value()) == TensorProto::FLOAT) {
+    EXT_ENFORCE_INVALID(OrtBits(header.format) == 0,
+                        "ORT MatMulNBits does not define a v2 FLOAT reconstruction contract.");
+    return DecodeValues<float>(encoded, std::move(header));
+  }
+  return DecodeValues<double>(encoded, std::move(header));
 }
 
 } // namespace
@@ -1351,8 +1451,7 @@ StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
 
 StructTypeProto MakeSharedQuantizationType(const StructTypeProto &type) {
   const std::string name = type.name().value();
-  EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported shared quantization storage type.");
-  const auto format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+  const auto format = ParseQuantizationFormat(ProfileName(name));
   size_t size = 1;
   auto add = [&](size_t bytes) {
     EXT_ENFORCE_INVALID(bytes <= size_t(std::numeric_limits<int64_t>::max()) - size,
@@ -1471,9 +1570,9 @@ QuantizationPlan PlanFromParameters(const Shape &shape, size_t value_count,
                                     const StructTypeProto &root,
                                     const QuantizationParameters &parameters) {
   const std::string name = root.name().value();
-  EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported Quantize storage type.");
   QuantizationPlan plan;
-  plan.format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+  plan.reconstruction_dtype = ReconstructionType(name);
+  plan.format = ParseQuantizationFormat(ProfileName(name));
   const bool ort = OrtBits(plan.format) != 0;
   if (ort) {
     const auto &field = GetField(root, 0, "parameters");
@@ -1481,6 +1580,8 @@ QuantizationPlan PlanFromParameters(const Shape &shape, size_t value_count,
                             field.constant().int64_data(1) > 0 && shape.size() == 2,
                         "Invalid ORT Quantize parameters.");
     plan = MakeMatMulNBitsPlan(plan.format, shape[0], shape[1], field.constant().int64_data(1));
+    EXT_ENFORCE_INVALID(ReconstructionType(name) == TensorProto::DOUBLE,
+                        "ORT MatMulNBits does not define a v2 FLOAT reconstruction contract.");
     EXT_ENFORCE_INVALID(!parameters.codebooks && !parameters.permutation && !parameters.forward &&
                             !parameters.inverse && !parameters.outliers && !parameters.offsets,
                         "ORT Quantize does not accept codebooks, transforms, outliers or offsets.");
@@ -1758,9 +1859,7 @@ QuantizationParameterCatalogue::EstimateMemory(const ModelProto &model) {
     }
     const auto &root = entry.storage_type;
     const std::string name = root.name().value();
-    EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported Quantize storage type.");
-    const auto format =
-        ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+    const auto format = ParseQuantizationFormat(ProfileName(name));
     size_t blocks = 0, runs = 0, tables = 0, common = 0;
     if (OrtBits(format)) {
       const auto &parameters = GetField(root, 0, "parameters");
@@ -2022,11 +2121,17 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
   const auto decoded = DecodeValues(value, catalogue);
   const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
   const size_t width = FloatBytes(type);
-  Tensor result =
-      MakeOutputTensor(type, decoded.shape, Product(decoded.values.size(), width), allocator);
+  Tensor result = MakeOutputTensor(
+      type, decoded.shape,
+      Product(std::visit([](const auto &values) { return values.size(); }, decoded.values), width),
+      allocator);
   result.name = value.name().value();
-  for (size_t i = 0; i < decoded.values.size(); ++i)
-    WriteFloat(result.mutable_bytes() + i * width, type, decoded.values[i]);
+  std::visit(
+      [&](const auto &values) {
+        for (size_t i = 0; i < values.size(); ++i)
+          WriteFloat(result.mutable_bytes() + i * width, type, values[i]);
+      },
+      decoded.values);
   return result;
 }
 
@@ -2062,10 +2167,14 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
   for (int64_t dim : decoded.shape)
     result.add_dims(dim);
   const size_t width = FloatBytes(decoded.type);
-  ByteWriter payload(*result.mutable_raw_data(), Product(decoded.values.size(), width));
-  for (double number : decoded.values)
-    PutFloat(payload, number, decoded.type);
-  payload.Finish();
+  std::visit(
+      [&](const auto &values) {
+        ByteWriter payload(*result.mutable_raw_data(), Product(values.size(), width));
+        for (auto number : values)
+          PutFloat(payload, number, decoded.type);
+        payload.Finish();
+      },
+      decoded.values);
   return result;
 }
 

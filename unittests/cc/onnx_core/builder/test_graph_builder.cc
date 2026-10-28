@@ -49,6 +49,31 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, PreservesImportedOptionalOutputsWithoutChangingGeneratedNames) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  const auto generated =
+      builder.MakeNode("OptionalOutputs", {"x"}, {"y", "", "", "side"}, "custom");
+  ASSERT_EQ(generated.size(), 4u);
+  EXPECT_FALSE(generated[1].empty());
+  EXPECT_FALSE(generated[2].empty());
+  builder.MakeOutput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  builder.MakeOutput("side", core::symbolic::TensorType::kFloat, MakeShape({2, 4}));
+  ModelProto model = builder.ToModel();
+  model.mutable_graph()->ref_node()[0].ref_output()[1] = "";
+  model.mutable_graph()->ref_node()[0].ref_output()[2] = "";
+
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  const auto &node = imported.Nodes()[0];
+  ASSERT_EQ(node.output_size(), 4);
+  EXPECT_EQ(node.output(0), "y");
+  EXPECT_TRUE(node.output(1).empty());
+  EXPECT_TRUE(node.output(2).empty());
+  EXPECT_EQ(node.output(3), "side");
+  EXPECT_TRUE(imported.ToModel().graph().node(0).output(1).empty());
+  EXPECT_FALSE(imported.MakeNode("Identity", {"y"}, {""})[0].empty());
+}
+
 TEST(GraphBuilder, RejectsOperatorFunctionDefinitionsBeforeMutation) {
   onnx_shapes::RegisterShapeFunctions();
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {

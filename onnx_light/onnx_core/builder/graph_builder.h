@@ -807,6 +807,13 @@ private:
 
   void ValidateLocalFunctionName(const std::string &name, const std::string &domain);
 
+  std::vector<std::string> MakeNodeImpl(const std::string &op_type,
+                                        const std::vector<std::string> &inputs,
+                                        const std::vector<std::string> &outputs,
+                                        const std::string &domain, const std::string &name,
+                                        const utils::RepeatedProtoField<AttributeProto> &attributes,
+                                        const std::string &overload, bool preserve_empty_outputs);
+
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
 

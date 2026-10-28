@@ -21,6 +21,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * - Finds exact attention/MatMul anchors, including recursively inspected local
  *   functions. Excludes existing layer-function calls and their bodies,
  *   stochastic operators, Dropout and opaque custom calls from candidate regions.
+ *   Allows the deterministic com.microsoft operators Gelu, BiasGelu, FastGelu,
+ *   SkipLayerNormalization, SkipSimplifiedLayerNormalization, RotaryEmbedding,
+ *   CausalConvWithState and LinearAttention, retaining explicit state/cache ports.
+ *   Requires known output types/shapes for these contrib calls without a local body.
+ *   Does not change the conservative custom-operator constant-folding policy.
  *   Keeps nodes referencing enclosing-function attributes, including references
  *   inside graph attributes, outside extracted regions.
  * - Groups compatible anchors into repeated seed roles. Tries individual anchors,

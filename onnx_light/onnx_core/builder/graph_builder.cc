@@ -1776,10 +1776,10 @@ void GraphBuilder::ImportNode(const NodeProto &node) {
   outputs.reserve(node.output().size());
   for (std::size_t i = 0; i < node.output().size(); ++i)
     outputs.push_back(node.output(i));
-  MakeNode(node.op_type().value(), inputs, outputs,
-           node.domain().empty() ? std::string() : node.domain().value(),
-           node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
-           node.overload().value());
+  MakeNodeImpl(node.op_type().value(), inputs, outputs,
+               node.domain().empty() ? std::string() : node.domain().value(),
+               node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+               node.overload().value(), /*preserve_empty_outputs=*/true);
   NodeProto &imported_node = nodes_.back();
   imported_node.name_ = node.name_;
   imported_node.op_type_ = node.op_type_;
@@ -2016,6 +2016,16 @@ std::vector<std::string> GraphBuilder::MakeNode(
     const std::string &op_type, const std::vector<std::string> &inputs,
     const std::vector<std::string> &outputs, const std::string &domain, const std::string &name,
     const utils::RepeatedProtoField<AttributeProto> &attributes, const std::string &overload) {
+  return MakeNodeImpl(op_type, inputs, outputs, domain, name, attributes, overload,
+                      /*preserve_empty_outputs=*/false);
+}
+
+std::vector<std::string>
+GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::string> &inputs,
+                           const std::vector<std::string> &outputs, const std::string &domain,
+                           const std::string &name,
+                           const utils::RepeatedProtoField<AttributeProto> &attributes,
+                           const std::string &overload, bool preserve_empty_outputs) {
   const int opset = OpsetVersion(domain);
   if (opset <= 0) {
     throw BuilderError("GraphBuilder: node '" + op_type + "' has no explicit opset for domain '" +
@@ -2114,6 +2124,8 @@ std::vector<std::string> GraphBuilder::MakeNode(
   for (std::size_t i = 0; i < num_outputs; ++i) {
     if (i < outputs.size() && !outputs[i].empty()) {
       resolved_outputs.push_back(ReserveName(outputs[i]));
+    } else if (preserve_empty_outputs && i < outputs.size()) {
+      resolved_outputs.emplace_back();
     } else {
       resolved_outputs.push_back(UniqueName(op_type));
     }

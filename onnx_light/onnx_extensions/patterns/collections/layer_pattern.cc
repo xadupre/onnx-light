@@ -60,6 +60,22 @@ bool IsPrimitiveAnchor(const NodeProto &node) {
           (domain == "ai.rt" && op == "PagedAttention"));
 }
 
+bool IsDeterministicContrib(const NodeProto &node) {
+  if (node.domain().value() != "com.microsoft")
+    return false;
+  // State and caches are explicit inputs/outputs for these operators.
+  static const std::unordered_set<std::string> kDeterministic = {
+      "BiasGelu",
+      "CausalConvWithState",
+      "FastGelu",
+      "Gelu",
+      "LinearAttention",
+      "RotaryEmbedding",
+      "SkipLayerNormalization",
+      "SkipSimplifiedLayerNormalization"};
+  return kDeterministic.count(node.op_type().value()) != 0;
+}
+
 // The key includes domain and overload: similarly named user operators are not anchors.
 bool IsAnchor(const NodeProto &node, const GraphBuilder &builder, std::size_t depth,
               std::size_t &work, std::set<std::string> &visiting, bool in_function = false) {
@@ -466,7 +482,7 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
         standard_domain &&
         core::shapes::DispatchTable().count("ai.onnx:" + node.op_type().value()) != 0;
     if (!node.overload().value().empty() || node.op_type().value() == "Dropout" ||
-        (!IsPrimitiveAnchor(node) &&
+        (!IsPrimitiveAnchor(node) && !IsDeterministicContrib(node) &&
          (!recognized_standard ||
           core::compute::IsNonDeterministicOp(node.domain().value(), node.op_type().value()))))
       return false;
@@ -522,6 +538,13 @@ struct Index {
         std::set<std::string> visiting;
         entry.usable = IsSafeNode(entry.materialized, graph.Builder(), safe_functions, visiting, 0,
                                   safety_work);
+      }
+      if (entry.usable && IsDeterministicContrib(node) &&
+          graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+              node.domain(), node.op_type(), node.overload())) == nullptr) {
+        entry.usable =
+            std::all_of(node.output().begin(), node.output().end(),
+                        [&](const auto &name) { return name.empty() || graph.HasType(name); });
       }
       if (entry.usable) {
         std::vector<std::string> attributes;

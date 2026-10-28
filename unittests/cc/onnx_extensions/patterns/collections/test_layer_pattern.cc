@@ -18,6 +18,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -1092,6 +1093,219 @@ TEST(RepeatedLayerPattern, RejectsDifferentAttributesAndDomains) {
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
     EXPECT_TRUE(before.Equals(builder.BuildGraph()));
   }
+}
+
+TEST(RepeatedLayerPattern, ExtractsStandardAndMicrosoftGeluWithoutMixingDomains) {
+  for (const std::string domain : {"", "com.microsoft", "mixed"}) {
+    SCOPED_TRACE(domain);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"com.microsoft", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+      const std::string node_domain =
+          domain == "mixed" ? (index == 0 ? "" : "com.microsoft") : domain;
+      builder.MakeNode("Gelu", {"m" + suffix}, {"y" + suffix}, node_domain, "gelu" + suffix);
+      builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    }
+    const GraphProto before = builder.BuildGraph();
+    const auto plan = OptimizeLayers(builder);
+    if (domain == "mixed") {
+      EXPECT_TRUE(plan.rewrites().empty());
+      EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+      continue;
+    }
+    EXPECT_FALSE(plan.rewrites().empty());
+    EXPECT_EQ(builder.Nodes().size(), 2u);
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+    ExpectOriginalOperators(before, builder.BuildGraph());
+    ExpectCoherentLayerMetadata(builder);
+    EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+    EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  }
+}
+
+TEST(RepeatedLayerPattern, ExtractsMicrosoftActivationsAndNormalizationsWithSideOutputs) {
+  for (const std::string op :
+       {"BiasGelu", "FastGelu", "SkipLayerNormalization", "SkipSimplifiedLayerNormalization"}) {
+    SCOPED_TRACE(op);
+    const bool normalization =
+        op == "SkipLayerNormalization" || op == "SkipSimplifiedLayerNormalization";
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"com.microsoft", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    builder.MakeInput("scale", core::symbolic::TensorType::kFloat, LayerShape({4}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+      const std::vector<std::string> inputs =
+          normalization ? std::vector<std::string>{"m" + suffix, "x", "scale"}
+                        : std::vector<std::string>{"m" + suffix, "scale"};
+      const std::vector<std::string> outputs =
+          normalization ? std::vector<std::string>{"y" + suffix, "", "", "sum" + suffix}
+                        : std::vector<std::string>{"y" + suffix};
+      builder.MakeNode(op, inputs, outputs, "com.microsoft", "contrib" + suffix);
+      builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      if (normalization)
+        builder.MakeOutput("sum" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    }
+    ModelProto original = builder.ToModel();
+    if (normalization) {
+      for (auto &node : original.mutable_graph()->ref_node()) {
+        if (node.domain() == "com.microsoft") {
+          node.ref_output()[1] = "";
+          node.ref_output()[2] = "";
+        }
+      }
+    }
+    core::builder::GraphBuilder imported(original, LayerSchemaLookup());
+    const GraphProto before = imported.BuildGraph();
+    EXPECT_FALSE(OptimizeLayers(imported).rewrites().empty());
+    EXPECT_EQ(ExpectLayerContracts(imported.BuildGraph()), 2u);
+    ExpectOriginalOperators(before, imported.BuildGraph());
+    ExpectCoherentLayerMetadata(imported);
+    const auto model = imported.ToModel();
+    for (const auto &function : model.functions()) {
+      if (function.domain() != "ai.rt")
+        continue;
+      ASSERT_EQ(function.node().size(), 2u);
+      const auto &contrib = function.node(1);
+      EXPECT_EQ(contrib.domain(), "com.microsoft");
+      EXPECT_EQ(contrib.op_type(), op);
+      if (normalization) {
+        EXPECT_EQ(contrib.output_size(), 4);
+        EXPECT_TRUE(contrib.output(1).empty());
+        EXPECT_TRUE(contrib.output(2).empty());
+      }
+      EXPECT_TRUE(std::any_of(function.opset_import().begin(), function.opset_import().end(),
+                              [](const auto &opset) {
+                                return opset.domain() == "com.microsoft" && opset.version() == 1;
+                              }));
+    }
+    EXPECT_NO_THROW(VerifyModel(model));
+    EXPECT_NO_THROW({
+      core::builder::GraphBuilder reimported(model, LayerSchemaLookup());
+      EXPECT_EQ(reimported.GetShape("y0").Shape(), LayerShape({2, 4}));
+    });
+  }
+}
+
+TEST(RepeatedLayerPattern, ExtractsMicrosoftAttentionHelpersWithExplicitState) {
+  for (const std::string op : {"CausalConvWithState", "LinearAttention", "RotaryEmbedding"}) {
+    SCOPED_TRACE(op);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"com.microsoft", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, 2, 4}));
+    if (op == "CausalConvWithState") {
+      builder.MakeInput("conv_weight", core::symbolic::TensorType::kFloat, LayerShape({2, 1, 3}));
+      builder.MakeInput("past", core::symbolic::TensorType::kFloat, LayerShape({1, 2, 2}));
+    } else if (op == "LinearAttention") {
+      builder.MakeInput("past", core::symbolic::TensorType::kFloat, LayerShape({1, 1, 4, 4}));
+    } else {
+      builder.MakeInput("positions", core::symbolic::TensorType::kInt64, LayerShape({1, 2}));
+      builder.MakeInput("cos", core::symbolic::TensorType::kFloat, LayerShape({2, 2}));
+      builder.MakeInput("sin", core::symbolic::TensorType::kFloat, LayerShape({2, 2}));
+    }
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+      std::vector<std::string> inputs;
+      std::vector<std::string> outputs = {"y" + suffix};
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      if (op == "CausalConvWithState") {
+        inputs = {"m" + suffix, "conv_weight", "", "past"};
+      } else if (op == "LinearAttention") {
+        inputs = {"m" + suffix, "m" + suffix, "m" + suffix, "past"};
+        attributes = LayerIntAttribute("q_num_heads", 1);
+        attributes.push_back(LayerIntAttribute("kv_num_heads", 1)[0]);
+      } else {
+        inputs = {"m" + suffix, "positions", "cos", "sin"};
+        attributes = LayerIntAttribute("num_heads", 1);
+      }
+      if (op != "RotaryEmbedding")
+        outputs.push_back("state" + suffix);
+      builder.MakeNode(op, inputs, outputs, "com.microsoft", "contrib" + suffix, attributes);
+      builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({1, 2, 4}));
+      if (op != "RotaryEmbedding")
+        builder.MakeOutput("state" + suffix, core::symbolic::TensorType::kFloat,
+                           op == "CausalConvWithState" ? LayerShape({1, 2, 2})
+                                                       : LayerShape({1, 1, 4, 4}));
+    }
+    const GraphProto before = builder.BuildGraph();
+    EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+    ExpectOriginalOperators(before, builder.BuildGraph());
+    ExpectCoherentLayerMetadata(builder);
+    EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+  }
+}
+
+TEST(RepeatedLayerPattern, KeepsOpaqueStochasticAndOverloadedContribCallsOutsideLayers) {
+  for (const auto &[domain, op, overload] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"other", "Gelu", ""},
+           {"com.microsoft", "Opaque", ""},
+           {"com.microsoft", "Dropout", ""},
+           {"", "Dropout", ""},
+           {"", "RandomNormalLike", ""},
+           {"com.microsoft", "Gelu", "custom"}}) {
+    SCOPED_TRACE(domain + "/" + op + "/" + overload);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                        {{"", 24}, {"com.microsoft", 1}, {"other", 1}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string suffix = std::to_string(index);
+      AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+      builder.MakeNode(op, {"m" + suffix}, {"y" + suffix}, domain, "barrier" + suffix,
+                       utils::RepeatedProtoField<AttributeProto>(), overload);
+      builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    }
+    const GraphProto before = builder.BuildGraph();
+    EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+    EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+  }
+}
+
+TEST(RepeatedLayerPattern, RejectsContribWithoutInternalOutputShapes) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"com.microsoft", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+    builder.MakeNode("Gelu", {"m" + suffix}, {"g" + suffix}, "com.microsoft", "gelu" + suffix);
+    builder.MakeNode("Relu", {"g" + suffix}, {"y" + suffix}, "", "relu" + suffix);
+    builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  }
+  const GraphProto before = builder.BuildGraph();
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+}
+
+TEST(RepeatedLayerPattern, ContribExtractionPreservesInterleavedOpaqueCallOrder) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                      {{"", 24}, {"com.microsoft", 1}, {"other", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+    builder.MakeNode("Opaque", {"x"}, {"side" + suffix}, "other", "opaque" + suffix);
+    builder.MakeNode("Gelu", {"m" + suffix}, {"y" + suffix}, "com.microsoft", "gelu" + suffix);
+    builder.MakeOutput("y" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    builder.MakeOutput("side" + suffix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  }
+  const GraphProto before = builder.BuildGraph();
+  EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 2u);
+  ExpectOriginalOperators(before, builder.BuildGraph());
+  std::vector<std::string> opaque_calls;
+  for (const auto &node : builder.Nodes())
+    if (node.domain() == "other")
+      opaque_calls.push_back(node.name());
+  EXPECT_EQ(opaque_calls, (std::vector<std::string>{"opaque0", "opaque1"}));
 }
 
 GraphProto CapturingLayerBranch(const std::string &capture) {

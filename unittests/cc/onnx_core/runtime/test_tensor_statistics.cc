@@ -337,7 +337,7 @@ TEST(TensorStatistics, SelectionPreservesWideIntegersAndDoublePrecision) {
   std::memcpy(unaligned.data() + 1, tensor.bytes(), tensor.size_bytes());
   const auto borrowed = Tensor::Borrow("X", tensor.data_type, tensor.shape, unaligned.data() + 1,
                                        tensor.size_bytes());
-  std::vector<long double> sorted(values.begin(), values.end());
+  auto sorted = values;
   std::sort(sorted.begin(), sorted.end());
   const std::vector<double> quantiles{0, 0.2, 0.5, 0.6, 0.9, 1};
   const auto stats = ComputeTensorStatistics(borrowed, 0, quantiles, true);
@@ -345,8 +345,10 @@ TEST(TensorStatistics, SelectionPreservesWideIntegersAndDoublePrecision) {
     const long double position = static_cast<long double>(quantiles[i]) * 5;
     const size_t lower = static_cast<size_t>(position);
     EXPECT_DOUBLE_EQ(stats.quantiles[i],
-                     static_cast<double>(std::lerp(
-                         sorted[lower], sorted[std::min(lower + 1, size_t{5})], position - lower)));
+                     static_cast<double>(
+                         std::lerp(static_cast<long double>(sorted[lower]),
+                                   static_cast<long double>(sorted[std::min(lower + 1, size_t{5})]),
+                                   position - lower)));
   }
   const int64_t small = std::numeric_limits<int64_t>::min();
   const int64_t large = std::numeric_limits<int64_t>::max();

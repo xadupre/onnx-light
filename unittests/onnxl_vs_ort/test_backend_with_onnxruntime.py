@@ -248,7 +248,13 @@ if sys.platform == "darwin":
 if platform.system() == "Darwin":
     ORT_EXCLUDE_REGEX.append(r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$")
 
-TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
+# ORT computes Hann windows in float32 rather than the expected values' double
+# precision. Allow one bfloat16 rounding step without relaxing native comparisons.
+TestOrtBackend = make_test_class(
+    onnxruntime_backend,
+    exclude_regex=ORT_EXCLUDE_REGEX,
+    rtols={"test_cc_hannwindow_bfloat16": 2**-7, "test_cc_hannwindow_bfloat16_symmetric": 2**-7},
+)
 
 # Keep these known ORT limitations executable: an unexpected success must fail
 # so the marker is removed when ORT catches up with the ONNX reference.

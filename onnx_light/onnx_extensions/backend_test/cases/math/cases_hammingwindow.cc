@@ -3,8 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
+
+#include <cmath>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
@@ -35,6 +38,55 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16, DataType::INT8}) {
+    for (const bool periodic : {true, false}) {
+      NodeProto node;
+      node.set_op_type("HammingWindow");
+      node.add_input("x");
+      node.add_output("y");
+      auto *attr = node.add_attribute();
+      attr->set_name("output_datatype");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(static_cast<int64_t>(dtype));
+      attr = node.add_attribute();
+      attr->set_name("periodic");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(periodic);
+      const std::string type_name = dtype == DataType::FLOAT16    ? "float16"
+                                    : dtype == DataType::BFLOAT16 ? "bfloat16"
+                                                                  : "int8";
+      Expect(
+          registry, std::move(node),
+          "test_cc_hammingwindow_" + type_name + (periodic ? "" : "_symmetric"), {opset},
+          [dtype, periodic]() -> IoData {
+            const int32_t size = dtype == DataType::INT8 ? 64 : 16384;
+            Tensor x = Tensor::FromInt32("", {}, {size});
+            std::vector<float> values(static_cast<size_t>(size));
+            constexpr double pi = 3.14159265358979323846;
+            for (int32_t i = 0; i < size; ++i) {
+              values[static_cast<size_t>(i)] = static_cast<float>(
+                  25.0 / 46.0 -
+                  21.0 / 46.0 *
+                      std::cos(2.0 * pi * (static_cast<double>(i) / (periodic ? size : size - 1))));
+            }
+            Tensor y;
+            if (dtype == DataType::INT8) {
+              std::vector<int8_t> integers;
+              integers.reserve(values.size());
+              for (float value : values) {
+                integers.push_back(static_cast<int8_t>(value));
+              }
+              y = Tensor::FromInt8("", {size}, integers);
+            } else {
+              y = dtype == DataType::FLOAT16
+                      ? core::runtime::MakeFloat16Tensor("", {size}, values)
+                      : core::runtime::MakeBfloat16Tensor("", {size}, values);
+            }
+            return IoData{{std::move(x)}, {std::move(y)}};
+          });
+    }
   }
 
   // Default periodic variant.

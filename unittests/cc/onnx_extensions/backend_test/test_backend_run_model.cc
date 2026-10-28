@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <set>
@@ -620,6 +621,74 @@ TEST(BackendRunModel, Multinomial) { RunBackendCasesFor("Multinomial"); }
 TEST(BackendRunModel, BlackmanWindow) { RunBackendCasesFor("BlackmanWindow"); }
 TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
 TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
+
+TEST(BackendRunModel, WindowSmallTypesRemainFinite) {
+  for (const std::string op : {"HannWindow", "HammingWindow"}) {
+    size_t checked = 0;
+    for (auto &tc : CollectTestCases(op)) {
+      if (tc.name.find("_symmetric") != std::string::npos) {
+        continue;
+      }
+      const auto &ds = tc.data_sets()[0];
+      const auto dtype = ds.outputs[0].data_type;
+      if (dtype == DataType::FLOAT) {
+        continue;
+      }
+      SCOPED_TRACE(tc.name);
+      RuntimeContext rt;
+      rt.Set(ds.inputs[0].name, ds.inputs[0]);
+      ASSERT_NO_THROW(RunModelViaSession(tc.model(), rt));
+      const Tensor &result = rt.Get(ds.outputs[0].name);
+      ASSERT_EQ(result.data_type, dtype);
+      const int64_t size = dtype == DataType::INT8 ? 64 : (op == "HannWindow" ? 32768 : 16384);
+      ASSERT_EQ(result.shape, std::vector<int64_t>{size});
+      if (dtype == DataType::INT8) {
+        EXPECT_EQ(result.AsInt8()[size / 2], 1);
+      } else {
+        const auto decode = dtype == DataType::FLOAT16 ? core::runtime::Float16BitsToFloat
+                                                       : core::runtime::Bfloat16BitsToFloat;
+        const auto encode = dtype == DataType::FLOAT16 ? core::runtime::FloatToFloat16Bits
+                                                       : core::runtime::FloatToBfloat16Bits;
+        for (int64_t i = 0; i < size; ++i) {
+          uint16_t bits;
+          std::memcpy(&bits, result.bytes() + static_cast<size_t>(i) * sizeof(bits), sizeof(bits));
+          ASSERT_TRUE(std::isfinite(decode(bits))) << "index=" << i;
+          if (i == size * 3 / 4) {
+            const float expected = op == "HannWindow" ? 0.5f : 25.0f / 46.0f;
+            EXPECT_EQ(bits, encode(expected));
+          }
+        }
+      }
+      ++checked;
+    }
+    EXPECT_EQ(checked, 3u);
+  }
+}
+
+TEST(BackendRunModel, WindowSmallTypesRetainValidation) {
+  for (const std::string op : {"HannWindow", "HammingWindow"}) {
+    for (auto &tc : CollectTestCases(op)) {
+      if (tc.name !=
+          (op == "HannWindow" ? "test_cc_hannwindow_float16" : "test_cc_hammingwindow_float16")) {
+        continue;
+      }
+      SCOPED_TRACE(tc.name);
+      const auto &input = tc.data_sets()[0].inputs[0];
+      for (const Tensor &invalid :
+           {Tensor::FromInt32(input.name, {}, {-1}), Tensor::FromInt32(input.name, {1}, {8})}) {
+        RuntimeContext rt;
+        rt.Set(input.name, invalid);
+        EXPECT_THROW(RunModelViaSession(tc.model(), rt), std::invalid_argument);
+      }
+      ModelProto invalid_model = tc.model();
+      invalid_model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(
+          (int64_t{1} << 32) + static_cast<int64_t>(DataType::FLOAT));
+      RuntimeContext rt;
+      rt.Set(input.name, input);
+      EXPECT_THROW(RunModelViaSession(invalid_model, rt), std::invalid_argument);
+    }
+  }
+}
 
 // ai.onnx.ml kernels.
 TEST(BackendRunModel, CastMap) { RunBackendCasesFor("CastMap"); }

@@ -242,7 +242,8 @@ void ExpectCoherentLayerMetadata(const core::builder::GraphBuilder &builder) {
   EXPECT_EQ(builder.Compute().ValueTags(), expected.ValueTags());
   EXPECT_EQ(builder.Compute().NodeTags(), expected.NodeTags());
   EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  EXPECT_TRUE(builder.Compute().PeakMemory().empty());
   ASSERT_EQ(builder.Compute().Size(), builder.Nodes().size());
 
   std::set<std::string> inputs;

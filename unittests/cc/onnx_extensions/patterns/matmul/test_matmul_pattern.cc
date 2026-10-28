@@ -496,7 +496,7 @@ TEST(GemmTransposePattern, InsertsWeightTransposeAndClearsTransB) {
   AddFloat(builder, "w", {4, 3}, std::vector<float>(12, 1.0F));
   AddFloat(builder, "bias", {4}, std::vector<float>(4, 0.5F));
   auto attributes = FloatAttr("alpha", 2.0F);
-  *attributes.add() = IntAttr("transB", 1)[0];
+  attributes.add() = IntAttr("transB", 1)[0];
   builder.MakeNode("Gemm", {"x", "w", "bias"}, {"out"}, "", "gemm", attributes);
   core::builder::GraphGraph graph(builder);
   onnx_patterns::GemmTransposePattern pattern;

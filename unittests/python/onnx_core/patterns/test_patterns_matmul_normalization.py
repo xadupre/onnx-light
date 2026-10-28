@@ -265,7 +265,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         for with_bias in (False, True):
             with self.subTest(with_bias=with_bias):
                 inputs = [("X", TensorProto.FLOAT, [2, 3])]
-                initializers = [self._initializer("B", self._range(3, 2), np.float32)]
+                initializers = [self._initializer("B", self._range(2, 3), np.float32)]
                 gemm_inputs = ["X", "B"]
                 feeds = {"X": self._range(2, 3)}
                 if with_bias:
@@ -273,7 +273,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     gemm_inputs.append("C")
                     feeds["C"] = self._range(2, bias=0.25)
                 model = self._make_model(
-                    [oh.make_node("Gemm", gemm_inputs, ["Y"], alpha=0.75)],
+                    [oh.make_node("Gemm", gemm_inputs, ["Y"], alpha=0.75, transB=1)],
                     inputs,
                     [("Y", TensorProto.FLOAT, [2, 2])],
                     initializers,
@@ -289,29 +289,35 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                 attributes = {
                     attribute.name: attribute for attribute in optimized.graph.node[-1].attribute
                 }
-                self.assertEqual(1, attributes["transB"].i)
+                self.assertEqual(0, attributes["transB"].i)
                 self.assertAlmostEqual(0.75, attributes["alpha"].f)
+                self.assertEqual(["Y"], list(optimized.graph.node[-1].output))
+                self.assertEqualArray(
+                    self._range(2, 3).T, onh.to_array(optimized.graph.initializer[0])
+                )
+                self._assert_no_match(optimized, feeds, "GemmTranspose")
 
     def test_gemm_transpose_no_match(self):
-        variants = [{"transB": 1}, {"beta": 0.5}]
+        variants = [{}, {"transB": 0}, {"transB": 1, "beta": 0.5}, {"transB": 1, "transA": 1}]
         for attributes in variants:
             with self.subTest(attributes=attributes):
                 weight_shape = (2, 3) if attributes.get("transB") else (3, 2)
+                input_shape = (3, 2) if attributes.get("transA") else (2, 3)
                 model = self._make_model(
                     [oh.make_node("Gemm", ["X", "B"], ["Y"], **attributes)],
-                    [("X", TensorProto.FLOAT, [2, 3])],
+                    [("X", TensorProto.FLOAT, list(input_shape))],
                     [("Y", TensorProto.FLOAT, [2, 2])],
                     [self._initializer("B", self._range(*weight_shape), np.float32)],
                 )
-                self._assert_no_match(model, {"X": self._range(2, 3)}, "GemmTranspose")
+                self._assert_no_match(model, {"X": self._range(*input_shape)}, "GemmTranspose")
 
         dynamic_weight = self._make_model(
-            [oh.make_node("Gemm", ["X", "B"], ["Y"])],
-            [("X", TensorProto.FLOAT, [2, 3]), ("B", TensorProto.FLOAT, [3, 2])],
+            [oh.make_node("Gemm", ["X", "B"], ["Y"], transB=1)],
+            [("X", TensorProto.FLOAT, [2, 3]), ("B", TensorProto.FLOAT, [2, 3])],
             [("Y", TensorProto.FLOAT, [2, 2])],
         )
         self._assert_no_match(
-            dynamic_weight, {"X": self._range(2, 3), "B": self._range(3, 2)}, "GemmTranspose"
+            dynamic_weight, {"X": self._range(2, 3), "B": self._range(2, 3)}, "GemmTranspose"
         )
 
     def test_gemm_sum_fusion(self):

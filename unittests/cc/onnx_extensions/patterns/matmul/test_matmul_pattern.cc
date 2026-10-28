@@ -490,11 +490,14 @@ TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[1]).pattern, nullptr);
 }
 
-TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
+TEST(GemmTransposePattern, InsertsWeightTransposeAndClearsTransB) {
   core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
-  AddFloat(builder, "w", {3, 4}, std::vector<float>(12, 1.0F));
-  builder.MakeNode("Gemm", {"x", "w"}, {"out"}, "", "gemm", FloatAttr("alpha", 2.0F));
+  AddFloat(builder, "w", {4, 3}, std::vector<float>(12, 1.0F));
+  AddFloat(builder, "bias", {4}, std::vector<float>(4, 0.5F));
+  auto attributes = FloatAttr("alpha", 2.0F);
+  *attributes.add() = IntAttr("transB", 1)[0];
+  builder.MakeNode("Gemm", {"x", "w", "bias"}, {"out"}, "", "gemm", attributes);
   core::builder::GraphGraph graph(builder);
   onnx_patterns::GemmTransposePattern pattern;
   const auto match = pattern.Match(graph, builder.Nodes()[0]);
@@ -506,16 +509,41 @@ TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
   EXPECT_EQ(replacements[0].input()[0].value(), "w");
   EXPECT_EQ(AttributeInts(replacements[0], "perm"), (std::vector<int64_t>{1, 0}));
   EXPECT_EQ(replacements[1].op_type().value(), "Gemm");
+  EXPECT_EQ(replacements[1].input()[0].value(), "x");
   EXPECT_EQ(replacements[1].input()[1].value(), replacements[0].output()[0].value());
-  EXPECT_EQ(GetAttributeOr<int64_t>(replacements[1], "transB", 0), 1);
+  EXPECT_EQ(replacements[1].input()[2].value(), "bias");
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+  EXPECT_EQ(GetAttributeOr<int64_t>(replacements[1], "transB", -1), 0);
   EXPECT_FLOAT_EQ(GetAttributeOr<float>(replacements[1], "alpha", 1.0F), 2.0F);
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloat(rejected, "w", {3, 4}, std::vector<float>(12, 1.0F));
-  rejected.MakeNode("Gemm", {"x", "w"}, {"out"}, "", "", IntAttr("transB", 1));
+  rejected.MakeNode("Gemm", {"x", "w"}, {"out"});
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
+  EXPECT_THROW(pattern.Apply(rejected_graph, {&rejected.Nodes()[0]}), core::builder::BuilderError);
+}
+
+TEST(GemmTransposePattern, ConvergesWithTransposeMatMulWithoutConstantFolding) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddFloat(builder, "w", {4, 3}, std::vector<float>(12, 1.0F));
+  builder.MakeNode("Gemm", {"x", "w"}, {"out"}, "", "gemm", IntAttr("transB", 1));
+  builder.MakeOutput("out", core::symbolic::TensorType::kFloat, Shape({2, 4}));
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("GemmTranspose"));
+  patterns.push_back(onnx_patterns::CreatePattern("TransposeMatMul"));
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  EXPECT_EQ(graph.Optimize(4, nullptr, folding).rewrites().size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Transpose");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Gemm");
+  EXPECT_EQ(GetAttributeOr<int64_t>(builder.Nodes()[1], "transB", -1), 0);
+  EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "out");
+  EXPECT_TRUE(graph.Optimize(4, nullptr, folding).rewrites().empty());
 }
 
 TEST(MatMulReshape2Of3Pattern, MovesBatchReshapeAndRejectsOnlyOneReshape) {

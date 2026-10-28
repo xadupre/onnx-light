@@ -761,7 +761,7 @@ core::builder::MatchResult GemmTransposePattern::Match(core::builder::GraphGraph
   }
   if (GetAttributeOr<float>(candidate, "beta", 1.0F) != 1.0F ||
       GetAttributeOr<int64_t>(candidate, "transA", 0) != 0 ||
-      GetAttributeOr<int64_t>(candidate, "transB", 0) != 0) {
+      GetAttributeOr<int64_t>(candidate, "transB", 0) != 1) {
     return NoMatch(candidate, "the Gemm transpose or beta attributes are not supported");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};
@@ -792,7 +792,7 @@ GemmTransposePattern::Apply(core::builder::GraphGraph &graph,
     inputs.push_back(gemm.input()[i].value());
   }
   NodeProto replacement = MakePatternNode("Gemm", inputs, Outputs(gemm), "", name);
-  AddAttribute<int64_t>(replacement, "transB", 1);
+  AddAttribute<int64_t>(replacement, "transB", 0);
   for (const char *attribute_name : {"alpha", "beta"}) {
     const AttributeProto *attribute = FindAttribute(gemm, attribute_name);
     if (attribute != nullptr) {
@@ -1488,7 +1488,7 @@ core::builder::MatchResult TransposeMatMulPattern::Match(core::builder::GraphGra
   if (IsDefaultOp(candidate, "Gemm")) {
     const int64_t trans_a = GetAttributeOr<int64_t>(candidate, "transA", 0);
     const int64_t trans_b = GetAttributeOr<int64_t>(candidate, "transB", 0);
-    if (right != nullptr && trans_b != trans_a && graph.IsConstant(candidate.input()[1].value())) {
+    if (right != nullptr && trans_b == 0 && graph.IsConstant(candidate.input()[1].value())) {
       return NoMatch(candidate, "the constant right transpose should be folded");
     }
     if (left != nullptr && trans_b != trans_a && graph.IsConstant(candidate.input()[0].value())) {

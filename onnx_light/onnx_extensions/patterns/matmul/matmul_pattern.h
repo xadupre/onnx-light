@@ -86,7 +86,7 @@ private:
  * @code
  * Before:
  *                                  ┌───────────────┐
- *   A, B constant, optional C ────→│ Gemm transB=0 │────→ y
+ *   A, B constant, optional C ────→│ Gemm transB=1 │────→ y
  *                                  └───────────────┘
  *
  * After:
@@ -95,11 +95,11 @@ private:
  *          └─────────────────┘
  *
  *                        ┌───────────────┐
- *   A, Bt, optional C ──→│ Gemm transB=1 │────→ y
+ *   A, Bt, optional C ──→│ Gemm transB=0 │────→ y
  *                        └───────────────┘
  * @endcode
  *
- * The original Gemm must have ``transA=0``, ``transB=0``, and ``beta=1``.
+ * The original Gemm must have ``transA=0``, ``transB=1``, and ``beta=1``.
  * The explicit transpose can subsequently be folded into the constant.
  */
 class GemmTransposePattern final : public core::builder::PatternOptimization {

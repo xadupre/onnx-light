@@ -37,6 +37,9 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
+
       - name: Build and Install package (Debug)
         env:
           CXXFLAGS: -O0 -g

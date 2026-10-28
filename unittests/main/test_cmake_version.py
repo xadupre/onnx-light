@@ -48,6 +48,33 @@ class TestCMakeVersion(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertIn('"cmake>=4.0"', (workflows / name).read_text(encoding="utf-8"))
 
+    def test_ci_installs_persistent_cmake_before_package_builds(self):
+        workflows = self.root / ".github/workflows"
+        for name in (
+            "ci_core.yml",
+            "ci_debug.yml",
+            "coverage.yml",
+            "cq_asan_ubsan.yml",
+            "cq_hardening.yml",
+        ):
+            content = (workflows / name).read_text(encoding="utf-8")
+            jobs = re.split(r"^  [\w-]+:\s*$", content, flags=re.MULTILINE)[1:]
+            builds_checked = 0
+            for job in jobs:
+                steps = re.split(r"^      - ", job, flags=re.MULTILINE)[1:]
+                cmake_installed = False
+                for step in steps:
+                    if 'run: python -m pip install "cmake>=4.0"' in step:
+                        cmake_installed = True
+                    if "pip install" in step and "-e .[dev]" in step:
+                        with self.subTest(workflow=name, step=step.splitlines()[0]):
+                            self.assertTrue(
+                                cmake_installed,
+                                "CTest discovery must not depend on pip's temporary CMake.",
+                            )
+                        builds_checked += 1
+            self.assertGreater(builds_checked, 0, name)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

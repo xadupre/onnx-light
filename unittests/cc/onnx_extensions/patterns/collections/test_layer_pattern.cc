@@ -1692,6 +1692,109 @@ TEST(RepeatedLayerPattern, ReusePreservesNestedInitializerValues) {
   }
 }
 
+TEST(RepeatedLayerPattern, ReusesBodiesRegardlessOfAttributeOrder) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+  std::string input = "x";
+  for (int layer = 0; layer < 3; ++layer) {
+    const std::string prefix = "h" + std::to_string(layer);
+    builder.MakeNode("MatMul", {input, "w"}, {prefix + "_mm"});
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto *name : layer == 1 ? std::vector<const char *>{"beta", "alpha"}
+                                       : std::vector<const char *>{"alpha", "beta"}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::FLOAT);
+      attribute.set_f(std::string(name) == "alpha" ? 0.2f : 0.5f);
+    }
+    builder.MakeNode("HardSigmoid", {prefix + "_mm"}, {prefix}, "", "", attributes);
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+  ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  for (const auto &node : builder.Nodes())
+    EXPECT_EQ(node.op_type(), "Layer");
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+}
+
+TEST(RepeatedLayerPattern, DoesNotReuseImportedHelpersWithCallerSpecificRanges) {
+  for (int location = 0; location < 4; ++location) {
+    SCOPED_TRACE(location);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+    for (int variant = 0; variant < 2; ++variant) {
+      auto &source = builder.MakeLocalFunction("Source" + std::to_string(variant), "source.local");
+      source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      source.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+      if (location == 3)
+        source.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+      std::string input = "x";
+      for (int layer = 0; layer < 3; ++layer) {
+        const std::string prefix = "h" + std::to_string(layer);
+        if (location != 3) {
+          AddMatMulLayer(source, input, "w", prefix);
+        } else {
+          source.MakeNode("MatMul", {input, "w"}, {prefix + "_mm"});
+          GraphProto branch;
+          branch.set_name(prefix + "_branch");
+          branch.add_node(MakeNode("Relu", {prefix + "_mm"}, {prefix + "_result"}));
+          auto *output = branch.add_output();
+          output->set_name(prefix + "_result");
+          auto *tensor = output->mutable_type()->mutable_tensor_type();
+          tensor->set_elem_type(TensorProto::FLOAT);
+          tensor->mutable_shape()->add_dim()->set_dim_value(2);
+          tensor->mutable_shape()->add_dim()->set_dim_value(4);
+          source.MakeNode("If", {"condition"}, {prefix}, "", "", LayerBranches(branch));
+        }
+        input = prefix;
+      }
+      source.MakeOutput(input);
+      if (variant == 0) {
+        ASSERT_FALSE(OptimizeLayers(source).rewrites().empty());
+      }
+    }
+    ModelProto model = builder.ToModel();
+    auto function = std::find_if(model.ref_functions().begin(), model.ref_functions().end(),
+                                 [](const auto &value) { return value.name() == "Layer"; });
+    ASSERT_NE(function, model.ref_functions().end());
+    ValueInfoProto *annotated = nullptr;
+    if (location == 3) {
+      auto *conditional = function->mutable_node(1);
+      ASSERT_EQ(conditional->op_type(), "If");
+      annotated = conditional->mutable_attribute(0)->mutable_g()->mutable_output(0);
+    } else {
+      for (auto &value : function->ref_value_info()) {
+        const bool input = std::find(function->input().begin(), function->input().end(),
+                                     value.name()) != function->input().end();
+        const bool output = std::find(function->output().begin(), function->output().end(),
+                                      value.name()) != function->output().end();
+        if ((location == 0 && input) || (location == 1 && output) ||
+            (location == 2 && !input && !output)) {
+          annotated = &value;
+          break;
+        }
+      }
+    }
+    ASSERT_NE(annotated, nullptr);
+    auto *bound = annotated->add_metadata_props();
+    bound->set_key(location == 1 ? core::symbolic::kValueInfoMaxMetadataKey
+                                 : core::symbolic::kValueInfoMinMetadataKey);
+    bound->set_value("123");
+    core::builder::GraphBuilder imported(model, LayerSchemaLookup());
+    const GraphProto original_helper = imported.LocalFunction("Layer").BuildGraph();
+    auto &source = imported.LocalFunction("Source1");
+    ASSERT_FALSE(OptimizeLayers(source).rewrites().empty());
+    ASSERT_EQ(source.Nodes().size(), 3u);
+    for (const auto &node : source.Nodes())
+      EXPECT_EQ(node.op_type(), "Layer_1");
+    EXPECT_EQ(imported.LocalFunctions().size(), 4u);
+    EXPECT_TRUE(original_helper.Equals(imported.LocalFunction("Layer").BuildGraph()));
+    EXPECT_NO_THROW(VerifyModel(imported.ToModel()));
+  }
+}
+
 TEST(RepeatedLayerPattern, DoesNotReuseBodiesWithUnloadedDeferredInitializers) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));

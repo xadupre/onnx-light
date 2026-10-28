@@ -190,7 +190,10 @@ with an ``ai.rt`` opset import of version 1. The first function is named
 the same definition, including across extraction batches and nested scopes.
 Local value and node names may differ, but interfaces, types, metadata, attributes
 (including nested constants), and source opsets must agree. Device-annotated
-bodies retain separate definitions. Caller-specific value ranges are not copied
+bodies retain separate definitions. Attribute order does not affect compatibility,
+including within nested graphs. Existing helpers with min/max annotations on
+inputs, outputs or intermediate values, including in nested graphs, are not
+reused for other occurrences. Caller-specific value ranges are not copied
 into shared bodies, and derived scheduling annotations are recomputed for the
 function scope. A uniform stack therefore needs only one
 function; distinct boundary cuts may require two or three, rather than one per

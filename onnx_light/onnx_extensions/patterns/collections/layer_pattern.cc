@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
 #include <queue>
 #include <set>
 #include <string>
@@ -1410,11 +1411,24 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
 }
 
 bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t depth,
-                        std::size_t &work) {
+                        std::size_t &work, bool reject_ranges) {
   if (depth >= kMaxScopeDepth || !body.sparse_initializer().empty() ||
       !body.extended_initializer().empty() || !body.quantization_annotation().empty() ||
       !body.persistent_bindings().empty() || !SafeGraphDeclarations(body))
     return false;
+  if (reject_ranges) {
+    const auto has_range = [](const ValueInfoProto &value) {
+      return std::any_of(value.metadata_props().begin(), value.metadata_props().end(),
+                         [](const auto &entry) {
+                           return entry.key() == core::symbolic::kValueInfoMinMetadataKey ||
+                                  entry.key() == core::symbolic::kValueInfoMaxMetadataKey;
+                         });
+    };
+    if (std::any_of(body.input().begin(), body.input().end(), has_range) ||
+        std::any_of(body.output().begin(), body.output().end(), has_range) ||
+        std::any_of(body.value_info().begin(), body.value_info().end(), has_range))
+      return false;
+  }
   ClearLayerAnalysis(body);
   body.clear_name();
   const std::string scope = "scope" + std::to_string(depth) + ":";
@@ -1458,11 +1472,23 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
         return false;
       input = found->second;
     }
+    if (node.attribute().size() > 1) {
+      std::vector<std::shared_ptr<AttributeProto>> attributes;
+      attributes.reserve(node.attribute().size());
+      for (std::size_t index = 0; index < node.attribute().size(); ++index)
+        attributes.push_back(node.attribute().shared_at(index));
+      std::sort(attributes.begin(), attributes.end(), [](const auto &left, const auto &right) {
+        return left->name().value() < right->name().value();
+      });
+      for (std::size_t index = 0; index < attributes.size(); ++index)
+        node.ref_attribute().get(index) = std::move(attributes[index]);
+    }
     for (auto &attribute : node.ref_attribute()) {
-      if (attribute.has_g() && !NormalizeLayerBody(attribute.ref_g(), names, depth + 1, work))
+      if (attribute.has_g() &&
+          !NormalizeLayerBody(attribute.ref_g(), names, depth + 1, work, reject_ranges))
         return false;
       for (auto &nested : attribute.ref_graphs())
-        if (!NormalizeLayerBody(nested, names, depth + 1, work))
+        if (!NormalizeLayerBody(nested, names, depth + 1, work, reject_ranges))
           return false;
     }
     for (std::size_t port = 0; port < node.output().size(); ++port) {
@@ -1523,7 +1549,7 @@ bool CompatibleLayerOpsets(const GraphBuilder &candidate, const GraphBuilder &so
 std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
   GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
   std::size_t work = 0;
-  if (!NormalizeLayerBody(normalized, {}, 0, work))
+  if (!NormalizeLayerBody(normalized, {}, 0, work, false))
     return {};
   GraphBuilder &builder = source.ModelBuilder();
   for (const auto &local : builder.LocalFunctions()) {
@@ -1539,7 +1565,7 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
       continue;
     GraphProto candidate = local->BuildGraph();
     work = 0;
-    if (NormalizeLayerBody(candidate, {}, 0, work) &&
+    if (NormalizeLayerBody(candidate, {}, 0, work, true) &&
         CompatibleLayerOpsets(*local, source, candidate) && normalized.Equals(candidate))
       return local->name();
   }

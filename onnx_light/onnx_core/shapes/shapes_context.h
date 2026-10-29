@@ -373,6 +373,9 @@ public:
   /// Overload: ``name`` given as a null-terminated C string.
   void Set(const char *name, SymTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
+  /// Stores a tensor descriptor without discarding its declared value kind.
+  void SetTensorWithType(const std::string &name, SymTensor &&tensor, const TypeProto &type);
+
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 

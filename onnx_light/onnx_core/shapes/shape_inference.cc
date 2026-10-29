@@ -652,6 +652,13 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
         for (std::size_t index = 0; index < tensor.ValueAsShape().Rank(); ++index)
           AddDimAnchorSymbols(tensor.ValueAsShape()[index], symbols);
     }
+    if (context.HasSequence(name)) {
+      const auto &sequence = context.GetSequence(name);
+      AddDimAnchorSymbols(sequence.Length(), symbols);
+      for (const auto &shape : sequence.ElemShapes())
+        for (std::size_t index = 0; index < shape.Rank(); ++index)
+          AddDimAnchorSymbols(shape[index], symbols);
+    }
     if (!context.HasType(name))
       return;
     std::unordered_set<const StructTypeProto *> visited;
@@ -699,24 +706,71 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
         replacements.emplace(token, prefix + token);
   if (replacements.empty())
     return;
+  const auto rename_type = [&](const auto &self, TypeProto &type) -> void {
+    const auto rename_shape = [&](TensorShapeProto &shape) {
+      for (auto &dimension : shape.ref_dim())
+        if (dimension.has_dim_param())
+          dimension.set_dim_param(
+              expressions::rename_dynamic_expression(dimension.dim_param(), replacements));
+    };
+    if (type.has_tensor_type() && type.tensor_type().has_shape())
+      rename_shape(type.ref_tensor_type().ref_shape());
+    else if (type.has_sparse_tensor_type() && type.sparse_tensor_type().has_shape())
+      rename_shape(type.ref_sparse_tensor_type().ref_shape());
+    else if (type.has_sequence_type())
+      self(self, type.ref_sequence_type().ref_elem_type());
+    else if (type.has_optional_type())
+      self(self, type.ref_optional_type().ref_elem_type());
+    else if (type.has_map_type())
+      self(self, type.ref_map_type().ref_value_type());
+  };
   // Data-dependent dimensions created inside a shared body are independent at
   // different call sites; input symbols and explicit custom annotations are not.
   for (const auto &output : function.output()) {
     const std::string name = output.value();
-    if (!body.Has(name) || body.HasEncodedValue(name))
+    if (body.HasEncodedValue(name))
       continue;
+    std::optional<TypeProto> type;
+    if (body.HasType(name)) {
+      type = body.GetType(name);
+      rename_type(rename_type, *type);
+    }
+    if (body.HasSequence(name)) {
+      core::symbolic::SymSequence sequence(body.GetSequence(name));
+      SymShape length;
+      length.PushBack(sequence.Length());
+      sequence.SetLength(RenameShapeWithReplacements(length, replacements)[0]);
+      for (auto &shape : sequence.ElemShapes())
+        shape = RenameShapeWithReplacements(shape, replacements);
+      if (sequence != body.GetSequence(name) || (type && !type->Equals(body.GetType(name)))) {
+        if (type)
+          body.SetSequenceWithType(name, std::move(sequence), *type);
+        else
+          body.SetSequence(name, std::move(sequence));
+      }
+      continue;
+    }
+    if (!body.Has(name)) {
+      if (type && !type->Equals(body.GetType(name)))
+        body.SetType(name, *type);
+      continue;
+    }
     const auto &tensor = body.Get(name);
     const auto shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
     SymShape values;
     if (tensor.HasValueAsShape())
       values = RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
-    if (shape == tensor.Shape() && (!tensor.HasValueAsShape() || values == tensor.ValueAsShape()))
+    if (shape == tensor.Shape() && (!tensor.HasValueAsShape() || values == tensor.ValueAsShape()) &&
+        (!type || type->Equals(body.GetType(name))))
       continue;
     SymTensor updated(tensor);
     updated.Shape() = shape;
     if (tensor.HasValueAsShape())
       updated.SetValueAsShape(std::move(values));
-    body.Set(name, std::move(updated));
+    if (type)
+      body.SetTensorWithType(name, std::move(updated), *type);
+    else
+      body.Set(name, std::move(updated));
   }
 }
 

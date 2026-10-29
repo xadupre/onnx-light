@@ -16,9 +16,8 @@ import numpy
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.__main__ import _build_parser, main
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto, load, save
-from onnx_light.onnx.reference import ReferenceEvaluator
 
 
 def _repeated_model():
@@ -76,6 +75,7 @@ class TestMainLayers(ExtTestCase):
         return source
 
     def test_extracts_functions_and_preserves_numerics_and_source_files(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             source = self._save_external(directory)
@@ -162,9 +162,52 @@ class TestMainLayers(ExtTestCase):
             weights = [
                 tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
             ]
-            self.assertTrue(weights)
+            self.assertEqual(len(weights), 3)
             self.assertTrue(all(not weight.raw_data for weight in weights))
             self.assertEqual(source.read_bytes(), original)
+
+    def test_skipped_weights_keep_parallel_projections_distinct(self):
+        for constants in (False, True):
+            with self.subTest(constants=constants), tempfile.TemporaryDirectory() as temporary:
+                weights = [
+                    tensor
+                    for tensor in _repeated_model().graph.initializer
+                    if tensor.name.startswith("W")
+                ]
+                nodes = []
+                for index, weight in enumerate(weights):
+                    if constants:
+                        weight.name = ""
+                        nodes.append(oh.make_node("Constant", [], [f"W{index}"], value=weight))
+                    nodes.extend(
+                        [
+                            oh.make_node("MatMul", ["X", f"W{index}"], [f"M{index}"]),
+                            oh.make_node("Relu", [f"M{index}"], [f"Y{index}"]),
+                        ]
+                    )
+                model = oh.make_model(
+                    oh.make_graph(
+                        nodes,
+                        "parallel",
+                        [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 16])],
+                        [
+                            oh.make_tensor_value_info(f"Y{index}", TensorProto.FLOAT, [1, 16])
+                            for index in range(3)
+                        ],
+                        [] if constants else weights,
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                source = Path(temporary) / "model.onnx"
+                output = Path(temporary) / "layers.onnx"
+                save(model, source)
+                with redirect_stdout(StringIO()):
+                    main(["layers", str(source), "-o", str(output)])
+                result = load(output)
+                calls = [node for node in result.graph.node if node.domain == "ai.rt"]
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(len(result.graph.initializer), 0 if constants else 3)
+                self.assertEqual({str(node.input[1]) for node in calls}, {"W0", "W1", "W2"})
 
     def test_overwrites_existing_output_with_optional_verbose_notice(self):
         with tempfile.TemporaryDirectory() as temporary:

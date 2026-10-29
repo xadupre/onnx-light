@@ -7251,8 +7251,27 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
   EXPECT_EQ(rt.Get("result").AsFloat()[0], 3);
   EXPECT_EQ(rt.kernel_ctx().opset.version, 0);
 
-  RuntimeContext mismatch(KernelContext(DefaultOpset(18)));
-  EXPECT_THROW(session.Run(mismatch), std::invalid_argument);
+  for (const std::string import_domain : {"", "ai.onnx", "onnx.ai"}) {
+    SCOPED_TRACE(import_domain);
+    model.ref_opset_import()[0].set_domain(import_domain);
+    RuntimeSession explicit_session(model);
+    for (const std::string &context_domain :
+         std::vector<std::string>{"", "ai.onnx", "onnx.ai", domain}) {
+      SCOPED_TRACE(context_domain);
+      const bool custom_domain = context_domain == domain;
+      RuntimeContext mismatch(KernelContext(core::runtime::OpsetId(context_domain, 18)));
+      mismatch.Set("x", Tensor::FromFloat("x", {1}, {1}));
+      mismatch.Set("y", Tensor::FromFloat("y", {1}, {2}));
+      EXPECT_THROW(explicit_session.Run(mismatch), std::invalid_argument);
+
+      RuntimeContext matching(
+          KernelContext(core::runtime::OpsetId(context_domain, custom_domain ? 2 : 23)));
+      matching.Set("x", Tensor::FromFloat("x", {1}, {1}));
+      matching.Set("y", Tensor::FromFloat("y", {1}, {2}));
+      EXPECT_NO_THROW(explicit_session.Run(matching));
+      EXPECT_EQ(matching.Get("result").AsFloat()[0], 3);
+    }
+  }
   ModelProto missing_model;
   missing_model.CopyFrom(model);
   missing_model.ref_opset_import().resize(1);

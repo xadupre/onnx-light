@@ -903,8 +903,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   }
   if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
       rt.kernel_ctx().opset.version != 0) {
-    const std::string domain =
-        rt.kernel_ctx().opset.domain.empty() ? "ai.onnx" : rt.kernel_ctx().opset.domain;
+    const std::string domain = NormaliseDomain(rt.kernel_ctx().opset.domain);
     const auto found = owned_opset_imports_->find(domain);
     EXT_ENFORCE_INVALID(found == owned_opset_imports_->end() ||
                             found->second == rt.kernel_ctx().opset.version,

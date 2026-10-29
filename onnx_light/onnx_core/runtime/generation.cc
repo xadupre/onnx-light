@@ -7,6 +7,8 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/runtime_session_loader.h"
+#include "onnx_lib/common/scoped_resource.h"
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -406,6 +408,24 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
   return options;
 }
 
+Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                              const RuntimeValueMap &feeds, const GenerationOptions *options) {
+  const auto &session_options = pipeline.session_options();
+  CpuExecutor *previous = context.cpu_executor();
+  const auto executor =
+      previous != nullptr && !session_options.cpu_execution
+          ? std::shared_ptr<CpuExecutor>{}
+          : GlobalCpuExecutorRegistry().Acquire(pipeline.prefill_session().cpu_execution_policy());
+  const ScopeExit restore([&context, previous]() noexcept { context.set_cpu_executor(previous); });
+  const CpuExecutorScope scope(executor ? executor.get() : previous);
+  context.set_cpu_executor(executor ? executor.get() : previous);
+  if (session_options.cpu_execution_counters)
+    context.cpu_executor()->EnableCounters();
+  return options == nullptr
+             ? Generate(pipeline.pipeline(), context, feeds, session_options)
+             : Generate(pipeline.pipeline(), context, feeds, *options, session_options);
+}
+
 } // namespace
 
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
@@ -458,6 +478,16 @@ Tensor Generate(const ModelProto &prefill, const ModelProto *embedding, RuntimeC
                 RuntimeSessionOptions session_options) {
   return GeneratePipeline(GenerationPipelineView{.prefill = &prefill, .embedding = embedding},
                           context, feeds, options, std::move(session_options));
+}
+
+Tensor Generate(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                const RuntimeValueMap &feeds) {
+  return GenerateLoadedPipeline(pipeline, context, feeds, nullptr);
+}
+
+Tensor Generate(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                const RuntimeValueMap &feeds, const GenerationOptions &options) {
+  return GenerateLoadedPipeline(pipeline, context, feeds, &options);
 }
 
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,

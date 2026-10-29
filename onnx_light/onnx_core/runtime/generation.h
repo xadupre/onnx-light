@@ -140,6 +140,25 @@ ONNX_LIGHT_CORE_API Tensor Generate(const PipelineProto &pipeline, RuntimeContex
                                     const RuntimeValueMap &feeds, const GenerationOptions &options,
                                     RuntimeSessionOptions session_options = {});
 
+class LoadedRuntimePipeline;
+
+/**
+ * Generates tokens from an owning pipeline using its stored generation settings.
+ *
+ * Reuses the loader's session settings and static preparation store. Invocation
+ * sessions and persistent state are fresh for each call. The owner must outlive
+ * the call and any initializer-backed views. Callers must not run invocations
+ * sharing a context or the static store concurrently.
+ * Temporarily installs the selected CPU executor, inheriting a caller's executor
+ * unless the loader's session options explicitly select another CPU policy.
+ */
+ONNX_LIGHT_CORE_API Tensor Generate(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                                    const RuntimeValueMap &feeds);
+
+/** Generates tokens from an owning pipeline using explicit generation options. */
+ONNX_LIGHT_CORE_API Tensor Generate(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                                    const RuntimeValueMap &feeds, const GenerationOptions &options);
+
 /**
  * Generates tokens from borrowed prefill and optional embedding models.
  *

@@ -34,6 +34,68 @@ store as for ordinary sessions.
 Caller overrides must be installed before construction; initializer names
 also declared as graph inputs remain overridable after loading.
 
+Owning pipelines
+----------------
+
+``LoadedRuntimePipeline(path, context, session_options, load_options)`` loads a
+``PipelineProto`` with a required prefill model and an optional embedding model.
+A separate decode model is rejected, matching native ``Generate`` support.
+The owner retains both models and their prepared stage sessions. It exposes
+``pipeline()`` for read-only inspection, ``prefill_session()`` and the nullable
+``embedding_session()`` for direct stage access.
+
+All stages are inspected and their combined payload reservation is admitted
+before any external read. Stages then load sequentially, embedding first, using
+the same bounded reader/preparation machinery as single models. At most one
+I/O worker and one queued root tensor exist across the pipeline. Serial mode
+reads a stage's payloads before preparing that stage. The shared memory limit
+includes all stages' retained sources, conversion reserves, function copies,
+catalogues and workspaces, plus all already-prepared values in the shared store.
+``statistics()`` aggregates these counters across stages; peak counters are
+pipeline-wide maxima rather than sums of independent stage peaks.
+``kComplete`` is emitted once, after all stages have loaded.
+
+Conversion reserves and catalogue construction workspace allowances are
+intentionally summed across stages, even though stages load sequentially.
+Admission computes one fixed pipeline-wide reservation before any external
+read and keeps it throughout loading. These reservations are not released
+between stages to increase the shared preparation budget. This conservative
+policy can reject a pipeline that would fit with peak-based workspace reuse;
+the temporary counters do not measure simultaneously live scratch memory.
+
+Use the owning overload to preserve loading-time session settings and the shared
+static preparation store automatically:
+
+.. code-block:: cpp
+
+    #include "onnx_core/runtime/generation.h"
+    #include "onnx_core/runtime/runtime_session_loader.h"
+
+    RuntimeLoadOptions loading;
+    loading.overlap_preparation = true;
+    loading.memory_limit = 8ULL * 1024 * 1024 * 1024;
+    LoadedRuntimePipeline loaded("pipeline.onnx", context, session_options, loading);
+    Tensor tokens = Generate(loaded, context, feeds);
+    // Explicit generation options replace the pipeline's stored sampling settings.
+    Tensor other = Generate(loaded, context, feeds, generation_options);
+
+Each generation call creates fresh invocation sessions and persistent state;
+requests do not inherit another request's cache. Static representations published
+in the shared store, such as packed ``Gemm`` weights, are reused without repacking.
+The owning overload temporarily installs a shared CPU executor for all stages,
+even when the supplied context has none. It inherits an existing context executor
+unless the loading-time options explicitly select another CPU policy, and
+restores the caller's executor on return or failure.
+Kernel-local initialization and unresolved runtime preparations still occur in
+the invocation sessions, outside the loading budget. For low-level callers,
+``session_options()`` exposes the retained options including the shared store;
+calling ``Generate(loaded.pipeline(), ...)`` without them does not reuse that store.
+Calls sharing the loader's context or static preparation store must not run
+concurrently. Different contexts do not make a shared store safe for concurrent
+access. Source views and initializer-backed outputs must not outlive the owner.
+The same payload restrictions, callback contracts and path protections described
+below apply to every stage.
+
 Admission and failures
 ----------------------
 

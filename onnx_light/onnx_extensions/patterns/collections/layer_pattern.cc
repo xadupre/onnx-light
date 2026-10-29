@@ -31,7 +31,7 @@ using core::builder::GraphBuilder;
 using core::builder::GraphGraph;
 
 constexpr std::size_t kMaxOccurrences = 32;
-constexpr std::size_t kMaxRegion = 64;
+constexpr std::size_t kMaxRegion = 256;
 constexpr std::size_t kMaxInterval = 4096;
 constexpr std::size_t kMaxFunctionWork = 4096;
 constexpr std::size_t kMaxScopeDepth = 16;
@@ -883,6 +883,21 @@ bool KnownBoundaryType(Index &index, const std::string &name) {
                                     TensorProto::DataType::UNDEFINED;
 }
 
+bool MovableConstantPreparation(Index &index, const NodeProto &node) {
+  if ((!node.domain().empty() && node.domain() != "ai.onnx") || !node.overload().empty() ||
+      !node.device_configurations().empty() ||
+      index.graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+          node.domain(), node.op_type(), "")) != nullptr)
+    return false;
+  if (node.op_type() == "Constant")
+    return node.input().empty();
+  if (node.op_type() != "Cast" && node.op_type() != "CastLike" && node.op_type() != "Identity")
+    return false;
+  return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
+    return !input.empty() && index.graph.IsConstant(input);
+  });
+}
+
 // A unit is either a contracted region or one untouched interleaving node.
 // Sorting the contracted DAG rejects re-entry cycles, even through nested captures.
 bool Schedule(Index &index, Plan &plan) {
@@ -929,15 +944,12 @@ bool Schedule(Index &index, Plan &plan) {
       }
     }
   }
-  // Only literal Constants may move across a contraction. All other operations
-  // keep their execution order, including calls inside contracted regions.
+  // Shared weight conversions may precede calls without reading or folding weights.
+  // All other operations keep their execution order, including retained calls.
   const NodeProto *previous = nullptr;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
     const NodeProto *node = &nodes[position];
-    if (node->op_type() == "Constant" && node->domain().empty() && node->overload().empty() &&
-        node->input().empty() && node->device_configurations().empty() &&
-        index.graph.Builder().Shapes().GetLocalFunction(
-            core::shapes::ShapesContext::LocalFunctionKey("", "Constant", "")) == nullptr)
+    if (MovableConstantPreparation(index, *node))
       continue;
     if (previous != nullptr) {
       const std::size_t from = owner.at(previous), to = owner.at(node);
@@ -1240,9 +1252,22 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
 bool FindPlan(Index &index, Plan &best) {
   if (!index.valid)
     return false;
+  Region candidates;
+  for (const NodeProto &node : index.graph.Builder().Nodes()) {
+    const auto &entry = index.data.at(&node);
+    if (entry.usable && entry.anchor)
+      candidates.push_back(&node);
+  }
+  // Rare anchors distinguish a complete periodic motif from its common projections.
+  std::stable_sort(candidates.begin(), candidates.end(),
+                   [&](const NodeProto *left, const NodeProto *right) {
+                     return index.anchors.at(index.data.at(left).signature).size() <
+                            index.anchors.at(index.data.at(right).signature).size();
+                   });
   std::map<std::string, Region> representatives;
   std::size_t groups = 0, attempts = 0;
-  for (const NodeProto &node : index.graph.Builder().Nodes()) {
+  for (const NodeProto *candidate : candidates) {
+    const NodeProto &node = *candidate;
     const auto &entry = index.data.at(&node);
     if (!entry.usable || index.anchors.count(entry.signature) == 0)
       continue;
@@ -1349,7 +1374,26 @@ void ClearLayerAnalysis(GraphProto &scope) {
   }
 }
 
-void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
+std::string MajorityInputPrefix(const std::vector<Boundary> &boundaries, std::size_t port) {
+  std::vector<std::string> names;
+  for (const Boundary &boundary : boundaries)
+    names.push_back(boundary.inputs.at(port));
+  std::sort(names.begin(), names.end());
+  const std::size_t majority = names.size() / 2 + 1;
+  std::string prefix;
+  for (std::size_t first = 0; first + majority <= names.size(); ++first) {
+    const std::string &left = names[first], &right = names[first + majority - 1];
+    std::size_t length = 0;
+    while (length < left.size() && length < right.size() && left[length] == right[length])
+      ++length;
+    if (length > prefix.size())
+      prefix = left.substr(0, length);
+  }
+  return prefix;
+}
+
+void RenameLayerInputs(GraphProto &body, GraphGraph &graph,
+                       const std::vector<Boundary> &boundaries) {
   const auto visit = [](const auto &self, GraphProto &scope, const auto &action) -> void {
     action(scope);
     for (auto &node : scope.ref_node())
@@ -1386,10 +1430,15 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
   // Graph attributes obey lexical SSA even though Layer binds its inputs positionally.
   std::unordered_map<std::string, std::string> names;
   for (std::size_t i = 0; i < body.input().size(); ++i) {
-    const std::string base = body.name().value() + "_input_" + std::to_string(i);
+    std::string base = MajorityInputPrefix(boundaries, i);
+    if (base.empty())
+      base = "input_" + std::to_string(i);
     std::string name = base;
+    if (used.contains(name) || graph.Builder().HasName(name))
+      name = base + "_" + std::to_string(i);
+    const std::string unique_base = name;
     for (std::size_t suffix = 0; used.contains(name) || graph.Builder().HasName(name); ++suffix)
-      name = base + "_" + std::to_string(suffix);
+      name = unique_base + "_" + std::to_string(suffix);
     used.insert(name);
     names.emplace(body.input(i).name().value(), std::move(name));
   }
@@ -1605,7 +1654,7 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
 }
 
 NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary,
-                    std::size_t occurrence) {
+                    const std::vector<Boundary> &boundaries, std::size_t occurrence) {
   GraphProto body;
   for (const std::string &name : boundary.inputs)
     *body.add_input() = ValueInfo(index, name);
@@ -1626,7 +1675,7 @@ NodeProto MakeLayer(Index &index, const Region &region, const Boundary &boundary
       }
     }
   }
-  RenameLayerInputs(body, index.graph);
+  RenameLayerInputs(body, index.graph, boundaries);
   core::builder::GraphBuilder &source = index.graph.Builder();
   source.SetOpsetVersion("ai.rt", 1);
   core::builder::GraphBuilder &builder = source.ModelBuilder();
@@ -1711,7 +1760,8 @@ RepeatedLayerPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto
     if (!is_region) {
       replacement.push_back(utils::CopyWithSharedTensorStorage(graph.Builder().Nodes()[unit]));
     } else {
-      replacement.push_back(MakeLayer(index, plan.regions[unit], plan.boundaries[unit], unit));
+      replacement.push_back(
+          MakeLayer(index, plan.regions[unit], plan.boundaries[unit], plan.boundaries, unit));
     }
   }
   return replacement;

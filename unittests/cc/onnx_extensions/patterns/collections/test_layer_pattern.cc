@@ -514,6 +514,117 @@ TEST(RepeatedLayerPattern, LiteralConstantsDoNotSplitRepeatedLayers) {
   EXPECT_TRUE(replayed.ToModel().Equals(extracted));
 }
 
+TEST(RepeatedLayerPattern, ExtractsWholeHybridMotifsAcrossSharedWeightConversions) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  const auto shape = LayerShape({1, 2, 3, 4});
+  for (const auto *name : {"x", "k", "v"})
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInitializer(MakeInitializer<int64_t>("bias", {}, {1}));
+  std::string input = "x";
+  for (int block = 0; block < 12; ++block) {
+    const std::string prefix = "block" + std::to_string(block);
+    AddLayerWeight(builder, prefix + "_weight", 4, 4, static_cast<float>(block + 1) / 16);
+    builder.MakeNode("MatMul", {input, prefix + "_weight"}, {prefix + "_mm"}, "", prefix + "_mm");
+    if (block == 0)
+      builder.MakeNode("Cast", {"bias"}, {"converted_bias"}, "", "prepare_bias",
+                       LayerIntAttribute("to", TensorProto::FLOAT));
+    builder.MakeNode("Add", {prefix + "_mm", "converted_bias"}, {prefix + "_biased"}, "",
+                     prefix + "_add");
+    input = prefix + "_biased";
+    for (int activation = 0; activation < 17; ++activation) {
+      const std::string output = prefix + "_relu" + std::to_string(activation);
+      builder.MakeNode("Relu", {input}, {output}, "", output);
+      input = output;
+    }
+    if (block % 4 == 3) {
+      builder.MakeNode("Attention", {input, "k", "v"}, {prefix + "_attention"}, "",
+                       prefix + "_attention");
+      input = prefix + "_attention";
+    }
+  }
+  builder.MakeOutput(input);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  optimizer.Canonicalize();
+  const ModelProto original = builder.ToModel();
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  const auto plan = optimizer.Optimize(-1, nullptr, folding);
+  ASSERT_FALSE(plan.rewrites().empty());
+  CacheLayerBodies(builder);
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  EXPECT_EQ(builder.LocalFunctions()[0]->Nodes().size(), 77u);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].name(), "prepare_bias");
+  ExpectCoherentLayerMetadata(builder);
+  const ModelProto extracted = builder.ToModel();
+  EXPECT_NO_THROW(VerifyModel(extracted));
+  EXPECT_NO_THROW(checker::check_model(extracted));
+  auto restored = builder.UndoRewritings(plan);
+  EXPECT_TRUE(restored.ToModel().Equals(original));
+  EXPECT_TRUE(restored.ApplyRewritings(plan).ToModel().Equals(extracted));
+}
+
+TEST(RepeatedLayerPattern, NamesInputsFromStrictMajorityPrefixesWithoutCollisions) {
+  for (bool majority : {true, false}) {
+    SCOPED_TRACE(majority);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+    const std::vector<std::string> inputs = majority
+                                                ? std::vector<std::string>{"A1", "A2", "B0"}
+                                                : std::vector<std::string>{"A1", "A2", "B0", "B1"};
+    for (std::size_t index = 0; index < inputs.size(); ++index) {
+      const std::string suffix = std::to_string(index);
+      const std::string bias =
+          index < 2 ? "A" + std::to_string(index + 3) : "B" + std::to_string(index + 3);
+      builder.MakeInput(inputs[index], core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      builder.MakeInput(bias, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      AddLayerWeight(builder, "W" + suffix, 4, 4, static_cast<float>(index + 1));
+      builder.MakeNode("MatMul", {inputs[index], "W" + suffix}, {"m" + suffix}, "",
+                       "matmul" + suffix);
+      builder.MakeNode("Add", {"m" + suffix, bias}, {"y" + suffix}, "", "add" + suffix);
+      builder.MakeOutput("y" + suffix);
+    }
+    const GraphProto before = builder.BuildGraph();
+    ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), inputs.size());
+    ExpectCoherentLayerMetadata(builder);
+    const ModelProto extracted = builder.ToModel();
+    ASSERT_EQ(extracted.functions().size(), 1u);
+    const auto &function = extracted.functions(0);
+    ASSERT_EQ(function.input().size(), 3u);
+    EXPECT_EQ(function.input(0), majority ? "A" : "input_0");
+    EXPECT_EQ(function.input(1), "W");
+    EXPECT_EQ(function.input(2), majority ? "A_2" : "input_2");
+    ExpectOriginalOperators(before, builder.BuildGraph());
+    EXPECT_NO_THROW(VerifyModel(extracted));
+    EXPECT_NO_THROW(checker::check_model(extracted));
+  }
+}
+
+TEST(RepeatedLayerPattern, DoesNotHoistConversionsOfGraphInputs) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("bias", core::symbolic::TensorType::kInt64, LayerShape({}));
+  std::string input = "x";
+  for (int index = 0; index < 3; ++index) {
+    const std::string prefix = "h" + std::to_string(index);
+    AddLayerWeight(builder, prefix + "_weight", 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {input, prefix + "_weight"}, {prefix + "_mm"}, "", prefix + "_mm");
+    if (index == 0)
+      builder.MakeNode("Cast", {"bias"}, {"converted_bias"}, "", "prepare_bias",
+                       LayerIntAttribute("to", TensorProto::FLOAT));
+    builder.MakeNode("Add", {prefix + "_mm", "converted_bias"}, {prefix}, "", prefix + "_add");
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+  const GraphProto before = builder.BuildGraph();
+  OptimizeLayers(builder);
+  ExpectOriginalOperators(before, builder.BuildGraph());
+  ExpectCoherentLayerMetadata(builder);
+}
+
 TEST(RepeatedLayerPattern, KeepsUninferredCustomOutputAnnotationsInFunctionIdentity) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
                                       {{"", 28}, {"test.custom", 1}, {"ai.rt", 1}});

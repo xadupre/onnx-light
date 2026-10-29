@@ -20,6 +20,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Runs detection only at the first graph node of each optimizer scan.
  * - Finds exact attention/MatMul anchors, including recursively inspected local
  *   functions. Excludes existing layer-function calls and their bodies.
+ *   Starts with rarer anchor families so hybrid blocks can form a complete motif
+ *   before their common projections are extracted separately.
  *   Accepts operators independently of their domain or determinism when shape
  *   inference is available, including context-local shape callbacks. Otherwise
  *   requires complete output tensor annotations to preserve function inference.
@@ -41,8 +43,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
  *   contraction cycles and preserves the original execution order except for
- *   literal Constant nodes, which may move before a call that needs their values.
- *   Does not assume other operators are pure or deterministic.
+ *   literal Constants and constant Cast/CastLike/Identity preparations, which may
+ *   move before a call that needs their values without evaluating any weights.
+ *   Retains order for other operators and device-annotated or overridden conversions.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
  *   and original positions. Ranks seed families by total anchor coverage, total
@@ -54,14 +57,16 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Copies nodes in topological order
  *   into closed function bodies, preserves caller boundary names/types/tags, and
  *   leaves weights as explicit inputs.
- *   Gives body inputs fresh names to avoid lexical SSA shadowing.
+ *   Names each formal input from the longest prefix shared by a strict majority
+ *   of corresponding arguments in the matched calls, falling back to input_N.
+ *   Gives colliding names a port suffix to avoid lexical SSA shadowing.
  *
  * Work limits:
  *
  * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.
- * - Limits each occurrence to 64 nodes and the rewritten interval to 4096 nodes.
+ * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
  * - Detects repeated computations, not necessarily entire transformer/model layers.
  *
  * @code

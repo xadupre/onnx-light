@@ -26,6 +26,17 @@ diagnostics or inferred symbolic shape names differ. Different computations
 retain distinct functions. The summary counts ``Layer`` definitions, not the
 other local functions already present in the model.
 
+Detection starts with rarer attention/projection anchors and grows complete
+repeated motifs of up to 256 nodes. For a hybrid model, one function can therefore
+contain several consecutive blocks, for example three linear-attention blocks
+followed by one standard-attention block. Shared constant weight conversions
+may move before those calls without loading or folding the weights.
+
+Formal inputs use the longest prefix shared by a strict majority of the
+corresponding arguments in the matched calls: ``A1``, ``A2``, ``B0`` give ``A``.
+If that name is already used, the input position is appended, for example ``A_2``.
+Without a majority prefix, the name is ``input_2`` for input position 2.
+
 Loading and weights
 -------------------
 

@@ -5,7 +5,7 @@
 
 import unittest
 
-import onnx_light.onnx.defs as defs
+from onnx_light.onnx import defs
 from unittests.main.test_schema_registration import _MACRO_INFO, _all_defined_schemas
 
 

@@ -4,6 +4,7 @@
 // without performing a real serialization (it delegates to SerializeSize()).
 #include "external_data_internal.h"
 #include "onnx.h"
+#include "onnx_helper.h"
 #include "windows_junction.h"
 #include <filesystem>
 #include <fstream>
@@ -167,6 +168,104 @@ TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths)
   stream.set_active_weights_location("sub/nested/extra.bin");
   stream.read_bytes_from_weights_stream(6, bytes, 0);
   EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "second");
+}
+
+TEST_F(ExternalDataDescriptorTest, ModelExternalDataDefaultsOmittedOffsetToZero) {
+  const auto base = root / "model";
+  const auto model_path = (base / "model.onnx").string();
+  const auto weights_path = (base / "weights.bin").string();
+  const std::string payload(1024, 'w');
+  WriteWholeFile(weights_path, payload);
+  for (const std::string length_key : {"length", "size"}) {
+    for (const bool location_first : {false, true}) {
+      for (const bool extra_metadata : {false, true}) {
+        ModelProto model;
+        auto *tensor = model.add_graph()->add_initializer();
+        tensor->set_name("W");
+        tensor->set_data_type(TensorProto::DataType::FLOAT);
+        tensor->add_dims(256);
+        tensor->set_data_location(TensorProto::DataLocation::EXTERNAL);
+        for (const bool location : {location_first, !location_first}) {
+          auto *entry = tensor->add_external_data();
+          entry->set_key(location ? "location" : length_key);
+          entry->set_value(location ? "weights.bin" : "1024");
+        }
+        if (extra_metadata) {
+          auto *entry = tensor->add_external_data();
+          entry->set_key("checksum");
+          entry->set_value("unused");
+        }
+        std::string serialized;
+        ASSERT_TRUE(model.SerializeToString(serialized));
+        WriteWholeFile(model_path, serialized);
+        tensor->LoadExternalData(base.string());
+        EXPECT_EQ(std::string(reinterpret_cast<const char *>(tensor->ref_raw_data().data()),
+                              tensor->ref_raw_data().size()),
+                  payload);
+        for (int mode = 0; mode < 4; ++mode) {
+          SCOPED_TRACE(::testing::Message()
+                       << length_key << ", location_first=" << location_first
+                       << ", extra_metadata=" << extra_metadata << ", mode=" << mode);
+          utils::TwoFilesStream stream(model_path, weights_path, mode == 3);
+          ParseOptions options;
+          options.no_copy = mode == 2;
+          options.num_threads = mode == 1 ? 2 : 1;
+          options.min_parallel_block_size = 0;
+          ModelProto loaded;
+          ASSERT_NO_THROW(ParseProtoFromStream(loaded, stream, options));
+          const auto &result = loaded.ref_graph().ref_initializer()[0];
+          EXPECT_EQ(std::string(reinterpret_cast<const char *>(result.ref_raw_data().data()),
+                                result.ref_raw_data().size()),
+                    payload);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(ExternalDataDescriptorTest, ModelExternalDataRetainsOffsetRangeAndPathChecks) {
+  const auto base = root / "model";
+  const auto model_path = (base / "model.onnx").string();
+  const auto weights_path = (base / "weights.bin").string();
+  WriteWholeFile(weights_path, std::string(1024, 'w'));
+  const struct {
+    const char *location;
+    const char *offset;
+    const char *length;
+  } invalid_cases[] = {{"weights.bin", "-1", "1024"},
+                       {"weights.bin", "1", "1024"},
+                       {"weights.bin", nullptr, "1025"},
+                       {"weights.bin", nullptr, "0"},
+                       {"../outside/weights.bin", nullptr, "1024"}};
+  for (const auto &invalid_case : invalid_cases) {
+    SCOPED_TRACE(::testing::Message() << invalid_case.location << ", offset="
+                                      << (invalid_case.offset ? invalid_case.offset : "omitted")
+                                      << ", length=" << invalid_case.length);
+    ModelProto model;
+    auto *tensor = model.add_graph()->add_initializer();
+    tensor->set_name("W");
+    tensor->set_data_type(TensorProto::DataType::FLOAT);
+    tensor->add_dims(256);
+    tensor->set_data_location(TensorProto::DataLocation::EXTERNAL);
+    auto *location = tensor->add_external_data();
+    location->set_key("location");
+    location->set_value(invalid_case.location);
+    if (invalid_case.offset) {
+      auto *offset = tensor->add_external_data();
+      offset->set_key("offset");
+      offset->set_value(invalid_case.offset);
+    }
+    auto *length = tensor->add_external_data();
+    length->set_key("length");
+    length->set_value(invalid_case.length);
+    std::string serialized;
+    ASSERT_TRUE(model.SerializeToString(serialized));
+    WriteWholeFile(model_path, serialized);
+    utils::TwoFilesStream stream(model_path, weights_path);
+    ParseOptions options;
+    ModelProto loaded;
+    EXPECT_THROW(ParseProtoFromStream(loaded, stream, options), std::runtime_error);
+  }
 }
 
 TEST_F(ExternalDataDescriptorTest, NonAsciiNativePathsWorkForExternalReadsAndWrites) {

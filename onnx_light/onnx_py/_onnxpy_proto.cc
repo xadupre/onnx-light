@@ -3630,7 +3630,6 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_OPTIONAL_INT(PipelineProto, max_new_tokens)
       .PYFIELD_OPTIONAL_FLOAT(PipelineProto, temperature)
       .PYFIELD_OPTIONAL_INT(PipelineProto, seed)
-      .PYFIELD_OPTIONAL_INT(PipelineProto, eos_token_id)
       .PYFIELD_OPTIONAL_INT(PipelineProto, pad_token_id)
       .PYFIELD_OPTIONAL_INT(PipelineProto, top_k)
       .PYFIELD_OPTIONAL_FLOAT(PipelineProto, top_p)
@@ -3638,7 +3637,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_STR(PipelineProto, logits_name)
       .PYFIELD_STR(PipelineProto, attention_mask_name)
       .PYFIELD_STR(PipelineProto, position_ids_name)
-      .PYFIELD(PipelineProto, metadata_props);
+      .PYFIELD(PipelineProto, metadata_props)
+      .PYFIELD(PipelineProto, eos_token_ids);
   PYADD_PROTO_SERIALIZATION(PipelineProto);
   nb_PipelineProto
       .def(
@@ -3668,8 +3668,6 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_temperature();
             if (field_name == "seed")
               return self.has_seed();
-            if (field_name == "eos_token_id")
-              return self.has_eos_token_id();
             if (field_name == "pad_token_id")
               return self.has_pad_token_id();
             if (field_name == "top_k")
@@ -3686,6 +3684,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_position_ids_name();
             if (field_name == "metadata_props")
               return self.has_metadata_props();
+            if (field_name == "eos_token_ids")
+              return self.has_eos_token_ids();
             throw nb::attribute_error(
                 ("Protocol message has no field named '" + field_name + "'").c_str());
           },

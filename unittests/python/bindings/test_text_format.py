@@ -99,6 +99,7 @@ class TestTextFormat(ExtTestCase):
             top_p=0.9,
             input_ids_name="input_ids",
             logits_name="logits",
+            eos_token_ids=[0, 2, 2],
         )
         metadata = pipeline.metadata_props.add()
         metadata.key = "family"
@@ -109,6 +110,11 @@ class TestTextFormat(ExtTestCase):
         self.assertIn("prefill {", text)
         self.assertIn("max_new_tokens: 64", text)
         parsed = parse_from_textproto(text, onnxl.PipelineProto())
+        self.assertTrue(parsed.HasField("eos_token_ids"))
+        self.assertEqual(list(parsed.eos_token_ids), [0, 2, 2])
+        restored = onnxl.PipelineProto()
+        restored.ParseFromString(pipeline.SerializeToString())
+        self.assertEqual(list(restored.eos_token_ids), [0, 2, 2])
         self.assertEqual(pipeline.SerializeToString(), parsed.SerializeToString())
 
     def test_round_trip_non_utf8_bytes(self):

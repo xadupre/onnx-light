@@ -166,6 +166,14 @@ also allows configuring the token, logits, mask and position input/output names.
 C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
 options and an existing ``RuntimeContext``.
 
+Native ``GenerationOptions`` and ``PipelineProto`` accept ``eos_token_ids``, for
+example ``options.eos_token_ids = {2, 3}`` in C++. Generation stops each batch row
+on any listed token, and duplicate IDs are harmless. An empty list disables
+EOS stopping. All IDs must be nonnegative and within the model's vocabulary.
+Finished rows receive ``pad_token_id`` while other rows continue. Without an
+explicit padding token, generation uses the first listed EOS ID.
+Explicit pipeline options replace the stored settings.
+
 For split models, ``language_model.generate(feeds, embedding=embedding)``
 runs the embedding model before the language model for both the prompt and
 subsequent tokens. Prefill names the prompt-processing phase; it is not a separate

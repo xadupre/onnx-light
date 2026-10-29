@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <functional>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -52,8 +53,9 @@ struct GenerationOptions {
   /// Zero selects greedy decoding; positive values sample softmax(logits / temperature).
   double temperature = 0.;
   std::optional<uint64_t> seed;
-  std::optional<int64_t> eos_token_id;
-  /// Defaults to eos_token_id for already-finished batch rows.
+  /// Stops each row on any listed token; an empty list disables EOS stopping.
+  std::vector<int64_t> eos_token_ids;
+  /// Defaults to the first eos_token_ids entry for already-finished rows.
   std::optional<int64_t> pad_token_id;
   std::string input_ids_name = "input_ids";
   std::string logits_name = "logits";

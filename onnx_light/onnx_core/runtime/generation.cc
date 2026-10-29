@@ -389,8 +389,7 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
     EXT_ENFORCE_INVALID(pipeline.seed() >= 0, "Generate: seed must be nonnegative.");
     options.seed = static_cast<uint64_t>(pipeline.seed());
   }
-  if (pipeline.has_eos_token_id())
-    options.eos_token_id = pipeline.eos_token_id();
+  options.eos_token_ids.assign(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end());
   if (pipeline.has_pad_token_id())
     options.pad_token_id = pipeline.pad_token_id();
   EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.top_k() == 0,
@@ -473,8 +472,18 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                       "Generate: raw-logit capture requires an on_step callback.");
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
-  EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id >= 0,
-                      "Generate: eos_token_id must be nonnegative.");
+  std::unordered_set<int64_t> eos_token_ids;
+  if (!options.eos_token_ids.empty())
+    eos_token_ids.reserve(options.eos_token_ids.size());
+  int64_t largest_eos_token_id = -1;
+  for (int64_t id : options.eos_token_ids) {
+    EXT_ENFORCE_INVALID(id >= 0, "Generate: eos_token_ids must be nonnegative; got ", id, ".");
+    eos_token_ids.insert(id);
+    largest_eos_token_id = std::max(largest_eos_token_id, id);
+  }
+  auto pad_token_id = options.pad_token_id;
+  if (!pad_token_id && !options.eos_token_ids.empty())
+    pad_token_id = options.eos_token_ids.front();
   EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id >= 0,
                       "Generate: pad_token_id must be nonnegative.");
   const bool embedded = pipeline.embedding != nullptr;
@@ -768,6 +777,9 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                         "Generate: logits must have a floating-point type.");
     ValidateStorage(logits);
     const int64_t vocabulary = logits.shape.back();
+    EXT_ENFORCE_INVALID(largest_eos_token_id < vocabulary,
+                        "Generate: eos_token_ids contains an ID outside the vocabulary: got ",
+                        largest_eos_token_id, ", valid range is [0, ", vocabulary, ").");
     size_t row_bytes = 0;
     bool capture_logits = false;
     if (options.on_step && remaining_logit_bytes > 0) {
@@ -781,23 +793,26 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     } else if (IsHalfPrecision(logits.data_type)) {
       logits = PromoteToFloat32(logits);
     }
-    EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id < vocabulary,
-                        "Generate: eos_token_id is outside the vocabulary.");
     EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id < vocabulary,
                         "Generate: pad_token_id is outside the vocabulary.");
     const int64_t stride = logits.shape.product() / batch;
     for (int64_t row = 0; row < batch; ++row) {
       next_mask[row] = finished[row] ? 0 : 1;
-      next[row] = finished[row] ? options.pad_token_id.value_or(*options.eos_token_id)
-                                : Sample(logits, (row + 1) * stride - vocabulary, vocabulary,
-                                         options.temperature, random);
+      if (finished[row]) {
+        EXT_ENFORCE(pad_token_id.has_value(),
+                    "Generate: a finished batch row requires a padding token.");
+        next[row] = *pad_token_id;
+      } else {
+        next[row] = Sample(logits, (row + 1) * stride - vocabulary, vocabulary, options.temperature,
+                           random);
+      }
       if (multi_axis) {
         for (int64_t axis = 0; axis < axes; ++axis)
           ++next_positions[axis * batch + row];
       } else {
         next_positions[row] = positions[row * length + length - 1] + 1;
       }
-      if (options.eos_token_id && next[row] == *options.eos_token_id)
+      if (eos_token_ids.contains(next[row]))
         finished[row] = true;
     }
     AppendColumn(tokens, next);

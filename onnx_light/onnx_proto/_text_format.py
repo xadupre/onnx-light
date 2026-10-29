@@ -265,7 +265,6 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("max_new_tokens", _INT, False),
             ("temperature", _FLOAT, False),
             ("seed", _INT, False),
-            ("eos_token_id", _INT, False),
             ("pad_token_id", _INT, False),
             ("top_k", _INT, False),
             ("top_p", _FLOAT, False),
@@ -274,6 +273,7 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("attention_mask_name", _STR, False),
             ("position_ids_name", _STR, False),
             ("metadata_props", _msg(string_entry), True),
+            ("eos_token_ids", _INT, True),
         ],
         SequenceProto: [
             ("name", _STR, False),

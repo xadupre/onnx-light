@@ -392,7 +392,7 @@ TEST(Generation, ObserverReportsEosAndPaddingAndPreservesFailurePaths) {
       });
   GenerationOptions options;
   options.max_new_tokens = 5;
-  options.eos_token_id = 2;
+  options.eos_token_ids = {2};
   options.pad_token_id = 0;
   options.on_step = [&](const GenerationStep &step) {
     EXPECT_EQ(step.token_ids,
@@ -490,7 +490,7 @@ TEST(Generation, BackendAttentionModels) {
         EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
-      options.eos_token_id = 1;
+      options.eos_token_ids = {1};
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
       EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, session_options)),
@@ -1333,6 +1333,150 @@ TEST(Generation, PipelineRetainsPersistentSequenceFeedsAfterRebinding) {
 TEST(Generation, PipelineRequiresItsPrefillModel) {
   RuntimeContext context;
   EXPECT_THROW(Generate(PipelineProto{}, context, {}), std::invalid_argument);
+}
+
+TEST(Generation, MultipleEosAcrossModelsPipelinesAndPersistentDecoding) {
+  struct Configuration {
+    std::vector<int64_t> ids;
+    std::optional<int64_t> padding;
+    int64_t expected_padding;
+  };
+  const Configuration configurations[] = {{{2, 3}, std::nullopt, 2},
+                                          {{3, 2, 3}, std::nullopt, 3},
+                                          {{0, 2, 3}, std::nullopt, 0},
+                                          {{2, 3}, 0, 0}};
+  for (bool persistent : {false, true}) {
+    for (int mode = 0; mode < 5; ++mode) {
+      for (const auto &configuration : configurations) {
+        SCOPED_TRACE(persistent);
+        SCOPED_TRACE(mode);
+        SCOPED_TRACE(configuration.expected_padding);
+        const bool embedded = mode >= 3;
+        const std::string input = embedded ? "inputs_embeds" : "input_ids";
+        PipelineProto pipeline = MakeGenerationPipeline(PipelineModel(
+            "Step", {{input, embedded ? TensorProto::FLOAT : TensorProto::INT64}}, "logits"));
+        if (persistent)
+          AddPersistentState(*pipeline.mutable_prefill());
+        if (embedded)
+          *pipeline.mutable_embedding() =
+              PipelineModel("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+        GenerationOptions options;
+        options.max_new_tokens = 3;
+        options.eos_token_ids = configuration.ids;
+        options.pad_token_id = configuration.padding;
+        int observations = 0;
+        options.max_logit_bytes = 64;
+        options.on_step = [&](const GenerationStep &step) {
+          EXPECT_EQ(step.index, observations);
+          EXPECT_EQ(step.token_ids,
+                    observations == 0 ? (std::vector<int64_t>{2, 1})
+                                      : (std::vector<int64_t>{configuration.expected_padding, 3}));
+          EXPECT_TRUE(step.raw_logits);
+          if (step.raw_logits) {
+            EXPECT_EQ(step.raw_logits->shape, (Shape{2, 4}));
+            EXPECT_FLOAT_EQ(step.raw_logits->AsFloat()[2], 4);
+          }
+          ++observations;
+          return true;
+        };
+        pipeline.set_max_new_tokens(options.max_new_tokens);
+        for (int64_t id : configuration.ids)
+          pipeline.add_eos_token_ids(id);
+        if (configuration.padding)
+          pipeline.set_pad_token_id(*configuration.padding);
+        RuntimeSession source(pipeline.prefill());
+        RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+        int calls = 0;
+        context.RegisterCustomKernel(
+            "test.pipeline", "Embed", [](const NodeProto &node, RuntimeContext &rt) {
+              const int64_t length = rt.Get("input_ids").shape[1];
+              rt.Put(node.output(0),
+                     Tensor::FromFloat("", {2, length, 1}, std::vector<float>(2 * length, 0)));
+            });
+        context.RegisterCustomKernel(
+            "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+              EXPECT_EQ(rt.Get(input).shape[1], persistent ? 1 : calls + 1);
+              if (persistent) {
+                EXPECT_EQ(rt.Get("state").AsInt64()[0], calls);
+                rt.Put("next_state", Tensor::FromInt64("", {}, {calls + 1}));
+              }
+              rt.Put(node.output(0),
+                     Tensor::FromFloat("", {2, 4},
+                                       calls == 0 ? std::vector<float>{0, 0, 4, 0, 0, 4, 0, 0}
+                                                  : std::vector<float>{0, 0, 4, 0, 0, 0, 0, 4}));
+              ++calls;
+            });
+        RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 1}, {0, 1}))}};
+        if (persistent)
+          feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+        Tensor result;
+        if (mode == 0) {
+          result = Generate(pipeline.prefill(), context, feeds, options);
+        } else if (mode == 1) {
+          // Explicit options override stored EOS settings as well as the token limit.
+          pipeline.ref_eos_token_ids() = {0};
+          pipeline.set_max_new_tokens(1);
+          result = Generate(pipeline, context, feeds, options);
+        } else if (mode == 3) {
+          result = Generate(pipeline.prefill(), &pipeline.embedding(), context, feeds, options);
+        } else {
+          PipelineProto restored;
+          std::string serialized;
+          ASSERT_TRUE(pipeline.SerializeToString(serialized));
+          ASSERT_TRUE(restored.ParseFromString(serialized));
+          result = Generate(restored, context, feeds);
+        }
+        EXPECT_EQ(Tokens(result),
+                  (std::vector<int64_t>{0, 2, configuration.expected_padding, 1, 1, 3}));
+        EXPECT_EQ(calls, 2);
+        EXPECT_EQ(observations, mode == 2 || mode == 4 ? 0 : 2);
+        if (persistent) {
+          EXPECT_EQ(feeds.at("state").tensor.AsInt64()[0], 0);
+        }
+      }
+    }
+  }
+}
+
+TEST(Generation, MultipleEosValidatesEveryIdBeforeSampling) {
+  ModelProto model = PipelineModel("Step", {{"input_ids", TensorProto::INT64}}, "logits");
+  RuntimeSession source(model);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 4}, {0, 4, 0, 0}));
+      });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  for (int64_t invalid : std::vector<int64_t>{-1, 4, std::numeric_limits<int64_t>::max()}) {
+    for (bool stored : {false, true}) {
+      SCOPED_TRACE(invalid);
+      SCOPED_TRACE(stored);
+      calls = 0;
+      GenerationOptions options;
+      options.max_new_tokens = invalid < 0 ? 0 : 3;
+      options.pad_token_id = 0;
+      options.eos_token_ids = {2, invalid};
+      std::string message;
+      if (stored) {
+        PipelineProto pipeline;
+        *pipeline.mutable_prefill() = model;
+        pipeline.set_max_new_tokens(options.max_new_tokens);
+        pipeline.set_pad_token_id(0);
+        for (int64_t id : options.eos_token_ids)
+          pipeline.add_eos_token_ids(id);
+        message = InvalidArgumentMessage([&]() { Generate(pipeline, context, feeds); });
+      } else {
+        message = InvalidArgumentMessage([&]() { Generate(model, context, feeds, options); });
+      }
+      EXPECT_NE(message.find("got " + std::to_string(invalid)), std::string::npos) << message;
+      if (invalid >= 0) {
+        EXPECT_NE(message.find("valid range is [0, 4)"), std::string::npos) << message;
+      }
+      EXPECT_EQ(calls, invalid < 0 ? 0 : 1);
+    }
+  }
 }
 
 TEST(Generation, PipelineUsesStoredOptionsAndRejectsUnsupportedSettings) {

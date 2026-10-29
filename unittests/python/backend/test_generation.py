@@ -74,6 +74,30 @@ def _shared_encoded(model, name, values):
 
 
 class TestGeneration(ExtTestCase):
+    def test_multiple_eos(self):
+        model = transition_model()
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        evaluator = ReferenceEvaluator(model)
+        for eos_ids, prompt, expected in [
+            ([1, 2], [[0], [1]], [[0, 1], [1, 2]]),
+            ([1, 2, 2], [[0], [1]], [[0, 1], [1, 2]]),
+            ([0, 2], [[0], [1]], [[0, 1, 2], [1, 2, 0]]),
+            ([2, 0], [[0], [1]], [[0, 1, 2], [1, 2, 2]]),
+            ([0, 2], [[2]], [[2, 0]]),
+            ([0], [[2]], [[2, 0]]),
+            ([], [[2]], [[2, 0, 1, 2, 0]]),
+        ]:
+            with self.subTest(eos_ids=eos_ids, prompt=prompt):
+                options = runtime.GenerationOptions()
+                options.max_new_tokens = 4
+                options.eos_token_ids = eos_ids
+                feeds = {"input_ids": numpy.array(prompt, dtype=numpy.int64)}
+                result = runtime.generate(model, context, feeds, options)
+                numpy.testing.assert_array_equal(numpy.from_dlpack(result), expected)
+                numpy.testing.assert_array_equal(
+                    evaluator.generate(feeds, max_new_tokens=4, eos_token_ids=eos_ids), expected
+                )
+
     def test_attention_mask_gather_releases_after_last_use(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
@@ -411,7 +435,7 @@ class TestGeneration(ExtTestCase):
             evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0], [1, 2, 0, 1]]
         )
         numpy.testing.assert_array_equal(
-            evaluator.generate(feeds, max_new_tokens=5, eos_token_id=2, pad_token_id=0),
+            evaluator.generate(feeds, max_new_tokens=5, eos_token_ids=[2], pad_token_id=0),
             [[0, 1, 2], [1, 2, 0]],
         )
         numpy.testing.assert_array_equal(feeds["input_ids"], [[0], [1]])
@@ -615,8 +639,9 @@ class TestGeneration(ExtTestCase):
         for options in (
             {"max_new_tokens": -1},
             {"max_new_tokens": 2**63 - 1},
-            {"eos_token_id": -1},
-            {"eos_token_id": 3},
+            {"eos_token_ids": [-1]},
+            {"eos_token_ids": [2, 3]},
+            {"eos_token_ids": [2, -1], "max_new_tokens": 0},
             {"pad_token_id": -1},
             {"pad_token_id": 3},
         ):

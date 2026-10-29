@@ -32,21 +32,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * attributes. Template inputs must be used, and template outputs must be
  * distinct node results. Template nodes must be connected through nonempty
  * values (including shared inputs). Matching follows local producers and
- * consumers, never scans unrelated graph nodes. Replacement outputs may alias
- * inputs or each other. Configured target nodes are conservatively rejected.
- * Intermediates may not escape the match. Subgraph captures and matches needing
- * interleaved external consumers are conservatively rejected. Function definitions
- * are copied. Forwarded or aliased outputs need a default ONNX opset for Identity.
+ * consumers from the selected anchor, never scans unrelated graph nodes. Replacement outputs may
+ * alias inputs or each other. Configured target nodes are conservatively rejected. Intermediates
+ * may not escape the match. Subgraph captures and matches needing interleaved external consumers
+ * are conservatively rejected. Function definitions are copied. Forwarded or aliased outputs need a
+ * default ONNX opset for Identity.
  *
  * Unlike built-in rewrites, this configurable class has no default factory:
  * register an instance with the desired function pair instead.
  */
 class FunctionPattern : public core::builder::PatternOptimization {
 public:
-  /// Creates a pattern from a template and an equivalent replacement.
+  /// Creates a pattern; anchor selects a zero-based template node (-1 means the last).
   FunctionPattern(const FunctionProto &pattern, const FunctionProto &replacement, int priority = 1,
                   std::string name = "FunctionPattern",
-                  core::symbolic::Device device = core::symbolic::Device::kUndefined);
+                  core::symbolic::Device device = core::symbolic::Device::kUndefined,
+                  int anchor = -1);
 
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -58,6 +59,7 @@ public:
 private:
   FunctionProto pattern_;
   FunctionProto replacement_;
+  std::size_t anchor_index_;
   std::vector<std::size_t> match_order_;
 };
 

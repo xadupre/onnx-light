@@ -5,8 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.2] – Unreleased
 
+### New Features
+
+- Added C++ and Python `FunctionPattern` rewrites defined by template and replacement ONNX functions, with positional interfaces, captured reference attributes, and local producer/consumer matching for connected multi-output templates ([#5676](https://github.com/xadupre/onnx-light/pull/5676)).
+- Added builder-local `OperatorRegistry` schema histories and shape-inference callbacks through `GraphBuilder(..., local_registry=...)`. Builders snapshot registrations and propagate them to nested scopes, export, replay, and undo without changing independent builders or global registries ([#5669](https://github.com/xadupre/onnx-light/pull/5669)).
+- Added opt-in version-2 FLOAT quantization reconstruction through `plan.reconstruction_dtype`, independently of the final output dtype. Version-1 DOUBLE reconstruction remains the default, preserving existing serialized values and ORT-compatible profiles ([#5674](https://github.com/xadupre/onnx-light/pull/5674)).
+
+### Improvements
+
+- Deferred `GraphBuilder` numerical memory and peak-memory profiling until export while keeping shapes, tags, lifetimes, and in-place reuse coherent during construction and mutations ([#5678](https://github.com/xadupre/onnx-light/pull/5678)).
+- Made repeated-layer extraction generic across domains and available shape-inference registrations, retaining exact operation order, optional ports, attributes, and explicit state/cache interfaces rather than relying on an operator whitelist ([#5669](https://github.com/xadupre/onnx-light/pull/5669)).
+- Reused equivalent extracted Layer functions across renamed scopes and attribute serialization orders while preserving interface types and initializer values. Existing helpers with caller-specific value bounds are not reused ([#5679](https://github.com/xadupre/onnx-light/pull/5679)).
+- Accelerated exact large-tensor quantiles and medians with bounded histogram refinement and multiselection, avoiding tensor-sized selection copies where applicable. Added native progress and cooperative cancellation callbacks while preserving interpolation and non-finite handling ([#5664](https://github.com/xadupre/onnx-light/pull/5664)).
+- Set the default priorities of `GroupedMatMul`, `GemmSumFusion`, `MatMulAdd`, `MatMulBatchNormalizationFusion`, and `MatMulScaleFusion` to `2`, preserving other defaults and explicit overrides ([#5667](https://github.com/xadupre/onnx-light/pull/5667)).
+
+### Fixes
+
+- Corrected `GemmTransposePattern` to absorb one or both rank-two input Transposes into the corresponding Gemm flags for dynamic or constant inputs, preserving scaling, bias, legacy `broadcast`, output names, and shared or exported Transpose producers ([#5681](https://github.com/xadupre/onnx-light/pull/5681)).
+- Added FLOAT16, BFLOAT16, and INT8 native Hann/Hamming window outputs using wide-precision calculation before the final cast, avoiding low-precision overflow and NaNs for long windows ([#5661](https://github.com/xadupre/onnx-light/pull/5661)).
+
+### Pending pull requests
+
+- Allows operator/local-function name collisions with registered-operator precedence for shape inference, memory analysis, and execution, including normalized domain aliases and overload handling. Errors from the selected operator propagate without retrying the local body or changing global registries ([#5682](https://github.com/xadupre/onnx-light/pull/5682)).
+- Indexes pattern candidates by operator type for each frozen matching iteration, preserving graph order, priorities, disjoint matches, and sequential/parallel behavior. Adds configurable C++ and Python `FunctionPattern` anchors (`anchor=-1` retains the last-node default) and a focused matching-phase benchmark ([#5684](https://github.com/xadupre/onnx-light/pull/5684)).
+
 ### Documentation & CI
 
+- Raised the minimum supported CMake version to `4.0` across builds, packaging, examples, and CI, removing CMake 3 coverage ([#5672](https://github.com/xadupre/onnx-light/pull/5672)).
+- Shared the shape-inference test harness across operator, data-propagation, and function-inference suites without changing their comparison policies ([#5663](https://github.com/xadupre/onnx-light/pull/5663)).
 - Bumped the release version to `0.2.2`.
 
 ## [0.2.1] – Unreleased

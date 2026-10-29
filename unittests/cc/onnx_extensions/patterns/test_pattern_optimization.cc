@@ -179,6 +179,36 @@ private:
   std::thread::id calling_thread_;
 };
 
+class CandidateSelectionPattern final : public core::builder::PatternOptimization {
+public:
+  CandidateSelectionPattern(std::string name, std::set<std::string> types,
+                            std::string replacement = {}, int priority = 1)
+      : PatternOptimization(priority, std::move(name)), types_(std::move(types)),
+        replacement_(std::move(replacement)) {}
+
+  std::set<std::string> FastOpType() const override { return types_; }
+  bool CanMatchInParallel() const noexcept override { return true; }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    if (replacement_.empty() || (!types_.empty() && !types_.contains(candidate.op_type().value())))
+      return {};
+    return {this, {&candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &nodes) const override {
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(*nodes[0]);
+    result[0].set_op_type(replacement_);
+    return result;
+  }
+
+private:
+  std::set<std::string> types_;
+  std::string replacement_;
+};
+
 class ParallelThreadTrackingPattern final : public ThreadTrackingPattern {
 public:
   ParallelThreadTrackingPattern() : ThreadTrackingPattern("ParallelTracking") {}
@@ -2767,6 +2797,105 @@ TEST(PatternOptimization, ParallelMatchingPreservesCandidateOrderAndStatistics) 
   for (int i = 0; i < plan.rewrites_size(); ++i) {
     ASSERT_EQ(plan.rewrites(i).matched_nodes_size(), 1);
     EXPECT_EQ(plan.rewrites(i).matched_nodes(0), static_cast<uint64_t>(i));
+  }
+}
+
+TEST(PatternOptimization, IndexedCandidatesPreserveGraphAndPatternOrder) {
+  for (const bool parallel : {false, true}) {
+    for (const int count : {6, 96}) {
+      SCOPED_TRACE(std::to_string(parallel) + ":" + std::to_string(count));
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+      const std::vector<std::string> types{"Neg", "Abs", "Sqrt"};
+      std::string input = "x";
+      for (int index = 0; index < count; ++index) {
+        const auto output = "y" + std::to_string(index);
+        builder.MakeNode(types[index % 3], {input}, {output});
+        input = output;
+      }
+      builder.MakeOutput(input);
+      std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns{
+          std::make_shared<CandidateSelectionPattern>(
+              "Multi", std::set<std::string>{"Missing", "Neg", "Sqrt"}, "Relu"),
+          std::make_shared<CandidateSelectionPattern>("Single", std::set<std::string>{"Abs"},
+                                                      "Relu"),
+          std::make_shared<CandidateSelectionPattern>(
+              "Overlap", std::set<std::string>{"Abs", "Neg", "Sqrt"}, "Sigmoid"),
+          std::make_shared<CandidateSelectionPattern>("All", std::set<std::string>{}),
+          std::make_shared<CandidateSelectionPattern>("Missing", std::set<std::string>{"Missing"})};
+      core::builder::GraphGraph graph(builder, patterns);
+      core::builder::OptimizationReport report;
+      const auto plan = graph.Optimize(1, &report, {}, false, {}, parallel);
+      ASSERT_EQ(plan.rewrites().size(), static_cast<std::size_t>(count));
+      std::vector<uint64_t> expected;
+      for (int index = 0; index < count; ++index)
+        if (index % 3 != 1)
+          expected.push_back(index);
+      for (int index = 1; index < count; index += 3)
+        expected.push_back(index);
+      for (std::size_t index = 0; index < expected.size(); ++index) {
+        EXPECT_EQ(plan.rewrites()[index].pattern_name(),
+                  index < expected.size() * 2 / 3 ? "Multi" : "Single");
+        ASSERT_EQ(plan.rewrites()[index].matched_nodes().size(), 1u);
+        EXPECT_EQ(plan.rewrites()[index].matched_nodes()[0], expected[index]);
+      }
+      ASSERT_EQ(report.patterns.size(), 5u);
+      EXPECT_EQ(report.patterns[0].attempts, static_cast<std::size_t>(count * 2 / 3));
+      EXPECT_EQ(report.patterns[1].attempts, static_cast<std::size_t>(count / 3));
+      EXPECT_EQ(report.patterns[2].attempts, static_cast<std::size_t>(count));
+      EXPECT_EQ(report.patterns[2].matches, 0u);
+      EXPECT_EQ(report.patterns[3].attempts, static_cast<std::size_t>(count));
+      EXPECT_EQ(report.patterns[4].attempts, 0u);
+    }
+  }
+}
+
+TEST(PatternOptimization, IndexedCandidatesRefreshAcrossRewritesAndPriorities) {
+  for (const bool parallel : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    builder.MakeNode("Neg", {"x"}, {"y"});
+    builder.MakeOutput("y");
+    std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns{
+        std::make_shared<CandidateSelectionPattern>("Later", std::set<std::string>{"Abs"}, "Relu",
+                                                    2),
+        std::make_shared<CandidateSelectionPattern>("First", std::set<std::string>{"Neg"}, "Abs",
+                                                    1)};
+    core::builder::GraphGraph graph(builder, patterns);
+    const auto plan = graph.Optimize(-1, nullptr, {}, false, {}, parallel);
+    ASSERT_EQ(plan.rewrites().size(), 2u);
+    EXPECT_EQ(plan.rewrites()[0].pattern_name(), "First");
+    EXPECT_EQ(plan.rewrites()[1].pattern_name(), "Later");
+    ASSERT_EQ(builder.Nodes().size(), 1u);
+    EXPECT_EQ(builder.Nodes()[0].op_type(), "Relu");
+    EXPECT_TRUE(graph.Optimize(-1, nullptr, {}, false, {}, parallel).rewrites().empty());
+  }
+}
+
+TEST(PatternOptimization, IndexedCandidatesExcludeUnresolvedAttributesInFunctions) {
+  for (const bool parallel : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    auto &function = builder.MakeLocalFunction("Parameterized", "test.pattern");
+    function.SetOpsetVersion("", 18);
+    function.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &attribute = attributes.add();
+    attribute.set_name("perm");
+    attribute.set_ref_attr_name("perm");
+    attribute.set_type(AttributeProto::INTS);
+    function.MakeNode("Transpose", {"X"}, {"Y"}, "", "", attributes);
+    function.MakeOutput("Y");
+    std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns{
+        std::make_shared<CandidateSelectionPattern>("Typed", std::set<std::string>{"Transpose"},
+                                                    "Relu"),
+        std::make_shared<CandidateSelectionPattern>("All", std::set<std::string>{}, "Relu")};
+    core::builder::GraphGraph graph(builder, patterns);
+    core::builder::OptimizationReport report;
+    EXPECT_TRUE(graph.Optimize(1, &report, {}, false, {}, parallel).rewrites().empty());
+    ASSERT_EQ(report.patterns.size(), 2u);
+    EXPECT_EQ(report.patterns[0].attempts, 0u);
+    EXPECT_EQ(report.patterns[1].attempts, 0u);
+    EXPECT_EQ(function.Nodes()[0].op_type(), "Transpose");
   }
 }
 

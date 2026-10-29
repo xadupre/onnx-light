@@ -12,6 +12,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <queue>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
@@ -116,6 +117,59 @@ bool HasUnresolvedAttributeReferences(const NodeProto &node) {
   }
   return false;
 }
+
+class PatternCandidates {
+public:
+  explicit PatternCandidates(const utils::RepeatedProtoField<NodeProto> &nodes) {
+    all_.reserve(nodes.size());
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+      if (HasUnresolvedAttributeReferences(nodes[index]))
+        continue;
+      all_.push_back(index);
+      by_type_[nodes[index].op_type().value()].push_back(index);
+    }
+  }
+
+  const std::vector<std::size_t> &Select(const std::set<std::string> &types,
+                                         std::vector<std::size_t> &merged) const {
+    if (types.empty())
+      return all_;
+    merged.clear();
+    if (types.size() == 1) {
+      const auto found = by_type_.find(*types.begin());
+      return found == by_type_.end() ? merged : found->second;
+    }
+    struct Cursor {
+      const std::vector<std::size_t> *bucket;
+      std::size_t offset = 0;
+      bool operator>(const Cursor &other) const {
+        return (*bucket)[offset] > (*other.bucket)[other.offset];
+      }
+    };
+    std::priority_queue<Cursor, std::vector<Cursor>, std::greater<Cursor>> pending;
+    std::size_t count = 0;
+    for (const auto &type : types) {
+      const auto found = by_type_.find(type);
+      if (found != by_type_.end()) {
+        pending.push(Cursor{&found->second});
+        count += found->second.size();
+      }
+    }
+    merged.reserve(count);
+    while (!pending.empty()) {
+      auto cursor = pending.top();
+      pending.pop();
+      merged.push_back((*cursor.bucket)[cursor.offset]);
+      if (++cursor.offset < cursor.bucket->size())
+        pending.push(cursor);
+    }
+    return merged;
+  }
+
+private:
+  std::vector<std::size_t> all_;
+  std::unordered_map<std::string, std::vector<std::size_t>> by_type_;
+};
 
 void MergeFunction(utils::RepeatedProtoField<FunctionProto> &functions,
                    const FunctionProto &function) {
@@ -1826,12 +1880,16 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     if (report != nullptr) {
       matching_start = std::chrono::steady_clock::now();
     }
+    // Positions remain valid until this iteration's matching phase finishes.
+    const PatternCandidates candidate_index(builder_.nodes_);
+    std::vector<std::size_t> merged_candidates;
     for (std::size_t pattern_index = 0; pattern_index < patterns_.size(); ++pattern_index) {
       const std::shared_ptr<PatternOptimization> &pattern = patterns_[pattern_index];
       if (pattern->priority > current_priority) {
         break;
       }
       const std::set<std::string> &fast_op_types = fast_op_types_by_pattern[pattern_index];
+      const auto &candidates = candidate_index.Select(fast_op_types, merged_candidates);
       const auto process_match = [&](const NodeProto &candidate, MatchResult match,
                                      int64_t match_time_ns) {
         if (report != nullptr) {
@@ -1899,18 +1957,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       };
 
       if (parallel && pattern->CanMatchInParallel()) {
-        std::vector<const NodeProto *> candidates;
-        candidates.reserve(builder_.nodes_.size());
-        for (const NodeProto &candidate : builder_.nodes_) {
-          if (!fast_op_types.empty() &&
-              fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
-            continue;
-          }
-          if (HasUnresolvedAttributeReferences(candidate))
-            continue;
-          candidates.push_back(&candidate);
-        }
-
         if (candidates.size() >= kParallelMatchMinimumCandidates) {
           std::vector<std::pair<MatchResult, int64_t>> candidate_matches(candidates.size());
           std::vector<std::exception_ptr> match_exceptions(candidates.size());
@@ -1920,7 +1966,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                 for (int64_t candidate_index = begin; candidate_index < end; ++candidate_index) {
                   const auto match_start = std::chrono::steady_clock::now();
                   try {
-                    MatchResult match = pattern->Match(*this, *candidates[candidate_index]);
+                    MatchResult match =
+                        pattern->Match(*this, builder_.nodes_[candidates[candidate_index]]);
                     const int64_t match_time_ns = ElapsedNanoseconds(match_start);
                     candidate_matches[candidate_index] = {std::move(match), match_time_ns};
                   } catch (...) {
@@ -1933,26 +1980,22 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
             if (match_exceptions[candidate_index] != nullptr) {
               std::rethrow_exception(match_exceptions[candidate_index]);
             }
-            process_match(*candidates[candidate_index],
+            process_match(builder_.nodes_[candidates[candidate_index]],
                           std::move(candidate_matches[candidate_index].first),
                           candidate_matches[candidate_index].second);
           }
         } else {
-          for (const NodeProto *candidate : candidates) {
+          for (const auto index : candidates) {
+            const NodeProto &candidate = builder_.nodes_[index];
             const auto match_start = std::chrono::steady_clock::now();
-            MatchResult match = pattern->Match(*this, *candidate);
+            MatchResult match = pattern->Match(*this, candidate);
             const int64_t match_time_ns = ElapsedNanoseconds(match_start);
-            process_match(*candidate, std::move(match), match_time_ns);
+            process_match(candidate, std::move(match), match_time_ns);
           }
         }
       } else {
-        for (const NodeProto &candidate : builder_.nodes_) {
-          if (!fast_op_types.empty() &&
-              fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {
-            continue;
-          }
-          if (HasUnresolvedAttributeReferences(candidate))
-            continue;
+        for (const auto index : candidates) {
+          const NodeProto &candidate = builder_.nodes_[index];
           const auto match_start = std::chrono::steady_clock::now();
           MatchResult match = pattern->Match(*this, candidate);
           const int64_t match_time_ns = ElapsedNanoseconds(match_start);

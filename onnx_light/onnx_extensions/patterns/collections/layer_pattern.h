@@ -47,7 +47,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   and original positions. Ranks seed families by total anchor coverage, total
  *   node coverage, occurrence count (smaller period), then region size.
  * - Revalidates the selected match in Apply and replaces every selected occurrence
- *   with uniquely named model-local functions. Copies nodes in topological order
+ *   with calls to shared model-local functions when their bodies and interfaces
+ *   agree up to local value and node names. Copies nodes in topological order
  *   into closed function bodies, preserves caller boundary names/types/tags, and
  *   leaves weights as explicit inputs.
  *   Gives body inputs fresh names to avoid lexical SSA shadowing.
@@ -70,7 +71,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *             ┌─────────────────┐       ┌─────────────────┐
- *   x, w0 ───→│ Layer(...)      │───y───→│ Layer_1(...)    │───→ z
+ *   x, w0 ───→│ Layer(...)      │───y───→│ Layer(...)      │───→ z
  *             │ body(x, w0) → y │       │ body(y, w1) → z │
  *             └─────────────────┘       └─────────────────┘
  *                                               ↑

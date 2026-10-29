@@ -12,6 +12,7 @@ import numpy
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import AttributeProto, TensorProto
+from onnx_light.onnx.checker import check_model
 from onnx_light.onnx_core.optimization import FunctionPattern, GraphBuilder, GraphGraph
 
 
@@ -55,6 +56,76 @@ def _double_neg():
 
 
 class TestFunctionPattern(ExtTestCase):
+    def test_local_calls_share_one_function_and_preserve_execution(self):
+        evaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        template, _, _ = _double_neg()
+        model = _model(
+            [
+                oh.make_node("Neg", ["x"], ["a"]),
+                oh.make_node("Neg", ["a"], ["y"]),
+                oh.make_node("Neg", ["y"], ["b"]),
+                oh.make_node("Neg", ["b"], ["z"]),
+            ],
+            outputs=("y", "z"),
+        )
+        builder = GraphBuilder(model)
+        pattern = FunctionPattern(template, template, anchor=0, as_function=True)
+        plan = GraphGraph(builder, patterns=[pattern]).optimize()
+        optimized = builder.to_onnx()
+        check_model(optimized)
+        self.assertEqual(len(plan.rewrites), 2)
+        self.assertEqual(len(plan.added_functions), 1)
+        self.assertEqual(len(optimized.functions), 1)
+        self.assertEqual(len(optimized.functions[0].node), 2)
+        self.assertEqual([node.domain for node in optimized.graph.node], ["patterns"] * 2)
+        self.assertEqual([node.op_type for node in optimized.graph.node], ["body"] * 2)
+        for output in ("y", "z"):
+            self.assertEqual(list(builder.get_shape(output).shape), [2, 2])
+        feeds = {"x": numpy.array([[-2, 0], [1, 3]], dtype=numpy.float32)}
+        for expected, actual in zip(
+            evaluator(model).run(None, feeds), evaluator(optimized).run(None, feeds)
+        ):
+            self.assertEqualArray(expected, actual)
+        replayed = GraphBuilder(model).apply_rewritings(plan).to_onnx()
+        check_model(replayed)
+        self.assertEqual(len(replayed.functions), 1)
+        for expected, actual in zip(
+            evaluator(model).run(None, feeds), evaluator(replayed).run(None, feeds)
+        ):
+            self.assertEqualArray(expected, actual)
+
+    def test_local_call_can_return_an_input(self):
+        evaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        template, replacement, model = _double_neg()
+        builder = GraphBuilder(model)
+        GraphGraph(
+            builder, patterns=[FunctionPattern(template, replacement, as_function=True)]
+        ).optimize()
+        optimized = builder.to_onnx()
+        self.assertEqual(len(optimized.graph.node), 1)
+        self.assertEqual(optimized.graph.node[0].domain, "patterns")
+        self.assertEqual(len(optimized.functions), 1)
+        feeds = {"x": numpy.array([[-2, 0], [1, 3]], dtype=numpy.float32)}
+        self.assertEqualArray(
+            evaluator(model).run(None, feeds)[0], evaluator(optimized).run(None, feeds)[0]
+        )
+
+    def test_local_call_rejects_duplicate_function_outputs(self):
+        template = _function(
+            ["a"],
+            ["left", "right"],
+            [
+                oh.make_node("Abs", ["a"], ["left"]),
+                oh.make_node("Neg", ["left"], ["middle"]),
+                oh.make_node("Neg", ["middle"], ["right"]),
+            ],
+        )
+        replacement = _function(
+            ["a"], ["value", "value"], [oh.make_node("Abs", ["a"], ["value"])]
+        )
+        with self.assertRaisesRegex(ValueError, "function-call outputs must be distinct"):
+            FunctionPattern(template, replacement, as_function=True)
+
     def test_selects_anchor(self):
         template = _function(
             ["a"], ["c"], [oh.make_node("Neg", ["a"], ["b"]), oh.make_node("Abs", ["b"], ["c"])]

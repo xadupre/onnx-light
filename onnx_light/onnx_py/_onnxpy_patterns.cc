@@ -84,10 +84,11 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "FunctionPattern",
       "Creates a fixed-arity rewrite from template and replacement ONNX functions.")
       .def(nb::init<const FunctionProto &, const FunctionProto &, int, std::string,
-                    core::symbolic::Device, int>(),
+                    core::symbolic::Device, int, bool>(),
            nb::arg("pattern"), nb::arg("replacement"), nb::arg("priority") = 1,
            nb::arg("name") = "FunctionPattern",
-           nb::arg("device") = core::symbolic::Device::kUndefined, nb::arg("anchor") = -1)
+           nb::arg("device") = core::symbolic::Device::kUndefined, nb::arg("anchor") = -1,
+           nb::arg("as_function") = false)
       .def("match", &onnx_patterns::FunctionPattern::Match, nb::arg("graph"), nb::arg("candidate"),
            nb::keep_alive<0, 1>(), nb::keep_alive<0, 2>(), nb::keep_alive<0, 3>())
       .def("apply", &onnx_patterns::FunctionPattern::Apply, nb::arg("graph"), nb::arg("nodes"));

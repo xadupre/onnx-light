@@ -170,14 +170,76 @@ bool NeedsOutputIdentity(const FunctionProto &function) {
   return false;
 }
 
+bool SameFunction(const FunctionProto &existing, const FunctionProto &expected) {
+  const auto same = [](const auto &left, const auto &right) {
+    return std::equal(left.begin(), left.end(), right.begin(), right.end());
+  };
+  const auto same_protos = [](const auto &left, const auto &right) {
+    return std::equal(left.begin(), left.end(), right.begin(), right.end(),
+                      [](const auto &a, const auto &b) { return a.Equals(b); });
+  };
+  if (!same(existing.input(), expected.input()) || !same(existing.output(), expected.output()) ||
+      !same(existing.attribute(), expected.attribute()) ||
+      !same_protos(existing.attribute_proto(), expected.attribute_proto()) ||
+      !std::equal(existing.node().begin(), existing.node().end(), expected.node().begin(),
+                  expected.node().end(), [&](const NodeProto &a, const NodeProto &b) {
+                    return a.op_type() == b.op_type() &&
+                           NormaliseDomain(a.domain()) == NormaliseDomain(b.domain()) &&
+                           a.overload() == b.overload() && same(a.input(), b.input()) &&
+                           same(a.output(), b.output()) &&
+                           same_protos(a.attribute(), b.attribute()) &&
+                           same_protos(a.device_configurations(), b.device_configurations()) &&
+                           same_protos(a.metadata_props(), b.metadata_props());
+                  }))
+    return false;
+  for (const auto &required : expected.opset_import()) {
+    const auto found = std::find_if(
+        existing.opset_import().begin(), existing.opset_import().end(), [&](const auto &opset) {
+          return NormaliseDomain(opset.domain()) == NormaliseDomain(required.domain());
+        });
+    if (found == existing.opset_import().end() || found->version() != required.version())
+      return false;
+  }
+  for (const auto &required : expected.value_info()) {
+    const auto found =
+        std::find_if(existing.value_info().begin(), existing.value_info().end(),
+                     [&](const auto &info) { return info.name() == required.name(); });
+    if (found == existing.value_info().end() || !found->type().Equals(required.type()))
+      return false;
+  }
+  return true;
+}
+
+void EnsureLocalFunction(GraphGraph &graph, const FunctionProto &function) {
+  auto &builder = graph.Builder();
+  auto &model = builder.ModelBuilder();
+  const auto *existing =
+      builder.Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+          function.domain(), function.name(), function.overload()));
+  if (existing != nullptr) {
+    const auto *original =
+        graph.FunctionBeforeOptimization(function.domain(), function.name(), function.overload());
+    if (!SameFunction(*existing, function) &&
+        (original == nullptr || !SameFunction(*original, function)))
+      throw BuilderError("FunctionPattern: replacement function has an incompatible definition.");
+  } else {
+    model.MakeLocalFunction(function);
+  }
+  const std::string domain = function.domain().value();
+  if (builder.OpsetVersion(domain) == core::shapes::kUnknownOpsetVersion) {
+    const int version = model.OpsetVersion(domain);
+    builder.SetOpsetVersion(domain, version == core::shapes::kUnknownOpsetVersion ? 1 : version);
+  }
+}
+
 } // namespace
 
 FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionProto &replacement,
                                  int priority, std::string name, core::symbolic::Device device,
-                                 int anchor)
+                                 int anchor, bool as_function)
     : PatternOptimization(priority, std::move(name), device),
       pattern_(utils::CopyWithSharedTensorStorage(pattern)),
-      replacement_(utils::CopyWithSharedTensorStorage(replacement)) {
+      replacement_(utils::CopyWithSharedTensorStorage(replacement)), as_function_(as_function) {
   const References captured = Validate(pattern_, true);
   const References required = Validate(replacement_, false);
   if (anchor < -1 || anchor >= pattern_.node_size())
@@ -188,9 +250,36 @@ FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionPro
     throw BuilderError("FunctionPattern: template and replacement arities must agree.");
   for (const auto &[reference, type] : required) {
     const auto it = captured.find(reference);
-    if (it == captured.end() || it->second != type)
-      throw BuilderError(
-          "FunctionPattern: replacement references must be captured by the template.");
+    if (it != captured.end() && it->second == type)
+      continue;
+    if (as_function_ && it == captured.end()) {
+      const auto default_value =
+          std::find_if(replacement_.attribute_proto().begin(), replacement_.attribute_proto().end(),
+                       [&](const auto &attribute) { return attribute.name() == reference; });
+      if (default_value != replacement_.attribute_proto().end() && default_value->type() == type)
+        continue;
+    }
+    throw BuilderError("FunctionPattern: replacement references must be captured by the template.");
+  }
+  if (as_function_) {
+    std::unordered_set<std::string> outputs;
+    for (const auto &output : replacement_.output())
+      if (!outputs.insert(output.value()).second)
+        throw BuilderError("FunctionPattern: function-call outputs must be distinct.");
+    for (const auto &attribute : replacement_.attribute())
+      if (!captured.contains(attribute.value()) &&
+          std::none_of(replacement_.attribute_proto().begin(), replacement_.attribute_proto().end(),
+                       [&](const auto &value) { return value.name().sv() == attribute.sv(); }))
+        throw BuilderError("FunctionPattern: required function attributes must be captured.");
+    for (const auto &attribute : replacement_.attribute_proto()) {
+      const auto capture = captured.find(attribute.name().value());
+      if (capture != captured.end() && capture->second != attribute.type())
+        throw BuilderError("FunctionPattern: captured attributes must match function defaults.");
+    }
+    for (const auto &node : replacement_.node())
+      if (NormaliseDomain(node.domain()) == NormaliseDomain(replacement_.domain()) &&
+          node.op_type() == replacement_.name() && node.overload() == replacement_.overload())
+        throw BuilderError("FunctionPattern: replacement function must not call itself.");
   }
   std::unordered_map<std::string, std::vector<std::size_t>> adjacent;
   for (std::size_t index = 0; index < pattern_.node().size(); ++index) {
@@ -232,9 +321,13 @@ std::set<std::string> FunctionPattern::FastOpType() const {
 
 core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!CompatibleOpsets(graph, pattern_) || !CompatibleOpsets(graph, replacement_))
+  if (as_function_ && graph.Builder().IsInsideLocalFunction(
+                          replacement_.name(), replacement_.domain(), replacement_.overload()))
+    return NoMatch(candidate, "replacement function must not rewrite its own body");
+  if (!CompatibleOpsets(graph, pattern_) ||
+      (!as_function_ && !CompatibleOpsets(graph, replacement_)))
     return NoMatch(candidate, "function opsets differ from the target graph");
-  if (NeedsOutputIdentity(replacement_) && graph.Builder().OpsetVersion("") <= 0)
+  if (!as_function_ && NeedsOutputIdentity(replacement_) && graph.Builder().OpsetVersion("") <= 0)
     return NoMatch(candidate, "output aliases require an imported default ONNX opset");
   Bindings initial;
   initial.nodes.resize(pattern_.node_size());
@@ -312,6 +405,33 @@ FunctionPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto *> &
   for (int i = 0; i < pattern_.node_size(); ++i)
     if (!BindNode(pattern_.node(i), *nodes[i], bindings))
       throw BuilderError("FunctionPattern::Apply: inconsistent attribute bindings.");
+  if (as_function_) {
+    EnsureLocalFunction(graph, replacement_);
+    NodeProto call;
+    call.set_op_type(replacement_.name());
+    call.set_domain(replacement_.domain());
+    call.set_overload(replacement_.overload());
+    for (const auto &input : pattern_.input())
+      call.add_input(bindings.values.at(input.value()));
+    for (const auto &output : pattern_.output())
+      call.add_output(bindings.values.at(output.value()));
+    std::unordered_set<std::string> forwarded;
+    const auto add_attribute = [&](const std::string &name) {
+      const auto found = bindings.attributes.find(name);
+      if (found != bindings.attributes.end() && forwarded.insert(name).second) {
+        auto &attribute = *call.add_attribute();
+        attribute = utils::CopyWithSharedTensorStorage(found->second);
+        attribute.set_name(name);
+      }
+    };
+    for (const auto &name : replacement_.attribute())
+      add_attribute(name.value());
+    for (const auto &attribute : replacement_.attribute_proto())
+      add_attribute(attribute.name().value());
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(std::move(call));
+    return result;
+  }
   std::unordered_map<std::string, std::string> values{{"", ""}};
   for (int i = 0; i < replacement_.input_size(); ++i)
     values.emplace(replacement_.input(i).value(), bindings.values.at(pattern_.input(i).value()));

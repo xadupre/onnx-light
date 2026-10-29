@@ -42,17 +42,19 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
                   const std::vector<int64_t> &boxes_shape, const std::vector<float> &boxes_values,
                   const std::vector<int64_t> &scores_shape, const std::vector<float> &scores_values,
                   int64_t max_output_boxes_per_class, float iou_threshold, float score_threshold,
-                  const std::vector<int64_t> &expected, int64_t center_point_box = 0) {
+                  const std::vector<int64_t> &expected, int64_t center_point_box = 0,
+                  const std::vector<int64_t> &optional_input_shape = {1}) {
   const OpsetId opset = DefaultOpset(11);
   NodeProto node = MakeNmsNode(center_point_box);
   Expect(registry, std::move(node), case_name, {opset},
          [boxes_shape, boxes_values, scores_shape, scores_values, max_output_boxes_per_class,
-          iou_threshold, score_threshold, expected]() -> IoData {
+          iou_threshold, score_threshold, expected, optional_input_shape]() -> IoData {
            Tensor boxes = Tensor::FromFloat("", boxes_shape, boxes_values);
            Tensor scores = Tensor::FromFloat("", scores_shape, scores_values);
-           Tensor max_out = Tensor::FromInt64("", {1}, {max_output_boxes_per_class});
-           Tensor iou_thr = Tensor::FromFloat("", {1}, {iou_threshold});
-           Tensor score_thr = Tensor::FromFloat("", {1}, {score_threshold});
+           Tensor max_out =
+               Tensor::FromInt64("", optional_input_shape, {max_output_boxes_per_class});
+           Tensor iou_thr = Tensor::FromFloat("", optional_input_shape, {iou_threshold});
+           Tensor score_thr = Tensor::FromFloat("", optional_input_shape, {score_threshold});
 
            const int64_t num_selected = static_cast<int64_t>(expected.size()) / 3;
            Tensor selected = Tensor::FromInt64("", {num_selected, 3}, expected);
@@ -70,7 +72,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
 // in the ai.onnx domain; the only opset-11 change is the documentation
 // clarification that the IoU comparison is strictly greater than).
 //
-// The ten cases registered here mirror the upstream ONNX reference suite
+// The eleven cases registered here mirror the upstream ONNX reference suite
 // ``onnx/backend/test/case/node/nonmaxsuppression.py`` (data inputs and
 // expected ``selected_indices`` outputs match ``test_nonmaxsuppression_*``
 // exactly; each case is registered under ``test_cc_<upstream_name>``).
@@ -139,6 +141,11 @@ void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mo
   RegisterCase(registry, "test_cc_nonmaxsuppression_suppress_by_IOU_and_scores", kCornerBoxesShape,
                kCornerBoxes, kSingleClassScoresShape, kSingleClassScores,
                /*max_out=*/3, /*iou=*/0.5f, /*score=*/0.4f, {0, 0, 3, 0, 0, 0});
+
+  RegisterCase(registry, "test_cc_nonmaxsuppression_scalar_inputs", kCornerBoxesShape, kCornerBoxes,
+               kSingleClassScoresShape, kSingleClassScores,
+               /*max_out=*/3, /*iou=*/0.5f, /*score=*/0.4f, {0, 0, 3, 0, 0, 0},
+               /*center_point_box=*/0, /*optional_input_shape=*/{});
 
   // test_cc_nonmaxsuppression_flipped_coordinates — same scores but several
   // boxes are flipped along x and/or y; selection must be unchanged.

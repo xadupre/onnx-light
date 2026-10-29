@@ -96,21 +96,23 @@ void ValidateInputs(const Tensor &boxes, const Tensor &scores,
     EXT_ENFORCE_INVALID(max_output_boxes_per_class->data_type ==
                             static_cast<int32_t>(DataType::INT64),
                         "kernel::NonMaxSuppression: max_output_boxes_per_class must be INT64.");
-    EXT_ENFORCE_INVALID(max_output_boxes_per_class->element_count() == 1,
-                        "kernel::NonMaxSuppression: max_output_boxes_per_class must be a scalar "
-                        "(or a 1-element 1-D tensor).");
+    EXT_ENFORCE_INVALID(max_output_boxes_per_class->element_count() == 0 ||
+                            max_output_boxes_per_class->element_count() == 1,
+                        "kernel::NonMaxSuppression: max_output_boxes_per_class must contain 0 "
+                        "or 1 elements.");
   }
   if (iou_threshold != nullptr) {
     EXT_ENFORCE_INVALID(iou_threshold->data_type == static_cast<int32_t>(DataType::FLOAT),
                         "kernel::NonMaxSuppression: iou_threshold must be FLOAT.");
-    EXT_ENFORCE_INVALID(iou_threshold->element_count() == 1,
-                        "kernel::NonMaxSuppression: iou_threshold must be a scalar.");
+    EXT_ENFORCE_INVALID(iou_threshold->element_count() == 0 || iou_threshold->element_count() == 1,
+                        "kernel::NonMaxSuppression: iou_threshold must contain 0 or 1 elements.");
   }
   if (score_threshold != nullptr) {
     EXT_ENFORCE_INVALID(score_threshold->data_type == static_cast<int32_t>(DataType::FLOAT),
                         "kernel::NonMaxSuppression: score_threshold must be FLOAT.");
-    EXT_ENFORCE_INVALID(score_threshold->element_count() == 1,
-                        "kernel::NonMaxSuppression: score_threshold must be a scalar.");
+    EXT_ENFORCE_INVALID(score_threshold->element_count() == 0 ||
+                            score_threshold->element_count() == 1,
+                        "kernel::NonMaxSuppression: score_threshold must contain 0 or 1 elements.");
   }
 }
 
@@ -121,6 +123,16 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
                                      const Tensor *iou_threshold, const Tensor *score_threshold,
                                      const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold);
+
+  if (max_output_boxes_per_class != nullptr && max_output_boxes_per_class->element_count() == 0) {
+    max_output_boxes_per_class = nullptr;
+  }
+  if (iou_threshold != nullptr && iou_threshold->element_count() == 0) {
+    iou_threshold = nullptr;
+  }
+  if (score_threshold != nullptr && score_threshold->element_count() == 0) {
+    score_threshold = nullptr;
+  }
 
   const int64_t num_batches = boxes.shape[0];
   const int64_t spatial = boxes.shape[1];
@@ -135,9 +147,8 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
   const float *pboxes = boxes.AsFloat();
   const float *pscores = scores.AsFloat();
 
-  // ``max_per_pair`` may be non-positive when ``max_boxes <= 0``; the
-  // ``max_selected <= 0`` guard below turns that into an empty output.
-  const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes);
+  // Clamp non-positive limits before multiplying the per-pair capacity.
+  const int64_t max_per_pair = std::max<int64_t>(0, std::min<int64_t>(spatial, max_boxes));
   const int64_t max_selected = num_batches * num_classes * max_per_pair;
 
   // Nothing can be selected (e.g. ``max_output_boxes_per_class <= 0`` or an

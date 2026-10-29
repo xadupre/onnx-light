@@ -709,9 +709,13 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
   const auto rename_type = [&](const auto &self, TypeProto &type) -> void {
     const auto rename_shape = [&](TensorShapeProto &shape) {
       for (auto &dimension : shape.ref_dim())
-        if (dimension.has_dim_param())
+        if (dimension.has_dim_param()) {
+          const auto found = replacements.find(dimension.dim_param().value());
           dimension.set_dim_param(
-              expressions::rename_dynamic_expression(dimension.dim_param(), replacements));
+              found != replacements.end()
+                  ? found->second
+                  : expressions::rename_dynamic_expression(dimension.dim_param(), replacements));
+        }
     };
     if (type.has_tensor_type() && type.tensor_type().has_shape())
       rename_shape(type.ref_tensor_type().ref_shape());

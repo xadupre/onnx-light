@@ -112,7 +112,10 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
             std::cerr << "Applying adapter" << '\n';
           }
           // adapt should handle replacing node in graph
+          // An adapter may destroy the original node and return its replacement.
+          const auto metadata_props = cur_op->metadataProps();
           cur_op = op_adapter.adapt(g, cur_op);
+          cur_op->setMetadataProps(metadata_props);
           it = graph_node_list_iterator(cur_op, kNextDirection);
         }
         // Recursively convert any subgraph attributes

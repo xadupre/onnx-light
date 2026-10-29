@@ -346,6 +346,202 @@ private:
   std::thread worker_;
 };
 
+struct ModelLoadingPlan {
+  ModelProto *model;
+  std::vector<TensorProto *> tensors;
+  std::unordered_set<const TensorProto *> initializers;
+  std::unordered_set<std::string> quantization_sources;
+  std::vector<TensorProto *> external;
+  std::vector<size_t> lengths;
+};
+
+std::vector<std::unique_ptr<RuntimeSession>>
+LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeContext &rt,
+             const RuntimeSessionOptions &session_options, const RuntimeLoadOptions &load_options,
+             RuntimeLoadStatistics &statistics) {
+  std::vector<ModelLoadingPlan> plans;
+  plans.reserve(models.size());
+  for (auto *model : models) {
+    if (!model->has_graph())
+      throw std::invalid_argument("Runtime loader requires a model graph in every stage.");
+    auto &plan = plans.emplace_back();
+    plan.model = model;
+    CollectGraph(model->ref_graph(), plan.tensors, 0);
+    for (auto &function : model->ref_functions()) {
+      CollectNodes(function.ref_node(), plan.tensors, 0);
+      for (auto &attribute : function.ref_attribute_proto())
+        CollectAttribute(attribute, plan.tensors, 0);
+    }
+    for (const auto &tensor : model->graph().initializer())
+      plan.initializers.insert(&tensor);
+    for (const auto &annotation : model->graph().quantization_annotation())
+      for (const auto &mapping : annotation.quant_parameter_tensor_names())
+        plan.quantization_sources.insert(mapping.value());
+    size_t source_bytes = 0;
+    for (TensorProto *tensor : plan.tensors) {
+      source_bytes = Add(source_bytes, InlineBytes(*tensor));
+      if (tensor->data_location() == TensorProto::EXTERNAL) {
+        const size_t length = ExternalBytes(*tensor);
+        plan.external.push_back(tensor);
+        plan.lengths.push_back(length);
+        source_bytes = Add(source_bytes, length);
+      }
+    }
+    const auto binding = FunctionBindingBytes(*model, rt);
+    statistics.source_bytes = Add(statistics.source_bytes, source_bytes);
+    statistics.conversion_reserve_bytes =
+        Add(statistics.conversion_reserve_bytes, std::max(source_bytes, binding.temporary_bytes));
+    statistics.function_binding_bytes =
+        Add(statistics.function_binding_bytes, binding.retained_bytes);
+    statistics.external_tensors = Add(statistics.external_tensors, plan.external.size());
+  }
+  size_t source_reservation = Add(Add(statistics.source_bytes, statistics.conversion_reserve_bytes),
+                                  statistics.function_binding_bytes);
+  if (source_reservation > load_options.memory_limit)
+    throw std::length_error("Runtime loader source payload exceeds memory admission limit.");
+  for (auto *model : models) {
+    const auto catalogue = QuantizationParameterCatalogue::EstimateMemory(*model);
+    statistics.quantization_catalogue_bytes =
+        Add(statistics.quantization_catalogue_bytes, catalogue.retained_bytes);
+    statistics.quantization_temporary_bytes =
+        Add(statistics.quantization_temporary_bytes, catalogue.temporary_bytes);
+  }
+  source_reservation = Add(source_reservation, Add(statistics.quantization_catalogue_bytes,
+                                                   statistics.quantization_temporary_bytes));
+  if (source_reservation > load_options.memory_limit)
+    throw std::length_error(
+        "Runtime loader quantization catalogue exceeds memory admission limit.");
+  statistics.peak_admitted_bytes =
+      Add(source_reservation,
+          session_options.value_store ? session_options.value_store->prepared_bytes() : 0);
+  if (statistics.peak_admitted_bytes > load_options.memory_limit)
+    throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
+  const size_t preparation_limit = load_options.memory_limit - source_reservation;
+  const std::string base = std::filesystem::absolute(path).parent_path().string();
+  std::vector<std::unique_ptr<RuntimeSession>> sessions;
+  sessions.reserve(models.size());
+  for (auto &plan : plans) {
+    auto &model = *plan.model;
+    auto &tensors = plan.tensors;
+    auto &initializers = plan.initializers;
+    auto &quantization_sources = plan.quantization_sources;
+    auto &external = plan.external;
+    auto &lengths = plan.lengths;
+    std::vector<TensorProto *> root_external;
+    std::vector<TensorProto *> preloaded_initializers;
+    std::vector<size_t> root_lengths;
+    for (size_t i = 0; i < external.size(); ++i) {
+      if (initializers.count(external[i]) && !quantization_sources.contains(external[i]->name())) {
+        root_external.push_back(external[i]);
+        root_lengths.push_back(lengths[i]);
+      } else {
+        // Function binding and custom factories may copy attribute payloads during
+        // declaration. Quantization catalogues also consume annotated initializers
+        // during construction, so only independent root initializers remain unloaded.
+        Reader::Read(*external[i], lengths[i], base, load_options);
+        if (!initializers.count(external[i])) {
+          external[i]->set_data_location(TensorProto::DEFAULT);
+          external[i]->clr_external_data();
+        } else {
+          preloaded_initializers.push_back(external[i]);
+        }
+      }
+    }
+    external = std::move(root_external);
+    lengths = std::move(root_lengths);
+    if (load_options.overlap_preparation && !external.empty())
+      statistics.peak_queued_tensors = 1;
+    auto session = std::make_unique<RuntimeSession>(model, session_options);
+    for (TensorProto *tensor : preloaded_initializers) {
+      tensor->set_data_location(TensorProto::DEFAULT);
+      tensor->clr_external_data();
+    }
+    statistics.peak_admitted_bytes = std::max(statistics.peak_admitted_bytes,
+                                              Add(source_reservation, session->prepared_bytes()));
+    if (statistics.peak_admitted_bytes > load_options.memory_limit)
+      throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
+    session->DeclarePreparations(rt);
+    Trace(load_options, RuntimeLoadPhase::kDeclared);
+
+    SeedCleanup cleanup{rt, {}};
+    const auto prepare = [&](TensorProto *tensor) {
+      if (tensor != nullptr && initializers.count(tensor) && !rt.HasValue(tensor->name())) {
+        cleanup.names.push_back(tensor->name());
+        rt.Set(tensor->name(), Tensor::BorrowInitializer(*tensor), RuntimeEventKind::kInitializer);
+      }
+      const size_t prepared_before = session->prepared_bytes();
+      const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
+      Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
+      session->ExecutePreparations(rt, preparation_limit,
+                                   tensor == nullptr ? std::span<const std::string>{}
+                                                     : std::span<const std::string>(&name, 1));
+      statistics.peak_admitted_bytes =
+          std::max(statistics.peak_admitted_bytes,
+                   Add(source_reservation,
+                       std::max(session->preparation_peak_bytes(), session->prepared_bytes())));
+      const size_t prepared_after = session->prepared_bytes();
+      Trace(load_options, RuntimeLoadPhase::kPreparationFinished, name,
+            prepared_after > prepared_before ? prepared_after - prepared_before : 0);
+    };
+    const auto prepare_inline = [&] {
+      for (TensorProto *tensor : tensors)
+        if (tensor->data_location() != TensorProto::EXTERNAL)
+          prepare(tensor);
+    };
+    if (load_options.overlap_preparation && !external.empty()) {
+      Reader reader(external, lengths, base, load_options);
+      prepare_inline();
+      for (size_t i = 0; i < external.size(); ++i) {
+        reader.Take(i);
+        prepare(external[i]);
+      }
+    } else {
+      for (size_t i = 0; i < external.size(); ++i)
+        Reader::Read(*external[i], lengths[i], base, load_options);
+      prepare_inline();
+      for (size_t i = 0; i < external.size(); ++i)
+        prepare(external[i]);
+    }
+    // Metadata is changed only after the worker is joined, never concurrently
+    // with kernel metadata inspection.
+    for (TensorProto *tensor : external) {
+      tensor->set_data_location(TensorProto::DEFAULT);
+      tensor->clr_external_data();
+    }
+    prepare(nullptr);
+    std::unordered_set<std::string> runtime_sources;
+    std::unordered_set<std::string> produced_sources;
+    for (const auto &input : model.graph().input())
+      runtime_sources.insert(input.name());
+    for (const auto &node : model.graph().node())
+      for (const auto &output : node.output())
+        produced_sources.insert(output);
+    std::unordered_set<size_t> deferred;
+    for (const auto &preparation : session->pending_preparations()) {
+      bool waits_for_runtime = preparation.awaits_runtime_tuning;
+      for (const auto &name : preparation.source_inputs) {
+        if (produced_sources.contains(name)) {
+          waits_for_runtime = true;
+          continue;
+        }
+        if (rt.HasValue(name))
+          continue;
+        if (!runtime_sources.contains(name))
+          throw std::invalid_argument("Runtime loader unknown preparation source: " + name);
+        waits_for_runtime = true;
+      }
+      for (size_t dependency : preparation.dependencies)
+        waits_for_runtime = waits_for_runtime || deferred.contains(dependency);
+      if (!waits_for_runtime)
+        throw std::length_error("Runtime loader cannot admit all ready declared preparations.");
+      deferred.insert(preparation.index);
+    }
+    sessions.push_back(std::move(session));
+  }
+  Trace(load_options, RuntimeLoadPhase::kComplete);
+  return sessions;
+}
+
 } // namespace
 
 LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeContext &rt,
@@ -355,166 +551,36 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
   ParseOptions parse_options;
   if (!model_.ParseFromStream(stream, parse_options) || !model_.has_graph())
     throw std::invalid_argument("Runtime loader failed to parse a model graph.");
-  std::vector<TensorProto *> tensors;
-  CollectGraph(model_.ref_graph(), tensors, 0);
-  for (auto &function : model_.ref_functions()) {
-    CollectNodes(function.ref_node(), tensors, 0);
-    for (auto &attribute : function.ref_attribute_proto())
-      CollectAttribute(attribute, tensors, 0);
-  }
-  std::unordered_set<const TensorProto *> initializers;
-  for (const auto &tensor : model_.graph().initializer())
-    initializers.insert(&tensor);
-  std::unordered_set<std::string> quantization_sources;
-  for (const auto &annotation : model_.graph().quantization_annotation())
-    for (const auto &mapping : annotation.quant_parameter_tensor_names())
-      quantization_sources.insert(mapping.value());
-  std::vector<TensorProto *> external;
-  std::vector<size_t> lengths;
-  for (TensorProto *tensor : tensors) {
-    statistics_.source_bytes = Add(statistics_.source_bytes, InlineBytes(*tensor));
-    if (tensor->data_location() == TensorProto::EXTERNAL) {
-      const size_t length = ExternalBytes(*tensor);
-      external.push_back(tensor);
-      lengths.push_back(length);
-      statistics_.source_bytes = Add(statistics_.source_bytes, length);
-    }
-  }
-  const auto binding = FunctionBindingBytes(model_, rt);
-  statistics_.conversion_reserve_bytes =
-      std::max(statistics_.source_bytes, binding.temporary_bytes);
-  statistics_.function_binding_bytes = binding.retained_bytes;
-  size_t source_reservation =
-      Add(Add(statistics_.source_bytes, statistics_.conversion_reserve_bytes),
-          statistics_.function_binding_bytes);
-  if (source_reservation > load_options.memory_limit)
-    throw std::length_error("Runtime loader source payload exceeds memory admission limit.");
-  const auto catalogue = QuantizationParameterCatalogue::EstimateMemory(model_);
-  statistics_.quantization_catalogue_bytes = catalogue.retained_bytes;
-  statistics_.quantization_temporary_bytes = catalogue.temporary_bytes;
-  source_reservation =
-      Add(source_reservation, Add(catalogue.retained_bytes, catalogue.temporary_bytes));
-  if (source_reservation > load_options.memory_limit)
-    throw std::length_error(
-        "Runtime loader quantization catalogue exceeds memory admission limit.");
-  statistics_.external_tensors = external.size();
-  statistics_.peak_admitted_bytes =
-      Add(source_reservation,
-          session_options.value_store ? session_options.value_store->prepared_bytes() : 0);
-  if (statistics_.peak_admitted_bytes > load_options.memory_limit)
-    throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
-  const size_t preparation_limit = load_options.memory_limit - source_reservation;
-  const std::string base = std::filesystem::absolute(path).parent_path().string();
-  std::vector<TensorProto *> root_external;
-  std::vector<TensorProto *> preloaded_initializers;
-  std::vector<size_t> root_lengths;
-  for (size_t i = 0; i < external.size(); ++i) {
-    if (initializers.count(external[i]) && !quantization_sources.contains(external[i]->name())) {
-      root_external.push_back(external[i]);
-      root_lengths.push_back(lengths[i]);
-    } else {
-      // Function binding and custom factories may copy attribute payloads during
-      // declaration. Quantization catalogues also consume annotated initializers
-      // during construction, so only independent root initializers remain unloaded.
-      Reader::Read(*external[i], lengths[i], base, load_options);
-      if (!initializers.count(external[i])) {
-        external[i]->set_data_location(TensorProto::DEFAULT);
-        external[i]->clr_external_data();
-      } else {
-        preloaded_initializers.push_back(external[i]);
-      }
-    }
-  }
-  external = std::move(root_external);
-  lengths = std::move(root_lengths);
-  statistics_.peak_queued_tensors = load_options.overlap_preparation && !external.empty() ? 1 : 0;
-  session_ = std::make_unique<RuntimeSession>(model_, std::move(session_options));
-  for (TensorProto *tensor : preloaded_initializers) {
-    tensor->set_data_location(TensorProto::DEFAULT);
-    tensor->clr_external_data();
-  }
-  statistics_.peak_admitted_bytes = Add(source_reservation, session_->prepared_bytes());
-  if (statistics_.peak_admitted_bytes > load_options.memory_limit)
-    throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
-  session_->DeclarePreparations(rt);
-  Trace(load_options, RuntimeLoadPhase::kDeclared);
-
-  SeedCleanup cleanup{rt, {}};
-  const auto prepare = [&](TensorProto *tensor) {
-    if (tensor != nullptr && initializers.count(tensor) && !rt.HasValue(tensor->name())) {
-      cleanup.names.push_back(tensor->name());
-      rt.Set(tensor->name(), Tensor::BorrowInitializer(*tensor), RuntimeEventKind::kInitializer);
-    }
-    const size_t prepared_before = session_->prepared_bytes();
-    const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
-    Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
-    session_->ExecutePreparations(rt, preparation_limit,
-                                  tensor == nullptr ? std::span<const std::string>{}
-                                                    : std::span<const std::string>(&name, 1));
-    statistics_.peak_admitted_bytes =
-        std::max(statistics_.peak_admitted_bytes,
-                 Add(source_reservation,
-                     std::max(session_->preparation_peak_bytes(), session_->prepared_bytes())));
-    const size_t prepared_after = session_->prepared_bytes();
-    Trace(load_options, RuntimeLoadPhase::kPreparationFinished, name,
-          prepared_after > prepared_before ? prepared_after - prepared_before : 0);
-  };
-  const auto prepare_inline = [&] {
-    for (TensorProto *tensor : tensors)
-      if (tensor->data_location() != TensorProto::EXTERNAL)
-        prepare(tensor);
-  };
-  if (load_options.overlap_preparation && !external.empty()) {
-    Reader reader(external, lengths, base, load_options);
-    prepare_inline();
-    for (size_t i = 0; i < external.size(); ++i) {
-      reader.Take(i);
-      prepare(external[i]);
-    }
-  } else {
-    for (size_t i = 0; i < external.size(); ++i)
-      Reader::Read(*external[i], lengths[i], base, load_options);
-    prepare_inline();
-    for (size_t i = 0; i < external.size(); ++i)
-      prepare(external[i]);
-  }
-  // Metadata is changed only after the worker is joined, never concurrently
-  // with kernel metadata inspection.
-  for (TensorProto *tensor : external) {
-    tensor->set_data_location(TensorProto::DEFAULT);
-    tensor->clr_external_data();
-  }
-  prepare(nullptr);
-  std::unordered_set<std::string> runtime_sources;
-  std::unordered_set<std::string> produced_sources;
-  for (const auto &input : model_.graph().input())
-    runtime_sources.insert(input.name());
-  for (const auto &node : model_.graph().node())
-    for (const auto &output : node.output())
-      produced_sources.insert(output);
-  std::unordered_set<size_t> deferred;
-  for (const auto &preparation : session_->pending_preparations()) {
-    bool waits_for_runtime = preparation.awaits_runtime_tuning;
-    for (const auto &name : preparation.source_inputs) {
-      if (produced_sources.contains(name)) {
-        waits_for_runtime = true;
-        continue;
-      }
-      if (rt.HasValue(name))
-        continue;
-      if (!runtime_sources.contains(name))
-        throw std::invalid_argument("Runtime loader unknown preparation source: " + name);
-      waits_for_runtime = true;
-    }
-    for (size_t dependency : preparation.dependencies)
-      waits_for_runtime = waits_for_runtime || deferred.contains(dependency);
-    if (!waits_for_runtime)
-      throw std::length_error("Runtime loader cannot admit all ready declared preparations.");
-    deferred.insert(preparation.index);
-  }
-  Trace(load_options, RuntimeLoadPhase::kComplete);
+  ModelProto *models[] = {&model_};
+  auto sessions = LoadSessions(models, path, rt, session_options, load_options, statistics_);
+  session_ = std::move(sessions.front());
 }
 
 LoadedRuntimeSession::~LoadedRuntimeSession() = default;
+
+LoadedRuntimePipeline::LoadedRuntimePipeline(const std::string &path, RuntimeContext &rt,
+                                             RuntimeSessionOptions session_options,
+                                             RuntimeLoadOptions load_options)
+    : session_options_(std::move(session_options)) {
+  utils::FileStream stream(path);
+  ParseOptions parse_options;
+  if (!pipeline_.ParseFromStream(stream, parse_options) || !pipeline_.has_prefill())
+    throw std::invalid_argument("Runtime pipeline loader requires a prefill model.");
+  if (pipeline_.has_decode())
+    throw std::invalid_argument(
+        "Runtime pipeline loader does not support a separate decode model.");
+  if (!session_options_.value_store)
+    session_options_.value_store = std::make_shared<ValueStore>();
+  std::vector<ModelProto *> models;
+  if (pipeline_.has_embedding())
+    models.push_back(pipeline_.mutable_embedding());
+  models.push_back(pipeline_.mutable_prefill());
+  auto sessions = LoadSessions(models, path, rt, session_options_, load_options, statistics_);
+  prefill_session_ = std::move(sessions.back());
+  if (pipeline_.has_embedding())
+    embedding_session_ = std::move(sessions.front());
+}
+
+LoadedRuntimePipeline::~LoadedRuntimePipeline() = default;
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

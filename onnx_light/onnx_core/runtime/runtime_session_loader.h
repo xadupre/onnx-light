@@ -34,7 +34,7 @@ struct RuntimeLoadEvent {
   size_t prepared_bytes_added = 0;
 };
 
-/** Configures synchronous owning model loading. */
+/** Configures synchronous owning model or pipeline loading. */
 struct RuntimeLoadOptions {
   bool overlap_preparation = true;
   /// Bounds source payload, conversion reserve, bound function copies, shared quantization
@@ -89,6 +89,44 @@ public:
 private:
   ModelProto model_;
   std::unique_ptr<RuntimeSession> session_;
+  RuntimeLoadStatistics statistics_;
+};
+
+/**
+ * Owns a pipeline, its prepared stage sessions and their shared static store.
+ *
+ * Supports the prefill and optional embedding stages accepted by Generate.
+ * The loading budget and statistics cover all stages together. Stages load
+ * sequentially, with at most one bounded I/O worker overlapping preparation.
+ * Generate overloads retain these session settings and reuse the static store,
+ * while creating fresh invocation sessions for request-local persistent state.
+ * Serialize generation, stage execution and other access to the shared store.
+ * Borrowed initializer views must not outlive this owner.
+ */
+class LoadedRuntimePipeline {
+public:
+  LoadedRuntimePipeline(const std::string &path, RuntimeContext &rt,
+                        RuntimeSessionOptions session_options = {},
+                        RuntimeLoadOptions load_options = {});
+  ~LoadedRuntimePipeline();
+  LoadedRuntimePipeline(const LoadedRuntimePipeline &) = delete;
+  LoadedRuntimePipeline &operator=(const LoadedRuntimePipeline &) = delete;
+  LoadedRuntimePipeline(LoadedRuntimePipeline &&) = delete;
+  LoadedRuntimePipeline &operator=(LoadedRuntimePipeline &&) = delete;
+
+  const PipelineProto &pipeline() const noexcept { return pipeline_; }
+  RuntimeSession &prefill_session() noexcept { return *prefill_session_; }
+  const RuntimeSession &prefill_session() const noexcept { return *prefill_session_; }
+  RuntimeSession *embedding_session() noexcept { return embedding_session_.get(); }
+  const RuntimeSession *embedding_session() const noexcept { return embedding_session_.get(); }
+  const RuntimeSessionOptions &session_options() const noexcept { return session_options_; }
+  const RuntimeLoadStatistics &statistics() const noexcept { return statistics_; }
+
+private:
+  PipelineProto pipeline_;
+  RuntimeSessionOptions session_options_;
+  std::unique_ptr<RuntimeSession> embedding_session_;
+  std::unique_ptr<RuntimeSession> prefill_session_;
   RuntimeLoadStatistics statistics_;
 };
 

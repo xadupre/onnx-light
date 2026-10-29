@@ -127,7 +127,9 @@ Captured function attributes are attached to each call, so differing attribute
 values do not create specialized copies of the definition. Function attribute
 defaults are retained. The local body supplies shape inference at its own opsets;
 its operator imports need not equal the caller's imports in this mode. The matcher
-does not encapsulate the replacement function's own body into a recursive call.
+does not rewrite any local-function body or its nested subgraphs in this mode,
+so existing functions cannot acquire a recursive dependency on the replacement.
+Matching remains enabled in the model graph and its nested subgraphs.
 The default ``as_function=False`` preserves the existing inline behavior.
 
 Function inputs and outputs correspond **by position** and must have equal,

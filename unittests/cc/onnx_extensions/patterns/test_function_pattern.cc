@@ -293,6 +293,107 @@ TEST(FunctionPattern, LocalCallsShareTheirDefinitionWithNestedSubgraphs) {
   EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 2);
 }
 
+TEST(FunctionPattern, LocalCallsDoNotRewriteExistingFunctionBodies) {
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"patterns", 1}});
+  auto function = DoubleNeg();
+  function.set_name("F");
+  auto &local = builder.MakeLocalFunction(function);
+  AddInput(builder, "x");
+  builder.MakeNode("F", {"x"}, {"y"}, "patterns");
+  builder.MakeOutput("y");
+  auto pattern = std::make_shared<FunctionPattern>(DoubleNeg(), Identity(), 1, "LocalIdentity",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  GraphGraph local_graph(local);
+  const std::vector<const NodeProto *> nodes{&local.Nodes()[0], &local.Nodes()[1]};
+  EXPECT_EQ(pattern->Match(local_graph, *nodes[1]).pattern, nullptr);
+  EXPECT_THROW(pattern->Apply(local_graph, nodes), BuilderError);
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  FunctionPattern inline_pattern(DoubleNeg(), Identity());
+  EXPECT_EQ(inline_pattern.Match(local_graph, *nodes[1]).pattern, &inline_pattern);
+  EXPECT_EQ(inline_pattern.Apply(local_graph, nodes).size(), 1u);
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  ASSERT_EQ(local.Nodes().size(), 2u);
+  EXPECT_EQ(local.Nodes()[0].op_type(), "Neg");
+  EXPECT_EQ(local.Nodes()[1].op_type(), "Neg");
+  EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 2);
+}
+
+TEST(FunctionPattern, LocalCallsDoNotRewriteSubgraphsInsideFunctions) {
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"patterns", 1}});
+  auto &local = builder.MakeLocalFunction("F", "patterns");
+  AddInput(local, "x");
+  local.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+  auto pattern = std::make_shared<FunctionPattern>(DoubleNeg(), Identity(), 1, "LocalIdentity",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then", "else"}) {
+    auto &branch = local.MakeSubgraph(name);
+    branch.MakeNode("Neg", {"x"}, {"middle"});
+    branch.MakeNode("Neg", {"middle"}, {"result"});
+    branch.MakeOutput("result");
+    GraphGraph branch_graph(branch);
+    const std::vector<const NodeProto *> nodes{&branch.Nodes()[0], &branch.Nodes()[1]};
+    EXPECT_EQ(pattern->Match(branch_graph, *nodes[1]).pattern, nullptr);
+    EXPECT_THROW(pattern->Apply(branch_graph, nodes), BuilderError);
+    auto &attribute = *attributes.Add();
+    attribute.set_name(name + "_branch_ref");
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s(name);
+  }
+  local.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+  local.MakeOutput("result");
+  AddInput(builder, "x");
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+  builder.MakeNode("F", {"x", "condition"}, {"y"}, "patterns");
+  builder.MakeOutput("y");
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  for (const auto &branch : local.Subgraphs()) {
+    ASSERT_EQ(branch->Nodes().size(), 2u);
+    EXPECT_EQ(branch->Nodes()[0].op_type(), "Neg");
+    EXPECT_EQ(branch->Nodes()[1].op_type(), "Neg");
+  }
+  EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 2);
+}
+
+TEST(FunctionPattern, LocalCallsCannotIntroduceIndirectRecursionThroughExistingFunctions) {
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"patterns", 1}});
+  auto function = DoubleNeg();
+  function.set_name("F");
+  auto &local = builder.MakeLocalFunction(function);
+  AddInput(builder, "x");
+  builder.MakeNode("Neg", {"x"}, {"middle"});
+  builder.MakeNode("Neg", {"middle"}, {"y"});
+  builder.MakeOutput("y");
+  auto call = MakeNode("F", {"input"}, {"output"});
+  call.set_domain("patterns");
+  auto replacement = Function({"input"}, {"output"}, {call});
+  replacement.set_name("R");
+  replacement.add_opset("patterns", 1);
+  auto pattern = std::make_shared<FunctionPattern>(DoubleNeg(), replacement, 1, "LocalF",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  const auto plan = graph.Optimize();
+  EXPECT_EQ(plan.rewrites().size(), 1u);
+  EXPECT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "R");
+  EXPECT_EQ(builder.Nodes()[0].domain(), "patterns");
+  EXPECT_EQ(builder.LocalFunctions().size(), 2u);
+  ASSERT_EQ(local.Nodes().size(), 2u);
+  EXPECT_EQ(local.Nodes()[0].op_type(), "Neg");
+  EXPECT_EQ(local.Nodes()[1].op_type(), "Neg");
+  const auto model = builder.ToModel();
+  EXPECT_EQ(model.functions_size(), 2);
+  EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 2);
+}
+
 TEST(FunctionPattern, LocalCallsUseDefaultsAndIndependentFunctionOpsets) {
   auto pattern_body = Function({"x"}, {"y"}, {Transpose("x", "y", false, {1, 0})});
   auto replacement = Function({"x"}, {"y"}, {Transpose("x", "y", true)});

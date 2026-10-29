@@ -251,6 +251,14 @@ public:
            function_template_.overload().value() == overload;
   }
 
+  /// Returns ``true`` inside any local function, including its subgraphs.
+  bool IsInsideLocalFunction() const noexcept {
+    for (const GraphBuilder *scope = this; scope != nullptr; scope = scope->parent_)
+      if (scope->is_local_function_)
+        return true;
+    return false;
+  }
+
   /// Returns ``true`` inside the identified local function, including its subgraphs.
   bool IsInsideLocalFunction(const std::string &name, const std::string &domain,
                              const std::string &overload = "") const noexcept {

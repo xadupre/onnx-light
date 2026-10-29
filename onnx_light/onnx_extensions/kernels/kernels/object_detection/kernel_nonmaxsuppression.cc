@@ -96,20 +96,22 @@ void ValidateInputs(const Tensor &boxes, const Tensor &scores,
     EXT_ENFORCE_INVALID(max_output_boxes_per_class->data_type ==
                             static_cast<int32_t>(DataType::INT64),
                         "kernel::NonMaxSuppression: max_output_boxes_per_class must be INT64.");
-    EXT_ENFORCE_INVALID(max_output_boxes_per_class->element_count() <= 1,
+    EXT_ENFORCE_INVALID(max_output_boxes_per_class->element_count() == 0 ||
+                            max_output_boxes_per_class->element_count() == 1,
                         "kernel::NonMaxSuppression: max_output_boxes_per_class must be a scalar "
                         "(or a 1-element 1-D tensor) or empty.");
   }
   if (iou_threshold != nullptr) {
     EXT_ENFORCE_INVALID(iou_threshold->data_type == static_cast<int32_t>(DataType::FLOAT),
                         "kernel::NonMaxSuppression: iou_threshold must be FLOAT.");
-    EXT_ENFORCE_INVALID(iou_threshold->element_count() <= 1,
+    EXT_ENFORCE_INVALID(iou_threshold->element_count() == 0 || iou_threshold->element_count() == 1,
                         "kernel::NonMaxSuppression: iou_threshold must be a scalar or empty.");
   }
   if (score_threshold != nullptr) {
     EXT_ENFORCE_INVALID(score_threshold->data_type == static_cast<int32_t>(DataType::FLOAT),
                         "kernel::NonMaxSuppression: score_threshold must be FLOAT.");
-    EXT_ENFORCE_INVALID(score_threshold->element_count() <= 1,
+    EXT_ENFORCE_INVALID(score_threshold->element_count() == 0 ||
+                            score_threshold->element_count() == 1,
                         "kernel::NonMaxSuppression: score_threshold must be a scalar or empty.");
   }
 }

@@ -228,6 +228,16 @@ TEST(KernelClass, NonMaxSuppressionRejectsBadInputs) {
                std::invalid_argument);
   EXPECT_THROW(nms(boxes, scores, nullptr, nullptr, &multiple_threshold, attrs),
                std::invalid_argument);
+
+  Tensor negative_max = Tensor::FromInt64("", {1}, {1});
+  negative_max.shape[0] = -1;
+  EXPECT_THROW(nms(boxes, scores, &negative_max, nullptr, nullptr, attrs), std::invalid_argument);
+  Tensor negative_threshold = Tensor::FromFloat("", {1}, {0.5f});
+  negative_threshold.shape[0] = -1;
+  EXPECT_THROW(nms(boxes, scores, nullptr, &negative_threshold, nullptr, attrs),
+               std::invalid_argument);
+  EXPECT_THROW(nms(boxes, scores, nullptr, nullptr, &negative_threshold, attrs),
+               std::invalid_argument);
 }
 
 TEST(KernelClass, NonMaxSuppressionScalarAndAbsentOptionalInputs) {

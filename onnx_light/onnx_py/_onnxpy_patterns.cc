@@ -399,6 +399,8 @@ NB_MODULE(_onnxpypatterns, m) {
       "Fuses gathered weights, unrolled MatMuls, or a per-token Loop into GroupedMatMul.", 2);
   BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
                                                    "Folds input transposes into a Gemm operation.");
+  BindPattern<onnx_patterns::GemmOutputTransposePattern>(
+      m, "GemmOutputTransposePattern", "Folds an output transpose into an unbiased Gemm.");
   BindPattern<onnx_patterns::GemmSumFusionPattern>(
       m, "GemmSumFusionPattern", "Fuses a two-input Sum into an unbiased Gemm bias input.", 2);
   nb::class_<onnx_patterns::MatMulAddPattern, core::builder::PatternOptimization>(

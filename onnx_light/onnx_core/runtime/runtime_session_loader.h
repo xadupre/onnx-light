@@ -46,6 +46,7 @@ struct RuntimeLoadOptions {
   std::function<void(const RuntimeLoadEvent &)> trace;
   /// Optional trusted reader, invoked instead of TensorProto::LoadExternalData.
   /// May change only this tensor's raw_data and must honor its declared length.
+  /// Missing lengths are filled from the fixed-width shape before invocation.
   /// It must return or throw: destruction joins, rather than interrupts, I/O.
   std::function<void(TensorProto &, const std::string &)> external_reader;
 };

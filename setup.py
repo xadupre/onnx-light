@@ -555,7 +555,7 @@ class BuildBenchmarks(Command):
 
 setup(
     name="onnx-light",
-    version="0.2.2",
+    version="0.2.3",
     packages=["onnx_light"],
     distclass=NoConfigDistribution,
     cmdclass={"build_ext": BuildExt, "build_benchmarks": BuildBenchmarks},

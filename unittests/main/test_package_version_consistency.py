@@ -18,6 +18,14 @@ class TestPackageVersionConsistency(unittest.TestCase):
             raise AssertionError(f"Unable to extract version from {source!r}.")
         return match.group(1)
 
+    def test_documentation_homepage_displays_release(self):
+        """Checks that the homepage displays the release from the package version."""
+        homepage = (self.root / "docs" / "index.rst").read_text(encoding="utf-8")
+        config = (self.root / "docs" / "conf.py").read_text(encoding="utf-8")
+
+        self.assertIn("\nVersion: |release|\n", homepage)
+        self.assertRegex(config, r"(?m)^release\s*=\s*onnx_light\.__version__\s*$")
+
     def test_package_versions_are_synchronized(self):
         """Verifies Python and C++ package version declarations remain aligned."""
         pyproject = (self.root / "pyproject.toml").read_text(encoding="utf-8")
@@ -58,6 +66,14 @@ class TestPackageVersionConsistency(unittest.TestCase):
         self.assertEqual(pyproject_version, cmake_version)
         self.assertEqual(pyproject_version, proto_cmake_version)
         self.assertEqual(pyproject_version, changelog_version)
+
+    def test_changelog_documents_current_version_bump(self):
+        """Verifies the latest changelog entry documents the current version bump."""
+        pyproject = (self.root / "pyproject.toml").read_text(encoding="utf-8")
+        version = self._extract(r'^version\s*=\s*"([^"]+)"', pyproject, "pyproject.toml")
+        changelog = (self.root / "CHANGELOGS.md").read_text(encoding="utf-8")
+        latest_entry = re.split(r"^## ", changelog, flags=re.MULTILINE)[1]
+        self.assertIn(f"Bumped the release version to `{version}`.", latest_entry)
 
 
 if __name__ == "__main__":

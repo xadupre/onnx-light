@@ -282,6 +282,40 @@ TEST_F(RuntimeSessionLoading, PipelineSerialAndOverlapGenerateFromOwnedStages) {
   EXPECT_EQ(serial.session_options().value_store, session_options.value_store);
 }
 
+TEST_F(RuntimeSessionLoading, PipelineInfersExternalLengthsBeforeReadingEitherStage) {
+  auto pipeline = MakePipeline();
+  for (auto *model : {pipeline.mutable_embedding(), pipeline.mutable_prefill()})
+    for (auto &tensor : model->ref_graph().ref_initializer())
+      if (tensor.data_location() == TensorProto::EXTERNAL)
+        tensor.ref_external_data().resize(1);
+  SavePipeline(pipeline);
+  for (const auto *name : {"embedding.bin", "weight0.bin", "weight1.bin"})
+    std::filesystem::resize_file(directory / name, 4096);
+  for (bool overlap : {false, true}) {
+    SCOPED_TRACE(overlap);
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+      ++reads;
+      const size_t expected = tensor.name() == "E" ? 12 : 24;
+      ASSERT_EQ(tensor.external_data().back().key(), "length");
+      EXPECT_EQ(tensor.external_data().back().value(), std::to_string(expected));
+      tensor.LoadExternalData(base);
+      EXPECT_EQ(tensor.raw_data().size(), expected);
+    };
+    RuntimeContext rt;
+    LoadedRuntimePipeline loaded(PipelinePath(), rt, {}, options);
+    EXPECT_EQ(reads, 3u);
+    EXPECT_EQ(loaded.statistics().source_bytes, 68u);
+    RuntimeValueMap feeds;
+    feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
+    const auto actual = Generate(loaded, rt, feeds);
+    EXPECT_EQ((std::vector<int64_t>{actual.AsInt64(), actual.AsInt64() + actual.element_count()}),
+              (std::vector<int64_t>{1, 1, 1}));
+  }
+}
+
 TEST_F(RuntimeSessionLoading, PipelineGenerationHonorsCpuPolicyAndRestoresCallerExecutor) {
   SavePipeline(MakePipeline());
   CpuExecutionPolicy caller_policy;
@@ -443,6 +477,7 @@ TEST_F(RuntimeSessionLoading, PipelineOverlapsActualPreparationInLaterStage) {
 
 TEST_F(RuntimeSessionLoading, PipelineValidatesEveryStageBeforePayloadReads) {
   for (size_t invalid = 0; invalid < 4; ++invalid) {
+    SCOPED_TRACE(invalid);
     auto pipeline = MakePipeline();
     if (invalid == 0)
       pipeline = PipelineProto{};
@@ -451,7 +486,11 @@ TEST_F(RuntimeSessionLoading, PipelineValidatesEveryStageBeforePayloadReads) {
     else if (invalid == 2)
       *pipeline.mutable_prefill() = ModelProto{};
     else
-      pipeline.mutable_prefill()->mutable_graph()->mutable_initializer(0)->clr_external_data();
+      pipeline.mutable_prefill()
+          ->mutable_graph()
+          ->mutable_initializer(0)
+          ->ref_external_data()[1]
+          .set_value("-1");
     SavePipeline(pipeline);
     RuntimeContext rt;
     size_t reads = 0;
@@ -620,9 +659,6 @@ TEST_F(RuntimeSessionLoading, LoadsSharedQuantizationSourcesBeforeSessionConstru
   auto *entry = scales->add_external_data();
   entry->set_key("location");
   entry->set_value("scales.bin");
-  entry = scales->add_external_data();
-  entry->set_key("length");
-  entry->set_value("8");
   auto *mapping = annotation->add_quant_parameter_tensor_names();
   mapping->set_key("scales");
   mapping->set_value("scales");
@@ -976,25 +1012,185 @@ TEST_F(RuntimeSessionLoading, RejectsExternalRangeOverflowBeforeReading) {
   auto *offset = model.ref_graph().ref_initializer()[0].add_external_data();
   offset->set_key("offset");
   offset->set_value("9223372036854775807");
-  SaveModel(model);
-  RuntimeContext rt;
-  size_t reads = 0;
-  RuntimeLoadOptions options;
-  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
-  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
-  EXPECT_EQ(reads, 0u);
+  for (bool explicit_length : {true, false}) {
+    SCOPED_TRACE(explicit_length);
+    if (!explicit_length)
+      model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("unused_metadata");
+    SaveModel(model);
+    RuntimeContext rt;
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+    EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+    EXPECT_EQ(reads, 0u);
+  }
 }
 
-TEST_F(RuntimeSessionLoading, RejectsMissingLengthBeforeReading) {
+TEST_F(RuntimeSessionLoading, LoadsGatherWithoutExternalLength) {
+  ModelProto model;
+  model.set_ir_version(9);
+  model.add_opset_import()->set_version(13);
+  auto *graph = model.mutable_graph();
+  graph->add_input()->set_name("indices");
+  graph->add_output()->set_name("Y");
+  graph->add_node(MakeNode("Gather", {"weight", "indices"}, {"Y"}));
+  auto *weight = graph->add_initializer();
+  weight->set_name("weight");
+  weight->set_data_type(TensorProto::FLOAT);
+  weight->add_dims(4);
+  weight->add_dims(4);
+  weight->set_data_location(TensorProto::EXTERNAL);
+  auto *location = weight->add_external_data();
+  location->set_key("location");
+  location->set_value("weights/decoder.bin");
+  std::filesystem::create_directory(directory / "weights");
+  const std::vector<float> values{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  const auto gather = [](RuntimeSession &session, RuntimeContext &rt) {
+    rt.Put("indices", Tensor::FromInt64("indices", {2}, {3, 1}));
+    session.Run(rt);
+    const auto &output = rt.Get("Y");
+    EXPECT_EQ(output.element_count(), 8);
+    return std::vector<float>(output.AsFloat(), output.AsFloat() + output.element_count());
+  };
+  for (size_t offset : {size_t{0}, size_t{16}}) {
+    SCOPED_TRACE(offset);
+    if (offset != 0) {
+      auto *entry = weight->add_external_data();
+      entry->set_key("offset");
+      entry->set_value(std::to_string(offset));
+    }
+    {
+      std::ofstream payload(directory / "weights" / "decoder.bin", std::ios::binary);
+      const std::string prefix(offset, '\0');
+      payload.write(prefix.data(), static_cast<std::streamsize>(prefix.size()));
+      payload.write(reinterpret_cast<const char *>(values.data()), 64);
+    }
+    SaveModel(model);
+    auto standard_model = ReadModel();
+    LoadExternalDataForModel(standard_model, directory.string());
+    RuntimeContext standard_rt;
+    RuntimeSession standard_session(standard_model);
+    const auto expected = gather(standard_session, standard_rt);
+    EXPECT_EQ(expected, (std::vector<float>{13, 14, 15, 16, 5, 6, 7, 8}));
+    for (bool overlap : {false, true}) {
+      SCOPED_TRACE(overlap);
+      RuntimeLoadOptions options;
+      options.overlap_preparation = overlap;
+      options.memory_limit = 128;
+      RuntimeContext rt;
+      LoadedRuntimeSession loaded(Path(), rt, {}, options);
+      EXPECT_EQ(loaded.statistics().source_bytes, 64u);
+      EXPECT_EQ(loaded.statistics().conversion_reserve_bytes, 64u);
+      EXPECT_LE(loaded.statistics().peak_admitted_bytes, options.memory_limit);
+      EXPECT_EQ(gather(loaded.session(), rt), expected);
+    }
+  }
+}
+
+TEST_F(RuntimeSessionLoading, AdmitsMissingLengthsBeforeInvokingBoundedReader) {
+  auto model = ReadModel();
+  for (auto &tensor : model.ref_graph().ref_initializer())
+    tensor.ref_external_data()[1].set_key("unused_metadata");
+  SaveModel(model);
+  // An omitted length must not let the reader allocate an unadmitted file remainder.
+  std::filesystem::resize_file(directory / "weight0.bin", 4096);
+  for (bool overlap : {false, true}) {
+    SCOPED_TRACE(overlap);
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    options.memory_limit = 95;
+    size_t reads = 0;
+    options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+      ++reads;
+      ASSERT_EQ(tensor.external_data().back().key(), "length");
+      EXPECT_EQ(tensor.external_data().back().value(), "24");
+      tensor.LoadExternalData(base);
+      EXPECT_EQ(tensor.raw_data().size(), 24u);
+    };
+    RuntimeContext rejected;
+    EXPECT_THROW(LoadedRuntimeSession(Path(), rejected, {}, options), std::length_error);
+    EXPECT_EQ(reads, 0u);
+    options.memory_limit = 1024 * 1024;
+    RuntimeContext rt;
+    LoadedRuntimeSession loaded(Path(), rt, {}, options);
+    EXPECT_EQ(reads, 2u);
+    EXPECT_EQ(loaded.statistics().source_bytes, 48u);
+    EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+  }
+}
+
+TEST_F(RuntimeSessionLoading, RejectsInvalidInferredLengthsBeforeReading) {
+  const auto original = ReadModel().SerializeAsString();
+  const std::vector<std::vector<int64_t>> shapes{
+      {-1}, {std::numeric_limits<int64_t>::max()}, {std::numeric_limits<int64_t>::max(), 3}};
+  for (const auto &shape : shapes) {
+    ModelProto model;
+    ASSERT_TRUE(model.ParseFromString(original));
+    auto &weight = model.ref_graph().ref_initializer()[0];
+    weight.ref_external_data()[1].set_key("unused_metadata");
+    weight.clr_dims();
+    for (int64_t dim : shape)
+      weight.add_dims(dim);
+    SaveModel(model);
+    RuntimeContext rt;
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+    EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+    EXPECT_EQ(reads, 0u);
+  }
+}
+
+TEST_F(RuntimeSessionLoading, InfersScalarEmptyAndPackedPayloadLengths) {
+  const auto original = ReadModel().SerializeAsString();
+  struct Case {
+    TensorProto::DataType type;
+    std::vector<int64_t> shape;
+    size_t bytes;
+  };
+  for (const auto &test : {Case{TensorProto::FLOAT, {}, 4}, Case{TensorProto::FLOAT, {0}, 0},
+                           Case{TensorProto::UINT4, {3}, 2}}) {
+    SCOPED_TRACE(test.bytes);
+    ModelProto model;
+    ASSERT_TRUE(model.ParseFromString(original));
+    auto &graph = model.ref_graph();
+    graph.ref_node().clear();
+    graph.ref_input().clear();
+    graph.ref_output().clear();
+    graph.add_output()->set_name("B0");
+    graph.ref_initializer().resize(1);
+    auto &weight = graph.ref_initializer()[0];
+    weight.ref_external_data()[1].set_key("unused_metadata");
+    weight.set_data_type(test.type);
+    weight.clr_dims();
+    for (int64_t dim : test.shape)
+      weight.add_dims(dim);
+    SaveModel(model);
+    for (bool overlap : {false, true}) {
+      RuntimeContext rt;
+      RuntimeLoadOptions options;
+      options.overlap_preparation = overlap;
+      options.memory_limit = 2 * test.bytes;
+      LoadedRuntimeSession loaded(Path(), rt, {}, options);
+      EXPECT_EQ(loaded.statistics().source_bytes, test.bytes);
+      EXPECT_EQ(loaded.model().graph().initializer(0).raw_data().size(), test.bytes);
+    }
+  }
+}
+
+TEST_F(RuntimeSessionLoading, MissingLengthDoesNotHideTruncatedPayloads) {
   auto model = ReadModel();
   model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("unused_metadata");
   SaveModel(model);
-  RuntimeContext rt;
-  size_t reads = 0;
-  RuntimeLoadOptions options;
-  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
-  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
-  EXPECT_EQ(reads, 0u);
+  std::filesystem::resize_file(directory / "weight0.bin", 23);
+  for (bool overlap : {false, true}) {
+    RuntimeContext rt;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::exception);
+    EXPECT_FALSE(rt.Has("B0"));
+    EXPECT_FALSE(rt.Has("B1"));
+  }
 }
 
 TEST_F(RuntimeSessionLoading, SupportsExternalSizeAlias) {
@@ -1174,6 +1370,7 @@ TEST_F(RuntimeSessionLoading, ConfinesExternalPaths) {
 
 TEST_F(RuntimeSessionLoading, LoadsNestedAndFunctionAttributePayloads) {
   auto model = ReadModel();
+  model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("unused_metadata");
   const auto bytes = model.graph().initializer(0).SerializeAsString();
   auto *attribute = model.ref_graph().ref_node()[0].add_attribute();
   attribute->set_name("unused_graph");
@@ -1204,7 +1401,8 @@ TEST_F(RuntimeSessionLoading, LoadsNestedAndFunctionAttributePayloads) {
 }
 
 TEST_F(RuntimeSessionLoading, LoadsFunctionConstantPayloadBeforeBindingCopiesIt) {
-  const auto original = ReadModel();
+  auto original = ReadModel();
+  original.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("unused_metadata");
   ModelProto model;
   model.set_ir_version(9);
   model.add_opset_import()->set_version(13);

@@ -111,9 +111,14 @@ finish before construction returns. Declarations requiring a runtime feed or
 an intermediate produced by inference remain explicitly pending. The session
 waits until those producers have executed and establishes readiness before
 each affected consumer; stale context intermediates do not satisfy that barrier.
-External tensors must declare an explicit non-negative ``length`` (or ``size``)
-matching their fixed-width shape. Unknown/string external payload types and
-missing lengths are rejected. ``statistics()`` reports source bytes, conversion
+External tensors may omit ``length`` (or its alias ``size``). The loader derives
+the payload byte count from the fixed-width element type and shape, including
+packed sub-byte types, and supplies that length to readers before any payload
+allocation. Reads are bounded to the admitted tensor range, starting at ``offset``
+(zero by default), rather than an arbitrary remainder of the external file.
+Explicit lengths must be non-negative and match the shape. Unknown/string
+external payload types, invalid dimensions and overflowing ranges are rejected.
+``statistics()`` reports source bytes, conversion
 reserve, function-binding bytes, quantization catalogue and temporary bytes,
 peak admitted bytes, external tensor count and
 the one-item queue bound. Function-binding admission includes each root call's

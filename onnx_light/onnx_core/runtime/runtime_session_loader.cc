@@ -102,8 +102,6 @@ size_t InlineBytes(const TensorProto &tensor) {
   return result;
 }
 
-// Explicit lengths prevent the reader from allocating an unadmitted remainder
-// of a file. Missing lengths are rejected rather than silently losing the bound.
 size_t ExternalBytes(const TensorProto &tensor) {
   bool found = false;
   bool found_offset = false;
@@ -131,10 +129,6 @@ size_t ExternalBytes(const TensorProto &tensor) {
       }
     }
   }
-  if (!found)
-    throw std::invalid_argument("Runtime loader requires explicit external tensor lengths.");
-  if (length > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - offset)
-    throw std::invalid_argument("Runtime loader external offset plus length overflows.");
   const size_t width = FixedBitWidth(tensor.data_type());
   if (width == 0)
     throw std::invalid_argument("Runtime loader external tensors require a fixed-width type.");
@@ -145,9 +139,14 @@ size_t ExternalBytes(const TensorProto &tensor) {
       throw std::invalid_argument("Runtime loader invalid external tensor dimensions.");
     elements *= static_cast<size_t>(dimension);
   }
-  if (elements > (std::numeric_limits<size_t>::max() - 7) / width ||
-      (elements * width + 7) / 8 != length)
+  if (elements > (std::numeric_limits<size_t>::max() - 7) / width)
+    throw std::invalid_argument("Runtime loader external tensor byte count overflows.");
+  const size_t expected_length = (elements * width + 7) / 8;
+  if (found && expected_length != length)
     throw std::invalid_argument("Runtime loader external tensor length does not match its shape.");
+  length = expected_length;
+  if (length > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - offset)
+    throw std::invalid_argument("Runtime loader external offset plus length overflows.");
   return length;
 }
 
@@ -382,6 +381,15 @@ LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeCon
       source_bytes = Add(source_bytes, InlineBytes(*tensor));
       if (tensor->data_location() == TensorProto::EXTERNAL) {
         const size_t length = ExternalBytes(*tensor);
+        // Bound every reader to the admitted payload, never an arbitrary file remainder.
+        if (std::none_of(tensor->external_data().begin(), tensor->external_data().end(),
+                         [](const auto &entry) {
+                           return entry.key() == "length" || entry.key() == "size";
+                         })) {
+          auto *entry = tensor->add_external_data();
+          entry->set_key("length");
+          entry->set_value(std::to_string(length));
+        }
         plan.external.push_back(tensor);
         plan.lengths.push_back(length);
         source_bytes = Add(source_bytes, length);

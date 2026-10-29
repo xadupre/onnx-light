@@ -1304,26 +1304,32 @@ public:
     std::vector<std::pair<std::string, RuntimeValue>> output_values;
     std::vector<std::pair<std::string, Sequence>> output_sequences;
     std::vector<std::pair<std::string, Map>> output_maps;
+    std::unordered_map<std::string, size_t> remaining_outputs;
+    for (const auto &name : func_.output())
+      ++remaining_outputs[name];
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
+      const bool last_output = --remaining_outputs.at(param_name) == 0;
       const ValueInfoProto *formal = formal_info(param_name);
       if (caller_name.empty()) {
-        rt.Remove(param_name);
+        if (last_output)
+          rt.Remove(param_name);
         continue;
       }
       auto value = rt.values().find(param_name);
       if (value != rt.values().end()) {
         if (formal != nullptr && formal->has_type())
           check_runtime_value(check_runtime_value, value->second, formal->type());
-        RuntimeValue result = TakeRuntimeValue(rt, param_name);
+        RuntimeValue result =
+            last_output ? TakeRuntimeValue(rt, param_name) : value->second.DeepCopy();
         if (formal != nullptr)
           result = std::move(result).Retain(rt.struct_type_catalogue());
         output_values.emplace_back(caller_name, std::move(result));
         continue;
       }
       if (formal != nullptr && rt.HasSequence(param_name)) {
-        Sequence result = TakeSequence(rt, param_name);
+        Sequence result = last_output ? TakeSequence(rt, param_name) : rt.GetSequence(param_name);
         check_sequence(result, *formal);
         for (auto &tensor : result.values)
           if (tensor.is_borrowed())
@@ -1333,7 +1339,7 @@ public:
         continue;
       }
       if (formal != nullptr && rt.HasMap(param_name)) {
-        Map result = TakeMap(rt, param_name);
+        Map result = last_output ? TakeMap(rt, param_name) : rt.GetMap(param_name);
         check_map(result, *formal);
         if (result.keys.is_borrowed())
           result.keys = result.keys.ToOwned();
@@ -1343,7 +1349,9 @@ public:
         output_maps.emplace_back(caller_name, std::move(result));
         continue;
       }
-      Tensor result = TakeTensor(rt, param_name, "RunNode: model-local function output");
+      Tensor result = last_output
+                          ? TakeTensor(rt, param_name, "RunNode: model-local function output")
+                          : rt.Get(param_name).ToOwned();
       if (formal != nullptr)
         check_tensor(result, *formal);
       if (formal != nullptr && result.is_borrowed())

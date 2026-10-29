@@ -818,6 +818,55 @@ TEST(GemmOutputTransposePattern, SupportsSymbolicShapesAndDefaultAttributes) {
   }
 }
 
+TEST(GemmOutputTransposePattern, PreservesAbsentNamesAcrossMultipleRewrites) {
+  for (bool named : {false, true}) {
+    SCOPED_TRACE(named);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+    builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+    for (int index = 0; index < 2; ++index) {
+      const std::string intermediate = "gemm" + std::to_string(index);
+      const std::string output = "out" + std::to_string(index);
+      builder.MakeNode("Gemm", {"x", "w"}, {intermediate}, "", named ? output : "",
+                       FloatAttr("alpha", static_cast<float>(index + 1)));
+      builder.MakeNode("Transpose", {intermediate}, {output});
+      builder.MakeOutput(output);
+    }
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(onnx_patterns::CreatePattern("GemmOutputTranspose"));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    ASSERT_EQ(graph.Optimize(4, nullptr, folding).rewrites().size(), 2u);
+    ASSERT_EQ(builder.Nodes().size(), 2u);
+    for (const auto &node : builder.Nodes()) {
+      EXPECT_EQ(node.op_type(), "Gemm");
+      EXPECT_EQ(node.name().value(),
+                named ? "GemmOutputTransposePattern--" + node.output(0).value() : "");
+    }
+  }
+}
+
+TEST(GemmOutputTransposePattern, RejectsNonBooleanTransposeFlagsWithoutMutation) {
+  onnx_patterns::GemmOutputTransposePattern pattern;
+  for (size_t attribute_index : {size_t{2}, size_t{3}}) {
+    for (int64_t value : {int64_t{-1}, int64_t{2}, std::numeric_limits<int64_t>::min(),
+                          std::numeric_limits<int64_t>::max()}) {
+      SCOPED_TRACE(attribute_index);
+      SCOPED_TRACE(value);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
+      MakeGemmOutputTranspose(builder);
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      nodes[0].ref_attribute()[attribute_index].set_i(value);
+      const auto before = builder.ToModel();
+      core::builder::GraphGraph graph(builder);
+      EXPECT_EQ(pattern.Match(graph, nodes[1]).pattern, nullptr);
+      EXPECT_THROW(pattern.Apply(graph, {&nodes[0], &nodes[1]}), core::builder::BuilderError);
+      EXPECT_TRUE(builder.ToModel().Equals(before));
+    }
+  }
+}
+
 TEST(GemmOutputTransposePattern, ConvergesWithInputTransposePatterns) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 2}));

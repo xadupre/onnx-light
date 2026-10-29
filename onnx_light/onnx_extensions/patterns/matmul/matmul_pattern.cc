@@ -824,6 +824,9 @@ core::builder::MatchResult GemmOutputTransposePattern::Match(core::builder::Grap
         !attribute.ref_attr_name().empty() || !seen.insert(name).second) {
       return NoMatch(candidate, "the Gemm has unsupported, unresolved, or duplicate attributes");
     }
+    if (flag && attribute.i() != 0 && attribute.i() != 1) {
+      return NoMatch(candidate, "the Gemm transpose flags must be zero or one");
+    }
   }
   if (!gemm->device_configurations().empty() || !candidate.device_configurations().empty()) {
     return NoMatch(candidate, "device configurations cannot be transposed safely");
@@ -852,7 +855,8 @@ GemmOutputTransposePattern::Apply(core::builder::GraphGraph &graph,
   const NodeProto &gemm = *nodes[0];
   const NodeProto &transpose = *nodes[1];
   NodeProto replacement = gemm;
-  replacement.set_name("GemmOutputTransposePattern--" + gemm.name().value());
+  if (!gemm.name().empty())
+    replacement.set_name("GemmOutputTransposePattern--" + gemm.name().value());
   replacement.clr_input();
   replacement.add_input(gemm.input()[1].value());
   replacement.add_input(gemm.input()[0].value());

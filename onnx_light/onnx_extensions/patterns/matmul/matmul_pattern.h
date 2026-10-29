@@ -135,7 +135,8 @@ public:
  * @endcode
  *
  * Requires opset 11 or later and rank-two inputs, with dynamic or constant
- * dimensions. An omitted permutation reverses the two matrix axes.
+ * dimensions. Transpose flags must be zero or one. An omitted permutation reverses
+ * the two matrix axes.
  * The Gemm intermediate cannot be shared, exported, or captured. Biases,
  * unresolved attributes, function overloads and device configurations are not
  * supported. Coefficients, final output names and compatible metadata survive.

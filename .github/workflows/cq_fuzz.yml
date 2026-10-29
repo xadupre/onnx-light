@@ -107,6 +107,7 @@ jobs:
             fuzz_optim_shape_inference \
             fuzz_version_converter \
             fuzz_compose \
+            fuzz_external_data \
             fuzz_ort_flatbuffers \
             make_seed_corpus
 
@@ -116,7 +117,8 @@ jobs:
           ./build-fuzz/make_seed_corpus \
             /tmp/fuzz_seeds/version_converter \
             /tmp/fuzz_seeds/parser \
-            /tmp/fuzz_seeds/shape_inference
+            /tmp/fuzz_seeds/shape_inference \
+            /tmp/fuzz_seeds/external_data
 
       - name: Run fuzz_checker (smoke)
         run: ./build-fuzz/fuzz_checker -runs=2000 -timeout=25
@@ -138,6 +140,9 @@ jobs:
 
       - name: Run fuzz_compose (smoke)
         run: ./build-fuzz/fuzz_compose -runs=2000 -timeout=25
+
+      - name: Run fuzz_external_data (smoke)
+        run: ./build-fuzz/fuzz_external_data /tmp/fuzz_seeds/external_data -runs=2000 -timeout=25
 
       - name: Run fuzz_ort_flatbuffers (smoke)
         run: ./build-fuzz/fuzz_ort_flatbuffers -runs=2000 -timeout=25

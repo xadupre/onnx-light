@@ -16,6 +16,7 @@ and rewritten directly against the onnx-light C++ API.
 | `fuzz_optim_shape_inference.cc`   | `onnx_shapes::shapes::InferShapesModel`                                   | Raw bytes → protobuf parser         |
 | `fuzz_version_converter.cc`       | `version_conversion::ConvertVersion`                                     | Raw bytes → protobuf parser         |
 | `fuzz_compose.cc`                 | `MergeModels` / `MergeGraphs` / `AddPrefix` / `CheckOverlappingNames` / `ExpandOutDim` | Length-prefixed bytes → two protobuf models |
+| `fuzz_external_data.cc`           | External-data checking, tensor/model reads, single/multi-tensor writes, and external-data conversion | Six-byte header + bounded payload + disposable filesystem |
 | `fuzz_ort_flatbuffers.cc`         | `ModelProto::ParseFromString` with `SerializeFormat::kOrtFlatbuffers`    | Raw bytes → ORT flatbuffer parser   |
 | `make_seed_corpus.cc`             | *(seed generator, not a fuzzer)*                                         | Writes seed files for OSS-Fuzz      |
 
@@ -48,6 +49,7 @@ Each harness is a standard libFuzzer executable:
 ./build-fuzz/fuzz_optim_shape_inference -runs=1000
 ./build-fuzz/fuzz_version_converter -runs=1000
 ./build-fuzz/fuzz_compose -runs=1000
+./build-fuzz/fuzz_external_data -runs=1000
 ./build-fuzz/fuzz_ort_flatbuffers -runs=1000
 ```
 
@@ -57,8 +59,13 @@ To generate seed corpora that OSS-Fuzz uses as starting inputs:
 ./build-fuzz/make_seed_corpus \
     /tmp/fuzz_seeds/version_converter \
     /tmp/fuzz_seeds/parser \
-    /tmp/fuzz_seeds/shape_inference
+    /tmp/fuzz_seeds/shape_inference \
+    /tmp/fuzz_seeds/external_data
 ```
+
+The fourth output directory is optional, preserving existing three-output
+invocations. It contains 21 external-data seeds adapted from
+[onnx/onnx#8659](https://github.com/onnx/onnx/pull/8659).
 
 The harnesses accept a seed-corpus directory as a positional
 argument:
@@ -104,6 +111,31 @@ real bugs.
 `LLVMFuzzerTestOneInput` is the [standard libFuzzer entry point](https://llvm.org/docs/LibFuzzer.html#fuzz-target).
 Each harness defines it with `extern "C"` so libFuzzer's runtime can
 call it directly without name mangling.
+
+### `fuzz_external_data.cc` filesystem boundary
+
+The target adapts the filesystem-aware harness from ONNX PR #8659 to the native
+APIs; `ModelContainer` is not implemented in onnx-light. A private disposable
+workspace contains a fresh model directory and an outside sentinel on each
+iteration. Locations cover ordinary and nested files, missing files, traversal,
+absolute paths, UNC and Windows drive forms, encoded traversal text, symlinks,
+and hardlinks. Link and escape fixtures point to the sentinel.
+
+The six-byte header selects the operation, location, duplicate/unknown metadata
+flags, offset, length, and alternate location/second offset. At most 4096 remaining
+bytes form the tensor payload. Operations cover metadata checking, tensor and whole-model
+loading, bounded streaming reads (including no-copy reads), single/multi-tensor
+writes with supplied offsets, external-data conversion, and model save/load.
+The standalone loader has no allocation-budget option, so gigabyte-scale length
+cases are routed to the streaming parser with an 8192-byte allocation limit.
+
+The target aborts on sentinel modification even after an expected validation
+exception. Read fixtures exclude the sentinel byte, letting the target detect
+sentinel disclosure in completed tensor reads independently of the library's
+path validation, even if a later model-parse step fails. Successful reads whose
+candidate locations are all unsafe are also findings, including zero-length
+reads. Fixture setup failures are not
+suppressed. Scheduler-dependent replacement races remain outside the harness.
 
 ## Adding a new harness
 

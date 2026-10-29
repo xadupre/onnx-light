@@ -53,9 +53,11 @@ struct RuntimeLoadOptions {
 /** Reports conservative admission counters, not process resident memory. */
 struct RuntimeLoadStatistics {
   size_t source_bytes = 0;
+  /// Sum of stage conversion/binding-copy allowances, reserved for the whole load.
   size_t conversion_reserve_bytes = 0;
   size_t function_binding_bytes = 0;
   size_t quantization_catalogue_bytes = 0;
+  /// Sum of stage catalogue construction allowances, not a simultaneous scratch peak.
   size_t quantization_temporary_bytes = 0;
   size_t peak_admitted_bytes = 0;
   size_t external_tensors = 0;
@@ -100,7 +102,8 @@ private:
  * sequentially, with at most one bounded I/O worker overlapping preparation.
  * Generate overloads retain these session settings and reuse the static store,
  * while creating fresh invocation sessions for request-local persistent state.
- * Serialize generation, stage execution and other access to the shared store.
+ * Generation, stage execution and other shared-store access must not run
+ * concurrently, even when using different runtime contexts.
  * Borrowed initializer views must not outlive this owner.
  */
 class LoadedRuntimePipeline {

@@ -575,7 +575,8 @@ LoadedRuntimePipeline::LoadedRuntimePipeline(const std::string &path, RuntimeCon
   if (pipeline_.has_embedding())
     models.push_back(pipeline_.mutable_embedding());
   models.push_back(pipeline_.mutable_prefill());
-  auto sessions = LoadSessions(models, path, rt, session_options_, load_options, statistics_);
+  auto sessions = LoadSessions(std::span<ModelProto *>{models}, path, rt, session_options_,
+                               load_options, statistics_);
   prefill_session_ = std::move(sessions.back());
   if (pipeline_.has_embedding())
     embedding_session_ = std::move(sessions.front());

@@ -145,7 +145,8 @@ class LoadedRuntimePipeline;
  *
  * Reuses the loader's session settings and static preparation store. Invocation
  * sessions and persistent state are fresh for each call. The owner must outlive
- * the call and any initializer-backed views. Calls sharing its store are serialized.
+ * the call and any initializer-backed views. Callers must not run invocations
+ * sharing a context or the static store concurrently.
  * Temporarily installs the selected CPU executor, inheriting a caller's executor
  * unless the loader's session options explicitly select another CPU policy.
  */

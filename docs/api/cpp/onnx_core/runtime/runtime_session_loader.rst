@@ -55,6 +55,14 @@ catalogues and workspaces, plus all already-prepared values in the shared store.
 pipeline-wide maxima rather than sums of independent stage peaks.
 ``kComplete`` is emitted once, after all stages have loaded.
 
+Conversion reserves and catalogue construction workspace allowances are
+intentionally summed across stages, even though stages load sequentially.
+Admission computes one fixed pipeline-wide reservation before any external
+read and keeps it throughout loading. These reservations are not released
+between stages to increase the shared preparation budget. This conservative
+policy can reject a pipeline that would fit with peak-based workspace reuse;
+the temporary counters do not measure simultaneously live scratch memory.
+
 Use the owning overload to preserve loading-time session settings and the shared
 static preparation store automatically:
 
@@ -82,8 +90,9 @@ Kernel-local initialization and unresolved runtime preparations still occur in
 the invocation sessions, outside the loading budget. For low-level callers,
 ``session_options()`` exposes the retained options including the shared store;
 calling ``Generate(loaded.pipeline(), ...)`` without them does not reuse that store.
-Serialize calls sharing the loader's context or store, even when using different
-contexts. Source views and initializer-backed outputs must not outlive the owner.
+Calls sharing the loader's context or static preparation store must not run
+concurrently. Different contexts do not make a shared store safe for concurrent
+access. Source views and initializer-backed outputs must not outlive the owner.
 The same payload restrictions, callback contracts and path protections described
 below apply to every stage.
 

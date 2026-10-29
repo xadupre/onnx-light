@@ -32,7 +32,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * of its inlined body. One compatible definition is shared by all occurrences,
  * including calls in subgraphs. Captures become call attributes; shape inference
  * follows the registered local body. Function-call replacement outputs must be
- * distinct. The pattern does not rewrite that body into a recursive call to itself.
+ * distinct. This mode does not rewrite local-function bodies or their subgraphs,
+ * preventing the introduction of recursive function dependencies.
  *
  * Bodies must be topologically sorted SSA graphs without graph-valued
  * attributes. Template inputs must be used, and template outputs must be

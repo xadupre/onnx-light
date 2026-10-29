@@ -278,9 +278,15 @@ public:
   const std::unordered_map<std::string, int> &OpsetVersions() const noexcept { return opsets_; }
 
   /// Returns the selected local schema, then the global schema, at the selected opset.
-  /// Returns nullptr for unknown operators; rejects known histories without
-  /// an applicable local or global schema.
-  const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "") const;
+  /// Returns nullptr for unknown operators or a usable local-function fallback.
+  /// Rejects known histories without an applicable schema or local definition.
+  const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "",
+                                  const std::string &overload = "") const;
+
+  /// Checks operator precedence using the supplied scope's imports, or this builder's imports.
+  bool IsRegisteredOperator(
+      const NodeProto &node,
+      const utils::RepeatedProtoField<OperatorSetIdProto> *imports = nullptr) const;
 
   /// Returns an independent copy of the constructor's local registry snapshot.
   OperatorRegistry LocalRegistry() const { return local_registry_; }
@@ -642,8 +648,8 @@ public:
   /// local functions are emitted into the produced :cpp:class:`ModelProto`.
   /// Calls through :cpp:func:`MakeNode` infer their outputs natively, including
   /// nested calls, from owned snapshots of the current function definitions.
-  /// Throws when ``name`` is already used or the normalized domain/name
-  /// identifies a registered operator, regardless of overload.
+  /// Throws when ``name`` is already used. Registered operators take precedence
+  /// over matching normalized domain/name definitions, regardless of overload.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
   /// Creates a local function with an independent set of opset imports.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain,
@@ -847,8 +853,6 @@ private:
   const std::vector<LightOpSchema> &DomainSchemas(const std::string &op_type,
                                                   const std::string &normalised_domain) const;
 
-  void ValidateLocalFunctionName(const std::string &name, const std::string &domain);
-
   std::vector<std::string> MakeNodeImpl(const std::string &op_type,
                                         const std::vector<std::string> &inputs,
                                         const std::vector<std::string> &outputs,
@@ -880,8 +884,8 @@ private:
   static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
                                                    const std::string &name,
                                                    const std::string &overload);
-  static utils::RepeatedProtoField<FunctionProto>
-  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions);
+  utils::RepeatedProtoField<FunctionProto>
+  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) const;
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
                                   std::set<FunctionIdentifier> &expanded_functions);
 

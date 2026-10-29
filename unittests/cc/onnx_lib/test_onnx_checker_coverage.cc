@@ -285,6 +285,30 @@ TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {
   EXPECT_NO_THROW(checker::check_model(model));
 }
 
+TEST(CHECKER_COVERAGE, SharedParameterBindingsIgnoreRegisteredOperatorBodies) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (bool nested : {false, true}) {
+      auto model = MakeSharedParameterFunctionModel();
+      auto call = MakeNode("Add", {"X", "X"}, {"sum"}, domain.c_str());
+      if (nested)
+        model.mutable_functions(0)->add_node(call);
+      else
+        model.mutable_graph()->add_node(call);
+      auto &ignored = *model.add_functions();
+      ignored.set_name("Add");
+      ignored.set_domain(domain);
+      ignored.add_opset("", 21);
+      ignored.add_input("A");
+      ignored.add_input("B");
+      ignored.add_output("C");
+      ignored.add_node(MakeNode("Add", {"A", "B"}, {"C"}, domain.c_str()));
+      EXPECT_NO_THROW(checker::check_model(model));
+      model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_s("missing");
+      EXPECT_THROW(checker::check_model(model), ValidationError);
+    }
+  }
+}
+
 TEST(CHECKER_COVERAGE, SharedParameterAttributeReferencesRequireFunctionScope) {
   for (bool nested : {false, true}) {
     SCOPED_TRACE(nested);
@@ -1658,6 +1682,49 @@ TEST(CHECKER_COVERAGE, FunctionCallCyclesDuplicateImplIdRejected) {
   EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
 }
 
+TEST(CHECKER_COVERAGE, FunctionCyclesResolveRegisteredOperatorsAtFunctionOpsets) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    ModelProto model;
+    model.add_opset("", 18);
+    auto &function = *model.add_functions();
+    function.set_domain(domain);
+    function.set_name("Add");
+    function.add_opset(domain, 18);
+    AddCalleeNode(function, domain, "Add");
+    EXPECT_NO_THROW(checker::check_function_call_cycles(model));
+    function.ref_node()[0].set_domain("local");
+    function.set_domain("local");
+    function.add_opset("local", 1);
+    EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  }
+  ModelProto model;
+  model.add_opset("", 18);
+  auto &function = *model.add_functions();
+  function.set_domain("");
+  function.set_name("HardSwish");
+  function.add_opset("", 13);
+  AddCalleeNode(function, "", "HardSwish");
+  EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  function.ref_opset_import()[0].set_version(14);
+  EXPECT_NO_THROW(checker::check_function_call_cycles(model));
+}
+
+TEST(CHECKER_COVERAGE, FunctionCyclesIncludeGraphValuedAttributes) {
+  for (bool repeated : {false, true}) {
+    ModelProto model;
+    auto &function = *model.add_functions();
+    InitFunction(function, "F");
+    function.add_opset("local", 1);
+    auto &node = *function.add_node();
+    node.set_op_type("Branch");
+    auto &attribute = *node.add_attribute();
+    GraphProto *graph = repeated ? attribute.add_graphs() : attribute.mutable_g();
+    graph->add_node()->set_op_type("F");
+    graph->ref_node()[0].set_domain("local");
+    EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // check_model
 // ---------------------------------------------------------------------------
@@ -1707,7 +1774,7 @@ TEST(CHECKER_COVERAGE, ModelMinimalValidAccepted) {
   EXPECT_NO_THROW(checker::check_model(m));
 }
 
-TEST(CHECKER_COVERAGE, RejectsOperatorFunctionDefinitionsRegardlessOfOverloadOrUse) {
+TEST(CHECKER_COVERAGE, AcceptsOperatorFunctionDefinitionsRegardlessOfOverloadOrUse) {
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     for (const std::string name : {"Add", "Attention"}) {
       for (const std::string overload : {"", "custom"}) {
@@ -1723,7 +1790,7 @@ TEST(CHECKER_COVERAGE, RejectsOperatorFunctionDefinitionsRegardlessOfOverloadOrU
           function->set_overload(overload);
           function->add_opset("", 18);
           EXPECT_NO_THROW(checker::check_function(*function, MakeCtx(ir), LexicalScopeContext{}));
-          EXPECT_THROW(checker::check_model(model), ValidationError);
+          EXPECT_NO_THROW(checker::check_model(model));
         }
       }
     }

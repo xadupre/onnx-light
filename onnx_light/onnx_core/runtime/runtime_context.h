@@ -815,11 +815,11 @@ public:
                             ContextualCustomKernelFn fn);
 
   /// Removes the custom kernel registered for ``(domain, op_type)``.
-  /// The empty domain is normalised to ``"ai.onnx"``; removes the entry for
+  /// Default-domain aliases are normalised to ``"ai.onnx"``; removes the entry for
   /// this context's device.
   /// Returns ``true`` when an entry was removed, ``false`` otherwise.
   bool UnregisterCustomKernel(const std::string &domain, const std::string &op_type) {
-    const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
+    const std::string d = NormaliseDomain(domain);
     return custom_kernels_.erase(d + ":" + op_type + symbolic::DeviceKeySuffix(device_)) > 0;
   }
 

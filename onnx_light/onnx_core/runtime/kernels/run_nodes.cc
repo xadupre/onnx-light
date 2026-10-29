@@ -1439,6 +1439,18 @@ private:
 
 } // namespace
 
+bool HasRegisteredNodeKernel(const NodeProto &node, symbolic::Device device,
+                             const CustomKernelMap *context_kernels) {
+  const std::string domain = NormaliseDomain(node.domain());
+  if (domain == kDefaultOnnxDomain && (node.op_type() == "If" || node.op_type() == "Loop" ||
+                                       node.op_type() == "Scan" || node.op_type() == "SequenceMap"))
+    return true;
+  const std::string key = domain + ":" + node.op_type();
+  const std::string device_key = key + symbolic::DeviceKeySuffix(device);
+  return (context_kernels != nullptr && context_kernels->contains(device_key)) ||
+         GlobalCustomKernels().contains(key) || KernelDispatchTable().contains(device_key);
+}
+
 // Resolves how ``node`` must be dispatched, building and returning the
 // ready-to-invoke kernel instance (without any progress printing or event
 // logging). This is the "kernel initialization" step: the (domain, op_type)
@@ -1449,9 +1461,8 @@ private:
 // up front and then invoke it repeatedly without redoing the lookup.
 //
 // Resolution precedence mirrors the historical inline logic of
-// :cpp:func:`RunNode`: model-local functions override built-ins, then the
-// control-flow operators, then per-context custom kernels, then global custom
-// kernels, then the dispatch table.
+// :cpp:func:`RunNode`: control-flow operators, then per-context custom kernels,
+// then global custom kernels, then the dispatch table, then model-local functions.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
 std::unique_ptr<KernelBase>
@@ -1463,25 +1474,6 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
   if (value_store == nullptr) {
     value_store = rt.value_store_owner();
   }
-  // A node referring to a model-local FunctionProto (registered by
-  // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
-  // the built-in kernel dispatch table so that user-defined functions
-  // override same-named built-ins, matching the ONNX runtime semantics
-  // for model-local functions.
-  const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
-  const FunctionMap *scopes[] = {model_functions, &rt.functions()};
-  for (const FunctionMap *scope : scopes) {
-    if (scope != nullptr) {
-      auto fit = scope->find(fkey);
-      if (fit == scope->end())
-        continue;
-      const FunctionProto *func = fit->second;
-      return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports,
-                                                        std::move(value_store), immutable_inputs,
-                                                        model_functions);
-    }
-  }
-
   if (domain == kDefaultOnnxDomain && op_type == "If") {
     const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
     const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
@@ -1558,6 +1550,20 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
   // than silently dispatching to the CPU kernel.
   const auto &table = KernelDispatchTable();
   auto it = table.find(key + device_suffix);
+  if (it == table.end()) {
+    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
+    const FunctionMap *scopes[] = {model_functions, &rt.functions()};
+    for (const FunctionMap *scope : scopes) {
+      if (scope == nullptr)
+        continue;
+      auto fit = scope->find(fkey);
+      if (fit != scope->end()) {
+        return std::make_unique<ModelLocalFunctionKernel>(node, *fit->second, kernel_context,
+                                                          opset_imports, std::move(value_store),
+                                                          immutable_inputs, model_functions);
+      }
+    }
+  }
   if (device_suffix.empty()) {
     EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
                         "' in domain '", domain, "'.");

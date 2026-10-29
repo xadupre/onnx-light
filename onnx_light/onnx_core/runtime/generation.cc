@@ -261,22 +261,25 @@ void CollectFunctionValueNames(const FunctionProto &function, PipelineValueNames
 void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProto> &nodes,
                                         const FunctionMap &functions, PipelineValueNames &names,
                                         std::unordered_set<std::string> &active,
-                                        std::unordered_set<std::string> &completed) {
+                                        std::unordered_set<std::string> &completed,
+                                        const RuntimeContext &context) {
   for (const NodeProto &node : nodes) {
     for (const AttributeProto &attribute : node.attribute()) {
       if (attribute.has_g()) {
         CollectGraphValueNames(attribute.g(), false, {}, names);
         CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active,
-                                           completed);
+                                           completed, context);
       }
       for (const GraphProto &nested : attribute.graphs()) {
         CollectGraphValueNames(nested, false, {}, names);
-        CollectReachableFunctionGraphNames(nested.node(), functions, names, active, completed);
+        CollectReachableFunctionGraphNames(nested.node(), functions, names, active, completed,
+                                           context);
       }
     }
     const std::string key = ModelFunctionKey(node);
     const auto found = functions.find(key);
-    if (found == functions.end() || active.contains(key))
+    if (found == functions.end() || active.contains(key) ||
+        detail::HasRegisteredNodeKernel(node, context.device(), &context.custom_kernels()))
       continue;
     const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
     // Calls to one function may bind different graph-valued attributes.
@@ -287,7 +290,7 @@ void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProt
       continue;
     active.insert(key);
     CollectFunctionValueNames(bound, names);
-    CollectReachableFunctionGraphNames(bound.node(), functions, names, active, completed);
+    CollectReachableFunctionGraphNames(bound.node(), functions, names, active, completed, context);
     active.erase(key);
     completed.insert(std::move(completed_key));
   }
@@ -296,28 +299,28 @@ void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProt
 PipelineValueNames
 CollectPipelineValueNames(const ModelProto &model,
                           const std::unordered_set<std::string> &public_initializer_outputs,
-                          const FunctionMap &context_functions) {
+                          const RuntimeContext &context) {
   PipelineValueNames names;
   CollectGraphValueNames(model.graph(), true, public_initializer_outputs, names);
-  FunctionMap functions = context_functions;
+  FunctionMap functions = context.functions();
   for (const auto &[key, function] : detail::ModelFunctions(model))
     functions.insert_or_assign(key, function);
   std::unordered_set<std::string> active;
   std::unordered_set<std::string> completed;
-  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active, completed);
+  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active, completed,
+                                     context);
   return names;
 }
 
 void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language,
-                                const FunctionMap &context_functions) {
+                                const RuntimeContext &context) {
   std::unordered_set<std::string> public_connections;
   for (const ValueInfoProto &output : embedding.graph().output())
     if (HasInput(language, output.name()))
       public_connections.insert(output.name());
   const PipelineValueNames embedding_names =
-      CollectPipelineValueNames(embedding, public_connections, context_functions);
-  const PipelineValueNames language_names =
-      CollectPipelineValueNames(language, {}, context_functions);
+      CollectPipelineValueNames(embedding, public_connections, context);
+  const PipelineValueNames language_names = CollectPipelineValueNames(language, {}, context);
   std::vector<std::string> collisions;
   for (const std::string &name : embedding_names.private_values)
     if (language_names.all.contains(name))
@@ -496,7 +499,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       EXT_ENFORCE_INVALID(HasInput(model, output.name()),
                           "Generate: embedding output must name a decoder input.");
     }
-    ValidatePipelineValueNames(*pipeline.embedding, model, context.functions());
+    ValidatePipelineValueNames(*pipeline.embedding, model, context);
   }
   for (const auto &binding : model.graph().persistent_bindings()) {
     if (embedded)

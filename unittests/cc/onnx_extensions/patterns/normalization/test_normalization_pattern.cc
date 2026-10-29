@@ -200,7 +200,7 @@ TEST(LayerNormalizationPattern, PreservesFunctionEpsilonAttributeReferences) {
     EXPECT_NE(node.op_type(), "LayerNormalization");
 }
 
-TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionRegistration) {
+TEST(LayerNormalizationPattern, IgnoresScalarConstantFunctionRegistration) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 23}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxes(builder, "axes", {-1});
@@ -237,8 +237,7 @@ TEST(LayerNormalizationPattern, RejectsScalarConstantFunctionRegistration) {
       AddAttribute<float>(epsilon, "low", 2.0F);
       AddAttribute<float>(epsilon, "high", 3.0F);
       function.ref_node().push_back(std::move(epsilon));
-      EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
-                   std::invalid_argument);
+      EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)));
       EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, &pattern);
     }
   }
@@ -603,9 +602,10 @@ TEST(CastLayerNormalizationCastPattern, HandlesDefaultDomainAliases) {
             function.add_opset("", 23);
             function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
             auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-            EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
-                         std::invalid_argument);
-            EXPECT_TRUE(shapes.LocalFunctions().empty());
+            EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)));
+            EXPECT_EQ(shapes.GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+                          function_domain, function_name)),
+                      nullptr);
             EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, &pattern);
           }
         }
@@ -614,7 +614,7 @@ TEST(CastLayerNormalizationCastPattern, HandlesDefaultDomainAliases) {
   }
 }
 
-TEST(CastLayerNormalizationCastPattern, RejectsScalarConstantFunctionsAndOverloads) {
+TEST(CastLayerNormalizationCastPattern, IgnoresScalarConstantFunctionsAndRejectsOverloads) {
   for (const std::string op : {"LayerNormalization", "RMSNormalization"}) {
     for (const std::string node_domain : {"", "ai.onnx"}) {
       SCOPED_TRACE(op + " constant domain=" + node_domain);
@@ -665,9 +665,10 @@ TEST(CastLayerNormalizationCastPattern, RejectsScalarConstantFunctionsAndOverloa
           AddAttribute<float>(weights, "low", 2.0F);
           AddAttribute<float>(weights, "high", 3.0F);
           function.ref_node().push_back(std::move(weights));
-          EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
-                       std::invalid_argument);
-          EXPECT_TRUE(shapes.LocalFunctions().empty());
+          EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)));
+          EXPECT_EQ(shapes.GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+                        function_domain, "Constant", overload)),
+                    nullptr);
           EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern,
                     overload.empty() ? &pattern : nullptr);
         }
@@ -839,9 +840,10 @@ TEST(CastLayerNormalizationCastPattern, RejectsUnsafeForms) {
       function.add_opset("", 23);
       function.ref_node().push_back(MakeNode("Identity", {"arg"}, {"result"}));
       auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-      EXPECT_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)),
-                   std::invalid_argument);
-      EXPECT_TRUE(shapes.LocalFunctions().empty());
+      EXPECT_NO_THROW(shapes.SetLocalFunction(std::make_shared<FunctionProto>(function)));
+      EXPECT_EQ(shapes.GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+                    function.domain(), function.name())),
+                nullptr);
     } else if (variant == "shared_output") {
       builder.MakeOutput("normalized");
     } else if (variant == "captured_output") {

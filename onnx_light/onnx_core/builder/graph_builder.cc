@@ -451,6 +451,8 @@ void OperatorRegistry::RegisterShapeInference(const std::string &domain, const s
 }
 
 void OperatorRegistry::ConfigureShapes(ShapesContext &shapes) const {
+  for (const auto &schema : schemas_)
+    shapes.SetOperatorSchemaVersion(schema.domain(), schema.name(), schema.since_version());
   for (const auto &[identity, fn] : shape_inference_)
     shapes.SetCustomShapeInferenceFunction(identity.first, identity.second, fn);
 }
@@ -488,7 +490,6 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
   }
   std::set<FunctionIdentifier> model_functions;
   for (const auto &function : model.functions()) {
-    ValidateLocalFunctionName(function.name(), function.domain());
     if (function.name().empty() ||
         !model_functions
              .insert(
@@ -497,9 +498,12 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
       throw BuilderError("GraphBuilder: empty or duplicate model-local function identity.");
   }
   std::set<FunctionIdentifier> imported_functions;
-  const auto check_function_calls = [&](const auto &self, const NodeProto &node) -> void {
+  const auto check_function_calls =
+      [&](const auto &self, const NodeProto &node,
+          const utils::RepeatedProtoField<OperatorSetIdProto> &imports) -> void {
     const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
-    if (model_functions.count(identity) != 0 && imported_functions.count(identity) == 0) {
+    if (model_functions.count(identity) != 0 && imported_functions.count(identity) == 0 &&
+        !IsRegisteredOperator(node, &imports)) {
       throw BuilderError("GraphBuilder: model-local function '" + node.domain().value() +
                          "::" + node.op_type().value() + ":" + node.overload().value() +
                          "' is not yet imported; definitions must place callees before callers.");
@@ -507,29 +511,29 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     for (const auto &attribute : node.attribute()) {
       if (attribute.has_g()) {
         for (const auto &child : attribute.g().node()) {
-          self(self, child);
+          self(self, child, imports);
         }
       }
       for (const auto &graph : attribute.graphs()) {
         for (const auto &child : graph.node()) {
-          self(self, child);
+          self(self, child, imports);
         }
       }
     }
   };
   for (const auto &function : model.functions()) {
     for (const auto &node : function.node()) {
-      check_function_calls(check_function_calls, node);
+      check_function_calls(check_function_calls, node, function.opset_import());
     }
     for (const auto &attribute : function.attribute_proto()) {
       if (attribute.has_g()) {
         for (const auto &node : attribute.g().node()) {
-          check_function_calls(check_function_calls, node);
+          check_function_calls(check_function_calls, node, function.opset_import());
         }
       }
       for (const auto &graph : attribute.graphs()) {
         for (const auto &node : graph.node()) {
-          check_function_calls(check_function_calls, node);
+          check_function_calls(check_function_calls, node, function.opset_import());
         }
       }
     }
@@ -542,6 +546,7 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     child->is_local_function_ = true;
     child->function_domain_ = function_domain;
     child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
+    child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
     child->parent_ = this;
     GraphBuilder &local = *child;
     local_functions_.push_back(std::move(child));
@@ -1996,8 +2001,8 @@ GraphBuilder::DomainSchemas(const std::string &op_type,
   return domain_it == table_it->second.end() ? kEmpty : domain_it->second;
 }
 
-const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
-                                              const std::string &domain) const {
+const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type, const std::string &domain,
+                                              const std::string &overload) const {
   const int opset = OpsetVersion(domain);
   if (opset <= 0)
     throw BuilderError("GraphBuilder: schema lookup requires an explicit positive opset.");
@@ -2020,10 +2025,35 @@ const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
         (selected == nullptr || candidate.since_version() > selected->since_version()))
       selected = &candidate;
   }
-  if (selected == nullptr && (known || !global.empty()))
+  if (selected == nullptr && (known || !global.empty()) &&
+      (Shapes().IsRegisteredOperator(domain, op_type, opset) ||
+       !HasLocalFunction(op_type, domain, overload)))
     throw BuilderError("GraphBuilder: operator '" + domain + "::" + op_type +
                        "' is unavailable at opset " + std::to_string(opset) + ".");
   return selected;
+}
+
+bool GraphBuilder::IsRegisteredOperator(
+    const NodeProto &node, const utils::RepeatedProtoField<OperatorSetIdProto> *imports) const {
+  int opset = OpsetVersion(node.domain());
+  if (imports != nullptr) {
+    opset = 0;
+    for (const auto &entry : *imports) {
+      if (NormaliseDomain(entry.domain()) == NormaliseDomain(node.domain())) {
+        if (entry.version() <= 0 || entry.version() > std::numeric_limits<int>::max())
+          throw BuilderError("GraphBuilder: operator resolution requires a positive int opset.");
+        opset = static_cast<int>(entry.version());
+        break;
+      }
+    }
+  }
+  if (opset <= 0)
+    throw BuilderError("GraphBuilder: operator resolution requires an explicit positive opset.");
+  if (Shapes().IsRegisteredOperator(node.domain(), node.op_type(), opset))
+    return true;
+  const auto &history = DomainSchemas(node.op_type(), NormaliseDomain(node.domain()));
+  return std::any_of(history.begin(), history.end(),
+                     [opset](const auto &schema) { return schema.since_version() <= opset; });
 }
 
 bool GraphBuilder::HasLocalFunction(const std::string &name, const std::string &domain,
@@ -2154,12 +2184,32 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
 
   // Select the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
-  const FunctionProto *local_function = compute_.Shapes().GetLocalFunction(
-      ShapesContext::LocalFunctionKey(domain, op_type, overload));
-  const LightOpSchema *schema = nullptr;
+  const std::string local_key = ShapesContext::LocalFunctionKey(domain, op_type, overload);
+  const LightOpSchema *schema = FindSchema(op_type, domain, overload);
+  const auto &history = DomainSchemas(op_type, normalised_domain);
+  if (!history.empty()) {
+    const auto earliest =
+        std::min_element(history.begin(), history.end(), [](const auto &left, const auto &right) {
+          return left.since_version() < right.since_version();
+        });
+    auto &root = ModelBuilder();
+    if (root.compute_.Shapes().SetOperatorSchemaVersion(domain, op_type,
+                                                        earliest->since_version())) {
+      const auto publish = [&](const auto &self, GraphBuilder &scope) -> void {
+        scope.compute_.Shapes().SetOperatorSchemaVersion(domain, op_type,
+                                                         earliest->since_version());
+        for (const auto &child : scope.local_functions_)
+          self(self, *child);
+        for (const auto &child : scope.subgraphs_)
+          self(self, *child);
+      };
+      publish(publish, root);
+    }
+  }
+  const FunctionProto *local_function =
+      schema == nullptr ? compute_.Shapes().GetLocalFunction(local_key) : nullptr;
   if (local_function == nullptr) {
-    schema = FindSchema(op_type, domain);
-    if (!overload.empty() &&
+    if (!overload.empty() && !compute_.Shapes().HasLocalFunction(local_key) &&
         (schema != nullptr || !DomainSchemas(op_type, normalised_domain).empty() ||
          core::shapes::DispatchTable().count(normalised_domain + ":" + op_type) != 0 ||
          compute_.Shapes().GetCustomShapeInferenceFunction(domain, op_type) != nullptr)) {
@@ -2891,7 +2941,7 @@ GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std:
 }
 
 utils::RepeatedProtoField<FunctionProto>
-GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) {
+GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) const {
   std::map<FunctionIdentifier, std::size_t> indices;
   for (std::size_t index = 0; index < functions.size(); ++index) {
     const auto &function = functions[index];
@@ -2910,7 +2960,7 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
     std::set<FunctionIdentifier> result;
     const auto collect = [&](const auto &self, const NodeProto &node) -> void {
       const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
-      if (indices.count(identity) != 0)
+      if (indices.count(identity) != 0 && !IsRegisteredOperator(node, &function.opset_import()))
         result.insert(identity);
       for (const auto &attribute : node.attribute()) {
         if (attribute.has_g())
@@ -3140,6 +3190,8 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     while (true) {
       std::vector<std::pair<std::size_t, GraphBuilder *>> calls;
       for (std::size_t i = 0; i < nodes_.size(); ++i) {
+        if (IsRegisteredOperator(nodes_[i]))
+          continue;
         if (GraphBuilder *function = FindCalledFunction(functions, nodes_[i])) {
           calls.emplace_back(i, function);
         }
@@ -3387,10 +3439,9 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // initializer carrying that name, which remains a valid graph output.
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
-    if (candidate && compute_.Shapes().HasLocalFunction(
-                         ShapesContext::LocalFunctionKey(domain, op_type, node.overload()))) {
-      // Native-only folding must not evaluate a model-local override as the
-      // primitive kernel; recipe replay resolves model functions first.
+    if (candidate && compute_.Shapes().GetLocalFunction(ShapesContext::LocalFunctionKey(
+                         domain, op_type, node.overload())) != nullptr) {
+      // Native-only folding must not evaluate a model-local call as a primitive kernel.
       candidate = false;
     }
     if (candidate && included_outputs != nullptr) {
@@ -3761,27 +3812,18 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   if (FindNamedBuilder(local_functions_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
-  ValidateLocalFunctionName(name, domain);
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets, local_registry_);
   child->is_local_function_ = true;
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
+  child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
   RefreshLocalFunctionDefinition(ref);
   InvalidateRewritings();
   return ref;
-}
-
-void GraphBuilder::ValidateLocalFunctionName(const std::string &name, const std::string &domain) {
-  const std::string normalized = NormaliseDomain(domain == "onnx.ai" ? std::string() : domain);
-  if (!DomainSchemas(name, normalized).empty() ||
-      core::shapes::DispatchTable().count(normalized + ":" + name) != 0) {
-    throw BuilderError("GraphBuilder: local function '" + domain + "::" + name +
-                       "' cannot redefine a registered operator, regardless of overload.");
-  }
 }
 
 GraphBuilder &GraphBuilder::MakeLocalFunction(const FunctionProto &function) {

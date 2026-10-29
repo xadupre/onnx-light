@@ -387,7 +387,7 @@ public:
   bool Empty() const noexcept { return tensors_.empty() && types_.empty() && sequences_.empty(); }
 
   /// Removes inferred values, opsets, and local functions while preserving the owned
-  /// structured catalogue and custom shape-inference callbacks.
+  /// structured catalogue, operator schemas and custom shape-inference callbacks.
   void Clear() noexcept {
     ClearValues();
     opsets_.clear();
@@ -590,8 +590,8 @@ public:
   /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
   /// lifetime of the shape-inference pass. Replaces any previous entry
   /// registered under the same domain/name/overload key. ``func`` must
-  /// not be ``nullptr``. Rejects domain/name collisions with registered
-  /// operators, regardless of overload.
+  /// not be ``nullptr``. Registered operators take precedence over matching
+  /// normalized domain/name definitions, regardless of overload.
   void SetLocalFunction(const FunctionProto *func);
 
   /// Registers an owned definition whose lifetime also covers copied contexts.
@@ -611,12 +611,20 @@ public:
   void ClearLocalFunctions() noexcept;
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
-  /// ``nullptr`` when none is registered. ``key`` is expected to be the
+  /// ``nullptr`` when none is registered or a registered operator takes
+  /// precedence. ``key`` is expected to be the
   /// identifier produced by LocalFunctionKey.
-  const FunctionProto *GetLocalFunction(const std::string &key) const {
-    auto it = local_functions_.find(key);
-    return it == local_functions_.end() ? nullptr : it->second;
-  }
+  const FunctionProto *GetLocalFunction(const std::string &key) const;
+
+  /// Records a schema's earliest applicable version and returns whether metadata changed.
+  bool SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
+                                int since_version);
+
+  /// Merges schema metadata without changing this scope's opsets or inferred values.
+  void MergeOperatorSchemas(const ShapesContext &context);
+
+  /// Checks schema or shape-callback registration at the supplied opset.
+  bool IsRegisteredOperator(const std::string &domain, const std::string &op_type, int opset) const;
 
   /// Read-only access to the function-identity → FunctionProto* map.
   const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {
@@ -928,6 +936,7 @@ private:
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> owned_local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
+  std::unordered_map<std::string, int> operator_schema_versions_;
   std::unordered_set<Constraint, PairStringHash> constraints_;
   std::unordered_set<LessEqualConstraint, PairStringHash> le_constraints_;
   struct NodeConstraints {

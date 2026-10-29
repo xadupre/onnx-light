@@ -91,7 +91,7 @@ private:
 OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
   OpsetImports versions;
   for (const auto &import : imports) {
-    const std::string domain = import.domain().empty() ? "ai.onnx" : import.domain().value();
+    const std::string domain = NormaliseDomain(import.domain());
     // These standard-domain limits mirror the schema versions supported by
     // this build; user-defined domains have no runtime-wide maximum.
     const int64_t maximum = domain == "ai.onnx"      ? 29

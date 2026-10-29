@@ -90,16 +90,14 @@ TEST(ConstantToInitializerPattern, RejectsNonConstantNode) {
   EXPECT_EQ(match.no_match->reason, "candidate is not a default-domain Constant");
 }
 
-TEST(ConstantToInitializerPattern, RejectsIdentityFunctionRegistrationBeforeMutation) {
+TEST(ConstantToInitializerPattern, IgnoresIdentityFunctionRegistration) {
   for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
     SCOPED_TRACE(domain);
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
     AddConstant(builder, "Y");
     builder.MakeOutput("Y");
-    const auto original = builder.ToModel();
-    EXPECT_THROW(builder.MakeLocalFunction("Identity", domain), core::builder::BuilderError);
-    EXPECT_FALSE(builder.HasLocalFunction("Identity"));
-    EXPECT_TRUE(builder.ToModel().Equals(original));
+    EXPECT_NO_THROW(builder.MakeLocalFunction("Identity", domain));
+    EXPECT_TRUE(builder.HasLocalFunction("Identity"));
     core::builder::GraphGraph graph(builder);
     onnx_patterns::ConstantToInitializerPattern pattern;
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);

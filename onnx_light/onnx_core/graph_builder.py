@@ -96,15 +96,15 @@ class _OperatorProxy:
             if not isinstance(name, str):
                 raise TypeError("The node name must be a string.")
 
-            normalized_domain = "ai.onnx" if domain in ("", "ai.onnx") else domain
+            normalized_domain = "ai.onnx" if domain in ("", "ai.onnx", "onnx.ai") else domain
             version = self._builder.opset_version(domain)
             if version <= 0:
                 raise ValueError(
                     f"Domain {domain!r} has no explicit opset; "
                     "supply opsets to the constructor or call set_opset_version() first."
                 )
-            is_function = self._builder.has_local_function(op_type, domain)
-            schema = None if is_function else self._builder.find_schema(op_type, domain)
+            schema = self._builder.find_schema(op_type, domain)
+            is_function = schema is None and self._builder.has_local_function(op_type, domain)
             if schema is not None:
                 attribute_names = {attribute.name for attribute in schema.attributes}
                 unknown = sorted(set(kwargs) - attribute_names)

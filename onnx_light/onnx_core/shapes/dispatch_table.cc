@@ -21,7 +21,7 @@ namespace {
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
 // domain to :cpp:var:`kOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
-  return (domain.empty() ? std::string(kOnnxDomain) : domain) + ":" + op_type;
+  return NormaliseDomain(domain) + ":" + op_type;
 }
 
 // Returns the device-qualified dispatch key. The identifier of a peak-memory
@@ -104,8 +104,8 @@ bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
 }
 
 bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node) {
-  return shapes.HasLocalFunction(
-             ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
+  return shapes.GetLocalFunction(ShapesContext::LocalFunctionKey(node.domain(), node.op_type(),
+                                                                 node.overload())) != nullptr ||
          shapes.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
          DispatchTable().count(DispatchKey(node.domain(), node.op_type())) != 0;
 }

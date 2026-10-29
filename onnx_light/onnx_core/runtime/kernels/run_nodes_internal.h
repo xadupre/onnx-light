@@ -32,6 +32,10 @@ FunctionMap ModelFunctions(const ModelProto &model);
 /// Returns a function body with referenced attributes resolved for one call site.
 FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodeProto &call);
 
+/// Checks control-flow and device-specific kernel registrations without expanding local functions.
+bool HasRegisteredNodeKernel(const NodeProto &node, symbolic::Device device,
+                             const CustomKernelMap *context_kernels = nullptr);
+
 /**
  * Resolves how ``node`` must be dispatched, building and returning the
  * ready-to-invoke kernel instance (without any progress printing or event
@@ -42,9 +46,8 @@ FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodePr
  * :cpp:class:`RuntimeSession`) can prepare every node's kernel instance up
  * front and then invoke it repeatedly without redoing the lookup.
  *
- * Resolution checks the explicit model-local functions first, then explicitly
- * registered context functions, control-flow operators, context custom kernels,
- * global custom kernels, and finally the built-in dispatch table.
+ * Resolution checks control-flow operators, context custom kernels, global custom
+ * kernels, and the built-in dispatch table before model-local and context functions.
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */

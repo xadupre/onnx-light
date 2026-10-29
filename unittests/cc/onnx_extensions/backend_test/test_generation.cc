@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_lib/common/scoped_resource.h"
 
 #include <chrono>
 #include <cstring>
@@ -677,6 +678,65 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
   EXPECT_EQ(calls, 0);
 }
 
+TEST(Generation, PipelineIgnoresPrivateValuesOfShadowedFunctionBodies) {
+  for (bool global_kernel : {false, true}) {
+    for (bool model_function : {false, true}) {
+      auto embedding = PipelineModel("NativeEmbeddingCollision",
+                                     {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+      FunctionProto ignored;
+      ignored.set_name("NativeEmbeddingCollision");
+      ignored.set_domain("test.pipeline");
+      ignored.add_opset("", 18);
+      ignored.add_input("X");
+      ignored.add_output("Y");
+      auto *intermediate = ignored.add_node();
+      intermediate->set_op_type("Identity");
+      intermediate->add_input("X");
+      intermediate->add_output("weight");
+      auto *output = ignored.add_node();
+      output->set_op_type("Identity");
+      output->add_input("weight");
+      output->add_output("Y");
+      if (model_function)
+        embedding.add_function(ignored);
+      auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+      auto *weight = language.mutable_graph()->add_initializer();
+      weight->set_name("weight");
+      weight->set_data_type(TensorProto::FLOAT);
+      weight->add_dims(1);
+      weight->add_float_data(2);
+      RuntimeSession source(language);
+      RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+      if (!model_function)
+        context.functions().emplace("test.pipeline:NativeEmbeddingCollision:", &ignored);
+      int calls = 0;
+      const auto embed = [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+      };
+      if (global_kernel)
+        RegisterGlobalCustomKernel("test.pipeline", "NativeEmbeddingCollision", embed);
+      else
+        context.RegisterCustomKernel("test.pipeline", "NativeEmbeddingCollision", embed);
+      ScopeExit cleanup([&]() noexcept {
+        if (global_kernel)
+          UnregisterGlobalCustomKernel("test.pipeline", "NativeEmbeddingCollision");
+      });
+      context.RegisterCustomKernel("test.pipeline", "Prefill",
+                                   [](const NodeProto &node, RuntimeContext &rt) {
+                                     rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                                   });
+      RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+      GenerationOptions options;
+      options.max_new_tokens = 1;
+      EXPECT_EQ(Tokens(Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)),
+                                context, feeds, options)),
+                (std::vector<int64_t>{0, 1}));
+      EXPECT_EQ(calls, 1);
+    }
+  }
+}
+
 TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
   auto embedding =
       PipelineModel("ContextStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
@@ -797,10 +857,11 @@ TEST(Generation, PipelineFunctionScanCacheIncludesGraphAttributeBindings) {
 }
 
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
-  auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  auto embedding =
+      PipelineModel("EmbeddingStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   auto *function = embedding.add_functions();
   function->set_domain("test.pipeline");
-  function->set_name("Stage");
+  function->set_name("EmbeddingStage");
   function->add_input("X");
   function->add_output("Y");
   auto *opset = function->add_opset_import();

@@ -60,7 +60,7 @@ class TestVerify(ExtTestCase):
         verify.verify_pipeline(pipeline)
 
         pipeline.eos_token_ids.append(-1)
-        with self.assertRaisesRegex(ValueError, "eos_token_ids"):
+        with self.assertRaisesRegex(ValueError, "eos_token_ids must be nonnegative; got -1"):
             verify.verify_pipeline(pipeline)
         del pipeline.eos_token_ids[:]
         pipeline.top_p = 0.0

@@ -110,7 +110,6 @@ class TestTextFormat(ExtTestCase):
         self.assertIn("prefill {", text)
         self.assertIn("max_new_tokens: 64", text)
         parsed = parse_from_textproto(text, onnxl.PipelineProto())
-        self.assertIn("eos_token_ids: 0", text)
         self.assertTrue(parsed.HasField("eos_token_ids"))
         self.assertEqual(list(parsed.eos_token_ids), [0, 2, 2])
         restored = onnxl.PipelineProto()

@@ -477,7 +477,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     eos_token_ids.reserve(options.eos_token_ids.size());
   int64_t largest_eos_token_id = -1;
   for (int64_t id : options.eos_token_ids) {
-    EXT_ENFORCE_INVALID(id >= 0, "Generate: eos_token_ids must be nonnegative.");
+    EXT_ENFORCE_INVALID(id >= 0, "Generate: eos_token_ids must be nonnegative; got ", id, ".");
     eos_token_ids.insert(id);
     largest_eos_token_id = std::max(largest_eos_token_id, id);
   }
@@ -778,7 +778,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     ValidateStorage(logits);
     const int64_t vocabulary = logits.shape.back();
     EXT_ENFORCE_INVALID(largest_eos_token_id < vocabulary,
-                        "Generate: eos_token_ids contains an ID outside the vocabulary.");
+                        "Generate: eos_token_ids contains an ID outside the vocabulary: got ",
+                        largest_eos_token_id, ", valid range is [0, ", vocabulary, ").");
     size_t row_bytes = 0;
     bool capture_logits = false;
     if (options.on_step && remaining_logit_bytes > 0) {

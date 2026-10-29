@@ -1458,6 +1458,7 @@ TEST(Generation, MultipleEosValidatesEveryIdBeforeSampling) {
       options.max_new_tokens = invalid < 0 ? 0 : 3;
       options.pad_token_id = 0;
       options.eos_token_ids = {2, invalid};
+      std::string message;
       if (stored) {
         PipelineProto pipeline;
         *pipeline.mutable_prefill() = model;
@@ -1465,9 +1466,13 @@ TEST(Generation, MultipleEosValidatesEveryIdBeforeSampling) {
         pipeline.set_pad_token_id(0);
         for (int64_t id : options.eos_token_ids)
           pipeline.add_eos_token_ids(id);
-        EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+        message = InvalidArgumentMessage([&]() { Generate(pipeline, context, feeds); });
       } else {
-        EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+        message = InvalidArgumentMessage([&]() { Generate(model, context, feeds, options); });
+      }
+      EXPECT_NE(message.find("got " + std::to_string(invalid)), std::string::npos) << message;
+      if (invalid >= 0) {
+        EXPECT_NE(message.find("valid range is [0, 4)"), std::string::npos) << message;
       }
       EXPECT_EQ(calls, invalid < 0 ? 0 : 1);
     }

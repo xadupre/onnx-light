@@ -388,8 +388,6 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
     EXT_ENFORCE_INVALID(pipeline.seed() >= 0, "Generate: seed must be nonnegative.");
     options.seed = static_cast<uint64_t>(pipeline.seed());
   }
-  if (pipeline.has_eos_token_id())
-    options.eos_token_id = pipeline.eos_token_id();
   options.eos_token_ids.assign(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end());
   if (pipeline.has_pad_token_id())
     options.pad_token_id = pipeline.pad_token_id();
@@ -471,8 +469,6 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
-  EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id >= 0,
-                      "Generate: eos_token_id must be nonnegative.");
   std::unordered_set<int64_t> eos_token_ids;
   int64_t largest_eos_token_id = -1;
   for (int64_t id : options.eos_token_ids) {
@@ -481,8 +477,6 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     largest_eos_token_id = std::max(largest_eos_token_id, id);
   }
   auto pad_token_id = options.pad_token_id;
-  if (!pad_token_id)
-    pad_token_id = options.eos_token_id;
   if (!pad_token_id && !options.eos_token_ids.empty())
     pad_token_id = options.eos_token_ids.front();
   EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id >= 0,
@@ -773,8 +767,6 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     if (IsHalfPrecision(logits.data_type))
       logits = PromoteToFloat32(logits);
     const int64_t vocabulary = logits.shape.back();
-    EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id < vocabulary,
-                        "Generate: eos_token_id is outside the vocabulary.");
     EXT_ENFORCE_INVALID(largest_eos_token_id < vocabulary,
                         "Generate: eos_token_ids contains an ID outside the vocabulary.");
     EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id < vocabulary,
@@ -791,8 +783,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       } else {
         next_positions[row] = positions[row * length + length - 1] + 1;
       }
-      if ((options.eos_token_id && next[row] == *options.eos_token_id) ||
-          eos_token_ids.contains(next[row]))
+      if (eos_token_ids.contains(next[row]))
         finished[row] = true;
     }
     AppendColumn(tokens, next);

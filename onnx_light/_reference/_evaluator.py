@@ -827,7 +827,7 @@ class ReferenceEvaluator:
         feed_inputs: dict[str, Any],
         max_new_tokens: int = 20,
         temperature: float = 0.0,
-        eos_token_id: int | None = None,
+        eos_token_ids: list[int] | None = None,
         pad_token_id: int | None = None,
         seed: int | None = None,
         *,
@@ -849,9 +849,10 @@ class ReferenceEvaluator:
 
         Zero temperature selects greedy decoding. Positive temperature samples
         softmax-scaled logits, reproducibly when ``seed`` is supplied. Generation
-        stops at ``max_new_tokens`` or when every row emits ``eos_token_id``.
-        Finished rows receive ``pad_token_id`` (EOS by default). Each call starts
-        fresh state and does not modify the supplied feeds.
+        stops at ``max_new_tokens`` or when every row emits a token in ``eos_token_ids``.
+        An empty list or None disables EOS stopping. Finished rows receive ``pad_token_id``
+        (the first EOS ID by default). Each call starts fresh state and does not modify
+        the supplied feeds.
 
         This method is not thread-safe on a shared evaluator. The caller must
         serialize it with other ``generate`` and ``run`` calls on this instance;
@@ -873,7 +874,7 @@ class ReferenceEvaluator:
         options = _runtime.GenerationOptions()
         options.max_new_tokens = max_new_tokens
         options.temperature = temperature
-        options.eos_token_id = eos_token_id
+        options.eos_token_ids = [] if eos_token_ids is None else eos_token_ids
         options.pad_token_id = pad_token_id
         options.seed = seed
         options.position_axes = position_axes

@@ -2483,7 +2483,6 @@ SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &strea
   SIZE_FIELD(size, options, stream, max_new_tokens)
   SIZE_FIELD(size, options, stream, temperature)
   SIZE_FIELD(size, options, stream, seed)
-  SIZE_FIELD(size, options, stream, eos_token_id)
   SIZE_FIELD(size, options, stream, pad_token_id)
   SIZE_FIELD(size, options, stream, top_k)
   SIZE_FIELD(size, options, stream, top_p)
@@ -2510,7 +2509,6 @@ void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, max_new_tokens)
   WRITE_FIELD(options, stream, temperature)
   WRITE_FIELD(options, stream, seed)
-  WRITE_FIELD(options, stream, eos_token_id)
   WRITE_FIELD(options, stream, pad_token_id)
   WRITE_FIELD(options, stream, top_k)
   WRITE_FIELD(options, stream, top_p)
@@ -2536,7 +2534,6 @@ bool PipelineProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_FIELD(options, stream, max_new_tokens)           //
   READ_FIELD(options, stream, temperature)              //
   READ_FIELD(options, stream, seed)                     //
-  READ_FIELD(options, stream, eos_token_id)             //
   READ_FIELD(options, stream, pad_token_id)             //
   READ_FIELD(options, stream, top_k)                    //
   READ_FIELD(options, stream, top_p)                    //
@@ -2555,11 +2552,11 @@ void PipelineProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptio
       NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
       NAME_EXIST_VALUE(pipeline_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(embedding),
       NAME_EXIST_VALUE(prefill), NAME_EXIST_VALUE(decode), NAME_EXIST_VALUE(max_new_tokens),
-      NAME_EXIST_VALUE(temperature), NAME_EXIST_VALUE(seed), NAME_EXIST_VALUE(eos_token_id),
-      NAME_EXIST_VALUE(pad_token_id), NAME_EXIST_VALUE(top_k), NAME_EXIST_VALUE(top_p),
-      NAME_EXIST_VALUE(input_ids_name), NAME_EXIST_VALUE(logits_name),
-      NAME_EXIST_VALUE(attention_mask_name), NAME_EXIST_VALUE(position_ids_name),
-      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(eos_token_ids));
+      NAME_EXIST_VALUE(temperature), NAME_EXIST_VALUE(seed), NAME_EXIST_VALUE(pad_token_id),
+      NAME_EXIST_VALUE(top_k), NAME_EXIST_VALUE(top_p), NAME_EXIST_VALUE(input_ids_name),
+      NAME_EXIST_VALUE(logits_name), NAME_EXIST_VALUE(attention_mask_name),
+      NAME_EXIST_VALUE(position_ids_name), NAME_EXIST_VALUE(metadata_props),
+      NAME_EXIST_VALUE(eos_token_ids));
 }
 
 // SequenceProto
@@ -3342,7 +3339,6 @@ bool VisitProtoFields(const PipelineProto &left, Right &right, Visitor &&visitor
   VISIT_FIELD(max_new_tokens)
   VISIT_FIELD(temperature)
   VISIT_FIELD(seed)
-  VISIT_FIELD(eos_token_id)
   VISIT_FIELD(pad_token_id)
   VISIT_FIELD(top_k)
   VISIT_FIELD(top_p)

@@ -3630,7 +3630,6 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_OPTIONAL_INT(PipelineProto, max_new_tokens)
       .PYFIELD_OPTIONAL_FLOAT(PipelineProto, temperature)
       .PYFIELD_OPTIONAL_INT(PipelineProto, seed)
-      .PYFIELD_OPTIONAL_INT(PipelineProto, eos_token_id)
       .PYFIELD_OPTIONAL_INT(PipelineProto, pad_token_id)
       .PYFIELD_OPTIONAL_INT(PipelineProto, top_k)
       .PYFIELD_OPTIONAL_FLOAT(PipelineProto, top_p)
@@ -3669,8 +3668,6 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_temperature();
             if (field_name == "seed")
               return self.has_seed();
-            if (field_name == "eos_token_id")
-              return self.has_eos_token_id();
             if (field_name == "pad_token_id")
               return self.has_pad_token_id();
             if (field_name == "top_k")

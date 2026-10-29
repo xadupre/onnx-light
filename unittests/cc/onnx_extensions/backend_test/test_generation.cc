@@ -280,7 +280,7 @@ TEST(Generation, BackendAttentionModels) {
         EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
-      options.eos_token_id = 1;
+      options.eos_token_ids = {1};
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
       EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, session_options)),
@@ -1127,16 +1127,14 @@ TEST(Generation, PipelineRequiresItsPrefillModel) {
 
 TEST(Generation, MultipleEosAcrossModelsPipelinesAndPersistentDecoding) {
   struct Configuration {
-    std::optional<int64_t> scalar;
     std::vector<int64_t> ids;
     std::optional<int64_t> padding;
     int64_t expected_padding;
   };
-  const Configuration configurations[] = {{std::nullopt, {2, 3}, std::nullopt, 2},
-                                          {2, {3}, std::nullopt, 2},
-                                          {std::nullopt, {3, 2, 3}, std::nullopt, 3},
-                                          {0, {2, 3}, std::nullopt, 0},
-                                          {std::nullopt, {2, 3}, 0, 0}};
+  const Configuration configurations[] = {{{2, 3}, std::nullopt, 2},
+                                          {{3, 2, 3}, std::nullopt, 3},
+                                          {{0, 2, 3}, std::nullopt, 0},
+                                          {{2, 3}, 0, 0}};
   for (bool persistent : {false, true}) {
     for (int mode = 0; mode < 5; ++mode) {
       for (const auto &configuration : configurations) {
@@ -1154,12 +1152,9 @@ TEST(Generation, MultipleEosAcrossModelsPipelinesAndPersistentDecoding) {
               PipelineModel("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
         GenerationOptions options;
         options.max_new_tokens = 3;
-        options.eos_token_id = configuration.scalar;
         options.eos_token_ids = configuration.ids;
         options.pad_token_id = configuration.padding;
         pipeline.set_max_new_tokens(options.max_new_tokens);
-        if (configuration.scalar)
-          pipeline.set_eos_token_id(*configuration.scalar);
         for (int64_t id : configuration.ids)
           pipeline.add_eos_token_ids(id);
         if (configuration.padding)
@@ -1195,7 +1190,6 @@ TEST(Generation, MultipleEosAcrossModelsPipelinesAndPersistentDecoding) {
         } else if (mode == 1) {
           // Explicit options override stored EOS settings as well as the token limit.
           pipeline.ref_eos_token_ids() = {0};
-          pipeline.set_eos_token_id(1);
           pipeline.set_max_new_tokens(1);
           result = Generate(pipeline, context, feeds, options);
         } else if (mode == 3) {

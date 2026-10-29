@@ -92,7 +92,7 @@ pipeline = onnx.PipelineProto(
     max_new_tokens=4,
     temperature=0.0,
     seed=42,
-    eos_token_id=2,
+    eos_token_ids=[2],
     pad_token_id=0,
     top_k=0,
     input_ids_name="input_ids",
@@ -133,7 +133,6 @@ for setting in (
     "max_new_tokens",
     "temperature",
     "seed",
-    "eos_token_id",
     "pad_token_id",
     "top_k",
     "input_ids_name",
@@ -143,6 +142,7 @@ for setting in (
 ):
     assert restored.HasField(setting)
     assert getattr(restored, setting) == getattr(pipeline, setting)
+assert list(restored.eos_token_ids) == [2]
 print("Binary round trip preserved stages, settings, and interface names.")
 
 # %%
@@ -163,7 +163,7 @@ tokens = evaluator.generate(
     max_new_tokens=restored.max_new_tokens,
     temperature=restored.temperature,
     seed=restored.seed,
-    eos_token_id=restored.eos_token_id,
+    eos_token_ids=list(restored.eos_token_ids),
     pad_token_id=restored.pad_token_id,
 )
 numpy.testing.assert_array_equal(tokens, [[0, 1, 2]])
@@ -185,5 +185,5 @@ limited = evaluator.generate(
     seed=restored.seed,
 )
 numpy.testing.assert_array_equal(limited, [[0, 1, 2, 0, 1]])
-assert restored.eos_token_id == 2
+assert list(restored.eos_token_ids) == [2]
 print("Tokens (including prompt, stopping at token limit):", limited.tolist())

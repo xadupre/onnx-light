@@ -2125,8 +2125,6 @@ void VerifyPipeline(const PipelineProto &pipeline) {
                       "PipelineProto temperature must be finite and nonnegative.");
   EXT_ENFORCE_INVALID(!pipeline.has_seed() || pipeline.ref_seed() >= 0,
                       "PipelineProto seed must be nonnegative.");
-  EXT_ENFORCE_INVALID(!pipeline.has_eos_token_id() || pipeline.ref_eos_token_id() >= 0,
-                      "PipelineProto eos_token_id must be nonnegative.");
   EXT_ENFORCE_INVALID(std::all_of(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end(),
                                   [](int64_t id) { return id >= 0; }),
                       "PipelineProto eos_token_ids must be nonnegative.");

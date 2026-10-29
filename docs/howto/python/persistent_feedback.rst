@@ -132,7 +132,7 @@ Autoregressive generation
         max_new_tokens=32,
         temperature=0.7,
         seed=42,
-        eos_token_id=2,
+        eos_token_ids=[2],
     )
 
 The result is an INT64 ``[batch, prompt_length + generated_length]`` array,

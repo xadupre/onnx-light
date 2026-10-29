@@ -15,8 +15,9 @@ struct GenerationOptions {
   /// Zero selects greedy decoding; positive values sample softmax(logits / temperature).
   double temperature = 0.;
   std::optional<uint64_t> seed;
-  std::optional<int64_t> eos_token_id;
-  /// Defaults to eos_token_id, otherwise the first eos_token_ids entry, for finished rows.
+  /// Stops each row on any listed token; an empty list disables EOS stopping.
+  std::vector<int64_t> eos_token_ids;
+  /// Defaults to the first eos_token_ids entry for already-finished rows.
   std::optional<int64_t> pad_token_id;
   std::string input_ids_name = "input_ids";
   std::string logits_name = "logits";
@@ -26,8 +27,6 @@ struct GenerationOptions {
   /// Zero infers the layout from the declared position input. Positive values select
   /// [axes, batch, sequence] positions (also for a graph with unspecified dimensions).
   int64_t position_axes = 0;
-  /// Additional stopping tokens, combined with eos_token_id as a union; duplicates are allowed.
-  std::vector<int64_t> eos_token_ids;
 };
 
 /**

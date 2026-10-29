@@ -1815,7 +1815,7 @@ END_PROTO()
 //   optional int64 max_new_tokens = 10;
 //   optional float temperature = 11;
 //   optional int64 seed = 12;
-//   optional int64 eos_token_id = 13;
+//   reserved 13;
 //   optional int64 pad_token_id = 14;
 //   optional int64 top_k = 15;
 //   optional float top_p = 16;
@@ -1842,7 +1842,6 @@ FIELD_OPTIONAL(ModelProto, decode, 9,
 FIELD_OPTIONAL(int64_t, max_new_tokens, 10, "Maximum number of tokens generated after the prompt.")
 FIELD_OPTIONAL(float, temperature, 11, "Sampling temperature. Zero selects greedy decoding.")
 FIELD_OPTIONAL(int64_t, seed, 12, "Optional nonnegative random seed.")
-FIELD_OPTIONAL(int64_t, eos_token_id, 13, "Token that terminates generation.")
 FIELD_OPTIONAL(int64_t, pad_token_id, 14, "Token emitted for already-finished batch rows.")
 FIELD_OPTIONAL(int64_t, top_k, 15,
                "Number of highest-scoring tokens retained before sampling. Zero disables top-k.")
@@ -1855,7 +1854,7 @@ FIELD_STR(position_ids_name, 20, "Name of the optional position-ID input.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 21,
                      "Named metadata values; keys must be distinct.")
 FIELD_REPEATED(int64_t, eos_token_ids, 22,
-               "Additional terminating tokens, combined with eos_token_id as a union.")
+               "Tokens that terminate generation; an empty list disables EOS stopping.")
 /** Rejects pipelines retaining deferred model sources before destination I/O. */
 void ValidateDeferredExport() const;
 END_PROTO()

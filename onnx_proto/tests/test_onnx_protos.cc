@@ -3861,7 +3861,6 @@ TEST(onnx_proto, PipelineProto_Serialization) {
   pipeline.set_top_p(0.9f);
   pipeline.set_input_ids_name("input_ids");
   pipeline.set_logits_name("logits");
-  pipeline.set_eos_token_id(1);
   pipeline.add_eos_token_ids(0);
   pipeline.add_eos_token_ids(2);
   pipeline.add_eos_token_ids(2);
@@ -3885,7 +3884,6 @@ TEST(onnx_proto, PipelineProto_Serialization) {
   EXPECT_EQ(restored.ref_input_ids_name(), "input_ids");
   ASSERT_EQ(restored.ref_metadata_props().size(), 1);
   EXPECT_EQ(restored.ref_metadata_props()[0].ref_value(), "decoder-only");
-  EXPECT_EQ(restored.eos_token_id(), 1);
   EXPECT_EQ(restored.eos_token_ids().values(), (std::vector<int64_t>{0, 2, 2}));
   PipelineProto copied = utils::CopyWithSharedTensorStorage(pipeline);
   EXPECT_TRUE(pipeline.Equals(copied));

@@ -420,6 +420,8 @@ Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeCont
   const ScopeExit restore([&context, previous]() noexcept { context.set_cpu_executor(previous); });
   const CpuExecutorScope scope(executor ? executor.get() : previous);
   context.set_cpu_executor(executor ? executor.get() : previous);
+  if (session_options.cpu_execution_counters)
+    context.cpu_executor()->EnableCounters();
   return options == nullptr
              ? Generate(pipeline.pipeline(), context, feeds, session_options)
              : Generate(pipeline.pipeline(), context, feeds, *options, session_options);

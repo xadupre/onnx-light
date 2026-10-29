@@ -18,6 +18,14 @@ class TestPackageVersionConsistency(unittest.TestCase):
             raise AssertionError(f"Unable to extract version from {source!r}.")
         return match.group(1)
 
+    def test_documentation_homepage_displays_release(self):
+        """Checks that the homepage displays the release from the package version."""
+        homepage = (self.root / "docs" / "index.rst").read_text(encoding="utf-8")
+        config = (self.root / "docs" / "conf.py").read_text(encoding="utf-8")
+
+        self.assertIn("\nVersion: |release|\n", homepage)
+        self.assertRegex(config, r"(?m)^release\s*=\s*onnx_light\.__version__\s*$")
+
     def test_package_versions_are_synchronized(self):
         """Verifies Python and C++ package version declarations remain aligned."""
         pyproject = (self.root / "pyproject.toml").read_text(encoding="utf-8")

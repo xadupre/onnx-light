@@ -1,6 +1,8 @@
 onnx-light
 ==========
 
+Version: |release|
+
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml
     :alt: core

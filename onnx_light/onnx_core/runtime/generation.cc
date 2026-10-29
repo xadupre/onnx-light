@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/runtime/quantization.h"
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <random>
 #include <string_view>
@@ -467,6 +468,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
+  EXT_ENFORCE_INVALID(options.max_logit_bytes == 0 || options.on_step,
+                      "Generate: raw-logit capture requires an on_step callback.");
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
   std::unordered_set<int64_t> eos_token_ids;
@@ -683,8 +686,15 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     }
   }
   std::vector<int64_t> next_mask(static_cast<size_t>(batch));
+  size_t remaining_logit_bytes = options.max_logit_bytes;
   int64_t length = prompt_length;
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
+    const auto started_at = options.on_step ? std::chrono::steady_clock::now()
+                                            : std::chrono::steady_clock::time_point{};
+    if (step > 0) {
+      AppendColumn(mask, next_mask);
+      AppendColumn(positions, next_positions);
+    }
     const bool decode = persistent && step > 0;
     const Shape shape{batch, decode ? 1 : length};
     const auto put_control = [&](const std::string &name, RuntimeValue value) {
@@ -764,11 +774,22 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                             IsHalfPrecision(logits.data_type),
                         "Generate: logits must have a floating-point type.");
     ValidateStorage(logits);
-    if (IsHalfPrecision(logits.data_type))
-      logits = PromoteToFloat32(logits);
     const int64_t vocabulary = logits.shape.back();
     EXT_ENFORCE_INVALID(largest_eos_token_id < vocabulary,
                         "Generate: eos_token_ids contains an ID outside the vocabulary.");
+    size_t row_bytes = 0;
+    bool capture_logits = false;
+    if (options.on_step && remaining_logit_bytes > 0) {
+      row_bytes = PackedByteSize(logits.data_type, vocabulary);
+      capture_logits = row_bytes <= remaining_logit_bytes / static_cast<size_t>(batch);
+    }
+    std::optional<Tensor> original_logits;
+    if (capture_logits && IsHalfPrecision(logits.data_type)) {
+      original_logits.emplace(std::move(logits));
+      logits = PromoteToFloat32(*original_logits);
+    } else if (IsHalfPrecision(logits.data_type)) {
+      logits = PromoteToFloat32(logits);
+    }
     EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id < vocabulary,
                         "Generate: pad_token_id is outside the vocabulary.");
     const int64_t stride = logits.shape.product() / batch;
@@ -788,11 +809,34 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     }
     AppendColumn(tokens, next);
     ++length;
+    if (options.on_step) {
+      GenerationStep observation;
+      observation.index = step;
+      observation.phase = step == 0 ? GenerationPhase::kPrefill : GenerationPhase::kDecode;
+      observation.started_at = started_at;
+      observation.completed_at = std::chrono::steady_clock::now();
+      observation.token_ids = next;
+      if (capture_logits) {
+        const Tensor &raw = original_logits ? *original_logits : logits;
+        const size_t snapshot_bytes = row_bytes * static_cast<size_t>(batch);
+        Tensor snapshot;
+        snapshot.name = options.logits_name;
+        snapshot.data_type = raw.data_type;
+        snapshot.shape = {batch, vocabulary};
+        snapshot.data.resize(snapshot_bytes);
+        const size_t stride_bytes = raw.size_bytes() / static_cast<size_t>(batch);
+        for (size_t row = 0; row < static_cast<size_t>(batch); ++row)
+          std::memcpy(snapshot.mutable_bytes() + row * row_bytes,
+                      raw.bytes() + (row + 1) * stride_bytes - row_bytes, row_bytes);
+        observation.raw_logits.emplace(std::move(snapshot));
+        remaining_logit_bytes -= snapshot_bytes;
+      }
+      if (!options.on_step(observation))
+        break;
+    }
     if (std::all_of(finished.begin(), finished.end(), [](bool value) { return value; }) ||
         step + 1 == options.max_new_tokens)
       break;
-    AppendColumn(mask, next_mask);
-    AppendColumn(positions, next_positions);
   }
   return Tensor::From<int64_t>(options.input_ids_name, {batch, length}, tokens);
 }

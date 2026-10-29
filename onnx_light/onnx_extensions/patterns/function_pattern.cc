@@ -321,9 +321,8 @@ std::set<std::string> FunctionPattern::FastOpType() const {
 
 core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (as_function_ && graph.Builder().IsInsideLocalFunction(
-                          replacement_.name(), replacement_.domain(), replacement_.overload()))
-    return NoMatch(candidate, "replacement function must not rewrite its own body");
+  if (as_function_ && graph.Builder().IsInsideLocalFunction())
+    return NoMatch(candidate, "function-call replacements are disabled inside local functions");
   if (!CompatibleOpsets(graph, pattern_) ||
       (!as_function_ && !CompatibleOpsets(graph, replacement_)))
     return NoMatch(candidate, "function opsets differ from the target graph");

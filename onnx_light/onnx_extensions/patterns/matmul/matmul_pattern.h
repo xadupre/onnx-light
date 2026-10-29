@@ -120,6 +120,40 @@ public:
 };
 
 /**
+ * Absorbs a matrix output Transpose into an unbiased Gemm.
+ *
+ * @code
+ * Before:
+ *          ┌─────────────────────────┐     ┌─────────────────┐
+ *   A, B ─→│ Gemm transA=a, transB=b │────→│ Transpose [1,0] │──→ y
+ *          └─────────────────────────┘     └─────────────────┘
+ *
+ * After:
+ *          ┌─────────────────────────────┐
+ *   B, A ─→│ Gemm transA=1-b, transB=1-a │──→ y
+ *          └─────────────────────────────┘
+ * @endcode
+ *
+ * Requires opset 11 or later and rank-two inputs, with dynamic or constant
+ * dimensions. An omitted permutation reverses the two matrix axes.
+ * The Gemm intermediate cannot be shared, exported, or captured. Biases,
+ * unresolved attributes, function overloads and device configurations are not
+ * supported. Coefficients, final output names and compatible metadata survive.
+ * Each application removes one output Transpose without introducing another.
+ */
+class GemmOutputTransposePattern final : public core::builder::PatternOptimization {
+public:
+  explicit GemmOutputTransposePattern(int priority = 1)
+      : PatternOptimization(priority, "GemmOutputTranspose") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Fuses a two-input Sum following an unbiased Gemm into the Gemm bias input.
  *
  * The Gemm output must be private to the Sum, and the other Sum input must be

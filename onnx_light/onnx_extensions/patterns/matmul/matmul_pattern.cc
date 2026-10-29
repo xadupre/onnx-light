@@ -778,6 +778,105 @@ GemmTransposePattern::Apply(core::builder::GraphGraph &graph,
   return replacements;
 }
 
+std::set<std::string> GemmOutputTransposePattern::FastOpType() const { return {"Transpose"}; }
+
+core::builder::MatchResult GemmOutputTransposePattern::Match(core::builder::GraphGraph &graph,
+                                                             const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Transpose") || !candidate.overload().empty() ||
+      candidate.input_size() != 1 || candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain matrix Transpose");
+  }
+  if (graph.Builder().OpsetVersion("") < 11) {
+    return NoMatch(candidate, "Gemm with optional bias requires a known opset of at least 11");
+  }
+  const NodeProto *gemm = graph.NodeBefore(candidate.input()[0].value());
+  if (gemm == nullptr || !IsDefaultOp(*gemm, "Gemm") || !gemm->overload().empty() ||
+      gemm->output_size() != 1 ||
+      (gemm->input_size() != 2 && (gemm->input_size() != 3 || !gemm->input()[2].empty()))) {
+    return NoMatch(candidate, "the Transpose input is not an unbiased default-domain Gemm");
+  }
+  if (graph.IsUsedMoreThanOnce(gemm->output()[0].value())) {
+    return NoMatch(candidate, "the Gemm output has another consumer, output, or capture");
+  }
+  for (int index = 0; index < 2; ++index) {
+    const std::string &input = gemm->input()[index].value();
+    if (!graph.HasShape(input) || graph.GetShape(input).Shape().Rank() != 2) {
+      return NoMatch(candidate, "both Gemm inputs must have known matrix rank");
+    }
+  }
+  if (candidate.attribute_size() > 1) {
+    return NoMatch(candidate, "the Transpose has unsupported or duplicate attributes");
+  }
+  for (const auto &attribute : candidate.attribute()) {
+    std::vector<int64_t> perm;
+    if (attribute.name() != "perm" || attribute.type() != AttributeProto::INTS ||
+        !attribute.ref_attr_name().empty() || !GetAttributeInts(candidate, "perm", perm) ||
+        perm != std::vector<int64_t>{1, 0}) {
+      return NoMatch(candidate, "the Transpose permutation does not swap the matrix axes");
+    }
+  }
+  std::unordered_set<std::string> seen;
+  for (const auto &attribute : gemm->attribute()) {
+    const std::string &name = attribute.name().value();
+    const bool flag = name == "transA" || name == "transB";
+    if ((!flag && name != "alpha" && name != "beta") ||
+        attribute.type() != (flag ? AttributeProto::INT : AttributeProto::FLOAT) ||
+        !attribute.ref_attr_name().empty() || !seen.insert(name).second) {
+      return NoMatch(candidate, "the Gemm has unsupported, unresolved, or duplicate attributes");
+    }
+  }
+  if (!gemm->device_configurations().empty() || !candidate.device_configurations().empty()) {
+    return NoMatch(candidate, "device configurations cannot be transposed safely");
+  }
+  for (const auto &entry : candidate.metadata_props()) {
+    for (const auto &source : gemm->metadata_props()) {
+      if (entry.key() == source.key() && entry.value() != source.value()) {
+        return NoMatch(candidate, "the Gemm and Transpose have conflicting metadata");
+      }
+    }
+  }
+  return core::builder::MatchResult{this, {gemm, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+GemmOutputTransposePattern::Apply(core::builder::GraphGraph &graph,
+                                  const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("GemmOutputTransposePattern::Apply expects Gemm followed by Transpose.");
+  }
+  const auto verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "GemmOutputTransposePattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &gemm = *nodes[0];
+  const NodeProto &transpose = *nodes[1];
+  NodeProto replacement = gemm;
+  replacement.set_name("GemmOutputTransposePattern--" + gemm.name().value());
+  replacement.clr_input();
+  replacement.add_input(gemm.input()[1].value());
+  replacement.add_input(gemm.input()[0].value());
+  replacement.clr_output();
+  replacement.add_output(transpose.output()[0].value());
+  replacement.clr_attribute();
+  for (const auto &attribute : gemm.attribute()) {
+    if (attribute.name() != "transA" && attribute.name() != "transB")
+      *replacement.add_attribute() = attribute;
+  }
+  AddAttribute<int64_t>(replacement, "transA", GetAttributeOr<int64_t>(gemm, "transB", 0) == 0);
+  AddAttribute<int64_t>(replacement, "transB", GetAttributeOr<int64_t>(gemm, "transA", 0) == 0);
+  if (!transpose.doc_string().empty())
+    replacement.set_doc_string(transpose.doc_string().value());
+  for (const auto &entry : transpose.metadata_props()) {
+    if (std::none_of(replacement.metadata_props().begin(), replacement.metadata_props().end(),
+                     [&](const auto &source) { return entry.key() == source.key(); }))
+      *replacement.add_metadata_props() = entry;
+  }
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
+
 std::set<std::string> MatMulReshape2Of3Pattern::FastOpType() const {
   return {"FusedMatMul", "MatMul"};
 }

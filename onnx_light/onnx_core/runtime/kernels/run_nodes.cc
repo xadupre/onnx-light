@@ -1439,6 +1439,18 @@ private:
 
 } // namespace
 
+bool HasRegisteredNodeKernel(const NodeProto &node, symbolic::Device device,
+                             const CustomKernelMap *context_kernels) {
+  const std::string domain = NormaliseDomain(node.domain());
+  if (domain == kDefaultOnnxDomain && (node.op_type() == "If" || node.op_type() == "Loop" ||
+                                       node.op_type() == "Scan" || node.op_type() == "SequenceMap"))
+    return true;
+  const std::string key = domain + ":" + node.op_type();
+  const std::string device_key = key + symbolic::DeviceKeySuffix(device);
+  return (context_kernels != nullptr && context_kernels->contains(device_key)) ||
+         GlobalCustomKernels().contains(key) || KernelDispatchTable().contains(device_key);
+}
+
 // Resolves how ``node`` must be dispatched, building and returning the
 // ready-to-invoke kernel instance (without any progress printing or event
 // logging). This is the "kernel initialization" step: the (domain, op_type)

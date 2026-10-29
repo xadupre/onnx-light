@@ -666,6 +666,58 @@ TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidP
   EXPECT_EQ(builder.Rewritings().size(), 2u);
 }
 
+TEST(PatternOptimization, NamedVariantsUseRuntimeFallbackDespiteShapeRegistrations) {
+  ScopedIdentityKernel kernel;
+  for (bool schema_only : {false, true}) {
+    core::builder::OperatorRegistry registry;
+    if (schema_only) {
+      registry.RegisterSchema(core::schema::LightOpSchema("F", "variant.fallback", 1, "",
+                                                          {{"x", "", "tensor(float)"}},
+                                                          {{"y", "", "tensor(float)"}}, {}));
+    } else {
+      registry.RegisterShapeInference("variant.fallback", "F",
+                                      [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                        ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                      });
+    }
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"variant.fallback", 1}},
+                                        registry);
+    auto &function = builder.MakeLocalFunction("F", "variant.fallback");
+    function.MakeInput("a", core::symbolic::TensorType::kFloat, Shape());
+    function.MakeNode("Identity", {"a"}, {"b"});
+    function.MakeOutput("b");
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    builder.MakeNode("F", {"x"}, {"y"}, "variant.fallback");
+    builder.MakeOutput("y", core::symbolic::TensorType::kFloat, Shape());
+    builder.AddRewriting("variant", RewritingProto{});
+    const core::runtime::Tensors feeds{core::runtime::Tensor::FromFloat("x", {2}, {2, 3})};
+    EXPECT_FLOAT_EQ(core::runtime::RunModel(builder.ToModel(), feeds)[0].AsFloat()[0], 2);
+    auto applied = builder.ApplyRewritings("variant").ToModel();
+    EXPECT_FLOAT_EQ(core::runtime::RunModel(applied, feeds)[0].AsFloat()[0], 2);
+  }
+}
+
+TEST(PatternOptimization, NamedVariantsCheckRuntimePrecedenceAtTheSelectedDevice) {
+  const std::string domain = "variant.device";
+  core::runtime::RegisterKernelFn(domain, "F", core::symbolic::Device::kGPU0,
+                                  core::runtime::MakeCustomKernelFactory(
+                                      [](const NodeProto &node, core::runtime::RuntimeContext &rt) {
+                                        rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                                      }));
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {domain, 1}});
+  auto &ignored = builder.MakeLocalFunction("F", domain);
+  ignored.MakeInput("a", core::symbolic::TensorType::kFloat, Shape());
+  ignored.MakeNode("MissingRuntimeBody", {"a"}, {"b"}, domain);
+  ignored.MakeOutput("b", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("F", {"x"}, {"y"}, domain);
+  builder.MakeOutput("y", core::symbolic::TensorType::kFloat, Shape());
+  builder.AddRewriting("variant", RewritingProto{});
+  EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
+  builder.set_device(core::symbolic::Device::kGPU0);
+  EXPECT_NO_THROW(builder.ApplyRewritings("variant"));
+}
+
 TEST(PatternOptimization, NamedVariantsCheckControlFlowAndBoundFunctionGraphs) {
   ScopedIdentityKernel kernel;
   for (int mode : {0, 1, 2}) {

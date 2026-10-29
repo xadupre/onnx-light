@@ -2480,7 +2480,8 @@ TEST(RunModel, RegisteredOperatorsPrecedeLocalFunctionsRegardlessOfOverload) {
       SCOPED_TRACE(domain + "/" + overload);
       ModelProto model;
       model.set_ir_version(10);
-      model.add_opset("", 18);
+      const std::string import_domain = domain == "ai.onnx" || domain == "onnx.ai" ? domain : "";
+      model.add_opset(import_domain, 18);
       if (domain == contrib || domain == "local.control")
         model.add_opset(domain, 1);
       const std::string op = domain == contrib || domain == "local.control" ? name : "Identity";
@@ -2488,7 +2489,7 @@ TEST(RunModel, RegisteredOperatorsPrecedeLocalFunctionsRegardlessOfOverload) {
       function->set_domain(domain);
       function->set_name(op);
       function->set_overload(overload);
-      function->add_opset("", 18);
+      function->add_opset(import_domain, 18);
       function->add_input("a");
       function->add_output("b");
       *function->add_node() = MakeNode("Neg", {"a"}, {"b"});
@@ -7260,20 +7261,23 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
 }
 
 TEST(RuntimeSessionOpsets, RejectsDuplicateAndInvalidImports) {
-  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
-  OperatorSetIdProto *alias = model.add_opset_import();
-  alias->set_domain("ai.onnx");
-  alias->set_version(19);
-  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
-  model.ref_opset_import().resize(1);
-  model.ref_opset_import()[0].set_version(0);
-  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
-  model.ref_opset_import()[0].set_version(1000);
-  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
-  model.ref_opset_import().clear();
-  RuntimeContext rt;
-  RuntimeSession missing(model);
-  EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+  for (const std::string domain : {"ai.onnx", "onnx.ai"}) {
+    ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+    OperatorSetIdProto *alias = model.add_opset_import();
+    alias->set_domain(domain);
+    alias->set_version(19);
+    EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+    model.ref_opset_import().resize(1);
+    model.ref_opset_import()[0].set_domain(domain);
+    model.ref_opset_import()[0].set_version(0);
+    EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+    model.ref_opset_import()[0].set_version(1000);
+    EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+    model.ref_opset_import().clear();
+    RuntimeContext rt;
+    RuntimeSession missing(model);
+    EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+  }
 }
 
 TEST(RuntimeSessionOpsets, LegacyPlanUsesExplicitContextVersion) {

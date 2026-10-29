@@ -222,6 +222,7 @@ TEST(GraphBuilder, SchemaOnlyOperatorsDoNotInferThroughCollidingFunctions) {
     EXPECT_FALSE(builder.HasShape("right"));
     auto &child = builder.MakeSubgraph("body");
     EXPECT_NO_THROW(child.MakeNode("F", {"x"}, {"nested", "side"}, "local.registry"));
+    EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
     builder.MakeOutput("left", core::symbolic::TensorType::kFloat, MakeShape({2}));
     EXPECT_NO_THROW(core::builder::GraphBuilder(builder.ToModel(), lookup, registry));
   }
@@ -265,6 +266,9 @@ TEST(GraphBuilder, FutureSchemasPreserveApplicableLocalFunctions) {
       EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2}));
       builder.MakeOutput("y");
       EXPECT_NO_THROW(core::builder::GraphBuilder(builder.ToModel(), lookup, registry));
+      EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+      ASSERT_EQ(builder.Nodes().size(), 1u);
+      EXPECT_EQ(builder.Nodes()[0].op_type(), "Identity");
     }
   }
 }

@@ -3190,6 +3190,8 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     while (true) {
       std::vector<std::pair<std::size_t, GraphBuilder *>> calls;
       for (std::size_t i = 0; i < nodes_.size(); ++i) {
+        if (IsRegisteredOperator(nodes_[i]))
+          continue;
         if (GraphBuilder *function = FindCalledFunction(functions, nodes_[i])) {
           calls.emplace_back(i, function);
         }
@@ -3273,18 +3275,7 @@ std::size_t GraphBuilder::InlineLocalFunctions(
   std::vector<GraphBuilder *> functions;
   functions.reserve(local_functions_.size());
   for (const auto &function : local_functions_) {
-    const std::string domain = NormaliseDomain(function->function_domain_);
-    const bool registered_schema =
-        !DomainSchemas(function->name(), domain).empty() ||
-        std::any_of(local_registry_.Schemas().begin(), local_registry_.Schemas().end(),
-                    [&](const LightOpSchema &schema) {
-                      return schema.name() == function->name() &&
-                             NormaliseDomain(schema.domain()) == domain;
-                    });
-    if (selected(function->function_domain_, function->name()) && !registered_schema &&
-        compute_.Shapes().GetLocalFunction(
-            ShapesContext::LocalFunctionKey(function->function_domain_, function->name(),
-                                            function->function_template_.overload())) != nullptr) {
+    if (selected(function->function_domain_, function->name())) {
       functions.push_back(function.get());
     }
   }

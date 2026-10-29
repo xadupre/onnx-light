@@ -2841,8 +2841,19 @@ GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
         if (depth >= 64)
           throw BuilderError("ApplyRewritings: implementation dependency nesting exceeds 64.");
         for (const auto &node : nodes) {
-          const auto *function = result.Shapes().GetLocalFunction(
+          const std::string key =
+              RewriteDomain(node.domain().value()) + ":" + node.op_type().value();
+          const bool registered = core::runtime::detail::HasRegisteredNodeKernel(node, device);
+          if (RewriteDomain(node.domain().value()) == kDefaultOnnxDomain &&
+              node.op_type() == "SequenceMap" && !core::runtime::GetSequenceMapPackFn()) {
+            throw BuilderError("ApplyRewritings '" + name +
+                               "': no SequenceMap packing function has been registered.");
+          }
+          const auto &functions = result.Shapes().LocalFunctions();
+          const auto found_function = functions.find(
               ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
+          const auto *function =
+              !registered && found_function != functions.end() ? found_function->second : nullptr;
           if (function != nullptr) {
             const auto key = Identity(*function);
             const bool cacheable =
@@ -2865,21 +2876,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
             }
             continue;
           } else {
-            const std::string key =
-                RewriteDomain(node.domain().value()) + ":" + node.op_type().value();
-            // ResolveNodeKernelDefault handles control flow outside the dispatch table.
-            const bool control_flow = RewriteDomain(node.domain().value()) == kDefaultOnnxDomain &&
-                                      (node.op_type() == "If" || node.op_type() == "Loop" ||
-                                       node.op_type() == "Scan" || node.op_type() == "SequenceMap");
-            if (control_flow && node.op_type() == "SequenceMap" &&
-                !core::runtime::GetSequenceMapPackFn()) {
-              throw BuilderError("ApplyRewritings '" + name +
-                                 "': no SequenceMap packing function has been registered.");
-            }
-            if (!control_flow &&
-                core::runtime::KernelDispatchTable().count(
-                    key + core::symbolic::DeviceKeySuffix(device)) == 0 &&
-                core::runtime::GlobalCustomKernels().count(key) == 0) {
+            if (!registered) {
               throw BuilderError("ApplyRewritings '" + name + "': no implementation for '" + key +
                                  "'.");
             }

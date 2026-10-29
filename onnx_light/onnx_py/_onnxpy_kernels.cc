@@ -2225,6 +2225,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("temperature", &core::runtime::GenerationOptions::temperature)
       .def_rw("seed", &core::runtime::GenerationOptions::seed)
       .def_rw("eos_token_id", &core::runtime::GenerationOptions::eos_token_id)
+      .def_rw("eos_token_ids", &core::runtime::GenerationOptions::eos_token_ids)
       .def_rw("pad_token_id", &core::runtime::GenerationOptions::pad_token_id)
       .def_rw("input_ids_name", &core::runtime::GenerationOptions::input_ids_name)
       .def_rw("logits_name", &core::runtime::GenerationOptions::logits_name)

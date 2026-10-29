@@ -55,9 +55,14 @@ class TestVerify(ExtTestCase):
             top_p=1.0,
             input_ids_name="input_ids",
             logits_name="logits",
+            eos_token_ids=[0, 2, 2],
         )
         verify.verify_pipeline(pipeline)
 
+        pipeline.eos_token_ids.append(-1)
+        with self.assertRaisesRegex(ValueError, "eos_token_ids"):
+            verify.verify_pipeline(pipeline)
+        del pipeline.eos_token_ids[:]
         pipeline.top_p = 0.0
         with self.assertRaises(ValueError):
             verify.verify_pipeline(pipeline)

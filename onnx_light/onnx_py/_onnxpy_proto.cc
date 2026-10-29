@@ -3638,7 +3638,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_STR(PipelineProto, logits_name)
       .PYFIELD_STR(PipelineProto, attention_mask_name)
       .PYFIELD_STR(PipelineProto, position_ids_name)
-      .PYFIELD(PipelineProto, metadata_props);
+      .PYFIELD(PipelineProto, metadata_props)
+      .PYFIELD(PipelineProto, eos_token_ids);
   PYADD_PROTO_SERIALIZATION(PipelineProto);
   nb_PipelineProto
       .def(
@@ -3686,6 +3687,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_position_ids_name();
             if (field_name == "metadata_props")
               return self.has_metadata_props();
+            if (field_name == "eos_token_ids")
+              return self.has_eos_token_ids();
             throw nb::attribute_error(
                 ("Protocol message has no field named '" + field_name + "'").c_str());
           },

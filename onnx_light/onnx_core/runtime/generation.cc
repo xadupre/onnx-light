@@ -390,6 +390,7 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
   }
   if (pipeline.has_eos_token_id())
     options.eos_token_id = pipeline.eos_token_id();
+  options.eos_token_ids.assign(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end());
   if (pipeline.has_pad_token_id())
     options.pad_token_id = pipeline.pad_token_id();
   EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.top_k() == 0,
@@ -472,6 +473,18 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                       "Generate: temperature must be finite and nonnegative.");
   EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id >= 0,
                       "Generate: eos_token_id must be nonnegative.");
+  std::unordered_set<int64_t> eos_token_ids;
+  int64_t largest_eos_token_id = -1;
+  for (int64_t id : options.eos_token_ids) {
+    EXT_ENFORCE_INVALID(id >= 0, "Generate: eos_token_ids must be nonnegative.");
+    eos_token_ids.insert(id);
+    largest_eos_token_id = std::max(largest_eos_token_id, id);
+  }
+  auto pad_token_id = options.pad_token_id;
+  if (!pad_token_id)
+    pad_token_id = options.eos_token_id;
+  if (!pad_token_id && !options.eos_token_ids.empty())
+    pad_token_id = options.eos_token_ids.front();
   EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id >= 0,
                       "Generate: pad_token_id must be nonnegative.");
   const bool embedded = pipeline.embedding != nullptr;
@@ -762,12 +775,14 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     const int64_t vocabulary = logits.shape.back();
     EXT_ENFORCE_INVALID(!options.eos_token_id || *options.eos_token_id < vocabulary,
                         "Generate: eos_token_id is outside the vocabulary.");
+    EXT_ENFORCE_INVALID(largest_eos_token_id < vocabulary,
+                        "Generate: eos_token_ids contains an ID outside the vocabulary.");
     EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id < vocabulary,
                         "Generate: pad_token_id is outside the vocabulary.");
     const int64_t stride = logits.shape.product() / batch;
     for (int64_t row = 0; row < batch; ++row) {
       next_mask[row] = finished[row] ? 0 : 1;
-      next[row] = finished[row] ? options.pad_token_id.value_or(*options.eos_token_id)
+      next[row] = finished[row] ? *pad_token_id
                                 : Sample(logits, (row + 1) * stride - vocabulary, vocabulary,
                                          options.temperature, random);
       if (multi_axis) {
@@ -776,7 +791,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       } else {
         next_positions[row] = positions[row * length + length - 1] + 1;
       }
-      if (options.eos_token_id && next[row] == *options.eos_token_id)
+      if ((options.eos_token_id && next[row] == *options.eos_token_id) ||
+          eos_token_ids.contains(next[row]))
         finished[row] = true;
     }
     AppendColumn(tokens, next);

@@ -1824,6 +1824,7 @@ END_PROTO()
 //   optional string attention_mask_name = 19;
 //   optional string position_ids_name = 20;
 //   repeated StringStringEntryProto metadata_props = 21;
+//   repeated int64 eos_token_ids = 22;
 // }
 BEGIN_PROTO(PipelineProto,
             "Bundles LLM models whose transferred values use identical output and input names.")
@@ -1853,6 +1854,8 @@ FIELD_STR(attention_mask_name, 19, "Name of the optional attention-mask input.")
 FIELD_STR(position_ids_name, 20, "Name of the optional position-ID input.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 21,
                      "Named metadata values; keys must be distinct.")
+FIELD_REPEATED(int64_t, eos_token_ids, 22,
+               "Additional terminating tokens, combined with eos_token_id as a union.")
 /** Rejects pipelines retaining deferred model sources before destination I/O. */
 void ValidateDeferredExport() const;
 END_PROTO()

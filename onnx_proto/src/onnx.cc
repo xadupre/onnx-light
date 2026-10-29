@@ -2492,6 +2492,7 @@ SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &strea
   SIZE_FIELD(size, options, stream, attention_mask_name)
   SIZE_FIELD(size, options, stream, position_ids_name)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
+  SIZE_REPEATED_FIELD(size, options, stream, eos_token_ids)
   return size;
 }
 void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2518,6 +2519,7 @@ void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, attention_mask_name)
   WRITE_FIELD(options, stream, position_ids_name)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
+  WRITE_REPEATED_FIELD(options, stream, eos_token_ids)
 }
 bool PipelineProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   EXT_ENFORCE(!options.defer_weights, "defer_weights does not support PipelineProto.");
@@ -2543,6 +2545,7 @@ bool PipelineProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_FIELD(options, stream, attention_mask_name)      //
   READ_FIELD(options, stream, position_ids_name)        //
   READ_REPEATED_FIELD(options, stream, metadata_props)  //
+  READ_REPEATED_FIELD(options, stream, eos_token_ids)   //
   READ_END(options, stream, PipelineProto)              //
   return true;
 }
@@ -2556,7 +2559,7 @@ void PipelineProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptio
       NAME_EXIST_VALUE(pad_token_id), NAME_EXIST_VALUE(top_k), NAME_EXIST_VALUE(top_p),
       NAME_EXIST_VALUE(input_ids_name), NAME_EXIST_VALUE(logits_name),
       NAME_EXIST_VALUE(attention_mask_name), NAME_EXIST_VALUE(position_ids_name),
-      NAME_EXIST_VALUE(metadata_props));
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(eos_token_ids));
 }
 
 // SequenceProto
@@ -3348,6 +3351,7 @@ bool VisitProtoFields(const PipelineProto &left, Right &right, Visitor &&visitor
   VISIT_FIELD(attention_mask_name)
   VISIT_FIELD(position_ids_name)
   VISIT_FIELD(metadata_props)
+  VISIT_FIELD(eos_token_ids)
   return true;
 }
 

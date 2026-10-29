@@ -74,6 +74,28 @@ def _shared_encoded(model, name, values):
 
 
 class TestGeneration(ExtTestCase):
+    def test_native_multiple_eos(self):
+        model = transition_model()
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        for scalar, eos_ids, prompt, expected in [
+            (None, [1, 2], [[0], [1]], [[0, 1], [1, 2]]),
+            (1, [2, 2], [[0], [1]], [[0, 1], [1, 2]]),
+            (None, [0, 2], [[0], [1]], [[0, 1, 2], [1, 2, 0]]),
+            (0, [2], [[0], [1]], [[0, 1, 2], [1, 2, 0]]),
+            (None, [0, 2], [[2]], [[2, 0]]),
+            (0, [], [[2]], [[2, 0]]),
+            (None, [], [[2]], [[2, 0, 1, 2, 0]]),
+        ]:
+            with self.subTest(scalar=scalar, eos_ids=eos_ids, prompt=prompt):
+                options = runtime.GenerationOptions()
+                options.max_new_tokens = 4
+                options.eos_token_id = scalar
+                options.eos_token_ids = eos_ids
+                result = runtime.generate(
+                    model, context, {"input_ids": numpy.array(prompt, dtype=numpy.int64)}, options
+                )
+                numpy.testing.assert_array_equal(numpy.from_dlpack(result), expected)
+
     def test_attention_mask_gather_releases_after_last_use(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

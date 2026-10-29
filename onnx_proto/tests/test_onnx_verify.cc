@@ -648,11 +648,17 @@ TEST(onnx_verify, VerifyPipeline_ModelsConfigurationAndMetadata) {
   pipeline.set_seed(42);
   pipeline.set_top_k(0);
   pipeline.set_top_p(1);
+  pipeline.add_eos_token_ids(0);
+  pipeline.add_eos_token_ids(2);
+  pipeline.add_eos_token_ids(2);
   auto *metadata = pipeline.add_metadata_props();
   metadata->set_key("family");
   metadata->set_value("decoder-only");
   EXPECT_NO_THROW(VerifyPipeline(pipeline));
 
+  pipeline.add_eos_token_ids(-1);
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+  pipeline.ref_eos_token_ids().clear();
   pipeline.set_top_p(0);
   EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
   pipeline.set_top_p(1);

@@ -274,6 +274,7 @@ def _build_schema() -> dict[type, list[tuple[str, Any, bool]]]:
             ("attention_mask_name", _STR, False),
             ("position_ids_name", _STR, False),
             ("metadata_props", _msg(string_entry), True),
+            ("eos_token_ids", _INT, True),
         ],
         SequenceProto: [
             ("name", _STR, False),

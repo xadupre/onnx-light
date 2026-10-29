@@ -2127,6 +2127,9 @@ void VerifyPipeline(const PipelineProto &pipeline) {
                       "PipelineProto seed must be nonnegative.");
   EXT_ENFORCE_INVALID(!pipeline.has_eos_token_id() || pipeline.ref_eos_token_id() >= 0,
                       "PipelineProto eos_token_id must be nonnegative.");
+  EXT_ENFORCE_INVALID(std::all_of(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end(),
+                                  [](int64_t id) { return id >= 0; }),
+                      "PipelineProto eos_token_ids must be nonnegative.");
   EXT_ENFORCE_INVALID(!pipeline.has_pad_token_id() || pipeline.ref_pad_token_id() >= 0,
                       "PipelineProto pad_token_id must be nonnegative.");
   EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.ref_top_k() >= 0,

@@ -1125,6 +1125,135 @@ TEST(Generation, PipelineRequiresItsPrefillModel) {
   EXPECT_THROW(Generate(PipelineProto{}, context, {}), std::invalid_argument);
 }
 
+TEST(Generation, MultipleEosAcrossModelsPipelinesAndPersistentDecoding) {
+  struct Configuration {
+    std::optional<int64_t> scalar;
+    std::vector<int64_t> ids;
+    std::optional<int64_t> padding;
+    int64_t expected_padding;
+  };
+  const Configuration configurations[] = {{std::nullopt, {2, 3}, std::nullopt, 2},
+                                          {2, {3}, std::nullopt, 2},
+                                          {std::nullopt, {3, 2, 3}, std::nullopt, 3},
+                                          {0, {2, 3}, std::nullopt, 0},
+                                          {std::nullopt, {2, 3}, 0, 0}};
+  for (bool persistent : {false, true}) {
+    for (int mode = 0; mode < 5; ++mode) {
+      for (const auto &configuration : configurations) {
+        SCOPED_TRACE(persistent);
+        SCOPED_TRACE(mode);
+        SCOPED_TRACE(configuration.expected_padding);
+        const bool embedded = mode >= 3;
+        const std::string input = embedded ? "inputs_embeds" : "input_ids";
+        PipelineProto pipeline = MakeGenerationPipeline(PipelineModel(
+            "Step", {{input, embedded ? TensorProto::FLOAT : TensorProto::INT64}}, "logits"));
+        if (persistent)
+          AddPersistentState(*pipeline.mutable_prefill());
+        if (embedded)
+          *pipeline.mutable_embedding() =
+              PipelineModel("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+        GenerationOptions options;
+        options.max_new_tokens = 3;
+        options.eos_token_id = configuration.scalar;
+        options.eos_token_ids = configuration.ids;
+        options.pad_token_id = configuration.padding;
+        pipeline.set_max_new_tokens(options.max_new_tokens);
+        if (configuration.scalar)
+          pipeline.set_eos_token_id(*configuration.scalar);
+        for (int64_t id : configuration.ids)
+          pipeline.add_eos_token_ids(id);
+        if (configuration.padding)
+          pipeline.set_pad_token_id(*configuration.padding);
+        RuntimeSession source(pipeline.prefill());
+        RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+        int calls = 0;
+        context.RegisterCustomKernel(
+            "test.pipeline", "Embed", [](const NodeProto &node, RuntimeContext &rt) {
+              const int64_t length = rt.Get("input_ids").shape[1];
+              rt.Put(node.output(0),
+                     Tensor::FromFloat("", {2, length, 1}, std::vector<float>(2 * length, 0)));
+            });
+        context.RegisterCustomKernel(
+            "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+              EXPECT_EQ(rt.Get(input).shape[1], persistent ? 1 : calls + 1);
+              if (persistent) {
+                EXPECT_EQ(rt.Get("state").AsInt64()[0], calls);
+                rt.Put("next_state", Tensor::FromInt64("", {}, {calls + 1}));
+              }
+              rt.Put(node.output(0),
+                     Tensor::FromFloat("", {2, 4},
+                                       calls == 0 ? std::vector<float>{0, 0, 4, 0, 0, 4, 0, 0}
+                                                  : std::vector<float>{0, 0, 4, 0, 0, 0, 0, 4}));
+              ++calls;
+            });
+        RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 1}, {0, 1}))}};
+        if (persistent)
+          feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+        Tensor result;
+        if (mode == 0) {
+          result = Generate(pipeline.prefill(), context, feeds, options);
+        } else if (mode == 1) {
+          // Explicit options override stored EOS settings as well as the token limit.
+          pipeline.ref_eos_token_ids() = {0};
+          pipeline.set_eos_token_id(1);
+          pipeline.set_max_new_tokens(1);
+          result = Generate(pipeline, context, feeds, options);
+        } else if (mode == 3) {
+          result = Generate(pipeline.prefill(), &pipeline.embedding(), context, feeds, options);
+        } else {
+          PipelineProto restored;
+          std::string serialized;
+          ASSERT_TRUE(pipeline.SerializeToString(serialized));
+          ASSERT_TRUE(restored.ParseFromString(serialized));
+          result = Generate(restored, context, feeds);
+        }
+        EXPECT_EQ(Tokens(result),
+                  (std::vector<int64_t>{0, 2, configuration.expected_padding, 1, 1, 3}));
+        EXPECT_EQ(calls, 2);
+        if (persistent) {
+          EXPECT_EQ(feeds.at("state").tensor.AsInt64()[0], 0);
+        }
+      }
+    }
+  }
+}
+
+TEST(Generation, MultipleEosValidatesEveryIdBeforeSampling) {
+  ModelProto model = PipelineModel("Step", {{"input_ids", TensorProto::INT64}}, "logits");
+  RuntimeSession source(model);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 4}, {0, 4, 0, 0}));
+      });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  for (int64_t invalid : std::vector<int64_t>{-1, 4, std::numeric_limits<int64_t>::max()}) {
+    for (bool stored : {false, true}) {
+      SCOPED_TRACE(invalid);
+      SCOPED_TRACE(stored);
+      calls = 0;
+      GenerationOptions options;
+      options.max_new_tokens = invalid < 0 ? 0 : 3;
+      options.pad_token_id = 0;
+      options.eos_token_ids = {2, invalid};
+      if (stored) {
+        PipelineProto pipeline;
+        *pipeline.mutable_prefill() = model;
+        pipeline.set_max_new_tokens(options.max_new_tokens);
+        pipeline.set_pad_token_id(0);
+        for (int64_t id : options.eos_token_ids)
+          pipeline.add_eos_token_ids(id);
+        EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+      } else {
+        EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+      }
+      EXPECT_EQ(calls, invalid < 0 ? 0 : 1);
+    }
+  }
+}
+
 TEST(Generation, PipelineUsesStoredOptionsAndRejectsUnsupportedSettings) {
   PipelineProto pipeline = MakeGenerationPipeline(PipelineModel("Step",
                                                                 {{"tokens", TensorProto::INT64},

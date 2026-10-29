@@ -12,10 +12,12 @@
 //   make_seed_corpus <version_converter_out_dir>
 //                    <parser_out_dir>
 //                    <shape_inference_out_dir>
+//                    [external_data_out_dir]
 //
-// All seeds are authored in ONNX text format and serialized to bytes
+// Model seeds are authored in ONNX text format and serialized to bytes
 // via ``OnnxParser``, so the seed bodies stay close to what a human
 // would read in the upstream OSS-Fuzz seed-corpus zips.
+// External-data seeds use a six-byte header followed by tensor payload bytes.
 
 #include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx.h"
@@ -118,13 +120,22 @@ void write_file(const std::filesystem::path &dir, const std::string &name,
   f.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
+std::string external_data_seed(uint8_t operation, uint8_t location, uint8_t flags = 0,
+                               uint8_t offset = 0, uint8_t length = 0,
+                               const std::string &payload = "seed payload") {
+  const char header[] = {static_cast<char>(operation), static_cast<char>(location),
+                         static_cast<char>(flags),     static_cast<char>(offset),
+                         static_cast<char>(length),    0};
+  return std::string(header, sizeof(header)) + payload;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
-  if (argc != 4) {
+  if (argc != 4 && argc != 5) {
     std::cerr << "Usage: " << (argc > 0 ? argv[0] : "make_seed_corpus")
               << " <version_converter_out_dir> <parser_out_dir>"
-                 " <shape_inference_out_dir>\n";
+                 " <shape_inference_out_dir> [external_data_out_dir]\n";
     return 2;
   }
   const std::filesystem::path vc_dir = argv[1];
@@ -238,6 +249,27 @@ int main(int argc, char *argv[]) {
                                         ">\n"
                                         "agraph (float[2, 4] A, float[3, 4] B) => (float[5, 4] Y)\n"
                                         "{ Y = Concat<axis=0>(A, B) }\n"));
+    if (argc == 5) {
+      const std::filesystem::path external_dir = argv[4];
+      write_file(external_dir, "metadata_duplicates_unknown.bin",
+                 external_data_seed(0, 0, 0x0f, 3, 10));
+      write_file(external_dir, "load_regular.bin", external_data_seed(1, 0));
+      write_file(external_dir, "load_traversal.bin", external_data_seed(1, 3));
+      write_file(external_dir, "load_absolute.bin", external_data_seed(1, 5));
+      write_file(external_dir, "load_symlink.bin", external_data_seed(1, 6));
+      write_file(external_dir, "load_hardlink.bin", external_data_seed(1, 7));
+      write_file(external_dir, "load_windows_unc.bin", external_data_seed(1, 9));
+      write_file(external_dir, "load_windows_drive.bin", external_data_seed(1, 11));
+      write_file(external_dir, "save_regular.bin", external_data_seed(2, 2, 0, 1, 2, "s"));
+      write_file(external_dir, "save_hardlink.bin", external_data_seed(2, 7, 0, 1, 2, "s"));
+      write_file(external_dir, "model_out_of_bounds.bin", external_data_seed(3, 0, 0, 8, 10));
+      write_file(external_dir, "write_overlapping_offsets.bin",
+                 external_data_seed(4, 2, 0, 1, 2, "s"));
+      write_file(external_dir, "model_load_regular.bin", external_data_seed(5, 0));
+      write_file(external_dir, "model_load_hardlink.bin", external_data_seed(5, 7));
+      write_file(external_dir, "save_model_traversal.bin", external_data_seed(6, 3));
+      write_file(external_dir, "model_roundtrip.bin", external_data_seed(7, 0));
+    }
   } catch (const std::exception &ex) {
     std::cerr << "make_seed_corpus: " << ex.what() << "\n";
     return 1;

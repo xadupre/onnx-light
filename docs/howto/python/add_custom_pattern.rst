@@ -101,7 +101,7 @@ and replacement automatically from two ``FunctionProto`` bodies:
         [oh.make_node("Identity", ["input"], ["output"])],
         opsets,
     )
-    pattern = FunctionPattern(template, replacement, name="DoubleNeg")
+    pattern = FunctionPattern(template, replacement, name="DoubleNeg", anchor=0)
 
 Function inputs and outputs correspond **by position** and must have equal,
 fixed counts. Every node also matches an exact input/output count (including
@@ -131,8 +131,11 @@ results. The replacement may return inputs directly or return a value more than
 once. Output names are preserved and replacement intermediates get fresh names.
 Template nodes must be connected through nonempty values, including shared
 function inputs. Multi-output branches are matched by following local producers
-and consumers from the last template node; unrelated graph nodes are never
-scanned. Templates with completely disconnected components are rejected.
+and consumers from the selected anchor; unrelated graph nodes are never scanned.
+``anchor`` is a zero-based template-node index; its default, ``-1``, selects the
+last node. ``FastOpType`` returns that anchor's operator type. Choosing an uncommon
+operator as the anchor reduces the candidates inspected by the optimizer.
+Templates with completely disconnected components are rejected.
 Target nodes with device configurations are rejected rather than losing their
 sharding or pipeline-stage assignments.
 Removed intermediates cannot be graph outputs, subgraph captures or inputs to
@@ -147,6 +150,24 @@ including supported types, shapes and broadcasting.
 
 This class requires function arguments, so it has no built-in registry factory.
 Pass the instance to ``GraphGraph`` or register it with ``register_pattern``.
+
+For each frozen matching iteration, the optimizer indexes eligible nodes once by
+operator type. Single-type patterns use their bucket directly; unrestricted
+patterns use all eligible nodes. Patterns accepting multiple types merge sorted
+buckets in graph order, without duplicates, in ``O(C log(K + 1))`` time for ``C``
+compatible nodes across ``K`` nonempty buckets. Index construction takes
+``O(N)`` time and storage (plus recursive unresolved-attribute checks), instead of
+scanning all ``N`` nodes separately for every pattern. Each iteration and recursive
+scope gets a fresh index, so rewritten or removed nodes cannot leave stale entries.
+Selection also performs one index lookup per declared operator type.
+
+The native ``bench_pattern_candidates`` target measures the matching phase,
+including index construction and candidate selection, on a heterogeneous graph
+with many selective patterns. For example, run
+``./build/temp/bench_pattern_candidates 20000 512 7`` for 20,000 nodes, 512
+patterns and seven measured iterations after a warm-up. It reports median
+matching time, not just ``Match`` call counts; graph construction and the other
+optimizer phases are excluded. This is not a model-runtime benchmark.
 
 Select the pattern for one optimizer
 ------------------------------------

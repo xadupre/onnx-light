@@ -95,6 +95,46 @@ TEST(FunctionPattern, MatchesAndRevalidatesApply) {
   EXPECT_THROW(pattern.Apply(graph, {nullptr, match.nodes[1]}), BuilderError);
 }
 
+TEST(FunctionPattern, SelectsAnAnchorAndMatchesForwardBranches) {
+  const auto body =
+      Function({"x"}, {"left", "right"},
+               {MakeNode("Neg", {"x"}, {"middle"}), MakeNode("Abs", {"middle"}, {"left"}),
+                MakeNode("Relu", {"middle"}, {"right"})});
+  for (const int anchor : {-1, 0, 1, 2}) {
+    SCOPED_TRACE(anchor);
+    GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    AddInput(builder, "input");
+    builder.MakeNode("Neg", {"input"}, {"shared"});
+    builder.MakeNode("Abs", {"shared"}, {"first"});
+    builder.MakeNode("Relu", {"shared"}, {"second"});
+    builder.MakeOutput("first");
+    builder.MakeOutput("second");
+    auto pattern = std::make_shared<FunctionPattern>(body, body, 1, "Anchored",
+                                                     core::symbolic::Device::kUndefined, anchor);
+    GraphGraph graph(builder,
+                     std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+    const std::size_t selected = anchor == -1 ? 2 : anchor;
+    EXPECT_EQ(pattern->FastOpType(),
+              std::set<std::string>{body.node()[selected].op_type().value()});
+    const auto match = pattern->Match(graph, builder.Nodes()[selected]);
+    ASSERT_EQ(match.pattern, pattern.get());
+    EXPECT_EQ(match.insert_at, &builder.Nodes()[2]);
+    for (std::size_t index = 0; index < 3; ++index)
+      EXPECT_EQ(match.nodes[index], &builder.Nodes()[index]);
+    EXPECT_EQ(pattern->Apply(graph, match.nodes).size(), 3u);
+    auto invalid = match.nodes;
+    invalid[selected] = nullptr;
+    EXPECT_THROW(pattern->Apply(graph, invalid), BuilderError);
+    EXPECT_EQ(graph.Optimize(1).rewrites().size(), 1u);
+    EXPECT_EQ(builder.Outputs()[0].name(), "first");
+    EXPECT_EQ(builder.Outputs()[1].name(), "second");
+  }
+  for (const int invalid : {-2, 3})
+    EXPECT_THROW(
+        FunctionPattern(body, body, 1, "Invalid", core::symbolic::Device::kUndefined, invalid),
+        BuilderError);
+}
+
 TEST(FunctionPattern, OptimizesAndPreservesOutput) {
   GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
   AddInput(builder, "a");

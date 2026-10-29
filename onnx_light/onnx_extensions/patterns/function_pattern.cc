@@ -173,12 +173,16 @@ bool NeedsOutputIdentity(const FunctionProto &function) {
 } // namespace
 
 FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionProto &replacement,
-                                 int priority, std::string name, core::symbolic::Device device)
+                                 int priority, std::string name, core::symbolic::Device device,
+                                 int anchor)
     : PatternOptimization(priority, std::move(name), device),
       pattern_(utils::CopyWithSharedTensorStorage(pattern)),
       replacement_(utils::CopyWithSharedTensorStorage(replacement)) {
   const References captured = Validate(pattern_, true);
   const References required = Validate(replacement_, false);
+  if (anchor < -1 || anchor >= pattern_.node_size())
+    throw BuilderError("FunctionPattern: anchor must identify a template node.");
+  anchor_index_ = anchor == -1 ? pattern_.node().size() - 1 : static_cast<std::size_t>(anchor);
   if (pattern_.input_size() != replacement_.input_size() ||
       pattern_.output_size() != replacement_.output_size())
     throw BuilderError("FunctionPattern: template and replacement arities must agree.");
@@ -198,7 +202,7 @@ FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionPro
         adjacent[output.value()].push_back(index);
   }
   std::vector<bool> visited(pattern_.node().size(), false);
-  match_order_.push_back(pattern_.node().size() - 1);
+  match_order_.push_back(anchor_index_);
   visited[match_order_.front()] = true;
   const auto visit = [&](const auto &value) {
     const auto found = adjacent.find(value.value());
@@ -223,7 +227,7 @@ FunctionPattern::FunctionPattern(const FunctionProto &pattern, const FunctionPro
 }
 
 std::set<std::string> FunctionPattern::FastOpType() const {
-  return {pattern_.node(pattern_.node_size() - 1).op_type().value()};
+  return {pattern_.node()[anchor_index_].op_type().value()};
 }
 
 core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
@@ -234,10 +238,9 @@ core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
     return NoMatch(candidate, "output aliases require an imported default ONNX opset");
   Bindings initial;
   initial.nodes.resize(pattern_.node_size());
-  const int last = pattern_.node_size() - 1;
-  if (!BindNode(pattern_.node(last), candidate, initial))
+  if (!BindNode(pattern_.node()[anchor_index_], candidate, initial))
     return NoMatch(candidate, "candidate differs from the template anchor");
-  initial.nodes[last] = &candidate;
+  initial.nodes[anchor_index_] = &candidate;
   std::function<bool(std::size_t, Bindings &)> search = [&](std::size_t position,
                                                             Bindings &bindings) {
     if (position == match_order_.size())
@@ -299,9 +302,10 @@ core::builder::MatchResult FunctionPattern::Match(GraphGraph &graph,
 
 utils::RepeatedProtoField<NodeProto>
 FunctionPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != static_cast<std::size_t>(pattern_.node_size()) || nodes.back() == nullptr)
+  if (nodes.size() != static_cast<std::size_t>(pattern_.node_size()) ||
+      nodes[anchor_index_] == nullptr)
     throw BuilderError("FunctionPattern::Apply: invalid matched nodes.");
-  const auto verified = Match(graph, *nodes.back());
+  const auto verified = Match(graph, *nodes[anchor_index_]);
   if (verified.pattern != this || verified.nodes != nodes)
     throw BuilderError("FunctionPattern::Apply: unsafe or inconsistent match.");
   Bindings bindings;

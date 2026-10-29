@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <new>
 #include <stdexcept>
 #include <vector>
@@ -213,6 +214,77 @@ TEST(KernelClass, NonMaxSuppressionRejectsBadInputs) {
   // max_output_boxes_per_class must be INT64.
   Tensor bad_max = Tensor::FromInt32("", {1}, {1});
   EXPECT_THROW(nms(boxes, scores, &bad_max, nullptr, nullptr, attrs), std::invalid_argument);
+
+  Tensor empty_bad_max = Tensor::FromInt32("", {0}, {});
+  EXPECT_THROW(nms(boxes, scores, &empty_bad_max, nullptr, nullptr, attrs), std::invalid_argument);
+  Tensor bad_threshold = Tensor::FromInt64("", {0}, {});
+  EXPECT_THROW(nms(boxes, scores, nullptr, &bad_threshold, nullptr, attrs), std::invalid_argument);
+  EXPECT_THROW(nms(boxes, scores, nullptr, nullptr, &bad_threshold, attrs), std::invalid_argument);
+
+  Tensor multiple_max = Tensor::FromInt64("", {2}, {1, 2});
+  EXPECT_THROW(nms(boxes, scores, &multiple_max, nullptr, nullptr, attrs), std::invalid_argument);
+  Tensor multiple_threshold = Tensor::FromFloat("", {2}, {0.4f, 0.5f});
+  EXPECT_THROW(nms(boxes, scores, nullptr, &multiple_threshold, nullptr, attrs),
+               std::invalid_argument);
+  EXPECT_THROW(nms(boxes, scores, nullptr, nullptr, &multiple_threshold, attrs),
+               std::invalid_argument);
+}
+
+TEST(KernelClass, NonMaxSuppressionScalarAndAbsentOptionalInputs) {
+  const KernelContext ctx{DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  Tensor boxes = Tensor::FromFloat("", {1, 6, 4}, {0.f, 0.f,   1.f, 1.f,   0.f, 0.1f,  1.f, 1.1f,
+                                                   0.f, -0.1f, 1.f, 0.9f,  0.f, 10.f,  1.f, 11.f,
+                                                   0.f, 10.1f, 1.f, 11.1f, 0.f, 100.f, 1.f, 101.f});
+  Tensor scores = Tensor::FromFloat("", {1, 1, 6}, {0.9f, 0.75f, 0.6f, 0.95f, 0.5f, 0.3f});
+  Tensor empty_max = Tensor::FromInt64("", {0}, {});
+  Tensor empty_threshold = Tensor::FromFloat("", {0}, {});
+  NonMaxSuppression::Attributes attrs;
+  for (const std::vector<int64_t> &shape : {std::vector<int64_t>{}, std::vector<int64_t>{1}}) {
+    SCOPED_TRACE(shape.size());
+    Tensor max_out = Tensor::FromInt64("", shape, {3});
+    Tensor iou = Tensor::FromFloat("", shape, {0.5f});
+    Tensor score = Tensor::FromFloat("", shape, {0.4f});
+    for (bool use_empty : {false, true}) {
+      SCOPED_TRACE(use_empty);
+      for (int mask = 0; mask < 8; ++mask) {
+        SCOPED_TRACE(mask);
+        const Tensor *max_input = (mask & 1) ? &max_out : (use_empty ? &empty_max : nullptr);
+        const Tensor *iou_input = (mask & 2) ? &iou : (use_empty ? &empty_threshold : nullptr);
+        const Tensor *score_input = (mask & 4) ? &score : (use_empty ? &empty_threshold : nullptr);
+        Tensor y = nms(boxes, scores, max_input, iou_input, score_input, attrs);
+        std::vector<int64_t> expected;
+        if (mask & 1) {
+          expected = {0, 0, 3, 0, 0, 0};
+          if (!(mask & 4)) {
+            expected.insert(expected.end(), {0, 0, 5});
+          }
+        }
+        EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
+        EXPECT_EQ(y.shape, (std::vector<int64_t>{static_cast<int64_t>(expected.size()) / 3, 3}));
+        ASSERT_EQ(y.element_count(), static_cast<int64_t>(expected.size()));
+        for (size_t i = 0; i < expected.size(); ++i) {
+          EXPECT_EQ(y.AsInt64()[i], expected[i]);
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelClass, NonMaxSuppressionNonPositiveLimitProducesEmptyOutput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  Tensor boxes = Tensor::FromFloat("", {2, 1, 4}, {0.f, 0.f, 1.f, 1.f, 0.f, 0.f, 1.f, 1.f});
+  Tensor scores = Tensor::FromFloat("", {2, 1, 1}, {0.9f, 0.8f});
+  NonMaxSuppression::Attributes attrs;
+  for (int64_t limit : {int64_t{0}, int64_t{-1}, std::numeric_limits<int64_t>::min()}) {
+    SCOPED_TRACE(limit);
+    Tensor max_out = Tensor::FromInt64("", {}, {limit});
+    Tensor y = nms(boxes, scores, &max_out, nullptr, nullptr, attrs);
+    EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{0, 3}));
+    EXPECT_EQ(y.element_count(), 0);
+  }
 }
 
 TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {

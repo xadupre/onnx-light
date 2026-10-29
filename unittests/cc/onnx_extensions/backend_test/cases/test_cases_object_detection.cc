@@ -138,6 +138,7 @@ TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
       "test_cc_nonmaxsuppression_two_classes",
       "test_cc_nonmaxsuppression_two_batches",
       "test_cc_nonmaxsuppression_iou_threshold_boundary",
+      "test_cc_nonmaxsuppression_scalar_inputs",
   };
 
   for (const std::string &name : expected_names) {
@@ -162,6 +163,19 @@ TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
     const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 1u);
+    if (name == "test_cc_nonmaxsuppression_scalar_inputs") {
+      for (size_t i = 2; i < 5; ++i) {
+        EXPECT_TRUE(ds.inputs[i].shape.empty());
+        EXPECT_EQ(ds.inputs[i].element_count(), 1);
+        EXPECT_EQ(graph.input(static_cast<int>(i)).type().tensor_type().shape().dim_size(), 0);
+      }
+      EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3}));
+      const std::vector<int64_t> expected = {0, 0, 3, 0, 0, 0};
+      ASSERT_EQ(ds.outputs[0].element_count(), static_cast<int64_t>(expected.size()));
+      for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(ds.outputs[0].AsInt64()[i], expected[i]);
+      }
+    }
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
     ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape[1], 3);

@@ -6,7 +6,7 @@
 import unittest
 
 from onnx_light.onnx import defs
-from unittests.main.test_schema_registration import _MACRO_INFO, _all_defined_schemas
+from unittests.main.schema_registration_utils import MACRO_INFO, all_defined_schemas
 
 
 class TestRuntimeSchemaRegistration(unittest.TestCase):
@@ -16,8 +16,8 @@ class TestRuntimeSchemaRegistration(unittest.TestCase):
         for schema in defs.get_all_schemas_with_history():
             runtime.setdefault(schema.domain, set()).add((schema.name, schema.since_version))
 
-        defined = _all_defined_schemas()
-        for macro, (_, registry_domain, _) in _MACRO_INFO.items():
+        defined = all_defined_schemas()
+        for macro, (_, registry_domain, _) in MACRO_INFO.items():
             with self.subTest(macro=macro, domain=registry_domain):
                 registered = runtime.get(registry_domain, set())
                 missing = defined[macro] - registered

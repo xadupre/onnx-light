@@ -57,7 +57,10 @@ core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::Gr
   if (!IsDefaultConstant(candidate)) {
     return NoMatch(candidate, "candidate is not a default-domain Constant");
   }
-  if (graph.GetComputedConstant(candidate.output()[0].value()) == nullptr) {
+  const TensorProto *value = graph.GetComputedConstant(candidate.output()[0].value());
+  if (value == nullptr ||
+      (!value->has_raw_data() && (value->has_external_data() ||
+                                  value->data_location() == TensorProto::DataLocation::EXTERNAL))) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};

@@ -16,14 +16,20 @@ The output is required and must be in the **same directory** as the input.
 Paths are interpreted relative to the current working directory. A destination
 in another directory is rejected, including a directory reached through a
 symbolic link. Existing files and symbolic links are never overwritten, so
-the input and weight files cannot accidentally be replaced.
+the input and weight files cannot accidentally be replaced. Recorded external
+weight locations are also protected when the files are missing, including
+references in nested graphs and local functions. The output is binary ONNX;
+``.textproto``, ``.pipeline`` and ``.pipe-onnx`` output suffixes are rejected.
 
 Large external tensors remain external references with their original
 locations, offsets and lengths. Existing weight files are neither copied nor
-rewritten. External tensors smaller than 128 bytes are loaded inline for shape
-inference; inline weights are retained. Constants introduced by optimization
-are saved inline in the output model. This command optimizes a model, not a
-pipeline.
+rewritten. Numeric external tensors smaller than 128 bytes are loaded inline
+for shape inference, including textproto inputs and tensors without explicit
+length metadata. Reads are bounded to the tensor's size, not the remaining
+weight file; inline weights are retained. Folding and Constant-to-initializer
+conversion skip external payloads that were not loaded. Constants introduced
+by optimization are saved inline in the output model. This command optimizes
+a model, not a pipeline.
 
 Pattern selection
 -----------------
@@ -50,7 +56,8 @@ individual names may also be combined:
     onnx-light optimize model.onnx -o model.opt.onnx --patterns NotNot,CastCast
     onnx-light optimize model.onnx -o model.opt.onnx --patterns L1,TransposeTranspose
 
-Names are case-sensitive and exact, not regular expressions. Surrounding
-whitespace is ignored, duplicates are removed, and unknown names or empty list
-items are rejected before loading the model. The optimizer's ordinary cleanup
-and constant-folding passes still run with an explicit selection.
+Names include patterns registered through ``register_pattern()`` in the calling
+Python process. They are case-sensitive and exact, not regular expressions.
+Surrounding whitespace is ignored, duplicates are removed, and unknown names or
+empty list items are rejected before loading the model. The optimizer's ordinary
+cleanup and constant-folding passes still run with an explicit selection.

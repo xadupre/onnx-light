@@ -153,7 +153,9 @@ kernel
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Iterator
 import json
+import math
 import os
 import re
 import sys
@@ -161,6 +163,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
+    from .onnx import AttributeProto, GraphProto, ModelProto, TensorProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -1305,10 +1308,14 @@ def _optimization_patterns(selection: str | None) -> list[str] | None:
     """Resolves comma-separated pattern names and groups to explicit names."""
     if selection is None:
         return None
-    from .onnx_core.optimization import standard_pattern_names, standard_pattern_sets
+    from .onnx_core.optimization import (
+        registered_pattern_names,
+        standard_pattern_names,
+        standard_pattern_sets,
+    )
 
     groups = standard_pattern_sets()
-    available = set(standard_pattern_names(include_opt_in=True))
+    available = set(standard_pattern_names(include_opt_in=True)) | set(registered_pattern_names())
     selected: list[str] = []
     for item in selection.split(","):
         name = item.strip()
@@ -1326,9 +1333,98 @@ def _optimization_patterns(selection: str | None) -> list[str] | None:
     return list(dict.fromkeys(selected))
 
 
+def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
+    """Visits tensors in graphs, attributes and local functions without copying payloads."""
+
+    def walk_attributes(attributes: Iterable[AttributeProto]) -> Iterator[TensorProto]:
+        for attribute in attributes:
+            if attribute.has_t():
+                yield attribute.t
+            yield from attribute.tensors
+            if attribute.has_sparse_tensor():
+                yield attribute.sparse_tensor.values
+                yield attribute.sparse_tensor.indices
+            for sparse in attribute.sparse_tensors:
+                yield sparse.values
+                yield sparse.indices
+            if attribute.has_g():
+                yield from walk_graph(attribute.g)
+            for graph in attribute.graphs:
+                yield from walk_graph(graph)
+
+    def walk_graph(graph: GraphProto) -> Iterator[TensorProto]:
+        yield from graph.initializer
+        for sparse in graph.sparse_initializer:
+            yield sparse.values
+            yield sparse.indices
+        for node in graph.node:
+            yield from walk_attributes(node.attribute)
+
+    yield from walk_graph(model.graph)
+    for function in model.functions:
+        yield from walk_attributes(function.attribute_proto)
+        for node in function.node:
+            yield from walk_attributes(node.attribute)
+
+
+def _prepare_optimization_external_data(
+    model: ModelProto, model_path: str, output_path: str
+) -> None:
+    """Protects external locations and loads only bounded, small numeric payloads."""
+    from .onnx import TensorProto
+    import onnx_light.onnx.helper as oh
+    from .onnx_lib.external_data_helper import uses_external_data
+
+    base_dir = os.path.dirname(model_path)
+    destination = os.path.normcase(os.path.realpath(output_path))
+    resolved: dict[str, str] = {}
+    packed_bits = {
+        TensorProto.INT2: 2,
+        TensorProto.UINT2: 2,
+        TensorProto.INT4: 4,
+        TensorProto.UINT4: 4,
+        TensorProto.FLOAT4E2M1: 4,
+        TensorProto.FLOAT6E2M3: 6,
+        TensorProto.FLOAT6E3M2: 6,
+    }
+    for tensor in _optimization_tensors(model):
+        if not uses_external_data(tensor):
+            continue
+        metadata = {entry.key: entry.value for entry in tensor.external_data}
+        location = metadata.get("location", "")
+        if location not in resolved:
+            resolved[location] = os.path.normcase(
+                os.path.realpath(os.path.join(base_dir, location))
+            )
+        if resolved[location] == destination:
+            raise ValueError(f"Output overlaps an external-data location: {location!r}")
+        if tensor.HasField("raw_data") or tensor.data_type == TensorProto.STRING:
+            continue
+        if any(dim < 0 for dim in tensor.dims):
+            raise ValueError(f"External tensor {tensor.name!r} has negative dimensions.")
+        bits = packed_bits.get(tensor.data_type)
+        if bits is None:
+            bits = oh.tensor_dtype_to_np_dtype(tensor.data_type).itemsize * 8
+        size = (math.prod(tensor.dims) * bits + 7) // 8
+        if size >= _FILLSHAPE_TINY_TENSOR_THRESHOLD:
+            continue
+        for key in ("length", "size"):
+            if key in metadata and int(metadata[key]) != size:
+                raise ValueError(f"External tensor {tensor.name!r} has an inconsistent {key}.")
+        if int(metadata.get("offset", "0")) < 0:
+            raise ValueError(f"External tensor {tensor.name!r} has a negative offset.")
+        # A missing length must not cause the loader to read the entire weights file.
+        if "length" not in metadata and "size" not in metadata:
+            entry = tensor.external_data.add()
+            entry.key, entry.value = "length", str(size)
+        tensor.load_external_data(base_dir)
+        tensor.data_location = TensorProto.DEFAULT
+        tensor.external_data.clear()
+
+
 def _cmd_optimize(args: argparse.Namespace) -> None:
     """Optimizes a model while preserving its external weight references."""
-    from .onnx import ModelProto, load, save
+    from .onnx import ModelProto, load, save_to_file_descriptor
     from .onnx_core.optimization import GraphBuilder, GraphGraph
 
     model_path = os.path.abspath(args.model)
@@ -1339,18 +1435,17 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         raise ValueError("The optimized model must be saved in the same directory as the input.")
     if os.path.lexists(output_path):
         raise FileExistsError(f"Output already exists: {output_path!r}")
+    if os.path.splitext(output_path)[1] in {".textproto", ".pipeline", ".pipe-onnx"}:
+        raise ValueError("The optimized output must use a binary ONNX model filename.")
     patterns = _optimization_patterns(args.patterns)
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
     if args.verbose:
         print(f"[optimize] load {model_path!r}")
-    model = load(
-        model_path,
-        load_external_data=False,
-        tiny_external_data_threshold=_FILLSHAPE_TINY_TENSOR_THRESHOLD,
-    )
+    model = load(model_path, load_external_data=False)
     if not isinstance(model, ModelProto):
         raise ValueError("optimize requires an ONNX model, not a pipeline.")
+    _prepare_optimization_external_data(model, model_path, output_path)
     builder = GraphBuilder(model)
     if args.verbose:
         print("[optimize] optimize")
@@ -1360,7 +1455,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         print(f"[optimize] save into {output_path!r}")
     # Exclusive creation also protects existing weight files and output links.
     with open(output_path, "xb") as stream:
-        save(result, stream)
+        save_to_file_descriptor(result, stream.fileno())
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:

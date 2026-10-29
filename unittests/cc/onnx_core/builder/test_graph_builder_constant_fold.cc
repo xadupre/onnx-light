@@ -144,6 +144,60 @@ TEST(GraphBuilderConstantFold, FoldsChainOfConstantNodesInOnePass) {
   EXPECT_FLOAT_EQ(values[1], -6.0f);
 }
 
+TEST(GraphBuilderConstantFold, SkipsUnloadedExternalInputsButFoldsAvailableConstants) {
+  ScopedFoldingKernels kernels;
+  for (const bool loaded : {false, true}) {
+    SCOPED_TRACE(loaded);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    TensorProto external;
+    external.set_name("external");
+    external.set_data_type(TensorProto::DataType::FLOAT);
+    external.add_dims(2);
+    external.set_data_location(TensorProto::DataLocation::EXTERNAL);
+    auto *location = external.add_external_data();
+    location->set_key("location");
+    location->set_value("unavailable.bin");
+    if (loaded) {
+      const float values[] = {1.0f, 2.0f};
+      external.set_raw_data(values, sizeof(values));
+    }
+    builder.MakeInitializer(external);
+    builder.MakeInitializer(MakeInitializer<float>("inline", {2}, {3.0f, 4.0f}));
+    builder.MakeNode("Neg", {"external"}, {"y"});
+    builder.MakeNode("Neg", {"inline"}, {"z"});
+    builder.MakeOutput("y");
+    builder.MakeOutput("z");
+
+    EXPECT_EQ(builder.ConstantFold(), loaded ? 2u : 1u);
+    EXPECT_EQ(builder.Nodes().size(), loaded ? 0u : 1u);
+    EXPECT_NE(FindInitializer(builder, "z"), nullptr);
+    EXPECT_EQ(FindInitializer(builder, "y") != nullptr, loaded);
+  }
+}
+
+TEST(GraphBuilderConstantFold, SkipsUnloadedExternalConstantAttribute) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &attribute = attributes.add();
+  attribute.set_name("value");
+  attribute.set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto &value = *attribute.mutable_t();
+  value.set_data_type(TensorProto::DataType::FLOAT);
+  value.add_dims(2);
+  value.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  auto *location = value.add_external_data();
+  location->set_key("location");
+  location->set_value("unavailable.bin");
+  builder.MakeNode("Constant", {}, {"y"}, "", "", attributes);
+  builder.MakeOutput("y");
+
+  core::builder::ConstantFoldingOptions options;
+  options.raise_on_missing_weight_kernel = true;
+  EXPECT_EQ(builder.ConstantFold(options), 0u);
+  EXPECT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Initializers().size(), 0u);
+}
+
 TEST(GraphBuilderConstantFold, DoesNotFoldNodeDependingOnGraphInput) {
   ScopedFoldingKernels kernels;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});

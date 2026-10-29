@@ -148,51 +148,25 @@ class TestMainLayers(ExtTestCase):
                 main(["layers", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
-    def test_rejects_skipped_inline_weights_in_graph_and_function_attributes(self):
-        for nested in (False, True):
-            with self.subTest(nested=nested), tempfile.TemporaryDirectory() as temporary:
-                directory = Path(temporary)
-                source = directory / "model.onnx"
-                output = directory / "layers.onnx"
-                if nested:
-                    model = oh.make_model(
-                        oh.make_graph(
-                            [oh.make_node("Relu", ["X"], ["Y"])],
-                            "plain",
-                            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [16, 16])],
-                            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [16, 16])],
-                        ),
-                        opset_imports=[oh.make_opsetid("", 18)],
-                        functions=[
-                            oh.make_function(
-                                "test",
-                                "Unused",
-                                [],
-                                ["constant"],
-                                [
-                                    oh.make_node(
-                                        "Constant",
-                                        [],
-                                        ["constant"],
-                                        value=onh.from_array(
-                                            numpy.ones((16, 16), dtype=numpy.float32)
-                                        ),
-                                    )
-                                ],
-                                [oh.make_opsetid("", 18)],
-                            )
-                        ],
-                    )
-                else:
-                    model = _repeated_model()
-                save(model, source)
-                original = source.read_bytes()
-                with self.assertRaisesRegex(ValueError, "externalize"):
-                    main(["layers", str(source), "-o", str(output)])
-                self.assertFalse(output.exists())
-                self.assertEqual(source.read_bytes(), original)
+    def test_extracts_layers_with_skipped_inline_weights(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "model.onnx"
+            output = directory / "layers.onnx"
+            save(_repeated_model(), source)
+            original = source.read_bytes()
+            with redirect_stdout(StringIO()):
+                main(["layers", str(source), "-o", str(output)])
+            result = load(output)
+            self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
+            weights = [
+                tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
+            ]
+            self.assertTrue(weights)
+            self.assertTrue(all(not weight.raw_data for weight in weights))
+            self.assertEqual(source.read_bytes(), original)
 
-    def test_rejects_unsafe_output_locations_and_never_overwrites(self):
+    def test_preserves_existing_output_and_accepts_another_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             source = self._save_external(directory)
@@ -203,13 +177,21 @@ class TestMainLayers(ExtTestCase):
             self.assertEqual(output.read_bytes(), b"keep")
             elsewhere = directory / "elsewhere"
             elsewhere.mkdir()
-            with self.assertRaisesRegex(ValueError, "input model directory"):
-                main(["layers", str(source), "-o", str(elsewhere / "layers.onnx")])
-            weights = directory / "weights.bin"
-            weights.unlink()
-            with self.assertRaisesRegex(ValueError, "external weight file"):
-                main(["layers", str(source), "-o", str(weights)])
-            self.assertFalse(weights.exists())
+            output = elsewhere / "layers.onnx"
+            with redirect_stdout(StringIO()):
+                main(["layers", str(source), "-o", str(output)])
+            result = load(output, load_external_data=False)
+            weights = [
+                tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
+            ]
+            self.assertEqual(len(weights), 3)
+            for weight in weights:
+                self.assertEqual(
+                    next(
+                        entry.value for entry in weight.external_data if entry.key == "location"
+                    ),
+                    "weights.bin",
+                )
 
     def test_saves_unchanged_model_when_no_repeated_layer_exists(self):
         model = oh.make_model(

@@ -159,7 +159,6 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
-    from .onnx import ModelProto, NodeProto, TensorProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -1439,44 +1438,9 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     save(model, dest)
 
 
-def _layer_model_contents(model: ModelProto) -> tuple[list[NodeProto], list[TensorProto]]:
-    """Collects nodes and tensors across graph, function and attribute scopes."""
-    from .onnx import GraphProto
-
-    nodes = []
-    tensors = []
-    scopes = [model.graph, *model.functions]
-    while scopes:
-        scope = scopes.pop()
-        nodes.extend(scope.node)
-        attributes = [attribute for node in scope.node for attribute in node.attribute]
-        sparse_tensors = []
-        if isinstance(scope, GraphProto):
-            tensors.extend(scope.initializer)
-            sparse_tensors.extend(scope.sparse_initializer)
-        else:
-            attributes.extend(scope.attribute_proto)
-        for attribute in attributes:
-            if attribute.HasField("t"):
-                tensors.append(attribute.t)
-            tensors.extend(attribute.tensors)
-            if attribute.HasField("sparse_tensor"):
-                sparse_tensors.append(attribute.sparse_tensor)
-            sparse_tensors.extend(attribute.sparse_tensors)
-            if attribute.HasField("g"):
-                scopes.append(attribute.g)
-            scopes.extend(attribute.graphs)
-        for sparse in sparse_tensors:
-            if sparse.HasField("values"):
-                tensors.append(sparse.values)
-            if sparse.HasField("indices"):
-                tensors.append(sparse.indices)
-    return nodes, tensors
-
-
 def _cmd_layers(args: argparse.Namespace) -> None:
     """Extracts repeated layers while retaining external weight references."""
-    from .onnx import ModelProto, TensorProto, load, save
+    from .onnx import FunctionProto, ModelProto, load, save
     from .onnx_core.optimization import (
         ConstantFoldingOptions,
         GraphBuilder,
@@ -1503,35 +1467,6 @@ def _cmd_layers(args: argparse.Namespace) -> None:
         raise TypeError("layers requires a ModelProto, not a pipeline.")
     if not model.HasField("graph"):
         raise ValueError("layers requires a model graph.")
-    _, tensors = _layer_model_contents(model)
-    model_dir = os.path.dirname(os.path.abspath(args.model))
-    for tensor in tensors:
-        if tensor.data_location == TensorProto.EXTERNAL:
-            for entry in tensor.external_data:
-                if entry.key == "location" and os.path.realpath(args.output) == os.path.realpath(
-                    os.path.join(model_dir, entry.value)
-                ):
-                    raise ValueError("The output must not replace an external weight file.")
-        elif not any(dimension == 0 for dimension in tensor.dims) and not (
-            tensor.HasField("raw_data")
-            or tensor.float_data
-            or tensor.double_data
-            or tensor.int32_data
-            or tensor.int64_data
-            or tensor.uint64_data
-            or tensor.string_data
-        ):
-            raise ValueError(
-                f"Tensor {str(tensor.name)!r} has no retained payload. Large inline raw tensors "
-                "are skipped; externalize them before running layers."
-            )
-    if any(tensor.data_location == TensorProto.EXTERNAL for tensor in tensors) and (
-        os.path.realpath(os.path.dirname(os.path.abspath(args.output)))
-        != os.path.realpath(model_dir)
-    ):
-        raise ValueError(
-            "The output must be in the input model directory to preserve external weight paths."
-        )
     if args.verbose:
         print("[layers] apply RepeatedLayer")
     builder = GraphBuilder(model)
@@ -1541,16 +1476,25 @@ def _cmd_layers(args: argparse.Namespace) -> None:
         folding_options=folding
     )
     result = builder.to_onnx()
-    nodes, _ = _layer_model_contents(result)
     layers = [
         function
         for function in result.functions
         if function.domain == "ai.rt" and re.fullmatch(r"Layer(?:_[0-9]+)?", str(function.name))
     ]
     calls: dict[tuple[str, str, str], int] = {}
-    for node in nodes:
-        key = (str(node.domain), str(node.op_type), str(node.overload))
-        calls[key] = calls.get(key, 0) + 1
+    scopes = [result.graph, *result.functions]
+    while scopes:
+        scope = scopes.pop()
+        attributes = [attribute for node in scope.node for attribute in node.attribute]
+        if isinstance(scope, FunctionProto):
+            attributes.extend(scope.attribute_proto)
+        for node in scope.node:
+            key = (str(node.domain), str(node.op_type), str(node.overload))
+            calls[key] = calls.get(key, 0) + 1
+        for attribute in attributes:
+            if attribute.HasField("g"):
+                scopes.append(attribute.g)
+            scopes.extend(attribute.graphs)
     with open(args.output, "xb") as stream:
         save(result, stream)
     extracted = sum(rewrite.pattern_name == "RepeatedLayer" for rewrite in rewrites.rewrites)
@@ -1883,7 +1827,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Applies only RepeatedLayer, retaining external weights and loading tiny tensors "
             "for shape inference. Saves a rewritten ONNX model and prints a layer summary. "
-            "Large inline raw tensors must be externalized first."
+            "Large raw tensors are omitted from this structural export."
         ),
     )
     layers_parser.add_argument("model", help="Path to the input binary ONNX model.")
@@ -1891,10 +1835,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         "-o",
         required=True,
-        help=(
-            "New output ONNX file. Must not exist. Keep it in the input directory when "
-            "external weight references remain."
-        ),
+        help=("New output ONNX file. Must not exist. External weight paths are preserved."),
     )
     layers_parser.add_argument(
         "--tiny-tensor-threshold",

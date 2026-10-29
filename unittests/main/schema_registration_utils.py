@@ -4,6 +4,7 @@
 """Parses vendored C++ schema definitions and registration calls."""
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -86,8 +87,9 @@ def defined_schemas(source: str) -> dict[str, set[tuple[str, int]]]:
     return defined
 
 
+@lru_cache(maxsize=1)
 def all_defined_schemas() -> dict[str, set[tuple[str, int]]]:
-    """Collects schema definitions from the vendored C++ sources."""
+    """Collects and caches schema definitions from the vendored C++ sources."""
     defined = {macro: set() for macro in MACRO_INFO}
     for source_file in DEFS_DIR.rglob("*.cc"):
         for macro, schemas in defined_schemas(source_file.read_text(encoding="utf-8")).items():

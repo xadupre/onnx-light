@@ -122,10 +122,10 @@ void write_file(const std::filesystem::path &dir, const std::string &name,
 
 std::string external_data_seed(uint8_t operation, uint8_t location, uint8_t flags = 0,
                                uint8_t offset = 0, uint8_t length = 0,
-                               const std::string &payload = "seed payload") {
+                               const std::string &payload = "seed payload", uint8_t alternate = 0) {
   const char header[] = {static_cast<char>(operation), static_cast<char>(location),
                          static_cast<char>(flags),     static_cast<char>(offset),
-                         static_cast<char>(length),    0};
+                         static_cast<char>(length),    static_cast<char>(alternate)};
   return std::string(header, sizeof(header)) + payload;
 }
 
@@ -268,10 +268,11 @@ int main(int argc, char *argv[]) {
       write_file(external_dir, "model_read_regular.bin", external_data_seed(3, 0, 0, 1, 2));
       write_file(external_dir, "model_read_no_copy.bin", external_data_seed(3, 0, 64, 1, 2));
       write_file(external_dir, "write_overlapping_offsets.bin",
-                 external_data_seed(4, 2, 0, 4, 2, "s"));
+                 external_data_seed(4, 2, 0, 1, 2, "s", 1));
       write_file(external_dir, "model_load_regular.bin", external_data_seed(5, 0));
       write_file(external_dir, "model_load_hardlink.bin", external_data_seed(5, 7));
       write_file(external_dir, "save_model_traversal.bin", external_data_seed(6, 3));
+      write_file(external_dir, "save_model_regular.bin", external_data_seed(6, 0));
       write_file(external_dir, "model_roundtrip.bin", external_data_seed(7, 0));
     }
   } catch (const std::exception &ex) {

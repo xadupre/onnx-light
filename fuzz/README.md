@@ -64,7 +64,7 @@ To generate seed corpora that OSS-Fuzz uses as starting inputs:
 ```
 
 The fourth output directory is optional, preserving existing three-output
-invocations. It contains 20 external-data seeds adapted from
+invocations. It contains 21 external-data seeds adapted from
 [onnx/onnx#8659](https://github.com/onnx/onnx/pull/8659).
 
 The harnesses accept a seed-corpus directory as a positional
@@ -122,8 +122,8 @@ absolute paths, UNC and Windows drive forms, encoded traversal text, symlinks,
 and hardlinks. Link and escape fixtures point to the sentinel.
 
 The six-byte header selects the operation, location, duplicate/unknown metadata
-flags, offset, length, and alternate location. At most 4096 remaining bytes form
-the tensor payload. Operations cover metadata checking, tensor and whole-model
+flags, offset, length, and alternate location/second offset. At most 4096 remaining
+bytes form the tensor payload. Operations cover metadata checking, tensor and whole-model
 loading, bounded streaming reads (including no-copy reads), single/multi-tensor
 writes with supplied offsets, external-data conversion, and model save/load.
 The standalone loader has no allocation-budget option, so gigabyte-scale length

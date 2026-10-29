@@ -189,8 +189,9 @@ ModelProto make_model(const TensorProto &tensor) {
 }
 
 void check_read(const TensorProto &tensor) {
-  for (uint8_t byte : tensor.raw_data()) {
-    if (byte == 0xa5) {
+  const auto &raw = tensor.raw_data();
+  for (size_t index = 0; index < raw.size(); ++index) {
+    if (raw[index] == 0xa5) {
       finding("operation read sentinel bytes");
     }
   }
@@ -260,7 +261,7 @@ void exercise(const uint8_t *data, const Workspace &workspace, const std::string
         if (operation == 4) {
           std::array<uint8_t, 6> second_header;
           std::copy_n(data, second_header.size(), second_header.begin());
-          ++second_header[3];
+          second_header[3] = data[5];
           auto second = make_tensor(second_header.data(), location, alternate, "second_weight",
                                     payload.size());
           second.set_raw_data(std::string(payload.rbegin(), payload.rend()));
@@ -272,6 +273,8 @@ void exercise(const uint8_t *data, const Workspace &workspace, const std::string
           ONNX_LIGHT_NAMESPACE::ConvertModelToExternalData(
               model, operation == 6 || (data[2] & 1), operation == 6 ? location : "roundtrip.bin",
               0);
+          add_metadata(embedded, "offset", "0");
+          add_metadata(embedded, "length", std::to_string(payload.size()));
         }
         {
           utils::TwoFilesWriteStream stream(model_path, weights_path);

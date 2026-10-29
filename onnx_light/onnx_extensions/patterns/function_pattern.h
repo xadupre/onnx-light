@@ -28,12 +28,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *              └──────────────────┘
  * @endcode
  *
+ * With ``as_function=true``, After is a call to the replacement function instead
+ * of its inlined body. One compatible definition is shared by all occurrences,
+ * including calls in subgraphs. Captures become call attributes; shape inference
+ * follows the registered local body. Function-call replacement outputs must be
+ * distinct. The pattern does not rewrite that body into a recursive call to itself.
+ *
  * Bodies must be topologically sorted SSA graphs without graph-valued
  * attributes. Template inputs must be used, and template outputs must be
  * distinct node results. Template nodes must be connected through nonempty
  * values (including shared inputs). Matching follows local producers and
  * consumers from the selected anchor, never scans unrelated graph nodes. Replacement outputs may
- * alias inputs or each other. Configured target nodes are conservatively rejected. Intermediates
+ * alias inputs, and in inline mode may alias each other. Configured target nodes are conservatively
+ * rejected. Intermediates
  * may not escape the match. Subgraph captures and matches needing interleaved external consumers
  * are conservatively rejected. Function definitions are copied. Forwarded or aliased outputs need a
  * default ONNX opset for Identity.
@@ -47,7 +54,7 @@ public:
   FunctionPattern(const FunctionProto &pattern, const FunctionProto &replacement, int priority = 1,
                   std::string name = "FunctionPattern",
                   core::symbolic::Device device = core::symbolic::Device::kUndefined,
-                  int anchor = -1);
+                  int anchor = -1, bool as_function = false);
 
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
@@ -59,6 +66,7 @@ public:
 private:
   FunctionProto pattern_;
   FunctionProto replacement_;
+  bool as_function_;
   std::size_t anchor_index_;
   std::vector<std::size_t> match_order_;
 };

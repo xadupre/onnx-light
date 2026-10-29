@@ -103,6 +103,33 @@ and replacement automatically from two ``FunctionProto`` bodies:
     )
     pattern = FunctionPattern(template, replacement, name="DoubleNeg", anchor=0)
 
+To emit a call instead of inlining the replacement body, use
+``as_function=True``:
+
+.. code-block:: python
+
+    pattern = FunctionPattern(
+        template, replacement, name="DoubleNeg", anchor=0, as_function=True
+    )
+    # Encapsulates the original matched body without changing its computation:
+    encapsulate = FunctionPattern(template, template, as_function=True)
+
+All occurrences share one model-local replacement function, including matches
+in nested subgraphs. Calls retain the replacement's domain, name and overload,
+and preserve the matched input/output order and externally visible output names.
+An existing compatible definition is reused; conflicting definitions are rejected,
+not overwritten. The calling scope imports the function domain at its existing
+model version, or version 1 when no version has been selected.
+Replacement output names must be distinct in function-call mode; forwarding a
+function input directly as an output remains supported.
+
+Captured function attributes are attached to each call, so differing attribute
+values do not create specialized copies of the definition. Function attribute
+defaults are retained. The local body supplies shape inference at its own opsets;
+its operator imports need not equal the caller's imports in this mode. The matcher
+does not encapsulate the replacement function's own body into a recursive call.
+The default ``as_function=False`` preserves the existing inline behavior.
+
 Function inputs and outputs correspond **by position** and must have equal,
 fixed counts. Every node also matches an exact input/output count (including
 empty optional slots), domain, overload, literal attributes and opset version.
@@ -112,8 +139,9 @@ Reference attributes created with ``oh.make_attribute_ref`` capture attributes
 instead of comparing a literal value. Declare their ``ref_attr_name`` in the
 function's ``attributes`` list. A replacement reference uses the same capture
 name and type, but may have a different node-attribute name. Repeated template
-references must match equal values. All replacement references must be captured
-by the template; missing candidate attributes are not filled from schema defaults.
+references must match equal values. Replacement references must be captured
+by the template, except for function-call attributes with function defaults.
+Missing candidate attributes are not filled from schema defaults.
 
 For example, these nodes capture and reuse a transpose permutation::
 
@@ -127,8 +155,9 @@ For example, these nodes capture and reuse a transpose permutation::
 
 Bodies must be topologically sorted, use SSA names, and contain no graph-valued
 attributes. Template inputs must be used; its outputs must be distinct node
-results. The replacement may return inputs directly or return a value more than
-once. Output names are preserved and replacement intermediates get fresh names.
+results. The replacement may return inputs directly; in inline mode, it may also
+return a value more than once. Output names are preserved and inlined replacement
+intermediates get fresh names.
 Template nodes must be connected through nonempty values, including shared
 function inputs. Multi-output branches are matched by following local producers
 and consumers from the selected anchor; unrelated graph nodes are never scanned.
@@ -142,9 +171,10 @@ Removed intermediates cannot be graph outputs, subgraph captures or inputs to
 unmatched nodes. Captured node outputs and matches requiring interleaved external
 consumers are conservatively rejected, even when the captured value is a template
 output.
-The target graph must already import the functions' operator opsets; the pattern
-does not upgrade opsets or install local function definitions. Forwarding an input
-or an aliased output also requires a default ONNX opset for ``Identity``.
+The target graph must already import the template's operator opsets. Inline mode
+also requires the replacement's operator opsets and does not install local
+function definitions. Forwarding an input or an aliased output in inline mode
+requires a default ONNX opset for ``Identity``.
 As with handwritten patterns, the author is responsible for semantic equivalence,
 including supported types, shapes and broadcasting.
 

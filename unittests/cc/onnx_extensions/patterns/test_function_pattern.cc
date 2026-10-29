@@ -151,6 +151,198 @@ TEST(FunctionPattern, OptimizesAndPreservesOutput) {
   EXPECT_EQ(builder.Nodes()[0].output(0), "result");
 }
 
+TEST(FunctionPattern, LocalCallsShareOneMultiOutputFunctionAndInferShapes) {
+  auto body = Function({"x"}, {"left", "right"},
+                       {MakeNode("Neg", {"x"}, {"middle"}), MakeNode("Abs", {"middle"}, {"left"}),
+                        MakeNode("Relu", {"middle"}, {"right"})});
+  body.set_overload("special");
+  auto pattern = std::make_shared<FunctionPattern>(body, body, 1, "LocalBranches",
+                                                   core::symbolic::Device::kUndefined, 0, true);
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  for (const std::string suffix : {"0", "1"}) {
+    AddInput(builder, "x" + suffix);
+    builder.MakeNode("Neg", {"x" + suffix}, {"middle" + suffix});
+    builder.MakeNode("Abs", {"middle" + suffix}, {"left" + suffix});
+    builder.MakeNode("Relu", {"middle" + suffix}, {"right" + suffix});
+    builder.MakeOutput("left" + suffix);
+    builder.MakeOutput("right" + suffix);
+  }
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  const auto plan = graph.Optimize();
+  EXPECT_EQ(plan.rewrites().size(), 2u);
+  EXPECT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  for (const auto &node : builder.Nodes()) {
+    EXPECT_EQ(node.op_type(), "body");
+    EXPECT_EQ(node.domain(), "patterns");
+    EXPECT_EQ(node.overload(), "special");
+    ASSERT_EQ(node.output_size(), 2);
+    for (const auto &output : node.output()) {
+      ASSERT_TRUE(builder.HasShape(output));
+      EXPECT_EQ(builder.GetShape(output).Shape()[0].AsInt(), 2);
+    }
+  }
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  EXPECT_EQ(builder.ToModel().functions_size(), 1);
+}
+
+TEST(FunctionPattern, LocalCallsCaptureAttributesWithoutSpecializingTheDefinition) {
+  const auto body = Function({"x"}, {"y"}, {Transpose("x", "y", true)});
+  auto declared = body;
+  declared.add_attribute("permutation");
+  auto &default_value = *declared.add_attribute_proto();
+  default_value.set_name("permutation");
+  default_value.set_type(AttributeProto::INTS);
+  default_value.add_ints(1);
+  default_value.add_ints(0);
+  auto pattern = std::make_shared<FunctionPattern>(declared, declared, 1, "LocalTranspose",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(3));
+  for (int index : {0, 1}) {
+    const std::string suffix = std::to_string(index);
+    builder.MakeInput("x" + suffix, core::symbolic::TensorType::kFloat, shape);
+    const auto node =
+        Transpose("x" + suffix, "y" + suffix, false,
+                  index == 0 ? std::vector<int64_t>{0, 1} : std::vector<int64_t>{1, 0});
+    builder.MakeNode("Transpose", {"x" + suffix}, {"y" + suffix}, "", "", node.attribute());
+    builder.MakeOutput("y" + suffix);
+  }
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  graph.Optimize();
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.ToModel().functions_size(), 1);
+  for (int index : {0, 1}) {
+    const auto &call = builder.Nodes()[index];
+    ASSERT_EQ(call.attribute_size(), 1);
+    EXPECT_EQ(call.attribute(0).name(), "permutation");
+    EXPECT_EQ(call.attribute(0).ints(0), index);
+    const auto &inferred = builder.GetShape(call.output(0)).Shape();
+    EXPECT_EQ(inferred[0].AsInt(), index == 0 ? 2 : 3);
+    EXPECT_EQ(inferred[1].AsInt(), index == 0 ? 3 : 2);
+  }
+}
+
+TEST(FunctionPattern, LocalCallsReuseCompatibleDefinitionsAndRejectConflicts) {
+  for (bool conflict : {false, true}) {
+    GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    auto replacement = Identity();
+    auto existing = replacement;
+    if (conflict)
+      existing.mutable_node(0)->set_op_type("Abs");
+    builder.MakeLocalFunction(existing);
+    AddInput(builder, "x");
+    builder.MakeNode("Neg", {"x"}, {"middle"});
+    builder.MakeNode("Neg", {"middle"}, {"y"});
+    builder.MakeOutput("y");
+    auto pattern = std::make_shared<FunctionPattern>(DoubleNeg(), replacement, 1, "LocalIdentity",
+                                                     core::symbolic::Device::kUndefined, -1, true);
+    GraphGraph graph(builder,
+                     std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+    if (conflict) {
+      EXPECT_THROW(graph.Optimize(), BuilderError);
+      EXPECT_EQ(builder.Nodes().size(), 2u);
+    } else {
+      EXPECT_NO_THROW(graph.Optimize());
+      ASSERT_EQ(builder.Nodes().size(), 1u);
+      EXPECT_EQ(builder.Nodes()[0].domain(), "patterns");
+    }
+    EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  }
+}
+
+TEST(FunctionPattern, LocalCallsShareTheirDefinitionWithNestedSubgraphs) {
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  AddInput(builder, "x");
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+  for (const std::string name : {"then", "else"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Neg", {"x"}, {"middle"});
+    branch.MakeNode("Neg", {"middle"}, {"result"});
+    branch.MakeOutput("result");
+  }
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then", "else"}) {
+    auto &attribute = *attributes.Add();
+    attribute.set_name(name + "_branch_ref");
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"y"}, "", "", attributes);
+  builder.MakeOutput("y");
+  const auto body = DoubleNeg();
+  auto pattern = std::make_shared<FunctionPattern>(body, body, 1, "NestedLocal",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  graph.Optimize();
+  const auto model = builder.ToModel();
+  ASSERT_EQ(model.functions_size(), 1);
+  EXPECT_EQ(model.functions(0).node_size(), 2);
+  for (const auto &attribute : model.graph().node(0).attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().node_size(), 1);
+    EXPECT_EQ(attribute.g().node(0).domain(), "patterns");
+    EXPECT_EQ(attribute.g().node(0).op_type(), "body");
+  }
+  ASSERT_TRUE(builder.HasShape("y"));
+  EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 2);
+}
+
+TEST(FunctionPattern, LocalCallsUseDefaultsAndIndependentFunctionOpsets) {
+  auto pattern_body = Function({"x"}, {"y"}, {Transpose("x", "y", false, {1, 0})});
+  auto replacement = Function({"x"}, {"y"}, {Transpose("x", "y", true)});
+  replacement.add_attribute("permutation");
+  auto &default_value = *replacement.add_attribute_proto();
+  default_value.set_name("permutation");
+  default_value.set_type(AttributeProto::INTS);
+  default_value.add_ints(1);
+  default_value.add_ints(0);
+  replacement.mutable_opset_import(0)->set_version(19);
+  auto pattern = std::make_shared<FunctionPattern>(pattern_body, replacement, 1, "LocalDefault",
+                                                   core::symbolic::Device::kUndefined, -1, true);
+  GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(3));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeNode("Transpose", {"x"}, {"y"}, "", "", pattern_body.node(0).attribute());
+  builder.MakeOutput("y");
+  GraphGraph graph(builder,
+                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  graph.Optimize();
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].attribute_size(), 0);
+  EXPECT_EQ(builder.GetShape("y").Shape()[0].AsInt(), 3);
+  EXPECT_EQ(builder.OpsetVersion(""), 18);
+  EXPECT_EQ(builder.LocalFunction("body").OpsetVersion(""), 19);
+  auto wrong_default = Identity();
+  auto &wrong_type = *wrong_default.add_attribute_proto();
+  wrong_type.set_name("permutation");
+  wrong_type.set_type(AttributeProto::FLOAT);
+  wrong_type.set_f(1.0f);
+  auto capture = Function({"x"}, {"y"}, {Transpose("x", "y", true)});
+  capture.add_attribute("permutation");
+  EXPECT_THROW(FunctionPattern(capture, wrong_default, 1, "WrongDefault",
+                               core::symbolic::Device::kUndefined, -1, true),
+               BuilderError);
+  replacement.add_attribute("missing");
+  EXPECT_THROW(FunctionPattern(pattern_body, replacement, 1, "Invalid",
+                               core::symbolic::Device::kUndefined, -1, true),
+               BuilderError);
+  auto recursive = DoubleNeg();
+  recursive.add_opset("patterns", 1);
+  recursive.mutable_node(0)->set_domain("patterns");
+  recursive.mutable_node(0)->set_op_type("body");
+  EXPECT_THROW(FunctionPattern(DoubleNeg(), recursive, 1, "Recursive",
+                               core::symbolic::Device::kUndefined, -1, true),
+               BuilderError);
+}
+
 TEST(FunctionPattern, RejectsEscapingIntermediate) {
   for (const bool graph_output : {false, true}) {
     GraphBuilder builder("g", SchemaLookup(), {{"", 18}});

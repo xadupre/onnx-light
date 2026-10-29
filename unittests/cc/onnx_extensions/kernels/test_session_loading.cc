@@ -528,7 +528,7 @@ TEST_F(RuntimeSessionLoading, PipelineConfinesExternalPathsInBothStages) {
     weight->mutable_external_data(0)->set_value("../weight0.bin");
     SavePipeline(pipeline);
     RuntimeContext rt;
-    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt), std::exception);
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt), std::invalid_argument);
     EXPECT_FALSE(rt.Has("E"));
     EXPECT_FALSE(rt.Has("B0"));
   }

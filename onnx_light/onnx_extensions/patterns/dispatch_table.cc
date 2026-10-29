@@ -320,6 +320,8 @@ void RegisterPatterns() {
                                    [] { return std::make_unique<GroupedMatMulPattern>(); });
     core::builder::RegisterPattern("GemmTranspose",
                                    [] { return std::make_unique<GemmTransposePattern>(); });
+    core::builder::RegisterPattern("GemmOutputTranspose",
+                                   [] { return std::make_unique<GemmOutputTransposePattern>(); });
     core::builder::RegisterPattern("GemmSumFusion",
                                    [] { return std::make_unique<GemmSumFusionPattern>(); });
     core::builder::RegisterPattern("MatMulAdd",

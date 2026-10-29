@@ -121,6 +121,7 @@ FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
 AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GroupedMatMulPattern: TypeAlias = _patterns.GroupedMatMulPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
+GemmOutputTransposePattern: TypeAlias = _patterns.GemmOutputTransposePattern
 GemmSumFusionPattern: TypeAlias = _patterns.GemmSumFusionPattern
 MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
 MatMulBatchNormalizationFusionPattern: TypeAlias = _patterns.MatMulBatchNormalizationFusionPattern
@@ -496,6 +497,7 @@ __all__ = [
     "GatherUpstreamPropagationPattern",
     "GathersSplitPattern",
     "GeluPattern",
+    "GemmOutputTransposePattern",
     "GemmSumFusionPattern",
     "GemmTransposePattern",
     "GraphBuilder",

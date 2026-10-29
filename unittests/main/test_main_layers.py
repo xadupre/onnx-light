@@ -166,15 +166,42 @@ class TestMainLayers(ExtTestCase):
             self.assertTrue(all(not weight.raw_data for weight in weights))
             self.assertEqual(source.read_bytes(), original)
 
-    def test_preserves_existing_output_and_accepts_another_directory(self):
+    def test_overwrites_existing_output_with_optional_verbose_notice(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             source = self._save_external(directory)
             output = directory / "existing.onnx"
-            output.write_bytes(b"keep")
-            with self.assertRaises(FileExistsError):
-                main(["layers", str(source), "-o", str(output)])
-            self.assertEqual(output.read_bytes(), b"keep")
+            for verbose in (False, True):
+                with self.subTest(verbose=verbose):
+                    output.write_bytes(b"old output")
+                    text = StringIO()
+                    arguments = ["layers", str(source), "-o", str(output)]
+                    if verbose:
+                        arguments.append("--verbose")
+                    with redirect_stdout(text):
+                        main(arguments)
+                    result = load(output, load_external_data=False)
+                    self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
+                    notice = f"[layers] overwriting {str(output)!r}"
+                    if verbose:
+                        self.assertIn(notice, text.getvalue())
+                    else:
+                        self.assertNotIn(notice, text.getvalue())
+
+    def test_overwrites_input_model_in_place(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = self._save_external(Path(temporary))
+            text = StringIO()
+            with redirect_stdout(text):
+                main(["layers", str(source), "-o", str(source), "--verbose"])
+            result = load(source, load_external_data=False)
+            self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
+            self.assertIn(f"[layers] overwriting {str(source)!r}", text.getvalue())
+
+    def test_accepts_another_output_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = self._save_external(directory)
             elsewhere = directory / "elsewhere"
             elsewhere.mkdir()
             output = elsewhere / "layers.onnx"

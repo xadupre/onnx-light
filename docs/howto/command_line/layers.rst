@@ -37,16 +37,17 @@ with ``--tiny-tensor-threshold BYTES``. Typed protobuf payload fields remain
 part of the model metadata and are parsed normally.
 
 Large external weights retain their original location, offset and length;
-the command never rewrites their files. Large inline raw tensor payloads are
+their payloads are not loaded during extraction. Large inline raw tensor payloads are
 omitted from this structural export. To retain executable weights in the
 rewritten model, externalize them before running the command.
 Results with omitted inline weights are for structural inspection only.
 Constant folding is disabled; only ``RepeatedLayer`` and the optimizer's normal
 structural cleanup passes run.
 
-``--output`` is required and must name a **new file**. Existing files, including
-the input model and weight files, are never overwritten. External weight paths
-are preserved without validation or rebasing. Place the output in the input
+``--output`` is required. An existing output file is overwritten; ``--verbose``
+announces the overwrite. Using the input model path rewrites it in place.
+Choose an output path distinct from the external weight files. External weight
+paths are preserved without validation or rebasing. Place the output in the input
 model's directory, or arrange the external files relative to its new location.
 Those external files must remain available when loading the rewritten model's
 weights. Missing or invalid tiny shape tensors raise an error during loading.

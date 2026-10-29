@@ -1448,10 +1448,6 @@ def _cmd_layers(args: argparse.Namespace) -> None:
         RepeatedLayerPattern,
     )
 
-    if os.path.lexists(args.output):
-        raise FileExistsError(
-            f"Output already exists: {args.output!r}. Choose a new output file."
-        )
     if args.verbose:
         print(f"[layers] load {args.model!r}")
     model = load(
@@ -1495,7 +1491,9 @@ def _cmd_layers(args: argparse.Namespace) -> None:
             if attribute.HasField("g"):
                 scopes.append(attribute.g)
             scopes.extend(attribute.graphs)
-    with open(args.output, "xb") as stream:
+    if args.verbose and os.path.exists(args.output):
+        print(f"[layers] overwriting {args.output!r}")
+    with open(args.output, "wb") as stream:
         save(result, stream)
     extracted = sum(rewrite.pattern_name == "RepeatedLayer" for rewrite in rewrites.rewrites)
     print(f"[layers] saved {args.output!r}")
@@ -1835,7 +1833,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         "-o",
         required=True,
-        help=("New output ONNX file. Must not exist. External weight paths are preserved."),
+        help="Output ONNX file, overwritten if it exists. External weight paths are preserved.",
     )
     layers_parser.add_argument(
         "--tiny-tensor-threshold",

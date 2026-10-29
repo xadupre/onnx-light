@@ -6,6 +6,7 @@
     :maxdepth: 1
 
     command_line/fillshape
+    command_line/extract_layers
     command_line/show
     command_line/run
     command_line/backend

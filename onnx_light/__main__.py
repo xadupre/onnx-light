@@ -49,6 +49,14 @@ fillshape
         Print shape-inference progress information. With no level, defaults
         to ``1`` (summary). With ``2``, also prints per-event details.
 
+extract-layers
+    Extracts repeated computations into model-local ``ai.rt::Layer`` functions
+    without loading large raw tensor payloads, and prints a layer summary.
+
+    Usage::
+
+        python -m onnx_light extract-layers model.onnx -o model.layers.onnx
+
 show
     Prints a human-readable, Mermaid or SVG rendering of an ONNX model.
 
@@ -151,6 +159,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
+    from .onnx import ModelProto, NodeProto, TensorProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -161,7 +170,7 @@ _EVENT_ACTION_RUN_NODE = "run_node"
 # references and are not read from disk.  Tensors below the threshold are
 # loaded because shape inference may need their values (e.g. the ``shape``
 # input of a Reshape node).
-_FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
+_SHAPE_TINY_TENSOR_THRESHOLD = 128
 
 
 class _KernelTunable(TypedDict):
@@ -1336,7 +1345,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     model = load(
         model_path,
         load_external_data=False,
-        tiny_external_data_threshold=_FILLSHAPE_TINY_TENSOR_THRESHOLD,
+        tiny_external_data_threshold=_SHAPE_TINY_TENSOR_THRESHOLD,
     )
 
     # Detect whether the model references weights stored in a separate file
@@ -1428,6 +1437,134 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     if verbose:
         print(f"[fillshape] save into {dest!r}")
     save(model, dest)
+
+
+def _layer_model_contents(model: ModelProto) -> tuple[list[NodeProto], list[TensorProto]]:
+    """Collects nodes and tensors across graph, function and attribute scopes."""
+    from .onnx import GraphProto
+
+    nodes = []
+    tensors = []
+    scopes = [model.graph, *model.functions]
+    while scopes:
+        scope = scopes.pop()
+        nodes.extend(scope.node)
+        attributes = [attribute for node in scope.node for attribute in node.attribute]
+        sparse_tensors = []
+        if isinstance(scope, GraphProto):
+            tensors.extend(scope.initializer)
+            sparse_tensors.extend(scope.sparse_initializer)
+        else:
+            attributes.extend(scope.attribute_proto)
+        for attribute in attributes:
+            if attribute.HasField("t"):
+                tensors.append(attribute.t)
+            tensors.extend(attribute.tensors)
+            if attribute.HasField("sparse_tensor"):
+                sparse_tensors.append(attribute.sparse_tensor)
+            sparse_tensors.extend(attribute.sparse_tensors)
+            if attribute.HasField("g"):
+                scopes.append(attribute.g)
+            scopes.extend(attribute.graphs)
+        for sparse in sparse_tensors:
+            if sparse.HasField("values"):
+                tensors.append(sparse.values)
+            if sparse.HasField("indices"):
+                tensors.append(sparse.indices)
+    return nodes, tensors
+
+
+def _cmd_extract_layers(args: argparse.Namespace) -> None:
+    """Extracts repeated layers while retaining external weight references."""
+    from .onnx import ModelProto, TensorProto, load, save
+    from .onnx_core.optimization import (
+        ConstantFoldingOptions,
+        GraphBuilder,
+        GraphGraph,
+        RepeatedLayerPattern,
+    )
+
+    if os.path.lexists(args.output):
+        raise FileExistsError(
+            f"Output already exists: {args.output!r}. Choose a new output file."
+        )
+    if args.verbose:
+        print(f"[extract-layers] load {args.model!r}")
+    model = load(
+        args.model,
+        format="protobuf",
+        skip_raw_data=True,
+        raw_data_threshold=args.tiny_tensor_threshold,
+        load_external_data=False,
+        tiny_external_data_threshold=args.tiny_tensor_threshold,
+        num_threads=1,
+    )
+    if not isinstance(model, ModelProto):
+        raise TypeError("extract-layers requires a ModelProto, not a pipeline.")
+    if not model.HasField("graph"):
+        raise ValueError("extract-layers requires a model graph.")
+    _, tensors = _layer_model_contents(model)
+    model_dir = os.path.dirname(os.path.abspath(args.model))
+    for tensor in tensors:
+        if tensor.data_location == TensorProto.EXTERNAL:
+            for entry in tensor.external_data:
+                if entry.key == "location" and os.path.realpath(args.output) == os.path.realpath(
+                    os.path.join(model_dir, entry.value)
+                ):
+                    raise ValueError("The output must not replace an external weight file.")
+        elif not any(dimension == 0 for dimension in tensor.dims) and not (
+            tensor.HasField("raw_data")
+            or tensor.float_data
+            or tensor.double_data
+            or tensor.int32_data
+            or tensor.int64_data
+            or tensor.uint64_data
+            or tensor.string_data
+        ):
+            raise ValueError(
+                f"Tensor {str(tensor.name)!r} has no retained payload. Large inline raw tensors "
+                "are skipped; externalize them before running extract-layers."
+            )
+    if any(tensor.data_location == TensorProto.EXTERNAL for tensor in tensors) and (
+        os.path.realpath(os.path.dirname(os.path.abspath(args.output)))
+        != os.path.realpath(model_dir)
+    ):
+        raise ValueError(
+            "The output must be in the input model directory to preserve external weight paths."
+        )
+    if args.verbose:
+        print("[extract-layers] apply RepeatedLayer")
+    builder = GraphBuilder(model)
+    folding = ConstantFoldingOptions()
+    folding.enabled = False
+    rewrites = GraphGraph(builder, patterns=[RepeatedLayerPattern()]).optimize(
+        folding_options=folding
+    )
+    result = builder.to_onnx()
+    nodes, _ = _layer_model_contents(result)
+    layers = [
+        function
+        for function in result.functions
+        if function.domain == "ai.rt" and re.fullmatch(r"Layer(?:_[0-9]+)?", str(function.name))
+    ]
+    calls: dict[tuple[str, str, str], int] = {}
+    for node in nodes:
+        key = (str(node.domain), str(node.op_type), str(node.overload))
+        calls[key] = calls.get(key, 0) + 1
+    with open(args.output, "xb") as stream:
+        save(result, stream)
+    extracted = sum(rewrite.pattern_name == "RepeatedLayer" for rewrite in rewrites.rewrites)
+    print(f"[extract-layers] saved {args.output!r}")
+    print(f"[extract-layers] {len(layers)} layer function(s), {extracted} extraction rewrite(s)")
+    for function in layers:
+        key = (str(function.domain), str(function.name), str(function.overload))
+        name = f"{function.domain}::{function.name}"
+        if function.overload:
+            name += f"[{function.overload}]"
+        print(
+            f"  {name!r}: {len(function.node)} node(s), {len(function.input)} input(s), "
+            f"{len(function.output)} output(s), {calls.get(key, 0)} call site(s)"
+        )
 
 
 def _cmd_show(args: argparse.Namespace) -> None:
@@ -1739,6 +1876,43 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
+
+    layers_parser = subparsers.add_parser(
+        "extract-layers",
+        help="Extract repeated computations into model-local Layer functions.",
+        description=(
+            "Applies only RepeatedLayer, retaining external weights and loading tiny tensors "
+            "for shape inference. Saves a rewritten ONNX model and prints a layer summary. "
+            "Large inline raw tensors must be externalized first."
+        ),
+    )
+    layers_parser.add_argument("model", help="Path to the input binary ONNX model.")
+    layers_parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help=(
+            "New output ONNX file. Must not exist. Keep it in the input directory when "
+            "external weight references remain."
+        ),
+    )
+    layers_parser.add_argument(
+        "--tiny-tensor-threshold",
+        type=_parse_positive_int,
+        default=_SHAPE_TINY_TENSOR_THRESHOLD,
+        metavar="BYTES",
+        help="Load raw and external tensors strictly smaller than BYTES (default: 128).",
+    )
+    layers_parser.add_argument(
+        "--verbose",
+        "-v",
+        type=_parse_non_negative_int,
+        nargs="?",
+        const=1,
+        default=0,
+        help="Print loading and extraction progress.",
+    )
+    layers_parser.set_defaults(func=_cmd_extract_layers)
 
     # --- fillshape -----------------------------------------------------------
     fillshape_parser = subparsers.add_parser(

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -725,6 +726,14 @@ TEST(GemmTransposePattern, RejectsInvalidPermutationAndForeignDomains) {
   }
 }
 
+AttributeProto &MutableAttribute(NodeProto &node, const char *name) {
+  for (auto &attribute : node.ref_attribute()) {
+    if (attribute.name() == name)
+      return attribute;
+  }
+  throw std::out_of_range("Missing test attribute: " + std::string(name));
+}
+
 void MakeGemmOutputTranspose(core::builder::GraphBuilder &builder, int flags = 0,
                              bool constant = false, bool default_perm = false) {
   const std::vector<int64_t> left_shape =
@@ -849,15 +858,15 @@ TEST(GemmOutputTransposePattern, PreservesAbsentNamesAcrossMultipleRewrites) {
 
 TEST(GemmOutputTransposePattern, RejectsNonBooleanTransposeFlagsWithoutMutation) {
   onnx_patterns::GemmOutputTransposePattern pattern;
-  for (size_t attribute_index : {size_t{2}, size_t{3}}) {
+  for (const char *name : {"transA", "transB"}) {
     for (int64_t value : {int64_t{-1}, int64_t{2}, std::numeric_limits<int64_t>::min(),
                           std::numeric_limits<int64_t>::max()}) {
-      SCOPED_TRACE(attribute_index);
+      SCOPED_TRACE(name);
       SCOPED_TRACE(value);
       core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
       MakeGemmOutputTranspose(builder);
       auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
-      nodes[0].ref_attribute()[attribute_index].set_i(value);
+      MutableAttribute(nodes[0], name).set_i(value);
       const auto before = builder.ToModel();
       core::builder::GraphGraph graph(builder);
       EXPECT_EQ(pattern.Match(graph, nodes[1]).pattern, nullptr);
@@ -945,9 +954,9 @@ TEST(GemmOutputTransposePattern, RejectsUnsafeFormsAndDirectCalls) {
     } else if (variant == "gemm_overload" || variant == "transpose_overload") {
       nodes[variant == "gemm_overload" ? 0 : 1].set_overload("custom");
     } else if (variant == "gemm_reference") {
-      nodes[0].ref_attribute()[2].set_ref_attr_name("flag");
+      MutableAttribute(nodes[0], "transA").set_ref_attr_name("flag");
     } else if (variant == "perm_reference") {
-      nodes[1].ref_attribute()[0].set_ref_attr_name("axes");
+      MutableAttribute(nodes[1], "perm").set_ref_attr_name("axes");
     } else if (variant == "duplicate_flag") {
       *nodes[0].add_attribute() = IntAttr("transA", 1)[0];
     } else if (variant == "duplicate_perm") {
@@ -955,9 +964,9 @@ TEST(GemmOutputTransposePattern, RejectsUnsafeFormsAndDirectCalls) {
     } else if (variant == "unknown_attribute") {
       *nodes[0].add_attribute() = IntAttr("unsupported", 1)[0];
     } else if (variant == "wrong_flag_type") {
-      nodes[0].ref_attribute()[2].set_type(AttributeProto::FLOAT);
+      MutableAttribute(nodes[0], "transA").set_type(AttributeProto::FLOAT);
     } else if (variant == "wrong_perm_type") {
-      nodes[1].ref_attribute()[0].set_type(AttributeProto::INT);
+      MutableAttribute(nodes[1], "perm").set_type(AttributeProto::INT);
     } else if (variant == "gemm_device" || variant == "transpose_device") {
       nodes[variant == "gemm_device" ? 0 : 1].add_device_configurations();
     } else if (variant == "wrong_rank") {

@@ -787,7 +787,7 @@ core::builder::MatchResult GemmOutputTransposePattern::Match(core::builder::Grap
     return NoMatch(candidate, "candidate is not a default-domain matrix Transpose");
   }
   if (graph.Builder().OpsetVersion("") < 11) {
-    return NoMatch(candidate, "Gemm with optional bias requires a known opset of at least 11");
+    return NoMatch(candidate, "GemmOutputTranspose requires a known opset of at least 11");
   }
   const NodeProto *gemm = graph.NodeBefore(candidate.input()[0].value());
   if (gemm == nullptr || !IsDefaultOp(*gemm, "Gemm") || !gemm->overload().empty() ||

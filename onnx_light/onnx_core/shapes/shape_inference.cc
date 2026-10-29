@@ -90,7 +90,8 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
 
 void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &caller,
                                      const NodeProto &node, const FunctionProto &function,
-                                     const std::unordered_set<std::string> &annotated_outputs);
+                                     const std::unordered_set<std::string> &annotated_outputs,
+                                     std::unordered_set<std::string> &annotation_symbols);
 
 // Expands a single local-function call ``node`` into shape inference
 // over ``func.node()`` with the function's input/output names rebound
@@ -103,7 +104,8 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
 // caller's opsets for any domain not redeclared by the function) and
 // the same local-function map, so nested local-function calls are also
 // supported.
-void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func) {
+void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func,
+                             std::unordered_set<std::string> *annotation_symbols) {
   EXT_ENFORCE_INVALID(node.input_size() == func.input_size(), "Local function '", func.name(),
                       "': expected ", func.input_size(), " inputs, got ", node.input_size(), ".");
   EXT_ENFORCE_INVALID(node.output_size() == func.output_size(), "Local function '", func.name(),
@@ -161,6 +163,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // attribute references on a per-node copy to avoid mutating ``func``.
   std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
   std::unordered_set<std::string> annotated_outputs;
+  std::unordered_set<std::string> protected_symbols;
   for (const auto &value_info : func.value_info())
     declared_outputs[value_info.name()] = &value_info;
   for (const auto &fn_node : func.node()) {
@@ -169,9 +172,11 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     if (TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
       annotated_outputs.insert(bound_node.output().begin(), bound_node.output().end());
     else
-      sub_ctx.ComputeShapeNode(bound_node);
+      sub_ctx.ComputeShapeNode(bound_node, &protected_symbols);
   }
-  ScopeLocalFunctionOutputSymbols(sub_ctx, ctx, node, func, annotated_outputs);
+  ScopeLocalFunctionOutputSymbols(sub_ctx, ctx, node, func, annotated_outputs, protected_symbols);
+  if (annotation_symbols != nullptr)
+    annotation_symbols->merge(protected_symbols);
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
   for (int i = 0; i < n_outputs; ++i) {
@@ -641,7 +646,8 @@ RenameShapeWithReplacements(const SymShape &shape,
 
 void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &caller,
                                      const NodeProto &node, const FunctionProto &function,
-                                     const std::unordered_set<std::string> &annotated_outputs) {
+                                     const std::unordered_set<std::string> &annotated_outputs,
+                                     std::unordered_set<std::string> &annotation_symbols) {
   const auto collect = [](const ShapesContext &context, const std::string &name,
                           std::unordered_set<std::string> &symbols) {
     if (context.Has(name) && !context.HasEncodedValue(name)) {
@@ -688,7 +694,8 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
       collect(caller, input.value(), inherited);
   for (const auto &output : annotated_outputs)
     if (!output.empty())
-      collect(body, output, inherited);
+      collect(body, output, annotation_symbols);
+  inherited.insert(annotation_symbols.begin(), annotation_symbols.end());
   std::string prefix;
   for (const auto &output : node.output())
     if (!output.empty()) {
@@ -927,7 +934,8 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
 // built-in dispatch-table entry) and stores the resulting output
 // descriptors in ``ctx``. Shared by :cpp:func:`ShapesContext::ComputeShapeNode`,
 // which wraps this with optional event logging.
-void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node,
+                              std::unordered_set<std::string> *annotation_symbols) {
   // Model-local function calls bypass the domain check (their domain
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
@@ -937,7 +945,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);
-    ExpandLocalFunctionCall(ctx, node, *func);
+    ExpandLocalFunctionCall(ctx, node, *func, annotation_symbols);
     return;
   }
   if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =
@@ -1074,7 +1082,8 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
   }
 }
 
-void ShapesContext::ComputeShapeNode(const NodeProto &node) {
+void ShapesContext::ComputeShapeNode(const NodeProto &node,
+                                     std::unordered_set<std::string> *annotation_symbols) {
   EraseNodeConstraints(node);
   struct RestoreConstraintOwner {
     std::string &owner;
@@ -1103,7 +1112,7 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   // ``onnx_kernels::RunNode``.
   const bool logging = events_enabled_;
 
-  DispatchComputeShapeNode(*this, node);
+  DispatchComputeShapeNode(*this, node, annotation_symbols);
 
   if (logging) {
     std::vector<std::string> inputs;

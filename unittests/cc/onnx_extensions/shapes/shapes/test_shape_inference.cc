@@ -1725,6 +1725,60 @@ TEST(OnnxOptimShapeInference, InferShapesModelPreservesAnnotatedCustomOperatorOu
   EXPECT_EQ(output.shape().dim(1).dim_value(), 3);
 }
 
+TEST(OnnxOptimShapeInference, NestedLocalFunctionsPreserveAnnotationSymbols) {
+  for (const auto *dimension : {"N", "2*N", "batch.size"}) {
+    SCOPED_TRACE(dimension);
+    core::shapes::ShapesContext ctx;
+    ctx.SetOpsetVersion("", 28);
+    ctx.SetOpsetVersion("local", 1);
+    ctx.Set("X",
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                      {core::symbolic::SymDim("M"), core::symbolic::SymDim(4)}));
+    std::vector<FunctionProto> functions;
+    functions.reserve(3);
+    auto &helper = functions.emplace_back();
+    helper.set_name("Helper");
+    helper.set_domain("local");
+    helper.add_input("x");
+    helper.add_output("annotated");
+    helper.add_output("indices");
+    helper.add_opset("", 28);
+    helper.add_opset("com.acme", 1);
+    *helper.add_node() = MakeNode("Opaque", {"x"}, {"annotated"}, "com.acme");
+    *helper.add_node() = MakeNode("NonZero", {"x"}, {"indices"});
+    auto &annotation = *helper.add_value_info();
+    annotation.set_name("annotated");
+    SetValueInfoTensorType(annotation, TensorProto::FLOAT, {-1, 4}, {dimension});
+    for (const auto *name : {"Wrapper", "Outer"}) {
+      const std::string callee = functions.back().name();
+      auto &wrapper = functions.emplace_back();
+      wrapper.set_name(name);
+      wrapper.set_domain("local");
+      wrapper.add_input("x");
+      wrapper.add_output("y");
+      wrapper.add_output("indices");
+      wrapper.add_opset("", 28);
+      wrapper.add_opset("local", 1);
+      *wrapper.add_node() = MakeNode(callee, {"x"}, {"nested", "nz"}, "local");
+      *wrapper.add_node() = MakeNode("Abs", {"nested"}, {"y"});
+      *wrapper.add_node() = MakeNode("Identity", {"nz"}, {"indices"});
+    }
+    for (const auto &function : functions)
+      ctx.SetLocalFunction(&function);
+    std::unordered_set<std::string> independent;
+    for (const auto &function : functions)
+      for (const auto *suffix : {"first", "second"}) {
+        const std::string output = function.name() + suffix;
+        const std::string indices = output + "_indices";
+        ctx.ComputeShapeNode(MakeNode(function.name(), {"X"}, {output, indices}, "local"));
+        EXPECT_EQ(ctx.Get(output).Shape(),
+                  (core::symbolic::SymShape{core::symbolic::SymDim(dimension),
+                                            core::symbolic::SymDim(4)}));
+        EXPECT_TRUE(independent.insert(ctx.Get(indices).Shape()[1].AsExpr()).second);
+      }
+  }
+}
+
 TEST(OnnxOptimShapeInference, LocalFunctionPreservesAnnotatedCustomOutputsAndOptionalSlots) {
   ModelProto model = MakeLocalFunctionAddModel();
   auto &function = model.ref_functions()[0];

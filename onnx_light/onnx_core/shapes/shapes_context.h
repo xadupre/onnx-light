@@ -798,7 +798,10 @@ public:
   /// Dispatches a single ``NodeProto`` to the matching per-operator
   /// ``ComputeShape*`` function and stores the resulting output
   /// :cpp:class:`SymTensor` descriptors in ``*this``.
-  void ComputeShapeNode(const NodeProto &node);
+  /// Optionally accumulates protected custom-annotation symbols from expanded
+  /// local functions, including nested calls.
+  void ComputeShapeNode(const NodeProto &node,
+                        std::unordered_set<std::string> *annotation_symbols = nullptr);
 
   /// Throws ``std::invalid_argument`` if any non-empty input name
   /// declared by ``node`` is missing from ``*this``.

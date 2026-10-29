@@ -38,7 +38,7 @@ Command overview
     * - :ref:`show <l-cli-show>`
       - Renders a model as text, a diagram, Python code, or C++ code.
       - Review a model or generate code that rebuilds it.
-    * - :ref:`extract-layers <l-cli-extract-layers>`
+    * - :ref:`layers <l-cli-layers>`
       - Encapsulates repeated computations as local Layer functions without
         loading large raw weight payloads.
       - Inspect repeated layers while preserving external weight references.

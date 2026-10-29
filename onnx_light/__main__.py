@@ -49,13 +49,13 @@ fillshape
         Print shape-inference progress information. With no level, defaults
         to ``1`` (summary). With ``2``, also prints per-event details.
 
-extract-layers
+layers
     Extracts repeated computations into model-local ``ai.rt::Layer`` functions
     without loading large raw tensor payloads, and prints a layer summary.
 
     Usage::
 
-        python -m onnx_light extract-layers model.onnx -o model.layers.onnx
+        python -m onnx_light layers model.onnx -o model.layers.onnx
 
 show
     Prints a human-readable, Mermaid or SVG rendering of an ONNX model.
@@ -1474,7 +1474,7 @@ def _layer_model_contents(model: ModelProto) -> tuple[list[NodeProto], list[Tens
     return nodes, tensors
 
 
-def _cmd_extract_layers(args: argparse.Namespace) -> None:
+def _cmd_layers(args: argparse.Namespace) -> None:
     """Extracts repeated layers while retaining external weight references."""
     from .onnx import ModelProto, TensorProto, load, save
     from .onnx_core.optimization import (
@@ -1489,7 +1489,7 @@ def _cmd_extract_layers(args: argparse.Namespace) -> None:
             f"Output already exists: {args.output!r}. Choose a new output file."
         )
     if args.verbose:
-        print(f"[extract-layers] load {args.model!r}")
+        print(f"[layers] load {args.model!r}")
     model = load(
         args.model,
         format="protobuf",
@@ -1500,9 +1500,9 @@ def _cmd_extract_layers(args: argparse.Namespace) -> None:
         num_threads=1,
     )
     if not isinstance(model, ModelProto):
-        raise TypeError("extract-layers requires a ModelProto, not a pipeline.")
+        raise TypeError("layers requires a ModelProto, not a pipeline.")
     if not model.HasField("graph"):
-        raise ValueError("extract-layers requires a model graph.")
+        raise ValueError("layers requires a model graph.")
     _, tensors = _layer_model_contents(model)
     model_dir = os.path.dirname(os.path.abspath(args.model))
     for tensor in tensors:
@@ -1523,7 +1523,7 @@ def _cmd_extract_layers(args: argparse.Namespace) -> None:
         ):
             raise ValueError(
                 f"Tensor {str(tensor.name)!r} has no retained payload. Large inline raw tensors "
-                "are skipped; externalize them before running extract-layers."
+                "are skipped; externalize them before running layers."
             )
     if any(tensor.data_location == TensorProto.EXTERNAL for tensor in tensors) and (
         os.path.realpath(os.path.dirname(os.path.abspath(args.output)))
@@ -1533,7 +1533,7 @@ def _cmd_extract_layers(args: argparse.Namespace) -> None:
             "The output must be in the input model directory to preserve external weight paths."
         )
     if args.verbose:
-        print("[extract-layers] apply RepeatedLayer")
+        print("[layers] apply RepeatedLayer")
     builder = GraphBuilder(model)
     folding = ConstantFoldingOptions()
     folding.enabled = False
@@ -1554,8 +1554,8 @@ def _cmd_extract_layers(args: argparse.Namespace) -> None:
     with open(args.output, "xb") as stream:
         save(result, stream)
     extracted = sum(rewrite.pattern_name == "RepeatedLayer" for rewrite in rewrites.rewrites)
-    print(f"[extract-layers] saved {args.output!r}")
-    print(f"[extract-layers] {len(layers)} layer function(s), {extracted} extraction rewrite(s)")
+    print(f"[layers] saved {args.output!r}")
+    print(f"[layers] {len(layers)} layer function(s), {extracted} extraction rewrite(s)")
     for function in layers:
         key = (str(function.domain), str(function.name), str(function.overload))
         name = f"{function.domain}::{function.name}"
@@ -1878,7 +1878,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.required = True
 
     layers_parser = subparsers.add_parser(
-        "extract-layers",
+        "layers",
         help="Extract repeated computations into model-local Layer functions.",
         description=(
             "Applies only RepeatedLayer, retaining external weights and loading tiny tensors "
@@ -1912,7 +1912,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Print loading and extraction progress.",
     )
-    layers_parser.set_defaults(func=_cmd_extract_layers)
+    layers_parser.set_defaults(func=_cmd_layers)
 
     # --- fillshape -----------------------------------------------------------
     fillshape_parser = subparsers.add_parser(

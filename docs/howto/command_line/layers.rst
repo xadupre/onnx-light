@@ -1,15 +1,15 @@
-.. _l-cli-extract-layers:
+.. _l-cli-layers:
 
-extract-layers
-==============
+layers
+======
 
 Extracts repeated computations into model-local functions using only the
 opt-in ``RepeatedLayer`` pattern:
 
 .. code-block:: bash
 
-    onnx-light extract-layers model.onnx --output model.layers.onnx
-    python -m onnx_light extract-layers model.onnx -o model.layers.onnx --verbose
+    onnx-light layers model.onnx --output model.layers.onnx
+    python -m onnx_light layers model.onnx -o model.layers.onnx --verbose
 
 The output is a rewritten ONNX model, not one file per layer. Shared function
 bodies appear in ``ModelProto.functions`` as ``ai.rt::Layer``, ``Layer_1``, etc.,
@@ -49,9 +49,9 @@ error rather than silently proceeding.
 
 .. code-block:: bash
 
-    python -m onnx_light extract-layers model.onnx \
+    python -m onnx_light layers model.onnx \
         --output model.layers.onnx \
         --tiny-tensor-threshold 256
 
 For the complete argument reference, see
-:doc:`../../api/command_lines/extract-layers`.
+:doc:`../../api/command_lines/layers`.

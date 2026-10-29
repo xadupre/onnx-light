@@ -49,7 +49,7 @@ def _repeated_model():
     )
 
 
-class TestMainExtractLayers(ExtTestCase):
+class TestMainLayers(ExtTestCase):
     def _save_external(self, directory):
         """Writes external weights and an independently stored tiny shape tensor."""
         source = directory / "model.onnx"
@@ -85,7 +85,7 @@ class TestMainExtractLayers(ExtTestCase):
             shape_before = (directory / "shape.bin").read_bytes()
             text = StringIO()
             with redirect_stdout(text):
-                main(["extract-layers", str(source), "-o", str(output), "--verbose"])
+                main(["layers", str(source), "-o", str(output), "--verbose"])
             result = load(output, load_external_data=False)
             layers = [function for function in result.functions if function.domain == "ai.rt"]
             self.assertEqual(len(layers), 1)
@@ -109,16 +109,7 @@ class TestMainExtractLayers(ExtTestCase):
             (directory / "weights.bin").unlink()
             output = directory / "layers.onnx"
             with redirect_stdout(StringIO()):
-                main(
-                    [
-                        "extract-layers",
-                        str(source),
-                        "-o",
-                        str(output),
-                        "--tiny-tensor-threshold",
-                        "128",
-                    ]
-                )
+                main(["layers", str(source), "-o", str(output), "--tiny-tensor-threshold", "128"])
             result = load(output, load_external_data=False)
             weights = [
                 tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
@@ -144,7 +135,7 @@ class TestMainExtractLayers(ExtTestCase):
             (directory / "shape.bin").unlink()
             output = directory / "layers.onnx"
             with self.assertRaises((RuntimeError, ValueError)):
-                main(["extract-layers", str(source), "-o", str(output)])
+                main(["layers", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
     def test_rejects_missing_graph_without_writing_output(self):
@@ -154,7 +145,7 @@ class TestMainExtractLayers(ExtTestCase):
             source.write_bytes(b"")
             output = directory / "layers.onnx"
             with self.assertRaisesRegex(ValueError, "requires a model graph"):
-                main(["extract-layers", str(source), "-o", str(output)])
+                main(["layers", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
     def test_rejects_skipped_inline_weights_in_graph_and_function_attributes(self):
@@ -197,7 +188,7 @@ class TestMainExtractLayers(ExtTestCase):
                 save(model, source)
                 original = source.read_bytes()
                 with self.assertRaisesRegex(ValueError, "externalize"):
-                    main(["extract-layers", str(source), "-o", str(output)])
+                    main(["layers", str(source), "-o", str(output)])
                 self.assertFalse(output.exists())
                 self.assertEqual(source.read_bytes(), original)
 
@@ -208,16 +199,16 @@ class TestMainExtractLayers(ExtTestCase):
             output = directory / "existing.onnx"
             output.write_bytes(b"keep")
             with self.assertRaises(FileExistsError):
-                main(["extract-layers", str(source), "-o", str(output)])
+                main(["layers", str(source), "-o", str(output)])
             self.assertEqual(output.read_bytes(), b"keep")
             elsewhere = directory / "elsewhere"
             elsewhere.mkdir()
             with self.assertRaisesRegex(ValueError, "input model directory"):
-                main(["extract-layers", str(source), "-o", str(elsewhere / "layers.onnx")])
+                main(["layers", str(source), "-o", str(elsewhere / "layers.onnx")])
             weights = directory / "weights.bin"
             weights.unlink()
             with self.assertRaisesRegex(ValueError, "external weight file"):
-                main(["extract-layers", str(source), "-o", str(weights)])
+                main(["layers", str(source), "-o", str(weights)])
             self.assertFalse(weights.exists())
 
     def test_saves_unchanged_model_when_no_repeated_layer_exists(self):
@@ -236,15 +227,7 @@ class TestMainExtractLayers(ExtTestCase):
             save(model, source)
             output = directory / "plain.layers.onnx"
             completed = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "onnx_light",
-                    "extract-layers",
-                    str(source),
-                    "-o",
-                    str(output),
-                ],
+                [sys.executable, "-m", "onnx_light", "layers", str(source), "-o", str(output)],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -255,16 +238,9 @@ class TestMainExtractLayers(ExtTestCase):
 
     def test_parser_requires_output_and_positive_threshold(self):
         for arguments in (
-            ["extract-layers", "model.onnx"],
-            ["extract-layers", "model.onnx", "-o", "layers.onnx", "--tiny-tensor-threshold", "0"],
-            [
-                "extract-layers",
-                "model.onnx",
-                "-o",
-                "layers.onnx",
-                "--tiny-tensor-threshold",
-                "-1",
-            ],
+            ["layers", "model.onnx"],
+            ["layers", "model.onnx", "-o", "layers.onnx", "--tiny-tensor-threshold", "0"],
+            ["layers", "model.onnx", "-o", "layers.onnx", "--tiny-tensor-threshold", "-1"],
         ):
             with (
                 self.subTest(arguments=arguments),

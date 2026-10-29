@@ -603,6 +603,37 @@ TEST(RepeatedLayerPattern, NamesInputsFromStrictMajorityPrefixesWithoutCollision
   }
 }
 
+TEST(RepeatedLayerPattern, InputPrefixesKeepCompleteUtf8CodePoints) {
+  const std::vector<std::pair<std::vector<std::string>, std::string>> cases = {
+      {{"\u00e91", "\u00ea2", "X"}, "input_0"},
+      {{"weight.\u00e91", "weight.\u00ea2", "X"}, "weight."},
+      {{"\u00e91", "\u00e92", "X"}, "\u00e9"},
+      {{"\u20ac1", "\u20ad2", "X"}, "input_0"},
+      {{"\U0001f6001", "\U0001f6012", "X"}, "input_0"},
+      {{"\u00e9", "\u00e91", "X"}, "\u00e9_0"}};
+  for (const auto &[inputs, expected] : cases) {
+    SCOPED_TRACE(inputs.front());
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+    for (std::size_t index = 0; index < inputs.size(); ++index) {
+      const std::string suffix = std::to_string(index);
+      builder.MakeInput(inputs[index], core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+      AddLayerWeight(builder, "W" + suffix, 4, 4, static_cast<float>(index + 1));
+      AddMatMulLayer(builder, inputs[index], "W" + suffix, "y" + suffix);
+      builder.MakeOutput("y" + suffix);
+    }
+    const GraphProto before = builder.BuildGraph();
+    ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    const ModelProto extracted = builder.ToModel();
+    ASSERT_EQ(extracted.functions().size(), 1u);
+    ASSERT_EQ(extracted.functions(0).input().size(), 2u);
+    EXPECT_EQ(extracted.functions(0).input(0), expected);
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), inputs.size());
+    ExpectOriginalOperators(before, builder.BuildGraph());
+    EXPECT_NO_THROW(VerifyModel(extracted));
+    EXPECT_NO_THROW(checker::check_model(extracted));
+  }
+}
+
 TEST(RepeatedLayerPattern, DoesNotHoistConversionsOfGraphInputs) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));

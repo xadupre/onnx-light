@@ -1575,32 +1575,38 @@ TEST(OnnxOptimShapeInference, LocalFunctionPreservesSequenceInputSymbols) {
 }
 
 TEST(OnnxOptimShapeInference, LocalFunctionPreservesOptionalKindWhenScopingSymbols) {
-  core::shapes::ShapesContext ctx;
-  ctx.SetOpsetVersion("", 28);
-  ctx.SetOpsetVersion("local", 1);
-  FunctionProto function;
-  function.set_name("Empty");
-  function.set_domain("local");
-  function.add_output("optional");
-  function.add_opset_import()->set_version(28);
-  NodeProto optional = MakeNode("Optional", {}, {"optional"});
-  auto *attribute = optional.add_attribute();
-  attribute->set_name("type");
-  attribute->set_type(AttributeProto::TYPE_PROTO);
-  auto *tensor = attribute->mutable_tp()->mutable_tensor_type();
-  tensor->set_elem_type(TensorProto::FLOAT);
-  tensor->mutable_shape()->add_dim()->set_dim_param("N");
-  *function.add_node() = std::move(optional);
-  ctx.SetLocalFunction(&function);
-  for (const auto *name : {"first", "second"}) {
-    ctx.ComputeShapeNode(MakeNode("Empty", {}, {name}, "local"));
-    ASSERT_TRUE(ctx.HasType(name));
-    ASSERT_TRUE(ctx.GetType(name).has_optional_type());
-    EXPECT_EQ(
-        ctx.GetType(name).optional_type().elem_type().tensor_type().shape().dim(0).dim_param(),
-        ctx.Get(name).Shape()[0].AsExpr());
+  for (const auto *dimension : {"N", "batch.size"}) {
+    SCOPED_TRACE(dimension);
+    core::shapes::ShapesContext ctx;
+    ctx.SetOpsetVersion("", 28);
+    ctx.SetOpsetVersion("local", 1);
+    FunctionProto function;
+    function.set_name("Empty");
+    function.set_domain("local");
+    function.add_output("optional");
+    function.add_opset_import()->set_version(28);
+    NodeProto optional = MakeNode("Optional", {}, {"optional"});
+    auto *attribute = optional.add_attribute();
+    attribute->set_name("type");
+    attribute->set_type(AttributeProto::TYPE_PROTO);
+    auto *tensor = attribute->mutable_tp()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    tensor->mutable_shape()->add_dim()->set_dim_param(dimension);
+    *function.add_node() = std::move(optional);
+    ctx.SetLocalFunction(&function);
+    for (const auto *name : {"first", "second"}) {
+      ctx.ComputeShapeNode(MakeNode("Empty", {}, {name}, "local"));
+      ASSERT_TRUE(ctx.HasType(name));
+      ASSERT_TRUE(ctx.GetType(name).has_optional_type());
+      const std::string expected =
+          "Function_" + std::to_string(std::string(name).size()) + "_" + name + "_" + dimension;
+      EXPECT_EQ(ctx.Get(name).Shape()[0].AsExpr(), expected);
+      EXPECT_EQ(
+          ctx.GetType(name).optional_type().elem_type().tensor_type().shape().dim(0).dim_param(),
+          ctx.Get(name).Shape()[0].AsExpr());
+    }
+    EXPECT_NE(ctx.Get("first").Shape(), ctx.Get("second").Shape());
   }
-  EXPECT_NE(ctx.Get("first").Shape(), ctx.Get("second").Shape());
 }
 
 TEST(OnnxOptimShapeInference, LocalFunctionScopesSequenceOutputSymbols) {

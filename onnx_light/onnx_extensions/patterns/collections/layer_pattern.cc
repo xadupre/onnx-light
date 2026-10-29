@@ -1386,6 +1386,10 @@ std::string MajorityInputPrefix(const std::vector<Boundary> &boundaries, std::si
     std::size_t length = 0;
     while (length < left.size() && length < right.size() && left[length] == right[length])
       ++length;
+    // A shared byte prefix may end inside a UTF-8 code point.
+    while (length > 0 && length < left.size() &&
+           (static_cast<unsigned char>(left[length]) & 0xC0) == 0x80)
+      --length;
     if (length > prefix.size())
       prefix = left.substr(0, length);
   }

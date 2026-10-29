@@ -4782,6 +4782,17 @@ TEST(RunNodes, UnregisterCustomKernelForUnknownOpFailsAgain) {
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
+TEST(RunNodes, CustomKernelUnregisterNormalizesEveryDefaultDomainAlias) {
+  for (const std::string registered : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string removed : {"", "ai.onnx", "onnx.ai"}) {
+      RuntimeContext runtime(KernelContext(DefaultOpset(18)));
+      runtime.RegisterCustomKernel(registered, "Abs", [](const NodeProto &, RuntimeContext &) {});
+      EXPECT_TRUE(runtime.UnregisterCustomKernel(removed, "Abs"));
+      EXPECT_FALSE(runtime.UnregisterCustomKernel(registered, "Abs"));
+    }
+  }
+}
+
 // Running the model chains a built-in kernel and a custom kernel together;
 // the CustomKernelMap survives across nodes within the same context.
 TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {

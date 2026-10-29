@@ -69,6 +69,7 @@ ShapesContext ShapesContext::MakeChildContext() const {
   child.local_functions_ = local_functions_;
   child.owned_local_functions_ = owned_local_functions_;
   child.custom_shape_inference_ = custom_shape_inference_;
+  child.operator_schema_versions_ = operator_schema_versions_;
   child.event_callback_ = event_callback_;
   child.events_enabled_ = events_enabled_;
   child.current_node_index_ = current_node_index_;
@@ -426,10 +427,27 @@ const FunctionProto *ShapesContext::GetLocalFunction(const std::string &key) con
   if (it == local_functions_.end())
     return nullptr;
   const auto &function = *it->second;
-  if (DispatchTable().count(NormaliseDomain(function.domain()) + ":" + function.name().value()) ||
-      GetCustomShapeInferenceFunction(function.domain(), function.name()) != nullptr)
+  if (IsRegisteredOperator(function.domain(), function.name(), OpsetVersion(function.domain())))
     return nullptr;
   return it->second;
+}
+
+bool ShapesContext::IsRegisteredOperator(const std::string &domain, const std::string &op_type,
+                                         int opset) const {
+  const std::string key = NormaliseDomain(domain) + ":" + op_type;
+  const auto schema = operator_schema_versions_.find(key);
+  return (schema != operator_schema_versions_.end() && schema->second <= opset) ||
+         DispatchTable().count(key) != 0 ||
+         GetCustomShapeInferenceFunction(domain, op_type) != nullptr;
+}
+
+void ShapesContext::SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
+                                             int since_version) {
+  EXT_ENFORCE_INVALID(since_version > 0, "Operator schemas require a positive version.");
+  const auto [it, inserted] =
+      operator_schema_versions_.emplace(NormaliseDomain(domain) + ":" + op_type, since_version);
+  if (!inserted && since_version < it->second)
+    it->second = since_version;
 }
 
 void ShapesContext::CopyLocalFunctions(const ShapesContext &context) {

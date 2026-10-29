@@ -104,8 +104,8 @@ bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
 }
 
 bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node) {
-  return shapes.HasLocalFunction(
-             ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
+  return shapes.GetLocalFunction(ShapesContext::LocalFunctionKey(node.domain(), node.op_type(),
+                                                                 node.overload())) != nullptr ||
          shapes.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
          DispatchTable().count(DispatchKey(node.domain(), node.op_type())) != 0;
 }

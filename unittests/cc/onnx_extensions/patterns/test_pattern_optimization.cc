@@ -892,6 +892,88 @@ TEST(PatternOptimization, ModelReplayRetainsFunctionsUsedByReplacementNodes) {
   EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
 }
 
+TEST(PatternOptimization, ReplayUsesOperatorSignaturesDespiteCollidingDefinitions) {
+  ScopedAddKernel kernel;
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (const std::string overload : {"", "special"}) {
+      FunctionProto ignored;
+      ignored.set_name("Add");
+      ignored.set_domain(domain);
+      ignored.set_overload(overload);
+      ignored.add_opset("", 18);
+      ignored.add_input("X");
+      ignored.add_output("Y");
+      ignored.add_node(MakeNode("Identity", {"X"}, {"Y"}));
+      for (int outputs : {1, 2}) {
+        RewritingProto plan;
+        plan.ref_added_functions().push_back(ignored);
+        auto &edit = *plan.add_rewrites();
+        edit.add_matched_nodes(0);
+        auto node = MakeNode("Add", {"a", "b"},
+                             outputs == 1 ? std::vector<std::string>{"y"}
+                                          : std::vector<std::string>{"y", "extra"},
+                             domain.c_str());
+        node.set_overload(overload);
+        edit.ref_added_nodes().push_back(node);
+        edit.add_added_nodes_positions(0);
+        core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
+        if (outputs == 2) {
+          EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+        } else {
+          const auto result = builder.ApplyRewritings(plan).ToModel();
+          EXPECT_EQ(result.functions_size(), 1);
+          EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
+        }
+      }
+    }
+  }
+}
+
+TEST(PatternOptimization, PreparationValidatesEffectiveKernelsInsteadOfIgnoredBodies) {
+  ScopedAddKernel add;
+  ScopedIdentityKernel identity;
+  const std::string key = kDefaultOnnxDomain + ":RandomNormalLike";
+  core::runtime::NodeKernelFn previous;
+  const auto found = core::runtime::GlobalCustomKernels().find(key);
+  if (found != core::runtime::GlobalCustomKernels().end())
+    previous = found->second;
+  ScopeExit restore([&]() noexcept {
+    if (previous)
+      core::runtime::RegisterGlobalCustomKernelFactory("", "RandomNormalLike", std::move(previous));
+    else
+      core::runtime::UnregisterGlobalCustomKernel("", "RandomNormalLike");
+  });
+  int executions = 0;
+  core::runtime::RegisterGlobalCustomKernel(
+      "", "RandomNormalLike", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+        ++executions;
+        runtime.Put(node.output(0), core::runtime::Tensor::FromFloat(node.output(0), {1}, {42}));
+      });
+  for (bool random_native : {false, true}) {
+    auto plan = PreparationPlan();
+    FunctionProto ignored;
+    ignored.set_name(random_native ? "RandomNormalLike" : "Add");
+    ignored.set_domain("");
+    ignored.add_opset("", 18);
+    ignored.add_input("X");
+    if (!random_native)
+      ignored.add_input("B");
+    ignored.add_output("Y");
+    ignored.add_node(MakeNode(random_native ? "Identity" : "RandomNormalLike", {"X"}, {"Y"}));
+    plan.ref_added_functions().push_back(ignored);
+    if (random_native)
+      plan.ref_added_functions()[0].ref_node()[0] = MakeNode("RandomNormalLike", {"A"}, {"C"});
+    core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
+    if (random_native) {
+      EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+    } else {
+      const auto result = builder.ApplyRewritings(plan).ToModel();
+      EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 12);
+    }
+    EXPECT_EQ(executions, 0);
+  }
+}
+
 TEST(PatternOptimization, ModelReplayRejectsRecipesReadingNewInputDefaults) {
   ScopedAddKernel kernel;
   for (const std::string name : {"literal", "c"}) {
@@ -1036,16 +1118,16 @@ TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
   for (bool multiple_edits : {false, true}) {
     SCOPED_TRACE(multiple_edits);
     auto original = PreparationModel();
-    original.mutable_graph()->ref_node()[0] = MakeNode("Neg", {"a"}, {"y"});
+    original.mutable_graph()->ref_node()[0] = MakeNode("LocalNeg", {"a"}, {"y"});
     if (multiple_edits) {
-      original.mutable_graph()->ref_node().push_back(MakeNode("Neg", {"b"}, {"z"}));
+      original.mutable_graph()->ref_node().push_back(MakeNode("LocalNeg", {"b"}, {"z"}));
       auto output = original.graph().output(0);
       output.set_name("z");
       original.mutable_graph()->ref_output().push_back(output);
     }
     RewritingProto plan;
     auto function = PreparationAdd();
-    function.set_name("Neg");
+    function.set_name("LocalNeg");
     function.set_domain("");
     function.clr_output();
     function.add_output("C");
@@ -1056,7 +1138,7 @@ TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
     auto &edit = *plan.add_rewrites();
     edit.add_matched_nodes(0);
     edit.add_added_nodes_positions(0);
-    edit.ref_added_nodes().push_back(MakeNode("Neg", {"a", "b"}, {"y"}));
+    edit.ref_added_nodes().push_back(MakeNode("LocalNeg", {"a", "b"}, {"y"}));
     if (multiple_edits) {
       auto literal = original.graph().initializer(0);
       literal.set_name("extra");
@@ -1065,7 +1147,7 @@ TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
       auto &second = *plan.add_rewrites();
       second.add_matched_nodes(1);
       second.add_added_nodes_positions(1);
-      second.ref_added_nodes().push_back(MakeNode("Neg", {"b", "a"}, {"z"}));
+      second.ref_added_nodes().push_back(MakeNode("LocalNeg", {"b", "a"}, {"z"}));
     }
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));

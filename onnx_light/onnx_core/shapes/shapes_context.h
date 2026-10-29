@@ -387,7 +387,7 @@ public:
   bool Empty() const noexcept { return tensors_.empty() && types_.empty() && sequences_.empty(); }
 
   /// Removes inferred values, opsets, and local functions while preserving the owned
-  /// structured catalogue and custom shape-inference callbacks.
+  /// structured catalogue, operator schemas and custom shape-inference callbacks.
   void Clear() noexcept {
     ClearValues();
     opsets_.clear();
@@ -615,6 +615,13 @@ public:
   /// precedence. ``key`` is expected to be the
   /// identifier produced by LocalFunctionKey.
   const FunctionProto *GetLocalFunction(const std::string &key) const;
+
+  /// Records a schema's earliest applicable version, including schema-only operators.
+  void SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
+                                int since_version);
+
+  /// Checks schema or shape-callback registration at the supplied opset.
+  bool IsRegisteredOperator(const std::string &domain, const std::string &op_type, int opset) const;
 
   /// Read-only access to the function-identity → FunctionProto* map.
   const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {
@@ -926,6 +933,7 @@ private:
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> owned_local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
+  std::unordered_map<std::string, int> operator_schema_versions_;
   std::unordered_set<Constraint, PairStringHash> constraints_;
   std::unordered_set<LessEqualConstraint, PairStringHash> le_constraints_;
   struct NodeConstraints {

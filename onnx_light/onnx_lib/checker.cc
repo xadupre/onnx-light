@@ -1071,6 +1071,13 @@ static int checked_opset_version(int64_t version) {
 static int get_version_for_domain(const std::string &domain,
                                   const std::unordered_map<std::string, int> &opset_imports) {
   auto it = opset_imports.find(domain);
+  if (it == opset_imports.end() && NormaliseDomain(domain) == "ai.onnx") {
+    for (const char *alias : {"", "ai.onnx", "onnx.ai"}) {
+      it = opset_imports.find(alias);
+      if (it != opset_imports.end())
+        break;
+    }
+  }
   if (it == opset_imports.end()) {
     return -1;
   }
@@ -1099,11 +1106,13 @@ void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
     return;
   }
 
-  const auto *const schema_for_model_import =
-      ctx.get_schema_registry()->GetSchema(node.op_type(), model_opset_version, node.domain());
+  const auto *const schema_for_model_import = ctx.get_schema_registry()->GetSchema(
+      node.op_type(), model_opset_version,
+      NormaliseDomain(node.domain()) == "ai.onnx" ? "" : node.domain().value());
 
-  const auto *const schema_for_function_import =
-      ctx.get_schema_registry()->GetSchema(node.op_type(), func_opset_version, node.domain());
+  const auto *const schema_for_function_import = ctx.get_schema_registry()->GetSchema(
+      node.op_type(), func_opset_version,
+      NormaliseDomain(node.domain()) == "ai.onnx" ? "" : node.domain().value());
 
   if (!schema_for_model_import && !schema_for_function_import) {
     // the op belongs to a custom domain so we cannot verify schema
@@ -1193,7 +1202,7 @@ void DetectCycleDFS(FuncPtr root, const CallGraph &call_graph,
 
 } // namespace
 
-void check_function_call_cycles(const ModelProto &model) {
+static void check_function_call_cycles(const ModelProto &model, const CheckerContext &ctx) {
   if (model.functions_size() > kMaxModelLocalFunctions) {
     fail_check("Model contains ", model.functions_size(),
                " local functions, exceeding the limit of ", kMaxModelLocalFunctions,
@@ -1217,11 +1226,39 @@ void check_function_call_cycles(const ModelProto &model) {
   for (const auto &entry : func_by_key) {
     const auto *func = entry.second;
     auto &callees = call_graph[func];
-    for (const auto &node : func->node()) {
+    std::unordered_map<std::string, int> imports;
+    for (const auto &opset : func->opset_import())
+      imports[NormaliseDomain(opset.domain())] = checked_opset_version(opset.version());
+    std::vector<const NodeProto *> pending;
+    const auto collect_graphs = [&](const auto &attributes) {
+      for (const auto &attribute : attributes) {
+        if (attribute.has_g())
+          for (const auto &child : attribute.g().node())
+            pending.push_back(&child);
+        for (const auto &graph : attribute.graphs())
+          for (const auto &child : graph.node())
+            pending.push_back(&child);
+      }
+    };
+    for (const auto &node : func->node())
+      pending.push_back(&node);
+    collect_graphs(func->attribute_proto());
+    while (!pending.empty()) {
+      const auto &node = *pending.back();
+      pending.pop_back();
       auto it = func_by_key.find(GetCalleeId(node));
       if (it != func_by_key.end()) {
-        callees.insert(it->second);
+        const auto domain = NormaliseDomain(node.domain());
+        const auto imported = imports.find(domain);
+        const auto *schema =
+            imported == imports.end()
+                ? nullptr
+                : ctx.get_schema_registry()->GetSchema(node.op_type(), imported->second,
+                                                       domain == "ai.onnx" ? "" : domain);
+        if (schema == nullptr)
+          callees.insert(it->second);
       }
+      collect_graphs(node.attribute());
     }
   }
 
@@ -1232,6 +1269,10 @@ void check_function_call_cycles(const ModelProto &model) {
       DetectCycleDFS(entry.second, call_graph, state, path);
     }
   }
+}
+
+void check_function_call_cycles(const ModelProto &model) {
+  check_function_call_cycles(model, CheckerContext{});
 }
 
 void check_model_local_functions(const ModelProto &model, const CheckerContext &ctx,
@@ -1252,7 +1293,7 @@ void check_model_local_functions(const ModelProto &model, const CheckerContext &
     }
   }
 
-  check_function_call_cycles(model);
+  check_function_call_cycles(model, ctx);
 
   CheckerContext ctx_copy = ctx;
   ctx_copy.set_opset_imports(model_opset_imports);

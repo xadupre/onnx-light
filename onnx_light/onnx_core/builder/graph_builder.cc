@@ -451,6 +451,8 @@ void OperatorRegistry::RegisterShapeInference(const std::string &domain, const s
 }
 
 void OperatorRegistry::ConfigureShapes(ShapesContext &shapes) const {
+  for (const auto &schema : schemas_)
+    shapes.SetOperatorSchemaVersion(schema.domain(), schema.name(), schema.since_version());
   for (const auto &[identity, fn] : shape_inference_)
     shapes.SetCustomShapeInferenceFunction(identity.first, identity.second, fn);
 }
@@ -496,9 +498,12 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
       throw BuilderError("GraphBuilder: empty or duplicate model-local function identity.");
   }
   std::set<FunctionIdentifier> imported_functions;
-  const auto check_function_calls = [&](const auto &self, const NodeProto &node) -> void {
+  const auto check_function_calls =
+      [&](const auto &self, const NodeProto &node,
+          const utils::RepeatedProtoField<OperatorSetIdProto> &imports) -> void {
     const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
-    if (model_functions.count(identity) != 0 && imported_functions.count(identity) == 0) {
+    if (model_functions.count(identity) != 0 && imported_functions.count(identity) == 0 &&
+        !IsRegisteredOperator(node, &imports)) {
       throw BuilderError("GraphBuilder: model-local function '" + node.domain().value() +
                          "::" + node.op_type().value() + ":" + node.overload().value() +
                          "' is not yet imported; definitions must place callees before callers.");
@@ -506,29 +511,29 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     for (const auto &attribute : node.attribute()) {
       if (attribute.has_g()) {
         for (const auto &child : attribute.g().node()) {
-          self(self, child);
+          self(self, child, imports);
         }
       }
       for (const auto &graph : attribute.graphs()) {
         for (const auto &child : graph.node()) {
-          self(self, child);
+          self(self, child, imports);
         }
       }
     }
   };
   for (const auto &function : model.functions()) {
     for (const auto &node : function.node()) {
-      check_function_calls(check_function_calls, node);
+      check_function_calls(check_function_calls, node, function.opset_import());
     }
     for (const auto &attribute : function.attribute_proto()) {
       if (attribute.has_g()) {
         for (const auto &node : attribute.g().node()) {
-          check_function_calls(check_function_calls, node);
+          check_function_calls(check_function_calls, node, function.opset_import());
         }
       }
       for (const auto &graph : attribute.graphs()) {
         for (const auto &node : graph.node()) {
-          check_function_calls(check_function_calls, node);
+          check_function_calls(check_function_calls, node, function.opset_import());
         }
       }
     }
@@ -2025,6 +2030,29 @@ const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
   return selected;
 }
 
+bool GraphBuilder::IsRegisteredOperator(
+    const NodeProto &node, const utils::RepeatedProtoField<OperatorSetIdProto> *imports) const {
+  int opset = OpsetVersion(node.domain());
+  if (imports != nullptr) {
+    opset = 0;
+    for (const auto &entry : *imports) {
+      if (NormaliseDomain(entry.domain()) == NormaliseDomain(node.domain())) {
+        if (entry.version() <= 0 || entry.version() > std::numeric_limits<int>::max())
+          throw BuilderError("GraphBuilder: operator resolution requires a positive int opset.");
+        opset = static_cast<int>(entry.version());
+        break;
+      }
+    }
+  }
+  if (opset <= 0)
+    throw BuilderError("GraphBuilder: operator resolution requires an explicit positive opset.");
+  if (Shapes().IsRegisteredOperator(node.domain(), node.op_type(), opset))
+    return true;
+  const auto &history = DomainSchemas(node.op_type(), NormaliseDomain(node.domain()));
+  return std::any_of(history.begin(), history.end(),
+                     [opset](const auto &schema) { return schema.since_version() <= opset; });
+}
+
 bool GraphBuilder::HasLocalFunction(const std::string &name, const std::string &domain,
                                     const std::string &overload) const {
   const std::string key = ShapesContext::LocalFunctionKey(domain, name, overload);
@@ -2155,6 +2183,16 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
   // per-operator, per-domain lookup table.
   const std::string local_key = ShapesContext::LocalFunctionKey(domain, op_type, overload);
   const LightOpSchema *schema = FindSchema(op_type, domain);
+  if (schema != nullptr) {
+    const auto &history = DomainSchemas(op_type, normalised_domain);
+    if (!history.empty()) {
+      const auto earliest =
+          std::min_element(history.begin(), history.end(), [](const auto &left, const auto &right) {
+            return left.since_version() < right.since_version();
+          });
+      compute_.Shapes().SetOperatorSchemaVersion(domain, op_type, earliest->since_version());
+    }
+  }
   const FunctionProto *local_function =
       schema == nullptr ? compute_.Shapes().GetLocalFunction(local_key) : nullptr;
   if (local_function == nullptr) {
@@ -2890,7 +2928,7 @@ GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std:
 }
 
 utils::RepeatedProtoField<FunctionProto>
-GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) {
+GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) const {
   std::map<FunctionIdentifier, std::size_t> indices;
   for (std::size_t index = 0; index < functions.size(); ++index) {
     const auto &function = functions[index];
@@ -2909,7 +2947,7 @@ GraphBuilder::DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> 
     std::set<FunctionIdentifier> result;
     const auto collect = [&](const auto &self, const NodeProto &node) -> void {
       const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
-      if (indices.count(identity) != 0)
+      if (indices.count(identity) != 0 && !IsRegisteredOperator(node, &function.opset_import()))
         result.insert(identity);
       for (const auto &attribute : node.attribute()) {
         if (attribute.has_g())

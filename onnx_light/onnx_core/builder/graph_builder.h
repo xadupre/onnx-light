@@ -282,6 +282,11 @@ public:
   /// an applicable local or global schema.
   const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "") const;
 
+  /// Checks operator precedence using the supplied scope's imports, or this builder's imports.
+  bool IsRegisteredOperator(
+      const NodeProto &node,
+      const utils::RepeatedProtoField<OperatorSetIdProto> *imports = nullptr) const;
+
   /// Returns an independent copy of the constructor's local registry snapshot.
   OperatorRegistry LocalRegistry() const { return local_registry_; }
 
@@ -878,8 +883,8 @@ private:
   static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
                                                    const std::string &name,
                                                    const std::string &overload);
-  static utils::RepeatedProtoField<FunctionProto>
-  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions);
+  utils::RepeatedProtoField<FunctionProto>
+  DependencyOrderFunctions(utils::RepeatedProtoField<FunctionProto> &&functions) const;
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
                                   std::set<FunctionIdentifier> &expanded_functions);
 

@@ -225,17 +225,20 @@ NodeProto CaptureInitializerCall(const NodeProto &node, const GraphBuilder &buil
 
 using FunctionIndex = std::map<FunctionKey, const FunctionProto *>;
 
-void ValidateFunctionCalls(const NodeProto &node, const FunctionIndex &functions) {
+void ValidateFunctionCalls(const NodeProto &node, const FunctionIndex &functions,
+                           const GraphBuilder &builder,
+                           const utils::RepeatedProtoField<OperatorSetIdProto> *imports = nullptr) {
   const auto function = functions.find(Identity(node));
-  if (function != functions.end() && (node.input_size() != function->second->input_size() ||
-                                      node.output_size() != function->second->output_size())) {
+  if (function != functions.end() && !builder.IsRegisteredOperator(node, imports) &&
+      (node.input_size() != function->second->input_size() ||
+       node.output_size() != function->second->output_size())) {
     throw BuilderError("ApplyRewriting: call to function '" + node.op_type().value() +
                        "' has an incompatible signature.");
   }
   for (const auto &attribute : node.attribute()) {
     const auto validate_graph = [&](const GraphProto &graph) {
       for (const auto &child : graph.node()) {
-        ValidateFunctionCalls(child, functions);
+        ValidateFunctionCalls(child, functions, builder, imports);
       }
     };
     if (attribute.has_g()) {
@@ -257,12 +260,25 @@ bool IsPreparationPrimitive(const NodeProto &node) {
   });
 }
 
+bool HasPreparationKernel(const NodeProto &node) {
+  const std::string key = RewriteDomain(node.domain()) + ":" + node.op_type().value();
+  return core::runtime::KernelDispatchTable().count(
+             key + core::symbolic::DeviceKeySuffix(core::symbolic::Device::kCPU)) != 0 ||
+         core::runtime::GlobalCustomKernels().count(key) != 0;
+}
+
 // Validates the complete dependency tree before any preparation code executes.
 void ValidatePreparation(const NodeProto &call, const FunctionIndex &functions,
                          std::set<FunctionKey> &active) {
   const auto found = functions.find(Identity(call));
   if (found == functions.end()) {
     throw BuilderError("ApplyRewriting: initializer calls must reference a defined function.");
+  }
+  if (HasPreparationKernel(call)) {
+    if (!IsPreparationPrimitive(call))
+      throw BuilderError(
+          "ApplyRewriting: initializer preparation must be deterministic and stateless.");
+    return;
   }
   const FunctionProto &function = *found->second;
   if (!call.attribute().empty() || !function.attribute().empty() ||
@@ -294,23 +310,20 @@ void ValidatePreparation(const NodeProto &call, const FunctionIndex &functions,
             "ApplyRewriting: preparation subgraphs and attribute references are unsupported.");
       }
     }
-    if (functions.count(Identity(node)) != 0) {
+    const auto imported = std::find_if(imports.begin(), imports.end(), [&](const auto &opset) {
+      return RewriteDomain(opset.domain()) == RewriteDomain(node.domain());
+    });
+    if (imported == imports.end())
+      throw BuilderError("ApplyRewriting: initializer operation has no opset import.");
+    if (!HasPreparationKernel(node) && functions.count(Identity(node)) != 0) {
       ValidatePreparation(node, functions, active);
     } else {
       if (!IsPreparationPrimitive(node)) {
         throw BuilderError(
             "ApplyRewriting: initializer preparation must be deterministic and stateless.");
       }
-      const auto imported = std::find_if(imports.begin(), imports.end(), [&](const auto &opset) {
-        return RewriteDomain(opset.domain().value()) == RewriteDomain(node.domain().value());
-      });
-      if (imported == imports.end()) {
-        throw BuilderError("ApplyRewriting: initializer operation has no opset import.");
-      }
       const std::string key = RewriteDomain(node.domain().value()) + ":" + node.op_type().value();
-      if (core::runtime::KernelDispatchTable().count(
-              key + core::symbolic::DeviceKeySuffix(core::symbolic::Device::kCPU)) == 0 &&
-          core::runtime::GlobalCustomKernels().count(key) == 0) {
+      if (!HasPreparationKernel(node)) {
         throw BuilderError("ApplyRewriting: no implementation for initializer operation '" + key +
                            "'.");
       }
@@ -1534,7 +1547,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       self(self, *subgraph, functions, originals);
   };
   capture_functions(capture_functions, *root, collection.ref_added_functions(), nullptr);
-  auto original_definitions = GraphBuilder::DependencyOrderFunctions(
+  auto original_definitions = builder_.DependencyOrderFunctions(
       utils::CopyWithSharedTensorStorage(collection.added_functions()));
   FunctionIndex original_function_index;
   OriginalFunctions original_functions_by_key;
@@ -1571,11 +1584,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   for (const auto &rewrite : result.rewrites()) {
     for (const auto &call : rewrite.initializer_calls()) {
       for (const auto &node : functions.at(Identity(call))->node()) {
-        if (functions.count(Identity(node)) != 0 &&
-            core::shapes::DispatchTable().count(NormaliseDomain(node.domain()) + ":" +
-                                                node.op_type().value()) == 0 &&
-            root->Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) ==
-                nullptr)
+        if (functions.count(Identity(node)) != 0 && !HasPreparationKernel(node))
           throw BuilderError("GraphGraph::Optimize: a later function overrides a captured "
                              "initializer operation '" +
                              node.op_type().value() + "'.");
@@ -1610,7 +1619,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   for (std::size_t i = 0; i < original_functions; ++i)
     collection.ref_added_functions().erase(collection.ref_added_functions().begin());
   result.ref_added_functions() =
-      GraphBuilder::DependencyOrderFunctions(std::move(collection.ref_added_functions()));
+      builder_.DependencyOrderFunctions(std::move(collection.ref_added_functions()));
   result.ref_required_opset_imports() = std::move(collection.ref_required_opset_imports());
   if (&builder_ == root) {
     undo->original_graph_headers = GraphHeaders(canonical);
@@ -2374,21 +2383,14 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     function_index.emplace(Identity(function), &function);
   }
   for (const auto &node : rewrite.added_nodes()) {
-    ValidateFunctionCalls(node, function_index);
+    ValidateFunctionCalls(node, function_index, *this);
     const int opset = OpsetVersion(node.domain().value());
     if (opset <= 0) {
       throw BuilderError("ApplyRewriting: added node '" + node.op_type().value() +
                          "' has no explicit opset import.");
     }
-    if (function_index.count(Identity(node)) == 0) {
-      const LightOpSchema *schema = nullptr;
-      for (const auto &candidate :
-           DomainSchemas(node.op_type().value(), RewriteDomain(node.domain().value()))) {
-        if (candidate.since_version() <= opset &&
-            (schema == nullptr || candidate.since_version() > schema->since_version())) {
-          schema = &candidate;
-        }
-      }
+    if (function_index.count(Identity(node)) == 0 || IsRegisteredOperator(node)) {
+      const LightOpSchema *schema = FindSchema(node.op_type(), node.domain());
       if (schema != nullptr && (node.output_size() < schema->min_output() ||
                                 node.output_size() > schema->max_output())) {
         throw BuilderError("ApplyRewriting: added node '" + node.op_type().value() +
@@ -2916,28 +2918,27 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     }
   }
   if (!new_functions.empty()) {
-    const auto check_overrides = [&](const auto &self, const NodeProto &node) -> void {
-      if (new_functions.count(Identity(node)) != 0 &&
-          core::shapes::DispatchTable().count(NormaliseDomain(node.domain()) + ":" +
-                                              node.op_type().value()) == 0 &&
-          Shapes().GetCustomShapeInferenceFunction(node.domain(), node.op_type()) == nullptr)
+    const auto check_overrides =
+        [&](const auto &self, const NodeProto &node,
+            const utils::RepeatedProtoField<OperatorSetIdProto> &imports) -> void {
+      if (new_functions.count(Identity(node)) != 0 && !IsRegisteredOperator(node, &imports))
         throw BuilderError("ApplyRewritings: an added function overrides an operation in an "
                            "existing function body.");
       for (const auto &attribute : node.attribute()) {
         if (attribute.has_g())
           for (const auto &child : attribute.g().node())
-            self(self, child);
+            self(self, child, imports);
         for (const auto &graph : attribute.graphs())
           for (const auto &child : graph.node())
-            self(self, child);
+            self(self, child, imports);
       }
     };
     for (const auto &function : model.functions()) {
       for (const auto &node : function.node())
-        check_overrides(check_overrides, node);
+        check_overrides(check_overrides, node, function.opset_import());
       NodeProto defaults;
       defaults.ref_attribute() = utils::CopyWithSharedTensorStorage(function.attribute_proto());
-      check_overrides(check_overrides, defaults);
+      check_overrides(check_overrides, defaults, function.opset_import());
     }
   }
   for (const auto &function : rewrites.added_functions()) {
@@ -3023,16 +3024,16 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     functions.emplace(Identity(function), &function);
   }
   for (const auto &node : model.graph().node()) {
-    ValidateFunctionCalls(node, functions);
+    ValidateFunctionCalls(node, functions, *this, &model.opset_import());
   }
   for (const auto &function : model.functions()) {
     for (const auto &node : function.node()) {
-      ValidateFunctionCalls(node, functions);
+      ValidateFunctionCalls(node, functions, *this, &function.opset_import());
     }
     for (const auto &attribute : function.attribute_proto()) {
       NodeProto defaults;
       defaults.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
-      ValidateFunctionCalls(defaults, functions);
+      ValidateFunctionCalls(defaults, functions, *this, &function.opset_import());
     }
   }
   GraphBuilder result(model, schema_lookup_, local_registry_);

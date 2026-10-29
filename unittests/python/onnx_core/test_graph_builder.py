@@ -176,8 +176,14 @@ class TestGraphBuilder(ExtTestCase):
         imported = GraphBuilder(model, local_registry=builder.local_registry())
         self.assertTrue(imported.has_local_function("LocalOp", "custom"))
         self.assertFalse(imported.has_local_function("LocalOp", "other"))
-        imported.op.LocalOp("x", domain="custom", outputs="result", alpha=1)
-        self.assertEqual(list(imported.get_shape("result").shape), [2, 3])
+        with self.assertRaisesRegex(ValueError, "Unknown attribute"):
+            imported.op.LocalOp("x", domain="custom", alpha=1)
+        with self.assertRaisesRegex(ValueError, "outputs"):
+            imported.op.LocalOp("x", domain="custom", outputs="result")
+        outputs = imported.op.LocalOp("x", domain="custom")
+        self.assertEqual(len(outputs), 2)
+        for output in outputs:
+            self.assertEqual(list(imported.get_shape(output).shape), [2, 3])
 
     def test_missing_opset_rejects_node_before_mutation(self):
         for with_schema in (False, True):

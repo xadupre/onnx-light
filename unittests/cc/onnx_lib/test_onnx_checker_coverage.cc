@@ -1658,6 +1658,49 @@ TEST(CHECKER_COVERAGE, FunctionCallCyclesDuplicateImplIdRejected) {
   EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
 }
 
+TEST(CHECKER_COVERAGE, FunctionCyclesResolveRegisteredOperatorsAtFunctionOpsets) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    ModelProto model;
+    model.add_opset("", 18);
+    auto &function = *model.add_functions();
+    function.set_domain(domain);
+    function.set_name("Add");
+    function.add_opset(domain, 18);
+    AddCalleeNode(function, domain, "Add");
+    EXPECT_NO_THROW(checker::check_function_call_cycles(model));
+    function.ref_node()[0].set_domain("local");
+    function.set_domain("local");
+    function.add_opset("local", 1);
+    EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  }
+  ModelProto model;
+  model.add_opset("", 18);
+  auto &function = *model.add_functions();
+  function.set_domain("");
+  function.set_name("HardSwish");
+  function.add_opset("", 13);
+  AddCalleeNode(function, "", "HardSwish");
+  EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  function.ref_opset_import()[0].set_version(14);
+  EXPECT_NO_THROW(checker::check_function_call_cycles(model));
+}
+
+TEST(CHECKER_COVERAGE, FunctionCyclesIncludeGraphValuedAttributes) {
+  for (bool repeated : {false, true}) {
+    ModelProto model;
+    auto &function = *model.add_functions();
+    InitFunction(function, "F");
+    function.add_opset("local", 1);
+    auto &node = *function.add_node();
+    node.set_op_type("Branch");
+    auto &attribute = *node.add_attribute();
+    GraphProto *graph = repeated ? attribute.add_graphs() : attribute.mutable_g();
+    graph->add_node()->set_op_type("F");
+    graph->ref_node()[0].set_domain("local");
+    EXPECT_THROW(checker::check_function_call_cycles(model), ValidationError);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // check_model
 // ---------------------------------------------------------------------------

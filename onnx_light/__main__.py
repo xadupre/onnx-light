@@ -2,6 +2,16 @@
 
 Supported subcommands
 ---------------------
+optimize
+    Optimizes a model using the default patterns or comma-separated pattern
+    names and groups, and saves it beside the input to reuse external weights.
+
+    Usage::
+
+        onnx-light optimize model.onnx --output model.opt.onnx
+        onnx-light optimize model.onnx --output model.opt.onnx --patterns L1,L2
+        onnx-light optimize model.onnx --output model.opt.onnx --patterns NotNot,CastCast
+
 fillshape
     Fills a model's ``graph.value_info`` and ``graph.output`` with the shapes
     inferred by ``onnx_shapes`` shape inference.
@@ -1291,6 +1301,68 @@ def _remove_node_metadata_key(graph: Any, key: str) -> None:
                 _remove_node_metadata_key(subgraph, key)
 
 
+def _optimization_patterns(selection: str | None) -> list[str] | None:
+    """Resolves comma-separated pattern names and groups to explicit names."""
+    if selection is None:
+        return None
+    from .onnx_core.optimization import standard_pattern_names, standard_pattern_sets
+
+    groups = standard_pattern_sets()
+    available = set(standard_pattern_names(include_opt_in=True))
+    selected: list[str] = []
+    for item in selection.split(","):
+        name = item.strip()
+        if not name:
+            raise ValueError("--patterns must contain non-empty comma-separated names.")
+        if name in groups:
+            selected.extend(groups[name])
+        elif name in available:
+            selected.append(name)
+        else:
+            raise ValueError(
+                f"Unknown pattern or group {name!r}. "
+                f"Available groups: {', '.join(sorted(groups))}."
+            )
+    return list(dict.fromkeys(selected))
+
+
+def _cmd_optimize(args: argparse.Namespace) -> None:
+    """Optimizes a model while preserving its external weight references."""
+    from .onnx import ModelProto, load, save
+    from .onnx_core.optimization import GraphBuilder, GraphGraph
+
+    model_path = os.path.abspath(args.model)
+    output_path = os.path.abspath(args.output)
+    if os.path.realpath(os.path.dirname(model_path)) != os.path.realpath(
+        os.path.dirname(output_path)
+    ):
+        raise ValueError("The optimized model must be saved in the same directory as the input.")
+    if os.path.lexists(output_path):
+        raise FileExistsError(f"Output already exists: {output_path!r}")
+    patterns = _optimization_patterns(args.patterns)
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path!r}")
+    if args.verbose:
+        print(f"[optimize] load {model_path!r}")
+    model = load(
+        model_path,
+        load_external_data=False,
+        tiny_external_data_threshold=_FILLSHAPE_TINY_TENSOR_THRESHOLD,
+    )
+    if not isinstance(model, ModelProto):
+        raise ValueError("optimize requires an ONNX model, not a pipeline.")
+    builder = GraphBuilder(model)
+    if args.verbose:
+        print("[optimize] optimize")
+    GraphGraph(builder, patterns=patterns).optimize()
+    result = builder.to_onnx()
+    if args.verbose:
+        print(f"[optimize] save into {output_path!r}")
+    # Exclusive creation also protects existing weight files and output links.
+    with open(output_path, "xb") as stream:
+        save(result, stream)
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -1739,6 +1811,42 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
+
+    optimize_parser = subparsers.add_parser(
+        "optimize",
+        help="Optimize a model while reusing its external weights.",
+        description=(
+            "Applies graph optimizations and writes a new binary ONNX model in the "
+            "same directory as the input, without rewriting existing weight files."
+        ),
+        epilog=(
+            "examples:\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx --patterns L1,L2\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx --patterns NotNot,CastCast"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    optimize_parser.add_argument("model", help="Path to the input ONNX model.")
+    optimize_parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help="New output model path, in the same directory as the input. Must not already exist.",
+    )
+    optimize_parser.add_argument(
+        "--patterns",
+        metavar="NAMES",
+        default=None,
+        help=(
+            "Comma-separated pattern names or registered groups (e.g. L1,L2 or NotNot,CastCast). "
+            "Omit to use the optimizer's default patterns. Names are case-sensitive, not regexes."
+        ),
+    )
+    optimize_parser.add_argument(
+        "--verbose", "-v", nargs="?", const=1, default=0, type=int, help="Print progress."
+    )
+    optimize_parser.set_defaults(func=_cmd_optimize)
 
     # --- fillshape -----------------------------------------------------------
     fillshape_parser = subparsers.add_parser(

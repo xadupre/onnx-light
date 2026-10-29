@@ -441,18 +441,29 @@ bool ShapesContext::IsRegisteredOperator(const std::string &domain, const std::s
          GetCustomShapeInferenceFunction(domain, op_type) != nullptr;
 }
 
-void ShapesContext::SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
+bool ShapesContext::SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
                                              int since_version) {
   EXT_ENFORCE_INVALID(since_version > 0, "Operator schemas require a positive version.");
   const auto [it, inserted] =
       operator_schema_versions_.emplace(NormaliseDomain(domain) + ":" + op_type, since_version);
-  if (!inserted && since_version < it->second)
+  if (!inserted && since_version < it->second) {
     it->second = since_version;
+    return true;
+  }
+  return inserted;
 }
 
 void ShapesContext::CopyLocalFunctions(const ShapesContext &context) {
   local_functions_ = context.local_functions_;
   owned_local_functions_ = context.owned_local_functions_;
+}
+
+void ShapesContext::MergeOperatorSchemas(const ShapesContext &context) {
+  for (const auto &[key, version] : context.operator_schema_versions_) {
+    const auto [it, inserted] = operator_schema_versions_.emplace(key, version);
+    if (!inserted && version < it->second)
+      it->second = version;
+  }
 }
 
 void ShapesContext::ClearLocalFunctions() noexcept {

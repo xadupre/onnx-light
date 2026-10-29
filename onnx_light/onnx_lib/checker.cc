@@ -1085,6 +1085,17 @@ static int get_version_for_domain(const std::string &domain,
   return it->second;
 }
 
+static bool has_operator_schema(const NodeProto &node,
+                                const std::unordered_map<std::string, int> &imports,
+                                const CheckerContext &ctx) {
+  const int version = get_version_for_domain(node.domain(), imports);
+  if (version < 0)
+    return false;
+  const std::string domain = NormaliseDomain(node.domain());
+  return ctx.get_schema_registry()->GetSchema(node.op_type(), version,
+                                              domain == "ai.onnx" ? "" : domain) != nullptr;
+}
+
 void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
                                const std::unordered_map<std::string, int> &func_opset_imports,
                                const std::unordered_map<std::string, int> &model_opset_imports) {
@@ -1248,14 +1259,7 @@ static void check_function_call_cycles(const ModelProto &model, const CheckerCon
       pending.pop_back();
       auto it = func_by_key.find(GetCalleeId(node));
       if (it != func_by_key.end()) {
-        const auto domain = NormaliseDomain(node.domain());
-        const auto imported = imports.find(domain);
-        const auto *schema =
-            imported == imports.end()
-                ? nullptr
-                : ctx.get_schema_registry()->GetSchema(node.op_type(), imported->second,
-                                                       domain == "ai.onnx" ? "" : domain);
-        if (schema == nullptr)
+        if (!has_operator_schema(node, imports, ctx))
           callees.insert(it->second);
       }
       collect_graphs(node.attribute());
@@ -1395,7 +1399,8 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
 }
 
 static void check_quantization_parameter_references(const ModelProto &model,
-                                                    const StructTypeCatalogue &types) {
+                                                    const StructTypeCatalogue &types,
+                                                    const CheckerContext &ctx) {
   std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
   check_structured(
       [&]() { parameters = core::runtime::QuantizationParameterCatalogue::Build(model); });
@@ -1407,9 +1412,17 @@ static void check_quantization_parameter_references(const ModelProto &model,
     functions.emplace(GetFunctionImplId(function), &function);
   std::unordered_set<FunctionImplId> active;
   bool has_bound_references = false;
-  std::function<void(const GraphProto &, bool, bool)> graph;
-  std::function<void(const NodeProto &, bool, bool)> node;
-  node = [&](const NodeProto &value, bool bind_functions, bool unbound_function) {
+  using Imports = std::unordered_map<std::string, int>;
+  const auto function_imports = [](const FunctionProto &function) {
+    Imports imports;
+    for (const auto &opset : function.opset_import())
+      imports[NormaliseDomain(opset.domain())] = checked_opset_version(opset.version());
+    return imports;
+  };
+  std::function<void(const GraphProto &, bool, bool, const Imports &)> graph;
+  std::function<void(const NodeProto &, bool, bool, const Imports &)> node;
+  node = [&](const NodeProto &value, bool bind_functions, bool unbound_function,
+             const Imports &imports) {
     for (const auto &attribute : value.attribute()) {
       if (value.domain() == "ai.rt" && value.op_type() == "Quantize" &&
           attribute.name() == "parameter_ref") {
@@ -1428,15 +1441,15 @@ static void check_quantization_parameter_references(const ModelProto &model,
         }
       }
       if (attribute.has_g())
-        graph(attribute.g(), bind_functions, unbound_function);
+        graph(attribute.g(), bind_functions, unbound_function, imports);
       for (const auto &nested : attribute.graphs())
-        graph(nested, bind_functions, unbound_function);
+        graph(nested, bind_functions, unbound_function, imports);
     }
     if (!bind_functions)
       return;
     const auto id = GetCalleeId(value);
     const auto found = functions.find(id);
-    if (found == functions.end())
+    if (found == functions.end() || has_operator_schema(value, imports, ctx))
       return;
     if (!active.insert(id).second)
       fail_check("Recursive model-local function: ", id);
@@ -1451,11 +1464,13 @@ static void check_quantization_parameter_references(const ModelProto &model,
       if (!attributes.contains(required))
         fail_check("Missing required attribute '", required, "' for model-local function ", id);
     internal::AttributeBinder(attributes).VisitFunction(bound);
+    const auto bound_imports = function_imports(bound);
     for (const auto &nested : bound.node())
-      node(nested, true, false);
+      node(nested, true, false, bound_imports);
     active.erase(id);
   };
-  graph = [&](const GraphProto &value, bool bind_functions, bool unbound_function) {
+  graph = [&](const GraphProto &value, bool bind_functions, bool unbound_function,
+              const Imports &imports) {
     for (const auto &initializer : value.extended_initializer()) {
       if (initializer.has_encoded_value()) {
         const auto &encoded = initializer.encoded_value();
@@ -1472,14 +1487,16 @@ static void check_quantization_parameter_references(const ModelProto &model,
       }
     }
     for (const auto &nested : value.node())
-      node(nested, bind_functions, unbound_function);
+      node(nested, bind_functions, unbound_function, imports);
   };
-  graph(model.graph(), false, false);
-  for (const auto &function : model.functions())
+  graph(model.graph(), false, false, ctx.get_opset_imports());
+  for (const auto &function : model.functions()) {
+    const auto imports = function_imports(function);
     for (const auto &nested : function.node())
-      node(nested, false, true);
+      node(nested, false, true, imports);
+  }
   if (has_bound_references)
-    graph(model.graph(), true, false);
+    graph(model.graph(), true, false, ctx.get_opset_imports());
 }
 
 static void check_model(const ModelProto &model, CheckerContext &ctx) {
@@ -1525,7 +1542,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   ctx.set_struct_type_catalogue(catalogue);
   LexicalScopeContext lex_ctx;
   check_model_local_functions(model, ctx, lex_ctx);
-  check_quantization_parameter_references(model, catalogue);
+  check_quantization_parameter_references(model, catalogue, ctx);
   check_graph(model.graph(), ctx, lex_ctx);
 }
 

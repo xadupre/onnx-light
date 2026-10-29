@@ -285,6 +285,30 @@ TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {
   EXPECT_NO_THROW(checker::check_model(model));
 }
 
+TEST(CHECKER_COVERAGE, SharedParameterBindingsIgnoreRegisteredOperatorBodies) {
+  for (const std::string domain : {"", "ai.onnx", "onnx.ai"}) {
+    for (bool nested : {false, true}) {
+      auto model = MakeSharedParameterFunctionModel();
+      auto call = MakeNode("Add", {"X", "X"}, {"sum"}, domain.c_str());
+      if (nested)
+        model.mutable_functions(0)->add_node(call);
+      else
+        model.mutable_graph()->add_node(call);
+      auto &ignored = *model.add_functions();
+      ignored.set_name("Add");
+      ignored.set_domain(domain);
+      ignored.add_opset("", 21);
+      ignored.add_input("A");
+      ignored.add_input("B");
+      ignored.add_output("C");
+      ignored.add_node(MakeNode("Add", {"A", "B"}, {"C"}, domain.c_str()));
+      EXPECT_NO_THROW(checker::check_model(model));
+      model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_s("missing");
+      EXPECT_THROW(checker::check_model(model), ValidationError);
+    }
+  }
+}
+
 TEST(CHECKER_COVERAGE, SharedParameterAttributeReferencesRequireFunctionScope) {
   for (bool nested : {false, true}) {
     SCOPED_TRACE(nested);

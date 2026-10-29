@@ -797,10 +797,11 @@ TEST(Generation, PipelineFunctionScanCacheIncludesGraphAttributeBindings) {
 }
 
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
-  auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  auto embedding =
+      PipelineModel("EmbeddingStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   auto *function = embedding.add_functions();
   function->set_domain("test.pipeline");
-  function->set_name("Stage");
+  function->set_name("EmbeddingStage");
   function->add_input("X");
   function->add_output("Y");
   auto *opset = function->add_opset_import();

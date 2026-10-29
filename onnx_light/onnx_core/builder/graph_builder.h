@@ -278,9 +278,10 @@ public:
   const std::unordered_map<std::string, int> &OpsetVersions() const noexcept { return opsets_; }
 
   /// Returns the selected local schema, then the global schema, at the selected opset.
-  /// Returns nullptr for unknown operators; rejects known histories without
-  /// an applicable local or global schema.
-  const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "") const;
+  /// Returns nullptr for unknown operators or a usable local-function fallback.
+  /// Rejects known histories without an applicable schema or local definition.
+  const LightOpSchema *FindSchema(const std::string &op_type, const std::string &domain = "",
+                                  const std::string &overload = "") const;
 
   /// Checks operator precedence using the supplied scope's imports, or this builder's imports.
   bool IsRegisteredOperator(

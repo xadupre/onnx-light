@@ -616,9 +616,12 @@ public:
   /// identifier produced by LocalFunctionKey.
   const FunctionProto *GetLocalFunction(const std::string &key) const;
 
-  /// Records a schema's earliest applicable version, including schema-only operators.
-  void SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
+  /// Records a schema's earliest applicable version and returns whether metadata changed.
+  bool SetOperatorSchemaVersion(const std::string &domain, const std::string &op_type,
                                 int since_version);
+
+  /// Merges schema metadata without changing this scope's opsets or inferred values.
+  void MergeOperatorSchemas(const ShapesContext &context);
 
   /// Checks schema or shape-callback registration at the supplied opset.
   bool IsRegisteredOperator(const std::string &domain, const std::string &op_type, int opset) const;

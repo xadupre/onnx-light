@@ -185,6 +185,66 @@ class TestGraphBuilder(ExtTestCase):
         for output in outputs:
             self.assertEqual(list(imported.get_shape(output).shape), [2, 3])
 
+    def test_future_schemas_preserve_local_function_fallback(self):
+        from onnx_light.onnx_op import (
+            FormalParameter,
+            GetAllOnnxOpSchemasWithHistory,
+            LightOpSchema,
+        )
+
+        parameter = FormalParameter()
+        parameter.name = "X"
+        parameter.type = "tensor(float)"
+        schema = LightOpSchema(
+            "FutureF", "custom", 2, "", [parameter], [parameter, parameter], []
+        )
+        for local_schema in (False, True):
+            with self.subTest(local_schema=local_schema):
+                registry = OperatorRegistry()
+                if local_schema:
+                    registry.register_schema(schema)
+                    lookup = GetAllOnnxOpSchemasWithHistory
+                else:
+
+                    def lookup(name):
+                        return (
+                            [schema]
+                            if name == "FutureF"
+                            else GetAllOnnxOpSchemasWithHistory(name, False)
+                        )
+
+                unavailable = GraphBuilder(
+                    "unavailable", lookup, opsets={"": 18, "custom": 1}, local_registry=registry
+                )
+                unavailable.inp("x", FLOAT, [2])
+                with self.assertRaisesRegex(ValueError, "unavailable at opset 1"):
+                    unavailable.op.FutureF("x", domain="custom")
+                function = oh.make_function(
+                    "custom",
+                    "FutureF",
+                    ["A"],
+                    ["B"],
+                    [oh.make_node("Identity", ["A"], ["B"])],
+                    [oh.make_opsetid("", 18)],
+                    attributes=["alpha"],
+                )
+                value = oh.make_tensor_value_info("x", FLOAT, [2])
+                model = oh.make_model(
+                    oh.make_graph([], "future", [value], [value]),
+                    functions=[function],
+                    opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("custom", 1)],
+                )
+                builder = GraphBuilder(model, lookup, local_registry=registry)
+                self.assertIsNone(builder.find_schema("FutureF", "custom"))
+                output = builder.op.FutureF("x", domain="custom", alpha=1)
+                self.assertIsInstance(output, str)
+                self.assertEqual(list(builder.get_shape(output).shape), [2])
+                builder.make_node(
+                    "FutureF", ["x"], ["direct"], domain="custom", attributes={"alpha": 1}
+                )
+                self.assertEqual(list(builder.get_shape("direct").shape), [2])
+                checker.check_model(builder.to_onnx())
+
     def test_missing_opset_rejects_node_before_mutation(self):
         for with_schema in (False, True):
             builder = (

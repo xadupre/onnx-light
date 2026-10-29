@@ -546,6 +546,7 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     child->is_local_function_ = true;
     child->function_domain_ = function_domain;
     child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
+    child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
     child->parent_ = this;
     GraphBuilder &local = *child;
     local_functions_.push_back(std::move(child));
@@ -2000,8 +2001,8 @@ GraphBuilder::DomainSchemas(const std::string &op_type,
   return domain_it == table_it->second.end() ? kEmpty : domain_it->second;
 }
 
-const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
-                                              const std::string &domain) const {
+const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type, const std::string &domain,
+                                              const std::string &overload) const {
   const int opset = OpsetVersion(domain);
   if (opset <= 0)
     throw BuilderError("GraphBuilder: schema lookup requires an explicit positive opset.");
@@ -2024,7 +2025,9 @@ const LightOpSchema *GraphBuilder::FindSchema(const std::string &op_type,
         (selected == nullptr || candidate.since_version() > selected->since_version()))
       selected = &candidate;
   }
-  if (selected == nullptr && (known || !global.empty()))
+  if (selected == nullptr && (known || !global.empty()) &&
+      (Shapes().IsRegisteredOperator(domain, op_type, opset) ||
+       !HasLocalFunction(op_type, domain, overload)))
     throw BuilderError("GraphBuilder: operator '" + domain + "::" + op_type +
                        "' is unavailable at opset " + std::to_string(opset) + ".");
   return selected;
@@ -2182,15 +2185,25 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
   // Select the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
   const std::string local_key = ShapesContext::LocalFunctionKey(domain, op_type, overload);
-  const LightOpSchema *schema = FindSchema(op_type, domain);
-  if (schema != nullptr) {
-    const auto &history = DomainSchemas(op_type, normalised_domain);
-    if (!history.empty()) {
-      const auto earliest =
-          std::min_element(history.begin(), history.end(), [](const auto &left, const auto &right) {
-            return left.since_version() < right.since_version();
-          });
-      compute_.Shapes().SetOperatorSchemaVersion(domain, op_type, earliest->since_version());
+  const LightOpSchema *schema = FindSchema(op_type, domain, overload);
+  const auto &history = DomainSchemas(op_type, normalised_domain);
+  if (!history.empty()) {
+    const auto earliest =
+        std::min_element(history.begin(), history.end(), [](const auto &left, const auto &right) {
+          return left.since_version() < right.since_version();
+        });
+    auto &root = ModelBuilder();
+    if (root.compute_.Shapes().SetOperatorSchemaVersion(domain, op_type,
+                                                        earliest->since_version())) {
+      const auto publish = [&](const auto &self, GraphBuilder &scope) -> void {
+        scope.compute_.Shapes().SetOperatorSchemaVersion(domain, op_type,
+                                                         earliest->since_version());
+        for (const auto &child : scope.local_functions_)
+          self(self, *child);
+        for (const auto &child : scope.subgraphs_)
+          self(self, *child);
+      };
+      publish(publish, root);
     }
   }
   const FunctionProto *local_function =
@@ -3813,6 +3826,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   child->is_local_function_ = true;
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
+  child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));

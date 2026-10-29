@@ -250,7 +250,8 @@ TEST(KernelClass, NonMaxSuppressionScalarAndAbsentOptionalInputs) {
   Tensor empty_max = Tensor::FromInt64("", {0}, {});
   Tensor empty_threshold = Tensor::FromFloat("", {0}, {});
   NonMaxSuppression::Attributes attrs;
-  for (const std::vector<int64_t> &shape : {std::vector<int64_t>{}, std::vector<int64_t>{1}}) {
+  for (const std::vector<int64_t> &shape :
+       {std::vector<int64_t>{}, std::vector<int64_t>{1}, std::vector<int64_t>{1, 1}}) {
     SCOPED_TRACE(shape.size());
     Tensor max_out = Tensor::FromInt64("", shape, {3});
     Tensor iou = Tensor::FromFloat("", shape, {0.5f});

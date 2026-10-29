@@ -3,82 +3,36 @@
 # SPDX-License-Identifier: Apache-2.0
 """Guards against defined operator schemas missing from the registration headers.
 
-Adapted from onnx/onnx#8373. Unlike the debug-only runtime count assertion, this
+Adapted from onnx/onnx#8373 and #8635. Unlike the debug-only runtime count assertion, this
 source-level check runs without a compiled extension and reports missing
-(name, version) pairs in every build configuration.
+(name, version) pairs in every build configuration. The companion binding test
+also compares these definitions with the runtime registry, catching missing
+opset registration calls and schemas registered under the wrong domain.
 """
 
-import re
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFS_DIR = REPO_ROOT / "onnx_light" / "onnx_lib" / "defs"
+from unittests.main.schema_registration_utils import (
+    DEFS_DIR,
+    MACRO_INFO,
+    REPO_ROOT,
+    all_defined_schemas,
+    defined_schemas,
+    registered_schemas,
+    strip_comments,
+)
 
-# Preview and preview-training share a class-name macro but use separate headers.
-_MACRO_DOMAIN_AND_HEADER = {
-    "ONNX_OPERATOR_SET_SCHEMA": ("Onnx", "operator_sets.h"),
-    "ONNX_ML_OPERATOR_SET_SCHEMA": ("OnnxML", "operator_sets_ml.h"),
-    "ONNX_TRAINING_OPERATOR_SET_SCHEMA": ("OnnxTraining", "operator_sets_training.h"),
-    "ONNX_PREVIEW_OPERATOR_SET_SCHEMA": ("OnnxPreview", "operator_sets_preview.h"),
-    "ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA": ("OnnxPreview", "operator_sets_training.h"),
-}
 _MACROS_WITHOUT_SCHEMAS = {"ONNX_TRAINING_OPERATOR_SET_SCHEMA"}
-
-_DEFINITION_RE = re.compile(
-    r"\b(" + "|".join(_MACRO_DOMAIN_AND_HEADER) + r")\s*\(\s*([A-Za-z0-9_]+)\s*,\s*(\d+)\s*,"
-)
-# Only a full fn(GetOpSchema<...>()) call counts, not a forward declaration.
-_REGISTRATION_RE = re.compile(
-    r"\bfn\s*\(\s*GetOpSchema\s*<\s*ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\s*\("
-    r"\s*([A-Za-z0-9_]+)\s*,\s*(\d+)\s*,\s*([A-Za-z0-9_]+)\s*\)\s*>\s*\(\s*\)\s*\)"
-)
-_PREVIEW_REGISTRATION_RE = re.compile(
-    r"\bfn\s*\(\s*GetOpSchema\s*<\s*ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME\s*\("
-    r"\s*(\d+)\s*,\s*([A-Za-z0-9_]+)\s*\)\s*>\s*\(\s*\)\s*\)"
-)
-_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
-
-
-def _defined_schemas(source: str) -> dict[str, set[tuple[str, int]]]:
-    """Returns the (name, version) pairs defined by each schema macro."""
-    defined: dict[str, set[tuple[str, int]]] = {
-        macro: set() for macro in _MACRO_DOMAIN_AND_HEADER
-    }
-    for match in _DEFINITION_RE.finditer(_COMMENT_RE.sub(" ", source)):
-        macro, name, version = match.groups()
-        defined[macro].add((name, int(version)))
-    return defined
-
-
-def _registered_schemas(source: str, domain: str) -> set[tuple[str, int]]:
-    """Returns the (name, version) pairs passed to fn for the given domain."""
-    source = _COMMENT_RE.sub(" ", source)
-    registered = {
-        (name, int(version))
-        for dom, version, name in _REGISTRATION_RE.findall(source)
-        if dom == domain
-    }
-    if domain == "OnnxPreview":
-        registered.update(
-            (name, int(version)) for version, name in _PREVIEW_REGISTRATION_RE.findall(source)
-        )
-    return registered
 
 
 class TestSchemaRegistration(unittest.TestCase):
     def test_all_defined_schemas_are_registered(self):
-        defined = {macro: set() for macro in _MACRO_DOMAIN_AND_HEADER}
-        for source_file in DEFS_DIR.rglob("*.cc"):
-            for macro, schemas in _defined_schemas(
-                source_file.read_text(encoding="utf-8")
-            ).items():
-                defined[macro].update(schemas)
+        defined = all_defined_schemas()
 
-        for macro, (domain, header_name) in _MACRO_DOMAIN_AND_HEADER.items():
+        for macro, (domain, _, header_name) in MACRO_INFO.items():
             with self.subTest(macro=macro):
                 header = DEFS_DIR / header_name
-                registered = _registered_schemas(header.read_text(encoding="utf-8"), domain)
+                registered = registered_schemas(header.read_text(encoding="utf-8"), domain)
                 if macro in _MACROS_WITHOUT_SCHEMAS:
                     self.assertFalse(
                         defined[macro],
@@ -105,7 +59,7 @@ class TestSchemaRegistration(unittest.TestCase):
                 )
 
     def test_definitions_ignore_comments(self):
-        for macro in _MACRO_DOMAIN_AND_HEADER:
+        for macro in MACRO_INFO:
             with self.subTest(macro=macro):
                 source = f"""
                 // {macro}(LineComment, 1, OpSchema());
@@ -114,7 +68,61 @@ class TestSchemaRegistration(unittest.TestCase):
                 {macro} (
                     Live, /* version */ 3, OpSchema());
                 """
-                self.assertEqual(_defined_schemas(source)[macro], {("Live", 3)})
+                self.assertEqual(defined_schemas(source)[macro], {("Live", 3)})
+
+    def test_strip_comments_preserves_literals(self):
+        for literal in (
+            '"https://onnx.ai/*docs*/"',
+            r'"escaped \" quote // still a string"',
+            "'/'",
+            r"'\''",
+            'R"(https://onnx.ai/"quoted" /*docs*/)"',
+            'R"DOC(https://onnx.ai/"quoted"\n/*docs*/)DOC"',
+        ):
+            with self.subTest(literal=literal):
+                source = f"{literal} // removed\n/* removed */ live"
+                self.assertEqual(strip_comments(source), f"{literal}  \n  live")
+                source = f"SetDoc({literal}); ONNX_OPERATOR_SET_SCHEMA(Live, 3, OpSchema());"
+                self.assertEqual(
+                    defined_schemas(source)["ONNX_OPERATOR_SET_SCHEMA"], {("Live", 3)}
+                )
+
+    def test_strip_comments_preserves_prefixed_literals_and_raw_delimiters(self):
+        for prefix in ("", "u8", "u", "U", "L"):
+            literals = [f'{prefix}"// literal /* literal */"', f"{prefix}'/'"]
+            for delimiter in ("tag-!", "0123456789ABC!#?", 'a"b'):
+                literals.append(f'{prefix}R"{delimiter}(" // literal\n/* literal */){delimiter}"')
+            for literal in literals:
+                with self.subTest(literal=literal):
+                    source = f"{literal} // removed\n/* removed */ live"
+                    self.assertEqual(strip_comments(source), f"{literal}  \n  live")
+                    source = f"SetDoc({literal}); ONNX_OPERATOR_SET_SCHEMA(Live, 3, OpSchema());"
+                    self.assertEqual(
+                        defined_schemas(source)["ONNX_OPERATOR_SET_SCHEMA"], {("Live", 3)}
+                    )
+
+    def test_strip_comments_handles_unterminated_input(self):
+        self.assertEqual(strip_comments("live // comment"), "live  ")
+        self.assertEqual(strip_comments("live /* comment"), "live  ")
+        self.assertEqual(strip_comments('R"DOC(// comment'), 'R"DOC(// comment')
+
+    def test_registrations_reject_unknown_macro(self):
+        source = "fn(GetOpSchema<UNKNOWN_CLASS_NAME(Onnx, 1, Example)>());"
+        with self.assertRaisesRegex(
+            AssertionError, "Unknown class-name macro UNKNOWN_CLASS_NAME"
+        ):
+            registered_schemas(source, "Onnx")
+
+    def test_registrations_reject_malformed_arguments(self):
+        for macro, args in (
+            ("ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME", "Onnx, Example"),
+            ("ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME", "invalid, Example"),
+        ):
+            with (
+                self.subTest(macro=macro),
+                self.assertRaisesRegex(AssertionError, "Cannot parse the arguments"),
+            ):
+                registered_schemas(f"fn(GetOpSchema<{macro}({args})>());", "Onnx")
 
     def test_registrations_require_live_calls_and_matching_domain(self):
         source = """
@@ -128,8 +136,8 @@ class TestSchemaRegistration(unittest.TestCase):
             GetOpSchema < ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME (
                 Onnx, /* version */ 6, Live) > ( ) );
         """
-        self.assertEqual(_registered_schemas(source, "Onnx"), {("Live", 6)})
-        self.assertEqual(_registered_schemas(source, "OnnxML"), {("OtherDomain", 5)})
+        self.assertEqual(registered_schemas(source, "Onnx"), {("Live", 6)})
+        self.assertEqual(registered_schemas(source, "OnnxML"), {("OtherDomain", 5)})
 
     def test_preview_registration_spellings(self):
         source = """
@@ -140,9 +148,9 @@ class TestSchemaRegistration(unittest.TestCase):
         fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(OnnxPreview, 2, Explicit)>());
         """
         self.assertEqual(
-            _registered_schemas(source, "OnnxPreview"), {("Alias", 1), ("Explicit", 2)}
+            registered_schemas(source, "OnnxPreview"), {("Alias", 1), ("Explicit", 2)}
         )
-        self.assertEqual(_registered_schemas(source, "Onnx"), set())
+        self.assertEqual(registered_schemas(source, "Onnx"), set())
 
 
 if __name__ == "__main__":

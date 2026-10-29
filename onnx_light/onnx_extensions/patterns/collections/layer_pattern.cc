@@ -341,12 +341,23 @@ bool GraphSignature(const GraphProto &graph, std::string &signature, SignatureNa
   return true;
 }
 
+bool HasComparableLayerTensorContent(const TensorProto &tensor) {
+  if (!tensor.raw_data().empty() || !tensor.float_data().empty() || !tensor.int32_data().empty() ||
+      !tensor.int64_data().empty() || !tensor.double_data().empty() ||
+      !tensor.uint64_data().empty() || !tensor.string_data().empty())
+    return true;
+  if (tensor.HasDeferredWeight())
+    return false;
+  return (tensor.data_location() == TensorProto::EXTERNAL && !tensor.external_data().empty()) ||
+         std::find(tensor.dims().begin(), tensor.dims().end(), 0) != tensor.dims().end();
+}
+
 bool AttributeSignature(const AttributeProto &attribute, std::string &signature,
                         const SignatureNames &outer, std::size_t depth, std::size_t &work) {
   // Tensor attribute values constrain matching exactly, without serializing
   // unbounded parameter payloads. Top-level Constant producers stay external.
   auto bounded_tensor = [](const TensorProto &tensor) {
-    if (tensor.raw_data().size() > kMaxSignatureBytes ||
+    if (!HasComparableLayerTensorContent(tensor) || tensor.raw_data().size() > kMaxSignatureBytes ||
         tensor.float_data().size() > kMaxSignatureBytes / sizeof(float) ||
         tensor.double_data().size() > kMaxSignatureBytes / sizeof(double) ||
         tensor.int32_data().size() > kMaxSignatureBytes / sizeof(int32_t) ||
@@ -1513,7 +1524,7 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
     names[body.input(i).name().value()] = scope + "input" + std::to_string(i);
   for (std::size_t i = 0; i < body.initializer().size(); ++i) {
     auto &initializer = *body.mutable_initializer(static_cast<int>(i));
-    if (initializer.HasDeferredWeight() && !initializer.is_raw_data())
+    if (!HasComparableLayerTensorContent(initializer))
       return false;
     const std::string name = initializer.name().value();
     if (!formal_inputs.contains(name))
@@ -1569,6 +1580,18 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
         node.ref_attribute().get(index) = std::move(attributes[index]);
     }
     for (auto &attribute : node.ref_attribute()) {
+      if ((attribute.has_t() && !HasComparableLayerTensorContent(attribute.t())) ||
+          !std::all_of(attribute.tensors().begin(), attribute.tensors().end(),
+                       HasComparableLayerTensorContent))
+        return false;
+      const auto comparable_sparse = [](const SparseTensorProto &tensor) {
+        return HasComparableLayerTensorContent(tensor.values()) &&
+               HasComparableLayerTensorContent(tensor.indices());
+      };
+      if ((attribute.has_sparse_tensor() && !comparable_sparse(attribute.sparse_tensor())) ||
+          !std::all_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
+                       comparable_sparse))
+        return false;
       if (attribute.has_g() &&
           !NormalizeLayerBody(attribute.ref_g(), builder, names, depth + 1, work, reject_ranges))
         return false;

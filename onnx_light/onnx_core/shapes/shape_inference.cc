@@ -692,7 +692,15 @@ void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &c
   std::string prefix;
   for (const auto &output : node.output())
     if (!output.empty()) {
-      prefix = "Function_" + std::to_string(output.value().size()) + "_" + output.value() + "_";
+      prefix = "Function_" + std::to_string(output.value().size()) + "_";
+      // Byte-wise encoding keeps arbitrary output names inside one expression identifier.
+      constexpr char hex[] = "0123456789abcdef";
+      for (const char character : output.value()) {
+        const auto byte = static_cast<unsigned char>(character);
+        prefix.push_back(hex[byte >> 4]);
+        prefix.push_back(hex[byte & 0x0F]);
+      }
+      prefix.push_back('_');
       break;
     }
   std::unordered_set<std::string> symbols;

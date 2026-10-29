@@ -2083,69 +2083,100 @@ TEST(RepeatedLayerPattern, DoesNotReuseImportedHelpersWithCallerSpecificRanges) 
   }
 }
 
-TEST(RepeatedLayerPattern, DoesNotReuseBodiesWithUnloadedDeferredInitializers) {
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
-  builder.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
-  builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
-  std::string input = "x";
-  for (int layer = 0; layer < 2; ++layer) {
-    const std::string prefix = "h" + std::to_string(layer);
-    builder.MakeNode("MatMul", {input, "w"}, {prefix + "_mm"});
-    GraphProto branch;
-    branch.set_name(prefix + "_branch");
-    TensorProto bias;
-    bias.set_name(prefix + "_bias");
-    bias.set_data_type(TensorProto::FLOAT);
-    const float value = static_cast<float>(layer + 1);
-    std::vector<uint8_t> raw_data(sizeof(value));
-    std::memcpy(raw_data.data(), &value, sizeof(value));
-    bias.set_raw_data(raw_data.data(), raw_data.size());
-    *branch.add_initializer() = std::move(bias);
-    branch.add_node(MakeNode("Add", {prefix + "_mm", prefix + "_bias"}, {prefix + "_result"}));
-    auto *output = branch.add_output();
-    output->set_name(prefix + "_result");
-    auto *tensor = output->mutable_type()->mutable_tensor_type();
-    tensor->set_elem_type(TensorProto::FLOAT);
-    tensor->mutable_shape()->add_dim()->set_dim_value(2);
-    tensor->mutable_shape()->add_dim()->set_dim_value(4);
-    builder.MakeNode("If", {"condition"}, {prefix}, "", "", LayerBranches(branch));
-    input = prefix;
-  }
-  builder.MakeOutput(input);
+TEST(RepeatedLayerPattern, DoesNotReuseBodiesWithUnavailableTensors) {
+  for (const bool constant_attribute : {false, true}) {
+    SCOPED_TRACE(constant_attribute);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, LayerShape({}));
+    builder.MakeInput("w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    std::string input = "x";
+    for (int layer = 0; layer < 2; ++layer) {
+      const std::string prefix = "h" + std::to_string(layer);
+      builder.MakeNode("MatMul", {input, "w"}, {prefix + "_mm"});
+      GraphProto branch;
+      branch.set_name(prefix + "_branch");
+      TensorProto bias;
+      bias.set_name(prefix + "_bias");
+      bias.set_data_type(TensorProto::FLOAT);
+      const float value = static_cast<float>(layer + 1);
+      std::vector<uint8_t> raw_data(sizeof(value));
+      std::memcpy(raw_data.data(), &value, sizeof(value));
+      bias.set_raw_data(raw_data.data(), raw_data.size());
+      if (constant_attribute) {
+        NodeProto constant = MakeNode("Constant", {}, {prefix + "_bias"});
+        auto *attribute = constant.add_attribute();
+        attribute->set_name("value");
+        attribute->set_type(AttributeProto::TENSOR);
+        *attribute->mutable_t() = std::move(bias);
+        *branch.add_node() = std::move(constant);
+      } else {
+        *branch.add_initializer() = std::move(bias);
+      }
+      branch.add_node(MakeNode("Add", {prefix + "_mm", prefix + "_bias"}, {prefix + "_result"}));
+      auto *output = branch.add_output();
+      output->set_name(prefix + "_result");
+      auto *tensor = output->mutable_type()->mutable_tensor_type();
+      tensor->set_elem_type(TensorProto::FLOAT);
+      tensor->mutable_shape()->add_dim()->set_dim_value(2);
+      tensor->mutable_shape()->add_dim()->set_dim_value(4);
+      builder.MakeNode("If", {"condition"}, {prefix}, "", "", LayerBranches(branch));
+      input = prefix;
+    }
+    builder.MakeOutput(input);
 
-  const auto model_path =
-      std::filesystem::temp_directory_path() /
-      ("onnx_light_layer_deferred_" +
-       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx");
-  ASSERT_TRUE(builder.ToModel().SerializeToFile(model_path.string()));
-  ParseOptions options;
-  options.defer_weights = true;
-  options.num_threads = 1;
-  ModelProto deferred_model;
-  {
-    utils::FileStream stream(model_path.string());
-    ASSERT_TRUE(deferred_model.ParseFromStream(stream, options));
-  }
-  std::error_code remove_error;
-  std::filesystem::remove(model_path, remove_error);
-  std::size_t unloaded_branch_weights = 0;
-  for (const auto &node : deferred_model.graph().node())
-    for (const auto &attribute : node.attribute())
-      if (attribute.has_g())
-        for (const auto &initializer : attribute.g().initializer())
-          unloaded_branch_weights += initializer.HasDeferredWeight() && !initializer.is_raw_data();
-  ASSERT_EQ(unloaded_branch_weights, 4u);
+    const auto model_path =
+        std::filesystem::temp_directory_path() /
+        ("onnx_light_layer_deferred_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx");
+    ASSERT_TRUE(builder.ToModel().SerializeToFile(model_path.string()));
+    for (const bool skip_raw_data : {false, true}) {
+      SCOPED_TRACE(skip_raw_data);
+      ParseOptions options;
+      options.defer_weights = !skip_raw_data;
+      options.skip_raw_data = skip_raw_data;
+      options.raw_data_threshold = 0;
+      options.num_threads = 1;
+      ModelProto unloaded_model;
+      {
+        utils::FileStream stream(model_path.string());
+        ASSERT_TRUE(unloaded_model.ParseFromStream(stream, options));
+      }
+      std::size_t unloaded_branch_weights = 0;
+      const auto count_unloaded = [&](const TensorProto &tensor) {
+        EXPECT_EQ(tensor.HasDeferredWeight(), !skip_raw_data);
+        unloaded_branch_weights += !tensor.is_raw_data();
+      };
+      for (const auto &node : unloaded_model.graph().node())
+        for (const auto &attribute : node.attribute())
+          if (attribute.has_g()) {
+            for (const auto &initializer : attribute.g().initializer())
+              count_unloaded(initializer);
+            for (const auto &nested : attribute.g().node())
+              for (const auto &value : nested.attribute())
+                if (value.has_t())
+                  count_unloaded(value.t());
+          }
+      ASSERT_EQ(unloaded_branch_weights, 4u);
 
-  core::builder::GraphBuilder imported(deferred_model, LayerSchemaLookup());
-  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
-  core::builder::GraphGraph optimizer(imported, std::move(patterns));
-  const auto match = optimizer.Patterns().front()->Match(optimizer, imported.Nodes()[0]);
-  ASSERT_NE(match.pattern, nullptr) << match.ToString();
-  const auto replacement = optimizer.Patterns().front()->Apply(optimizer, match.nodes);
-  EXPECT_EQ(replacement.size(), 2u);
-  EXPECT_EQ(imported.LocalFunctions().size(), 2u);
+      core::builder::GraphBuilder imported(unloaded_model, LayerSchemaLookup());
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+      core::builder::GraphGraph optimizer(imported, std::move(patterns));
+      const auto match = optimizer.Patterns().front()->Match(optimizer, imported.Nodes()[0]);
+      if (constant_attribute) {
+        for (const auto *node : match.nodes)
+          EXPECT_NE(node->op_type(), "If");
+        continue;
+      }
+      ASSERT_NE(match.pattern, nullptr) << match.ToString();
+      const auto replacement = optimizer.Patterns().front()->Apply(optimizer, match.nodes);
+      EXPECT_EQ(replacement.size(), 2u);
+      EXPECT_EQ(imported.LocalFunctions().size(), 2u);
+    }
+    std::error_code remove_error;
+    std::filesystem::remove(model_path, remove_error);
+  }
 }
 
 TEST(RepeatedLayerPattern, EqualEdgeCutsPreferSmallerKnownTensors) {

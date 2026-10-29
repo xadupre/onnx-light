@@ -5,6 +5,7 @@
 #include "onnx_core/shapes/shape_inference.h"
 
 #include "onnx_core/compute/compute_context.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -14,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <stdexcept>
+#include <unordered_set>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -1598,9 +1600,7 @@ TEST(OnnxOptimShapeInference, LocalFunctionPreservesOptionalKindWhenScopingSymbo
       ctx.ComputeShapeNode(MakeNode("Empty", {}, {name}, "local"));
       ASSERT_TRUE(ctx.HasType(name));
       ASSERT_TRUE(ctx.GetType(name).has_optional_type());
-      const std::string expected =
-          "Function_" + std::to_string(std::string(name).size()) + "_" + name + "_" + dimension;
-      EXPECT_EQ(ctx.Get(name).Shape()[0].AsExpr(), expected);
+      EXPECT_TRUE(ctx.Get(name).Shape()[0].AsExpr().ends_with("_" + std::string(dimension)));
       EXPECT_EQ(
           ctx.GetType(name).optional_type().elem_type().tensor_type().shape().dim(0).dim_param(),
           ctx.Get(name).Shape()[0].AsExpr());
@@ -1629,6 +1629,39 @@ TEST(OnnxOptimShapeInference, LocalFunctionScopesSequenceOutputSymbols) {
   ASSERT_TRUE(ctx.HasSequence("first"));
   ASSERT_TRUE(ctx.HasSequence("second"));
   EXPECT_NE(ctx.GetSequence("first").ElemShapes(), ctx.GetSequence("second").ElemShapes());
+}
+
+TEST(OnnxOptimShapeInference, LocalFunctionScopesPunctuatedOutputNamesAsSingleSymbols) {
+  core::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 28);
+  ctx.SetOpsetVersion("local", 1);
+  FunctionProto function;
+  function.set_name("Empty");
+  function.set_domain("local");
+  function.add_output("optional");
+  function.add_opset_import()->set_version(28);
+  NodeProto optional = MakeNode("Optional", {}, {"optional"});
+  auto *attribute = optional.add_attribute();
+  attribute->set_name("type");
+  attribute->set_type(AttributeProto::TYPE_PROTO);
+  auto *tensor = attribute->mutable_tp()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_param("2*nnz");
+  *function.add_node() = std::move(optional);
+  ctx.SetLocalFunction(&function);
+
+  std::unordered_set<std::string> symbols;
+  for (const auto *name :
+       {"foo-bar", "foo+bar", "foo_2Dbar", "foo_2Bbar", "foo.bar", "foo/bar", "\xC3\xA9"}) {
+    SCOPED_TRACE(name);
+    ctx.ComputeShapeNode(MakeNode("Empty", {}, {name}, "local"));
+    const std::string expression = ctx.Get(name).Shape()[0].AsExpr();
+    const auto tokens = core::expressions::parse_expression_tokens(expression);
+    ASSERT_EQ(tokens.size(), 1u) << expression;
+    const std::string &symbol = *tokens.begin();
+    EXPECT_TRUE(symbols.insert(symbol).second);
+    EXPECT_EQ(core::expressions::evaluate_expression(expression + "+1", {{symbol, 7}}), 15);
+  }
 }
 
 TEST(OnnxOptimShapeInference, InferShapesModelWritesBackLocalFunctionOutput) {

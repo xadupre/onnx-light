@@ -572,7 +572,9 @@ LoadedRuntimePipeline::LoadedRuntimePipeline(const std::string &path, RuntimeCon
     : session_options_(std::move(session_options)) {
   utils::FileStream stream(path);
   ParseOptions parse_options;
-  if (!pipeline_.ParseFromStream(stream, parse_options) || !pipeline_.has_prefill())
+  if (!pipeline_.ParseFromStream(stream, parse_options))
+    throw std::invalid_argument("Runtime pipeline loader failed to parse pipeline.");
+  if (!pipeline_.has_prefill())
     throw std::invalid_argument("Runtime pipeline loader requires a prefill model.");
   if (pipeline_.has_decode())
     throw std::invalid_argument(

@@ -2615,6 +2615,140 @@ TEST(RunModel, NodeDispatchedToModelLocalFunction) {
   EXPECT_FALSE(rt.Has("tmp"));
 }
 
+TEST(RunModel, ModelLocalFunctionRepeatedTensorOutputs) {
+  for (const bool typed : {false, true}) {
+    for (const unsigned mask : {1u, 2u, 3u}) {
+      SCOPED_TRACE(::testing::Message() << "typed=" << typed << ", mask=" << mask);
+      ModelProto model;
+      model.set_ir_version(10);
+      AddOpsetImport(model, "", 18);
+      AddOpsetImport(model, "local", 1);
+      FunctionProto *func = model.add_functions();
+      func->set_name("Repeated");
+      func->set_domain("local");
+      func->add_input("x");
+      func->add_output("a");
+      func->add_output("a");
+      *func->add_node() = MakeNode("Abs", {"x"}, {"a"});
+      if (typed) {
+        ValueInfoProto *info = func->add_value_info();
+        info->set_name("a");
+        info->ref_type().add_tensor_type()->set_elem_type(DataType::FLOAT);
+      }
+      GraphProto *graph = model.add_graph();
+      graph->add_input()->set_name("input");
+      const std::vector<std::string> outputs{mask & 1 ? "y" : "", mask & 2 ? "z" : ""};
+      *graph->add_node() = MakeNode("Repeated", {"input"}, outputs, "local");
+      for (const auto &name : outputs)
+        if (!name.empty())
+          graph->add_output()->set_name(name);
+      RuntimeSession session(model);
+      RuntimeContext rt(KernelContext(DefaultOpset(18)));
+      for (const float value : {-2.0f, -3.0f}) {
+        rt.Put("input", Tensor::FromFloat("input", {2}, {value, 1.0f}),
+               core::runtime::RuntimeEventKind::kInput);
+        ASSERT_NO_THROW(session.Run(rt));
+        for (const auto &name : outputs) {
+          if (name.empty())
+            continue;
+          ASSERT_TRUE(rt.Has(name));
+          EXPECT_EQ(rt.Get(name).name, name);
+          EXPECT_EQ(rt.Get(name).shape, (std::vector<int64_t>{2}));
+          EXPECT_FLOAT_EQ(rt.Get(name).AsFloat()[0], -value);
+          EXPECT_FLOAT_EQ(rt.Get(name).AsFloat()[1], 1.0f);
+        }
+        EXPECT_FALSE(rt.Has("a"));
+        EXPECT_FALSE(rt.Has("x"));
+      }
+    }
+  }
+}
+
+TEST(RunModel, ModelLocalFunctionRepeatedContainerOutputs) {
+  for (const std::string kind : {"sequence", "map", "value"}) {
+    for (const unsigned mask : {1u, 2u, 3u}) {
+      SCOPED_TRACE(::testing::Message() << "kind=" << kind << ", mask=" << mask);
+      ModelProto model;
+      model.set_ir_version(10);
+      AddOpsetImport(model, "", 18);
+      AddOpsetImport(model, "local", 1);
+      FunctionProto *func = model.add_functions();
+      func->set_name("Repeated");
+      func->set_domain("local");
+      func->add_input("a");
+      func->add_output("a");
+      func->add_output("a");
+      ValueInfoProto *info = func->add_value_info();
+      info->set_name("a");
+      if (kind == "sequence" || kind == "value") {
+        AddSequenceFloatValueInfo(info, "a");
+      } else if (kind == "map") {
+        auto *type = info->ref_type().add_map_type();
+        type->set_key_type(DataType::INT64);
+        type->add_value_type()->add_tensor_type()->set_elem_type(DataType::FLOAT);
+      }
+      GraphProto *graph = model.add_graph();
+      ValueInfoProto *input = graph->add_input();
+      *input = *info;
+      input->set_name("input");
+      const std::vector<std::string> outputs{mask & 1 ? "y" : "", mask & 2 ? "z" : ""};
+      *graph->add_node() = MakeNode("Repeated", {"input"}, outputs, "local");
+      for (const auto &name : outputs) {
+        if (name.empty())
+          continue;
+        ValueInfoProto *output = graph->add_output();
+        *output = *info;
+        output->set_name(name);
+      }
+      RuntimeSession session(model);
+      RuntimeContext rt(KernelContext(DefaultOpset(18)));
+      for (const float value : {2.0f, 3.0f}) {
+        Tensor tensor = Tensor::FromFloat("input", {2}, {value, 1.0f});
+        if (kind == "sequence")
+          rt.PutSequence("input", Sequence("input", DataType::FLOAT, {std::move(tensor)}));
+        else if (kind == "map")
+          rt.PutMap("input", core::runtime::Map("input", Tensor::FromInt64("", {2}, {4, 5}),
+                                                std::move(tensor)));
+        else
+          rt.PutValue("input", core::runtime::RuntimeValue(std::vector<core::runtime::RuntimeValue>{
+                                   core::runtime::RuntimeValue(std::move(tensor))}));
+        ASSERT_NO_THROW(session.Run(rt));
+        for (const auto &name : outputs) {
+          if (name.empty())
+            continue;
+          const Tensor *actual;
+          if (kind == "sequence") {
+            ASSERT_TRUE(rt.HasSequence(name));
+            const auto &sequence = rt.GetSequence(name);
+            EXPECT_EQ(sequence.name, name);
+            ASSERT_EQ(sequence.size(), 1u);
+            actual = &sequence.at(0);
+          } else if (kind == "map") {
+            ASSERT_TRUE(rt.HasMap(name));
+            const auto &map = rt.GetMap(name);
+            EXPECT_EQ(map.name, name);
+            ASSERT_EQ(map.size(), 2);
+            EXPECT_EQ(map.keys.AsInt64()[0], 4);
+            EXPECT_EQ(map.keys.AsInt64()[1], 5);
+            actual = &map.values;
+          } else {
+            ASSERT_NE(rt.values().find(name), rt.values().end());
+            const auto &elements = rt.values().at(name).elements;
+            ASSERT_EQ(elements.size(), 1u);
+            actual = &elements.at(0).tensor;
+          }
+          EXPECT_EQ(actual->shape, (std::vector<int64_t>{2}));
+          EXPECT_FLOAT_EQ(actual->AsFloat()[0], value);
+          EXPECT_FLOAT_EQ(actual->AsFloat()[1], 1.0f);
+        }
+        EXPECT_EQ(rt.sequences().count("a"), 0u);
+        EXPECT_EQ(rt.maps().count("a"), 0u);
+        EXPECT_EQ(rt.values().count("a"), 0u);
+      }
+    }
+  }
+}
+
 TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   // Define two model-local functions in "custom":
   //   AddOne(x) -> Add(x, one_init_passed_as_input)  -- here we use x+x

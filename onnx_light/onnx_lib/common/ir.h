@@ -694,6 +694,7 @@ private:
   std::string doc_string_;
   bool has_overload_{false};
   std::string overload_;
+  std::vector<StringStringEntryProto> metadata_props_;
   // Count of this node's currently-set attributes with kind g or gs (If/Loop/
   // Scan subgraph bodies, or any custom op with a graph attribute). Kept in
   // sync incrementally by onAttributeAdded()/onAttributeRemoved() so the owning
@@ -756,6 +757,15 @@ public:
   }
   /** @brief Returns the symbolic kind of this node (e.g. @c kAdd, @c kConv). */
   NodeKind kind() const { return kind_; }
+  /** @brief Returns the node metadata properties. */
+  const std::vector<StringStringEntryProto> &metadataProps() const { return metadata_props_; }
+  /**
+   * @brief Sets the node metadata properties.
+   * @param props Metadata key-value entries.
+   */
+  void setMetadataProps(std::vector<StringStringEntryProto> props) {
+    metadata_props_ = std::move(props);
+  }
   /** @brief Returns the owning graph. */
   Graph *owningGraph() { return graph_; }
   /** @brief Returns the owning graph (const overload). */
@@ -1384,6 +1394,7 @@ private:
   std::string doc_string_;
 
   std::vector<OpSetID> opset_versions_;
+  std::vector<StringStringEntryProto> metadata_props_;
 
   bool isNameUnique(const std::string &name) const {
     // O(1) check against this graph's own initializer/value names, replacing
@@ -1420,6 +1431,16 @@ public:
   Graph()
       : output_(initOutput(create(kReturn, 0))), input_(create(kParam, 0)),
         initializer_node_(create(kParam, 0)) {}
+
+  /** @brief Returns the graph metadata properties. */
+  const std::vector<StringStringEntryProto> &metadataProps() const { return metadata_props_; }
+  /**
+   * @brief Sets the graph metadata properties.
+   * @param props Metadata key-value entries.
+   */
+  void setMetadataProps(std::vector<StringStringEntryProto> props) {
+    metadata_props_ = std::move(props);
+  }
 
   /** @brief Returns true if a documentation string is set. */
   bool has_doc_string() const { return has_doc_string_; }

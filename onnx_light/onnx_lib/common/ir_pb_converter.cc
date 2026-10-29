@@ -257,6 +257,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
   if (gp.has_doc_string()) {
     g->setDocString(gp.doc_string());
   }
+  g->setMetadataProps({gp.metadata_props().begin(), gp.metadata_props().end()});
 
   // Values are created (as in `new Value(..)`) by the Node that
   // outputs them. Therefore we initialize the Nodes and Values in
@@ -335,6 +336,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
       fail_convert("Captured node must have exactly one output.");
     }
     auto *n = g->create(kind, /* num_outputs = */ np.output().size());
+    n->setMetadataProps({np.metadata_props().begin(), np.metadata_props().end()});
     g->appendNode(n);
     for (int j = 0; j < static_cast<int>(np.output().size()); j++) {
       auto *out = n->outputs()[j];
@@ -664,6 +666,9 @@ static void encodeValueInfo(ValueInfoProto &v, Value &n) {
 }
 
 static void encodeGraph(GraphProto &p_g, const std::shared_ptr<Graph> &g) {
+  for (const auto &prop : g->metadataProps()) {
+    p_g.add_metadata_props()->CopyFrom(prop);
+  }
   if (g->has_name()) {
     p_g.set_name(g->name());
   }
@@ -690,6 +695,9 @@ static void encodeGraph(GraphProto &p_g, const std::shared_ptr<Graph> &g) {
       continue;
     }
     auto *p_n = p_g.add_node();
+    for (const auto &prop : node->metadataProps()) {
+      p_n->add_metadata_props()->CopyFrom(prop);
+    }
     for (auto *input : node->inputs()) {
       if (input->node()->kind() == kUndefined) {
         p_n->input().push_back(utils::String(""));

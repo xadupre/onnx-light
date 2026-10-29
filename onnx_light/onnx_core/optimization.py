@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 import re
-from typing import Literal, TypeAlias, overload
+from typing import TYPE_CHECKING, Literal, TypeAlias, overload
 
 from ..onnx_lib import GraphProto, LocalRewritingProto, ModelProto, RewritingProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
@@ -362,41 +362,44 @@ class GraphGraph(_C.GraphGraph):
         if target_device is not None:
             self.set_target_device(target_device)
 
-    @overload
-    def optimize(
-        self,
-        max_iter: int = -1,
-        *,
-        report: Literal[False] = False,
-        folding_options: ConstantFoldingOptions | None = None,
-        remove_unused: bool = True,
-        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
-        parallel: bool = False,
-    ) -> RewritingProto: ...
+    # Runtime overload registration retains native objects past nanobind shutdown.
+    if TYPE_CHECKING:
 
-    @overload
-    def optimize(
-        self,
-        max_iter: int = -1,
-        *,
-        report: Literal[True],
-        folding_options: ConstantFoldingOptions | None = None,
-        remove_unused: bool = True,
-        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
-        parallel: bool = False,
-    ) -> tuple[RewritingProto, OptimizationReport]: ...
+        @overload
+        def optimize(
+            self,
+            max_iter: int = -1,
+            *,
+            report: Literal[False] = False,
+            folding_options: ConstantFoldingOptions | None = None,
+            remove_unused: bool = True,
+            callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+            parallel: bool = False,
+        ) -> RewritingProto: ...
 
-    @overload
-    def optimize(
-        self,
-        max_iter: int = -1,
-        *,
-        report: bool,
-        folding_options: ConstantFoldingOptions | None = None,
-        remove_unused: bool = True,
-        callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
-        parallel: bool = False,
-    ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
+        @overload
+        def optimize(
+            self,
+            max_iter: int = -1,
+            *,
+            report: Literal[True],
+            folding_options: ConstantFoldingOptions | None = None,
+            remove_unused: bool = True,
+            callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+            parallel: bool = False,
+        ) -> tuple[RewritingProto, OptimizationReport]: ...
+
+        @overload
+        def optimize(
+            self,
+            max_iter: int = -1,
+            *,
+            report: bool,
+            folding_options: ConstantFoldingOptions | None = None,
+            remove_unused: bool = True,
+            callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
+            parallel: bool = False,
+        ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
 
     def optimize(
         self,

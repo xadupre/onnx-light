@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests optimization callbacks without requiring operator kernels."""
 
+import subprocess
+import sys
+import textwrap
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
@@ -46,6 +49,34 @@ class NegNegPattern(optim.PatternOptimization):
 
 
 class TestOptimizationCallback(ExtTestCase):
+    def test_optimizer_shuts_down_without_nanobind_leaks(self):
+        for code in (
+            "import onnx_light.onnx_core.optimization",
+            """
+            from onnx_light.onnx import TensorProto
+            from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph
+
+            builder = GraphBuilder("shutdown", opsets=18)
+            builder.inp("x", TensorProto.FLOAT, [2, 3])
+            builder.make_node("Transpose", ["x"], ["t"], attributes={"perm": [1, 0]})
+            builder.make_node("Transpose", ["t"], ["y"], attributes={"perm": [1, 0]})
+            builder.out("y")
+            rewrites, report = GraphGraph(builder, ["TransposeTranspose"]).optimize(report=True)
+            assert len(rewrites.rewrites) == 1
+            assert report.rewrites == 1
+            """,
+        ):
+            with self.subTest(code=code):
+                completed = subprocess.run(
+                    [sys.executable, "-c", textwrap.dedent(code)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertNotIn("nanobind: leaked", completed.stderr)
+
     def test_callback_accepts_or_rejects_native_matches(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18]>\n'

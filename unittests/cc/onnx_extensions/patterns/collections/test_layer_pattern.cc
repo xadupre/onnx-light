@@ -604,13 +604,14 @@ TEST(RepeatedLayerPattern, NamesInputsFromStrictMajorityPrefixesWithoutCollision
 }
 
 TEST(RepeatedLayerPattern, InputPrefixesKeepCompleteUtf8CodePoints) {
+  // Explicit UTF-8 bytes avoid dependence on the compiler's execution character set.
   const std::vector<std::pair<std::vector<std::string>, std::string>> cases = {
-      {{"\u00e91", "\u00ea2", "X"}, "input_0"},
-      {{"weight.\u00e91", "weight.\u00ea2", "X"}, "weight."},
-      {{"\u00e91", "\u00e92", "X"}, "\u00e9"},
-      {{"\u20ac1", "\u20ad2", "X"}, "input_0"},
-      {{"\U0001f6001", "\U0001f6012", "X"}, "input_0"},
-      {{"\u00e9", "\u00e91", "X"}, "\u00e9_0"}};
+      {{"\xC3\xA9x", "\xC3\xAAy", "X"}, "input_0"},
+      {{"weight.\xC3\xA9x", "weight.\xC3\xAAy", "X"}, "weight."},
+      {{"\xC3\xA9x", "\xC3\xA9y", "X"}, "\xC3\xA9"},
+      {{"\xE2\x82\xACx", "\xE2\x82\xADy", "X"}, "input_0"},
+      {{"\xF0\x9F\x98\x80x", "\xF0\x9F\x98\x81y", "X"}, "input_0"},
+      {{"\xC3\xA9", "\xC3\xA9x", "X"}, "\xC3\xA9_0"}};
   for (const auto &[inputs, expected] : cases) {
     SCOPED_TRACE(inputs.front());
     core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});

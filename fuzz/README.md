@@ -64,7 +64,7 @@ To generate seed corpora that OSS-Fuzz uses as starting inputs:
 ```
 
 The fourth output directory is optional, preserving existing three-output
-invocations. It contains 16 external-data seeds ported from
+invocations. It contains 20 external-data seeds adapted from
 [onnx/onnx#8659](https://github.com/onnx/onnx/pull/8659).
 
 The harnesses accept a seed-corpus directory as a positional

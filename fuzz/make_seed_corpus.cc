@@ -258,13 +258,17 @@ int main(int argc, char *argv[]) {
       write_file(external_dir, "load_absolute.bin", external_data_seed(1, 5));
       write_file(external_dir, "load_symlink.bin", external_data_seed(1, 6));
       write_file(external_dir, "load_hardlink.bin", external_data_seed(1, 7));
+      write_file(external_dir, "load_hardlink_zero_length.bin", external_data_seed(1, 7, 0, 1, 1));
+      write_file(external_dir, "load_oversized_length.bin", external_data_seed(1, 0, 0, 1, 7));
       write_file(external_dir, "load_windows_unc.bin", external_data_seed(1, 9));
       write_file(external_dir, "load_windows_drive.bin", external_data_seed(1, 11));
       write_file(external_dir, "save_regular.bin", external_data_seed(2, 2, 0, 1, 2, "s"));
       write_file(external_dir, "save_hardlink.bin", external_data_seed(2, 7, 0, 1, 2, "s"));
       write_file(external_dir, "model_out_of_bounds.bin", external_data_seed(3, 0, 0, 8, 10));
+      write_file(external_dir, "model_read_regular.bin", external_data_seed(3, 0, 0, 1, 2));
+      write_file(external_dir, "model_read_no_copy.bin", external_data_seed(3, 0, 64, 1, 2));
       write_file(external_dir, "write_overlapping_offsets.bin",
-                 external_data_seed(4, 2, 0, 1, 2, "s"));
+                 external_data_seed(4, 2, 0, 4, 2, "s"));
       write_file(external_dir, "model_load_regular.bin", external_data_seed(5, 0));
       write_file(external_dir, "model_load_hardlink.bin", external_data_seed(5, 7));
       write_file(external_dir, "save_model_traversal.bin", external_data_seed(6, 3));

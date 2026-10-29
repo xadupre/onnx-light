@@ -40,15 +40,18 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Supports tensors, structured values, sequences of supported values and
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
- *   contraction cycles and preserves the original execution order of every node,
- *   without assuming that any operator is pure or deterministic.
+ *   contraction cycles and preserves the original execution order except for
+ *   literal Constant nodes, which may move before a call that needs their values.
+ *   Does not assume other operators are pure or deterministic.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
  *   and original positions. Ranks seed families by total anchor coverage, total
  *   node coverage, occurrence count (smaller period), then region size.
  * - Revalidates the selected match in Apply and replaces every selected occurrence
  *   with calls to shared model-local functions when their bodies and interfaces
- *   agree up to local value and node names. Copies nodes in topological order
+ *   agree up to local names, exporter provenance and recomputed tensor shapes.
+ *   Retains shape annotations needed by operators without shape inference.
+ *   Copies nodes in topological order
  *   into closed function bodies, preserves caller boundary names/types/tags, and
  *   leaves weights as explicit inputs.
  *   Gives body inputs fresh names to avoid lexical SSA shadowing.

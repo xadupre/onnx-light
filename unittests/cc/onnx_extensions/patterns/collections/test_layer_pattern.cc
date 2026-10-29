@@ -397,6 +397,148 @@ TEST(RepeatedLayerPattern, NestedExtractionExportsRequiredImportAndPreservesRepl
   EXPECT_NO_THROW(checker::check_model(replayed.ToModel()));
 }
 
+TEST(RepeatedLayerPattern, ReusesBodiesWithDistinctExporterProvenance) {
+  core::builder::GraphBuilder source("g", LayerSchemaLookup(), {{"", 28}});
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int index = 0; index < 3; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(source, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    AddMatMulLayer(source, "x", "w" + suffix, "h" + suffix);
+    source.MakeOutput("h" + suffix);
+  }
+  ModelProto model = source.ToModel();
+  for (auto &node : model.ref_graph().ref_node()) {
+    node.set_doc_string("Documentation for " + node.name().value());
+    for (const auto *key :
+         {"namespace", "pkg.onnxscript.class_hierarchy", "pkg.onnxscript.name_scopes",
+          "pkg.onnxscript.stack_trace", "pkg.onnxscript.shape_inference_error"}) {
+      auto *metadata = node.add_metadata_props();
+      metadata->set_key(key);
+      metadata->set_value(node.name().value());
+    }
+  }
+  core::builder::GraphBuilder builder(model, LayerSchemaLookup());
+  ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  ExpectCoherentLayerMetadata(builder);
+  const ModelProto extracted = builder.ToModel();
+  EXPECT_EQ(extracted.functions(0).node(0).doc_string(), model.graph().node(0).doc_string());
+  for (const auto &metadata : model.graph().node(0).metadata_props()) {
+    if (metadata.key() == "namespace" || metadata.key().value().rfind("pkg.onnxscript.", 0) == 0) {
+      EXPECT_TRUE(std::any_of(extracted.functions(0).node(0).metadata_props().begin(),
+                              extracted.functions(0).node(0).metadata_props().end(),
+                              [&](const auto &entry) { return entry.Equals(metadata); }));
+    }
+  }
+  ExpectOriginalOperators(model.graph(), builder.BuildGraph());
+}
+
+TEST(RepeatedLayerPattern, ReusesBodiesWithoutComparingInferredSymbolNames) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, DynamicLayerShape(4));
+  for (int index = 0; index < 3; ++index) {
+    const std::string suffix = std::to_string(index);
+    AddLayerWeight(builder, "w" + suffix, 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {"x", "w" + suffix}, {"m" + suffix}, "", "matmul" + suffix);
+    builder.MakeOutput("m" + suffix);
+    builder.MakeNode("NonZero", {"m" + suffix}, {"y" + suffix}, "", "nonzero" + suffix);
+    builder.MakeOutput("y" + suffix);
+    builder.MakeNode("Shape", {"y" + suffix}, {"s" + suffix}, "", "shape" + suffix);
+    builder.MakeOutput("s" + suffix);
+  }
+  const GraphProto before = builder.BuildGraph();
+  ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+  std::set<std::string> counts;
+  for (int index = 0; index < 3; ++index) {
+    const std::string suffix = std::to_string(index);
+    EXPECT_EQ(builder.GetShape("m" + suffix).Shape(), DynamicLayerShape(4));
+    const auto &shape = builder.GetShape("y" + suffix).Shape();
+    ASSERT_EQ(shape.Rank(), 2u);
+    EXPECT_EQ(shape[0], core::symbolic::SymDim(2));
+    ASSERT_TRUE(shape[1].IsExpr());
+    EXPECT_TRUE(counts.insert(shape[1].AsExpr()).second);
+    ASSERT_TRUE(builder.GetShape("s" + suffix).HasValueAsShape());
+    EXPECT_EQ(builder.GetShape("s" + suffix).ValueAsShape(), shape);
+  }
+  ExpectOriginalOperators(before, builder.BuildGraph());
+  ExpectCoherentLayerMetadata(builder);
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+}
+
+TEST(RepeatedLayerPattern, LiteralConstantsDoNotSplitRepeatedLayers) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  std::string input = "x";
+  for (int index = 0; index < 3; ++index) {
+    const std::string prefix = "h" + std::to_string(index);
+    AddLayerWeight(builder, "w" + std::to_string(index), 4, 4, static_cast<float>(index + 1));
+    builder.MakeNode("MatMul", {input, "w" + std::to_string(index)}, {prefix + "_mm"}, "",
+                     prefix + "_matmul");
+    if (index == 0) {
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      auto &value = attributes.add();
+      value.set_name("value_float");
+      value.set_type(AttributeProto::FLOAT);
+      value.set_f(0.25f);
+      builder.MakeNode("Constant", {}, {"bias"}, "", "literal_bias", attributes);
+    }
+    builder.MakeNode("Add", {prefix + "_mm", "bias"}, {prefix + "_biased"}, "", prefix + "_add");
+    builder.MakeNode("Relu", {prefix + "_biased"}, {prefix}, "", prefix + "_relu");
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("RepeatedLayer"));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  optimizer.Canonicalize();
+  const ModelProto original = builder.ToModel();
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  const auto plan = optimizer.Optimize(-1, nullptr, folding);
+  ASSERT_FALSE(plan.rewrites().empty());
+  CacheLayerBodies(builder);
+  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Constant");
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  EXPECT_EQ(builder.LocalFunctions()[0]->Nodes().size(), 3u);
+  ExpectCoherentLayerMetadata(builder);
+  const ModelProto extracted = builder.ToModel();
+  EXPECT_NO_THROW(VerifyModel(extracted));
+  auto restored = builder.UndoRewritings(plan);
+  EXPECT_TRUE(restored.ToModel().Equals(original));
+  auto replayed = restored.ApplyRewritings(plan);
+  EXPECT_TRUE(replayed.ToModel().Equals(extracted));
+}
+
+TEST(RepeatedLayerPattern, KeepsUninferredCustomOutputAnnotationsInFunctionIdentity) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                      {{"", 28}, {"test.custom", 1}, {"ai.rt", 1}});
+  std::vector<std::string> layer_names;
+  for (int variant = 0; variant < 2; ++variant) {
+    auto &source = builder.MakeLocalFunction("Source" + std::to_string(variant), "test.source");
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    const auto output_shape = LayerShape({2, variant == 0 ? 4 : 8});
+    for (int index = 0; index < 2; ++index) {
+      const std::string prefix = "h" + std::to_string(index);
+      source.MakeInput(prefix + "_w", core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+      source.MakeNode("MatMul", {"x", prefix + "_w"}, {prefix + "_mm"}, "", prefix + "_matmul");
+      source.MakeNode("Opaque", {prefix + "_mm"}, {prefix}, "test.custom", prefix + "_opaque");
+      source.MakeOutput(prefix, core::symbolic::TensorType::kFloat, output_shape);
+    }
+    ASSERT_FALSE(OptimizeLayers(source).rewrites().empty());
+    ASSERT_EQ(source.Nodes().size(), 2u);
+    layer_names.push_back(source.Nodes()[0].op_type().value());
+    EXPECT_EQ(source.GetShape("h0").Shape(), output_shape);
+    EXPECT_EQ(source.GetShape("h1").Shape(), output_shape);
+  }
+  EXPECT_NE(layer_names[0], layer_names[1]);
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+}
+
 TEST(RepeatedLayerPattern, ReusesOnlyMatchingBodiesInterfacesAndSourceOpsets) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
   std::vector<std::string> layer_names;

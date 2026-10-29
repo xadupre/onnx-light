@@ -21,6 +21,11 @@ normally and reports zero layers. Detection finds repeated computations, which
 need not correspond to complete transformer layers. See
 :ref:`l-design-optimization` for the pattern contracts.
 
+Identical computations share a function even when exporter namespaces,
+diagnostics or inferred symbolic shape names differ. Different computations
+retain distinct functions. The summary counts ``Layer`` definitions, not the
+other local functions already present in the model.
+
 Loading and weights
 -------------------
 

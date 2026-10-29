@@ -929,11 +929,16 @@ bool Schedule(Index &index, Plan &plan) {
       }
     }
   }
-  // Encapsulation does not assume purity: every original operation keeps its
-  // execution order, including calls inside contracted regions.
+  // Only literal Constants may move across a contraction. All other operations
+  // keep their execution order, including calls inside contracted regions.
   const NodeProto *previous = nullptr;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
     const NodeProto *node = &nodes[position];
+    if (node->op_type() == "Constant" && node->domain().empty() && node->overload().empty() &&
+        node->input().empty() && node->device_configurations().empty() &&
+        index.graph.Builder().Shapes().GetLocalFunction(
+            core::shapes::ShapesContext::LocalFunctionKey("", "Constant", "")) == nullptr)
+      continue;
     if (previous != nullptr) {
       const std::size_t from = owner.at(previous), to = owner.at(node);
       if (from != to && successors[from].insert(to).second)
@@ -1410,8 +1415,8 @@ void RenameLayerInputs(GraphProto &body, GraphGraph &graph) {
   });
 }
 
-bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t depth,
-                        std::size_t &work, bool reject_ranges) {
+bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, SignatureNames names,
+                        std::size_t depth, std::size_t &work, bool reject_ranges) {
   if (depth >= kMaxScopeDepth || !body.sparse_initializer().empty() ||
       !body.extended_initializer().empty() || !body.quantization_annotation().empty() ||
       !body.persistent_bindings().empty() || !SafeGraphDeclarations(body))
@@ -1430,6 +1435,22 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
       return false;
   }
   ClearLayerAnalysis(body);
+  std::unordered_set<std::string> inferred;
+  for (const auto &node : body.node())
+    if (core::shapes::HasShapeInference(builder.Shapes(), node))
+      inferred.insert(node.output().begin(), node.output().end());
+  const auto normalize_value = [&](ValueInfoProto &value) {
+    value.clear_doc_string();
+    // Recomputed shapes belong to each call, not to the function's identity.
+    if (inferred.contains(value.name().value()) && value.type().has_tensor_type())
+      value.mutable_type()->mutable_tensor_type()->clear_shape();
+  };
+  for (auto &input : body.ref_input())
+    normalize_value(input);
+  for (auto &output : body.ref_output())
+    normalize_value(output);
+  for (auto &info : body.ref_value_info())
+    normalize_value(info);
   body.clear_name();
   const std::string scope = "scope" + std::to_string(depth) + ":";
   std::unordered_set<std::string> formal_inputs;
@@ -1464,6 +1485,17 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
     if (!node.device_configurations().empty())
       return false;
     node.clear_name();
+    node.clear_doc_string();
+    // Exporter provenance does not change the computation.
+    auto &metadata = node.ref_metadata_props();
+    for (auto it = metadata.begin(); it != metadata.end();) {
+      if (it->key() == "namespace" || it->key() == "pkg.onnxscript.class_hierarchy" ||
+          it->key() == "pkg.onnxscript.name_scopes" || it->key() == "pkg.onnxscript.stack_trace" ||
+          it->key() == "pkg.onnxscript.shape_inference_error")
+        it = metadata.erase(it);
+      else
+        ++it;
+    }
     for (auto &input : node.ref_input()) {
       if (input.value().empty())
         continue;
@@ -1485,10 +1517,10 @@ bool NormalizeLayerBody(GraphProto &body, SignatureNames names, std::size_t dept
     }
     for (auto &attribute : node.ref_attribute()) {
       if (attribute.has_g() &&
-          !NormalizeLayerBody(attribute.ref_g(), names, depth + 1, work, reject_ranges))
+          !NormalizeLayerBody(attribute.ref_g(), builder, names, depth + 1, work, reject_ranges))
         return false;
       for (auto &nested : attribute.ref_graphs())
-        if (!NormalizeLayerBody(nested, names, depth + 1, work, reject_ranges))
+        if (!NormalizeLayerBody(nested, builder, names, depth + 1, work, reject_ranges))
           return false;
     }
     for (std::size_t port = 0; port < node.output().size(); ++port) {
@@ -1549,7 +1581,7 @@ bool CompatibleLayerOpsets(const GraphBuilder &candidate, const GraphBuilder &so
 std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
   GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
   std::size_t work = 0;
-  if (!NormalizeLayerBody(normalized, {}, 0, work, false))
+  if (!NormalizeLayerBody(normalized, source, {}, 0, work, false))
     return {};
   GraphBuilder &builder = source.ModelBuilder();
   for (const auto &local : builder.LocalFunctions()) {
@@ -1565,7 +1597,7 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
       continue;
     GraphProto candidate = local->BuildGraph();
     work = 0;
-    if (NormalizeLayerBody(candidate, {}, 0, work, true) &&
+    if (NormalizeLayerBody(candidate, *local, {}, 0, work, true) &&
         CompatibleLayerOpsets(*local, source, candidate) && normalized.Equals(candidate))
       return local->name();
   }

@@ -473,6 +473,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
   std::unordered_set<int64_t> eos_token_ids;
+  if (!options.eos_token_ids.empty())
+    eos_token_ids.reserve(options.eos_token_ids.size());
   int64_t largest_eos_token_id = -1;
   for (int64_t id : options.eos_token_ids) {
     EXT_ENFORCE_INVALID(id >= 0, "Generate: eos_token_ids must be nonnegative.");
@@ -795,9 +797,14 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     const int64_t stride = logits.shape.product() / batch;
     for (int64_t row = 0; row < batch; ++row) {
       next_mask[row] = finished[row] ? 0 : 1;
-      next[row] = finished[row] ? *pad_token_id
-                                : Sample(logits, (row + 1) * stride - vocabulary, vocabulary,
-                                         options.temperature, random);
+      if (finished[row]) {
+        EXT_ENFORCE(pad_token_id.has_value(),
+                    "Generate: a finished batch row requires a padding token.");
+        next[row] = *pad_token_id;
+      } else {
+        next[row] = Sample(logits, (row + 1) * stride - vocabulary, vocabulary, options.temperature,
+                           random);
+      }
       if (multi_axis) {
         for (int64_t axis = 0; axis < axes; ++axis)
           ++next_positions[axis * batch + row];

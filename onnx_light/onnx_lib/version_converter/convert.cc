@@ -5,9 +5,12 @@
 #include "onnx_lib/version_converter/convert.h"
 #include "onnx_lib/version_converter/errors.h"
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_set>
+#include <utility>
 
 #include "onnx_lib/common/ir_pb_converter.h"
 
@@ -113,9 +116,28 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
           }
           // adapt should handle replacing node in graph
           // An adapter may destroy the original node and return its replacement.
-          const auto metadata_props = cur_op->metadataProps();
+          auto metadata_props = cur_op->metadataProps();
           cur_op = op_adapter.adapt(g, cur_op);
-          cur_op->setMetadataProps(metadata_props);
+          const auto &adapted_metadata = cur_op->metadataProps();
+          if (adapted_metadata.empty()) {
+            cur_op->setMetadataProps(std::move(metadata_props));
+          } else if (!metadata_props.empty() &&
+                     !std::equal(
+                         metadata_props.begin(), metadata_props.end(), adapted_metadata.begin(),
+                         adapted_metadata.end(),
+                         [](const auto &left, const auto &right) { return left.Equals(right); })) {
+            // Adapter entries override source keys; other source entries are preserved.
+            std::unordered_set<std::string> adapted_keys;
+            adapted_keys.reserve(adapted_metadata.size());
+            for (const auto &prop : adapted_metadata)
+              adapted_keys.insert(prop.key().value());
+            std::erase_if(metadata_props, [&](const auto &prop) {
+              return adapted_keys.contains(prop.key().value());
+            });
+            metadata_props.insert(metadata_props.end(), adapted_metadata.begin(),
+                                  adapted_metadata.end());
+            cur_op->setMetadataProps(std::move(metadata_props));
+          }
           it = graph_node_list_iterator(cur_op, kNextDirection);
         }
         // Recursively convert any subgraph attributes

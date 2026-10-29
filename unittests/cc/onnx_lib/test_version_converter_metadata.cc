@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <map>
 #include <string>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -57,19 +58,19 @@ ModelProto MakeNestedMetadataModel() {
   *node->add_input() = "cond";
   *node->add_output() = "Y";
   AddMetadata(node, "node");
-  for (const std::string name : {"then_branch", "else_branch"}) {
+  for (const char *name : {"then_branch", "else_branch"}) {
     auto *attr = node->add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::GRAPH);
     auto *branch = attr->mutable_g();
     branch->set_name(name);
     AddTensorValue(branch->add_output(), "B", TensorProto::FLOAT);
-    AddMetadata(branch, name + "_graph");
+    AddMetadata(branch, std::string(name) + "_graph");
     auto *abs = branch->add_node();
     abs->set_op_type("Abs");
     *abs->add_input() = "X";
     *abs->add_output() = "B";
-    AddMetadata(abs, name + "_node");
+    AddMetadata(abs, std::string(name) + "_node");
   }
   return model;
 }
@@ -135,6 +136,67 @@ TEST(onnx_version_converter, PreservesReplacedNodeMetadata) {
   ASSERT_EQ(converted.graph().node().size(), 1u);
   EXPECT_EQ(converted.graph().node()[0].op_type(), "Resize");
   ExpectMetadata(converted.graph().node()[0], *node);
+}
+
+TEST(onnx_version_converter, PreservesAdapterMetadataAndUnchangedSourceEntries) {
+  for (bool replace : {false, true}) {
+    for (bool source_metadata : {false, true}) {
+      for (const char *updated_value : {"adapter", ""}) {
+        SCOPED_TRACE(replace);
+        SCOPED_TRACE(source_metadata);
+        SCOPED_TRACE(updated_value);
+        ModelProto original;
+        original.set_ir_version(10);
+        original.add_opset_import()->set_version(13);
+        auto *graph = original.mutable_graph();
+        graph->set_name("adapter_metadata");
+        AddTensorValue(graph->add_input(), "X", TensorProto::FLOAT);
+        AddTensorValue(graph->add_output(), "Y", TensorProto::FLOAT);
+        auto *node = graph->add_node();
+        node->set_op_type("Relu");
+        node->add_input("X");
+        node->add_output("Y");
+        if (source_metadata)
+          AddMetadata(node, "source");
+        ASSERT_NO_THROW(checker::check_model(original));
+        const auto before = original.SerializeAsString();
+        version_conversion::DefaultVersionConverter converter;
+        converter.registerAdapter(
+            "Relu", 13, 14, [replace, updated_value](std::shared_ptr<Graph> graph, Node *node) {
+              Node *adapted = node;
+              if (replace) {
+                adapted = graph->create(node->kind());
+                adapted->addInput(node->inputs()[0]);
+                node->replaceAllUsesWith(adapted);
+                adapted->insertBefore(node);
+                node->destroy();
+              }
+              StringStringEntryProto updated;
+              updated.set_key("origin");
+              updated.set_value(updated_value);
+              StringStringEntryProto added;
+              added.set_key("adapter_only");
+              added.set_value("created");
+              adapted->setMetadataProps({updated, added});
+              return adapted;
+            });
+        const ModelProto converted = converter.convert_version(original, OpSetID(13), OpSetID(14));
+        ASSERT_NO_THROW(checker::check_model(converted));
+        EXPECT_EQ(original.SerializeAsString(), before);
+        ASSERT_EQ(converted.graph().node().size(), 1u);
+        std::map<std::string, std::string> metadata;
+        for (const auto &prop : converted.graph().node()[0].metadata_props()) {
+          EXPECT_TRUE(metadata.emplace(prop.key().value(), prop.value().value()).second);
+        }
+        EXPECT_EQ(metadata.size(), source_metadata ? 3u : 2u);
+        EXPECT_EQ(metadata.at("origin"), updated_value);
+        EXPECT_EQ(metadata.at("adapter_only"), "created");
+        if (source_metadata) {
+          EXPECT_EQ(metadata.at("annotation"), "");
+        }
+      }
+    }
+  }
 }
 
 } // namespace

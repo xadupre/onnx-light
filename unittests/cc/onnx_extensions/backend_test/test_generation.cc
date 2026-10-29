@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/generation.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_lib/common/scoped_resource.h"
@@ -222,6 +223,215 @@ void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
 }
 
 } // namespace
+
+TEST(Generation, ObservesRawLastPositionLogitsWithinTheCaptureBudget) {
+  using Clock = std::chrono::steady_clock;
+  for (const int32_t dtype :
+       {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
+    for (bool rank3 : {false, true}) {
+      const auto make_logits = [dtype](const Shape &shape, const std::vector<float> &values) {
+        if (dtype == DataType::DOUBLE)
+          return Tensor::FromDouble("", shape, {values.begin(), values.end()});
+        Tensor tensor = Tensor::FromFloat("", shape, values);
+        return IsHalfPrecision(dtype) ? DemoteFromFloat32(tensor, dtype) : std::move(tensor);
+      };
+      const Tensor example = make_logits({2, 3}, {0, 1, 2, 3, 4, 5});
+      const size_t frame_bytes = example.size_bytes();
+      for (size_t budget : {size_t{0}, frame_bytes - 1, 2 * frame_bytes}) {
+        SCOPED_TRACE(dtype);
+        SCOPED_TRACE(rank3);
+        SCOPED_TRACE(budget);
+        std::vector<GenerationStep> observations;
+        {
+          auto model = PipelineModel("Step", {{"input_ids", TensorProto::INT64}}, "logits");
+          model.mutable_graph()
+              ->mutable_output(0)
+              ->mutable_type()
+              ->mutable_tensor_type()
+              ->set_elem_type(dtype);
+          RuntimeContext context;
+          int64_t calls = 0;
+          Clock::time_point kernel_started, kernel_completed, callback_completed;
+          context.RegisterCustomKernel(
+              "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+                kernel_started = Clock::now();
+                const int64_t sequence = rank3 ? rt.Get("input_ids").shape[1] : 1;
+                std::vector<float> values(static_cast<size_t>(2 * sequence * 3), -100);
+                for (int64_t row = 0; row < 2; ++row)
+                  for (int64_t token = 0; token < 3; ++token)
+                    values[(row + 1) * sequence * 3 - 3 + token] =
+                        static_cast<float>(calls * 10 + row * 3 + token - 2);
+                ++calls;
+                rt.Put(node.output(0),
+                       make_logits(rank3 ? Shape{2, sequence, 3} : Shape{2, 3}, values));
+                kernel_completed = Clock::now();
+              });
+          GenerationOptions options;
+          options.max_new_tokens = 3;
+          options.temperature = 2.;
+          options.seed = 7;
+          options.max_logit_bytes = budget;
+          options.on_step = [&](const GenerationStep &step) {
+            EXPECT_EQ(step.index, static_cast<int64_t>(observations.size()));
+            EXPECT_EQ(step.phase,
+                      step.index == 0 ? GenerationPhase::kPrefill : GenerationPhase::kDecode);
+            if (!observations.empty()) {
+              EXPECT_LE(callback_completed, step.started_at);
+            }
+            EXPECT_LE(step.started_at, kernel_started);
+            EXPECT_LE(kernel_completed, step.completed_at);
+            EXPECT_LE(step.completed_at, Clock::now());
+            observations.push_back(step);
+            callback_completed = Clock::now();
+            return true;
+          };
+          RuntimeValueMap feeds{
+              {"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 2}, {0, 1, 1, 0}))}};
+          const Tensor result = Generate(model, context, feeds, options);
+          ASSERT_EQ(result.shape, (Shape{2, 5}));
+          EXPECT_EQ(calls, 3);
+          ASSERT_EQ(observations.size(), 3u);
+          for (int64_t step = 0; step < 3; ++step) {
+            EXPECT_EQ(
+                observations[step].token_ids,
+                (std::vector<int64_t>{result.AsInt64()[2 + step], result.AsInt64()[5 + 2 + step]}));
+          }
+          context.Clear();
+        }
+        size_t captured_bytes = 0;
+        for (size_t index = 0; index < observations.size(); ++index) {
+          const auto &raw = observations[index].raw_logits;
+          ASSERT_EQ(raw.has_value(), frame_bytes * (index + 1) <= budget);
+          if (!raw)
+            continue;
+          EXPECT_EQ(raw->data_type, dtype);
+          EXPECT_EQ(raw->shape, (Shape{2, 3}));
+          EXPECT_FALSE(raw->is_borrowed());
+          const float base = static_cast<float>(index * 10);
+          const Tensor expected =
+              make_logits({2, 3}, {base - 2, base - 1, base, base + 1, base + 2, base + 3});
+          ASSERT_EQ(raw->size_bytes(), expected.size_bytes());
+          EXPECT_EQ(std::memcmp(raw->bytes(), expected.bytes(), expected.size_bytes()), 0);
+          captured_bytes += raw->size_bytes();
+        }
+        EXPECT_LE(captured_bytes, budget);
+      }
+    }
+  }
+}
+
+TEST(Generation, ObserverCancelsModelAndPipelineOverloadsBetweenSteps) {
+  using Clock = std::chrono::steady_clock;
+  for (int variant : {0, 1, 2, 3}) {
+    SCOPED_TRACE(variant);
+    const bool embedded = variant >= 2;
+    auto prefill = PipelineModel("Step",
+                                 {{embedded ? "inputs_embeds" : "input_ids",
+                                   embedded ? TensorProto::FLOAT : TensorProto::INT64}},
+                                 "logits");
+    auto embedding = PipelineModel("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+    RuntimeSession source(prefill);
+    RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+    Clock::time_point iteration_started, model_completed;
+    std::vector<std::string> calls;
+    context.RegisterCustomKernel(
+        "test.pipeline", "Embed", [&](const NodeProto &node, RuntimeContext &rt) {
+          iteration_started = Clock::now();
+          calls.push_back("Embed");
+          rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+        });
+    context.RegisterCustomKernel(
+        "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+          if (!embedded)
+            iteration_started = Clock::now();
+          calls.push_back("Step");
+          rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+          model_completed = Clock::now();
+        });
+    GenerationOptions options;
+    options.max_new_tokens = 5;
+    int observations = 0;
+    options.on_step = [&](const GenerationStep &step) {
+      EXPECT_EQ(step.index, observations++);
+      EXPECT_LE(step.started_at, iteration_started);
+      EXPECT_LE(model_completed, step.completed_at);
+      EXPECT_EQ(step.token_ids, (std::vector<int64_t>{1}));
+      EXPECT_FALSE(step.raw_logits);
+      return step.index < 1;
+    };
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+    Tensor result;
+    if (variant == 0) {
+      result = Generate(prefill, context, feeds, options);
+    } else if (variant == 3) {
+      result = Generate(prefill, &embedding, context, feeds, options);
+    } else {
+      auto pipeline = embedded ? MakeGenerationPipeline(std::move(prefill), std::move(embedding))
+                               : MakeGenerationPipeline(std::move(prefill));
+      result = Generate(pipeline, context, feeds, options);
+    }
+    EXPECT_EQ(Tokens(result), (std::vector<int64_t>{0, 1, 1}));
+    EXPECT_EQ(observations, 2);
+    EXPECT_EQ(calls, embedded ? (std::vector<std::string>{"Embed", "Step", "Embed", "Step"})
+                              : (std::vector<std::string>{"Step", "Step"}));
+  }
+}
+
+TEST(Generation, ObserverReportsEosAndPaddingAndPreservesFailurePaths) {
+  auto model = PipelineModel("Step", {{"input_ids", TensorProto::INT64}}, "logits");
+  RuntimeContext context;
+  int calls = 0, observations = 0;
+  bool invalid_logits = false;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        const float maximum = invalid_logits ? std::numeric_limits<float>::quiet_NaN() : 4;
+        rt.Put(node.output(0), Tensor::FromFloat("", {2, 3},
+                                                 {0, 0, maximum, 0, calls == 0 ? maximum : 0,
+                                                  calls == 0 ? 0 : maximum}));
+        ++calls;
+      });
+  GenerationOptions options;
+  options.max_new_tokens = 5;
+  options.eos_token_id = 2;
+  options.pad_token_id = 0;
+  options.on_step = [&](const GenerationStep &step) {
+    EXPECT_EQ(step.token_ids,
+              observations == 0 ? (std::vector<int64_t>{2, 1}) : (std::vector<int64_t>{0, 2}));
+    ++observations;
+    return true;
+  };
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 1}, {0, 1}))}};
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)),
+            (std::vector<int64_t>{0, 2, 0, 1, 1, 2}));
+  EXPECT_EQ(calls, 2);
+  EXPECT_EQ(observations, 2);
+  calls = observations = 0;
+  options.max_new_tokens = 0;
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), (std::vector<int64_t>{0, 1}));
+  EXPECT_EQ(calls, 0);
+  EXPECT_EQ(observations, 0);
+  options.max_logit_bytes = 24;
+  options.on_step = {};
+  EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+  EXPECT_EQ(calls, 0);
+  options.max_new_tokens = 3;
+  options.on_step = [&](const GenerationStep &) -> bool {
+    ++observations;
+    throw std::runtime_error("observer failure");
+  };
+  EXPECT_THROW(Generate(model, context, feeds, options), std::runtime_error);
+  EXPECT_EQ(calls, 1);
+  EXPECT_EQ(observations, 1);
+  calls = observations = 0;
+  invalid_logits = true;
+  options.on_step = [&](const GenerationStep &) {
+    ++observations;
+    return true;
+  };
+  EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+  EXPECT_EQ(calls, 1);
+  EXPECT_EQ(observations, 0);
+}
 
 TEST(Generation, BackendAttentionModels) {
   onnx_kernels::RegisterKernelFunctions();
@@ -1214,6 +1424,7 @@ TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {
   onnx_kernels::RegisterKernelFunctions();
   auto cases = core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_");
   std::vector<std::vector<int64_t>> results;
+  std::vector<std::vector<Tensor>> raw_logits;
   for (auto &test : cases) {
     RuntimeValueMap feeds;
     for (const auto &input : test.data_sets()[0].inputs)
@@ -1223,10 +1434,31 @@ TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {
     options.max_new_tokens = 12;
     options.temperature = 2.;
     options.seed = 7;
+    options.max_logit_bytes = 12 * 2 * sizeof(float);
+    raw_logits.emplace_back();
+    options.on_step = [&](const GenerationStep &step) {
+      EXPECT_EQ(step.index, static_cast<int64_t>(raw_logits.back().size()));
+      EXPECT_EQ(step.phase, step.index == 0 ? GenerationPhase::kPrefill : GenerationPhase::kDecode);
+      EXPECT_LE(step.started_at, step.completed_at);
+      EXPECT_EQ(step.token_ids.size(), 1u);
+      EXPECT_TRUE(step.raw_logits.has_value());
+      if (step.raw_logits)
+        raw_logits.back().push_back(*step.raw_logits);
+      return true;
+    };
     results.push_back(Tokens(Generate(test.model(), context, feeds, options)));
+    EXPECT_EQ(raw_logits.back().size(), 12u);
   }
   ASSERT_EQ(results.size(), 2u);
   EXPECT_EQ(results[0], results[1]);
+  ASSERT_EQ(raw_logits.size(), 2u);
+  ASSERT_EQ(raw_logits[0].size(), raw_logits[1].size());
+  for (size_t step = 0; step < raw_logits[0].size(); ++step) {
+    ASSERT_EQ(raw_logits[0][step].shape, (Shape{1, 2}));
+    ASSERT_EQ(raw_logits[1][step].shape, (Shape{1, 2}));
+    for (int64_t token = 0; token < 2; ++token)
+      EXPECT_NEAR(raw_logits[0][step].AsFloat()[token], raw_logits[1][step].AsFloat()[token], 1e-5);
+  }
 }
 
 TEST(Generation, RetainsOwnedInitialCounterWithoutChangingCaller) {

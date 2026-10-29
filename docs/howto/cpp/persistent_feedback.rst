@@ -209,6 +209,73 @@ the pipeline or supplied explicitly with ``GenerationOptions``. The single feed
 map and ``RuntimeContext`` are passed as separate arguments; callers never need
 to duplicate or manually separate feeds by model.
 
+Native generation observations
+------------------------------
+
+C++ callers can observe actual token iterations without implementing a generation
+loop or handling caches themselves. Set ``GenerationOptions::on_step`` for the
+model, pipeline, or borrowed-model ``Generate`` overload that accepts explicit
+options:
+
+.. code-block:: cpp
+
+    using namespace onnx_light::core::runtime;
+    GenerationOptions options;
+    options.max_new_tokens = 20;
+    options.max_logit_bytes = 16 * 1024 * 1024;
+    std::vector<GenerationStep> steps;
+    options.on_step = [&](const GenerationStep &step) {
+      steps.push_back(step);
+      return true;
+    };
+    Tensor ids = Generate(pipeline, context, feeds, options);
+
+    std::optional<double> prefill_ms, decode_mean_ms;
+    double decode_ms = 0.;
+    size_t decode_count = 0;
+    for (const auto &step : steps) {
+      const double ms = std::chrono::duration<double, std::milli>(
+          step.completed_at - step.started_at).count();
+      if (step.phase == GenerationPhase::kPrefill) {
+        prefill_ms = ms;
+      } else {
+        decode_ms += ms;
+        ++decode_count;
+      }
+    }
+    if (decode_count != 0)
+      decode_mean_ms = decode_ms / decode_count;
+
+Each notification contains a zero-based step index and one emitted ID per batch
+row, including padding IDs for rows that already finished. The first step is
+prefill and later steps are decode, including full-prefix evaluation when the
+model has no persistent caches. The decode mean excludes prefill; it is absent
+when no decode iteration ran.
+
+The monotonic ``steady_clock`` interval starts before per-iteration input
+preparation and includes embedding execution, language-model evaluation, token
+selection and appending the tokens. It excludes initial validation and session
+construction, raw-logit snapshot copying, the observer and final output-tensor
+construction. These are batch-iteration measurements, not separate timings for
+each batch row or estimates obtained by dividing total request duration.
+
+``step.raw_logits`` optionally owns the complete ``[batch, vocabulary]`` final
+logit position in the model's original floating-point dtype, before temperature
+scaling or token selection processing. Only these positions are copied, not
+the whole prefix. ``max_logit_bytes`` bounds the sum of snapshot payloads delivered
+over one call; zero disables capture. A snapshot that does not fit the remaining
+budget is absent, but token/timing notifications continue. Capture requires an
+observer. Copied steps remain valid after context destruction; further copies
+made by application code are outside the SDK's delivery budget.
+
+The observer runs synchronously. Returning ``false`` stops before the next
+iteration and keeps the token just emitted. EOS and the final requested token
+are also reported. Zero requested tokens produce no notifications. Callback
+exceptions propagate; callbacks must not reenter execution or mutate the model,
+feeds, options or execution context. With no observer, generation performs no
+observation allocations or clock reads. This observer is a native C++ API; the
+Python generation interface is unchanged.
+
 A basic feedback loop
 ---------------------
 

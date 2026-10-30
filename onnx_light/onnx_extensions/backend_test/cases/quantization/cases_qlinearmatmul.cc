@@ -72,6 +72,8 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 //   * ``test_cc_qlinearmatmul_{overflow,underflow}_{uint8,int8}`` — saturation
 //     of values that exceed the output dtype range (mirrors upstream
 //     ``QLinearMatMul.export_overflow`` / ``export_underflow``).
+//   * ``test_cc_qlinearmatmul_round_before_zero_point_{uint8,int8}`` — ties-to-even
+//     rounding before adding an odd output zero point (ONNX PR #8700).
 //
 // FLOAT32 expected outputs are computed by the reference
 // ``kernel::QLinearMatMul``. The kernel evaluates the combined scale in
@@ -243,6 +245,32 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
 
   register_variant(DataType::UINT8, "uint8", /*is_int8=*/false);
   register_variant(DataType::INT8, "int8", /*is_int8=*/true);
+
+  for (bool is_int8 : {false, true}) {
+    const DataType dtype = is_int8 ? DataType::INT8 : DataType::UINT8;
+    NodeProto node = MakeQLinearMatMulNode();
+    Expect(registry, std::move(node),
+           std::string("test_cc_qlinearmatmul_round_before_zero_point_") +
+               (is_int8 ? "int8" : "uint8"),
+           {opset}, [dtype, is_int8]() -> IoData {
+             // The scaled products are exactly 0.5, 2.5, and -1.5.
+             Tensor a = MakeQuantTensor("a", dtype, {3, 1},
+                                        is_int8 ? std::vector<int32_t>{1, 5, -3}
+                                                : std::vector<int32_t>{4, 8, 0});
+             Tensor a_scale = Tensor::FromFloat("a_scale", {}, {1.0f});
+             Tensor a_zp = MakeQuantScalar("a_zero_point", dtype, is_int8 ? 0 : 3);
+             Tensor b = MakeQuantTensor("b", dtype, {1, 1}, {1});
+             Tensor b_scale = Tensor::FromFloat("b_scale", {}, {0.5f});
+             Tensor b_zp = MakeQuantScalar("b_zero_point", dtype, 0);
+             Tensor y_scale = Tensor::FromFloat("y_scale", {}, {1.0f});
+             Tensor y_zp = MakeQuantScalar("y_zero_point", dtype, 1);
+             Tensor y = MakeQuantTensor("y", dtype, {3, 1}, {1, 3, is_int8 ? -1 : 0});
+             return IoData{{std::move(a), std::move(a_scale), std::move(a_zp), std::move(b),
+                            std::move(b_scale), std::move(b_zp), std::move(y_scale),
+                            std::move(y_zp)},
+                           {std::move(y)}};
+           });
+  }
 
   // -------------------------------------------------------------------------
   // Overflow / underflow saturation cases (mirroring upstream

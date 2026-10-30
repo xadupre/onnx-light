@@ -3,7 +3,14 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.2.3] – Unreleased
+## [0.2.4] – Unreleased
+
+### Documentation & CI
+
+- Made shared test helpers importable in reduced-wheel CI without shadowing the installed wheel ([#5730](https://github.com/xadupre/onnx-light/pull/5730)).
+- Updated Ruff to `0.17.3` ([#5726](https://github.com/xadupre/onnx-light/pull/5726)).
+
+## [0.2.3] – 2026-10-30
 
 ### New Features
 
@@ -29,8 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Documentation & CI
 
 - Added external-data fuzzing for overlapping writes and save/load round trips, and ported upstream schema-registry checks ([#5710](https://github.com/xadupre/onnx-light/pull/5710), [#5708](https://github.com/xadupre/onnx-light/pull/5708)).
-- Displayed the package version on the documentation homepage and made shared test helpers importable in reduced-wheel CI without shadowing the installed wheel ([#5705](https://github.com/xadupre/onnx-light/pull/5705), [#5730](https://github.com/xadupre/onnx-light/pull/5730)).
-- Updated Ruff to `0.17.3` ([#5726](https://github.com/xadupre/onnx-light/pull/5726)).
+- Displayed the package version on the documentation homepage ([#5705](https://github.com/xadupre/onnx-light/pull/5705)).
 - Bumped the release version to `0.2.3`.
 
 ## [0.2.2] – Unreleased

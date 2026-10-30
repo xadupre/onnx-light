@@ -81,11 +81,11 @@ ModelProto MakeInputAttributeModel(const InputAttributeCase &test_case, const st
     AddValue(graph->add_output(), name, TensorProto::FLOAT, test_case.output_shapes[i]);
   }
   if (sharing == "node") {
-    auto *identity = graph->add_node();
-    identity->set_op_type("Identity");
-    *identity->add_input() = "parameter";
-    *identity->add_output() = "copy";
-    AddValue(graph->add_output(), "copy", TensorProto::INT64, parameter_shape);
+    auto *consumer = graph->add_node();
+    consumer->set_op_type("Unique");
+    *consumer->add_input() = "parameter";
+    *consumer->add_output() = "unique";
+    AddValue(graph->add_output(), "unique", TensorProto::INT64, {1});
   } else if (sharing == "output") {
     AddValue(graph->add_output(), "parameter", TensorProto::INT64, parameter_shape);
   }
@@ -148,9 +148,9 @@ TEST_P(ConstantAttributeInput, PreservesValuesAndOtherUses) {
       ++constant_count;
       EXPECT_EQ(node.SerializeAsString(), original.ref_graph().ref_node()[0].SerializeAsString());
     } else {
-      EXPECT_EQ(node.ref_op_type(), "Identity");
+      EXPECT_EQ(node.ref_op_type(), "Unique");
       EXPECT_EQ(node.ref_input()[0], "parameter");
-      EXPECT_EQ(node.ref_output()[0], "copy");
+      EXPECT_EQ(node.ref_output()[0], "unique");
     }
   }
   EXPECT_EQ(converted_count, 1u);
@@ -162,7 +162,7 @@ TEST_P(ConstantAttributeInput, PreservesValuesAndOtherUses) {
   }
   ASSERT_EQ(graph.ref_output().size(), test_case.output_shapes.size() + (retained ? 1 : 0));
   if (sharing == "output") {
-    EXPECT_EQ(graph.ref_output().back().ref_name(), "parameter");
+    EXPECT_EQ(graph.ref_output()[test_case.output_shapes.size()].ref_name(), "parameter");
   }
 }
 

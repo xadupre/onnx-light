@@ -98,6 +98,17 @@ bool SameExternalData(const TensorProto &lhs, const TensorProto &rhs) {
   return true;
 }
 
+bool HasComparableInitializerContent(const TensorProto &tensor) {
+  if (!tensor.raw_data().empty() || !tensor.float_data().empty() || !tensor.int32_data().empty() ||
+      !tensor.int64_data().empty() || !tensor.double_data().empty() ||
+      !tensor.uint64_data().empty() || !tensor.string_data().empty())
+    return true;
+  if (tensor.HasDeferredWeight())
+    return false;
+  return (tensor.data_location() == TensorProto::EXTERNAL && !tensor.external_data().empty()) ||
+         std::find(tensor.dims().begin(), tensor.dims().end(), 0) != tensor.dims().end();
+}
+
 // Returns true when two initializers carry byte-for-byte identical content
 // (ignoring their names). Cheap discriminators -- element type then shape --
 // are checked first so mismatched tensors are rejected before any payload is
@@ -2667,6 +2678,23 @@ std::size_t GraphBuilder::RemoveDuplicateNodes() {
 
 namespace {
 
+bool HasComparableNodeContent(const NodeProto &node) {
+  for (const auto &attribute : node.attribute()) {
+    if ((attribute.has_t() && !HasComparableInitializerContent(attribute.t())) ||
+        std::any_of(attribute.tensors().begin(), attribute.tensors().end(),
+                    [](const auto &tensor) { return !HasComparableInitializerContent(tensor); }) ||
+        (attribute.has_sparse_tensor() &&
+         (!HasComparableInitializerContent(attribute.sparse_tensor().values()) ||
+          !HasComparableInitializerContent(attribute.sparse_tensor().indices()))))
+      return false;
+    for (const auto &tensor : attribute.sparse_tensors())
+      if (!HasComparableInitializerContent(tensor.values()) ||
+          !HasComparableInitializerContent(tensor.indices()))
+        return false;
+  }
+  return true;
+}
+
 bool SameNodeComputation(const NodeProto &left, const NodeProto &right) {
   if (left.op_type() != right.op_type() ||
       NormaliseDomain(left.domain()) != NormaliseDomain(right.domain()) ||
@@ -2735,6 +2763,10 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
   kept.reserve(num_nodes);
   std::size_t local_removed = 0;
   for (NodeProto &node : nodes_) {
+    if (!HasComparableNodeContent(node)) {
+      kept.push_back(std::move(node));
+      continue;
+    }
     // Resolve inputs against earlier-dropped duplicates so a chain of identical
     // sub-computations collapses in a single forward pass.
     std::vector<std::string> resolved_inputs;
@@ -3628,7 +3660,8 @@ std::size_t GraphBuilder::DeduplicateInitializers(
   kept.reserve(initializers_.size());
   std::size_t removed = 0;
   for (TensorProto &initializer : initializers_) {
-    if (input_names.count(initializer.name().value())) {
+    if (input_names.count(initializer.name().value()) ||
+        !HasComparableInitializerContent(initializer)) {
       kept.push_back(std::move(initializer));
       continue;
     }

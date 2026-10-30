@@ -35,18 +35,18 @@ Static tensor sizes that exceed the native size range are treated as unknown,
 not truncated. Accumulated transfer-cost overflow raises ``ValueError``.
 
 To apply the proposals as local functions, explicitly select the
-``OperatorGroup`` fusion pattern. It calls the same core algorithm using the
+``PartitionGroup`` fusion pattern. It calls the same core algorithm using the
 builder's inferred shapes and leaves constants as explicit function arguments:
 
 .. code-block:: python
 
     from onnx_light.onnx_core.graph_builder import GraphBuilder
-    from onnx_light.onnx_core.optimization import GraphGraph, OperatorGroupPattern
+    from onnx_light.onnx_core.optimization import GraphGraph, PartitionGroupPattern
 
     builder = GraphBuilder(model)
     optimizer = GraphGraph(
         builder,
-        patterns=[OperatorGroupPattern(max_boundary_bytes=1024, max_group_nodes=128)],
+        patterns=[PartitionGroupPattern(max_boundary_bytes=1024, max_group_nodes=128)],
     )
     optimizer.optimize()
     grouped_model = builder.to_model()

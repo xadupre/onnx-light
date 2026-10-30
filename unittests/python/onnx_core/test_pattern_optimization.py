@@ -113,7 +113,7 @@ class TestPatternSelection(ExtTestCase):
             set(pattern_sets["L1"])
             | set(pattern_sets["L2"])
             | set(pattern_sets["Layer"])
-            | {"OperatorGroup"},
+            | {"PartitionGroup"},
         )
         self.assertTrue(set(pattern_sets["L1"]).isdisjoint(pattern_sets["L2"]))
         self.assertEqual(pattern_sets["Layer"], ("RepeatedLayer",))

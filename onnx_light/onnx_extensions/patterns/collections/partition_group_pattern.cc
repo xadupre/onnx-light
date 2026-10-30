@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/patterns/collections/operator_group_pattern.h"
+#include "onnx_extensions/patterns/collections/partition_group_pattern.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -21,7 +21,7 @@ using ValueInfos = std::unordered_map<std::string, const ValueInfoProto *>;
 
 bool IsGroup(const NodeProto &node) {
   return node.domain() == "ai.rt" &&
-         (node.op_type() == "OperatorGroup" || node.op_type().find("OperatorGroup_") == 0);
+         (node.op_type() == "PartitionGroup" || node.op_type().find("PartitionGroup_") == 0);
 }
 
 bool Extractable(const NodeProto &node) {
@@ -104,7 +104,7 @@ NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const Operato
   source.SetOpsetVersion("ai.rt", 1);
   std::string name;
   do {
-    name = suffix == 0 ? "OperatorGroup" : "OperatorGroup_" + std::to_string(suffix);
+    name = suffix == 0 ? "PartitionGroup" : "PartitionGroup_" + std::to_string(suffix);
     ++suffix;
   } while (model.HasName(name) ||
            source.Shapes().HasLocalFunction(
@@ -139,23 +139,23 @@ NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const Operato
   }
   model.MakeLocalFunction(function);
   return MakeNode(name.c_str(), group.inputs, group.outputs, "ai.rt",
-                  source.UniqueName("OperatorGroup").c_str());
+                  source.UniqueName("PartitionGroup").c_str());
 }
 
 } // namespace
 
-OperatorGroupPattern::OperatorGroupPattern(int priority, uint64_t max_boundary_bytes,
-                                           uint64_t min_group_nodes, uint64_t max_group_nodes)
-    : PatternOptimization(priority, "OperatorGroup"),
+PartitionGroupPattern::PartitionGroupPattern(int priority, uint64_t max_boundary_bytes,
+                                             uint64_t min_group_nodes, uint64_t max_group_nodes)
+    : PatternOptimization(priority, "PartitionGroup"),
       options_{max_boundary_bytes, min_group_nodes, max_group_nodes} {
   if (min_group_nodes < 2 || max_group_nodes < min_group_nodes)
-    throw std::invalid_argument("OperatorGroup requires 2 <= min_group_nodes <= max_group_nodes.");
+    throw std::invalid_argument("PartitionGroup requires 2 <= min_group_nodes <= max_group_nodes.");
 }
 
-std::set<std::string> OperatorGroupPattern::FastOpType() const { return {}; }
+std::set<std::string> PartitionGroupPattern::FastOpType() const { return {}; }
 
-core::builder::MatchResult OperatorGroupPattern::Match(GraphGraph &graph,
-                                                       const NodeProto &candidate) const {
+core::builder::MatchResult PartitionGroupPattern::Match(GraphGraph &graph,
+                                                        const NodeProto &candidate) const {
   const auto &nodes = graph.Builder().Nodes();
   if (nodes.empty() || &candidate != &nodes[0])
     return NoMatch(candidate, "operator grouping runs only at the first graph node");
@@ -163,7 +163,7 @@ core::builder::MatchResult OperatorGroupPattern::Match(GraphGraph &graph,
     return NoMatch(candidate, "local-function bodies must not introduce recursive groups");
   const int version = graph.Builder().OpsetVersion("ai.rt");
   if (version > 0 && version != 1)
-    return NoMatch(candidate, "OperatorGroup requires ai.rt opset 1");
+    return NoMatch(candidate, "PartitionGroup requires ai.rt opset 1");
   const auto groups = Groups(AnalysisGraph(graph), options_);
   if (groups.empty())
     return NoMatch(candidate, "no extractable low-transfer operator interval");
@@ -176,12 +176,12 @@ core::builder::MatchResult OperatorGroupPattern::Match(GraphGraph &graph,
 }
 
 utils::RepeatedProtoField<NodeProto>
-OperatorGroupPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const {
+PartitionGroupPattern::Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const {
   if (nodes.empty() || nodes[0] == nullptr || graph.Builder().Nodes().empty())
-    throw core::builder::BuilderError("OperatorGroup::Apply expects a nonempty match.");
+    throw core::builder::BuilderError("PartitionGroup::Apply expects a nonempty match.");
   const auto verified = Match(graph, graph.Builder().Nodes()[0]);
   if (verified.pattern != this || verified.nodes != nodes)
-    throw core::builder::BuilderError("OperatorGroup::Apply received an inconsistent match.");
+    throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
   const GraphProto snapshot = AnalysisGraph(graph);
   const auto groups = Groups(snapshot, options_);
   ValueInfos descriptors;

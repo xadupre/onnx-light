@@ -11,7 +11,7 @@ from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 from onnx_light.onnx_core.graph_partition import propose_operator_groups
-from onnx_light.onnx_core.optimization import GraphGraph, OperatorGroupPattern
+from onnx_light.onnx_core.optimization import GraphGraph, PartitionGroupPattern
 from onnx_light.onnx_py._onnxpycore import graph_partition as native_partition
 
 
@@ -346,7 +346,7 @@ class TestGraphPartition(ExtTestCase):
             propose_operator_groups(model)
 
 
-class TestOperatorGroupPattern(ExtTestCase):
+class TestPartitionGroupPattern(ExtTestCase):
     def test_extracts_and_executes_large_intermediates_with_tiny_boundaries(self):
         reference = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         model = oh.make_model(
@@ -364,7 +364,7 @@ class TestOperatorGroupPattern(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         builder = GraphBuilder(model)
-        graph = GraphGraph(builder, [OperatorGroupPattern(max_boundary_bytes=8)])
+        graph = GraphGraph(builder, [PartitionGroupPattern(max_boundary_bytes=8)])
         plan = graph.optimize()
         grouped = builder.to_model()
         self.assertEqual(len(plan.rewrites), 1)
@@ -416,17 +416,17 @@ class TestOperatorGroupPattern(ExtTestCase):
                 builder = GraphBuilder(model)
                 GraphGraph(
                     builder,
-                    [OperatorGroupPattern(max_boundary_bytes=boundary, max_group_nodes=maximum)],
+                    [PartitionGroupPattern(max_boundary_bytes=boundary, max_group_nodes=maximum)],
                 ).optimize()
                 self.assertEqual(len(builder.to_model().functions), functions)
         builder = GraphBuilder(model)
-        graph = GraphGraph(builder, ["OperatorGroup"])
-        self.assertEqual(graph.patterns[0].name, "OperatorGroup")
+        graph = GraphGraph(builder, ["PartitionGroup"])
+        self.assertEqual(graph.patterns[0].name, "PartitionGroup")
         self.assertNotIn(
-            "OperatorGroup", [pattern.name for pattern in GraphGraph(builder).patterns]
+            "PartitionGroup", [pattern.name for pattern in GraphGraph(builder).patterns]
         )
         with self.assertRaises(ValueError):
-            OperatorGroupPattern(min_group_nodes=1)
+            PartitionGroupPattern(min_group_nodes=1)
 
     def test_device_configurations_prevent_extraction(self):
         model = oh.make_model(
@@ -449,7 +449,7 @@ class TestOperatorGroupPattern(ExtTestCase):
                 configuration.pipeline_stage = 2
                 builder = GraphBuilder(model)
                 self.assertEqual(
-                    len(GraphGraph(builder, ["OperatorGroup"]).optimize().rewrites), 0
+                    len(GraphGraph(builder, ["PartitionGroup"]).optimize().rewrites), 0
                 )
                 self.assertEqual(len(builder.to_model().functions), 0)
                 model.graph.node[configured].device_configurations.clear()
@@ -478,7 +478,7 @@ class TestOperatorGroupPattern(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         builder = GraphBuilder(model)
-        GraphGraph(builder, ["OperatorGroup"]).optimize()
+        GraphGraph(builder, ["PartitionGroup"]).optimize()
         grouped = builder.to_model()
         self.assertEqual(len(grouped.functions), 2)
         checker.check_model(grouped)

@@ -24,7 +24,7 @@
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/layer_pattern.h"
-#include "onnx_extensions/patterns/collections/operator_group_pattern.h"
+#include "onnx_extensions/patterns/collections/partition_group_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
@@ -97,8 +97,8 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::RepeatedLayerPattern>(
       m, "RepeatedLayerPattern",
       "Encapsulates structurally repeated regions as model-local functions (opt-in).");
-  nb::class_<onnx_patterns::OperatorGroupPattern, core::builder::PatternOptimization>(
-      m, "OperatorGroupPattern",
+  nb::class_<onnx_patterns::PartitionGroupPattern, core::builder::PatternOptimization>(
+      m, "PartitionGroupPattern",
       "Extracts low-transfer groups selected by the core partition algorithm (opt-in).")
       .def(nb::init<int, uint64_t, uint64_t, uint64_t>(), nb::arg("priority") = 0,
            nb::arg("max_boundary_bytes") = 1024, nb::arg("min_group_nodes") = 2,

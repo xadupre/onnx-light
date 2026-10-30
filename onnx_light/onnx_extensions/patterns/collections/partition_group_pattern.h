@@ -22,7 +22,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * lexical captures. Unknown boundary sizes prevent grouping. Device-configured
  * nodes and enclosing-function attribute references are not extracted.
  * Local-function bodies and their subgraphs are left unchanged, and generated
- * OperatorGroup calls are never wrapped again.
+ * PartitionGroup calls are never wrapped again.
  *
  * @code
  * Before:
@@ -32,15 +32,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *             ┌───────────────────────────────┐
- *   x, w ────→│ OperatorGroup(x, w) → y      │───→ y
+ *   x, w ────→│ PartitionGroup(x, w) → y     │───→ y
  *             └───────────────────────────────┘
  * @endcode
  */
-class OperatorGroupPattern final : public core::builder::PatternOptimization {
+class PartitionGroupPattern final : public core::builder::PatternOptimization {
 public:
   /// Creates an opt-in pattern with the core grouping limits.
-  explicit OperatorGroupPattern(int priority = 0, uint64_t max_boundary_bytes = 1024,
-                                uint64_t min_group_nodes = 2, uint64_t max_group_nodes = 128);
+  explicit PartitionGroupPattern(int priority = 0, uint64_t max_boundary_bytes = 1024,
+                                 uint64_t min_group_nodes = 2, uint64_t max_group_nodes = 128);
 
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,

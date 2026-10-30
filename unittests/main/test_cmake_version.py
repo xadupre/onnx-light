@@ -50,16 +50,22 @@ class TestCMakeVersion(unittest.TestCase):
 
     def test_ci_installs_persistent_cmake_before_package_builds(self):
         workflows = self.root / ".github/workflows"
-        core = (workflows / "ci_core.yml").read_text(encoding="utf-8")
-        test_builds = re.findall(
-            r"^\s+run: pip install ([^\n]*ONNX_LIGHT_BUILD_TESTS=ON[^\n]*)$",
-            core,
-            flags=re.MULTILINE,
-        )
-        self.assertEqual(len(test_builds), 4)
-        for command in test_builds:
-            with self.subTest(command=command):
-                self.assertIn("--no-build-isolation", command)
+        for name, count in (("ci_core.yml", 4), ("ci_debug.yml", 1)):
+            content = (workflows / name).read_text(encoding="utf-8")
+            test_builds = re.findall(
+                r"^\s+run: pip install ([^\n]*ONNX_LIGHT_BUILD_TESTS=ON[^\n]*)$",
+                content,
+                flags=re.MULTILINE,
+            )
+            self.assertEqual(len(test_builds), count, name)
+            for command in test_builds:
+                with self.subTest(workflow=name, command=command):
+                    self.assertIn("--no-build-isolation", command)
+            self.assertIn(
+                'python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" '
+                '"nanobind>=3.0.1" "numpy>=2.2"',
+                content,
+            )
         for name in (
             "ci_core.yml",
             "ci_debug.yml",

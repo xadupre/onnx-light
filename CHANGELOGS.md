@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Made shared test helpers importable in reduced-wheel CI without shadowing the installed wheel ([#5730](https://github.com/xadupre/onnx-light/pull/5730)).
 - Updated Ruff to `0.17.3` ([#5726](https://github.com/xadupre/onnx-light/pull/5726)).
+- Bumped the release version to `0.2.4`.
 
 ## [0.2.3] – 2026-10-30
 

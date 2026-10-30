@@ -52,61 +52,6 @@ bool IsLayer(const NodeProto &node) {
   return IsLayerName(node.domain().value(), node.op_type().value());
 }
 
-bool IsPrimitiveAnchor(const NodeProto &node) {
-  const std::string &domain = node.domain().value();
-  const std::string &op = node.op_type().value();
-  return node.overload().value().empty() &&
-         (((domain.empty() || domain == "ai.onnx") && (op == "MatMul" || op == "Attention")) ||
-          (domain == "com.microsoft" && op == "GroupQueryAttention") ||
-          (domain == "ai.rt" && op == "PagedAttention"));
-}
-
-// The key includes domain and overload: similarly named user operators are not anchors.
-bool IsAnchor(const NodeProto &node, const GraphBuilder &builder, std::size_t depth,
-              std::size_t &work, std::set<std::string> &visiting, bool in_function = false) {
-  if (IsLayer(node))
-    return false;
-  const std::string key = core::shapes::ShapesContext::LocalFunctionKey(
-      node.domain().value(), node.op_type().value(), node.overload().value());
-  const FunctionProto *function = builder.Shapes().GetLocalFunction(key);
-  if (function == nullptr && IsPrimitiveAnchor(node))
-    return true;
-  if (depth >= kMaxScopeDepth || work >= kMaxFunctionWork)
-    return false;
-  bool found = false;
-  if (function != nullptr && visiting.insert(key).second) {
-    for (const NodeProto &inner : function->node()) {
-      if (++work > kMaxFunctionWork)
-        break;
-      if (IsAnchor(inner, builder, depth + 1, work, visiting, true)) {
-        found = true;
-        break;
-      }
-    }
-    visiting.erase(key);
-  }
-  if (!found && in_function) {
-    auto search = [&](const GraphProto &graph) {
-      for (const NodeProto &inner : graph.node()) {
-        if (++work > kMaxFunctionWork)
-          return false;
-        if (IsAnchor(inner, builder, depth + 1, work, visiting, true))
-          return true;
-      }
-      return false;
-    };
-    for (const auto &attribute : node.attribute()) {
-      if (attribute.has_g() && search(attribute.g()))
-        return true;
-      for (const GraphProto &nested : attribute.graphs()) {
-        if (search(nested))
-          return true;
-      }
-    }
-  }
-  return found;
-}
-
 // Collects lexical uses, not just deduplicated values: the cost counts actual edges.
 bool GraphCaptures(const GraphProto &graph, std::vector<std::string> &captures, std::size_t depth,
                    std::size_t &work);
@@ -578,8 +523,7 @@ struct Index {
             std::make_tuple(node.domain().value(), node.op_type().value(), node.overload().value());
         auto [it, inserted] = anchor_cache.emplace(identity, false);
         if (inserted) {
-          std::set<std::string> visiting;
-          it->second = IsAnchor(node, graph.Builder(), 0, function_work, visiting);
+          it->second = IsOperatorGroupAnchor(node, graph.Builder(), function_work);
         }
         entry.anchor = it->second;
         if (entry.anchor)
@@ -1662,7 +1606,8 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
 }
 
 NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
-                    const std::vector<OperatorGroup> &boundaries, std::size_t occurrence) {
+                    const std::vector<OperatorGroup> &boundaries, std::size_t occurrence,
+                    const std::vector<OperatorGroupInput> &producers, std::size_t &suffix) {
   GraphProto body;
   for (const std::string &name : boundary.inputs)
     *body.add_input() = ValueInfo(index, name);
@@ -1681,39 +1626,16 @@ NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
     }
   }
   RenameLayerInputs(body, index.graph, boundaries);
+  const auto inputs = InlineOperatorGroupInputs(body, boundary, producers);
   core::builder::GraphBuilder &source = index.graph.Builder();
   source.SetOpsetVersion("ai.rt", 1);
-  core::builder::GraphBuilder &builder = source.ModelBuilder();
   const std::string name = "RepeatedLayer_n" + std::to_string(occurrence) + "_p" +
                            std::to_string(boundary.node_indices.front());
   if (const std::string existing = FindLayerFunction(source, body); !existing.empty())
-    return MakeNode(existing.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
-  std::string function_name = "Layer";
-  for (std::size_t suffix = 1;
-       builder.HasLocalFunction(function_name) || builder.HasName(function_name); ++suffix)
-    function_name = "Layer_" + std::to_string(suffix);
-  FunctionProto definition;
-  definition.set_name(function_name);
-  definition.set_domain("ai.rt");
-  for (const auto &[domain, version] : source.OpsetVersions()) {
-    auto *opset = definition.add_opset_import();
-    if (!domain.empty())
-      opset->set_domain(domain);
-    opset->set_version(version);
-  }
-  for (const ValueInfoProto &input : body.input()) {
-    definition.add_input(input.name());
-    *definition.add_value_info() = input;
-  }
-  for (const ValueInfoProto &output : body.output()) {
-    definition.add_output(output.name());
-    *definition.add_value_info() = output;
-  }
-  for (const ValueInfoProto &value_info : body.value_info())
-    *definition.add_value_info() = value_info;
-  definition.ref_node() = utils::CopyWithSharedTensorStorage(body.node());
-  builder.MakeLocalFunction(definition);
-  return MakeNode(function_name.c_str(), boundary.inputs, boundary.outputs, "ai.rt", name.c_str());
+    return MakeNode(existing.c_str(), inputs, boundary.outputs, "ai.rt", name.c_str());
+  const std::string function_name =
+      AddOperatorGroupFunction(source, std::move(body), "Layer", suffix);
+  return MakeNode(function_name.c_str(), inputs, boundary.outputs, "ai.rt", name.c_str());
 }
 
 OperatorGroupStatus Eligibility(const GraphGraph &graph) {
@@ -1766,8 +1688,10 @@ MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodePro
   plan.status = OperatorGroupStatus::kFound;
   if (plan.MatchedNodes(graph.Builder().Nodes()) != nodes)
     throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
+  const auto producers = FindCommonOperatorGroupInputs(graph, plan.groups);
+  std::size_t suffix = 0;
   return MakeOperatorGroupReplacements(graph, plan, [&](std::size_t group) {
-    return MakeLayer(index, plan.groups[group], plan.groups, group);
+    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix);
   });
 }
 

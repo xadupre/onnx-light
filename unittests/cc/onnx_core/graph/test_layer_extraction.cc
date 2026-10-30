@@ -10,6 +10,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -65,6 +66,7 @@ TEST(LayerExtraction, ProposesWithoutMutationAndBuildsSharedFunctionCalls) {
   EXPECT_EQ(replacement[1].name(), "RepeatedLayer_n1_p2");
   EXPECT_EQ(replacement[0].domain(), "ai.rt");
   EXPECT_EQ(replacement[1].domain(), "ai.rt");
+  EXPECT_EQ(replacement[0].op_type(), "Layer_MatMul_0");
   EXPECT_EQ(replacement[0].op_type(), replacement[1].op_type());
   ASSERT_EQ(replacement[0].input().size(), 2u);
   EXPECT_EQ(replacement[0].input(0), "x");
@@ -80,6 +82,34 @@ TEST(LayerExtraction, ProposesWithoutMutationAndBuildsSharedFunctionCalls) {
   EXPECT_EQ(body.node(1).op_type(), "Relu");
   EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
   EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+}
+
+TEST(LayerExtraction, NamesAfterFirstAnchorAndAvoidsGraphNameCollisions) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(2));
+  for (const std::string name : {"x", "w0", "w1", "Layer_MatMul_0"})
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, shape);
+  builder.MakeNode("Relu", {"x"}, {"pre0"});
+  builder.MakeNode("MatMul", {"pre0", "w0"}, {"h0"});
+  builder.MakeNode("Relu", {"h0"}, {"pre1"});
+  builder.MakeNode("MatMul", {"pre1", "w1"}, {"h1"});
+  builder.MakeOutput("h1");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+  ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+  const auto replacement =
+      core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
+  ASSERT_EQ(replacement.size(), 2u);
+  EXPECT_EQ(replacement[0].op_type(), "Layer_MatMul_1");
+  EXPECT_EQ(replacement[1].op_type(), "Layer_MatMul_1");
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  const auto &body = builder.LocalFunctions()[0]->Nodes();
+  ASSERT_EQ(body.size(), 2u);
+  EXPECT_EQ(body[0].op_type(), "Relu");
+  EXPECT_EQ(body[1].op_type(), "MatMul");
 }
 
 TEST(LayerExtraction, RejectsInvalidIntervalsBeforeCreatingFunctions) {
@@ -186,6 +216,126 @@ TEST(OperatorGroups, BothAlgorithmsUseTheSameInterfacesAndReplacementConsumer) {
   }
 }
 
+TEST(OperatorGroups, BothAlgorithmsShareMainOperatorNamingAndCollisionChecks) {
+  for (const bool repeated : {false, true}) {
+    const std::string prefix = repeated ? "Layer" : "PartitionGroup";
+    core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+    core::symbolic::SymShape shape;
+    shape.PushBack(core::symbolic::SymDim(2));
+    shape.PushBack(core::symbolic::SymDim(2));
+    builder.MakeInput(prefix + "_MatMul_0", core::symbolic::TensorType::kFloat, shape);
+    AddRepeatedLayers(builder);
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+    const auto proposal = repeated ? core::graph::ProposeRepeatedLayers(graph)
+                                   : core::graph::ProposePartitionGroups(graph, {1024, 2, 2});
+    ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+    const auto nodes = proposal.MatchedNodes(builder.Nodes());
+    const auto replacement =
+        repeated ? core::graph::MakeRepeatedLayerReplacements(graph, nodes)
+                 : core::graph::MakePartitionGroupReplacements(graph, nodes, {1024, 2, 2});
+    ASSERT_EQ(replacement.size(), 2u);
+    EXPECT_EQ(replacement[0].op_type(), prefix + "_MatMul_1");
+    EXPECT_EQ(replacement[1].op_type(), prefix + (repeated ? "_MatMul_1" : "_MatMul_2"));
+  }
+}
+
+TEST(OperatorGroups, NamingRejectsEmptyBodiesAndDoesNotOverflowTheCounter) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  AddRepeatedLayers(builder);
+  std::size_t suffix = 0;
+  EXPECT_THROW(core::graph::MakeOperatorGroupFunctionName(
+                   builder, utils::RepeatedProtoField<NodeProto>{}, "PartitionGroup", suffix),
+               core::builder::BuilderError);
+  EXPECT_THROW(core::graph::MakeOperatorGroupFunctionName(builder, builder.Nodes(), "", suffix),
+               core::builder::BuilderError);
+  suffix = std::numeric_limits<std::size_t>::max();
+  const std::string name = "PartitionGroup_MatMul_" + std::to_string(suffix);
+  EXPECT_EQ(core::graph::MakeOperatorGroupFunctionName(builder, builder.Nodes(), "PartitionGroup",
+                                                       suffix),
+            name);
+  auto &existing = builder.MakeLocalFunction(name, "ai.rt");
+  AddRepeatedLayers(existing);
+  EXPECT_THROW(core::graph::MakeOperatorGroupFunctionName(builder, builder.Nodes(),
+                                                          "PartitionGroup", suffix),
+               core::builder::BuilderError);
+}
+
+TEST(OperatorGroups, InlinesOnlySmallMaterializedConstantsCommonToAllFunctionInstances) {
+  for (const bool repeated : {false, true})
+    for (const int width : {31, 32})
+      for (const int variant : {0, 1, 2, 3}) {
+        SCOPED_TRACE(::testing::Message() << repeated << "," << width << "," << variant);
+        core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+        const auto shape = [](int64_t rows, int64_t columns) {
+          core::symbolic::SymShape result;
+          result.PushBack(core::symbolic::SymDim(rows));
+          result.PushBack(core::symbolic::SymDim(columns));
+          return result;
+        };
+        builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape(1, width));
+        std::string input = "x";
+        for (int i = 0; i < 3; ++i) {
+          const std::string suffix = std::to_string(i);
+          builder.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, shape(width, width));
+          std::vector<float> values(width, variant == 1 && i == 2 ? 2.0f : 1.0f);
+          TensorProto bias = MakeInitializer<float>(("bias" + suffix).c_str(), {1, width}, values);
+          if (variant == 2)
+            builder.MakeInput("bias" + suffix, core::symbolic::TensorType::kFloat, shape(1, width));
+          if (variant == 3) {
+            bias.clear_float_data();
+            bias.clear_raw_data();
+            bias.set_data_location(TensorProto::EXTERNAL);
+            auto &location = *bias.add_external_data();
+            location.set_key("location");
+            location.set_value("unavailable-small-constant.bin");
+          } else if (i != 0) {
+            bias.clear_float_data();
+            bias.set_raw_data(values.data(), values.size() * sizeof(float));
+          }
+          builder.MakeInitializer(bias);
+          builder.MakeNode("MatMul", {input, "w" + suffix}, {"mm" + suffix});
+          builder.MakeNode("Add", {"mm" + suffix, "bias" + suffix}, {"h" + suffix});
+          input = "h" + suffix;
+        }
+        builder.MakeOutput(input);
+        core::builder::GraphGraph graph(
+            builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+        const auto proposal = repeated ? core::graph::ProposeRepeatedLayers(graph)
+                                       : core::graph::ProposePartitionGroups(graph, {65536, 2, 2});
+        ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+        const auto nodes = proposal.MatchedNodes(builder.Nodes());
+        const auto replacement =
+            repeated ? core::graph::MakeRepeatedLayerReplacements(graph, nodes)
+                     : core::graph::MakePartitionGroupReplacements(graph, nodes, {65536, 2, 2});
+        ASSERT_EQ(replacement.size(), 3u);
+        const bool inlined =
+            width < 32 && variant != 2 && variant != 3 && (!repeated || variant != 1);
+        for (std::size_t i = 0; i < replacement.size(); ++i) {
+          const auto &call = replacement[i];
+          EXPECT_EQ(call.input().size(), inlined ? 2u : 3u);
+          const auto &body = builder.LocalFunction(call.op_type()).Nodes();
+          ASSERT_EQ(body.size(), inlined ? 3u : 2u);
+          EXPECT_EQ(body[0].op_type(), inlined ? "Constant" : "MatMul");
+          if (inlined) {
+            const auto &tensor = body[0].attribute(0).t();
+            EXPECT_EQ(tensor.dims().values(), (std::vector<int64_t>{1, width}));
+            EXPECT_FALSE(tensor.HasDeferredWeight());
+            EXPECT_TRUE(tensor.external_data().empty());
+            EXPECT_EQ(tensor.raw_data().size(), static_cast<std::size_t>(width) * sizeof(float));
+            const std::vector<float> expected(width, variant == 1 && i == 2 ? 2.0f : 1.0f);
+            EXPECT_EQ(std::memcmp(tensor.raw_data().data(), expected.data(),
+                                  expected.size() * sizeof(float)),
+                      0);
+          }
+        }
+        if (repeated) {
+          EXPECT_EQ(replacement[0].op_type(), replacement[1].op_type());
+          EXPECT_EQ(replacement[0].op_type(), replacement[2].op_type());
+        }
+      }
+}
+
 TEST(OperatorGroups, RejectsInvalidCoverageBeforeInvokingTheFunctionBuilder) {
   core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
   AddRepeatedLayers(builder);
@@ -211,6 +361,117 @@ TEST(OperatorGroups, RejectsInvalidCoverageBeforeInvokingTheFunctionBuilder) {
                core::builder::BuilderError);
   EXPECT_EQ(calls, 0u);
   EXPECT_TRUE(builder.LocalFunctions().empty());
+}
+
+TEST(OperatorGroups, InternalizesOnlyShapesOfCorrespondingBoundaryInputs) {
+  for (const std::string variant : {"common", "attributes", "source_port", "missing", "defaults"}) {
+    SCOPED_TRACE(variant);
+    core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+    core::symbolic::SymShape shape;
+    for (const int64_t dim : {1, 2, 2})
+      shape.PushBack(core::symbolic::SymDim(dim));
+    std::vector<core::graph::OperatorGroup> groups;
+    for (int i = 0; i < 3; ++i) {
+      const auto suffix = std::to_string(i);
+      for (const auto &prefix : {"x", "w", "z"})
+        builder.MakeInput(prefix + suffix, core::symbolic::TensorType::kFloat, shape);
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      const auto add_attribute = [&](const char *name, int64_t value) {
+        auto &attribute = attributes.add();
+        attribute.set_name(name);
+        attribute.set_type(AttributeProto::INT);
+        attribute.set_i(value);
+      };
+      if (variant != "defaults") {
+        add_attribute("end", variant == "attributes" && i == 2 ? 4 : 3);
+        add_attribute("start", 1);
+      } else if (i == 2) {
+        add_attribute("end", std::numeric_limits<int64_t>::max());
+        add_attribute("start", 0);
+      }
+      const std::string source = variant == "missing"                 ? "z"
+                                 : variant == "source_port" && i == 2 ? "w"
+                                                                      : "x";
+      builder.MakeNode("Shape", {source + suffix}, {"s" + suffix}, "", "", attributes);
+      const auto first = builder.Nodes().size();
+      builder.MakeNode("MatMul", {"x" + suffix, "w" + suffix}, {"mm" + suffix});
+      builder.MakeNode("Reshape", {"mm" + suffix, "s" + suffix}, {"y" + suffix});
+      builder.MakeOutput("y" + suffix);
+      groups.push_back(
+          {{first, first + 1}, {"x" + suffix, "w" + suffix, "s" + suffix}, {"y" + suffix}, {}});
+    }
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+    const auto producers = core::graph::FindCommonOperatorGroupInputs(graph, groups);
+    const bool internalized = variant == "common" || variant == "defaults";
+    ASSERT_EQ(producers.size(), internalized ? 1u : 0u);
+    for (const auto &group : groups) {
+      GraphProto body;
+      for (const auto &name : group.inputs)
+        body.add_input()->set_name(name);
+      for (const auto index : group.node_indices)
+        *body.add_node() = utils::CopyWithSharedTensorStorage(builder.Nodes()[index]);
+      const auto inputs = core::graph::InlineOperatorGroupInputs(body, group, producers);
+      EXPECT_EQ(inputs.size(), internalized ? 2u : 3u);
+      ASSERT_EQ(body.node().size(), internalized ? 3u : 2u);
+      if (internalized) {
+        const auto &node = body.node(0);
+        EXPECT_EQ(node.op_type(), "Shape");
+        EXPECT_EQ(node.input(0), group.inputs[0]);
+        EXPECT_EQ(node.output(0), group.inputs[2]);
+        ASSERT_EQ(node.attribute().size(), variant == "defaults" ? 0u : 2u);
+        if (variant != "defaults") {
+          EXPECT_EQ(node.attribute(0).name(), "start");
+          EXPECT_EQ(node.attribute(0).i(), 1);
+          EXPECT_EQ(node.attribute(1).name(), "end");
+          EXPECT_EQ(node.attribute(1).i(), 3);
+        }
+      }
+    }
+  }
+}
+
+TEST(OperatorGroups, OrdersInternalizedShapesAfterTheirInternalizedConstantInputs) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(2));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInitializer(MakeInitializer<float>("w", {2, 2}, {1, 0, 0, 1}));
+  builder.MakeNode("Shape", {"w"}, {"s"});
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  builder.MakeNode("Reshape", {"mm", "s"}, {"y"});
+  builder.MakeOutput("y");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  const core::graph::OperatorGroup group{{1, 2}, {"s", "w", "x"}, {"y"}, {}};
+  const auto producers = core::graph::FindCommonOperatorGroupInputs(graph, {&group, 1});
+  ASSERT_EQ(producers.size(), 2u);
+  GraphProto body;
+  for (const auto &name : group.inputs)
+    body.add_input()->set_name(name);
+  for (const auto index : group.node_indices)
+    *body.add_node() = utils::CopyWithSharedTensorStorage(builder.Nodes()[index]);
+  const auto inputs = core::graph::InlineOperatorGroupInputs(body, group, producers);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"x"}));
+  ASSERT_EQ(body.node().size(), 4u);
+  EXPECT_EQ(body.node(0).op_type(), "Constant");
+  EXPECT_EQ(body.node(0).output(0), "w");
+  EXPECT_EQ(body.node(1).op_type(), "Shape");
+  EXPECT_EQ(body.node(1).input(0), "w");
+  EXPECT_EQ(body.node(1).output(0), "s");
+  EXPECT_EQ(body.node(2).op_type(), "MatMul");
+  EXPECT_EQ(body.node(3).op_type(), "Reshape");
+  const std::vector<core::graph::OperatorGroupInput> cycle{{0, 1, MakeNode("Shape", {""}, {""})},
+                                                           {1, 0, MakeNode("Shape", {""}, {""})}};
+  GraphProto invalid;
+  invalid.add_input()->set_name("s");
+  invalid.add_input()->set_name("w");
+  const auto invalid_before = utils::CopyWithSharedTensorStorage(invalid);
+  const core::graph::OperatorGroup invalid_group{{}, {"s", "w"}, {}, {}};
+  EXPECT_THROW(core::graph::InlineOperatorGroupInputs(invalid, invalid_group, cycle),
+               core::builder::BuilderError);
+  EXPECT_TRUE(invalid.Equals(invalid_before));
 }
 
 TEST(OperatorGroups, RetainsInterleavedNodesAndRejectsOutOfRangeIntervals) {

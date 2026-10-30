@@ -75,9 +75,32 @@ NB_MODULE(_onnxpycore, m) {
       .def_ro("outputs", &core::graph::OperatorGroup::outputs)
       .def_ro("transfer_bytes", &core::graph::OperatorGroup::transfer_bytes);
   partition.def(
+      "symbolic_byte_sizes",
+      [](const std::vector<ValueInfoProto> &values) {
+        core::shapes::ShapesContext context;
+        std::unordered_map<std::string, std::optional<core::expressions::DimType>> cache;
+        std::vector<std::optional<core::expressions::DimType>> sizes;
+        sizes.reserve(values.size());
+        for (const auto &value : values) {
+          core::symbolic::SymTensor tensor;
+          if (!value.type().has_tensor_type() || !value.type().tensor_type().has_shape() ||
+              !core::symbolic::SymTensorFromValueInfo(value, tensor)) {
+            sizes.push_back(std::nullopt);
+            continue;
+          }
+          const std::string key = std::to_string(sizes.size());
+          context.Set(key, std::move(tensor));
+          sizes.push_back(core::compute::GetCachedByteSizeExpr(context, key, cache,
+                                                               &context.ExpressionCache()));
+        }
+        return sizes;
+      },
+      nb::arg("values"),
+      "Returns packed symbolic byte sizes from descriptors without reading tensor payloads.");
+  partition.def(
       "propose_operator_groups",
       [](const GraphProto &graph, nb::object max_bytes, nb::object min_nodes, nb::object max_nodes,
-         const nb::dict &value_sizes) {
+         const nb::dict &value_sizes, nb::object max_constants) {
         auto integer = [](nb::handle value) {
           uint64_t result;
           if (nb::isinstance<nb::bool_>(value) || !nb::isinstance<nb::int_>(value) ||
@@ -85,8 +108,13 @@ NB_MODULE(_onnxpycore, m) {
             throw nb::value_error("Grouping limits and sizes must be uint64 integers.");
           return result;
         };
-        core::graph::OperatorGroupOptions options{integer(max_bytes), integer(min_nodes),
-                                                  integer(max_nodes)};
+        core::graph::OperatorGroupOptions options;
+        if (!max_bytes.is_none())
+          options.max_boundary_bytes = integer(max_bytes);
+        options.min_group_nodes = integer(min_nodes);
+        options.max_group_nodes = integer(max_nodes);
+        if (!max_constants.is_none())
+          options.max_constant_inputs = integer(max_constants);
         std::unordered_map<std::string, uint64_t> sizes;
         for (auto item : value_sizes) {
           std::string name;
@@ -96,9 +124,9 @@ NB_MODULE(_onnxpycore, m) {
         }
         return core::graph::ProposeOperatorGroups(graph, options, sizes).groups;
       },
-      nb::arg("graph"), nb::arg("max_boundary_bytes") = nb::int_(1024),
+      nb::arg("graph"), nb::arg("max_boundary_bytes") = nb::none(),
       nb::arg("min_group_nodes") = nb::int_(2), nb::arg("max_group_nodes") = nb::int_(128),
-      nb::arg("value_sizes") = nb::dict());
+      nb::arg("value_sizes") = nb::dict(), nb::arg("max_constant_inputs") = nb::none());
 }
 
 void AddOnnxPyExpressions(nb::module_ &m) {

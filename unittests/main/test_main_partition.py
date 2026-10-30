@@ -20,15 +20,15 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto, load, save
 
 
-def _repeated_model():
-    """Builds three distinct weighted layers following a shape-driven reshape."""
+def _repeated_model(layers=3):
+    """Builds distinct weighted layers following a shape-driven reshape."""
     nodes = [oh.make_node("Reshape", ["X", "shape"], ["flat"])]
     initializers = [onh.from_array(numpy.array([1, 16], dtype=numpy.int64), name="shape")]
     previous = "flat"
-    for index in range(3):
+    for index in range(layers):
         weight = f"W{index}"
         product = f"product{index}"
-        output = "Y" if index == 2 else f"hidden{index}"
+        output = "Y" if index + 1 == layers else f"hidden{index}"
         nodes.append(oh.make_node("MatMul", [previous, weight], [product]))
         nodes.append(oh.make_node("Relu", [product], [output]))
         initializers.append(
@@ -49,11 +49,61 @@ def _repeated_model():
 
 
 class TestMainPartition(ExtTestCase):
-    def _save_external(self, directory):
+    def test_both_methods_report_compact_symbolic_input_output_totals_per_call(self):
+        for method, verbose in (("layer", 0), ("layer", 1), ("mincut", 0), ("mincut", 1)):
+            with (
+                self.subTest(method=method, verbose=verbose),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                directory = Path(temporary)
+                source = self._save_external(directory, layers=20 if method == "mincut" else 3)
+                model = load(source, load_external_data=False)
+                model.graph.input[0].CopyFrom(
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, ["batch", 8])
+                )
+                save(model, source)
+                (directory / "shape.bin").write_bytes(
+                    numpy.array([-1, 16], dtype=numpy.int64).tobytes()
+                )
+                (directory / "weights.bin").unlink()
+                text = StringIO()
+                output = directory / "partition.onnx"
+                with redirect_stdout(text):
+                    main(
+                        ["partition", method, str(source), "-o", str(output), "-v", str(verbose)]
+                    )
+                report = text.getvalue()
+                self.assertIn(f"[partition {method}] selection:", report)
+                self.assertIn("inputs: logical bytes=", report)
+                self.assertIn("outputs: logical bytes=", report)
+                self.assertIn("transfer bytes=", report)
+                self.assertIn("batch", report)
+                self.assertNotIn("(constant)", report)
+                self.assertNotIn("FLOAT[16,16]", report)
+                self.assertNotIn("known transfer bytes=", report)
+                lines = [line.strip() for line in report.splitlines()]
+                call_count = sum(line.startswith("call ") for line in lines)
+                self.assertGreater(call_count, 0)
+                self.assertEqual(
+                    sum(line.startswith("inputs: logical bytes=") for line in lines), call_count
+                )
+                self.assertEqual(
+                    sum(line.startswith("outputs: logical bytes=") for line in lines), call_count
+                )
+                self.assertEqual(sum("bytes=" in line for line in lines), 2 * call_count)
+                self.assertIn("not compared by the selector", report)
+                self.assertIn(
+                    "interval dynamic programming" if method == "mincut" else "equivalent bodies",
+                    report,
+                )
+                result = load(output, load_external_data=False)
+                self.assertGreater(len(result.functions), 0)
+
+    def _save_external(self, directory, layers=3):
         """Writes external weights and an independently stored tiny shape tensor."""
         source = directory / "model.onnx"
         save(
-            _repeated_model(),
+            _repeated_model(layers),
             source,
             save_as_external_data=True,
             location="weights.bin",
@@ -89,11 +139,12 @@ class TestMainPartition(ExtTestCase):
             result = load(output, load_external_data=False)
             layers = [function for function in result.functions if function.domain == "ai.rt"]
             self.assertEqual(len(layers), 1)
+            self.assertEqual(layers[0].name, "Layer_MatMul_0")
             self.assertEqual([node.op_type for node in layers[0].node], ["MatMul", "Relu"])
             self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
             self.assertIn("1 layer function(s)", text.getvalue())
             self.assertIn("3 call site(s)", text.getvalue())
-            self.assertIn("ai.rt::Layer", text.getvalue())
+            self.assertIn("ai.rt::Layer_MatMul_0", text.getvalue())
             feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
             expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
             actual = ReferenceEvaluator(load(output, load_external_data=True)).run(None, feeds)
@@ -142,7 +193,7 @@ class TestMainPartition(ExtTestCase):
         ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            source = self._save_external(directory)
+            source = self._save_external(directory, layers=20)
             output = directory / "partition.onnx"
             original_bytes = source.read_bytes()
             weights_before = (directory / "weights.bin").read_bytes()
@@ -155,12 +206,17 @@ class TestMainPartition(ExtTestCase):
                 for function in result.functions
                 if function.domain == "ai.rt" and function.name.startswith("PartitionGroup")
             ]
-            self.assertEqual(len(functions), 1)
-            self.assertEqual(len(functions[0].node), 7)
-            self.assertEqual(len(result.graph.node), 1)
-            self.assertEqual(result.graph.node[0].op_type, functions[0].name)
-            self.assertIn("1 partition function(s)", text.getvalue())
+            self.assertEqual(len(functions), 20)
+            self.assertEqual(functions[0].name, "PartitionGroup_MatMul_0")
+            self.assertTrue(all(len(function.node) == 2 for function in functions))
+            self.assertEqual(len(result.graph.node), 21)
+            self.assertEqual(result.graph.node[0].op_type, "Reshape")
+            self.assertIn("20 partition function(s)", text.getvalue())
+            self.assertIn("constant inputs <= 1 (5% of 21 model weights", text.getvalue())
+            for node in list(result.graph.node)[1:]:
+                self.assertEqual(sum(name.startswith("W") for name in node.input), 1)
             self.assertIn("1 call site(s)", text.getvalue())
+            self.assertIn("ai.rt::PartitionGroup_MatMul_0", text.getvalue())
             feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
             expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
             actual = ReferenceEvaluator(load(output, load_external_data=True)).run(None, feeds)
@@ -168,15 +224,65 @@ class TestMainPartition(ExtTestCase):
             self.assertEqual(source.read_bytes(), original_bytes)
             self.assertEqual((directory / "weights.bin").read_bytes(), weights_before)
 
+    def test_mincut_keeps_over_budget_operators_outside_groups(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = self._save_external(directory)
+            (directory / "weights.bin").unlink()
+            output = directory / "partition.onnx"
+            text = StringIO()
+            with redirect_stdout(text):
+                main(["partition", "mincut", str(source), "-o", str(output)])
+            result = load(output, load_external_data=False)
+            self.assertIn("constant inputs <= 0 (5% of 4 model weights", text.getvalue())
+            self.assertFalse(any(function.domain == "ai.rt" for function in result.functions))
+            self.assertEqual(sum(node.op_type == "MatMul" for node in result.graph.node), 3)
+
+    def test_mincut_partitions_symbolic_and_large_boundaries_without_a_default_byte_cap(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        for symbolic in (False, True):
+            with self.subTest(symbolic=symbolic), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                source = self._save_external(directory, layers=20)
+                model = load(source, load_external_data=False)
+                model.graph.input[0].CopyFrom(
+                    oh.make_tensor_value_info(
+                        "X", TensorProto.FLOAT, ["batch", 8] if symbolic else [4096, 8]
+                    )
+                )
+                save(model, source)
+                (directory / "shape.bin").write_bytes(
+                    numpy.array([-1, 16], dtype=numpy.int64).tobytes()
+                )
+                original = source.read_bytes()
+                weights = (directory / "weights.bin").read_bytes()
+                output = directory / "partition.onnx"
+                text = StringIO()
+                with redirect_stdout(text):
+                    main(["partition", "mincut", str(source), "-o", str(output), "-v", "1"])
+                self.assertIn("20 partition function(s)", text.getvalue())
+                result = load(output, load_external_data=True)
+                self.assertEqual(len(result.graph.node), 21)
+                self.assertTrue(result.graph.node[1].op_type.startswith("PartitionGroup_"))
+                for batch in ((2, 4) if symbolic else (4096,)):
+                    feeds = {"X": numpy.arange(batch * 8, dtype=numpy.float32).reshape(batch, 8)}
+                    expected = ReferenceEvaluator(load(source, load_external_data=True)).run(
+                        None, feeds
+                    )
+                    actual = ReferenceEvaluator(result).run(None, feeds)
+                    self.assertEqualArray(actual[0], expected[0])
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual((directory / "weights.bin").read_bytes(), weights)
+
     def test_mincut_respects_transfer_and_group_size_limits_without_reading_weights(self):
         for options, expected_groups in (
             (["--max-boundary-bytes", "127"], 0),
-            (["--max-boundary-bytes", "128"], 1),
-            (["--min-group-nodes", "2", "--max-group-nodes", "2"], 3),
+            (["--max-boundary-bytes", "128"], 20),
+            (["--min-group-nodes", "2", "--max-group-nodes", "2"], 20),
         ):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
-                source = self._save_external(directory)
+                source = self._save_external(directory, layers=20)
                 (directory / "weights.bin").unlink()
                 output = directory / "partition.onnx"
                 with redirect_stdout(StringIO()):
@@ -193,7 +299,7 @@ class TestMainPartition(ExtTestCase):
                 weights = [
                     tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
                 ]
-                self.assertEqual(len(weights), 3)
+                self.assertEqual(len(weights), 20)
                 self.assertTrue(
                     all(
                         weight.data_location == TensorProto.EXTERNAL and not weight.raw_data

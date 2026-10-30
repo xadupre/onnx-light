@@ -100,9 +100,10 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::PartitionGroupPattern, core::builder::PatternOptimization>(
       m, "PartitionGroupPattern",
       "Extracts low-transfer groups selected by the core partition algorithm (opt-in).")
-      .def(nb::init<int, uint64_t, uint64_t, uint64_t>(), nb::arg("priority") = 0,
-           nb::arg("max_boundary_bytes") = 1024, nb::arg("min_group_nodes") = 2,
-           nb::arg("max_group_nodes") = 128);
+      .def(nb::init<int, std::optional<uint64_t>, uint64_t, uint64_t, std::optional<uint64_t>>(),
+           nb::arg("priority") = 0, nb::arg("max_boundary_bytes") = nb::none(),
+           nb::arg("min_group_nodes") = 2, nb::arg("max_group_nodes") = 128,
+           nb::arg("max_constant_inputs") = nb::none());
 
   nb::class_<onnx_patterns::CastPattern, core::builder::PatternOptimization>(
       m, "CastPattern",

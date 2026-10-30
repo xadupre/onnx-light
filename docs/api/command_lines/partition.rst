@@ -13,6 +13,13 @@ model and prints a function summary.
 See :ref:`l-cli-partition` for algorithm descriptions, structural export details
 and output placement.
 
+Both methods print their selection policy and two totals per call: inputs and
+outputs, each with symbolic logical bytes and transfer bytes. Constants contribute
+logical bytes but no transfer bytes, except for overridable initializers. The
+report omits individual tensors, also with ``--verbose``. Unavailable volumes are
+explicit unknowns. These post-internalization formulas are descriptive, not compared by
+the selectors.
+
 Command-line reference
 ----------------------
 
@@ -39,10 +46,15 @@ Repeated layers
 Transfer-aware groups
 ---------------------
 
-``partition mincut`` accepts the same arguments plus ``--max-boundary-bytes``
-(default ``1024``), ``--min-group-nodes`` (default ``2``) and
+``partition mincut`` accepts the same arguments plus an optional
+``--max-boundary-bytes`` cap (no cap by default), ``--min-group-nodes`` (default ``2``) and
 ``--max-group-nodes`` (default ``128``). The minimum must be at least two and
-must not exceed the maximum.
+must not exceed the maximum. Symbolic boundaries are supported by default:
+the algorithm minimizes unknown transfers first, then known bytes.
+An explicit byte cap requires fully known boundary sizes.
+Each partition is also limited to ``floor(model_weights / 20)`` distinct constant
+inputs before internalization. This 5% budget counts weights, not their byte
+volumes. Over-budget operators remain outside extracted functions.
 
 .. runpython::
 

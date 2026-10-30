@@ -10,12 +10,138 @@ import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx_core.graph_builder import GraphBuilder
-from onnx_light.onnx_core.graph_partition import propose_operator_groups
+from onnx_light.onnx_core.expressions import evaluate_expression
+from onnx_light.onnx_core.graph_partition import (
+    count_constant_inputs,
+    describe_operator_group_calls,
+    propose_operator_groups,
+    symbolic_byte_sizes,
+)
 from onnx_light.onnx_core.optimization import GraphGraph, PartitionGroupPattern
 from onnx_light.onnx_py._onnxpycore import graph_partition as native_partition
 
 
 class TestGraphPartition(ExtTestCase):
+    def test_symbolic_byte_sizes_reuse_native_packing_and_keep_unknowns_explicit(self):
+        sizes = symbolic_byte_sizes(
+            [
+                oh.make_tensor_value_info("same", dtype, shape)
+                for dtype, shape in (
+                    (TensorProto.FLOAT16, ["N", 2]),
+                    (TensorProto.UINT2, ["N"]),
+                    (TensorProto.INT4, ["N"]),
+                    (TensorProto.FLOAT, []),
+                    (TensorProto.FLOAT, [0, "N"]),
+                    (TensorProto.FLOAT, [None]),
+                    (TensorProto.FLOAT, None),
+                    (TensorProto.STRING, [3]),
+                )
+            ]
+        )
+        self.assertEqual(len(sizes), 8)
+        for n in (1, 2, 5, 9):
+            with self.subTest(n=n):
+                self.assertEqual(evaluate_expression(str(sizes[0]), {"N": n}), 4 * n)
+                self.assertEqual(evaluate_expression(str(sizes[1]), {"N": n}), (n + 3) // 4)
+                self.assertEqual(evaluate_expression(str(sizes[2]), {"N": n}), (n + 1) // 2)
+        self.assertEqual(sizes[3:], [4, 0, None, None, None])
+
+    def test_call_descriptions_resolve_captures_constants_and_function_local_names(self):
+        function = oh.make_function(
+            "ai.rt",
+            "Layer_Neg_0",
+            ["a"],
+            ["b"],
+            [oh.make_node("Neg", ["a"], ["negative"]), oh.make_node("Abs", ["negative"], ["b"])],
+            [oh.make_opsetid("", 18)],
+        )
+        wrapper = oh.make_function(
+            "local",
+            "Wrapper",
+            ["w"],
+            ["y"],
+            [oh.make_node("Layer_Neg_0", ["w"], ["y"], domain="ai.rt", name="formal")],
+            [oh.make_opsetid("ai.rt", 1)],
+        )
+        wrapper.value_info.extend(
+            oh.make_tensor_value_info(name, TensorProto.FLOAT, ["K"]) for name in ("w", "y")
+        )
+        branch = oh.make_graph(
+            [
+                oh.make_node(
+                    "Constant",
+                    [],
+                    ["local_x"],
+                    value=oh.make_tensor("", TensorProto.FLOAT, [3], [1, 2, 3]),
+                ),
+                oh.make_node(
+                    "Layer_Neg_0", ["local_x"], ["branch_y"], domain="ai.rt", name="constant"
+                ),
+            ],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("branch_y", TensorProto.FLOAT, [3])],
+            value_info=[oh.make_tensor_value_info("local_x", TensorProto.FLOAT, [3])],
+        )
+        other = oh.make_graph(
+            [oh.make_node("Layer_Neg_0", ["w"], ["branch_y"], domain="ai.rt", name="captured")],
+            "other",
+            [],
+            [oh.make_tensor_value_info("branch_y", TensorProto.FLOAT, [4])],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Layer_Neg_0", ["x"], ["y"], domain="ai.rt", name="dynamic"),
+                    oh.make_node(
+                        "Layer_Neg_0",
+                        ["overridable"],
+                        ["not_inferred"],
+                        domain="ai.rt",
+                        name="overridable",
+                    ),
+                    oh.make_node("If", ["cond"], ["z"], then_branch=branch, else_branch=other),
+                ],
+                "root",
+                [
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, ["N"]),
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("overridable", TensorProto.FLOAT, [2]),
+                ],
+                [
+                    oh.make_tensor_value_info("y", TensorProto.FLOAT, ["N"]),
+                    oh.make_tensor_value_info("z", TensorProto.FLOAT, [None]),
+                    oh.make_tensor_value_info("not_inferred", TensorProto.FLOAT, [None]),
+                ],
+                initializer=[
+                    oh.make_tensor("w", TensorProto.FLOAT, [4], [1, 2, 3, 4]),
+                    oh.make_tensor("overridable", TensorProto.FLOAT, [2], [1, 2]),
+                ],
+            ),
+            functions=[function, wrapper],
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("ai.rt", 1)],
+        )
+        checker.check_model(model)
+        self.assertEqual(count_constant_inputs(model), 2)
+        reports = describe_operator_group_calls(model, [function])
+        self.assertTrue(all(len(lines) == 3 for lines in reports[("ai.rt", "Layer_Neg_0", "")]))
+        descriptions = {
+            lines[0]: "\n".join(lines) for lines in reports[("ai.rt", "Layer_Neg_0", "")]
+        }
+        self.assertEqual(len(descriptions), 5)
+        self.assertIn("logical bytes=4*N; transfer bytes=4*N", descriptions["call 'dynamic':"])
+        self.assertIn("logical bytes=12; transfer bytes=0", descriptions["call 'constant':"])
+        self.assertIn("logical bytes=16; transfer bytes=0", descriptions["call 'captured':"])
+        self.assertIn("logical bytes=4*K; transfer bytes=4*K", descriptions["call 'formal':"])
+        self.assertIn(
+            "outputs: logical bytes=12; transfer bytes=12", descriptions["call 'constant':"]
+        )
+        self.assertIn("logical bytes=8; transfer bytes=8", descriptions["call 'overridable':"])
+        self.assertIn(
+            "logical bytes=unknown[1]; transfer bytes=unknown[1]",
+            descriptions["call 'overridable':"],
+        )
+
     @staticmethod
     def chain(shapes, dtype=TensorProto.FLOAT):
         names = ["x"] + [f"v{i}" for i in range(len(shapes) - 2)] + ["y"]
@@ -87,6 +213,49 @@ class TestGraphPartition(ExtTestCase):
         self.assertEqual([g.node_indices for g in groups], [(0, 1, 2, 3)])
         self.assertEqual(groups[0].transfer_bytes, 8)
 
+    def test_constant_input_limit_splits_groups_and_validates_the_budget(self):
+        model = self.chain([["N"]] * 5)
+        for i in range(4):
+            name = f"w{i // 2}"
+            model.graph.node[i].input.append(name)
+        model.graph.initializer.extend(
+            oh.make_tensor(name, TensorProto.FLOAT, [1], [1]) for name in ("w0", "w1")
+        )
+        self.assertEqual(
+            [
+                group.node_indices
+                for group in propose_operator_groups(model, max_constant_inputs=1)
+            ],
+            [(0, 1), (2, 3)],
+        )
+        self.assertEqual(propose_operator_groups(model, max_constant_inputs=0), [])
+        for invalid in (-1, True, 1.5, 1 << 64):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                propose_operator_groups(model, max_constant_inputs=invalid)
+
+    def test_constant_input_limit_is_enforced_before_small_constants_are_inlined(self):
+        model = self.chain([["N"]] * 5)
+        for i in range(4):
+            model.graph.node[i].op_type = "Add"
+            model.graph.node[i].input.append(f"w{i // 2}")
+        model.graph.initializer.extend(
+            oh.make_tensor(name, TensorProto.FLOAT, [1], [value])
+            for name, value in (("w0", 1), ("w1", 2))
+        )
+        builder = GraphBuilder(model)
+        optimizer = GraphGraph(builder, patterns=[PartitionGroupPattern(max_constant_inputs=1)])
+        optimizer.optimize()
+        result = builder.to_model()
+        functions = [function for function in result.functions if function.domain == "ai.rt"]
+        self.assertEqual(len(functions), 2)
+        self.assertTrue(all(len(function.input) == 1 for function in functions))
+        self.assertTrue(
+            all(
+                sum(node.op_type == "Constant" for node in function.node) == 1
+                for function in functions
+            )
+        )
+
     def test_extracts_tiny_island_after_large_input(self):
         graph = oh.make_graph(
             [
@@ -116,11 +285,14 @@ class TestGraphPartition(ExtTestCase):
         for shape in (None, ["N"], [None]):
             with self.subTest(shape=shape):
                 model = self.chain([shape, [1024], shape])
-                self.assertEqual(propose_operator_groups(model), [])
+                unknown = propose_operator_groups(model)
+                self.assertEqual(len(unknown), 1)
+                self.assertIsNone(unknown[0].transfer_bytes)
+                self.assertEqual(propose_operator_groups(model, max_boundary_bytes=8), [])
                 group = propose_operator_groups(model, value_sizes={"x": 4, "y": 4})[0]
                 self.assertEqual(group.transfer_bytes, 8)
         model = self.chain([[], [], []], dtype=TensorProto.STRING)
-        self.assertEqual(propose_operator_groups(model), [])
+        self.assertIsNone(propose_operator_groups(model)[0].transfer_bytes)
 
     def test_packed_types_scalars_and_empty_tensors(self):
         for dtype, shape, cost in (
@@ -171,10 +343,10 @@ class TestGraphPartition(ExtTestCase):
         model.graph.node[0].input.append("weight")
         self.assertEqual(propose_operator_groups(model)[0].transfer_bytes, 8)
         model.graph.input.append(oh.make_tensor_value_info("weight", TensorProto.FLOAT, [10000]))
-        self.assertEqual(propose_operator_groups(model), [])
+        self.assertEqual(propose_operator_groups(model, max_boundary_bytes=1024), [])
         model.graph.sparse_initializer.clear()
         model.graph.initializer.append(oh.make_tensor("weight", TensorProto.FLOAT, [1], [1]))
-        self.assertEqual(propose_operator_groups(model), [])
+        self.assertEqual(propose_operator_groups(model, max_boundary_bytes=1024), [])
 
     def test_fanout_and_graph_outputs_are_boundary_outputs(self):
         model = self.chain([[], [4096], [], []])
@@ -302,6 +474,53 @@ class TestGraphPartition(ExtTestCase):
                     propose_operator_groups(model, max_boundary_bytes=16, max_group_nodes=3),
                 )
 
+    def test_unbounded_symbolic_cost_matches_exhaustive_partitions(self):
+        for elements in ([None, None, 1, None, None, 1, None], [None, 4, None, 1, None, None]):
+            with self.subTest(elements=elements):
+                model = self.chain([["N"] if n is None else [n] for n in elements])
+                count = len(elements) - 1
+                groups = propose_operator_groups(model, max_group_nodes=3)
+                native = native_partition.propose_operator_groups(model.graph, max_group_nodes=3)
+                self.assertEqual(
+                    [tuple(group.node_indices) for group in native],
+                    [group.node_indices for group in groups],
+                )
+
+                def cost(start, end):
+                    boundaries = (elements[start], elements[end])
+                    return (
+                        sum(n is None for n in boundaries),
+                        sum(4 * n for n in boundaries if n is not None),
+                    )
+
+                grouped = {i for group in groups for i in group.node_indices}
+                transfers = [
+                    cost(group.node_indices[0], group.node_indices[-1] + 1) for group in groups
+                ]
+                for group, (unknown, size) in zip(groups, transfers, strict=True):
+                    self.assertEqual(group.transfer_bytes, None if unknown else size)
+                transfers.extend(cost(i, i + 1) for i in range(count) if i not in grouped)
+                actual = (
+                    sum(unknown for unknown, _ in transfers),
+                    sum(size for _, size in transfers),
+                    -len(grouped),
+                )
+                scores = []
+                for cuts in itertools.product((False, True), repeat=count - 1):
+                    boundaries = [0] + [i + 1 for i, cut in enumerate(cuts) if cut] + [count]
+                    intervals = list(itertools.pairwise(boundaries))
+                    if any(end - start > 3 for start, end in intervals):
+                        continue
+                    transfers = [cost(start, end) for start, end in intervals]
+                    scores.append(
+                        (
+                            sum(unknown for unknown, _ in transfers),
+                            sum(size for _, size in transfers),
+                            -sum(end - start for start, end in intervals if end - start > 1),
+                        )
+                    )
+                self.assertEqual(actual, min(scores))
+
     def test_empty_constant_only_and_optional_inputs(self):
         graph = oh.make_graph([], "empty", [], [])
         self.assertEqual(propose_operator_groups(graph), [])
@@ -347,6 +566,81 @@ class TestGraphPartition(ExtTestCase):
 
 
 class TestPartitionGroupPattern(ExtTestCase):
+    def test_internalizes_shapes_of_existing_inputs_for_both_extraction_methods(self):
+        reference = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        for repeated in (False, True):
+            with self.subTest(repeated=repeated):
+                shape = ["N", 2] if repeated else [2, 2]
+                inputs = [
+                    oh.make_tensor_value_info(f"{prefix}{i}", TensorProto.FLOAT, dimensions)
+                    for i in range(3)
+                    for prefix, dimensions in (("x", shape), ("w", [2, 2]))
+                ]
+                outputs = [
+                    oh.make_tensor_value_info(f"y{i}", TensorProto.FLOAT, shape) for i in range(3)
+                ]
+                outputs.append(oh.make_tensor_value_info("s0", TensorProto.INT64, [2]))
+                nodes = [oh.make_node("Shape", [f"x{i}"], [f"s{i}"]) for i in range(3)]
+                for i in range(3):
+                    nodes.extend(
+                        [
+                            oh.make_node("MatMul", [f"x{i}", f"w{i}"], [f"mm{i}"]),
+                            oh.make_node("Reshape", [f"mm{i}", f"s{i}"], [f"y{i}"]),
+                        ]
+                    )
+                model = oh.make_model(
+                    oh.make_graph(nodes, "shape_inputs", inputs, outputs),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                builder = GraphBuilder(model)
+                pattern = (
+                    "RepeatedLayer"
+                    if repeated
+                    else PartitionGroupPattern(max_boundary_bytes=1024, max_group_nodes=2)
+                )
+                plan = GraphGraph(builder, [pattern]).optimize()
+                grouped = builder.to_model()
+                checker.check_model(grouped)
+                functions = [
+                    function
+                    for function in grouped.functions
+                    if any(node.op_type == "MatMul" for node in function.node)
+                    and any(node.op_type == "Reshape" for node in function.node)
+                ]
+                self.assertGreater(len(functions), 0)
+                for function in functions:
+                    self.assertEqual(len(function.input), 2)
+                    self.assertEqual(
+                        [node.op_type for node in function.node], ["Shape", "MatMul", "Reshape"]
+                    )
+                    self.assertEqual(function.node[0].input[0], function.input[0])
+                names = {function.name for function in functions}
+                calls = [
+                    node
+                    for node in grouped.graph.node
+                    if node.domain == "ai.rt" and node.op_type in names
+                ]
+                self.assertEqual(len(calls), 3)
+                for node in calls:
+                    self.assertEqual(len(node.input), 2)
+                if repeated:
+                    self.assertEqual(len(functions), 1)
+                    self.assertEqual(len(grouped.graph.node), 4)
+                replayed = GraphBuilder(model).apply_rewritings(plan).to_model()
+                checker.check_model(replayed)
+                for rows in ((1, 4) if repeated else (2,)):
+                    feeds = {}
+                    for i in range(3):
+                        feeds[f"x{i}"] = (
+                            numpy.arange(rows * 2, dtype=numpy.float32).reshape(rows, 2) - i
+                        )
+                        feeds[f"w{i}"] = numpy.array([[i + 1, -1], [0.5, 2]], dtype=numpy.float32)
+                    expected = reference(model).run(None, feeds)
+                    for result in (grouped, replayed):
+                        actual = reference(result).run(None, feeds)
+                        for value, baseline in zip(actual, expected, strict=True):
+                            self.assertEqualArray(value, baseline)
+
     def test_extracts_and_executes_large_intermediates_with_tiny_boundaries(self):
         reference = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         model = oh.make_model(
@@ -367,12 +661,13 @@ class TestPartitionGroupPattern(ExtTestCase):
         graph = GraphGraph(builder, [PartitionGroupPattern(max_boundary_bytes=8)])
         plan = graph.optimize()
         grouped = builder.to_model()
-        self.assertEqual(len(plan.rewrites), 1)
+        self.assertEqual(sum(r.pattern_name == "PartitionGroup" for r in plan.rewrites), 1)
         self.assertEqual(len(grouped.graph.node), 1)
-        self.assertEqual(list(grouped.graph.node[0].input), ["x", "shape"])
+        self.assertEqual(list(grouped.graph.node[0].input), ["x"])
         self.assertEqual(list(grouped.graph.node[0].output), ["y"])
         self.assertEqual(
-            [node.op_type for node in grouped.functions[0].node], ["Expand", "Relu", "ReduceSum"]
+            [node.op_type for node in grouped.functions[0].node],
+            ["Constant", "Expand", "Relu", "ReduceSum"],
         )
         checker.check_model(grouped)
         replayed = GraphBuilder(model).apply_rewritings(plan).to_model()

@@ -12,7 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  * Finds repeated, connected, structurally corresponding regions around exact
  * attention or matrix-multiplication identities, including local functions.
  * Extracts every selected occurrence together, retaining weights as explicit
- * inputs and preserving side outputs and lexical subgraph dependencies.
+ * inputs except for shared materialized constants with fewer than 32 elements.
+ * Preserves side outputs and lexical subgraph dependencies.
  * Returns OperatorGroupProposal, shared with transfer-aware partitioning.
  * Indices refer to the unchanged source graph; transfer estimates are not reported.
  *
@@ -58,10 +59,16 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *   Retains shape annotations needed by operators without shape inference.
  *   Copies nodes in topological order
  *   into closed function bodies, preserves caller boundary names/types/tags, and
- *   leaves weights as explicit inputs.
+ *   leaves other weights as explicit inputs.
+ *   Embeds materialized constants with fewer than 32 elements as Constant nodes
+ *   only when their types, shapes and values agree at every corresponding input.
+ *   Reconstructs external Shape results from existing corresponding inputs when
+ *   start/end attributes agree, removing those result arguments from every call.
  *   Names each formal input from the longest prefix shared by a strict majority
  *   of corresponding arguments in the matched calls, falling back to input_N.
  *   Gives colliding names a port suffix to avoid lexical SSA shadowing.
+ *   Names new functions Layer_<mainop>_<index>, using the first anchor's
+ *   operator type in source order and an available nonnegative index.
  *
  * Work limits:
  *

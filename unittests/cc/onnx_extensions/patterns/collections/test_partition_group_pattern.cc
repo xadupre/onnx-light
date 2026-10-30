@@ -63,6 +63,8 @@ TEST(PartitionGroupPattern, CallsCoreSelectionAndPreservesShapeAndNames) {
   ASSERT_EQ(builder.Nodes().size(), 2u);
   ASSERT_EQ(builder.LocalFunctions().size(), 2u);
   EXPECT_EQ(builder.Nodes()[0].domain(), "ai.rt");
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "PartitionGroup_Neg_0");
+  EXPECT_EQ(builder.Nodes()[1].op_type(), "PartitionGroup_Neg_1");
   EXPECT_EQ(builder.Nodes()[0].input(0), "x");
   EXPECT_EQ(builder.Nodes()[0].output(0), "v1");
   EXPECT_EQ(builder.Nodes()[1].input(0), "v1");
@@ -85,7 +87,7 @@ TEST(PartitionGroupPattern, RunsOnlyAtFirstNodeAndRevalidatesApply) {
   EXPECT_THROW(pattern.Apply(graph, {match.nodes[1], match.nodes[0]}), BuilderError);
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 1u);
-  EXPECT_EQ(replacement[0].op_type(), "PartitionGroup");
+  EXPECT_EQ(replacement[0].op_type(), "PartitionGroup_Neg_0");
 }
 
 TEST(PartitionGroupPattern, LimitsAndDefaultSelectionArePreserved) {
@@ -138,11 +140,12 @@ TEST(PartitionGroupPattern, KeepsInterleavedConstantsBeforeCallsAndMetadataInBod
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 2u);
   EXPECT_EQ(replacement[0].op_type(), "Constant");
-  EXPECT_EQ(replacement[1].input_size(), 2);
-  EXPECT_EQ(replacement[1].input(1), "weight");
+  EXPECT_EQ(replacement[1].input_size(), 1);
+  EXPECT_EQ(replacement[1].input(0), "x");
   const auto function = builder.LocalFunctions()[0]->ToFunction("ai.rt");
-  ASSERT_EQ(function.node_size(), 2);
-  EXPECT_EQ(function.node(0).name(), "negative");
+  ASSERT_EQ(function.node_size(), 3);
+  EXPECT_EQ(function.node(0).op_type(), "Constant");
+  EXPECT_EQ(function.node(1).name(), "negative");
 }
 
 TEST(PartitionGroupPattern, DoesNotRewriteFunctionBodiesOrConflictingDomainVersions) {

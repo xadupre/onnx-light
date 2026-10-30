@@ -3,6 +3,7 @@
 #include "onnx_core/graph/operator_groups.h"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -10,9 +11,10 @@
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 struct OperatorGroupOptions {
-  uint64_t max_boundary_bytes = 1024;
+  std::optional<uint64_t> max_boundary_bytes;
   uint64_t min_group_nodes = 2;
   uint64_t max_group_nodes = 128;
+  std::optional<uint64_t> max_constant_inputs = std::nullopt;
 };
 
 /**
@@ -22,6 +24,9 @@ struct OperatorGroupOptions {
  * retain the first discovered partition. Constants and non-overridable initializers
  * remain explicit inputs but cost no bytes. Captures participate in dependencies.
  * Unrepresentable static sizes are unknown; explicit estimates override descriptors.
+ * Accepts unknown boundaries by default and reports their transfer_bytes as nullopt.
+ * An explicit byte cap requires fully known boundaries within that cap.
+ * max_constant_inputs caps distinct constant boundary inputs before internalization.
  *
  * Throws std::invalid_argument for invalid limits, invalid dataflow, or cost overflow.
  * Does not read tensor payloads or modify the graph.

@@ -38,6 +38,39 @@ GraphProto Chain(size_t count = 2) {
 
 } // namespace
 
+TEST(GraphPartition, ConstantInputLimitCountsDistinctWeightsBeforeInternalization) {
+  auto graph = Chain(4);
+  graph.add_initializer()->set_name("a");
+  graph.add_initializer()->set_name("b");
+  for (size_t i = 0; i < 4; ++i) {
+    graph.mutable_node(i)->add_input(i < 2 ? "a" : "b");
+    graph.mutable_node(i)->add_input(i < 2 ? "a" : "b");
+  }
+  ASSERT_EQ(ProposeOperatorGroups(graph).groups.size(), 1u);
+  OperatorGroupOptions options;
+  options.max_constant_inputs = 1;
+  const auto groups = ProposeOperatorGroups(graph, options).groups;
+  ASSERT_EQ(groups.size(), 2u);
+  EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({0, 1}));
+  EXPECT_EQ(groups[1].node_indices, std::vector<size_t>({2, 3}));
+  options.max_constant_inputs = 0;
+  EXPECT_TRUE(ProposeOperatorGroups(graph, options).groups.empty());
+}
+
+TEST(GraphPartition, ConstantInputLimitIncludesExtendedAndExcludesOverridableInitializers) {
+  auto graph = Chain();
+  graph.add_extended_initializer()->mutable_encoded_value()->set_name("weight");
+  graph.mutable_node(0)->add_input("weight");
+  OperatorGroupOptions options;
+  options.max_constant_inputs = 0;
+  EXPECT_TRUE(ProposeOperatorGroups(graph, options).groups.empty());
+  options.max_constant_inputs = 1;
+  EXPECT_EQ(ProposeOperatorGroups(graph, options).groups.size(), 1u);
+  Describe(graph.add_input(), "weight");
+  options.max_constant_inputs = 0;
+  EXPECT_EQ(ProposeOperatorGroups(graph, options).groups.size(), 1u);
+}
+
 TEST(GraphPartition, TinyBoundaryUnknownInternalAndOrderedPorts) {
   auto graph = Chain();
   graph.mutable_value_info(0)->mutable_type()->mutable_tensor_type()->clear_shape();
@@ -141,10 +174,45 @@ TEST(GraphPartition, CapturesRemainInputsAndLiveOutputs) {
 TEST(GraphPartition, UnknownBoundariesAndExplicitEstimates) {
   auto graph = Chain();
   graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->clear_shape();
-  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
+  const auto groups = ProposeOperatorGroups(graph).groups;
+  ASSERT_EQ(groups.size(), 1u);
+  EXPECT_FALSE(groups[0].transfer_bytes.has_value());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {1024, 2, 128}).groups.empty());
   EXPECT_EQ(ProposeOperatorGroups(graph, {}, {{"x", 4}}).groups.size(), 1u);
   Describe(graph.mutable_input(0), "x", {}, TensorProto::STRING);
-  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
+  const auto strings = ProposeOperatorGroups(graph).groups;
+  ASSERT_EQ(strings.size(), 1u);
+  EXPECT_FALSE(strings[0].transfer_bytes.has_value());
+}
+
+TEST(GraphPartition, DefaultPartitionSupportsLargeAndSymbolicBoundariesWithoutInventingSizes) {
+  auto large = Chain();
+  Describe(large.mutable_input(0), "x", {4096});
+  Describe(large.mutable_output(0), "y", {4096});
+  const auto static_groups = ProposeOperatorGroups(large).groups;
+  ASSERT_EQ(static_groups.size(), 1u);
+  EXPECT_EQ(static_groups[0].transfer_bytes, 32768u);
+  EXPECT_TRUE(ProposeOperatorGroups(large, {1024, 2, 128}).groups.empty());
+
+  auto symbolic = Chain(257);
+  for (auto *values : {&symbolic.ref_input(), &symbolic.ref_output(), &symbolic.ref_value_info()})
+    for (auto &value : *values) {
+      auto *shape = value.mutable_type()->mutable_tensor_type()->mutable_shape();
+      shape->clear_dim();
+      shape->add_dim()->set_dim_param("batch");
+    }
+  const auto groups = ProposeOperatorGroups(symbolic).groups;
+  ASSERT_EQ(groups.size(), 3u);
+  std::size_t next = 0;
+  for (const auto &group : groups) {
+    EXPECT_FALSE(group.transfer_bytes.has_value());
+    EXPECT_GE(group.node_indices.size(), 2u);
+    EXPECT_LE(group.node_indices.size(), 128u);
+    for (const auto index : group.node_indices)
+      EXPECT_EQ(index, next++);
+  }
+  EXPECT_EQ(next, symbolic.node().size());
+  EXPECT_TRUE(ProposeOperatorGroups(symbolic, {UINT64_MAX, 2, 128}).groups.empty());
 }
 
 TEST(GraphPartition, PackedAndZeroSizes) {
@@ -168,11 +236,11 @@ TEST(GraphPartition, StaticSizeOverflowIsUnknownAndZeroDimensionsDoNotOverflow) 
   auto graph = Chain();
   const auto huge = std::numeric_limits<int64_t>::max();
   Describe(graph.mutable_input(0), "x", {huge, huge});
-  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}).groups.empty());
   Describe(graph.mutable_input(0), "x", {huge, huge, 0});
   EXPECT_EQ(ProposeOperatorGroups(graph).groups.size(), 1u);
   Describe(graph.mutable_input(0), "x", {huge}, TensorProto::COMPLEX128);
-  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}).groups.empty());
 }
 
 TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {

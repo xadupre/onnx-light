@@ -10,18 +10,21 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
+class GraphBuilder;
 class GraphGraph;
-}
+} // namespace ONNX_LIGHT_NAMESPACE::core::builder
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 /// Describes a function body through source indices and ordered interfaces.
 struct OperatorGroup {
   std::vector<std::size_t> node_indices;
+  /// Source-boundary inputs, before optional constant/Shape internalization.
   std::vector<std::string> inputs;
   std::vector<std::string> outputs;
   /// Transfer estimate when reported by the proposing algorithm.
@@ -69,6 +72,43 @@ struct OperatorGroupProposal {
 /// Builds the source-order schedule for disjoint intervals, retaining Constants.
 OperatorGroupProposal MakeIntervalGroupProposal(std::vector<OperatorGroup> groups,
                                                 std::size_t node_count);
+
+/// Detects exact attention/MatMul anchors, including bounded local-function traversal.
+/// Shares a cumulative work budget across calls; zero starts a fresh search.
+bool IsOperatorGroupAnchor(const NodeProto &node, const builder::GraphBuilder &builder,
+                           std::size_t &work);
+
+/// Returns prefix_<mainop>_<index>, advancing the caller's naming counter.
+/// Uses the first anchor in source order, or the first operator without anchors.
+/// Avoids function, graph-value and registered-operator collisions in ai.rt.
+/// Requires ai.rt opset 1 in source; the caller installs the returned name.
+/// Throws builder::BuilderError for an empty prefix/body or exhausted indices.
+std::string MakeOperatorGroupFunctionName(builder::GraphBuilder &source,
+                                          const utils::RepeatedProtoField<NodeProto> &nodes,
+                                          const std::string &prefix, std::size_t &suffix);
+
+/// Describes a Constant or Shape producer replacing a formal input.
+struct OperatorGroupInput {
+  std::size_t input_index;
+  std::optional<std::size_t> source_input;
+  NodeProto node;
+};
+
+/// Finds common small constants and Shape producers of corresponding boundary inputs.
+/// Requires matching Shape attributes and source-input positions across all instances.
+/// Never loads external/deferred payloads or specializes overridable graph inputs.
+std::vector<OperatorGroupInput>
+FindCommonOperatorGroupInputs(const builder::GraphGraph &graph,
+                              std::span<const OperatorGroup> instances);
+
+/// Internalizes selected producers in dependency order and returns the remaining arguments.
+std::vector<std::string>
+InlineOperatorGroupInputs(GraphProto &body, const OperatorGroup &group,
+                          const std::vector<OperatorGroupInput> &producers);
+
+/// Consumes a closed body to create a model-local ai.rt function with shared naming.
+std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,
+                                     const std::string &prefix, std::size_t &suffix);
 
 /// Validates a freshly rederived proposal before creating any local functions.
 /// Copies untouched nodes with shared tensor storage and delegates each body to

@@ -20,14 +20,27 @@ opt-in ``RepeatedLayer`` pattern:
     python -m onnx_light partition layer model.onnx -o model.layers.onnx --verbose
 
 The output is a rewritten ONNX model, not one file per layer. Shared function
-bodies appear in ``ModelProto.functions`` as ``ai.rt::Layer``, ``Layer_1``, etc.,
-with distinct weights passed explicitly at each call. The command prints each
+bodies appear in ``ModelProto.functions`` as ``ai.rt::Layer_MatMul_0``,
+``ai.rt::Layer_Attention_0``, etc. The operator name comes from the first anchor
+in source order; the index starts at zero and avoids existing names.
+Distinct weights are passed explicitly at each call. The command prints each
 function's node count, input/output counts, and number of static call sites,
 including calls inside nested graphs and local functions. It also reports the
 number of extraction rewrites. A model without repeated regions is saved
 normally and reports zero layers. Detection finds repeated computations, which
 need not correspond to complete transformer layers. See
 :ref:`l-design-optimization` for the pattern contracts.
+
+For both methods, available constants with strictly fewer than 32 elements are
+embedded as ``Constant`` nodes when their dtype, shape and values are common to
+all calls of the function. They are removed from its arguments. Other constants,
+including overridable initializers and unloaded external data, remain arguments;
+extraction does not load additional weights for specialization.
+
+Both methods also turn ``f(x, Shape(x))`` into ``f(x)`` by computing ``Shape(x)``
+inside the function. The source must already be an input at the corresponding
+position in every call, with matching ``Shape`` attributes. This works with
+dynamic dimensions and preserves outside uses of the original shape value.
 
 Identical computations share a function even when exporter namespaces,
 diagnostics or inferred symbolic shape names differ. Different computations
@@ -49,27 +62,63 @@ Transfer-aware partitioning
 ---------------------------
 
 ``partition mincut`` applies the opt-in ``PartitionGroup`` pattern. It groups
-topological intervals into ``ai.rt::PartitionGroup`` functions while minimizing
-boundary transfers. Despite the command name, the algorithm is bounded interval
-dynamic programming, not a general graph minimum-cut solver.
+topological intervals into ``ai.rt::PartitionGroup_<mainop>_<index>`` functions
+while minimizing boundary transfers. Despite the command name, this is bounded
+interval dynamic programming, not a general graph minimum-cut solver.
 
 .. code-block:: bash
 
     python -m onnx_light partition mincut model.onnx \
         --output model.partition.onnx \
-        --max-boundary-bytes 1024 \
         --min-group-nodes 2 \
         --max-group-nodes 128
 
-The combined input/output transfer estimate of each group must fit
-``--max-boundary-bytes`` (default 1024). Constants and non-overridable initializers
-are explicit inputs but cost no transfer bytes. Unknown boundary sizes prevent
-a proposal; inferred descriptors provide static sizes when available.
+There is **no byte cap by default**. Symbolic or otherwise unknown tensor sizes
+do not block partitioning: the algorithm minimizes the number of unknown boundary
+transfers first, then known transfer bytes, and finally ungrouped nodes.
+Unknown sizes are not replaced by zero bytes or invented dimension values.
+Constants and non-overridable initializers cost no transfer bytes.
+
+Each partition may consume at most **5% of the model's weights**, counted as
+distinct constant inputs, not bytes or elements. The command counts declared
+non-overridable dense, sparse and extended initializers and standard ``Constant``
+outputs across model scopes before optimization. A shared weight counts once
+per partition. The limit is rounded down and checked before small constants
+are internalized, so embedding them cannot bypass it. The selection summary
+prints the model weight count and the resulting per-partition limit.
+Operators that cannot satisfy the limit remain outside extracted functions;
+for fewer than 20 weights, weighted partitions are therefore not extracted.
+
+For static boundaries, optionally pass ``--max-boundary-bytes BYTES`` to require
+each group's combined input/output bytes to fit that cap. An explicit cap
+excludes groups with unknown boundary sizes.
 ``--min-group-nodes`` and ``--max-group-nodes`` bound each group, defaulting to
 2 and 128. All limits must fit unsigned 64-bit integers.
 
+Both methods share the same naming implementation: ``mainop`` is the first
+anchor's operator type in source order, or the first operator when a mincut group
+has no attention/MatMul anchor. Indices start at zero and skip existing function,
+graph-value and registered-operator names. For example, a group containing
+``Reshape``, ``MatMul`` and ``Relu`` becomes ``PartitionGroup_MatMul_0``.
+
 The summary lists ``PartitionGroup`` definitions and their call sites. A model
 without eligible groups is still saved and reports zero partition functions.
+
+Explaining interfaces
+--------------------
+
+Both ``partition layer`` and ``partition mincut`` print their selection policy
+and report two totals per call, one for all inputs and one for all outputs,
+after constant and ``Shape`` internalization. Logical byte volumes retain symbolic
+dimensions, for example ``4*N`` for a ``FLOAT[N]`` tensor. Transfer volumes exclude constants and
+non-overridable initializers, while their logical volumes remain visible.
+Unavailable sizes appear explicitly as ``unknown[N]``, where ``N`` is their count.
+
+The report does not list individual tensors, including with ``--verbose`` or
+``-v 1``. Reporting uses metadata only and does not read additional weight payloads.
+Missing shapes and unsupported types remain unknown rather than
+receiving invented values. These formulas explain the resulting interfaces;
+neither selector compares symbolic formulas as a new optimization objective.
 
 Loading and weights
 -------------------

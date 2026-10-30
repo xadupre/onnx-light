@@ -192,6 +192,22 @@ std::size_t ExpectLayerContracts(const GraphProto &graph, std::set<std::string> 
   return count;
 }
 
+std::string ConstantKey(const TensorProto &tensor) {
+  std::string key = "constant:" + std::to_string(tensor.data_type());
+  for (const auto dim : tensor.dims())
+    key += ":" + std::to_string(dim);
+  key += "|";
+  if (tensor.data_type() == TensorProto::STRING) {
+    for (const auto &value : tensor.string_data())
+      key += std::to_string(value.size()) + ":" + value.value();
+  } else {
+    const auto value = core::runtime::TensorFromProto(tensor);
+    if (value.size_bytes())
+      key.append(reinterpret_cast<const char *>(value.bytes()), value.size_bytes());
+  }
+  return key;
+}
+
 void CollectOriginalOperators(const GraphProto &graph,
                               std::map<std::string, std::string> &operators,
                               std::vector<std::string> &order,
@@ -200,8 +216,23 @@ void CollectOriginalOperators(const GraphProto &graph,
     const auto found = bindings.find(name);
     return found == bindings.end() ? name : found->second;
   };
+  for (const auto &initializer : graph.initializer())
+    bindings[initializer.name().value()] = ConstantKey(initializer);
   for (const auto &node : graph.node()) {
-    if (IsLayer(node)) {
+    if (NormaliseDomain(node.domain()) == "ai.onnx" && node.op_type() == "Constant") {
+      TensorProto tensor;
+      if (const auto *value = FindAttribute(node, "value"); value != nullptr && value->has_t())
+        tensor = utils::CopyWithSharedTensorStorage(value->t());
+      else if (const auto *value = FindAttribute(node, "value_float"); value != nullptr) {
+        tensor.set_data_type(TensorProto::FLOAT);
+        tensor.add_float_data(value->f());
+      } else if (const auto *value = FindAttribute(node, "value_int"); value != nullptr) {
+        tensor.set_data_type(TensorProto::INT64);
+        tensor.add_int64_data(value->i());
+      }
+      ASSERT_NE(tensor.data_type(), TensorProto::UNDEFINED);
+      bindings[node.output(0).value()] = ConstantKey(tensor);
+    } else if (IsLayer(node)) {
       const GraphProto *body = LayerBody(node);
       ASSERT_NE(body, nullptr);
       ASSERT_EQ(body->input().size(), node.input().size());
@@ -328,7 +359,7 @@ TEST(RepeatedLayerPattern, DynamicMatMulLayersKeepDistinctWeightsExternalAndAreI
     EXPECT_TRUE(after.initializer(index).Equals(before.initializer(index)));
   for (const auto &node : after.node())
     if (IsLayer(node)) {
-      EXPECT_EQ(node.op_type(), "Layer");
+      EXPECT_EQ(node.op_type(), "Layer_MatMul_0");
     }
   for (const auto &function : model.functions())
     EXPECT_TRUE(function.name() == "Layer" || function.name().value().starts_with("Layer_"));
@@ -501,10 +532,10 @@ TEST(RepeatedLayerPattern, LiteralConstantsDoNotSplitRepeatedLayers) {
   ASSERT_FALSE(plan.rewrites().empty());
   CacheLayerBodies(builder);
   EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
-  ASSERT_EQ(builder.Nodes().size(), 4u);
-  EXPECT_EQ(builder.Nodes()[0].op_type(), "Constant");
+  ASSERT_EQ(builder.Nodes().size(), 3u);
   ASSERT_EQ(builder.LocalFunctions().size(), 1u);
-  EXPECT_EQ(builder.LocalFunctions()[0]->Nodes().size(), 3u);
+  EXPECT_EQ(builder.LocalFunctions()[0]->Nodes().size(), 4u);
+  EXPECT_EQ(builder.LocalFunctions()[0]->Nodes()[0].op_type(), "Constant");
   ExpectCoherentLayerMetadata(builder);
   const ModelProto extracted = builder.ToModel();
   EXPECT_NO_THROW(VerifyModel(extracted));
@@ -756,7 +787,7 @@ TEST(RepeatedLayerPattern, DoesNotReuseSpecialLayerOverloadAsDefault) {
   source.MakeOutput("h2");
 
   FunctionProto special;
-  special.set_name("Layer");
+  special.set_name("Layer_MatMul_0");
   special.set_domain("ai.rt");
   special.set_overload("special");
   special.add_input("x");
@@ -776,7 +807,7 @@ TEST(RepeatedLayerPattern, DoesNotReuseSpecialLayerOverloadAsDefault) {
   auto &imported_source = imported.LocalFunction("Source");
   ASSERT_FALSE(OptimizeLayers(imported_source).rewrites().empty());
   ASSERT_EQ(imported_source.Nodes().size(), 3u);
-  EXPECT_EQ(imported_source.Nodes()[0].op_type(), "Layer_1");
+  EXPECT_EQ(imported_source.Nodes()[0].op_type(), "Layer_MatMul_1");
   EXPECT_TRUE(imported_source.Nodes()[0].overload().empty());
 }
 
@@ -842,9 +873,9 @@ TEST(RepeatedLayerPattern, LocalFunctionExtractionUsesSourceOpsetsAndPreservesNo
   EXPECT_FALSE(std::any_of(source_function->opset_import().begin(),
                            source_function->opset_import().end(),
                            [](const auto &opset) { return opset.domain() == "ai.onnx"; }));
-  const auto layer_function =
-      std::find_if(extracted.functions().begin(), extracted.functions().end(),
-                   [](const FunctionProto &function) { return function.name() == "Layer"; });
+  const auto layer_function = std::find_if(
+      extracted.functions().begin(), extracted.functions().end(),
+      [](const FunctionProto &function) { return function.name() == "Layer_MatMul_0"; });
   ASSERT_NE(layer_function, extracted.functions().end());
   EXPECT_TRUE(std::any_of(
       layer_function->opset_import().begin(), layer_function->opset_import().end(),
@@ -1013,10 +1044,12 @@ TEST(RepeatedLayerPattern, BoundedOccurrenceBatchesDoNotLeaveSingletonRemainders
       ASSERT_TRUE(IsLayer(node));
       const GraphProto *body = LayerBody(node);
       ASSERT_NE(body, nullptr);
-      wrapped_nodes += body->node().size();
+      wrapped_nodes +=
+          std::count_if(body->node().begin(), body->node().end(),
+                        [](const auto &inner) { return inner.op_type() != "Constant"; });
     }
     EXPECT_EQ(wrapped_nodes, static_cast<std::size_t>(count * 2));
-    EXPECT_EQ(builder.Initializers().size(), 1u);
+    EXPECT_TRUE(builder.Initializers().empty());
     ExpectCoherentLayerMetadata(builder);
     EXPECT_LE(builder.ToModel().functions().size(), 3u);
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
@@ -1185,7 +1218,7 @@ TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGr
   for (std::size_t index = 0; index < before.output().size(); ++index)
     EXPECT_EQ(after.output()[index].name().value(), before.output()[index].name().value());
   EXPECT_EQ(builder.GetShape("h0_mm"), intermediate_shape);
-  EXPECT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_TRUE(builder.Initializers().empty());
 }
 
 TEST(RepeatedLayerPattern, AttentionLayersKeepOptionalInputsAndAttributes) {
@@ -1277,6 +1310,7 @@ TEST(RepeatedLayerPattern, SameShapedSequentialProjectionRolesFormWholeLayers) {
     const GraphProto *body = LayerBody(node);
     if (!body)
       continue;
+    EXPECT_EQ(node.op_type(), "Layer_MatMul_0");
     EXPECT_EQ(std::count_if(body->node().begin(), body->node().end(),
                             [](const NodeProto &inner) { return inner.op_type() == "MatMul"; }),
               2);
@@ -1312,6 +1346,7 @@ TEST(RepeatedLayerPattern, AttentionAndOutputProjectionStayInTheSameLayer) {
     const GraphProto *body = LayerBody(node);
     if (!body)
       continue;
+    EXPECT_EQ(node.op_type(), "Layer_Attention_0");
     EXPECT_EQ(std::count_if(body->node().begin(), body->node().end(),
                             [](const NodeProto &inner) { return inner.op_type() == "Attention"; }),
               1);
@@ -1356,6 +1391,7 @@ TEST(RepeatedLayerPattern, LocalCompositeCallsRetainTheirDefinitions) {
   EXPECT_EQ(builder.GetShape(input), shape);
   const ModelProto model = builder.ToModel();
   EXPECT_EQ(model.functions().size(), 2u);
+  EXPECT_TRUE(builder.HasLocalFunction("Layer_Projection_0"));
 }
 
 TEST(RepeatedLayerPattern, RootTraversalSurvivesHelpersAppendedByMultipleFunctions) {
@@ -2004,7 +2040,7 @@ TEST(RepeatedLayerPattern, ReusesBodiesRegardlessOfAttributeOrder) {
   ASSERT_EQ(builder.Nodes().size(), 3u);
   EXPECT_EQ(builder.LocalFunctions().size(), 1u);
   for (const auto &node : builder.Nodes())
-    EXPECT_EQ(node.op_type(), "Layer");
+    EXPECT_EQ(node.op_type(), "Layer_MatMul_0");
   EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
 }
 
@@ -2044,8 +2080,9 @@ TEST(RepeatedLayerPattern, DoesNotReuseImportedHelpersWithCallerSpecificRanges) 
       }
     }
     ModelProto model = builder.ToModel();
-    auto function = std::find_if(model.ref_functions().begin(), model.ref_functions().end(),
-                                 [](const auto &value) { return value.name() == "Layer"; });
+    auto function =
+        std::find_if(model.ref_functions().begin(), model.ref_functions().end(),
+                     [](const auto &value) { return value.name() == "Layer_MatMul_0"; });
     ASSERT_NE(function, model.ref_functions().end());
     ValueInfoProto *annotated = nullptr;
     if (location == 3) {
@@ -2071,14 +2108,14 @@ TEST(RepeatedLayerPattern, DoesNotReuseImportedHelpersWithCallerSpecificRanges) 
                                  : core::symbolic::kValueInfoMinMetadataKey);
     bound->set_value("123");
     core::builder::GraphBuilder imported(model, LayerSchemaLookup());
-    const GraphProto original_helper = imported.LocalFunction("Layer").BuildGraph();
+    const GraphProto original_helper = imported.LocalFunction("Layer_MatMul_0").BuildGraph();
     auto &source = imported.LocalFunction("Source1");
     ASSERT_FALSE(OptimizeLayers(source).rewrites().empty());
     ASSERT_EQ(source.Nodes().size(), 3u);
     for (const auto &node : source.Nodes())
-      EXPECT_EQ(node.op_type(), "Layer_1");
+      EXPECT_EQ(node.op_type(), "Layer_MatMul_1");
     EXPECT_EQ(imported.LocalFunctions().size(), 4u);
-    EXPECT_TRUE(original_helper.Equals(imported.LocalFunction("Layer").BuildGraph()));
+    EXPECT_TRUE(original_helper.Equals(imported.LocalFunction("Layer_MatMul_0").BuildGraph()));
     EXPECT_NO_THROW(VerifyModel(imported.ToModel()));
   }
 }
@@ -2513,77 +2550,85 @@ TEST(RepeatedLayerPattern, LeavesPreexistingLayerFunctionCallsUnwrapped) {
 }
 
 TEST(RepeatedLayerPattern, ExtractedLayersExecuteLikeTheOriginalGraphAcrossRepeatedRuns) {
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, 2}));
-  builder.MakeInitializer(MakeInitializer<float>("w0", {2, 2}, {1, -1, 2, 1}));
-  builder.MakeInitializer(MakeInitializer<float>("w1", {2, 2}, {0.5f, 1, -2, 1}));
-  builder.MakeInitializer(MakeInitializer<float>("w2", {2, 2}, {1, -1, 2, 1}));
-  AddMatMulLayer(builder, "x", "w0", "h0");
-  AddMatMulLayer(builder, "h0", "w1", "h1");
-  AddMatMulLayer(builder, "h1", "w2", "h2");
-  builder.MakeOutput("h0_mm");
-  builder.MakeOutput("h2");
-  const ModelProto original = builder.ToModel();
-  EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
-  const ModelProto extracted = builder.ToModel();
-  EXPECT_EQ(ExpectLayerContracts(extracted.graph()), 3u);
-  EXPECT_EQ(extracted.functions().size(), 2u);
+  for (const bool common_weight : {false, true}) {
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({1, 2}));
+    builder.MakeInitializer(MakeInitializer<float>("w0", {2, 2}, {1, -1, 2, 1}));
+    builder.MakeInitializer(MakeInitializer<float>(
+        "w1", {2, 2},
+        common_weight ? std::vector<float>{1, -1, 2, 1} : std::vector<float>{0.5f, 1, -2, 1}));
+    builder.MakeInitializer(MakeInitializer<float>("w2", {2, 2}, {1, -1, 2, 1}));
+    AddMatMulLayer(builder, "x", "w0", "h0");
+    AddMatMulLayer(builder, "h0", "w1", "h1");
+    AddMatMulLayer(builder, "h1", "w2", "h2");
+    builder.MakeOutput("h0_mm");
+    builder.MakeOutput("h2");
+    const ModelProto original = builder.ToModel();
+    EXPECT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    const ModelProto extracted = builder.ToModel();
+    EXPECT_EQ(ExpectLayerContracts(extracted.graph()), 3u);
+    EXPECT_EQ(extracted.functions().size(), 2u);
 
-  auto execute = [](const ModelProto &model) {
-    core::runtime::RuntimeSession session(model);
-    core::runtime::RuntimeContext context;
-    int matmul_calls = 0;
-    int relu_calls = 0;
-    context.RegisterCustomKernel(
-        "", "MatMul", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
-          ++matmul_calls;
-          const auto &left = runtime.Get(node.input(0));
-          const auto &right = runtime.Get(node.input(1));
-          ASSERT_EQ(left.shape.size(), 2u);
-          ASSERT_EQ(right.shape.size(), 2u);
-          ASSERT_EQ(left.shape[1], right.shape[0]);
-          const int64_t rows = left.shape[0];
-          const int64_t inner = left.shape[1];
-          const int64_t columns = right.shape[1];
-          std::vector<float> values(static_cast<std::size_t>(rows * columns), 0.0f);
-          for (int64_t row = 0; row < rows; ++row)
-            for (int64_t column = 0; column < columns; ++column)
-              for (int64_t index = 0; index < inner; ++index)
-                values[static_cast<std::size_t>(row * columns + column)] +=
-                    left.AsFloat()[row * inner + index] * right.AsFloat()[index * columns + column];
-          runtime.Put(node.output(0),
-                      core::runtime::Tensor::FromFloat(node.output(0), {rows, columns}, values));
-        });
-    context.RegisterCustomKernel(
-        "", "Relu", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
-          ++relu_calls;
-          const auto &input = runtime.Get(node.input(0));
-          std::vector<float> values(input.AsFloat(), input.AsFloat() + input.element_count());
-          for (auto &value : values)
-            value = std::max(value, 0.0f);
-          runtime.Put(node.output(0),
-                      core::runtime::Tensor::FromFloat(node.output(0), input.shape, values));
-        });
-    std::vector<std::vector<float>> results;
-    for (const std::vector<float> &feed : {std::vector<float>{-2, 3}, std::vector<float>{1, 2}}) {
-      context.Put("x", core::runtime::Tensor::FromFloat("x", {1, 2}, feed));
-      session.Run(context);
-      std::vector<float> values;
-      for (const char *name : {"h0_mm", "h2"}) {
-        const auto &output = context.Get(name);
-        values.insert(values.end(), output.AsFloat(), output.AsFloat() + output.element_count());
+    auto execute = [](const ModelProto &model) {
+      core::runtime::RuntimeSession session(model);
+      core::runtime::RuntimeContext context;
+      int matmul_calls = 0;
+      int relu_calls = 0;
+      context.RegisterCustomKernel(
+          "", "MatMul", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+            ++matmul_calls;
+            const auto &left = runtime.Get(node.input(0));
+            const auto &right = runtime.Get(node.input(1));
+            ASSERT_EQ(left.shape.size(), 2u);
+            ASSERT_EQ(right.shape.size(), 2u);
+            ASSERT_EQ(left.shape[1], right.shape[0]);
+            const int64_t rows = left.shape[0];
+            const int64_t inner = left.shape[1];
+            const int64_t columns = right.shape[1];
+            std::vector<float> values(static_cast<std::size_t>(rows * columns), 0.0f);
+            for (int64_t row = 0; row < rows; ++row)
+              for (int64_t column = 0; column < columns; ++column)
+                for (int64_t index = 0; index < inner; ++index)
+                  values[static_cast<std::size_t>(row * columns + column)] +=
+                      left.AsFloat()[row * inner + index] *
+                      right.AsFloat()[index * columns + column];
+            runtime.Put(node.output(0),
+                        core::runtime::Tensor::FromFloat(node.output(0), {rows, columns}, values));
+          });
+      context.RegisterCustomKernel(
+          "", "Relu", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+            ++relu_calls;
+            const auto &input = runtime.Get(node.input(0));
+            std::vector<float> values(input.AsFloat(), input.AsFloat() + input.element_count());
+            for (auto &value : values)
+              value = std::max(value, 0.0f);
+            runtime.Put(node.output(0),
+                        core::runtime::Tensor::FromFloat(node.output(0), input.shape, values));
+          });
+      std::vector<std::vector<float>> results;
+      for (const std::vector<float> &feed : {std::vector<float>{-2, 3}, std::vector<float>{1, 2}}) {
+        context.Put("x", core::runtime::Tensor::FromFloat("x", {1, 2}, feed));
+        session.Run(context);
+        std::vector<float> values;
+        for (const char *name : {"h0_mm", "h2"}) {
+          const auto &output = context.Get(name);
+          values.insert(values.end(), output.AsFloat(), output.AsFloat() + output.element_count());
+        }
+        results.push_back(std::move(values));
+        EXPECT_EQ(context.Get("x").AsFloat()[0], feed[0]);
+        EXPECT_EQ(context.Get("x").AsFloat()[1], feed[1]);
       }
-      results.push_back(std::move(values));
-      EXPECT_EQ(context.Get("x").AsFloat()[0], feed[0]);
-      EXPECT_EQ(context.Get("x").AsFloat()[1], feed[1]);
-    }
-    EXPECT_EQ(matmul_calls, 6);
-    EXPECT_EQ(relu_calls, 6);
-    return results;
-  };
-  const auto baseline = execute(original);
-  EXPECT_EQ(baseline, (std::vector<std::vector<float>>{{4, 5, 18, 9}, {5, 1, 12.5f, 5.5f}}));
-  EXPECT_EQ(execute(extracted), baseline);
+      EXPECT_EQ(matmul_calls, 6);
+      EXPECT_EQ(relu_calls, 6);
+      return results;
+    };
+    const auto baseline = execute(original);
+    EXPECT_EQ(baseline,
+              common_weight
+                  ? (std::vector<std::vector<float>>{{4, 5, 16, 0}, {5, 1, 7, 0}})
+                  : (std::vector<std::vector<float>>{{4, 5, 18, 9}, {5, 1, 12.5f, 5.5f}}));
+    EXPECT_EQ(execute(extracted), baseline);
+  }
 }
 
 } // namespace

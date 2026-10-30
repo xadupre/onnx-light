@@ -100,45 +100,42 @@ OperatorGroupProposal Groups(const GraphProto &snapshot, const OperatorGroupOpti
 NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const OperatorGroup &group,
                     const ValueInfos &descriptors, size_t &suffix) {
   auto &source = graph.Builder();
-  auto &model = source.ModelBuilder();
   source.SetOpsetVersion("ai.rt", 1);
-  std::string name;
-  do {
-    name = suffix == 0 ? "PartitionGroup" : "PartitionGroup_" + std::to_string(suffix);
-    ++suffix;
-  } while (model.HasName(name) ||
-           source.Shapes().HasLocalFunction(
-               core::shapes::ShapesContext::LocalFunctionKey("ai.rt", name, "")) ||
-           source.IsRegisteredOperator(MakeNode(name.c_str(), {}, {}, "ai.rt")));
-  FunctionProto function;
-  function.set_name(name);
-  function.set_domain("ai.rt");
-  for (const auto &[domain, version] : source.OpsetVersions()) {
-    auto &opset = *function.add_opset_import();
-    opset.set_domain(domain);
-    opset.set_version(version);
-  }
+  GraphProto body;
   std::unordered_set<std::string> annotated;
   auto annotate = [&](const std::string &name) {
     const auto found = descriptors.find(name);
     if (found != descriptors.end() && annotated.insert(name).second)
-      *function.add_value_info() = *found->second;
+      *body.add_value_info() = *found->second;
   };
   for (const auto &input : group.inputs) {
-    function.add_input(input);
-    annotate(input);
+    auto &value = *body.add_input();
+    value.set_name(input);
+    const auto found = descriptors.find(input);
+    if (found != descriptors.end())
+      value = *found->second;
+    annotated.insert(input);
   }
-  for (const auto &output : group.outputs)
-    function.add_output(output);
+  for (const auto &output : group.outputs) {
+    auto &value = *body.add_output();
+    value.set_name(output);
+    const auto found = descriptors.find(output);
+    if (found != descriptors.end())
+      value = *found->second;
+    annotated.insert(output);
+  }
   for (size_t index : group.node_indices) {
     const auto &node = snapshot.node()[index];
-    *function.add_node() = utils::CopyWithSharedTensorStorage(node);
+    *body.add_node() = utils::CopyWithSharedTensorStorage(node);
     for (const auto &output : node.output())
       if (!output.empty())
         annotate(output.value());
   }
-  model.MakeLocalFunction(function);
-  return MakeNode(name.c_str(), group.inputs, group.outputs, "ai.rt",
+  const auto producers = FindCommonOperatorGroupInputs(graph, {&group, 1});
+  const auto inputs = InlineOperatorGroupInputs(body, group, producers);
+  const std::string name =
+      AddOperatorGroupFunction(source, std::move(body), "PartitionGroup", suffix);
+  return MakeNode(name.c_str(), inputs, group.outputs, "ai.rt",
                   source.UniqueName("PartitionGroup").c_str());
 }
 

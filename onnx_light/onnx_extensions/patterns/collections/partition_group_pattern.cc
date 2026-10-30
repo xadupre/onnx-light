@@ -11,10 +11,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
-PartitionGroupPattern::PartitionGroupPattern(int priority, uint64_t max_boundary_bytes,
-                                             uint64_t min_group_nodes, uint64_t max_group_nodes)
+PartitionGroupPattern::PartitionGroupPattern(int priority,
+                                             std::optional<uint64_t> max_boundary_bytes,
+                                             uint64_t min_group_nodes, uint64_t max_group_nodes,
+                                             std::optional<uint64_t> max_constant_inputs)
     : PatternOptimization(priority, "PartitionGroup"),
-      options_{max_boundary_bytes, min_group_nodes, max_group_nodes} {
+      options_{max_boundary_bytes, min_group_nodes, max_group_nodes, max_constant_inputs} {
   if (min_group_nodes < 2 || max_group_nodes < min_group_nodes)
     throw std::invalid_argument("PartitionGroup requires 2 <= min_group_nodes <= max_group_nodes.");
 }

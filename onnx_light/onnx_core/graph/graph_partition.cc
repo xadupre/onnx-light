@@ -97,6 +97,8 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
     initializer(value.name());
   for (const auto &value : graph.sparse_initializer())
     initializer(value.values().name());
+  for (const auto &value : graph.extended_initializer())
+    initializer(value.name());
 
   std::unordered_map<std::string, size_t> producers, last_use;
   std::vector<size_t> indices;
@@ -193,14 +195,17 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
 
     std::vector<std::string> inputs, outputs;
     std::unordered_set<std::string> seen_inputs;
+    size_t constant_inputs = 0;
     const size_t length_limit =
         static_cast<size_t>(std::min<uint64_t>(count - start, options.max_group_nodes));
     for (size_t end = start; end < start + length_limit; ++end) {
       for (const auto &name : node_inputs[end]) {
         const auto producer = producers.find(name);
         if ((producer == producers.end() || producer->second < start) &&
-            seen_inputs.insert(name).second)
+            seen_inputs.insert(name).second) {
           inputs.push_back(name);
+          constant_inputs += constants.count(name);
+        }
         const auto use = last_use.find(name);
         if (use != last_use.end() && use->second == end)
           std::erase(outputs, name);
@@ -208,23 +213,30 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
       for (const auto &name : node_outputs[end])
         if (live_after(name, end))
           outputs.push_back(name);
-      const Cost input_cost = cost(inputs, {});
-      if (input_cost.unknown || input_cost.bytes > options.max_boundary_bytes)
+      if (options.max_constant_inputs && constant_inputs > *options.max_constant_inputs)
         break;
+      if (options.max_boundary_bytes) {
+        const Cost input_cost = cost(inputs, {});
+        if (input_cost.unknown || input_cost.bytes > *options.max_boundary_bytes)
+          break;
+      }
       const size_t length = end - start + 1;
       if (length < options.min_group_nodes || outputs.empty())
         continue;
       const Cost boundary = cost(inputs, outputs);
-      if (boundary.unknown || boundary.bytes > options.max_boundary_bytes)
+      if (options.max_boundary_bytes &&
+          (boundary.unknown || boundary.bytes > *options.max_boundary_bytes))
         continue;
-      const Score score{{state.cost.unknown, CheckedAdd(state.cost.bytes, boundary.bytes)},
+      const Score score{{CheckedAdd(state.cost.unknown, boundary.unknown),
+                         CheckedAdd(state.cost.bytes, boundary.bytes)},
                         state.grouped + length};
       if (!best[end + 1] || Better(score, *best[end + 1])) {
         OperatorGroup group;
         group.node_indices.assign(indices.begin() + start, indices.begin() + end + 1);
         group.inputs = inputs;
         group.outputs = outputs;
-        group.transfer_bytes = boundary.bytes;
+        if (!boundary.unknown)
+          group.transfer_bytes = boundary.bytes;
         update(end + 1, score, start, std::move(group));
       }
     }

@@ -10,6 +10,9 @@
 #include <unordered_set>
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/compute/value_tags.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
@@ -23,20 +26,35 @@ bool IsGroup(const NodeProto &node) {
          (node.op_type() == "PartitionGroup" || node.op_type().find("PartitionGroup_") == 0);
 }
 
-bool Extractable(const NodeProto &node) {
+ValueInfos Descriptors(const GraphProto &graph) {
+  ValueInfos result;
+  for (const auto *values : {&graph.input(), &graph.output(), &graph.value_info()})
+    for (const auto &value : *values)
+      result.emplace(value.name().value(), &value);
+  return result;
+}
+
+bool Extractable(const NodeProto &node, const core::shapes::ShapesContext &shapes,
+                 const ValueInfos &descriptors) {
   if (IsGroup(node) || !node.device_configurations().empty())
     return false;
+  if (!core::shapes::HasShapeInference(shapes, node) &&
+      !core::shapes::CanSeedAnnotatedOutputsForUnknownCustomOp(shapes, node, descriptors))
+    return false;
+  const auto extractable_graph = [&](const GraphProto &body) {
+    const auto annotations = Descriptors(body);
+    return std::all_of(body.node().begin(), body.node().end(), [&](const NodeProto &inner) {
+      return Extractable(inner, shapes, annotations);
+    });
+  };
   for (const auto &attribute : node.attribute()) {
     if (!attribute.ref_attr_name().empty())
       return false;
-    if (attribute.has_g())
-      for (const auto &inner : attribute.g().node())
-        if (!Extractable(inner))
-          return false;
+    if (attribute.has_g() && !extractable_graph(attribute.g()))
+      return false;
     for (const auto &body : attribute.graphs())
-      for (const auto &inner : body.node())
-        if (!Extractable(inner))
-          return false;
+      if (!extractable_graph(body))
+        return false;
   }
   return true;
 }
@@ -50,6 +68,21 @@ GraphProto AnalysisGraph(GraphGraph &graph) {
       *value.mutable_type() = builder.Shapes().GetType(name);
     if (graph.HasShape(name))
       core::symbolic::SymTensorToValueInfo(graph.GetShape(name), value);
+    const auto &tags = builder.Compute().ValueTags();
+    const auto tag = tags.find(name);
+    if (tag != tags.end()) {
+      StringStringEntryProto *metadata = nullptr;
+      for (auto &entry : value.ref_metadata_props())
+        if (entry.key() == core::compute::kValueTagMetadataKey) {
+          metadata = &entry;
+          break;
+        }
+      if (metadata == nullptr) {
+        metadata = value.add_metadata_props();
+        metadata->set_key(core::compute::kValueTagMetadataKey);
+      }
+      metadata->set_value(tag->second);
+    }
   };
   for (auto &value : snapshot.ref_input())
     describe(value);
@@ -73,28 +106,25 @@ GraphProto AnalysisGraph(GraphGraph &graph) {
   std::vector<std::string> ordered(captures.begin(), captures.end());
   std::sort(ordered.begin(), ordered.end());
   for (const auto &name : ordered) {
-    auto &value = *snapshot.add_input();
+    // Analysis-only declarations preserve constant provenance without loading weights.
+    const bool constant = graph.IsConstant(name);
+    if (constant)
+      snapshot.add_initializer()->set_name(name);
+    auto &value = *(constant ? snapshot.add_value_info() : snapshot.add_input());
     value.set_name(name);
     describe(value);
   }
-  // The core analysis understands dense/sparse initializers; mark the builder's
-  // extended initializers as ordinary constants without reading their payloads.
-  for (const auto &value : snapshot.extended_initializer())
-    snapshot.add_initializer()->set_name(value.name());
   return snapshot;
 }
 
-OperatorGroupProposal Groups(const GraphProto &snapshot, const OperatorGroupOptions &options) {
-  auto proposal = ProposeOperatorGroups(snapshot, options);
-  const auto removed = std::erase_if(proposal.groups, [&](const OperatorGroup &group) {
-    for (size_t index = group.node_indices.front(); index <= group.node_indices.back(); ++index)
-      if (!Extractable(snapshot.node()[index]))
-        return true;
-    return false;
-  });
-  if (removed)
-    return MakeIntervalGroupProposal(std::move(proposal.groups), snapshot.node().size());
-  return proposal;
+OperatorGroupProposal Groups(GraphGraph &graph, const GraphProto &snapshot,
+                             const OperatorGroupOptions &options) {
+  const auto descriptors = Descriptors(snapshot);
+  std::set<size_t> excluded;
+  for (size_t index = 0; index < snapshot.node().size(); ++index)
+    if (!Extractable(snapshot.node()[index], graph.Builder().Shapes(), descriptors))
+      excluded.insert(index);
+  return ProposeOperatorGroups(snapshot, options, {}, excluded);
 }
 
 NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const OperatorGroup &group,
@@ -163,7 +193,7 @@ OperatorGroupProposal ProposePartitionGroups(GraphGraph &graph,
     proposal.status = status;
     return proposal;
   }
-  return Groups(AnalysisGraph(graph), options);
+  return Groups(graph, AnalysisGraph(graph), options);
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -175,14 +205,11 @@ MakePartitionGroupReplacements(GraphGraph &graph, const std::vector<const NodePr
   if (Eligibility(graph) != OperatorGroupStatus::kFound)
     throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
   const GraphProto snapshot = AnalysisGraph(graph);
-  const auto proposal = Groups(snapshot, options);
+  const auto proposal = Groups(graph, snapshot, options);
   if (proposal.status != OperatorGroupStatus::kFound ||
       proposal.MatchedNodes(graph.Builder().Nodes()) != nodes)
     throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
-  ValueInfos descriptors;
-  for (const auto *values : {&snapshot.input(), &snapshot.output(), &snapshot.value_info()})
-    for (const auto &value : *values)
-      descriptors.emplace(value.name().value(), &value);
+  const auto descriptors = Descriptors(snapshot);
   size_t suffix = 0;
   return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
     return MakeGroup(graph, snapshot, proposal.groups[group], descriptors, suffix);

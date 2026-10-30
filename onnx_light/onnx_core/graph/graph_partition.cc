@@ -25,13 +25,15 @@ std::optional<uint64_t> TensorBytes(const ValueInfoProto &value) {
   if (!bits)
     return std::nullopt;
   bool zero = false;
+  bool unknown = false;
   for (const auto &dim : tensor.shape().dim()) {
-    if (!dim.has_dim_value() || dim.dim_value() < 0)
-      return std::nullopt;
-    zero = zero || dim.dim_value() == 0;
+    unknown = unknown || !dim.has_dim_value() || dim.dim_value() < 0;
+    zero = zero || (dim.has_dim_value() && dim.dim_value() == 0);
   }
   if (zero)
     return 0;
+  if (unknown)
+    return std::nullopt;
   uint64_t bytes = bits / 8;
   uint64_t remainder = bits % 8;
   for (const auto &dim : tensor.shape().dim()) {
@@ -56,7 +58,15 @@ std::optional<uint64_t> TensorBytes(const ValueInfoProto &value) {
 struct Cost {
   uint64_t unknown = 0;
   uint64_t bytes = 0;
+  // Retains the high word so losing alternatives cannot overflow the optimum.
+  uint64_t overflow = 0;
 };
+
+Cost AddCost(const Cost &a, const Cost &b) {
+  const uint64_t bytes = a.bytes + b.bytes;
+  return {CheckedAdd(a.unknown, b.unknown), bytes,
+          CheckedAdd(CheckedAdd(a.overflow, b.overflow), bytes < a.bytes)};
+}
 
 struct Score {
   Cost cost;
@@ -64,8 +74,10 @@ struct Score {
 };
 
 bool Better(const Score &a, const Score &b) {
-  if (std::tie(a.cost.unknown, a.cost.bytes) != std::tie(b.cost.unknown, b.cost.bytes))
-    return std::tie(a.cost.unknown, a.cost.bytes) < std::tie(b.cost.unknown, b.cost.bytes);
+  if (std::tie(a.cost.unknown, a.cost.overflow, a.cost.bytes) !=
+      std::tie(b.cost.unknown, b.cost.overflow, b.cost.bytes))
+    return std::tie(a.cost.unknown, a.cost.overflow, a.cost.bytes) <
+           std::tie(b.cost.unknown, b.cost.overflow, b.cost.bytes);
   return a.grouped > b.grouped;
 }
 
@@ -78,10 +90,13 @@ struct Step {
 
 OperatorGroupProposal
 ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &options,
-                      const std::unordered_map<std::string, uint64_t> &value_sizes) {
+                      const std::unordered_map<std::string, uint64_t> &value_sizes,
+                      const std::set<size_t> &excluded_nodes) {
   if (options.min_group_nodes < 2 || options.max_group_nodes < options.min_group_nodes)
     throw std::invalid_argument(
         "Operator grouping requires 2 <= min_group_nodes <= max_group_nodes.");
+  if (!excluded_nodes.empty() && *excluded_nodes.rbegin() >= graph.node().size())
+    throw std::invalid_argument("Excluded operator grouping node index is out of range.");
 
   std::unordered_set<std::string> graph_inputs, defined, constants;
   for (const auto &value : graph.input()) {
@@ -161,7 +176,7 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
         if (size == sizes.end() || !size->second)
           result.unknown = CheckedAdd(result.unknown, 1);
         else
-          result.bytes = CheckedAdd(result.bytes, *size->second);
+          result = AddCost(result, {0, *size->second});
       }
     }
     return result;
@@ -187,18 +202,17 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
       if (live_after(name, start))
         single_outputs.push_back(name);
     const Cost single = cost(node_inputs[start], single_outputs);
-    update(start + 1,
-           {{CheckedAdd(state.cost.unknown, single.unknown),
-             CheckedAdd(state.cost.bytes, single.bytes)},
-            state.grouped},
-           start, std::nullopt);
+    update(start + 1, {AddCost(state.cost, single), state.grouped}, start, std::nullopt);
 
     std::vector<std::string> inputs, outputs;
     std::unordered_set<std::string> seen_inputs;
     size_t constant_inputs = 0;
     const size_t length_limit =
         static_cast<size_t>(std::min<uint64_t>(count - start, options.max_group_nodes));
+    const auto excluded = excluded_nodes.lower_bound(indices[start]);
     for (size_t end = start; end < start + length_limit; ++end) {
+      if (excluded != excluded_nodes.end() && indices[end] >= *excluded)
+        break;
       for (const auto &name : node_inputs[end]) {
         const auto producer = producers.find(name);
         if ((producer == producers.end() || producer->second < start) &&
@@ -217,7 +231,8 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
         break;
       if (options.max_boundary_bytes) {
         const Cost input_cost = cost(inputs, {});
-        if (input_cost.unknown || input_cost.bytes > *options.max_boundary_bytes)
+        if (input_cost.unknown || input_cost.overflow ||
+            input_cost.bytes > *options.max_boundary_bytes)
           break;
       }
       const size_t length = end - start + 1;
@@ -225,22 +240,22 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
         continue;
       const Cost boundary = cost(inputs, outputs);
       if (options.max_boundary_bytes &&
-          (boundary.unknown || boundary.bytes > *options.max_boundary_bytes))
+          (boundary.unknown || boundary.overflow || boundary.bytes > *options.max_boundary_bytes))
         continue;
-      const Score score{{CheckedAdd(state.cost.unknown, boundary.unknown),
-                         CheckedAdd(state.cost.bytes, boundary.bytes)},
-                        state.grouped + length};
+      const Score score{AddCost(state.cost, boundary), state.grouped + length};
       if (!best[end + 1] || Better(score, *best[end + 1])) {
         OperatorGroup group;
         group.node_indices.assign(indices.begin() + start, indices.begin() + end + 1);
         group.inputs = inputs;
         group.outputs = outputs;
-        if (!boundary.unknown)
+        if (!boundary.unknown && !boundary.overflow)
           group.transfer_bytes = boundary.bytes;
         update(end + 1, score, start, std::move(group));
       }
     }
   }
+  if (best[count]->cost.overflow)
+    throw std::invalid_argument("Operator grouping transfer cost overflows uint64.");
   std::vector<OperatorGroup> result;
   for (size_t position = count; position;) {
     auto &step = previous[position];

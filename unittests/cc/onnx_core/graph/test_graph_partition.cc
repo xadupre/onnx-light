@@ -243,6 +243,60 @@ TEST(GraphPartition, StaticSizeOverflowIsUnknownAndZeroDimensionsDoNotOverflow) 
   EXPECT_TRUE(ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}).groups.empty());
 }
 
+TEST(GraphPartition, EmptySymbolicAndUnspecifiedDimensionsHaveKnownZeroBytes) {
+  for (const bool zero_first : {false, true})
+    for (const bool symbolic : {false, true}) {
+      auto graph = Chain();
+      for (auto *value : {graph.mutable_input(0), graph.mutable_output(0)}) {
+        auto *shape = value->mutable_type()->mutable_tensor_type()->mutable_shape();
+        shape->clear_dim();
+        for (const bool zero : {zero_first, !zero_first}) {
+          auto *dimension = shape->add_dim();
+          if (zero)
+            dimension->set_dim_value(0);
+          else if (symbolic)
+            dimension->set_dim_param("N");
+        }
+      }
+      for (const auto &options : {OperatorGroupOptions{}, OperatorGroupOptions{0, 2, 128}}) {
+        const auto groups = ProposeOperatorGroups(graph, options).groups;
+        ASSERT_EQ(groups.size(), 1u);
+        EXPECT_EQ(groups[0].transfer_bytes, 0u);
+      }
+    }
+}
+
+TEST(GraphPartition, OverflowingAlternativesDoNotRejectRepresentableOptimum) {
+  auto graph = Chain();
+  for (const uint64_t internal : {uint64_t{1} << 63, UINT64_MAX}) {
+    const auto groups = ProposeOperatorGroups(graph, {8, 2, 128}, {{"v0", internal}}).groups;
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0].node_indices, (std::vector<size_t>{0, 1}));
+    EXPECT_EQ(groups[0].transfer_bytes, 8u);
+  }
+  graph = Chain(3);
+  const auto groups =
+      ProposeOperatorGroups(graph, {}, {{"v0", UINT64_MAX}, {"v1", UINT64_MAX}}).groups;
+  ASSERT_EQ(groups.size(), 1u);
+  EXPECT_EQ(groups[0].node_indices, (std::vector<size_t>{0, 1, 2}));
+  EXPECT_EQ(groups[0].transfer_bytes, 8u);
+}
+
+TEST(GraphPartition, ExcludedNodesSplitIntervalsWithoutDiscardingEligibleNeighbors) {
+  const auto graph = Chain(5);
+  const auto groups = ProposeOperatorGroups(graph, {}, {}, {2}).groups;
+  ASSERT_EQ(groups.size(), 2u);
+  EXPECT_EQ(groups[0].node_indices, (std::vector<size_t>{0, 1}));
+  EXPECT_EQ(groups[1].node_indices, (std::vector<size_t>{3, 4}));
+  EXPECT_THROW(ProposeOperatorGroups(graph, {}, {}, {5}), std::invalid_argument);
+
+  auto constants = Chain(3);
+  auto &constant = *constants.mutable_node(1);
+  constant.set_op_type("Constant");
+  constant.clear_input();
+  EXPECT_TRUE(ProposeOperatorGroups(constants, {}, {}, {1}).groups.empty());
+}
+
 TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {
   auto graph = Chain();
   Describe(graph.mutable_input(0), "x", {std::numeric_limits<int64_t>::max(), 2},

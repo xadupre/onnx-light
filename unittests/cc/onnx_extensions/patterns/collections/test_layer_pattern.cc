@@ -2569,11 +2569,17 @@ TEST(RepeatedLayerPattern, ExtractedLayersExecuteLikeTheOriginalGraphAcrossRepea
     EXPECT_EQ(ExpectLayerContracts(extracted.graph()), 3u);
     EXPECT_EQ(extracted.functions().size(), 2u);
 
-    auto execute = [](const ModelProto &model) {
+    auto execute = [common_weight](const ModelProto &model) {
       core::runtime::RuntimeSession session(model);
       core::runtime::RuntimeContext context;
       int matmul_calls = 0;
       int relu_calls = 0;
+      int constant_calls = 0;
+      context.RegisterCustomKernel(
+          "", "Constant", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+            ++constant_calls;
+            runtime.Put(node.output(0), core::runtime::TensorFromProto(node.attribute(0).t()));
+          });
       context.RegisterCustomKernel(
           "", "MatMul", [&](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
             ++matmul_calls;
@@ -2620,6 +2626,7 @@ TEST(RepeatedLayerPattern, ExtractedLayersExecuteLikeTheOriginalGraphAcrossRepea
       }
       EXPECT_EQ(matmul_calls, 6);
       EXPECT_EQ(relu_calls, 6);
+      EXPECT_EQ(constant_calls, model.functions().empty() || !common_weight ? 0 : 6);
       return results;
     };
     const auto baseline = execute(original);

@@ -14,6 +14,10 @@ It returns proposals without changing the model or installing functions:
         nodes = [model.graph.node[i] for i in group.node_indices]
         print(group.inputs, group.outputs, group.transfer_bytes)
 
+Graph analysis, size accounting and grouping run in C++; the Python facade
+validates arguments and returns immutable ``OperatorGroup`` records. Native
+callers use :cpp:func:`onnx_light::core::graph::ProposeOperatorGroups`.
+
 Run shape inference before proposing groups when intermediate descriptors are
 missing. Alternatively, pass ``value_sizes={"name": estimated_bytes}`` for
 dynamic boundaries. Unknown sizes are never treated as zero.
@@ -24,6 +28,11 @@ search considers up to 128 non-Constant operators per function. Constants and
 initializers remain explicit body inputs but contribute no transfer cost, except
 for overridable initializers also declared as graph inputs. The budget limits
 the sum of all input and output bytes, not each tensor separately.
+Limits and explicit byte estimates must fit in an unsigned 64-bit integer.
+Static sizes use the shared native element-width helper, including packed
+2-, 4- and 6-bit tensor types.
+Static tensor sizes that exceed the native size range are treated as unknown,
+not truncated. Accumulated transfer-cost overflow raises ``ValueError``.
 
 .. automodule:: onnx_light.onnx_core.graph_partition
     :members:

@@ -4,6 +4,7 @@
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/graph/graph_partition.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shape_inference.h"
@@ -66,6 +67,37 @@ NB_MODULE(_onnxpycore, m) {
   AddOnnxPyShapeInference(m);
   AddOnnxPyBuilder(m);
   AddOnnxPyPatternCore(m);
+  auto partition = m.def_submodule("graph_partition");
+  nb::class_<core::graph::OperatorGroup>(partition, "OperatorGroup")
+      .def_ro("node_indices", &core::graph::OperatorGroup::node_indices)
+      .def_ro("inputs", &core::graph::OperatorGroup::inputs)
+      .def_ro("outputs", &core::graph::OperatorGroup::outputs)
+      .def_ro("transfer_bytes", &core::graph::OperatorGroup::transfer_bytes);
+  partition.def(
+      "propose_operator_groups",
+      [](const GraphProto &graph, nb::object max_bytes, nb::object min_nodes, nb::object max_nodes,
+         const nb::dict &value_sizes) {
+        auto integer = [](nb::handle value) {
+          uint64_t result;
+          if (nb::isinstance<nb::bool_>(value) || !nb::isinstance<nb::int_>(value) ||
+              !nb::try_cast(value, result))
+            throw nb::value_error("Grouping limits and sizes must be uint64 integers.");
+          return result;
+        };
+        core::graph::OperatorGroupOptions options{integer(max_bytes), integer(min_nodes),
+                                                  integer(max_nodes)};
+        std::unordered_map<std::string, uint64_t> sizes;
+        for (auto item : value_sizes) {
+          std::string name;
+          if (!nb::try_cast(item.first, name))
+            throw nb::value_error("value_sizes keys must be strings.");
+          sizes.emplace(std::move(name), integer(item.second));
+        }
+        return core::graph::ProposeOperatorGroups(graph, options, sizes);
+      },
+      nb::arg("graph"), nb::arg("max_boundary_bytes") = nb::int_(1024),
+      nb::arg("min_group_nodes") = nb::int_(2), nb::arg("max_group_nodes") = nb::int_(128),
+      nb::arg("value_sizes") = nb::dict());
 }
 
 void AddOnnxPyExpressions(nb::module_ &m) {

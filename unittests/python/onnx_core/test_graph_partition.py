@@ -8,6 +8,7 @@ import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_core.graph_partition import propose_operator_groups
+from onnx_light.onnx_py._onnxpycore import graph_partition as native_partition
 
 
 class TestGraphPartition(ExtTestCase):
@@ -209,6 +210,42 @@ class TestGraphPartition(ExtTestCase):
         self.assertEqual([g.node_indices for g in groups], [(0, 1), (2, 3)])
         self.assertEqual([g.transfer_bytes for g in groups], [8, 8])
 
+    def test_native_binding_matches_python_facade(self):
+        model = self.chain([[], [4096], [], [4096], []])
+        options = {"max_group_nodes": 2, "max_boundary_bytes": 8}
+        native = native_partition.propose_operator_groups(model.graph, **options)
+        python = propose_operator_groups(model, **options)
+        self.assertEqual(len(native), len(python))
+        for actual, expected in zip(native, python, strict=True):
+            self.assertEqual(tuple(actual.node_indices), expected.node_indices)
+            self.assertEqual(tuple(actual.inputs), expected.inputs)
+            self.assertEqual(tuple(actual.outputs), expected.outputs)
+            self.assertEqual(actual.transfer_bytes, expected.transfer_bytes)
+
+    def test_native_binding_validates_empty_graph(self):
+        graph = oh.make_graph([], "empty", [], [])
+        for kwargs in (
+            {"max_boundary_bytes": -1},
+            {"max_boundary_bytes": True},
+            {"min_group_nodes": 1},
+            {"max_group_nodes": 1},
+            {"value_sizes": {"x": -1}},
+            {"value_sizes": {"x": True}},
+            {"value_sizes": {"x": 1 << 64}},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                native_partition.propose_operator_groups(graph, **kwargs)
+
+    def test_native_sizes_do_not_wrap(self):
+        model = self.chain([[1 << 62, 16], [], [1 << 62, 16]])
+        self.assertEqual(propose_operator_groups(model, max_boundary_bytes=(1 << 64) - 1), [])
+        model = self.chain([[], [], []])
+        # Two individually representable boundary sizes overflow their sum.
+        with self.assertRaises((ValueError, OverflowError)):
+            propose_operator_groups(
+                model, max_boundary_bytes=(1 << 64) - 1, value_sizes={"x": 1 << 63, "y": 1 << 63}
+            )
+
     def test_nested_captures_are_charged_and_exported(self):
         model = self.chain([[], [4096], [], []])
         branch = oh.make_graph(
@@ -281,6 +318,10 @@ class TestGraphPartition(ExtTestCase):
             {"value_sizes": {"x": -1}},
             {"value_sizes": {"x": True}},
             {"value_sizes": {"x": 1.5}},
+            {"max_boundary_bytes": 1 << 64},
+            {"max_group_nodes": 1 << 64},
+            {"min_group_nodes": 1 << 64, "max_group_nodes": 1 << 64},
+            {"value_sizes": {"x": 1 << 64}},
         ):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 propose_operator_groups(graph, **kwargs)

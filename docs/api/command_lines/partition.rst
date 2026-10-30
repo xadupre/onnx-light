@@ -1,7 +1,8 @@
 partition
 =========
 
-Extracts local functions without loading large raw weight payloads. Chooses
+Extracts local functions while preserving inline weights and leaving large
+external weight payloads unloaded. Chooses
 repeated-layer detection or transfer-aware partitioning, saves a rewritten ONNX
 model and prints a function summary.
 
@@ -10,7 +11,7 @@ model and prints a function summary.
     python -m onnx_light partition layer model.onnx --output model.layers.onnx
     python -m onnx_light partition mincut model.onnx --output model.partition.onnx
 
-See :ref:`l-cli-partition` for algorithm descriptions, structural export details
+See :ref:`l-cli-partition` for algorithm descriptions, weight preservation
 and output placement.
 
 Both methods print their selection policy and two totals per call: inputs and

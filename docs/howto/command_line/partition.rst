@@ -4,7 +4,7 @@ partition
 =========
 
 Extracts model-local functions using one of two partitioning methods. Both
-methods preserve external weight references, omit large inline raw payloads
+methods preserve inline tensor payloads and external weight references
 and use the same loading, output and verbosity arguments. The former ``layers``
 command is now ``partition layer``.
 
@@ -123,18 +123,17 @@ neither selector compares symbolic formulas as a new optimization objective.
 Loading and weights
 -------------------
 
-The binary ONNX model is parsed without reading large ``raw_data`` payloads
-or large external tensor payloads. Raw tensors strictly smaller than 128 bytes
-are retained; tiny external tensors are loaded and inlined so shape inference
-can use values such as a ``Reshape`` shape. Change this positive byte threshold
-with ``--tiny-tensor-threshold BYTES``. Typed protobuf payload fields remain
-part of the model metadata and are parsed normally.
+All inline tensor payloads, including ``raw_data`` and typed protobuf fields,
+are loaded and preserved regardless of size. External tensors strictly smaller
+than 128 bytes are loaded and inlined so shape inference can use values such as
+a ``Reshape`` shape. Change this positive byte threshold with
+``--tiny-tensor-threshold BYTES``; it only controls external tensor loading.
 
 Large external weights retain their original location, offset and length;
-their payloads are not loaded during extraction. Large inline raw tensor payloads are
-omitted from this structural export. To retain executable weights in the
-rewritten model, externalize them before running the command.
-Results with omitted inline weights are for structural inspection only.
+their payloads are not loaded during extraction. The rewritten model retains its
+weights and can be verified and executed while its external files remain
+available. For models with large inline weights, externalize them before
+partitioning to reduce memory usage.
 Constant folding is disabled; only the selected pattern and the optimizer's
 normal structural cleanup passes run.
 

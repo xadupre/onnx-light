@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests metadata-only partitioning from the command line."""
+"""Tests weight-preserving partitioning from the command line."""
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -18,6 +18,7 @@ import onnx_light.onnx.numpy_helper as onh
 from onnx_light.__main__ import _build_parser, main
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto, load, save
+from onnx_light.onnx_proto.verify import verify_model
 
 
 def _repeated_model(layers=3):
@@ -351,25 +352,80 @@ class TestMainPartition(ExtTestCase):
                 main(["partition", "layer", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
-    def test_extracts_layers_with_skipped_inline_weights(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            source = directory / "model.onnx"
-            output = directory / "layers.onnx"
-            save(_repeated_model(), source)
-            original = source.read_bytes()
-            with redirect_stdout(StringIO()):
-                main(["partition", "layer", str(source), "-o", str(output)])
-            result = load(output)
-            self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
-            weights = [
-                tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
-            ]
-            self.assertEqual(len(weights), 3)
-            self.assertTrue(all(not weight.raw_data for weight in weights))
-            self.assertEqual(source.read_bytes(), original)
+    def test_preserves_inline_weights_and_numerics_including_in_place(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        for method in ("layer", "mincut"):
+            for in_place in (False, True):
+                with (
+                    self.subTest(method=method, in_place=in_place),
+                    tempfile.TemporaryDirectory() as temporary,
+                ):
+                    directory = Path(temporary)
+                    source = directory / "model.onnx"
+                    output = source if in_place else directory / "partition.onnx"
+                    model = _repeated_model(layers=20 if method == "mincut" else 3)
+                    save(model, source)
+                    original = source.read_bytes()
+                    with redirect_stdout(StringIO()):
+                        main(["partition", method, str(source), "-o", str(output)])
+                    result = load(output)
+                    verify_model(result)
+                    self.assertGreater(
+                        sum(node.domain == "ai.rt" for node in result.graph.node), 0
+                    )
+                    expected_weights = {
+                        str(tensor.name): bytes(tensor.raw_data)
+                        for tensor in model.graph.initializer
+                        if tensor.name.startswith("W")
+                    }
+                    actual_weights = {
+                        str(tensor.name): bytes(tensor.raw_data)
+                        for tensor in result.graph.initializer
+                        if tensor.name.startswith("W")
+                    }
+                    self.assertEqual(actual_weights, expected_weights)
+                    feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
+                    expected = ReferenceEvaluator(model).run(None, feeds)
+                    actual = ReferenceEvaluator(result).run(None, feeds)
+                    self.assertEqualArray(actual[0], expected[0])
+                    if not in_place:
+                        self.assertEqual(source.read_bytes(), original)
 
-    def test_skipped_weights_keep_parallel_projections_distinct(self):
+    def test_preserves_mixed_inline_and_unloaded_external_weights(self):
+        for method in ("layer", "mincut"):
+            with self.subTest(method=method), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                source = self._save_external(directory, layers=20 if method == "mincut" else 3)
+                model = load(source, load_external_data=False)
+                inline = _repeated_model().graph.initializer[1]
+                model.graph.initializer[1].CopyFrom(inline)
+                save(model, source)
+                original = source.read_bytes()
+                (directory / "weights.bin").unlink()
+                output = directory / "partition.onnx"
+                with redirect_stdout(StringIO()):
+                    main(["partition", method, str(source), "-o", str(output)])
+                result = load(output, load_external_data=False)
+                verify_model(result)
+                weights = {
+                    str(tensor.name): tensor
+                    for tensor in result.graph.initializer
+                    if tensor.name.startswith("W")
+                }
+                self.assertEqual(bytes(weights["W0"].raw_data), bytes(inline.raw_data))
+                for name, weight in weights.items():
+                    if name != "W0":
+                        self.assertEqual(weight.data_location, TensorProto.EXTERNAL)
+                        self.assertFalse(weight.raw_data)
+                        expected = next(t for t in model.graph.initializer if t.name == name)
+                        self.assertEqual(
+                            [(entry.key, entry.value) for entry in weight.external_data],
+                            [(entry.key, entry.value) for entry in expected.external_data],
+                        )
+                self.assertEqual(source.read_bytes(), original)
+
+    def test_inline_weights_keep_parallel_projections_distinct(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         for constants in (False, True):
             with self.subTest(constants=constants), tempfile.TemporaryDirectory() as temporary:
                 weights = [
@@ -407,10 +463,16 @@ class TestMainPartition(ExtTestCase):
                 with redirect_stdout(StringIO()):
                     main(["partition", "layer", str(source), "-o", str(output)])
                 result = load(output)
+                verify_model(result)
                 calls = [node for node in result.graph.node if node.domain == "ai.rt"]
                 self.assertEqual(len(calls), 3)
                 self.assertEqual(len(result.graph.initializer), 0 if constants else 3)
                 self.assertEqual({str(node.input[1]) for node in calls}, {"W0", "W1", "W2"})
+                feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(1, 16)}
+                expected = ReferenceEvaluator(model).run(None, feeds)
+                actual = ReferenceEvaluator(result).run(None, feeds)
+                for expected_output, actual_output in zip(expected, actual):
+                    self.assertEqualArray(actual_output, expected_output)
 
     def test_overwrites_existing_output_with_optional_verbose_notice(self):
         with tempfile.TemporaryDirectory() as temporary:

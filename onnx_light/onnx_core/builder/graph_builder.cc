@@ -40,6 +40,11 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
+bool HasUnloadedExternalData(const TensorProto &tensor) {
+  return !tensor.has_raw_data() && (tensor.has_external_data() ||
+                                    tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
+}
+
 template <typename Proto> std::string DeclaredValueTag(const Proto &value) {
   for (const auto &entry : value.metadata_props()) {
     if (entry.key() == core::compute::kValueTagMetadataKey) {
@@ -3446,7 +3451,9 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
   // references to existing elements (only iterators) on rehash.
   std::unordered_map<std::string, const TensorProto *> const_tensors;
   for (const TensorProto &initializer : initializers_) {
-    const_tensors.emplace(initializer.name().value(), &initializer);
+    if (!HasUnloadedExternalData(initializer)) {
+      const_tensors.emplace(initializer.name().value(), &initializer);
+    }
   }
   std::unordered_map<std::string, TensorProto> folded;
   folded.reserve(num_nodes);
@@ -3480,6 +3487,24 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       for (std::size_t i = 0; i < node.output().size(); ++i) {
         const std::string output(node.output(static_cast<std::size_t>(i)));
         if (!output.empty() && included_outputs->find(output) == included_outputs->end()) {
+          candidate = false;
+          break;
+        }
+      }
+    }
+    if (candidate) {
+      const auto has_unloaded_sparse_data = [](const SparseTensorProto &tensor) {
+        return HasUnloadedExternalData(tensor.values()) ||
+               HasUnloadedExternalData(tensor.indices());
+      };
+      for (const AttributeProto &attribute : node.attribute()) {
+        if ((attribute.has_t() && HasUnloadedExternalData(attribute.t())) ||
+            std::any_of(attribute.tensors().begin(), attribute.tensors().end(),
+                        HasUnloadedExternalData) ||
+            (attribute.has_sparse_tensor() &&
+             has_unloaded_sparse_data(attribute.sparse_tensor())) ||
+            std::any_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
+                        has_unloaded_sparse_data)) {
           candidate = false;
           break;
         }

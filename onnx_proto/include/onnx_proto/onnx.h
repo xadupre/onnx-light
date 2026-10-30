@@ -655,14 +655,15 @@ void WriteExternalData(utils::BinaryWriteStream &stream, const SerializeOptions 
  *
  * The element type and shape are always mixed in, followed by the size of
  * every payload field (raw_data, the typed data arrays, string_data and
- * external_data). When ``include_content`` is true the payload bytes and
- * string/external entries themselves are hashed as well, producing a more
- * discriminating (but costlier) value; when false only the field sizes are
- * mixed in, yielding a cheap hash suitable for bucketing candidates that are
+ * external_data). External metadata keys and values are always hashed in order
+ * without loading external payloads. When ``include_content`` is true the payload
+ * bytes and string entries themselves are hashed as well, producing a more
+ * discriminating (but costlier) value; when false only the inline payload sizes
+ * are mixed in, yielding a cheap hash suitable for bucketing candidates that are
  * then compared exactly.
  *
  * @param include_content When true, hashes the payload bytes; when false,
- *        hashes only the payload sizes.
+ *        hashes only the inline payload sizes and external metadata.
  * Returns: A 64-bit hash of the selected fields.
  */
 int64_t ContentHash(bool include_content) const;

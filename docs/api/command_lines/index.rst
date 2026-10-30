@@ -14,6 +14,8 @@ commands. Each page below describes one command, with its arguments and examples
       - Lists available commands and displays command-specific help.
     * - :doc:`python -m onnx_light fillshape <fillshape>`
       - Adds inferred shapes and optional memory and shape-tag metadata to a model.
+    * - :doc:`python -m onnx_light optimize <optimize>`
+      - Optimizes a model using default patterns, named groups, or explicit patterns.
     * - :doc:`python -m onnx_light partition <partition>`
       - Extracts repeated layers or low-transfer operator groups as local functions.
     * - :doc:`python -m onnx_light show <show>`
@@ -32,6 +34,7 @@ commands. Each page below describes one command, with its arguments and examples
 
     onnx_light
     fillshape
+    optimize
     partition
     show
     run

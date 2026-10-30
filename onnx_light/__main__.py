@@ -2,6 +2,16 @@
 
 Supported subcommands
 ---------------------
+optimize
+    Optimizes a model using the default patterns or comma-separated pattern
+    names and groups, and saves it beside the input to reuse external weights.
+
+    Usage::
+
+        onnx-light optimize model.onnx --output model.opt.onnx
+        onnx-light optimize model.onnx --output model.opt.onnx --patterns L1,L2
+        onnx-light optimize model.onnx --output model.opt.onnx --patterns NotNot,CastCast
+
 fillshape
     Fills a model's ``graph.value_info`` and ``graph.output`` with the shapes
     inferred by ``onnx_shapes`` shape inference.
@@ -151,7 +161,9 @@ kernel
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Iterator
 import json
+import math
 import os
 import re
 import sys
@@ -159,6 +171,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
+    from .onnx import AttributeProto, GraphProto, ModelProto, TensorProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -1299,6 +1312,237 @@ def _remove_node_metadata_key(graph: Any, key: str) -> None:
                 _remove_node_metadata_key(subgraph, key)
 
 
+def _optimization_patterns(selection: str | None) -> list[str] | None:
+    """Resolves comma-separated pattern names and groups to explicit names."""
+    if selection is None:
+        return None
+    from .onnx_core.optimization import (
+        registered_pattern_names,
+        standard_pattern_names,
+        standard_pattern_sets,
+    )
+
+    groups = standard_pattern_sets()
+    registered = registered_pattern_names()
+    available = set(standard_pattern_names(include_opt_in=True)) | set(registered)
+    selected: list[str] = []
+    for item in selection.split(","):
+        name = item.strip()
+        if not name:
+            raise ValueError("--patterns must contain non-empty comma-separated names.")
+        if name in groups:
+            selected.extend(groups[name])
+            if name == "all":
+                selected.extend(registered)
+        elif name in available:
+            selected.append(name)
+        else:
+            raise ValueError(
+                f"Unknown pattern or group {name!r}. "
+                f"Available groups: {', '.join(sorted(groups))}."
+            )
+    selected = list(dict.fromkeys(selected))
+    missing = [name for name in selected if name not in available]
+    if missing:
+        raise ValueError(f"Unregistered patterns in selected groups: {', '.join(missing)}.")
+    return selected
+
+
+def _reject_optimization_training_info(model_path: str) -> None:
+    """Rejects training graphs that the model parser cannot preserve."""
+    suffix = os.path.splitext(model_path)[1]
+    if suffix in {".pipeline", ".pipe-onnx"}:
+        return
+    if suffix == ".textproto":
+        from .onnx_proto._text_format import _TOKEN_RE
+
+        with open(model_path, encoding="utf-8") as text_stream:
+            text = text_stream.read()
+        if "training_info" not in text:
+            return
+        closing: list[str] = []
+        delimiters = {"{": "}", "[": "]", "<": ">"}
+        for token in _TOKEN_RE.finditer(text):
+            if token.lastgroup == "name" and not closing and token.group() == "training_info":
+                raise ValueError("optimize does not support models containing training_info.")
+            if token.lastgroup == "symbol":
+                symbol = token.group()
+                if symbol in delimiters:
+                    closing.append(delimiters[symbol])
+                elif symbol in "}]>" and (not closing or closing.pop() != symbol):
+                    raise ValueError("Malformed ONNX textproto: mismatched delimiters.")
+        if closing:
+            raise ValueError("Malformed ONNX textproto: unclosed delimiters.")
+        return
+
+    with open(model_path, "rb") as stream:
+        size = os.fstat(stream.fileno()).st_size
+
+        def read_varint() -> int:
+            value = 0
+            for shift in range(0, 70, 7):
+                byte = stream.read(1)
+                if not byte or (shift == 63 and byte[0] > 1):
+                    raise ValueError("Malformed ONNX model: invalid protobuf varint.")
+                value |= (byte[0] & 127) << shift
+                if byte[0] < 128:
+                    return value
+            raise ValueError("Malformed ONNX model: invalid protobuf varint.")
+
+        # Skip complete top-level fields, including graph payloads, without reading weights.
+        while stream.tell() < size:
+            tag = read_varint()
+            number, wire = tag >> 3, tag & 7
+            if number == 20:
+                raise ValueError("optimize does not support models containing training_info.")
+            if number == 0 or number >= 1 << 29:
+                raise ValueError("Malformed ONNX model: invalid protobuf field number.")
+            if wire == 0:
+                read_varint()
+                continue
+            if wire == 2:
+                length = read_varint()
+            elif wire in (1, 5):
+                length = 8 if wire == 1 else 4
+            else:
+                raise ValueError("Malformed ONNX model: unsupported protobuf wire type.")
+            if length > size - stream.tell():
+                raise ValueError("Malformed ONNX model: truncated protobuf field.")
+            stream.seek(length, os.SEEK_CUR)
+
+
+def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
+    """Visits tensors in graphs, attributes and local functions without copying payloads."""
+
+    def walk_attributes(attributes: Iterable[AttributeProto]) -> Iterator[TensorProto]:
+        for attribute in attributes:
+            if attribute.has_t():
+                yield attribute.t
+            yield from attribute.tensors
+            if attribute.has_sparse_tensor():
+                yield attribute.sparse_tensor.values
+                yield attribute.sparse_tensor.indices
+            for sparse in attribute.sparse_tensors:
+                yield sparse.values
+                yield sparse.indices
+            if attribute.has_g():
+                yield from walk_graph(attribute.g)
+            for graph in attribute.graphs:
+                yield from walk_graph(graph)
+
+    def walk_graph(graph: GraphProto) -> Iterator[TensorProto]:
+        yield from graph.initializer
+        for sparse in graph.sparse_initializer:
+            yield sparse.values
+            yield sparse.indices
+        for node in graph.node:
+            yield from walk_attributes(node.attribute)
+
+    yield from walk_graph(model.graph)
+    for function in model.functions:
+        yield from walk_attributes(function.attribute_proto)
+        for node in function.node:
+            yield from walk_attributes(node.attribute)
+
+
+def _prepare_optimization_external_data(
+    model: ModelProto, model_path: str, output_path: str
+) -> None:
+    """Protects external locations and loads only bounded, small numeric payloads."""
+    from .onnx import TensorProto
+    import onnx_light.onnx.helper as oh
+    from .onnx_lib.external_data_helper import uses_external_data
+
+    base_dir = os.path.dirname(model_path)
+    destination = os.path.normcase(os.path.realpath(output_path))
+    resolved: dict[str, str] = {}
+    packed_bits = {
+        TensorProto.INT2: 2,
+        TensorProto.UINT2: 2,
+        TensorProto.INT4: 4,
+        TensorProto.UINT4: 4,
+        TensorProto.FLOAT4E2M1: 4,
+        TensorProto.FLOAT6E2M3: 6,
+        TensorProto.FLOAT6E3M2: 6,
+    }
+    for tensor in _optimization_tensors(model):
+        if not uses_external_data(tensor):
+            continue
+        metadata = {entry.key: entry.value for entry in tensor.external_data}
+        location = metadata.get("location", "")
+        if location not in resolved:
+            resolved[location] = os.path.normcase(
+                os.path.realpath(os.path.join(base_dir, location))
+            )
+        if resolved[location] == destination:
+            raise ValueError(f"Output overlaps an external-data location: {location!r}")
+        if tensor.HasField("raw_data") or tensor.data_type == TensorProto.STRING:
+            continue
+        if any(dim < 0 for dim in tensor.dims):
+            raise ValueError(f"External tensor {tensor.name!r} has negative dimensions.")
+        bits = packed_bits.get(tensor.data_type)
+        if bits is None:
+            bits = oh.tensor_dtype_to_np_dtype(tensor.data_type).itemsize * 8
+        size = (math.prod(tensor.dims) * bits + 7) // 8
+        if size >= _SHAPE_TINY_TENSOR_THRESHOLD:
+            continue
+        for key in ("length", "size"):
+            if key in metadata and int(metadata[key]) != size:
+                raise ValueError(f"External tensor {tensor.name!r} has an inconsistent {key}.")
+        if int(metadata.get("offset", "0")) < 0:
+            raise ValueError(f"External tensor {tensor.name!r} has a negative offset.")
+        # A missing length must not cause the loader to read the entire weights file.
+        if "length" not in metadata and "size" not in metadata:
+            entry = tensor.external_data.add()
+            entry.key, entry.value = "length", str(size)
+        tensor.load_external_data(base_dir)
+        tensor.data_location = TensorProto.DEFAULT
+        tensor.external_data.clear()
+
+
+def _cmd_optimize(args: argparse.Namespace) -> None:
+    """Optimizes a model while preserving its external weight references."""
+    from .onnx import ModelProto, load, save_to_file_descriptor
+    from .onnx_core.optimization import GraphBuilder, GraphGraph
+    import tempfile
+
+    model_path = os.path.abspath(args.model)
+    output_path = os.path.abspath(args.output)
+    if os.path.realpath(os.path.dirname(model_path)) != os.path.realpath(
+        os.path.dirname(output_path)
+    ):
+        raise ValueError("The optimized model must be saved in the same directory as the input.")
+    if os.path.lexists(output_path):
+        raise FileExistsError(f"Output already exists: {output_path!r}")
+    if os.path.splitext(output_path)[1] in {".textproto", ".pipeline", ".pipe-onnx"}:
+        raise ValueError("The optimized output must use a binary ONNX model filename.")
+    patterns = _optimization_patterns(args.patterns)
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path!r}")
+    if args.verbose:
+        print(f"[optimize] load {model_path!r}")
+    _reject_optimization_training_info(model_path)
+    model = load(model_path, load_external_data=False)
+    if not isinstance(model, ModelProto):
+        raise ValueError("optimize requires an ONNX model, not a pipeline.")
+    _prepare_optimization_external_data(model, model_path, output_path)
+    builder = GraphBuilder(model)
+    if args.verbose:
+        print("[optimize] optimize")
+    GraphGraph(builder, patterns=patterns).optimize()
+    result = builder.to_onnx()
+    if args.verbose:
+        print(f"[optimize] save into {output_path!r}")
+    # Publish only a complete file, without replacing an existing destination or link.
+    with tempfile.TemporaryDirectory(
+        prefix=".onnx-light-optimize-", dir=os.path.dirname(output_path)
+    ) as temporary:
+        staged = os.path.join(temporary, "model.onnx")
+        with open(staged, "xb") as stream:
+            save_to_file_descriptor(result, stream.fileno())
+        os.link(staged, output_path)
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -1818,6 +2062,42 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
+
+    optimize_parser = subparsers.add_parser(
+        "optimize",
+        help="Optimize a model while reusing its external weights.",
+        description=(
+            "Applies graph optimizations and writes a new binary ONNX model in the "
+            "same directory as the input, without rewriting existing weight files."
+        ),
+        epilog=(
+            "examples:\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx --patterns L1,L2\n"
+            "  onnx-light optimize model.onnx -o model.opt.onnx --patterns NotNot,CastCast"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    optimize_parser.add_argument("model", help="Path to the input ONNX model.")
+    optimize_parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help="New output model path, in the same directory as the input. Must not already exist.",
+    )
+    optimize_parser.add_argument(
+        "--patterns",
+        metavar="NAMES",
+        default=None,
+        help=(
+            "Comma-separated pattern names or registered groups (e.g. L1,L2 or NotNot,CastCast). "
+            "Omit to use the optimizer's default patterns. Names are case-sensitive, not regexes."
+        ),
+    )
+    optimize_parser.add_argument(
+        "--verbose", "-v", nargs="?", const=1, default=0, type=int, help="Print progress."
+    )
+    optimize_parser.set_defaults(func=_cmd_optimize)
 
     layers_parser = subparsers.add_parser(
         "layers",

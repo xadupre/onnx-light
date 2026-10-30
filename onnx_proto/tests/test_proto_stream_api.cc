@@ -19,6 +19,7 @@
 #include <unistd.h>
 #endif
 #include <gtest/gtest.h>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -682,6 +683,44 @@ TEST(proto_stream_api, ByteSizeLongOnModelProto) {
   std::string serialized;
   ASSERT_TRUE(model.SerializeToString(serialized));
   EXPECT_EQ(model.ByteSizeLong(), serialized.size());
+}
+
+TEST(proto_stream_api, SerializesPackedFloatingPointPayloadsInBlocks) {
+  class CountingWriteStream : public utils::StringWriteStream {
+  public:
+    void write_raw_bytes(const uint8_t *data, utils::offset_t size) override {
+      ++calls;
+      utils::StringWriteStream::write_raw_bytes(data, size);
+    }
+    std::size_t calls = 0;
+  };
+  for (const bool doubles : {false, true}) {
+    SCOPED_TRACE(doubles);
+    TensorProto tensor;
+    tensor.set_name("weights");
+    tensor.set_data_type(doubles ? TensorProto::DOUBLE : TensorProto::FLOAT);
+    tensor.add_dims(16384);
+    for (int i = 0; i < 16384; ++i) {
+      if (doubles)
+        tensor.add_double_data(i == 0 ? -0.0 : (i - 8192) * 0.125);
+      else
+        tensor.add_float_data(i == 0 ? -0.0f : (i - 8192) * 0.125f);
+    }
+    if (doubles)
+      tensor.ref_double_data()[1] = std::numeric_limits<double>::quiet_NaN();
+    else
+      tensor.ref_float_data()[1] = std::numeric_limits<float>::quiet_NaN();
+    CountingWriteStream stream;
+    SerializeOptions options;
+    tensor.SerializeSize(stream, options);
+    tensor.SerializeToStream(stream, options);
+    EXPECT_LT(stream.calls, 32u);
+    TensorProto parsed;
+    ASSERT_TRUE(parsed.ParseFromString(
+        std::string(reinterpret_cast<const char *>(stream.data()), stream.size())));
+    std::string difference;
+    EXPECT_TRUE(tensor.Equals(parsed, &difference)) << difference;
+  }
 }
 
 TEST(proto_stream_api, SerializeToFileDescriptorReturnsTrue) {

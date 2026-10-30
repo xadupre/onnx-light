@@ -35,6 +35,9 @@ Command overview
       - Infers shapes and optionally writes memory, lifetime, and semantic
         metadata.
       - Prepare or inspect a model before optimization or execution.
+    * - :ref:`optimize <l-cli-optimize>`
+      - Rewrites a model using default patterns, named groups, or explicit patterns.
+      - Optimize a model while reusing its external weight files.
     * - :ref:`show <l-cli-show>`
       - Renders a model as text, a diagram, Python code, or C++ code.
       - Review a model or generate code that rebuilds it.

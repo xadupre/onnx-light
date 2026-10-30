@@ -314,9 +314,9 @@ void write_repeated_field_packed_numerical_float(utils::BinaryWriteStream &strea
                                                  SerializeOptions &) {
   stream.write_field_header(order, FIELD_FIXED_SIZE);
   stream.write_variant_uint64(field.size() * sizeof(T));
-  for (const T &d : field) {
-    stream.write_packed_element(d);
-  }
+  if (!field.empty())
+    stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(field.data()),
+                           static_cast<utils::offset_t>(field.size() * sizeof(T)));
 }
 
 template <typename T>

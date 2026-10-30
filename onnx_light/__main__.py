@@ -1315,7 +1315,8 @@ def _optimization_patterns(selection: str | None) -> list[str] | None:
     )
 
     groups = standard_pattern_sets()
-    available = set(standard_pattern_names(include_opt_in=True)) | set(registered_pattern_names())
+    registered = registered_pattern_names()
+    available = set(standard_pattern_names(include_opt_in=True)) | set(registered)
     selected: list[str] = []
     for item in selection.split(","):
         name = item.strip()
@@ -1323,6 +1324,8 @@ def _optimization_patterns(selection: str | None) -> list[str] | None:
             raise ValueError("--patterns must contain non-empty comma-separated names.")
         if name in groups:
             selected.extend(groups[name])
+            if name == "all":
+                selected.extend(registered)
         elif name in available:
             selected.append(name)
         else:
@@ -1330,7 +1333,74 @@ def _optimization_patterns(selection: str | None) -> list[str] | None:
                 f"Unknown pattern or group {name!r}. "
                 f"Available groups: {', '.join(sorted(groups))}."
             )
-    return list(dict.fromkeys(selected))
+    selected = list(dict.fromkeys(selected))
+    missing = [name for name in selected if name not in available]
+    if missing:
+        raise ValueError(f"Unregistered patterns in selected groups: {', '.join(missing)}.")
+    return selected
+
+
+def _reject_optimization_training_info(model_path: str) -> None:
+    """Rejects training graphs that the model parser cannot preserve."""
+    suffix = os.path.splitext(model_path)[1]
+    if suffix in {".pipeline", ".pipe-onnx"}:
+        return
+    if suffix == ".textproto":
+        from .onnx_proto._text_format import _TOKEN_RE
+
+        with open(model_path, encoding="utf-8") as text_stream:
+            text = text_stream.read()
+        if "training_info" not in text:
+            return
+        closing: list[str] = []
+        delimiters = {"{": "}", "[": "]", "<": ">"}
+        for token in _TOKEN_RE.finditer(text):
+            if token.lastgroup == "name" and not closing and token.group() == "training_info":
+                raise ValueError("optimize does not support models containing training_info.")
+            if token.lastgroup == "symbol":
+                symbol = token.group()
+                if symbol in delimiters:
+                    closing.append(delimiters[symbol])
+                elif symbol in "}]>" and (not closing or closing.pop() != symbol):
+                    raise ValueError("Malformed ONNX textproto: mismatched delimiters.")
+        if closing:
+            raise ValueError("Malformed ONNX textproto: unclosed delimiters.")
+        return
+
+    with open(model_path, "rb") as stream:
+        size = os.fstat(stream.fileno()).st_size
+
+        def read_varint() -> int:
+            value = 0
+            for shift in range(0, 70, 7):
+                byte = stream.read(1)
+                if not byte or (shift == 63 and byte[0] > 1):
+                    raise ValueError("Malformed ONNX model: invalid protobuf varint.")
+                value |= (byte[0] & 127) << shift
+                if byte[0] < 128:
+                    return value
+            raise ValueError("Malformed ONNX model: invalid protobuf varint.")
+
+        # Skip complete top-level fields, including graph payloads, without reading weights.
+        while stream.tell() < size:
+            tag = read_varint()
+            number, wire = tag >> 3, tag & 7
+            if number == 20:
+                raise ValueError("optimize does not support models containing training_info.")
+            if number == 0 or number >= 1 << 29:
+                raise ValueError("Malformed ONNX model: invalid protobuf field number.")
+            if wire == 0:
+                read_varint()
+                continue
+            if wire == 2:
+                length = read_varint()
+            elif wire in (1, 5):
+                length = 8 if wire == 1 else 4
+            else:
+                raise ValueError("Malformed ONNX model: unsupported protobuf wire type.")
+            if length > size - stream.tell():
+                raise ValueError("Malformed ONNX model: truncated protobuf field.")
+            stream.seek(length, os.SEEK_CUR)
 
 
 def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
@@ -1426,6 +1496,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
     """Optimizes a model while preserving its external weight references."""
     from .onnx import ModelProto, load, save_to_file_descriptor
     from .onnx_core.optimization import GraphBuilder, GraphGraph
+    import tempfile
 
     model_path = os.path.abspath(args.model)
     output_path = os.path.abspath(args.output)
@@ -1442,6 +1513,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
     if args.verbose:
         print(f"[optimize] load {model_path!r}")
+    _reject_optimization_training_info(model_path)
     model = load(model_path, load_external_data=False)
     if not isinstance(model, ModelProto):
         raise ValueError("optimize requires an ONNX model, not a pipeline.")
@@ -1453,9 +1525,14 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
     result = builder.to_onnx()
     if args.verbose:
         print(f"[optimize] save into {output_path!r}")
-    # Exclusive creation also protects existing weight files and output links.
-    with open(output_path, "xb") as stream:
-        save_to_file_descriptor(result, stream.fileno())
+    # Publish only a complete file, without replacing an existing destination or link.
+    with tempfile.TemporaryDirectory(
+        prefix=".onnx-light-optimize-", dir=os.path.dirname(output_path)
+    ) as temporary:
+        staged = os.path.join(temporary, "model.onnx")
+        with open(staged, "xb") as stream:
+            save_to_file_descriptor(result, stream.fileno())
+        os.link(staged, output_path)
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:

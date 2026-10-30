@@ -7,12 +7,14 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 import numpy
 
-from onnx_light.__main__ import main
+from onnx_light.__main__ import _optimization_patterns, main
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import PipelineProto, TensorProto, load, save
 import onnx_light.onnx.helper as oh
@@ -53,6 +55,7 @@ class TestMainOptimize(ExtTestCase):
         class CustomNotNot(PatternOptimization):
             def __init__(self):
                 super().__init__(priority=1, name="CustomNotNot")
+                self.destination: Path | None = None
 
             def fast_op_type(self):
                 return {"Not"}
@@ -65,10 +68,20 @@ class TestMainOptimize(ExtTestCase):
 
             def apply(self, graph, nodes):
                 del graph
+                if self.destination is not None:
+                    self.destination.write_bytes(b"concurrently created output")
                 return [oh.make_node("Identity", [nodes[0].input[0]], list(nodes[1].output))]
 
-        register_pattern(CustomNotNot())
+        pattern = CustomNotNot()
+        register_pattern(pattern)
         self.addCleanup(unregister_pattern, "CustomNotNot")
+        self.assertIn("CustomNotNot", _optimization_patterns("all"))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "all.onnx"
+            save(_make_model(), source)
+            main(["optimize", str(source), "-o", str(output), "--patterns", "all"])
+            self.assertNotIn("Not", [node.op_type for node in load(output).graph.node])
         register_pattern_set("CustomOptimizeGroup", ["CustomNotNot"])
         self.addCleanup(unregister_pattern_set, "CustomOptimizeGroup")
         for selection in ("CustomNotNot", "CustomOptimizeGroup", "L1,CustomNotNot"):
@@ -78,6 +91,56 @@ class TestMainOptimize(ExtTestCase):
                 save(_make_model(), source)
                 main(["optimize", str(source), "-o", str(output), "--patterns", selection])
                 self.assertNotIn("Not", [node.op_type for node in load(output).graph.node])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "raced.onnx"
+            save(_make_model(), source)
+            pattern.destination = output
+            with self.assertRaises(FileExistsError):
+                main(["optimize", str(source), "-o", str(output), "--patterns", "CustomNotNot"])
+            self.assertEqual(output.read_bytes(), b"concurrently created output")
+            self.assertEqual(
+                sorted(path.name for path in Path(tmp).iterdir()), ["model.onnx", "raced.onnx"]
+            )
+
+        unregister_pattern("CustomNotNot")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaisesRegex(ValueError, "Unregistered.*CustomNotNot"),
+        ):
+            main(
+                [
+                    "optimize",
+                    str(Path(tmp) / "missing.onnx"),
+                    "-o",
+                    str(Path(tmp) / "out.onnx"),
+                    "--patterns",
+                    "CustomOptimizeGroup",
+                ]
+            )
+
+    def test_invalid_group_members_are_rejected_before_model_io(self):
+        from onnx_light.onnx_core.optimization import register_pattern_set, unregister_pattern_set
+
+        register_pattern_set("BrokenOptimizeGroup", ["NotNot", "MissingOptimizePattern"])
+        self.addCleanup(unregister_pattern_set, "BrokenOptimizeGroup")
+        for selection in ("BrokenOptimizeGroup", "all"):
+            with (
+                self.subTest(patterns=selection),
+                tempfile.TemporaryDirectory() as tmp,
+                self.assertRaisesRegex(ValueError, "Unregistered.*MissingOptimizePattern"),
+            ):
+                main(
+                    [
+                        "optimize",
+                        str(Path(tmp) / "missing.onnx"),
+                        "-o",
+                        str(Path(tmp) / "out.onnx"),
+                        "--patterns",
+                        selection,
+                    ]
+                )
 
     def test_default_and_explicit_patterns(self):
         for selection, expected in (
@@ -173,24 +236,120 @@ class TestMainOptimize(ExtTestCase):
                 self.assertEqualArray(left, right)
 
     def test_inline_weights_are_preserved(self):
+        for dtype, raw in ((numpy.float32, True), (numpy.float32, False), (numpy.float64, False)):
+            with self.subTest(dtype=dtype, raw=raw), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.onnx"
+                output = Path(tmp) / "optimized.onnx"
+                values = numpy.arange(512 * 512, dtype=dtype).reshape(512, 512)
+                tensor_type = TensorProto.FLOAT if dtype == numpy.float32 else TensorProto.DOUBLE
+                weight = (
+                    onh.from_array(values, name="W")
+                    if raw
+                    else oh.make_tensor("W", tensor_type, values.shape, values.ravel().tolist())
+                )
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("MatMul", ["X", "W"], ["Y"])],
+                        "g",
+                        [oh.make_tensor_value_info("X", tensor_type, [1, 512])],
+                        [oh.make_tensor_value_info("Y", tensor_type, [1, 512])],
+                        initializer=[weight],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                save(model, source)
+                main(["optimize", str(source), "-o", str(output)])
+                result = load(output)
+                self.assertEqualArray(onh.to_array(result.graph.initializer[0]), values)
+
+    def test_rejects_training_info_without_creating_output(self):
+        for suffix in (".onnx", ".textproto"):
+            for before_model in (False, True):
+                with (
+                    self.subTest(suffix=suffix, before_model=before_model),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    source = Path(tmp) / f"model{suffix}"
+                    output = Path(tmp) / "optimized.onnx"
+                    save(_make_model(), source)
+                    training = (
+                        b"\xa2\x01\x04\x0a\x00\x12\x00"
+                        if suffix == ".onnx"
+                        else b"training_info { initialization {} algorithm {} }\n"
+                    )
+                    original = source.read_bytes()
+                    original = training + original if before_model else original + training
+                    source.write_bytes(original)
+                    with self.assertRaisesRegex(ValueError, "training_info"):
+                        main(["optimize", str(source), "-o", str(output)])
+                    self.assertFalse(output.exists())
+                    self.assertEqual(source.read_bytes(), original)
+
+    def test_training_info_text_inside_payloads_is_not_a_training_graph(self):
+        for suffix in (".onnx", ".textproto"):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / f"model{suffix}"
+                output = Path(tmp) / "optimized.onnx"
+                model = _make_model()
+                model.doc_string = "training_info { initialization {} }"
+                model.graph.name = "training_info"
+                save(model, source)
+                main(["optimize", str(source), "-o", str(output)])
+                self.assertEqual(load(output).doc_string, model.doc_string)
+
+    def test_malformed_binary_headers_do_not_create_output(self):
+        for payload in (b"\x00", b"\x3a\xff" * 10, b"\x3a\x80", b"\x3a\x08short"):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.onnx"
+                output = Path(tmp) / "optimized.onnx"
+                source.write_bytes(payload)
+                with self.assertRaisesRegex(ValueError, "Malformed ONNX"):
+                    main(["optimize", str(source), "-o", str(output)])
+                self.assertFalse(output.exists())
+
+    def test_malformed_text_cannot_hide_training_info(self):
+        for prefix in ("bogus: ] ", "bogus: { bogus: ] ", "bogus: { "):
+            with self.subTest(prefix=prefix), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.textproto"
+                output = Path(tmp) / "optimized.onnx"
+                save(_make_model(), source)
+                with source.open("a", encoding="utf-8") as stream:
+                    stream.write(prefix + "training_info {}")
+                with self.assertRaisesRegex(ValueError, "Malformed ONNX textproto"):
+                    main(["optimize", str(source), "-o", str(output)])
+                self.assertFalse(output.exists())
+
+    @unittest.skipIf(os.name == "nt", "Requires POSIX file-size resource limits.")
+    def test_failed_serialization_leaves_no_output_and_allows_retry(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "model.onnx"
             output = Path(tmp) / "optimized.onnx"
-            values = numpy.arange(512 * 512, dtype=numpy.float32).reshape(512, 512)
-            model = oh.make_model(
-                oh.make_graph(
-                    [oh.make_node("MatMul", ["X", "W"], ["Y"])],
-                    "g",
-                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 512])],
-                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 512])],
-                    initializer=[onh.from_array(values, name="W")],
-                ),
-                opset_imports=[oh.make_opsetid("", 18)],
+            save(_make_model(), source)
+            original = source.read_bytes()
+            failed = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import resource, signal, sys\n"
+                        "from onnx_light.__main__ import main\n"
+                        "signal.signal(signal.SIGXFSZ, signal.SIG_IGN)\n"
+                        "resource.setrlimit(resource.RLIMIT_FSIZE, (32, 32))\n"
+                        "main(['optimize', sys.argv[1], '-o', sys.argv[2]])\n"
+                    ),
+                    str(source),
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
             )
-            save(model, source)
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("FdWriteStream: failed to write", failed.stderr)
+            self.assertEqual([path.name for path in Path(tmp).iterdir()], ["model.onnx"])
+            self.assertEqual(source.read_bytes(), original)
             main(["optimize", str(source), "-o", str(output)])
-            result = load(output)
-            self.assertEqualArray(onh.to_array(result.graph.initializer[0]), values)
+            self.assertNotIn("Not", [node.op_type for node in load(output).graph.node])
 
     def test_missing_external_location_cannot_be_used_as_output(self):
         for nested in (False, True):

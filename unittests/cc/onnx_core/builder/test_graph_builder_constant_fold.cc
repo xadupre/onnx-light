@@ -198,6 +198,50 @@ TEST(GraphBuilderConstantFold, SkipsUnloadedExternalConstantAttribute) {
   EXPECT_EQ(builder.Initializers().size(), 0u);
 }
 
+TEST(GraphBuilderConstantFold, SkipsUnloadedExternalSparseAttributes) {
+  for (const bool repeated : {false, true}) {
+    for (const bool external_indices : {false, true}) {
+      SCOPED_TRACE(repeated);
+      SCOPED_TRACE(external_indices);
+      core::builder::GraphBuilder builder("g", {}, {{"", 28}});
+      SparseTensorProto sparse;
+      sparse.add_dims(4);
+      *sparse.mutable_values() = MakeInitializer<float>("values", {2}, {1.0f, 2.0f});
+      *sparse.mutable_indices() = MakeInitializer<int64_t>("indices", {2}, {0, 3});
+      utils::RepeatedProtoField<AttributeProto> attributes;
+      auto &attribute = attributes.add();
+      attribute.set_name("sparse_value");
+      attribute.set_type(AttributeProto::SPARSE_TENSOR);
+      *attribute.mutable_sparse_tensor() = sparse;
+      SparseTensorProto *unloaded = attribute.mutable_sparse_tensor();
+      if (repeated) {
+        auto &extra = attributes.add();
+        extra.set_name("extra_sparse");
+        extra.set_type(AttributeProto::SPARSE_TENSORS);
+        *extra.add_sparse_tensors() = sparse;
+        unloaded = extra.add_sparse_tensors();
+        *unloaded = sparse;
+      }
+      TensorProto &tensor =
+          external_indices ? *unloaded->mutable_indices() : *unloaded->mutable_values();
+      tensor.ref_float_data().clear();
+      tensor.ref_int64_data().clear();
+      tensor.set_data_location(TensorProto::EXTERNAL);
+      auto *location = tensor.add_external_data();
+      location->set_key("location");
+      location->set_value("unavailable.bin");
+      builder.MakeNode("Constant", {}, {"y"}, "", "", attributes);
+      builder.MakeOutput("y");
+
+      core::builder::ConstantFoldingOptions options;
+      options.raise_on_missing_weight_kernel = true;
+      EXPECT_EQ(builder.ConstantFold(options), 0u);
+      EXPECT_EQ(builder.Nodes().size(), 1u);
+      EXPECT_EQ(builder.Initializers().size(), 0u);
+    }
+  }
+}
+
 TEST(GraphBuilderConstantFold, DoesNotFoldNodeDependingOnGraphInput) {
   ScopedFoldingKernels kernels;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});

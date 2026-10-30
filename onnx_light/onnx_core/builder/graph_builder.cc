@@ -3461,10 +3461,18 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
     }
     if (candidate) {
+      const auto has_unloaded_sparse_data = [](const SparseTensorProto &tensor) {
+        return HasUnloadedExternalData(tensor.values()) ||
+               HasUnloadedExternalData(tensor.indices());
+      };
       for (const AttributeProto &attribute : node.attribute()) {
         if ((attribute.has_t() && HasUnloadedExternalData(attribute.t())) ||
             std::any_of(attribute.tensors().begin(), attribute.tensors().end(),
-                        HasUnloadedExternalData)) {
+                        HasUnloadedExternalData) ||
+            (attribute.has_sparse_tensor() &&
+             has_unloaded_sparse_data(attribute.sparse_tensor())) ||
+            std::any_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
+                        has_unloaded_sparse_data)) {
           candidate = false;
           break;
         }

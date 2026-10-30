@@ -20,6 +20,10 @@ the input and weight files cannot accidentally be replaced. Recorded external
 weight locations are also protected when the files are missing, including
 references in nested graphs and local functions. The output is binary ONNX;
 ``.textproto``, ``.pipeline`` and ``.pipe-onnx`` output suffixes are rejected.
+Serialization uses a temporary directory next to the destination and publishes
+the completed model through an exclusive hard link. Failed writes leave no
+partial destination and can be retried; publishing requires hard-link support
+on the destination filesystem.
 
 Large external tensors remain external references with their original
 locations, offsets and lengths. Existing weight files are neither copied nor
@@ -29,7 +33,8 @@ length metadata. Reads are bounded to the tensor's size, not the remaining
 weight file; inline weights are retained. Folding and Constant-to-initializer
 conversion skip external payloads that were not loaded. Constants introduced
 by optimization are saved inline in the output model. This command optimizes
-a model, not a pipeline.
+a model, not a pipeline. Models containing ``training_info`` are rejected
+before parsing because their training graphs cannot currently be preserved.
 
 Pattern selection
 -----------------
@@ -61,3 +66,5 @@ Python process. They are case-sensitive and exact, not regular expressions.
 Surrounding whitespace is ignored, duplicates are removed, and unknown names or
 empty list items are rejected before loading the model. The optimizer's ordinary
 cleanup and constant-folding passes still run with an explicit selection.
+Group members are validated too, including registrations that were removed
+after a group was created.

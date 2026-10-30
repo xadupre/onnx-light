@@ -116,6 +116,15 @@ jobs:
         run: |
           cmake --install build/cpp --config Release
 
+      - name: Compile installed visitor header (Linux / macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          prefix="${{ github.workspace }}/dist/onnx-light-cpp"
+          printf '#include <onnx_lib/common/visitor.h>\n' | \
+            c++ -std=c++20 -fsyntax-only -x c++ \
+              -I "$prefix/include" -I "$prefix/include/onnx_light" -
+
       # ── Archive ────────────────────────────────────────────────────────────
       - name: Archive (Linux / macOS)
         if: runner.os != 'Windows'

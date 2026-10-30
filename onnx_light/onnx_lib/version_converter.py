@@ -23,6 +23,7 @@ def convert_version(model: ModelProto, target_version: int) -> ModelProto:
         A new ModelProto converted to the target opset version.
 
     Raises:
-        ConvertError: If the conversion cannot be completed.
+        ConvertError: If the conversion cannot be completed, including when any
+            graph contains unsupported sparse initializers.
     """
     return _vc.convert_version(model, target_version)

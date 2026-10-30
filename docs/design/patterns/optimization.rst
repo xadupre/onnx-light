@@ -186,9 +186,12 @@ Layer function contract
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 The extracted regions are represented by local functions in domain ``ai.rt``
-with an ``ai.rt`` opset import of version 1. The first function is named
-``Layer``; subsequent functions use an index suffix (``Layer_1``, ``Layer_2``,
-...), so each distinct body has a unique definition. Equivalent bodies reuse
+with an ``ai.rt`` opset import of version 1. New functions are named
+``Layer_<mainop>_<index>``, for example ``Layer_MatMul_0`` or
+``Layer_Attention_0``. ``mainop`` is the operator type of the first anchor
+in source order, including a retained local-function call when it is an anchor.
+The index starts at zero and skips existing function and graph-value names,
+so each distinct body has a unique definition. Equivalent bodies reuse
 the same definition, including across extraction batches and nested scopes.
 Local value and node names may differ, but interfaces, types, metadata, attributes
 (including nested constants), and source opsets must agree. Device-annotated
@@ -206,15 +209,34 @@ a function identity, not an operator schema.
 
 The function body is a closed lexical scope at its boundary. Every dependency
 on a surrounding graph, including a dependency used only inside a nested graph
-attribute, is supplied as an explicit function input. Nested control-flow
-graphs may capture values declared within this body; they may not reach past
-it. Local function calls and operators retain their original domain/overload
+attribute, is supplied as an explicit function input, an embedded constant or a
+reconstructed ``Shape``. Nested control-flow graphs may capture values declared
+within this body; they may not reach past it.
+Local function calls and operators retain their original domain/overload
 and use the enclosing model's opset imports and function definitions.
 
-The extractor keeps all surrounding initializers and constant producers outside
-the bodies and passes their values explicitly. Shared large weights are not
-copied into multiple bodies. Initializers already owned by a nested graph stay
-there. Original nodes, attributes, internal port wiring and fan-out are retained.
+Materialized constants with **strictly fewer than 32 elements** are embedded as
+``Constant`` nodes when their dtype, shape and exact values agree at the
+corresponding input of every instance. Equal typed and raw tensor encodings are
+recognized. The constant disappears from the function signature and call
+arguments; initializers that are also graph inputs remain overridable and are
+never embedded. Missing external/deferred payloads are not loaded to do this.
+This specialization and function construction are shared with mincut extraction;
+each mincut function currently has one instance.
+
+An external ``Shape(x)`` is also reconstructed inside the function when ``x`` is
+already a boundary input. Its result is removed from the signature and call
+arguments, while ``x`` remains available. Corresponding calls must compute
+``Shape`` from the same input position with matching ``start``/``end`` attributes;
+omitted defaults and explicit defaults are equivalent. Dynamic dimensions stay
+dynamic: the shape is computed inside each call, not frozen from another instance.
+Internalized constants and shapes are emitted in dependency order. A surrounding
+producer still used elsewhere is retained.
+
+Other surrounding initializers and constant producers remain outside the bodies
+and their values are passed explicitly. Shared large weights are not copied into
+multiple bodies. Initializers already owned by a nested graph stay there.
+Original nodes, attributes, internal port wiring and fan-out are retained.
 Every internal value needed by an outside consumer, nested capture or graph
 output becomes a wrapper output, with the original outer name. Boundary values
 are deduplicated in first-use order (inputs) and topological producer/output-port

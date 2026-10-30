@@ -20,6 +20,7 @@ from .shape_inference import Device
 PatternOptimization: TypeAlias = _C.PatternOptimization
 FunctionPattern: TypeAlias = _patterns.FunctionPattern
 RepeatedLayerPattern: TypeAlias = _patterns.RepeatedLayerPattern
+PartitionGroupPattern: TypeAlias = _patterns.PartitionGroupPattern
 MatchResult: TypeAlias = _C.MatchResult
 OptimizationReport: TypeAlias = _C.OptimizationReport
 
@@ -528,6 +529,7 @@ __all__ = [
     "OptimizationReport",
     "PadConvPattern",
     "PadPadFusionPattern",
+    "PartitionGroupPattern",
     "PatternOptimization",
     "PreShapeNodeEliminationPattern",
     "RMSNormalizationMulPattern",

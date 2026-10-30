@@ -7,6 +7,7 @@ onnx_light.onnx_core
     expressions
     gradient
     graph_builder
+    graph_partition
     optimization
     quantization
     shape_inference

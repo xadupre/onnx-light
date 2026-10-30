@@ -31,13 +31,53 @@ class TestMainParser(ExtTestCase):
             _build_parser().parse_args(["kernel-baseline"])
 
     def test_rejects_renamed_commands(self):
-        for command in ("tune", "tune-kernels", "backend-test", "extract-layers"):
+        for command in (
+            "tune",
+            "tune-kernels",
+            "backend-test",
+            "extract-layers",
+            "layers",
+            "layer",
+        ):
             with (
                 self.subTest(command=command),
                 redirect_stderr(StringIO()),
                 self.assertRaises(SystemExit),
             ):
                 _build_parser().parse_args([command])
+
+    def test_partition_requires_a_method(self):
+        for arguments in (["partition"], ["partition", "unknown"]):
+            with (
+                self.subTest(arguments=arguments),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                _build_parser().parse_args(arguments)
+
+    def test_partition_methods_share_the_existing_loading_and_output_options(self):
+        parser = _build_parser()
+        self.assertNotIn("layers", parser._subparsers._group_actions[0].choices)
+        for method in ("layer", "mincut"):
+            with self.subTest(method=method):
+                args = parser.parse_args(
+                    [
+                        "partition",
+                        method,
+                        "model.onnx",
+                        "-o",
+                        "output.onnx",
+                        "--tiny-tensor-threshold",
+                        "256",
+                        "-v",
+                        "2",
+                    ]
+                )
+                self.assertEqual(args.partition_method, method)
+                self.assertEqual(args.model, "model.onnx")
+                self.assertEqual(args.output, "output.onnx")
+                self.assertEqual(args.tiny_tensor_threshold, 256)
+                self.assertEqual(args.verbose, 2)
 
 
 if __name__ == "__main__":

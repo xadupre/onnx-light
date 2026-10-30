@@ -59,13 +59,15 @@ fillshape
         Print shape-inference progress information. With no level, defaults
         to ``1`` (summary). With ``2``, also prints per-event details.
 
-layers
-    Extracts repeated computations into model-local ``ai.rt::Layer`` functions
-    without loading large raw tensor payloads, and prints a layer summary.
+partition
+    Extracts model-local functions without loading large raw tensor payloads.
+    ``layer`` detects repeated computations; ``mincut`` selects low-transfer
+    operator groups using bounded interval dynamic programming.
 
     Usage::
 
-        python -m onnx_light layers model.onnx -o model.layers.onnx
+        python -m onnx_light partition layer model.onnx -o model.layers.onnx
+        python -m onnx_light partition mincut model.onnx -o model.partition.onnx
 
 show
     Prints a human-readable, Mermaid or SVG rendering of an ONNX model.
@@ -1682,18 +1684,34 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     save(model, dest)
 
 
-def _cmd_layers(args: argparse.Namespace) -> None:
-    """Extracts repeated layers while retaining external weight references."""
-    from .onnx import FunctionProto, ModelProto, load, save
+def _cmd_partition(args: argparse.Namespace) -> None:
+    """Extracts local functions while retaining external weight references."""
+    from .onnx import ModelProto, load, save
+    from .onnx_core.graph_partition import count_constant_inputs, describe_operator_group_calls
     from .onnx_core.optimization import (
         ConstantFoldingOptions,
         GraphBuilder,
         GraphGraph,
+        PartitionGroupPattern,
         RepeatedLayerPattern,
     )
 
+    command = f"partition {args.partition_method}"
+    if args.partition_method == "layer":
+        function_prefix = "Layer"
+        function_kind = "layer"
+    elif args.partition_method == "mincut":
+        limits = (args.max_boundary_bytes, args.min_group_nodes, args.max_group_nodes)
+        if any(value is not None and (value < 0 or value > (1 << 64) - 1) for value in limits):
+            raise ValueError("Partition limits must fit in an unsigned 64-bit integer.")
+        if not 2 <= args.min_group_nodes <= args.max_group_nodes:
+            raise ValueError("Partition limits require 2 <= min_group_nodes <= max_group_nodes.")
+        function_prefix = "PartitionGroup"
+        function_kind = "partition"
+    else:
+        raise ValueError(f"Unknown partition method {args.partition_method!r}.")
     if args.verbose:
-        print(f"[layers] load {args.model!r}")
+        print(f"[{command}] load {args.model!r}")
     model = load(
         args.model,
         format="protobuf",
@@ -1704,53 +1722,76 @@ def _cmd_layers(args: argparse.Namespace) -> None:
         num_threads=1,
     )
     if not isinstance(model, ModelProto):
-        raise TypeError("layers requires a ModelProto, not a pipeline.")
+        raise TypeError(f"{command} requires a ModelProto, not a pipeline.")
     if not model.HasField("graph"):
-        raise ValueError("layers requires a model graph.")
+        raise ValueError(f"{command} requires a model graph.")
+    if args.partition_method == "layer":
+        pattern = RepeatedLayerPattern()
+        selection = (
+            "repeated topology and attributes around attention/MatMul "
+            "anchors; ranks matching cuts by crossing edges, unknown sizes and known bytes; "
+            "equivalent bodies share a function"
+        )
+    else:
+        weight_count = count_constant_inputs(model)
+        weight_limit = weight_count // 20
+        pattern = PartitionGroupPattern(
+            max_boundary_bytes=args.max_boundary_bytes,
+            min_group_nodes=args.min_group_nodes,
+            max_group_nodes=args.max_group_nodes,
+            max_constant_inputs=weight_limit,
+        )
+        byte_cap = args.max_boundary_bytes if args.max_boundary_bytes is not None else "none"
+        selection = (
+            "interval dynamic programming; minimizes unknown-size "
+            "transfers, then known bytes, then ungrouped nodes; "
+            f"source group size={args.min_group_nodes}..{args.max_group_nodes}; "
+            f"byte cap={byte_cap}; constant inputs <= {weight_limit} "
+            f"(5% of {weight_count} model weights, rounded down, before internalization)"
+        )
     if args.verbose:
-        print("[layers] apply RepeatedLayer")
+        print(f"[{command}] apply {pattern.name}")
     builder = GraphBuilder(model)
     folding = ConstantFoldingOptions()
     folding.enabled = False
-    rewrites = GraphGraph(builder, patterns=[RepeatedLayerPattern()]).optimize(
-        folding_options=folding
-    )
+    rewrites = GraphGraph(builder, patterns=[pattern]).optimize(folding_options=folding)
     result = builder.to_onnx()
-    layers = [
+    functions = [
         function
         for function in result.functions
-        if function.domain == "ai.rt" and re.fullmatch(r"Layer(?:_[0-9]+)?", str(function.name))
+        if function.domain == "ai.rt"
+        and re.fullmatch(
+            rf"{function_prefix}(?:_(?:.+_)?[0-9]+)?", str(function.name), flags=re.DOTALL
+        )
     ]
-    calls: dict[tuple[str, str, str], int] = {}
-    scopes = [result.graph, *result.functions]
-    while scopes:
-        scope = scopes.pop()
-        attributes = [attribute for node in scope.node for attribute in node.attribute]
-        if isinstance(scope, FunctionProto):
-            attributes.extend(scope.attribute_proto)
-        for node in scope.node:
-            key = (str(node.domain), str(node.op_type), str(node.overload))
-            calls[key] = calls.get(key, 0) + 1
-        for attribute in attributes:
-            if attribute.HasField("g"):
-                scopes.append(attribute.g)
-            scopes.extend(attribute.graphs)
+    calls = describe_operator_group_calls(result, functions)
     if args.verbose and os.path.exists(args.output):
-        print(f"[layers] overwriting {args.output!r}")
+        print(f"[{command}] overwriting {args.output!r}")
     with open(args.output, "wb") as stream:
         save(result, stream)
-    extracted = sum(rewrite.pattern_name == "RepeatedLayer" for rewrite in rewrites.rewrites)
-    print(f"[layers] saved {args.output!r}")
-    print(f"[layers] {len(layers)} layer function(s), {extracted} extraction rewrite(s)")
-    for function in layers:
+    extracted = sum(rewrite.pattern_name == pattern.name for rewrite in rewrites.rewrites)
+    print(f"[{command}] saved {args.output!r}")
+    print(
+        f"[{command}] {len(functions)} {function_kind} function(s), "
+        f"{extracted} extraction rewrite(s)"
+    )
+    print(f"[{command}] selection: {selection}")
+    print(
+        f"[{command}] post-internalization interfaces; symbolic formulas are descriptive, "
+        "not compared by the selector"
+    )
+    for function in functions:
         key = (str(function.domain), str(function.name), str(function.overload))
         name = f"{function.domain}::{function.name}"
         if function.overload:
             name += f"[{function.overload}]"
         print(
             f"  {name!r}: {len(function.node)} node(s), {len(function.input)} input(s), "
-            f"{len(function.output)} output(s), {calls.get(key, 0)} call site(s)"
+            f"{len(function.output)} output(s), {len(calls[key])} call site(s)"
         )
+        for description in calls[key]:
+            for line in description:
+                print(f"    {line}")
 
 
 def _cmd_show(args: argparse.Namespace) -> None:
@@ -2099,39 +2140,77 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     optimize_parser.set_defaults(func=_cmd_optimize)
 
-    layers_parser = subparsers.add_parser(
-        "layers",
-        help="Extract repeated computations into model-local Layer functions.",
-        description=(
-            "Applies only RepeatedLayer, retaining external weights and loading tiny tensors "
-            "for shape inference. Saves a rewritten ONNX model and prints a layer summary. "
-            "Large raw tensors are omitted from this structural export."
+    partition_parser = subparsers.add_parser(
+        "partition",
+        help="Extract repeated layers or low-transfer operator groups as local functions.",
+    )
+    partition_methods = partition_parser.add_subparsers(
+        dest="partition_method", metavar="METHOD", required=True
+    )
+    for method, description in (
+        ("layer", "Applies only RepeatedLayer to extract repeated computations."),
+        (
+            "mincut",
+            "Applies only PartitionGroup using bounded transfer-aware interval partitioning.",
         ),
-    )
-    layers_parser.add_argument("model", help="Path to the input binary ONNX model.")
-    layers_parser.add_argument(
-        "--output",
-        "-o",
-        required=True,
-        help="Output ONNX file, overwritten if it exists. External weight paths are preserved.",
-    )
-    layers_parser.add_argument(
-        "--tiny-tensor-threshold",
-        type=_parse_positive_int,
-        default=_SHAPE_TINY_TENSOR_THRESHOLD,
-        metavar="BYTES",
-        help="Load raw and external tensors strictly smaller than BYTES (default: 128).",
-    )
-    layers_parser.add_argument(
-        "--verbose",
-        "-v",
-        type=_parse_non_negative_int,
-        nargs="?",
-        const=1,
-        default=0,
-        help="Print loading and extraction progress.",
-    )
-    layers_parser.set_defaults(func=_cmd_layers)
+    ):
+        method_parser = partition_methods.add_parser(
+            method,
+            help=description,
+            description=(
+                f"{description} Retains external weights and loads tiny tensors for shape "
+                "inference. Saves a rewritten ONNX model and prints a function summary. "
+                "Large raw tensors are omitted from this structural export."
+            ),
+        )
+        method_parser.add_argument("model", help="Path to the input binary ONNX model.")
+        method_parser.add_argument(
+            "--output",
+            "-o",
+            required=True,
+            help=(
+                "Output ONNX file, overwritten if it exists. External weight paths are preserved."
+            ),
+        )
+        method_parser.add_argument(
+            "--tiny-tensor-threshold",
+            type=_parse_positive_int,
+            default=_SHAPE_TINY_TENSOR_THRESHOLD,
+            metavar="BYTES",
+            help="Load raw and external tensors strictly smaller than BYTES (default: 128).",
+        )
+        method_parser.add_argument(
+            "--verbose",
+            "-v",
+            type=_parse_non_negative_int,
+            nargs="?",
+            const=1,
+            default=0,
+            help="Print loading and extraction progress.",
+        )
+        method_parser.set_defaults(func=_cmd_partition)
+        if method == "mincut":
+            method_parser.add_argument(
+                "--max-boundary-bytes",
+                type=_parse_non_negative_int,
+                default=None,
+                metavar="BYTES",
+                help="Optional transfer-byte cap for fully known boundaries (default: no cap).",
+            )
+            method_parser.add_argument(
+                "--min-group-nodes",
+                type=_parse_positive_int,
+                default=2,
+                metavar="N",
+                help="Minimum nodes per group, at least 2 (default: 2).",
+            )
+            method_parser.add_argument(
+                "--max-group-nodes",
+                type=_parse_positive_int,
+                default=128,
+                metavar="N",
+                help="Maximum nodes per group, at least --min-group-nodes (default: 128).",
+            )
 
     # --- fillshape -----------------------------------------------------------
     fillshape_parser = subparsers.add_parser(

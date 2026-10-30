@@ -41,6 +41,7 @@ This module documents the C++ optimization-pattern headers used by
 .. doxygenfile:: onnx_extensions/patterns/collections/concat_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/collections/gather_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/collections/layer_pattern.h
+.. doxygenfile:: onnx_extensions/patterns/collections/partition_group_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/collections/sequence_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/collections/shape_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/collections/slice_pattern.h

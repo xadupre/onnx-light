@@ -55,11 +55,17 @@ class TestCommandLineDocs(ExtTestCase):
         for name, command_parser in {"onnx_light": parser, **commands}.items():
             with self.subTest(command=name):
                 text = (self.DOCS / f"{name}.rst").read_text(encoding="utf-8")
-                code = textwrap.dedent(text.split(".. runpython::\n", 1)[1]).strip()
-                output = StringIO()
-                with redirect_stdout(output):
-                    exec(compile(code, str(self.DOCS / f"{name}.rst"), "exec"), {})
-                self.assertEqual(output.getvalue(), command_parser.format_help() + "\n")
+                snippets = re.findall(r"\.\. runpython::\n((?:\n|[ \t]+[^\n]*\n?)*)", text)
+                parsers = [command_parser]
+                if name != "onnx_light" and command_parser._subparsers is not None:
+                    parsers.extend(command_parser._subparsers._group_actions[0].choices.values())
+                self.assertEqual(len(snippets), len(parsers))
+                for snippet, help_parser in zip(snippets, parsers):
+                    code = textwrap.dedent(snippet).strip()
+                    output = StringIO()
+                    with redirect_stdout(output):
+                        exec(compile(code, str(self.DOCS / f"{name}.rst"), "exec"), {})
+                    self.assertEqual(output.getvalue(), help_parser.format_help() + "\n")
                 invocation = "python -m onnx_light"
                 if name != "onnx_light":
                     invocation += f" {name}"

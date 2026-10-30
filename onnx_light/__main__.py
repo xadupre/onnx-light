@@ -1715,8 +1715,6 @@ def _cmd_partition(args: argparse.Namespace) -> None:
     model = load(
         args.model,
         format="protobuf",
-        skip_raw_data=True,
-        raw_data_threshold=args.tiny_tensor_threshold,
         load_external_data=False,
         tiny_external_data_threshold=args.tiny_tensor_threshold,
         num_threads=1,
@@ -2158,9 +2156,9 @@ def _build_parser() -> argparse.ArgumentParser:
             method,
             help=description,
             description=(
-                f"{description} Retains external weights and loads tiny tensors for shape "
-                "inference. Saves a rewritten ONNX model and prints a function summary. "
-                "Large raw tensors are omitted from this structural export."
+                f"{description} Preserves inline weights and external weight references, "
+                "and loads tiny external tensors for shape inference. "
+                "Saves a rewritten ONNX model and prints a function summary."
             ),
         )
         method_parser.add_argument("model", help="Path to the input binary ONNX model.")
@@ -2177,7 +2175,7 @@ def _build_parser() -> argparse.ArgumentParser:
             type=_parse_positive_int,
             default=_SHAPE_TINY_TENSOR_THRESHOLD,
             metavar="BYTES",
-            help="Load raw and external tensors strictly smaller than BYTES (default: 128).",
+            help="Inline external tensors strictly smaller than BYTES (default: 128).",
         )
         method_parser.add_argument(
             "--verbose",

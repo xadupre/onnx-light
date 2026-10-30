@@ -322,6 +322,7 @@ public:
     sequences_.clear();
     types_.clear();
     encoded_values_.clear();
+    graph_annotation_symbols_.clear();
   }
 
   /// Clears inferred graph state while preserving configuration and memoized expressions.
@@ -799,7 +800,7 @@ public:
   /// ``ComputeShape*`` function and stores the resulting output
   /// :cpp:class:`SymTensor` descriptors in ``*this``.
   /// Optionally accumulates protected custom-annotation symbols from expanded
-  /// local functions, including nested calls.
+  /// local functions and inferred control-flow subgraphs.
   void ComputeShapeNode(const NodeProto &node,
                         std::unordered_set<std::string> *annotation_symbols = nullptr);
 
@@ -954,6 +955,8 @@ private:
   std::unordered_map<LessEqualConstraint, std::size_t, PairStringHash> le_constraint_counts_;
   std::string constraint_owner_;
   std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
+  /// Annotation provenance collected during this graph's inference, not inherited by children.
+  std::unordered_set<std::string> graph_annotation_symbols_;
   ShapeEventLog events_;
   std::function<void(const ShapeEvent &)> event_callback_;
   bool events_enabled_ = false;

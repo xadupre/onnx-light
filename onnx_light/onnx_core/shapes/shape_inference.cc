@@ -166,7 +166,9 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   std::unordered_set<std::string> protected_symbols;
   for (const auto &value_info : func.value_info())
     declared_outputs[value_info.name()] = &value_info;
-  for (const auto &fn_node : func.node()) {
+  for (std::size_t index = 0; index < func.node().size(); ++index) {
+    const auto &fn_node = func.node()[index];
+    sub_ctx.set_current_node_index(static_cast<int64_t>(index));
     NodeProto bound_node = utils::CopyWithSharedTensorStorage(fn_node);
     BindNodeAttributes(bound_node, attr_map);
     if (TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
@@ -1113,6 +1115,16 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node,
   const bool logging = events_enabled_;
 
   DispatchComputeShapeNode(*this, node, annotation_symbols);
+  if (annotation_symbols != nullptr && !local_function && !custom_inference &&
+      !subgraph_contexts_.empty()) {
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g() && HasSubgraphContext(current_node_index_, attribute.name())) {
+        const auto &symbols =
+            GetSubgraphContext(current_node_index_, attribute.name()).graph_annotation_symbols_;
+        annotation_symbols->insert(symbols.begin(), symbols.end());
+      }
+    }
+  }
 
   if (logging) {
     std::vector<std::string> inputs;
@@ -1134,6 +1146,7 @@ void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &no
 }
 
 void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
+  graph_annotation_symbols_.clear();
   ModelProto declarations;
   declarations.ref_struct_types() = StructTypes();
   StructTypeCatalogue catalogue;
@@ -1238,9 +1251,12 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     const NodeProto &node = graph.node()[i];
     current_node_index_ = static_cast<int64_t>(i);
     if (TrySeedAnnotatedOutputsForUnknownCustomOp(*this, node, declared_outputs)) {
+      for (const auto &output : node.output())
+        if (!output.empty())
+          AddValueInfoSymbols(*declared_outputs.at(output), graph_annotation_symbols_);
       continue;
     }
-    ComputeShapeNode(node);
+    ComputeShapeNode(node, &graph_annotation_symbols_);
   }
   current_node_index_ = -1;
   for (const auto &vi : graph.output()) {

@@ -1779,6 +1779,91 @@ TEST(OnnxOptimShapeInference, NestedLocalFunctionsPreserveAnnotationSymbols) {
   }
 }
 
+TEST(OnnxOptimShapeInference, LocalFunctionPreservesIfBranchAnnotationSymbols) {
+  for (const std::string nesting : {"direct", "function", "subgraph"}) {
+    for (const auto *dimension : {"N", "2*N", "batch.size"}) {
+      SCOPED_TRACE(nesting);
+      SCOPED_TRACE(dimension);
+      core::shapes::ShapesContext ctx;
+      ctx.SetOpsetVersion("", 28);
+      ctx.SetOpsetVersion("local", 1);
+      ctx.Set("X",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                        {core::symbolic::SymDim("M"), core::symbolic::SymDim(4)}));
+      ctx.Set("condition",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+      FunctionProto helper;
+      helper.set_name("Helper");
+      helper.set_domain("local");
+      helper.add_input("x");
+      helper.add_output("annotated");
+      helper.add_output("indices");
+      helper.add_opset("", 28);
+      helper.add_opset("com.acme", 1);
+      *helper.add_node() = MakeNode("Opaque", {"x"}, {"annotated"}, "com.acme");
+      *helper.add_node() = MakeNode("NonZero", {"x"}, {"indices"});
+      auto &annotation = *helper.add_value_info();
+      annotation.set_name("annotated");
+      SetValueInfoTensorType(annotation, TensorProto::FLOAT, {-1, 4}, {dimension});
+      ctx.SetLocalFunction(&helper);
+
+      FunctionProto function;
+      function.set_name("Conditional");
+      function.set_domain("local");
+      function.add_input("cond");
+      function.add_input("x");
+      function.add_output("y");
+      function.add_output("indices");
+      function.add_opset("", 28);
+      function.add_opset("local", 1);
+      function.add_opset("com.acme", 1);
+      auto &conditional = *function.add_node();
+      conditional = MakeNode("If", {"cond"}, {"branched", "indices"});
+      for (const auto *name : {"then_branch", "else_branch"}) {
+        auto &attribute = *conditional.add_attribute();
+        attribute.set_name(name);
+        attribute.set_type(AttributeProto::GRAPH);
+        auto &branch = *attribute.mutable_g();
+        branch.set_name(name);
+        if (nesting == "function") {
+          *branch.add_node() = MakeNode("Helper", {"x"}, {"annotated", "indices"}, "local");
+          branch.add_output()->set_name("annotated");
+        } else {
+          *branch.add_node() = MakeNode("Opaque", {"x"}, {"annotated"}, "com.acme");
+          *branch.add_node() = MakeNode("NonZero", {"x"}, {"indices"});
+          auto &output = *branch.add_output();
+          output.set_name("annotated");
+          SetValueInfoTensorType(output, TensorProto::FLOAT, {-1, 4}, {dimension});
+        }
+        branch.add_output()->set_name("indices");
+        if (nesting == "subgraph") {
+          const GraphProto inner = branch;
+          branch.clear_node();
+          auto &nested = *branch.add_node();
+          nested = MakeNode("If", {"cond"}, {"annotated", "indices"});
+          for (const auto *inner_name : {"then_branch", "else_branch"}) {
+            auto &inner_attribute = *nested.add_attribute();
+            inner_attribute.set_name(inner_name);
+            inner_attribute.set_type(AttributeProto::GRAPH);
+            *inner_attribute.mutable_g() = inner;
+          }
+        }
+      }
+      *function.add_node() = MakeNode("Abs", {"branched"}, {"y"});
+      ctx.SetLocalFunction(&function);
+      std::unordered_set<std::string> independent;
+      for (const auto *name : {"first", "second"}) {
+        const std::string indices = std::string(name) + "_indices";
+        ctx.ComputeShapeNode(MakeNode("Conditional", {"condition", "X"}, {name, indices}, "local"));
+        EXPECT_EQ(ctx.Get(name).Shape(),
+                  (core::symbolic::SymShape{core::symbolic::SymDim(dimension),
+                                            core::symbolic::SymDim(4)}));
+        EXPECT_TRUE(independent.insert(ctx.Get(indices).Shape()[1].AsExpr()).second);
+      }
+    }
+  }
+}
+
 TEST(OnnxOptimShapeInference, LocalFunctionPreservesAnnotatedCustomOutputsAndOptionalSlots) {
   ModelProto model = MakeLocalFunctionAddModel();
   auto &function = model.ref_functions()[0];

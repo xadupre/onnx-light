@@ -372,8 +372,7 @@ class TestExternalDataHelper(ExtTestCase):
         entry_bad.key = "__class__"
         entry_bad.value = "malicious"
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        with warnings.catch_warnings(record=True, action="always") as caught:
             info = ExternalDataInfo(tensor)
 
         self.assertEqual(info.location, "data.bin")

@@ -17,7 +17,7 @@
  */
 
 #pragma once
-#include "onnx_lib/onnx_pb.h"
+#include "onnx_proto/onnx.h"
 
 namespace ONNX_LIGHT_NAMESPACE::internal {
 

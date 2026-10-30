@@ -116,6 +116,24 @@ jobs:
         run: |
           cmake --install build/cpp --config Release
 
+      - name: Compile installed visitor header
+        shell: bash
+        run: |
+          check_dir="${RUNNER_TEMP}/visitor-header-check"
+          mkdir -p "$check_dir"
+          printf '#include <onnx_lib/common/visitor.h>\n' > "$check_dir/visitor_header_check.cc"
+          cat > "$check_dir/CMakeLists.txt" <<'EOF'
+          cmake_minimum_required(VERSION 4.0)
+          project(visitor_header_check LANGUAGES CXX)
+          add_library(visitor_header_check OBJECT visitor_header_check.cc)
+          target_compile_features(visitor_header_check PRIVATE cxx_std_20)
+          target_include_directories(visitor_header_check PRIVATE
+            "${SDK_PREFIX}/include" "${SDK_PREFIX}/include/onnx_light")
+          EOF
+          cmake -S "$check_dir" -B "$check_dir/build" \
+            -DSDK_PREFIX="${{ github.workspace }}/dist/onnx-light-cpp"
+          cmake --build "$check_dir/build" --config Release
+
       # ── Archive ────────────────────────────────────────────────────────────
       - name: Archive (Linux / macOS)
         if: runner.os != 'Windows'

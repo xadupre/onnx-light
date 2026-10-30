@@ -57,6 +57,38 @@ TEST(LightOpSchemaVerify, ValidNodePasses) {
   EXPECT_NO_THROW(schema.Verify(node));
 }
 
+TEST(LightOpSchemaVerify, CosineSumWindowAttributeMetadata) {
+  for (const auto *op_type : {"HannWindow", "HammingWindow", "BlackmanWindow"}) {
+    SCOPED_TRACE(op_type);
+    for (bool init_doc : {false, true}) {
+      SCOPED_TRACE(init_doc);
+      const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, init_doc);
+      ASSERT_EQ(schemas.size(), 1u);
+      const auto &schema = schemas.front();
+      EXPECT_EQ(schema.domain(), core::schema::kOnnxDomain);
+      EXPECT_EQ(schema.since_version(), 17);
+      ASSERT_EQ(schema.attributes().size(), 2u);
+      for (const auto *name : {"periodic", "output_datatype"}) {
+        SCOPED_TRACE(name);
+        const auto &attributes = schema.attributes();
+        const auto found = std::find_if(
+            attributes.begin(), attributes.end(),
+            [name](const AttributeParam &attribute) { return attribute.name == name; });
+        ASSERT_NE(found, attributes.end());
+        EXPECT_EQ(found->type, AttributeType::INT);
+        EXPECT_FALSE(found->required);
+        const auto *default_value = std::get_if<int64_t>(&found->default_value);
+        ASSERT_NE(default_value, nullptr);
+        EXPECT_EQ(*default_value,
+                  found->name == "periodic" ? int64_t{1} : int64_t{TensorProto::FLOAT});
+        if (init_doc) {
+          EXPECT_FALSE(found->description.empty());
+        }
+      }
+    }
+  }
+}
+
 TEST(LightOpSchemaVerify, CastAcceptsComplexFromOpset6) {
   using core::schema::TensorType;
   const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("Cast", true);

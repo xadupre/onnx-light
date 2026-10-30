@@ -193,53 +193,19 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
 
 // Returns the minimum byte extent of a tensor with a fixed-size data type.
 static int64_t expected_raw_data_bytes(const TensorProto &tensor, int64_t nelem) {
-  int64_t bytes_per_elem = 0;
-  switch (tensor.data_type()) {
-  case TensorProto::UINT4:
-  case TensorProto::INT4:
-  case TensorProto::FLOAT4E2M1:
-    return nelem / 2 + (nelem % 2 != 0);
-  case TensorProto::UINT2:
-  case TensorProto::INT2:
-    return nelem / 4 + (nelem % 4 != 0);
-  case TensorProto::FLOAT6E2M3:
-  case TensorProto::FLOAT6E3M2:
-    return nelem / 4 * 3 + (nelem % 4 * 6 + 7) / 8;
-  case TensorProto::UINT8:
-  case TensorProto::INT8:
-  case TensorProto::BOOL:
-  case TensorProto::FLOAT8E4M3FN:
-  case TensorProto::FLOAT8E4M3FNUZ:
-  case TensorProto::FLOAT8E5M2:
-  case TensorProto::FLOAT8E5M2FNUZ:
-  case TensorProto::FLOAT8E8M0:
-    bytes_per_elem = 1;
-    break;
-  case TensorProto::UINT16:
-  case TensorProto::INT16:
-  case TensorProto::FLOAT16:
-  case TensorProto::BFLOAT16:
-    bytes_per_elem = 2;
-    break;
-  case TensorProto::FLOAT:
-  case TensorProto::INT32:
-  case TensorProto::UINT32:
-    bytes_per_elem = 4;
-    break;
-  case TensorProto::DOUBLE:
-  case TensorProto::INT64:
-  case TensorProto::UINT64:
-  case TensorProto::COMPLEX64:
-    bytes_per_elem = 8;
-    break;
-  case TensorProto::COMPLEX128:
-    bytes_per_elem = 16;
-    break;
-  default:
+  const uint32_t bit_width = FixedBitWidth(tensor.data_type());
+  if (bit_width == 0) {
     return 0;
   }
+  if (bit_width == 2 || bit_width == 4) {
+    const int64_t elements_per_byte = 8 / bit_width;
+    return nelem / elements_per_byte + (nelem % elements_per_byte != 0);
+  }
+  if (bit_width == 6) {
+    return nelem / 4 * 3 + (nelem % 4 * 6 + 7) / 8;
+  }
   int64_t expected_bytes = 0;
-  if (checked_mul_overflow(nelem, bytes_per_elem, &expected_bytes)) {
+  if (checked_mul_overflow(nelem, bit_width / 8, &expected_bytes)) {
     fail_check("TensorProto (tensor name: ", tensor.name(),
                ") has a shape too large to validate against its data type.");
   }
@@ -291,9 +257,23 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
 
 #undef check_data_field
 
-  const int64_t nelem = safe_dim_product(tensor.dims(), [&](const char *msg) {
+  const int64_t full_nelem = safe_dim_product(tensor.dims(), [&](const char *msg) {
     fail_check(msg, " (tensor name: ", tensor.name(), ")");
   });
+  int64_t nelem = full_nelem;
+  if (tensor.has_segment()) {
+    const auto &segment = tensor.segment();
+    if (!segment.has_begin() || !segment.has_end()) {
+      fail_check("TensorProto segment must set begin and end (tensor name: ", tensor.name(), ")");
+    }
+    const int64_t begin = segment.begin();
+    const int64_t end = segment.end();
+    if (begin < 0 || end < begin || end > full_nelem) {
+      fail_check("Invalid TensorProto segment (tensor name: ", tensor.name(), "): [", begin, ", ",
+                 end, ") out of [0, ", full_nelem, ")");
+    }
+    nelem = end - begin;
+  }
   bool stored_externally =
       tensor.has_data_location() && tensor.data_location() == TensorProto::EXTERNAL;
   if (stored_externally) {
@@ -398,6 +378,17 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
   }
 
     const auto dtype = tensor.data_type();
+    auto check_typed_data_size = [&](const char *field, size_t size, int64_t components = 1) {
+      int64_t expected_count = 0;
+      if (checked_mul_overflow(nelem, components, &expected_count)) {
+        fail_check("TensorProto (tensor name: ", tensor.name(),
+                   ") has a shape too large to validate against its data type.");
+      }
+      if (size < static_cast<uint64_t>(expected_count)) {
+        fail_check("TensorProto (tensor name: ", tensor.name(), ") ", field, " size (", size,
+                   ") is too small for the declared shape (", expected_count, " values required).");
+      }
+    };
     if (((dtype == TensorProto::UINT4 || dtype == TensorProto::INT4 ||
           dtype == TensorProto::FLOAT4E2M1) &&
          nelem > std::numeric_limits<int64_t>::max() - 7) ||
@@ -410,15 +401,20 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     case TensorProto::FLOAT:
     case TensorProto::COMPLEX64:
       check_field(float_data);
+      check_typed_data_size("float_data", tensor.float_data().size(),
+                            dtype == TensorProto::COMPLEX64 ? 2 : 1);
       break;
 
     case TensorProto::DOUBLE:
     case TensorProto::COMPLEX128:
       check_field(double_data);
+      check_typed_data_size("double_data", tensor.double_data().size(),
+                            dtype == TensorProto::COMPLEX128 ? 2 : 1);
       break;
 
     case TensorProto::INT32:
       check_field(int32_data);
+      check_typed_data_size("int32_data", tensor.int32_data().size());
       break;
 
     case TensorProto::UINT8:
@@ -488,15 +484,18 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
 
     case TensorProto::INT64:
       check_field(int64_data);
+      check_typed_data_size("int64_data", tensor.int64_data().size());
       break;
 
     case TensorProto::UINT32:
     case TensorProto::UINT64:
       check_field(uint64_data);
+      check_typed_data_size("uint64_data", tensor.uint64_data().size());
       break;
 
     case TensorProto::STRING:
       check_field(string_data);
+      check_typed_data_size("string_data", tensor.string_data().size());
       break;
 
     default:

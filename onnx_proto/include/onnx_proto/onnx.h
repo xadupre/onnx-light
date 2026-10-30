@@ -476,8 +476,8 @@ BEGIN_PROTO(
     Segment,
     "For very large tensors, we may want to store them in chunks, in which case the following "
     "fields will specify the segment that is stored in the current TensorProto.")
-FIELD_DEFAULT(int64_t, begin, 1, 0, "Segment start.")
-FIELD_DEFAULT(int64_t, end, 2, 0, "Segment end.")
+FIELD_OPTIONAL(int64_t, begin, 1, "Segment start.")
+FIELD_OPTIONAL(int64_t, end, 2, "Segment end.")
 END_PROTO()
 
 FIELD_REPEATED(int64_t, dims, 1, "The shape of the tensor.")

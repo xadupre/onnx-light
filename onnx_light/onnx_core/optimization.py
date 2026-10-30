@@ -20,6 +20,7 @@ from .shape_inference import Device
 PatternOptimization: TypeAlias = _C.PatternOptimization
 FunctionPattern: TypeAlias = _patterns.FunctionPattern
 RepeatedLayerPattern: TypeAlias = _patterns.RepeatedLayerPattern
+OperatorGroupPattern: TypeAlias = _patterns.OperatorGroupPattern
 MatchResult: TypeAlias = _C.MatchResult
 OptimizationReport: TypeAlias = _C.OptimizationReport
 
@@ -525,6 +526,7 @@ __all__ = [
     "MulUnsqueezeUnsqueezePattern",
     "NotNotPattern",
     "NotWherePattern",
+    "OperatorGroupPattern",
     "OptimizationReport",
     "PadConvPattern",
     "PadPadFusionPattern",

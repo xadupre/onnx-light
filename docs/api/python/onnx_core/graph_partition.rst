@@ -34,5 +34,26 @@ Static sizes use the shared native element-width helper, including packed
 Static tensor sizes that exceed the native size range are treated as unknown,
 not truncated. Accumulated transfer-cost overflow raises ``ValueError``.
 
+To apply the proposals as local functions, explicitly select the
+``OperatorGroup`` fusion pattern. It calls the same core algorithm using the
+builder's inferred shapes and leaves constants as explicit function arguments:
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+    from onnx_light.onnx_core.optimization import GraphGraph, OperatorGroupPattern
+
+    builder = GraphBuilder(model)
+    optimizer = GraphGraph(
+        builder,
+        patterns=[OperatorGroupPattern(max_boundary_bytes=1024, max_group_nodes=128)],
+    )
+    optimizer.optimize()
+    grouped_model = builder.to_model()
+
+The pattern is not enabled by default. It runs analysis at the first node of
+each optimizer scan, not at every candidate. Local-function bodies, previously
+generated group calls and device-configured regions are not wrapped.
+
 .. automodule:: onnx_light.onnx_core.graph_partition
     :members:

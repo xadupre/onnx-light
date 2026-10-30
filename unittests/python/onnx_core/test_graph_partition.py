@@ -3,11 +3,15 @@
 import itertools
 import unittest
 
+import numpy
+
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+from onnx_light.onnx_core.graph_builder import GraphBuilder
 from onnx_light.onnx_core.graph_partition import propose_operator_groups
+from onnx_light.onnx_core.optimization import GraphGraph, OperatorGroupPattern
 from onnx_light.onnx_py._onnxpycore import graph_partition as native_partition
 
 
@@ -340,6 +344,149 @@ class TestGraphPartition(ExtTestCase):
         model.graph.output[0].name = "undefined"
         with self.assertRaisesRegex(ValueError, "Undefined graph output"):
             propose_operator_groups(model)
+
+
+class TestOperatorGroupPattern(ExtTestCase):
+    def test_extracts_and_executes_large_intermediates_with_tiny_boundaries(self):
+        reference = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Expand", ["x", "shape"], ["large"]),
+                    oh.make_node("Relu", ["large"], ["positive"]),
+                    oh.make_node("ReduceSum", ["positive"], ["y"], keepdims=0),
+                ],
+                "expand_reduce",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [])],
+                initializer=[oh.make_tensor("shape", TensorProto.INT64, [1], [4096])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = GraphBuilder(model)
+        graph = GraphGraph(builder, [OperatorGroupPattern(max_boundary_bytes=8)])
+        plan = graph.optimize()
+        grouped = builder.to_model()
+        self.assertEqual(len(plan.rewrites), 1)
+        self.assertEqual(len(grouped.graph.node), 1)
+        self.assertEqual(list(grouped.graph.node[0].input), ["x", "shape"])
+        self.assertEqual(list(grouped.graph.node[0].output), ["y"])
+        self.assertEqual(
+            [node.op_type for node in grouped.functions[0].node], ["Expand", "Relu", "ReduceSum"]
+        )
+        checker.check_model(grouped)
+        replayed = GraphBuilder(model).apply_rewritings(plan).to_model()
+        checker.check_model(replayed)
+        for value in (-2, 0, 3):
+            feeds = {"x": numpy.array(value, dtype=numpy.float32)}
+            self.assertEqualArray(
+                reference(model).run(None, feeds)[0], reference(grouped).run(None, feeds)[0]
+            )
+            self.assertEqualArray(
+                reference(model).run(None, feeds)[0], reference(replayed).run(None, feeds)[0]
+            )
+        self.assertEqual(len(graph.optimize().rewrites), 0)
+        self.assertEqual(len(builder.to_model().functions), 1)
+
+    def test_limits_unknown_boundaries_and_registration(self):
+        for boundary, maximum, shape, functions in (
+            (7, 4, [], 0),
+            (8, 4, [], 1),
+            (8, 2, [], 2),
+            (1024, 4, ["N"], 0),
+        ):
+            with self.subTest(boundary=boundary, maximum=maximum, shape=shape):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(op, [before], [after])
+                            for op, before, after in (
+                                ("Neg", "x", "v0"),
+                                ("Abs", "v0", "v1"),
+                                ("Neg", "v1", "v2"),
+                                ("Abs", "v2", "y"),
+                            )
+                        ],
+                        "chain",
+                        [oh.make_tensor_value_info("x", TensorProto.FLOAT, shape)],
+                        [oh.make_tensor_value_info("y", TensorProto.FLOAT, shape)],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+                builder = GraphBuilder(model)
+                GraphGraph(
+                    builder,
+                    [OperatorGroupPattern(max_boundary_bytes=boundary, max_group_nodes=maximum)],
+                ).optimize()
+                self.assertEqual(len(builder.to_model().functions), functions)
+        builder = GraphBuilder(model)
+        graph = GraphGraph(builder, ["OperatorGroup"])
+        self.assertEqual(graph.patterns[0].name, "OperatorGroup")
+        self.assertNotIn(
+            "OperatorGroup", [pattern.name for pattern in GraphGraph(builder).patterns]
+        )
+        with self.assertRaises(ValueError):
+            OperatorGroupPattern(min_group_nodes=1)
+
+    def test_device_configurations_prevent_extraction(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Neg", ["x"], ["middle"]),
+                    oh.make_node("Constant", [], ["weight"], value_float=2),
+                    oh.make_node("Add", ["middle", "weight"], ["y"]),
+                ],
+                "configured",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [])],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        for configured in (0, 1):
+            with self.subTest(configured=configured):
+                configuration = model.graph.node[configured].device_configurations.add()
+                configuration.configuration_id = "sharded"
+                configuration.pipeline_stage = 2
+                builder = GraphBuilder(model)
+                self.assertEqual(
+                    len(GraphGraph(builder, ["OperatorGroup"]).optimize().rewrites), 0
+                )
+                self.assertEqual(len(builder.to_model().functions), 0)
+                model.graph.node[configured].device_configurations.clear()
+
+    def test_extracts_capturing_subgraphs_without_recursive_functions(self):
+        reference = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        branch = oh.make_graph(
+            [
+                oh.make_node("Neg", ["x"], ["middle"]),
+                oh.make_node("Abs", ["middle"], ["branch_y"]),
+            ],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("branch_y", TensorProto.FLOAT, [])],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("If", ["cond"], ["y"], then_branch=branch, else_branch=branch)],
+                "conditional",
+                [
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, []),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = GraphBuilder(model)
+        GraphGraph(builder, ["OperatorGroup"]).optimize()
+        grouped = builder.to_model()
+        self.assertEqual(len(grouped.functions), 2)
+        checker.check_model(grouped)
+        for condition in (False, True):
+            feeds = {"cond": numpy.array(condition), "x": numpy.array(-3, dtype=numpy.float32)}
+            self.assertEqualArray(
+                reference(model).run(None, feeds)[0], reference(grouped).run(None, feeds)[0]
+            )
 
 
 if __name__ == "__main__":

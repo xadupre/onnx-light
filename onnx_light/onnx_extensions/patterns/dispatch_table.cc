@@ -29,6 +29,7 @@
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/layer_pattern.h"
+#include "onnx_extensions/patterns/collections/operator_group_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
@@ -52,6 +53,8 @@ void RegisterPatterns() {
     const std::vector<std::string> existing_names = core::builder::RegisteredPatternNames();
     core::builder::RegisterPattern(
         "RepeatedLayer", [] { return std::make_unique<RepeatedLayerPattern>(); }, false);
+    core::builder::RegisterPattern(
+        "OperatorGroup", [] { return std::make_unique<OperatorGroupPattern>(); }, false);
     core::builder::RegisterPattern("Cast",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<CastPattern>();

@@ -554,7 +554,7 @@ def get_attribute_value(attr: AttributeProto) -> Any:
     raise ValueError(f"Unsupported ONNX attribute {attr.type} in {attr}")
 
 
-@functools.lru_cache(None)
+@functools.cache
 def tensor_dtype_to_field(tensor_dtype: int) -> str:
     """
     Converts a TensorProto's data_type to corresponding field name for storage.

@@ -9,9 +9,34 @@ from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
+from onnx_light.onnx_proto._helper import tensor_dtype_to_field
 
 
 class TestOnnxLightHelper(ExtTestCase):
+    def test_tensor_dtype_to_field_cache(self):
+        tensor_dtype_to_field.cache_clear()
+        self.addCleanup(tensor_dtype_to_field.cache_clear)
+        cases = [
+            (onnxl.TensorProto.FLOAT, "float_data"),
+            (onnxl.TensorProto.INT8, "int32_data"),
+            (onnxl.TensorProto.INT64, "int64_data"),
+            (onnxl.TensorProto.DOUBLE, "double_data"),
+            (onnxl.TensorProto.UINT32, "uint64_data"),
+            (onnxl.TensorProto.STRING, "string_data"),
+            (onnxl.TensorProto.COMPLEX64, "float_data"),
+            (onnxl.TensorProto.INT4, "int32_data"),
+        ]
+        for tensor_dtype, field in cases:
+            with self.subTest(tensor_dtype=tensor_dtype):
+                self.assertEqual(tensor_dtype_to_field(int(tensor_dtype)), field)
+                self.assertEqual(tensor_dtype_to_field(int(tensor_dtype)), field)
+        info = tensor_dtype_to_field.cache_info()
+        self.assertIsNone(info.maxsize)
+        self.assertEqual(info.misses, len(cases))
+        self.assertEqual(info.hits, len(cases))
+        with self.assertRaises(KeyError):
+            tensor_dtype_to_field(int(onnxl.TensorProto.UNDEFINED))
+
     def test_make_operatorsetid(self):
         op = oh.make_operatorsetid("", 19)
         self.assertEqual(op.domain, "")

@@ -1,15 +1,23 @@
-.. _l-cli-layers:
+.. _l-cli-partition:
 
-layers
-======
+partition
+=========
+
+Extracts model-local functions using one of two partitioning methods. Both
+methods preserve external weight references, omit large inline raw payloads
+and use the same loading, output and verbosity arguments. The former ``layers``
+command is now ``partition layer``.
+
+Repeated layers
+---------------
 
 Extracts repeated computations into model-local functions using only the
 opt-in ``RepeatedLayer`` pattern:
 
 .. code-block:: bash
 
-    onnx-light layers model.onnx --output model.layers.onnx
-    python -m onnx_light layers model.onnx -o model.layers.onnx --verbose
+    onnx-light partition layer model.onnx --output model.layers.onnx
+    python -m onnx_light partition layer model.onnx -o model.layers.onnx --verbose
 
 The output is a rewritten ONNX model, not one file per layer. Shared function
 bodies appear in ``ModelProto.functions`` as ``ai.rt::Layer``, ``Layer_1``, etc.,
@@ -37,6 +45,32 @@ corresponding arguments in the matched calls: ``A1``, ``A2``, ``B0`` give ``A``.
 If that name is already used, the input position is appended, for example ``A_2``.
 Without a majority prefix, the name is ``input_2`` for input position 2.
 
+Transfer-aware partitioning
+---------------------------
+
+``partition mincut`` applies the opt-in ``PartitionGroup`` pattern. It groups
+topological intervals into ``ai.rt::PartitionGroup`` functions while minimizing
+boundary transfers. Despite the command name, the algorithm is bounded interval
+dynamic programming, not a general graph minimum-cut solver.
+
+.. code-block:: bash
+
+    python -m onnx_light partition mincut model.onnx \
+        --output model.partition.onnx \
+        --max-boundary-bytes 1024 \
+        --min-group-nodes 2 \
+        --max-group-nodes 128
+
+The combined input/output transfer estimate of each group must fit
+``--max-boundary-bytes`` (default 1024). Constants and non-overridable initializers
+are explicit inputs but cost no transfer bytes. Unknown boundary sizes prevent
+a proposal; inferred descriptors provide static sizes when available.
+``--min-group-nodes`` and ``--max-group-nodes`` bound each group, defaulting to
+2 and 128. All limits must fit unsigned 64-bit integers.
+
+The summary lists ``PartitionGroup`` definitions and their call sites. A model
+without eligible groups is still saved and reports zero partition functions.
+
 Loading and weights
 -------------------
 
@@ -52,8 +86,8 @@ their payloads are not loaded during extraction. Large inline raw tensor payload
 omitted from this structural export. To retain executable weights in the
 rewritten model, externalize them before running the command.
 Results with omitted inline weights are for structural inspection only.
-Constant folding is disabled; only ``RepeatedLayer`` and the optimizer's normal
-structural cleanup passes run.
+Constant folding is disabled; only the selected pattern and the optimizer's
+normal structural cleanup passes run.
 
 ``--output`` is required. An existing output file is overwritten; ``--verbose``
 announces the overwrite. Using the input model path rewrites it in place.
@@ -65,9 +99,9 @@ weights. Missing or invalid tiny shape tensors raise an error during loading.
 
 .. code-block:: bash
 
-    python -m onnx_light layers model.onnx \
+    python -m onnx_light partition layer model.onnx \
         --output model.layers.onnx \
         --tiny-tensor-threshold 256
 
 For the complete argument reference, see
-:doc:`../../api/command_lines/layers`.
+:doc:`../../api/command_lines/partition`.

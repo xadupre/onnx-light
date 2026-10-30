@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests metadata-only repeated-layer extraction from the command line."""
+"""Tests metadata-only partitioning from the command line."""
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -48,7 +48,7 @@ def _repeated_model():
     )
 
 
-class TestMainLayers(ExtTestCase):
+class TestMainPartition(ExtTestCase):
     def _save_external(self, directory):
         """Writes external weights and an independently stored tiny shape tensor."""
         source = directory / "model.onnx"
@@ -85,7 +85,7 @@ class TestMainLayers(ExtTestCase):
             shape_before = (directory / "shape.bin").read_bytes()
             text = StringIO()
             with redirect_stdout(text):
-                main(["layers", str(source), "-o", str(output), "--verbose"])
+                main(["partition", "layer", str(source), "-o", str(output), "--verbose"])
             result = load(output, load_external_data=False)
             layers = [function for function in result.functions if function.domain == "ai.rt"]
             self.assertEqual(len(layers), 1)
@@ -109,7 +109,17 @@ class TestMainLayers(ExtTestCase):
             (directory / "weights.bin").unlink()
             output = directory / "layers.onnx"
             with redirect_stdout(StringIO()):
-                main(["layers", str(source), "-o", str(output), "--tiny-tensor-threshold", "128"])
+                main(
+                    [
+                        "partition",
+                        "layer",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--tiny-tensor-threshold",
+                        "128",
+                    ]
+                )
             result = load(output, load_external_data=False)
             weights = [
                 tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
@@ -128,6 +138,93 @@ class TestMainLayers(ExtTestCase):
                 [1, 16],
             )
 
+    def test_mincut_preserves_numerics_and_external_weight_files(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = self._save_external(directory)
+            output = directory / "partition.onnx"
+            original_bytes = source.read_bytes()
+            weights_before = (directory / "weights.bin").read_bytes()
+            text = StringIO()
+            with redirect_stdout(text):
+                main(["partition", "mincut", str(source), "-o", str(output), "--verbose"])
+            result = load(output, load_external_data=False)
+            functions = [
+                function
+                for function in result.functions
+                if function.domain == "ai.rt" and function.name.startswith("PartitionGroup")
+            ]
+            self.assertEqual(len(functions), 1)
+            self.assertEqual(len(functions[0].node), 7)
+            self.assertEqual(len(result.graph.node), 1)
+            self.assertEqual(result.graph.node[0].op_type, functions[0].name)
+            self.assertIn("1 partition function(s)", text.getvalue())
+            self.assertIn("1 call site(s)", text.getvalue())
+            feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
+            expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
+            actual = ReferenceEvaluator(load(output, load_external_data=True)).run(None, feeds)
+            numpy.testing.assert_allclose(actual[0], expected[0], rtol=1e-6, atol=1e-6)
+            self.assertEqual(source.read_bytes(), original_bytes)
+            self.assertEqual((directory / "weights.bin").read_bytes(), weights_before)
+
+    def test_mincut_respects_transfer_and_group_size_limits_without_reading_weights(self):
+        for options, expected_groups in (
+            (["--max-boundary-bytes", "127"], 0),
+            (["--max-boundary-bytes", "128"], 1),
+            (["--min-group-nodes", "2", "--max-group-nodes", "2"], 3),
+        ):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                source = self._save_external(directory)
+                (directory / "weights.bin").unlink()
+                output = directory / "partition.onnx"
+                with redirect_stdout(StringIO()):
+                    main(["partition", "mincut", str(source), "-o", str(output), *options])
+                result = load(output, load_external_data=False)
+                functions = [
+                    function
+                    for function in result.functions
+                    if function.domain == "ai.rt" and function.name.startswith("PartitionGroup")
+                ]
+                self.assertEqual(len(functions), expected_groups)
+                if "--max-group-nodes" in options:
+                    self.assertTrue(all(len(function.node) == 2 for function in functions))
+                weights = [
+                    tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
+                ]
+                self.assertEqual(len(weights), 3)
+                self.assertTrue(
+                    all(
+                        weight.data_location == TensorProto.EXTERNAL and not weight.raw_data
+                        for weight in weights
+                    )
+                )
+
+    def test_mincut_rejects_invalid_limits_before_loading_or_overwriting(self):
+        for options in (
+            ["--min-group-nodes", "1"],
+            ["--min-group-nodes", "4", "--max-group-nodes", "3"],
+            ["--max-boundary-bytes", str(1 << 64)],
+            ["--max-group-nodes", str(1 << 64)],
+        ):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                output = directory / "output.onnx"
+                output.write_bytes(b"existing output")
+                with self.assertRaisesRegex(ValueError, "Partition limits"):
+                    main(
+                        [
+                            "partition",
+                            "mincut",
+                            str(directory / "missing.onnx"),
+                            "-o",
+                            str(output),
+                            *options,
+                        ]
+                    )
+                self.assertEqual(output.read_bytes(), b"existing output")
+
     def test_missing_tiny_shape_fails_without_writing_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -135,7 +232,7 @@ class TestMainLayers(ExtTestCase):
             (directory / "shape.bin").unlink()
             output = directory / "layers.onnx"
             with self.assertRaises((RuntimeError, ValueError)):
-                main(["layers", str(source), "-o", str(output)])
+                main(["partition", "layer", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
     def test_rejects_missing_graph_without_writing_output(self):
@@ -145,7 +242,7 @@ class TestMainLayers(ExtTestCase):
             source.write_bytes(b"")
             output = directory / "layers.onnx"
             with self.assertRaisesRegex(ValueError, "requires a model graph"):
-                main(["layers", str(source), "-o", str(output)])
+                main(["partition", "layer", str(source), "-o", str(output)])
             self.assertFalse(output.exists())
 
     def test_extracts_layers_with_skipped_inline_weights(self):
@@ -156,7 +253,7 @@ class TestMainLayers(ExtTestCase):
             save(_repeated_model(), source)
             original = source.read_bytes()
             with redirect_stdout(StringIO()):
-                main(["layers", str(source), "-o", str(output)])
+                main(["partition", "layer", str(source), "-o", str(output)])
             result = load(output)
             self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
             weights = [
@@ -202,7 +299,7 @@ class TestMainLayers(ExtTestCase):
                 output = Path(temporary) / "layers.onnx"
                 save(model, source)
                 with redirect_stdout(StringIO()):
-                    main(["layers", str(source), "-o", str(output)])
+                    main(["partition", "layer", str(source), "-o", str(output)])
                 result = load(output)
                 calls = [node for node in result.graph.node if node.domain == "ai.rt"]
                 self.assertEqual(len(calls), 3)
@@ -218,14 +315,14 @@ class TestMainLayers(ExtTestCase):
                 with self.subTest(verbose=verbose):
                     output.write_bytes(b"old output")
                     text = StringIO()
-                    arguments = ["layers", str(source), "-o", str(output)]
+                    arguments = ["partition", "layer", str(source), "-o", str(output)]
                     if verbose:
                         arguments.append("--verbose")
                     with redirect_stdout(text):
                         main(arguments)
                     result = load(output, load_external_data=False)
                     self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
-                    notice = f"[layers] overwriting {str(output)!r}"
+                    notice = f"[partition layer] overwriting {str(output)!r}"
                     if verbose:
                         self.assertIn(notice, text.getvalue())
                     else:
@@ -236,10 +333,10 @@ class TestMainLayers(ExtTestCase):
             source = self._save_external(Path(temporary))
             text = StringIO()
             with redirect_stdout(text):
-                main(["layers", str(source), "-o", str(source), "--verbose"])
+                main(["partition", "layer", str(source), "-o", str(source), "--verbose"])
             result = load(source, load_external_data=False)
             self.assertEqual(sum(node.domain == "ai.rt" for node in result.graph.node), 3)
-            self.assertIn(f"[layers] overwriting {str(source)!r}", text.getvalue())
+            self.assertIn(f"[partition layer] overwriting {str(source)!r}", text.getvalue())
 
     def test_accepts_another_output_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -249,7 +346,7 @@ class TestMainLayers(ExtTestCase):
             elsewhere.mkdir()
             output = elsewhere / "layers.onnx"
             with redirect_stdout(StringIO()):
-                main(["layers", str(source), "-o", str(output)])
+                main(["partition", "layer", str(source), "-o", str(output)])
             result = load(output, load_external_data=False)
             weights = [
                 tensor for tensor in result.graph.initializer if tensor.name.startswith("W")
@@ -279,7 +376,16 @@ class TestMainLayers(ExtTestCase):
             save(model, source)
             output = directory / "plain.layers.onnx"
             completed = subprocess.run(
-                [sys.executable, "-m", "onnx_light", "layers", str(source), "-o", str(output)],
+                [
+                    sys.executable,
+                    "-m",
+                    "onnx_light",
+                    "partition",
+                    "layer",
+                    str(source),
+                    "-o",
+                    str(output),
+                ],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -289,17 +395,18 @@ class TestMainLayers(ExtTestCase):
             self.assertEqual([node.op_type for node in load(output).graph.node], ["Relu"])
 
     def test_parser_requires_output_and_positive_threshold(self):
-        for arguments in (
-            ["layers", "model.onnx"],
-            ["layers", "model.onnx", "-o", "layers.onnx", "--tiny-tensor-threshold", "0"],
-            ["layers", "model.onnx", "-o", "layers.onnx", "--tiny-tensor-threshold", "-1"],
-        ):
-            with (
-                self.subTest(arguments=arguments),
-                redirect_stderr(StringIO()),
-                self.assertRaises(SystemExit),
+        for method in ("layer", "mincut"):
+            for arguments in (
+                ["model.onnx"],
+                ["model.onnx", "-o", "output.onnx", "--tiny-tensor-threshold", "0"],
+                ["model.onnx", "-o", "output.onnx", "--tiny-tensor-threshold", "-1"],
             ):
-                _build_parser().parse_args(arguments)
+                with (
+                    self.subTest(method=method, arguments=arguments),
+                    redirect_stderr(StringIO()),
+                    self.assertRaises(SystemExit),
+                ):
+                    _build_parser().parse_args(["partition", method, *arguments])
 
 
 if __name__ == "__main__":

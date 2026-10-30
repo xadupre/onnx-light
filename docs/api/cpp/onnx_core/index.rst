@@ -13,6 +13,8 @@ libraries depending on the other.
     dim_sum
     graph_manipulations
     graph_partition
+    layer_extraction
+    operator_groups
     light_op_schema
     sym_tensor
     sym_sequence

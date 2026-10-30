@@ -6,7 +6,7 @@
     :maxdepth: 1
 
     command_line/fillshape
-    command_line/layers
+    command_line/partition
     command_line/show
     command_line/run
     command_line/backend

@@ -45,13 +45,13 @@ TEST(GraphPartition, TinyBoundaryUnknownInternalAndOrderedPorts) {
   graph.mutable_node(0)->add_input("x");
   graph.mutable_node(0)->add_output("side");
   Describe(graph.add_output(), "side");
-  const auto groups = ProposeOperatorGroups(graph, {12, 2, 128});
+  const auto groups = ProposeOperatorGroups(graph, {12, 2, 128}).groups;
   ASSERT_EQ(groups.size(), 1u);
   EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({0, 1}));
   EXPECT_EQ(groups[0].inputs, std::vector<std::string>({"x"}));
   EXPECT_EQ(groups[0].outputs, std::vector<std::string>({"side", "y"}));
   EXPECT_EQ(groups[0].transfer_bytes, 12u);
-  EXPECT_TRUE(ProposeOperatorGroups(graph, {11, 2, 128}).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {11, 2, 128}).groups.empty());
 }
 
 TEST(GraphPartition, DynamicProgrammingBeatsEarlySmallGroup) {
@@ -60,10 +60,10 @@ TEST(GraphPartition, DynamicProgrammingBeatsEarlySmallGroup) {
   Describe(graph.mutable_value_info(0), "v0", {1000});
   Describe(graph.mutable_value_info(1), "v1", {});
   Describe(graph.mutable_value_info(2), "v2", {1000});
-  auto groups = ProposeOperatorGroups(graph, {8, 2, 4});
+  auto groups = ProposeOperatorGroups(graph, {8, 2, 4}).groups;
   ASSERT_EQ(groups.size(), 1u);
   EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({0, 1, 2, 3}));
-  groups = ProposeOperatorGroups(graph, {8, 2, 2});
+  groups = ProposeOperatorGroups(graph, {8, 2, 2}).groups;
   ASSERT_EQ(groups.size(), 2u);
   EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({0, 1}));
   EXPECT_EQ(groups[1].node_indices, std::vector<size_t>({2, 3}));
@@ -74,7 +74,7 @@ TEST(GraphPartition, EqualCostPrefersMoreGroupedNodesThenFirstPartition) {
   std::unordered_map<std::string, uint64_t> sizes;
   for (const auto *name : {"x", "v0", "v1", "v2", "v3", "y"})
     sizes[name] = 0;
-  const auto groups = ProposeOperatorGroups(graph, {0, 2, 3}, sizes);
+  const auto groups = ProposeOperatorGroups(graph, {0, 2, 3}, sizes).groups;
   ASSERT_EQ(groups.size(), 2u);
   EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({0, 1}));
   EXPECT_EQ(groups[1].node_indices, std::vector<size_t>({2, 3, 4}));
@@ -89,15 +89,15 @@ TEST(GraphPartition, DenseSparseAndStandardConstantsAreFreeButExplicit) {
   graph.add_sparse_initializer()->mutable_values()->set_name("sparse");
   graph.mutable_node(1)->add_input("dense");
   graph.mutable_node(1)->add_input("sparse");
-  const auto groups = ProposeOperatorGroups(graph, {4, 2, 2});
+  const auto groups = ProposeOperatorGroups(graph, {4, 2, 2}).groups;
   ASSERT_EQ(groups.size(), 1u);
   EXPECT_EQ(groups[0].node_indices, std::vector<size_t>({1, 2}));
   EXPECT_EQ(groups[0].inputs, std::vector<std::string>({"v0", "dense", "sparse"}));
   EXPECT_EQ(groups[0].transfer_bytes, 4u);
   Describe(graph.add_input(), "sparse", {1000});
-  EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).groups.empty());
   graph.mutable_input(1)->set_name("dense");
-  EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).groups.empty());
 }
 
 TEST(GraphPartition, CustomAndOverloadedConstantsAreChargeable) {
@@ -112,7 +112,7 @@ TEST(GraphPartition, CustomAndOverloadedConstantsAreChargeable) {
       node->set_domain("custom");
     Describe(graph.mutable_value_info(0), "v0", {1000});
     Describe(graph.add_output(), "v0", {1000});
-    EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).empty());
+    EXPECT_TRUE(ProposeOperatorGroups(graph, {4, 2, 2}).groups.empty());
   }
 }
 
@@ -127,24 +127,24 @@ TEST(GraphPartition, CapturesRemainInputsAndLiveOutputs) {
   capture->add_input("v0");
   capture->add_output("nested");
   body->mutable_g()->add_output()->set_name("nested");
-  EXPECT_TRUE(ProposeOperatorGroups(graph, {8, 2, 2}).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {8, 2, 2}).groups.empty());
   Describe(graph.add_input(), "external", {1000});
   *graph.mutable_node(1)->add_attribute() = *body;
   graph.mutable_node(2)->clear_attribute();
   capture = graph.mutable_node(1)->mutable_attribute(0)->mutable_g()->mutable_node(0);
   capture->ref_input()[0] = "external";
-  EXPECT_TRUE(ProposeOperatorGroups(graph, {8, 2, 128}).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph, {8, 2, 128}).groups.empty());
   capture->ref_input()[0] = "undefined";
-  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
 }
 
 TEST(GraphPartition, UnknownBoundariesAndExplicitEstimates) {
   auto graph = Chain();
   graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->clear_shape();
-  EXPECT_TRUE(ProposeOperatorGroups(graph).empty());
-  EXPECT_EQ(ProposeOperatorGroups(graph, {}, {{"x", 4}}).size(), 1u);
+  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
+  EXPECT_EQ(ProposeOperatorGroups(graph, {}, {{"x", 4}}).groups.size(), 1u);
   Describe(graph.mutable_input(0), "x", {}, TensorProto::STRING);
-  EXPECT_TRUE(ProposeOperatorGroups(graph).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
 }
 
 TEST(GraphPartition, PackedAndZeroSizes) {
@@ -158,7 +158,7 @@ TEST(GraphPartition, PackedAndZeroSizes) {
     auto graph = Chain();
     Describe(graph.mutable_input(0), "x", {count}, dtype);
     Describe(graph.mutable_output(0), "y", {count}, dtype);
-    const auto groups = ProposeOperatorGroups(graph, {bytes, 2, 128});
+    const auto groups = ProposeOperatorGroups(graph, {bytes, 2, 128}).groups;
     ASSERT_EQ(groups.size(), 1u);
     EXPECT_EQ(groups[0].transfer_bytes, bytes);
   }
@@ -168,22 +168,24 @@ TEST(GraphPartition, StaticSizeOverflowIsUnknownAndZeroDimensionsDoNotOverflow) 
   auto graph = Chain();
   const auto huge = std::numeric_limits<int64_t>::max();
   Describe(graph.mutable_input(0), "x", {huge, huge});
-  EXPECT_TRUE(ProposeOperatorGroups(graph).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
   Describe(graph.mutable_input(0), "x", {huge, huge, 0});
-  EXPECT_EQ(ProposeOperatorGroups(graph).size(), 1u);
+  EXPECT_EQ(ProposeOperatorGroups(graph).groups.size(), 1u);
   Describe(graph.mutable_input(0), "x", {huge}, TensorProto::COMPLEX128);
-  EXPECT_TRUE(ProposeOperatorGroups(graph).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(graph).groups.empty());
 }
 
 TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {
   auto graph = Chain();
   Describe(graph.mutable_input(0), "x", {std::numeric_limits<int64_t>::max(), 2},
            TensorProto::UINT8);
-  const auto groups = ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"v0", 0}, {"y", 0}});
+  const auto groups =
+      ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"v0", 0}, {"y", 0}}).groups;
   ASSERT_EQ(groups.size(), 1u);
   EXPECT_EQ(groups[0].transfer_bytes, UINT64_MAX - 1);
   Describe(graph.mutable_input(0), "x", {int64_t{1} << 62, 4}, TensorProto::UINT2);
-  const auto packed = ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"v0", 0}, {"y", 0}});
+  const auto packed =
+      ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"v0", 0}, {"y", 0}}).groups;
   ASSERT_EQ(packed.size(), 1u);
   EXPECT_EQ(packed[0].transfer_bytes, uint64_t{1} << 62);
 }
@@ -191,21 +193,22 @@ TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {
 TEST(GraphPartition, CostOverflowAndInvalidLimitsAreRejected) {
   const auto graph = Chain();
   const uint64_t half = uint64_t{1} << 63;
-  EXPECT_THROW(ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"x", half}, {"y", half}}),
-               std::invalid_argument);
-  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 1, 128}), std::invalid_argument);
-  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 3, 2}), std::invalid_argument);
+  EXPECT_THROW(
+      ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"x", half}, {"y", half}}).groups,
+      std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 1, 128}).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 3, 2}).groups, std::invalid_argument);
 }
 
 TEST(GraphPartition, ValidatesAllDataflowEvenForIneligibleGraphs) {
   GraphProto empty;
-  EXPECT_TRUE(ProposeOperatorGroups(empty).empty());
+  EXPECT_TRUE(ProposeOperatorGroups(empty).groups.empty());
   empty.add_output()->set_name("missing");
-  EXPECT_THROW(ProposeOperatorGroups(empty), std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(empty).groups, std::invalid_argument);
   auto graph = Chain();
   graph.mutable_node(0)->ref_input()[0] = "y";
-  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
   graph.mutable_node(0)->ref_input()[0] = "x";
   graph.mutable_node(1)->ref_output()[0] = "x";
-  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
 }

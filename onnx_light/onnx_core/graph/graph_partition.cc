@@ -76,7 +76,7 @@ struct Step {
 
 } // namespace
 
-std::vector<OperatorGroup>
+OperatorGroupProposal
 ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &options,
                       const std::unordered_map<std::string, uint64_t> &value_sizes) {
   if (options.min_group_nodes < 2 || options.max_group_nodes < options.min_group_nodes)
@@ -237,7 +237,7 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
       result.push_back(std::move(*step.group));
   }
   std::reverse(result.begin(), result.end());
-  return result;
+  return MakeIntervalGroupProposal(std::move(result), graph.node().size());
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

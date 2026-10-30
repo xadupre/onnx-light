@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ..onnx import GraphProto, ModelProto
-from ..onnx_py._onnxpycore import graph_partition as _C
+from ..onnx_py._onnxpycore import graph_partition as _C  # type: ignore[attr-defined]
 
 __all__ = ["OperatorGroup", "propose_operator_groups"]
 

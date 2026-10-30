@@ -18,6 +18,7 @@
 #include <nanobind/operators.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/map.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/string.h>
@@ -93,7 +94,7 @@ NB_MODULE(_onnxpycore, m) {
             throw nb::value_error("value_sizes keys must be strings.");
           sizes.emplace(std::move(name), integer(item.second));
         }
-        return core::graph::ProposeOperatorGroups(graph, options, sizes);
+        return core::graph::ProposeOperatorGroups(graph, options, sizes).groups;
       },
       nb::arg("graph"), nb::arg("max_boundary_bytes") = nb::int_(1024),
       nb::arg("min_group_nodes") = nb::int_(2), nb::arg("max_group_nodes") = nb::int_(128),

@@ -9,65 +9,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
- * Finds repeated, connected, structurally corresponding regions around exact
- * attention or matrix-multiplication identities, including local functions.
- * Extracts every selected occurrence together, retaining weights as explicit
- * inputs and preserving side outputs and lexical subgraph dependencies.
+ * Extracts repeated operator regions using core::graph::ProposeRepeatedLayers.
  *
- * Algorithm, in execution order:
- *
- * - Indexes producers, consumers, declared types and lexical subgraph captures.
- *   Runs detection only at the first graph node of each optimizer scan.
- * - Finds exact attention/MatMul anchors, including recursively inspected local
- *   functions. Excludes existing layer-function calls and their bodies.
- *   Starts with rarer anchor families so hybrid blocks can form a complete motif
- *   before their common projections are extracted separately.
- *   Accepts operators independently of their domain or determinism when shape
- *   inference is available, including context-local shape callbacks. Otherwise
- *   requires complete output tensor annotations to preserve function inference.
- *   Does not change the conservative custom-operator constant-folding policy.
- *   Keeps nodes referencing enclosing-function attributes, including references
- *   inside graph attributes, outside extracted regions.
- * - Groups compatible anchors into repeated seed roles. Tries individual anchors,
- *   directed port-labelled one-hop neighborhoods, then bounded periodic strides
- *   to distinguish otherwise identical projections within a larger repeat.
- * - Grows all occurrences together through corresponding predecessors/successors.
- *   Requires matching attributes, port roles and topology, but not equal weights.
- *   Rejects incompatible known dtypes, ranks and feature dimensions; leading
- *   activation dimensions may vary. Each accepted region contains at least two nodes.
- * - Computes each candidate cut: entering values become formal inputs, including
- *   weights and captures; values used outside the region become formal outputs,
- *   including intermediate graph outputs. Rejects unsupported boundary types and
- *   nested outputs captured directly from an outer scope without a local Identity.
- *   Supports tensors, structured values, sequences of supported values and
- *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
- * - Contracts regions into scheduling units alongside untouched nodes. Rejects
- *   contraction cycles and preserves the original execution order except for
- *   literal Constants and constant Cast/CastLike/Identity preparations, which may
- *   move before a call that needs their values without evaluating any weights.
- *   Retains order for other operators and device-annotated or overridden conversions.
- * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
- *   unknown-size crossings, saturating known byte size, decreasing region size,
- *   and original positions. Ranks seed families by total anchor coverage, total
- *   node coverage, occurrence count (smaller period), then region size.
- * - Revalidates the selected match in Apply and replaces every selected occurrence
- *   with calls to shared model-local functions when their bodies and interfaces
- *   agree up to local names, exporter provenance and recomputed tensor shapes.
- *   Retains shape annotations needed by operators without shape inference.
- *   Copies nodes in topological order
- *   into closed function bodies, preserves caller boundary names/types/tags, and
- *   leaves weights as explicit inputs.
- *   Names each formal input from the longest prefix shared by a strict majority
- *   of corresponding arguments in the matched calls, falling back to input_N.
- *   Gives colliding names a port suffix to avoid lexical SSA shadowing.
- *
- * Work limits:
- *
- * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
- * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
- *   Shortens batches when needed to leave at least two occurrences for the next batch.
- * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
- * - Detects repeated computations, not necessarily entire transformer/model layers.
+ * Runs detection at the first graph node of each optimizer scan and delegates
+ * function construction to core::graph::MakeRepeatedLayerReplacements.
+ * Preserves the core algorithm's boundary, scheduling and reuse safeguards.
+ * The pattern is opt-in and does not wrap existing ai.rt Layer bodies.
  *
  * @code
  * Before:
@@ -79,11 +26,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *             ┌─────────────────┐       ┌─────────────────┐
- *   x, w0 ───→│ Layer(...)      │───y───→│ Layer(...)      │───→ z
- *             │ body(x, w0) → y │       │ body(y, w1) → z │
+ *   x, w0 ───→│ Layer(x, w0)    │───y───→│ Layer(y, w1)    │───→ z
  *             └─────────────────┘       └─────────────────┘
- *                                               ↑
- *                                               w1
  * @endcode
  */
 class RepeatedLayerPattern final : public core::builder::PatternOptimization {
@@ -95,11 +39,11 @@ public:
   /// Returns an empty filter because local-function names are unrestricted.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds occurrences from the first graph node and a dependency-safe rewrite interval.
+  /// Finds occurrences from the first node using the core analysis.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
-  /// Rechecks the match and emits local functions with explicit formal interfaces.
+  /// Rechecks the match and delegates local-function construction to core.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;

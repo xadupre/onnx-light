@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 /**
  * Extracts low-transfer operator intervals as model-local ai.rt functions.
  *
- * Calls core::graph::ProposeOperatorGroups only at the first node of each
+ * Calls core::graph::ProposePartitionGroups only at the first node of each
  * optimizer scan, using the builder's inferred tensor descriptors. The core
  * algorithm owns interval selection and transfer accounting; this opt-in
  * pattern only materializes its proposals. Constants remain explicit inputs.

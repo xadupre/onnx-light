@@ -3394,6 +3394,22 @@ TEST(GraphBuilder, RemoveDuplicateInitializersUsesUnloadedExternalIdentity) {
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
 }
 
+TEST(GraphBuilder, RemoveDuplicateInitializersKeepsUnavailablePayloads) {
+  for (int64_t width : {0, 2}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    for (const auto *name : {"w1", "w2"}) {
+      TensorProto tensor;
+      tensor.set_name(name);
+      tensor.set_data_type(TensorProto::FLOAT);
+      tensor.add_dims(2);
+      tensor.add_dims(width);
+      builder.MakeInitializer(tensor);
+    }
+    EXPECT_EQ(builder.RemoveDuplicateInitializers(), width == 0 ? 1u : 0u);
+    EXPECT_EQ(builder.Initializers().size(), width == 0 ? 1u : 2u);
+  }
+}
+
 TEST(GraphBuilder, RemoveDuplicateInitializersRecursesIntoSubgraphs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));

@@ -259,6 +259,16 @@ void ShapesContext::SetType(const std::string &name, const TypeProto &type) {
   types_[name] = std::move(owned);
 }
 
+void ShapesContext::SetTensorWithType(const std::string &name, SymTensor &&tensor,
+                                      const TypeProto &type) {
+  SetType(name, type);
+  EXT_ENFORCE_INVALID(Has(name), "SetTensorWithType: type for '", name,
+                      "' must carry a tensor descriptor.");
+  EXT_ENFORCE_INVALID(Get(name).Dtype() == tensor.Dtype(), "SetTensorWithType: dtype for '", name,
+                      "' does not match the declared type.");
+  tensors_[name] = std::move(tensor);
+}
+
 void ShapesContext::SetSequenceWithType(const std::string &name, SymSequence &&sequence,
                                         const TypeProto &type) {
   const TypeProto *descriptor_type = &type;

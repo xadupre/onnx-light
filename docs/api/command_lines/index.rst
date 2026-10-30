@@ -14,6 +14,8 @@ commands. Each page below describes one command, with its arguments and examples
       - Lists available commands and displays command-specific help.
     * - :doc:`python -m onnx_light fillshape <fillshape>`
       - Adds inferred shapes and optional memory and shape-tag metadata to a model.
+    * - :doc:`python -m onnx_light layers <layers>`
+      - Extracts repeated computations as local Layer functions and prints their summary.
     * - :doc:`python -m onnx_light show <show>`
       - Renders a model as text, a diagram, or code that rebuilds it.
     * - :doc:`python -m onnx_light run <run>`
@@ -30,6 +32,7 @@ commands. Each page below describes one command, with its arguments and examples
 
     onnx_light
     fillshape
+    layers
     show
     run
     backend

@@ -118,6 +118,10 @@ jobs:
         env:
           UNITTEST_GOING: "1"
         run: |
+          # Expose shared test helpers without shadowing the installed reduced wheel.
+          test_support=$(mktemp -d)
+          ln -s "$GITHUB_WORKSPACE/unittests" "$test_support/unittests"
+          export PYTHONPATH="$test_support"
           pytest --durations=10 \
             unittests/python/onnx_protos \
             unittests/python/onnx_op \

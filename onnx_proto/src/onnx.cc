@@ -1038,8 +1038,9 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
 int64_t TensorProto::ContentHash(bool include_content) const {
   if (!include_content) {
     // Cheap metadata-only hash: element type, shape, data location and the
-    // size of every payload field. Two tensors sharing this hash are candidates
-    // for an exact byte comparison, nothing more.
+    // size of every payload field, plus the external metadata entries.
+    // Two tensors sharing this hash are candidates for an exact byte comparison,
+    // nothing more.
     uint64_t seed = static_cast<uint64_t>(std::hash<int>()(static_cast<int>(data_type())));
     for (int64_t dim : dims().values()) {
       HashCombine(seed, dim);
@@ -1054,6 +1055,10 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     HashCombine(seed, static_cast<uint64_t>(uint64_data().size()));
     HashCombine(seed, static_cast<uint64_t>(string_data().size()));
     HashCombine(seed, static_cast<uint64_t>(external_data().size()));
+    for (const auto &entry : external_data()) {
+      HashCombine(seed, std::hash<std::string_view>()(entry.key().sv()));
+      HashCombine(seed, std::hash<std::string_view>()(entry.value().sv()));
+    }
     return static_cast<int64_t>(seed);
   }
 

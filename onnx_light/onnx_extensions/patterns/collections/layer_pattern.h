@@ -20,6 +20,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Runs detection only at the first graph node of each optimizer scan.
  * - Finds exact attention/MatMul anchors, including recursively inspected local
  *   functions. Excludes existing layer-function calls and their bodies.
+ *   Starts with rarer anchor families so hybrid blocks can form a complete motif
+ *   before their common projections are extracted separately.
  *   Accepts operators independently of their domain or determinism when shape
  *   inference is available, including context-local shape callbacks. Otherwise
  *   requires complete output tensor annotations to preserve function inference.
@@ -40,25 +42,31 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   Supports tensors, structured values, sequences of supported values and
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
- *   contraction cycles and preserves the original execution order of every node,
- *   without assuming that any operator is pure or deterministic.
+ *   contraction cycles and preserves the original execution order except for
+ *   literal Constants and constant Cast/CastLike/Identity preparations, which may
+ *   move before a call that needs their values without evaluating any weights.
+ *   Retains order for other operators and device-annotated or overridden conversions.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
  *   and original positions. Ranks seed families by total anchor coverage, total
  *   node coverage, occurrence count (smaller period), then region size.
  * - Revalidates the selected match in Apply and replaces every selected occurrence
  *   with calls to shared model-local functions when their bodies and interfaces
- *   agree up to local value and node names. Copies nodes in topological order
+ *   agree up to local names, exporter provenance and recomputed tensor shapes.
+ *   Retains shape annotations needed by operators without shape inference.
+ *   Copies nodes in topological order
  *   into closed function bodies, preserves caller boundary names/types/tags, and
  *   leaves weights as explicit inputs.
- *   Gives body inputs fresh names to avoid lexical SSA shadowing.
+ *   Names each formal input from the longest prefix shared by a strict majority
+ *   of corresponding arguments in the matched calls, falling back to input_N.
+ *   Gives colliding names a port suffix to avoid lexical SSA shadowing.
  *
  * Work limits:
  *
  * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.
- * - Limits each occurrence to 64 nodes and the rewritten interval to 4096 nodes.
+ * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
  * - Detects repeated computations, not necessarily entire transformer/model layers.
  *
  * @code

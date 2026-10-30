@@ -88,6 +88,11 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
   }
 }
 
+void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &caller,
+                                     const NodeProto &node, const FunctionProto &function,
+                                     const std::unordered_set<std::string> &annotated_outputs,
+                                     std::unordered_set<std::string> &annotation_symbols);
+
 // Expands a single local-function call ``node`` into shape inference
 // over ``func.node()`` with the function's input/output names rebound
 // to the caller's names. Bound through positional binding of
@@ -99,7 +104,8 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
 // caller's opsets for any domain not redeclared by the function) and
 // the same local-function map, so nested local-function calls are also
 // supported.
-void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func) {
+void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func,
+                             std::unordered_set<std::string> *annotation_symbols) {
   EXT_ENFORCE_INVALID(node.input_size() == func.input_size(), "Local function '", func.name(),
                       "': expected ", func.input_size(), " inputs, got ", node.input_size(), ".");
   EXT_ENFORCE_INVALID(node.output_size() == func.output_size(), "Local function '", func.name(),
@@ -156,14 +162,23 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
   std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+  std::unordered_set<std::string> annotated_outputs;
+  std::unordered_set<std::string> protected_symbols;
   for (const auto &value_info : func.value_info())
     declared_outputs[value_info.name()] = &value_info;
-  for (const auto &fn_node : func.node()) {
+  for (std::size_t index = 0; index < func.node().size(); ++index) {
+    const auto &fn_node = func.node()[index];
+    sub_ctx.set_current_node_index(static_cast<int64_t>(index));
     NodeProto bound_node = utils::CopyWithSharedTensorStorage(fn_node);
     BindNodeAttributes(bound_node, attr_map);
-    if (!TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
-      sub_ctx.ComputeShapeNode(bound_node);
+    if (TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
+      annotated_outputs.insert(bound_node.output().begin(), bound_node.output().end());
+    else
+      sub_ctx.ComputeShapeNode(bound_node, &protected_symbols);
   }
+  ScopeLocalFunctionOutputSymbols(sub_ctx, ctx, node, func, annotated_outputs, protected_symbols);
+  if (annotation_symbols != nullptr)
+    annotation_symbols->merge(protected_symbols);
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
   for (int i = 0; i < n_outputs; ++i) {
@@ -631,6 +646,155 @@ RenameShapeWithReplacements(const SymShape &shape,
   return renamed;
 }
 
+void ScopeLocalFunctionOutputSymbols(ShapesContext &body, const ShapesContext &caller,
+                                     const NodeProto &node, const FunctionProto &function,
+                                     const std::unordered_set<std::string> &annotated_outputs,
+                                     std::unordered_set<std::string> &annotation_symbols) {
+  const auto collect = [](const ShapesContext &context, const std::string &name,
+                          std::unordered_set<std::string> &symbols) {
+    if (context.Has(name) && !context.HasEncodedValue(name)) {
+      const auto &tensor = context.Get(name);
+      for (std::size_t index = 0; index < tensor.Shape().Rank(); ++index)
+        AddDimAnchorSymbols(tensor.Shape()[index], symbols);
+      if (tensor.HasValueAsShape())
+        for (std::size_t index = 0; index < tensor.ValueAsShape().Rank(); ++index)
+          AddDimAnchorSymbols(tensor.ValueAsShape()[index], symbols);
+    }
+    if (context.HasSequence(name)) {
+      const auto &sequence = context.GetSequence(name);
+      AddDimAnchorSymbols(sequence.Length(), symbols);
+      for (const auto &shape : sequence.ElemShapes())
+        for (std::size_t index = 0; index < shape.Rank(); ++index)
+          AddDimAnchorSymbols(shape[index], symbols);
+    }
+    if (!context.HasType(name))
+      return;
+    std::unordered_set<const StructTypeProto *> visited;
+    const auto visit = [&](const auto &self, const TypeProto &type) -> void {
+      if (type.has_tensor_type()) {
+        for (const auto &dimension : type.tensor_type().shape().dim())
+          if (dimension.has_dim_param())
+            AddDimAnchorSymbols(SymDim(dimension.dim_param().value()), symbols);
+      } else if (type.has_sequence_type()) {
+        self(self, type.sequence_type().elem_type());
+      } else if (type.has_optional_type()) {
+        self(self, type.optional_type().elem_type());
+      } else if (type.has_map_type()) {
+        self(self, type.map_type().value_type());
+      } else if (type.has_struct_type()) {
+        const auto &structure = context.ResolveStructType(type.struct_type());
+        if (visited.insert(&structure).second)
+          for (const auto &field : structure.structure().field())
+            self(self, field.type());
+      }
+    };
+    visit(visit, context.GetType(name));
+  };
+  std::unordered_set<std::string> inherited;
+  for (const auto &input : node.input())
+    if (!input.empty())
+      collect(caller, input.value(), inherited);
+  for (const auto &output : annotated_outputs)
+    if (!output.empty())
+      collect(body, output, annotation_symbols);
+  inherited.insert(annotation_symbols.begin(), annotation_symbols.end());
+  std::string prefix;
+  for (const auto &output : node.output())
+    if (!output.empty()) {
+      prefix = "Function_" + std::to_string(output.value().size()) + "_";
+      // Byte-wise encoding keeps arbitrary output names inside one expression identifier.
+      constexpr char hex[] = "0123456789abcdef";
+      for (const char character : output.value()) {
+        const auto byte = static_cast<unsigned char>(character);
+        prefix.push_back(hex[byte >> 4]);
+        prefix.push_back(hex[byte & 0x0F]);
+      }
+      prefix.push_back('_');
+      break;
+    }
+  std::unordered_set<std::string> symbols;
+  for (const auto &output : function.output())
+    if (!output.empty())
+      collect(body, output.value(), symbols);
+  std::unordered_map<std::string, std::string> replacements;
+  for (const auto &expression : symbols)
+    for (const auto &token : expressions::parse_expression_tokens(expression))
+      if (!inherited.contains(token))
+        replacements.emplace(token, prefix + token);
+  if (replacements.empty())
+    return;
+  const auto rename_type = [&](const auto &self, TypeProto &type) -> void {
+    const auto rename_shape = [&](TensorShapeProto &shape) {
+      for (auto &dimension : shape.ref_dim())
+        if (dimension.has_dim_param()) {
+          const auto found = replacements.find(dimension.dim_param().value());
+          dimension.set_dim_param(
+              found != replacements.end()
+                  ? found->second
+                  : expressions::rename_dynamic_expression(dimension.dim_param(), replacements));
+        }
+    };
+    if (type.has_tensor_type() && type.tensor_type().has_shape())
+      rename_shape(type.ref_tensor_type().ref_shape());
+    else if (type.has_sparse_tensor_type() && type.sparse_tensor_type().has_shape())
+      rename_shape(type.ref_sparse_tensor_type().ref_shape());
+    else if (type.has_sequence_type())
+      self(self, type.ref_sequence_type().ref_elem_type());
+    else if (type.has_optional_type())
+      self(self, type.ref_optional_type().ref_elem_type());
+    else if (type.has_map_type())
+      self(self, type.ref_map_type().ref_value_type());
+  };
+  // Data-dependent dimensions created inside a shared body are independent at
+  // different call sites; input symbols and explicit custom annotations are not.
+  for (const auto &output : function.output()) {
+    const std::string name = output.value();
+    if (body.HasEncodedValue(name))
+      continue;
+    std::optional<TypeProto> type;
+    if (body.HasType(name)) {
+      type = body.GetType(name);
+      rename_type(rename_type, *type);
+    }
+    if (body.HasSequence(name)) {
+      core::symbolic::SymSequence sequence(body.GetSequence(name));
+      SymShape length;
+      length.PushBack(sequence.Length());
+      sequence.SetLength(RenameShapeWithReplacements(length, replacements)[0]);
+      for (auto &shape : sequence.ElemShapes())
+        shape = RenameShapeWithReplacements(shape, replacements);
+      if (sequence != body.GetSequence(name) || (type && !type->Equals(body.GetType(name)))) {
+        if (type)
+          body.SetSequenceWithType(name, std::move(sequence), *type);
+        else
+          body.SetSequence(name, std::move(sequence));
+      }
+      continue;
+    }
+    if (!body.Has(name)) {
+      if (type && !type->Equals(body.GetType(name)))
+        body.SetType(name, *type);
+      continue;
+    }
+    const auto &tensor = body.Get(name);
+    const auto shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+    SymShape values;
+    if (tensor.HasValueAsShape())
+      values = RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
+    if (shape == tensor.Shape() && (!tensor.HasValueAsShape() || values == tensor.ValueAsShape()) &&
+        (!type || type->Equals(body.GetType(name))))
+      continue;
+    SymTensor updated(tensor);
+    updated.Shape() = shape;
+    if (tensor.HasValueAsShape())
+      updated.SetValueAsShape(std::move(values));
+    if (type)
+      body.SetTensorWithType(name, std::move(updated), *type);
+    else
+      body.Set(name, std::move(updated));
+  }
+}
+
 void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors,
                                            const GraphProto &graph) {
   if (ctx.ConstraintsSize() == 0) {
@@ -772,7 +936,8 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
 // built-in dispatch-table entry) and stores the resulting output
 // descriptors in ``ctx``. Shared by :cpp:func:`ShapesContext::ComputeShapeNode`,
 // which wraps this with optional event logging.
-void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node,
+                              std::unordered_set<std::string> *annotation_symbols) {
   // Model-local function calls bypass the domain check (their domain
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
@@ -782,7 +947,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);
-    ExpandLocalFunctionCall(ctx, node, *func);
+    ExpandLocalFunctionCall(ctx, node, *func, annotation_symbols);
     return;
   }
   if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =
@@ -919,7 +1084,8 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
   }
 }
 
-void ShapesContext::ComputeShapeNode(const NodeProto &node) {
+void ShapesContext::ComputeShapeNode(const NodeProto &node,
+                                     std::unordered_set<std::string> *annotation_symbols) {
   EraseNodeConstraints(node);
   struct RestoreConstraintOwner {
     std::string &owner;
@@ -948,7 +1114,17 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   // ``onnx_kernels::RunNode``.
   const bool logging = events_enabled_;
 
-  DispatchComputeShapeNode(*this, node);
+  DispatchComputeShapeNode(*this, node, annotation_symbols);
+  if (annotation_symbols != nullptr && !local_function && !custom_inference &&
+      !subgraph_contexts_.empty()) {
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g() && HasSubgraphContext(current_node_index_, attribute.name())) {
+        const auto &symbols =
+            GetSubgraphContext(current_node_index_, attribute.name()).graph_annotation_symbols_;
+        annotation_symbols->insert(symbols.begin(), symbols.end());
+      }
+    }
+  }
 
   if (logging) {
     std::vector<std::string> inputs;
@@ -970,6 +1146,7 @@ void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &no
 }
 
 void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
+  graph_annotation_symbols_.clear();
   ModelProto declarations;
   declarations.ref_struct_types() = StructTypes();
   StructTypeCatalogue catalogue;
@@ -1074,9 +1251,12 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     const NodeProto &node = graph.node()[i];
     current_node_index_ = static_cast<int64_t>(i);
     if (TrySeedAnnotatedOutputsForUnknownCustomOp(*this, node, declared_outputs)) {
+      for (const auto &output : node.output())
+        if (!output.empty())
+          AddValueInfoSymbols(*declared_outputs.at(output), graph_annotation_symbols_);
       continue;
     }
-    ComputeShapeNode(node);
+    ComputeShapeNode(node, &graph_annotation_symbols_);
   }
   current_node_index_ = -1;
   for (const auto &vi : graph.output()) {

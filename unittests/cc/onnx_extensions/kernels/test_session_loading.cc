@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_session_loader.h"
@@ -13,6 +15,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -134,8 +137,406 @@ protected:
     const auto bytes = model.SerializeAsString();
     output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
   }
+
+  PipelineProto MakePipeline(bool embedded = true) const {
+    PipelineProto pipeline;
+    pipeline.set_max_new_tokens(2);
+    pipeline.set_logits_name(embedded ? "Y0" : "A");
+    ModelProto token_model;
+    token_model.set_ir_version(9);
+    token_model.add_opset_import()->set_version(13);
+    auto *graph = token_model.mutable_graph();
+    auto *input = graph->add_input();
+    input->set_name("input_ids");
+    input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+    auto *output = graph->add_output();
+    output->set_name("A");
+    output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    auto *axis = graph->add_initializer();
+    axis->set_name("embedding_axis");
+    axis->set_data_type(TensorProto::INT64);
+    axis->add_dims(1);
+    axis->add_int64_data(1);
+    auto *weight = graph->add_initializer();
+    weight->set_name("E");
+    weight->set_data_type(TensorProto::FLOAT);
+    weight->add_dims(1);
+    weight->add_dims(3);
+    weight->set_data_location(TensorProto::EXTERNAL);
+    auto *location = weight->add_external_data();
+    location->set_key("location");
+    location->set_value("embedding.bin");
+    auto *length = weight->add_external_data();
+    length->set_key("length");
+    length->set_value("12");
+    const std::vector<float> values{1, 2, 3};
+    std::ofstream payload(directory / "embedding.bin", std::ios::binary);
+    payload.write(reinterpret_cast<const char *>(values.data()),
+                  static_cast<std::streamsize>(values.size() * sizeof(float)));
+    auto *cast = graph->add_node();
+    cast->set_op_type("Cast");
+    cast->add_input("input_ids");
+    cast->add_output("embedding_float_ids");
+    auto *to = cast->add_attribute();
+    to->set_name("to");
+    to->set_type(AttributeProto::INT);
+    to->set_i(TensorProto::FLOAT);
+    auto *sum = graph->add_node();
+    sum->set_op_type("ReduceSum");
+    sum->add_input("embedding_float_ids");
+    sum->add_input("embedding_axis");
+    sum->add_output("embedding_sum");
+    auto *gemm = graph->add_node();
+    gemm->set_op_type("Gemm");
+    gemm->add_input("embedding_sum");
+    gemm->add_input("E");
+    gemm->add_output("A");
+    if (embedded) {
+      *pipeline.mutable_embedding() = std::move(token_model);
+      *pipeline.mutable_prefill() = ReadModel();
+      auto *prefill = pipeline.mutable_prefill()->mutable_graph();
+      prefill->mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::FLOAT);
+      for (auto &value : prefill->ref_output())
+        value.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    } else {
+      *pipeline.mutable_prefill() = std::move(token_model);
+    }
+    return pipeline;
+  }
+
+  std::string PipelinePath() const { return (directory / "pipeline.onnx").string(); }
+
+  void SavePipeline(const PipelineProto &pipeline) const {
+    std::ofstream output(PipelinePath(), std::ios::binary);
+    const auto bytes = pipeline.SerializeAsString();
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  }
   std::filesystem::path directory;
 };
+
+TEST_F(RuntimeSessionLoading, PipelineSerialAndOverlapGenerateFromOwnedStages) {
+  auto pipeline = MakePipeline();
+  SavePipeline(pipeline);
+  RuntimeSessionOptions session_options;
+  session_options.parameters.num_threads = 1;
+  session_options.value_store = std::make_shared<ValueStore>();
+  RuntimeLoadOptions serial_options;
+  serial_options.overlap_preparation = false;
+  RuntimeContext serial_rt;
+  LoadedRuntimePipeline serial(PipelinePath(), serial_rt, session_options, serial_options);
+  RuntimeContext overlap_rt;
+  size_t completions = 0;
+  RuntimeLoadOptions overlap_options;
+  overlap_options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kComplete) {
+      ++completions;
+      EXPECT_FALSE(overlap_rt.Has("E"));
+      EXPECT_FALSE(overlap_rt.Has("B0"));
+      EXPECT_FALSE(overlap_rt.Has("B1"));
+    }
+  };
+  LoadedRuntimePipeline overlap(PipelinePath(), overlap_rt, {}, overlap_options);
+  EXPECT_EQ(completions, 1u);
+  RuntimeValueMap feeds;
+  feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
+  LoadExternalDataForModel(*pipeline.mutable_embedding(), directory.string());
+  LoadExternalDataForModel(*pipeline.mutable_prefill(), directory.string());
+  RuntimeSession explicit_session(pipeline.prefill());
+  auto executor = explicit_session.cpu_executor();
+  RuntimeContext explicit_rt(RuntimeContextOptions{.cpu_executor = executor.get()});
+  auto expected = Generate(pipeline, explicit_rt, feeds);
+  EXPECT_EQ(
+      (std::vector<int64_t>{expected.AsInt64(), expected.AsInt64() + expected.element_count()}),
+      (std::vector<int64_t>{1, 1, 1}));
+  std::filesystem::remove_all(directory);
+  for (auto *loaded : {&serial, &overlap}) {
+    RuntimeContext &rt = loaded == &serial ? serial_rt : overlap_rt;
+    const size_t prepared = loaded->session_options().value_store->prepared_bytes();
+    const size_t slots = loaded->session_options().value_store->slot_count();
+    EXPECT_GT(prepared, 0u);
+    EXPECT_GT(slots, 0u);
+    for (size_t request = 0; request < 2; ++request) {
+      auto actual = Generate(*loaded, rt, feeds);
+      ASSERT_EQ(actual.shape, expected.shape);
+      EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), expected.size_bytes()), 0);
+    }
+    GenerationOptions options;
+    options.max_new_tokens = 1;
+    options.logits_name = "Y0";
+    EXPECT_EQ(Generate(*loaded, rt, feeds, options).shape, (Shape{1, 2}));
+    EXPECT_EQ(rt.cpu_executor(), nullptr);
+    options.on_step = [](const GenerationStep &) -> bool {
+      throw std::runtime_error("observer failure");
+    };
+    EXPECT_THROW(Generate(*loaded, rt, feeds, options), std::runtime_error);
+    EXPECT_EQ(rt.cpu_executor(), nullptr);
+    EXPECT_EQ(loaded->session_options().value_store->prepared_bytes(), prepared);
+    EXPECT_EQ(loaded->session_options().value_store->slot_count(), slots);
+
+    // Avoid asserting exact serialization-dependent sizes/counts; instead assert
+    // invariants that reflect the behavior under test.
+    EXPECT_GT(loaded->statistics().source_bytes, 0u);
+    EXPECT_GT(loaded->statistics().external_tensors, 0u);
+
+    EXPECT_FALSE(rt.Has("E"));
+  }
+  EXPECT_EQ(serial.statistics().peak_queued_tensors, 0u);
+  EXPECT_EQ(overlap.statistics().peak_queued_tensors, 1u);
+  EXPECT_EQ(serial.session_options().value_store, session_options.value_store);
+}
+
+TEST_F(RuntimeSessionLoading, PipelineInfersExternalLengthsBeforeReadingEitherStage) {
+  auto pipeline = MakePipeline();
+  for (auto *model : {pipeline.mutable_embedding(), pipeline.mutable_prefill()})
+    for (auto &tensor : model->ref_graph().ref_initializer())
+      if (tensor.data_location() == TensorProto::EXTERNAL)
+        tensor.ref_external_data().resize(1);
+  SavePipeline(pipeline);
+  for (const auto *name : {"embedding.bin", "weight0.bin", "weight1.bin"})
+    std::filesystem::resize_file(directory / name, 4096);
+  for (bool overlap : {false, true}) {
+    SCOPED_TRACE(overlap);
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+      ++reads;
+      const size_t expected = tensor.name() == "E" ? 12 : 24;
+      ASSERT_EQ(tensor.external_data().back().key(), "length");
+      EXPECT_EQ(tensor.external_data().back().value(), std::to_string(expected));
+      tensor.LoadExternalData(base);
+      EXPECT_EQ(tensor.raw_data().size(), expected);
+    };
+    RuntimeContext rt;
+    LoadedRuntimePipeline loaded(PipelinePath(), rt, {}, options);
+    EXPECT_EQ(reads, 3u);
+    EXPECT_EQ(loaded.statistics().source_bytes, 68u);
+    RuntimeValueMap feeds;
+    feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
+    const auto actual = Generate(loaded, rt, feeds);
+    EXPECT_EQ((std::vector<int64_t>{actual.AsInt64(), actual.AsInt64() + actual.element_count()}),
+              (std::vector<int64_t>{1, 1, 1}));
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelineGenerationHonorsCpuPolicyAndRestoresCallerExecutor) {
+  SavePipeline(MakePipeline());
+  CpuExecutionPolicy caller_policy;
+  caller_policy.num_threads = 1;
+  auto executor = GlobalCpuExecutorRegistry().Acquire(caller_policy);
+  for (bool explicit_policy : {false, true}) {
+    RuntimeContext rt(RuntimeContextOptions{.cpu_executor = executor.get()});
+    RuntimeSessionOptions session_options;
+    if (explicit_policy) {
+      CpuExecutionPolicy policy;
+      policy.num_threads = 2;
+      session_options.cpu_execution = policy;
+    }
+    LoadedRuntimePipeline loaded(PipelinePath(), rt, session_options);
+    RuntimeValueMap feeds;
+    feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
+    auto *selected =
+        explicit_policy ? loaded.prefill_session().cpu_executor().get() : executor.get();
+    if (explicit_policy) {
+      EXPECT_NE(selected, executor.get());
+    }
+    GenerationOptions options;
+    options.logits_name = "Y0";
+    options.max_new_tokens = 1;
+    options.on_step = [&](const GenerationStep &) {
+      EXPECT_EQ(rt.cpu_executor(), selected);
+      return true;
+    };
+    EXPECT_EQ(Generate(loaded, rt, feeds, options).shape, (Shape{1, 2}));
+    EXPECT_EQ(rt.cpu_executor(), executor.get());
+    options.on_step = [&](const GenerationStep &) -> bool {
+      EXPECT_EQ(rt.cpu_executor(), selected);
+      throw std::runtime_error("observer failure");
+    };
+    EXPECT_THROW(Generate(loaded, rt, feeds, options), std::runtime_error);
+    EXPECT_EQ(rt.cpu_executor(), executor.get());
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelinePrefillOnlyUsesStoredAndExplicitOptions) {
+  auto pipeline = MakePipeline(false);
+  pipeline.set_top_p(0.9f);
+  SavePipeline(pipeline);
+  RuntimeContext rt;
+  LoadedRuntimePipeline loaded(PipelinePath(), rt);
+  RuntimeValueMap feeds;
+  feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
+  EXPECT_THROW(Generate(loaded, rt, feeds), std::invalid_argument);
+  GenerationOptions options;
+  options.logits_name = "A";
+  options.max_new_tokens = 2;
+  const auto tokens = Generate(loaded, rt, feeds, options);
+  EXPECT_EQ((std::vector<int64_t>{tokens.AsInt64(), tokens.AsInt64() + tokens.element_count()}),
+            (std::vector<int64_t>{1, 2, 2}));
+  EXPECT_EQ(loaded.embedding_session(), nullptr);
+  EXPECT_EQ(loaded.statistics().external_tensors, 1u);
+}
+
+TEST_F(RuntimeSessionLoading, PipelineRequestsHaveIndependentPersistentState) {
+  auto cases =
+      core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_persistent$");
+  ASSERT_EQ(cases.size(), 1u);
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = std::move(cases[0].model());
+  pipeline.set_max_new_tokens(2);
+  SavePipeline(pipeline);
+  RuntimeContext rt;
+  LoadedRuntimePipeline loaded(PipelinePath(), rt);
+  RuntimeValueMap feeds;
+  for (const auto &input : cases[0].data_sets()[0].inputs)
+    feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
+  for (size_t request = 0; request < 2; ++request) {
+    const auto tokens = Generate(loaded, rt, feeds);
+    EXPECT_EQ((std::vector<int64_t>{tokens.AsInt64(), tokens.AsInt64() + tokens.element_count()}),
+              (std::vector<int64_t>{0, 1, 1, 1}));
+    EXPECT_EQ(feeds.at("past_key").tensor.shape, (Shape{1, 1, 0, 2}));
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelineAdmissionAggregatesStagesAndSharedStoreBeforeReads) {
+  SavePipeline(MakePipeline());
+  RuntimeContext baseline_rt;
+  LoadedRuntimePipeline baseline(PipelinePath(), baseline_rt);
+  const auto &statistics = baseline.statistics();
+  const size_t reservation = statistics.source_bytes + statistics.conversion_reserve_bytes;
+  for (bool overlap : {false, true}) {
+    RuntimeContext rt;
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+    options.memory_limit = reservation - 1;
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt, {}, options), std::length_error);
+    EXPECT_EQ(reads, 0u);
+    options.memory_limit =
+        reservation + baseline.session_options().value_store->prepared_bytes() - 1;
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt, baseline.session_options(), options),
+                 std::length_error);
+    EXPECT_EQ(reads, 0u);
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelinePreparationBudgetAccountsForEarlierStages) {
+  SavePipeline(MakePipeline());
+  RuntimeContext baseline_rt;
+  LoadedRuntimePipeline baseline(PipelinePath(), baseline_rt);
+  for (bool overlap : {false, true}) {
+    RuntimeContext rt;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    options.memory_limit = baseline.statistics().peak_admitted_bytes;
+    {
+      LoadedRuntimePipeline exact(PipelinePath(), rt, {}, options);
+      EXPECT_EQ(exact.statistics().peak_admitted_bytes, options.memory_limit);
+    }
+    --options.memory_limit;
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt, {}, options), std::length_error);
+    EXPECT_FALSE(rt.Has("E"));
+    EXPECT_FALSE(rt.Has("B0"));
+    EXPECT_FALSE(rt.Has("B1"));
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelineOverlapsActualPreparationInLaterStage) {
+  SavePipeline(MakePipeline());
+  RuntimeContext rt;
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool second_started = false;
+  bool prepared = false;
+  RuntimeLoadOptions options;
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted && event.tensor_name == "B0") {
+      std::unique_lock lock(mutex);
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return second_started; }))
+        throw std::runtime_error("Pipeline second read did not start.");
+    }
+    if (event.phase == RuntimeLoadPhase::kPreparationFinished && event.tensor_name == "B0") {
+      EXPECT_GT(event.prepared_bytes_added, 0u);
+      std::lock_guard lock(mutex);
+      prepared = true;
+      changed.notify_all();
+    }
+  };
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    if (tensor.name() == "B1") {
+      std::unique_lock lock(mutex);
+      second_started = true;
+      changed.notify_all();
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return prepared; }))
+        throw std::runtime_error("Pipeline preparation did not overlap second read.");
+    }
+    tensor.LoadExternalData(base);
+  };
+  LoadedRuntimePipeline loaded(PipelinePath(), rt, {}, options);
+  EXPECT_TRUE(prepared);
+  EXPECT_EQ(loaded.statistics().peak_queued_tensors, 1u);
+}
+
+TEST_F(RuntimeSessionLoading, PipelineValidatesEveryStageBeforePayloadReads) {
+  for (size_t invalid = 0; invalid < 4; ++invalid) {
+    SCOPED_TRACE(invalid);
+    auto pipeline = MakePipeline();
+    if (invalid == 0)
+      pipeline = PipelineProto{};
+    else if (invalid == 1)
+      *pipeline.mutable_decode() = ReadModel();
+    else if (invalid == 2)
+      *pipeline.mutable_prefill() = ModelProto{};
+    else
+      pipeline.mutable_prefill()
+          ->mutable_graph()
+          ->mutable_initializer(0)
+          ->ref_external_data()[1]
+          .set_value("-1");
+    SavePipeline(pipeline);
+    RuntimeContext rt;
+    size_t reads = 0;
+    RuntimeLoadOptions options;
+    options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt, {}, options), std::invalid_argument);
+    EXPECT_EQ(reads, 0u);
+  }
+}
+
+TEST_F(RuntimeSessionLoading, PipelineReaderFailureCleansUpEveryStageAndPreservesOverrides) {
+  SavePipeline(MakePipeline());
+  RuntimeContext rt;
+  rt.Put("B0", Tensor::FromFloat("B0", {3, 2}, {1, 2, 3, 4, 5, 6}));
+  std::atomic<size_t> reads{0};
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    ++reads;
+    if (tensor.name() == "B1")
+      throw std::runtime_error("pipeline reader failure");
+    tensor.LoadExternalData(base);
+  };
+  EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt, {}, options), std::runtime_error);
+  EXPECT_EQ(reads, 3u);
+  EXPECT_FALSE(rt.Has("E"));
+  EXPECT_TRUE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, PipelineConfinesExternalPathsInBothStages) {
+  for (bool embedding : {false, true}) {
+    auto pipeline = MakePipeline();
+    auto *stage = embedding ? pipeline.mutable_embedding() : pipeline.mutable_prefill();
+    auto *weight = stage->mutable_graph()->mutable_initializer(embedding ? 1 : 0);
+    weight->mutable_external_data(0)->set_value("../weight0.bin");
+    SavePipeline(pipeline);
+    RuntimeContext rt;
+    EXPECT_THROW(LoadedRuntimePipeline(PipelinePath(), rt), std::runtime_error);
+    EXPECT_FALSE(rt.Has("E"));
+    EXPECT_FALSE(rt.Has("B0"));
+  }
+}
 
 TEST_F(RuntimeSessionLoading, OverlapsRealGemmPreparationWithSecondRead) {
   RuntimeContext rt;

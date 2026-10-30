@@ -34,7 +34,7 @@ struct RuntimeLoadEvent {
   size_t prepared_bytes_added = 0;
 };
 
-/** Configures synchronous owning model loading. */
+/** Configures synchronous owning model or pipeline loading. */
 struct RuntimeLoadOptions {
   bool overlap_preparation = true;
   /// Bounds source payload, conversion reserve, bound function copies, shared quantization
@@ -54,9 +54,11 @@ struct RuntimeLoadOptions {
 /** Reports conservative admission counters, not process resident memory. */
 struct RuntimeLoadStatistics {
   size_t source_bytes = 0;
+  /// Sum of stage conversion/binding-copy allowances, reserved for the whole load.
   size_t conversion_reserve_bytes = 0;
   size_t function_binding_bytes = 0;
   size_t quantization_catalogue_bytes = 0;
+  /// Sum of stage catalogue construction allowances, not a simultaneous scratch peak.
   size_t quantization_temporary_bytes = 0;
   size_t peak_admitted_bytes = 0;
   size_t external_tensors = 0;
@@ -90,6 +92,45 @@ public:
 private:
   ModelProto model_;
   std::unique_ptr<RuntimeSession> session_;
+  RuntimeLoadStatistics statistics_;
+};
+
+/**
+ * Owns a pipeline, its prepared stage sessions and their shared static store.
+ *
+ * Supports the prefill and optional embedding stages accepted by Generate.
+ * The loading budget and statistics cover all stages together. Stages load
+ * sequentially, with at most one bounded I/O worker overlapping preparation.
+ * Generate overloads retain these session settings and reuse the static store,
+ * while creating fresh invocation sessions for request-local persistent state.
+ * Generation, stage execution and other shared-store access must not run
+ * concurrently, even when using different runtime contexts.
+ * Borrowed initializer views must not outlive this owner.
+ */
+class LoadedRuntimePipeline {
+public:
+  LoadedRuntimePipeline(const std::string &path, RuntimeContext &rt,
+                        RuntimeSessionOptions session_options = {},
+                        RuntimeLoadOptions load_options = {});
+  ~LoadedRuntimePipeline();
+  LoadedRuntimePipeline(const LoadedRuntimePipeline &) = delete;
+  LoadedRuntimePipeline &operator=(const LoadedRuntimePipeline &) = delete;
+  LoadedRuntimePipeline(LoadedRuntimePipeline &&) = delete;
+  LoadedRuntimePipeline &operator=(LoadedRuntimePipeline &&) = delete;
+
+  const PipelineProto &pipeline() const noexcept { return pipeline_; }
+  RuntimeSession &prefill_session() noexcept { return *prefill_session_; }
+  const RuntimeSession &prefill_session() const noexcept { return *prefill_session_; }
+  RuntimeSession *embedding_session() noexcept { return embedding_session_.get(); }
+  const RuntimeSession *embedding_session() const noexcept { return embedding_session_.get(); }
+  const RuntimeSessionOptions &session_options() const noexcept { return session_options_; }
+  const RuntimeLoadStatistics &statistics() const noexcept { return statistics_; }
+
+private:
+  PipelineProto pipeline_;
+  RuntimeSessionOptions session_options_;
+  std::unique_ptr<RuntimeSession> embedding_session_;
+  std::unique_ptr<RuntimeSession> prefill_session_;
   RuntimeLoadStatistics statistics_;
 };
 

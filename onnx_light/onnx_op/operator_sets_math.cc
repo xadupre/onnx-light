@@ -2067,6 +2067,23 @@ If input > 0, output 1. if input < 0, output -1. if input == 0, output 0.
   return schemas;
 }
 
+static std::vector<AttributeParam> MakeCosineSumWindowAttributes() {
+  return {
+      {"output_datatype",
+       "The data type of the output tensor. "
+       "Strictly must be one of the values from DataType enum in TensorProto whose values "
+       "correspond to T2. "
+       "The default value is 1 = FLOAT. ",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(TensorProto::FLOAT)},
+      {"periodic",
+       "If 1, returns a window to be used as periodic function. If 0, return a symmetric window. "
+       "When 'periodic' is specified, hann computes a window of length size + 1 and returns the "
+       "first size points. "
+       "The default value is 1. ",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+  };
+}
+
 std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   return std::vector<LightOpSchema>{
       LightOpSchema(
@@ -2083,7 +2100,8 @@ std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          }),
+          },
+          MakeCosineSumWindowAttributes()),
   };
 }
 
@@ -2103,7 +2121,8 @@ std::vector<LightOpSchema> BuildHannWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          }),
+          },
+          MakeCosineSumWindowAttributes()),
   };
 }
 
@@ -2123,7 +2142,8 @@ std::vector<LightOpSchema> BuildHammingWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          }),
+          },
+          MakeCosineSumWindowAttributes()),
   };
 }
 

@@ -7,6 +7,7 @@
 
     command_line/fillshape
     command_line/optimize
+    command_line/layers
     command_line/show
     command_line/run
     command_line/backend

@@ -3369,6 +3369,31 @@ TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {
   EXPECT_EQ(builder.Initializers().size(), 2u);
 }
 
+TEST(GraphBuilder, RemoveDuplicateInitializersUsesUnloadedExternalIdentity) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  constexpr std::size_t count = 256;
+  for (std::size_t i = 0; i < count; ++i) {
+    builder.MakeExternalInitializer("w" + std::to_string(i), core::symbolic::TensorType::kFloat,
+                                    {4}, "missing-weights.bin", i * 16, 16);
+  }
+  builder.MakeExternalInitializer("duplicate", core::symbolic::TensorType::kFloat, {4},
+                                  "missing-weights.bin", 16, 16);
+  builder.MakeExternalInitializer("other_file", core::symbolic::TensorType::kFloat, {4},
+                                  "other-missing-weights.bin", 16, 16);
+  const auto output = builder.MakeNode("Add", {"duplicate", "other_file"});
+  builder.MakeOutput(output[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.Initializers().size(), count + 1);
+  EXPECT_EQ(builder.Nodes()[0].input(0), "w1");
+  EXPECT_EQ(builder.Nodes()[0].input(1), "other_file");
+  for (const auto &initializer : builder.Initializers()) {
+    EXPECT_FALSE(initializer.has_raw_data());
+    EXPECT_EQ(initializer.external_data().size(), 3u);
+  }
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+}
+
 TEST(GraphBuilder, RemoveDuplicateInitializersKeepsUnavailablePayloads) {
   for (int64_t width : {0, 2}) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});

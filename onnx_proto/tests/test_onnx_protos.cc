@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -865,6 +866,59 @@ TEST(onnx_proto, TensorProtoContentHash) {
 
   // The return type is int64_t.
   static_assert(std::is_same<decltype(a.ContentHash(true)), int64_t>::value);
+}
+
+TEST(onnx_proto, TensorProtoContentHashExternalMetadata) {
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.add_dims(4);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  for (const auto &[key, value] : std::vector<std::pair<std::string, std::string>>{
+           {"location", "missing-weights.bin"}, {"offset", "0"}, {"length", "16"}}) {
+    auto *entry = tensor.add_external_data();
+    entry->set_key(key);
+    entry->set_value(value);
+  }
+  const auto serialized = tensor.SerializeAsString();
+  TensorProto renamed = tensor;
+  renamed.set_name("different_name");
+  EXPECT_EQ(tensor.ContentHash(false), renamed.ContentHash(false));
+  EXPECT_EQ(tensor.ContentHash(true), renamed.ContentHash(true));
+
+  for (std::size_t i = 0; i < tensor.external_data().size(); ++i) {
+    TensorProto changed_key = tensor;
+    changed_key.mutable_external_data(i)->set_key("different_key");
+    EXPECT_NE(tensor.ContentHash(false), changed_key.ContentHash(false));
+    TensorProto changed_value = tensor;
+    changed_value.mutable_external_data(i)->set_value("different_value");
+    EXPECT_NE(tensor.ContentHash(false), changed_value.ContentHash(false));
+  }
+  EXPECT_EQ(tensor.SerializeAsString(), serialized);
+  EXPECT_FALSE(tensor.has_raw_data());
+}
+
+TEST(onnx_proto, TensorProtoContentHashExternalOffsetsDistributeBuckets) {
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.add_dims(4);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  auto *location = tensor.add_external_data();
+  location->set_key("location");
+  location->set_value("missing-weights.bin");
+  auto *offset = tensor.add_external_data();
+  offset->set_key("offset");
+  auto *length = tensor.add_external_data();
+  length->set_key("length");
+  length->set_value("16");
+  constexpr std::size_t count = 4000;
+  std::unordered_set<int64_t> hashes;
+  for (std::size_t i = 0; i < count; ++i) {
+    offset->set_value(std::to_string(i * 16));
+    hashes.insert(tensor.ContentHash(false));
+  }
+  // Allow hash collisions, but not a single quadratic comparison bucket.
+  EXPECT_GT(hashes.size(), count * 99 / 100);
+  EXPECT_FALSE(tensor.has_raw_data());
 }
 
 TEST(onnx_proto, Blake3HasherMatchesOfficialVectors) {

@@ -7112,6 +7112,31 @@ TEST(onnx_proto, TensorProto_SegmentSerialization) {
   EXPECT_EQ(tensor2.ref_segment().ref_end(), 10);
 }
 
+TEST(onnx_proto, TensorProto_SegmentPresenceSerialization) {
+  for (int fields = 0; fields < 4; ++fields) {
+    SCOPED_TRACE(fields);
+    TensorProto tensor;
+    auto *segment = tensor.mutable_segment();
+    EXPECT_FALSE(segment->has_begin());
+    EXPECT_FALSE(segment->has_end());
+    if (fields & 1)
+      segment->set_begin(0);
+    if (fields & 2)
+      segment->set_end(0);
+    EXPECT_EQ(segment->has_begin(), (fields & 1) != 0);
+    EXPECT_EQ(segment->has_end(), (fields & 2) != 0);
+    const std::string serialized = tensor.SerializeAsString();
+    EXPECT_EQ(serialized.size(), tensor.SerializeSize().size());
+    TensorProto parsed;
+    ASSERT_TRUE(parsed.ParseFromString(serialized));
+    ASSERT_TRUE(parsed.has_segment());
+    EXPECT_EQ(parsed.segment().has_begin(), (fields & 1) != 0);
+    EXPECT_EQ(parsed.segment().has_end(), (fields & 2) != 0);
+    EXPECT_EQ(parsed.segment().begin(), 0);
+    EXPECT_EQ(parsed.segment().end(), 0);
+  }
+}
+
 TEST(onnx_proto, ValueInfoProto_MetadataPropsSerialization) {
   ValueInfoProto value_info1;
   value_info1.set_name("with_metadata");

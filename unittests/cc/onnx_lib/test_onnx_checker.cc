@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <utility>
 
 #ifdef _WIN32
 #include "../../../onnx_proto/tests/windows_junction.h"
@@ -173,6 +174,266 @@ TEST(CHECKER, ExternalTensorDataBounds) {
   fs::remove(dir / "weights.bin");
   fs::remove(dir);
 #endif
+}
+
+TEST(CHECKER, TensorSegmentRawData) {
+  checker::CheckerContext ctx;
+  for (const auto &[dtype, bytes] :
+       {std::pair{TensorProto::BOOL, 4},  {TensorProto::UINT8, 4},
+        {TensorProto::INT8, 4},           {TensorProto::FLOAT8E4M3FN, 4},
+        {TensorProto::FLOAT8E4M3FNUZ, 4}, {TensorProto::FLOAT8E5M2, 4},
+        {TensorProto::FLOAT8E5M2FNUZ, 4}, {TensorProto::FLOAT8E8M0, 4},
+        {TensorProto::FLOAT16, 8},        {TensorProto::BFLOAT16, 8},
+        {TensorProto::UINT16, 8},         {TensorProto::INT16, 8},
+        {TensorProto::FLOAT, 16},         {TensorProto::INT32, 16},
+        {TensorProto::UINT32, 16},        {TensorProto::DOUBLE, 32},
+        {TensorProto::INT64, 32},         {TensorProto::UINT64, 32},
+        {TensorProto::COMPLEX64, 32},     {TensorProto::COMPLEX128, 64},
+        {TensorProto::INT4, 2},           {TensorProto::UINT4, 2},
+        {TensorProto::FLOAT4E2M1, 2},     {TensorProto::INT2, 1},
+        {TensorProto::UINT2, 1},          {TensorProto::FLOAT6E2M3, 3},
+        {TensorProto::FLOAT6E3M2, 3}}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    TensorProto tensor;
+    tensor.set_data_type(dtype);
+    tensor.add_dims(1000);
+    tensor.mutable_segment()->set_begin(5);
+    tensor.mutable_segment()->set_end(9);
+    tensor.set_raw_data(std::string(bytes, '\0'));
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    tensor.ref_raw_data().resize(bytes - 1);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    tensor.set_raw_data(std::string(bytes + 1, '\0'));
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  }
+}
+
+TEST(CHECKER, TensorSegmentTypedData) {
+  checker::CheckerContext ctx;
+  for (const auto dtype :
+       {TensorProto::FLOAT, TensorProto::COMPLEX64, TensorProto::DOUBLE, TensorProto::COMPLEX128,
+        TensorProto::INT32, TensorProto::INT64, TensorProto::UINT32, TensorProto::UINT64,
+        TensorProto::STRING, TensorProto::BOOL, TensorProto::FLOAT16, TensorProto::FLOAT6E2M3,
+        TensorProto::FLOAT6E3M2, TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1,
+        TensorProto::INT2, TensorProto::UINT2}) {
+    SCOPED_TRACE(static_cast<int>(dtype));
+    TensorProto tensor;
+    tensor.set_data_type(dtype);
+    tensor.add_dims(1000);
+    tensor.mutable_segment()->set_begin(2);
+    tensor.mutable_segment()->set_end(19);
+    const int count = dtype == TensorProto::COMPLEX64 || dtype == TensorProto::COMPLEX128 ? 34
+                      : dtype == TensorProto::INT4 || dtype == TensorProto::UINT4 ||
+                              dtype == TensorProto::FLOAT4E2M1
+                          ? 3
+                      : dtype == TensorProto::INT2 || dtype == TensorProto::UINT2 ? 2
+                                                                                  : 17;
+    auto resize_data = [&](int size) {
+      switch (dtype) {
+      case TensorProto::FLOAT:
+      case TensorProto::COMPLEX64:
+        tensor.ref_float_data().resize(size);
+        break;
+      case TensorProto::DOUBLE:
+      case TensorProto::COMPLEX128:
+        tensor.ref_double_data().resize(size);
+        break;
+      case TensorProto::INT64:
+        tensor.ref_int64_data().resize(size);
+        break;
+      case TensorProto::UINT32:
+      case TensorProto::UINT64:
+        tensor.ref_uint64_data().resize(size);
+        break;
+      case TensorProto::STRING:
+        tensor.ref_string_data().resize(size);
+        break;
+      default:
+        tensor.ref_int32_data().resize(size);
+      }
+    };
+    resize_data(count);
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    resize_data(count - 1);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    resize_data(count + 1);
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    tensor.clear_segment();
+    tensor.ref_dims()[0] = 17;
+    resize_data(count);
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    resize_data(count - 1);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  }
+}
+
+TEST(CHECKER, TensorSegmentShapeAndSizeOverflow) {
+  checker::CheckerContext ctx;
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::FLOAT);
+  tensor.add_dims(std::numeric_limits<int64_t>::max());
+  tensor.mutable_segment()->set_begin(std::numeric_limits<int64_t>::max() - 1);
+  tensor.mutable_segment()->set_end(std::numeric_limits<int64_t>::max());
+  tensor.set_raw_data(std::string(4, '\0'));
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  tensor.add_dims(2);
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  tensor.ref_dims()[1] = -1;
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  tensor.ref_dims().resize(1);
+  tensor.mutable_segment()->set_begin(0);
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  tensor.clear_raw_data();
+  for (auto dtype : {TensorProto::COMPLEX64, TensorProto::COMPLEX128}) {
+    tensor.set_data_type(dtype);
+    if (dtype == TensorProto::COMPLEX64) {
+      tensor.add_float_data(0);
+    } else {
+      tensor.clear_float_data();
+      tensor.add_double_data(0);
+    }
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  }
+}
+
+TEST(CHECKER, TensorInvalidSegmentAllPayloads) {
+  for (int payload = 0; payload < 4; ++payload) {
+    SCOPED_TRACE(payload);
+    checker::CheckerContext ctx;
+    TensorProto tensor;
+    tensor.set_data_type(TensorProto::FLOAT);
+    tensor.add_dims(1000);
+    if (payload == 0) {
+      tensor.set_raw_data(std::string(4000, '\0'));
+    } else if (payload == 1) {
+      tensor.ref_float_data().resize(1000);
+    } else {
+      tensor.set_data_location(TensorProto::EXTERNAL);
+      auto *location = tensor.add_external_data();
+      location->set_key("location");
+      location->set_value("#in-memory");
+      ctx.set_skip_external_data_location_check(payload == 3);
+    }
+    for (int invalid = 0; invalid < 6; ++invalid) {
+      SCOPED_TRACE(invalid);
+      auto *segment = tensor.mutable_segment();
+      segment->set_begin(0);
+      segment->set_end(4);
+      switch (invalid) {
+      case 0:
+        segment->clear_begin();
+        break;
+      case 1:
+        segment->clear_end();
+        break;
+      case 2:
+        segment->set_begin(-1);
+        break;
+      case 3:
+        segment->set_begin(5);
+        break;
+      case 4:
+        segment->set_end(1001);
+        break;
+      case 5:
+        segment->set_begin(std::numeric_limits<int64_t>::min());
+        segment->set_end(std::numeric_limits<int64_t>::max());
+        break;
+      }
+      EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    }
+  }
+}
+
+TEST(CHECKER, TensorEmptySegment) {
+  checker::CheckerContext ctx;
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::FLOAT);
+  tensor.add_dims(1000);
+  for (int64_t position : {0, 500, 1000}) {
+    tensor.mutable_segment()->set_begin(position);
+    tensor.mutable_segment()->set_end(position);
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    tensor.add_float_data(0);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    tensor.clear_float_data();
+    tensor.set_raw_data("data");
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    tensor.clear_raw_data();
+  }
+}
+
+TEST(CHECKER, TensorSegmentFloat6Padding) {
+  checker::CheckerContext ctx;
+  for (auto dtype : {TensorProto::FLOAT6E2M3, TensorProto::FLOAT6E3M2}) {
+    for (const auto &[count, last_byte] : {std::pair{1, 0x3f}, {2, 0x0f}, {3, 0x03}}) {
+      TensorProto tensor;
+      tensor.set_data_type(dtype);
+      tensor.add_dims(1000);
+      tensor.mutable_segment()->set_begin(5);
+      tensor.mutable_segment()->set_end(5 + count);
+      tensor.set_raw_data(std::string((count * 6 + 7) / 8, '\xff'));
+      tensor.ref_raw_data()[tensor.raw_data().size() - 1] = static_cast<char>(last_byte);
+      EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+      tensor.ref_raw_data()[tensor.raw_data().size() - 1] = static_cast<char>(last_byte + 1);
+      EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+    }
+  }
+}
+
+TEST(CHECKER, TensorSegmentExternalData) {
+  const fs::path dir = fs::temp_directory_path() / "onnx_light_segment_checker_test";
+  fs::create_directories(dir);
+  checker::CheckerContext ctx;
+  ctx.set_model_dir(ONNX_LIGHT_NAMESPACE::path_to_utf8(dir));
+  for (int offset : {0, 8}) {
+    for (int bytes : {15, 16}) {
+      SCOPED_TRACE(offset);
+      SCOPED_TRACE(bytes);
+      {
+        std::ofstream out(dir / "weights.bin", std::ios::binary);
+        out << std::string(offset + bytes, '\0');
+      }
+      TensorProto tensor;
+      tensor.set_data_type(TensorProto::FLOAT);
+      tensor.add_dims(1000);
+      tensor.mutable_segment()->set_begin(1);
+      tensor.mutable_segment()->set_end(5);
+      tensor.set_data_location(TensorProto::EXTERNAL);
+      auto *location = tensor.add_external_data();
+      location->set_key("location");
+      location->set_value("weights.bin");
+      auto *start = tensor.add_external_data();
+      start->set_key("offset");
+      start->set_value(std::to_string(offset));
+      if (bytes == 16) {
+        EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+        auto *length = tensor.add_external_data();
+        length->set_key("length");
+        length->set_value("16");
+        EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+        length->set_value("15");
+        EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+      } else {
+        EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+      }
+      tensor.mutable_segment()->set_end(1);
+      EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+    }
+  }
+  std::ofstream(dir / "weights.bin", std::ios::binary).close();
+  TensorProto empty;
+  empty.set_data_type(TensorProto::FLOAT);
+  empty.add_dims(1000);
+  empty.mutable_segment()->set_begin(1000);
+  empty.mutable_segment()->set_end(1000);
+  empty.set_data_location(TensorProto::EXTERNAL);
+  auto *location = empty.add_external_data();
+  location->set_key("location");
+  location->set_value("weights.bin");
+  EXPECT_NO_THROW(checker::check_tensor(empty, ctx));
+  fs::remove(dir / "weights.bin");
+  fs::remove(dir);
 }
 
 TEST(CHECKER, ValidDataLocationSymLinkTest) {

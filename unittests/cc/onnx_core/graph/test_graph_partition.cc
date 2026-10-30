@@ -168,7 +168,7 @@ TEST(GraphPartition, CapturesRemainInputsAndLiveOutputs) {
   capture->ref_input()[0] = "external";
   EXPECT_TRUE(ProposeOperatorGroups(graph, {8, 2, 128}).groups.empty());
   capture->ref_input()[0] = "undefined";
-  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
 }
 
 TEST(GraphPartition, UnknownBoundariesAndExplicitEstimates) {
@@ -315,22 +315,21 @@ TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {
 TEST(GraphPartition, CostOverflowAndInvalidLimitsAreRejected) {
   const auto graph = Chain();
   const uint64_t half = uint64_t{1} << 63;
-  EXPECT_THROW(
-      ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"x", half}, {"y", half}}).groups,
-      std::invalid_argument);
-  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 1, 128}).groups, std::invalid_argument);
-  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 3, 2}).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph, {UINT64_MAX, 2, 128}, {{"x", half}, {"y", half}}),
+               std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 1, 128}), std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph, {1024, 3, 2}), std::invalid_argument);
 }
 
 TEST(GraphPartition, ValidatesAllDataflowEvenForIneligibleGraphs) {
   GraphProto empty;
   EXPECT_TRUE(ProposeOperatorGroups(empty).groups.empty());
   empty.add_output()->set_name("missing");
-  EXPECT_THROW(ProposeOperatorGroups(empty).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(empty), std::invalid_argument);
   auto graph = Chain();
   graph.mutable_node(0)->ref_input()[0] = "y";
-  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
   graph.mutable_node(0)->ref_input()[0] = "x";
   graph.mutable_node(1)->ref_output()[0] = "x";
-  EXPECT_THROW(ProposeOperatorGroups(graph).groups, std::invalid_argument);
+  EXPECT_THROW(ProposeOperatorGroups(graph), std::invalid_argument);
 }

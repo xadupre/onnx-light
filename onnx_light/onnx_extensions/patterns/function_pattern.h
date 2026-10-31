@@ -16,6 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * A template attribute with ref_attr_name captures the candidate attribute; the
  * replacement may reference that capture, including under another attribute name.
  * Repeated references must capture equal values of the declared type.
+ * Tensor literals compare exact element types, dimensions and payload bytes,
+ * independently of raw or typed inline storage.
  *
  * @code
  * Before:

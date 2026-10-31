@@ -10,6 +10,7 @@
 #include <unordered_set>
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
@@ -54,6 +55,23 @@ References Validate(const FunctionProto &function, bool is_template) {
   return references;
 }
 
+void NormalizeTensorStorage(TensorProto &tensor) {
+  if (tensor.data_type() == TensorProto::STRING || tensor.has_segment() ||
+      tensor.HasDeferredWeight() || tensor.data_location() == TensorProto::EXTERNAL ||
+      !tensor.external_data().empty())
+    return;
+  const auto value = core::runtime::TensorFromProto(tensor);
+  VerifyTensor(tensor);
+  if (tensor.is_raw_data())
+    return;
+  tensor.set_raw_data(value.bytes(), value.size_bytes());
+  tensor.clr_float_data();
+  tensor.clr_double_data();
+  tensor.clr_int32_data();
+  tensor.clr_int64_data();
+  tensor.clr_uint64_data();
+}
+
 bool SameAttribute(const AttributeProto &left, const AttributeProto &right) {
   AttributeProto first = utils::CopyWithSharedTensorStorage(left);
   AttributeProto second = utils::CopyWithSharedTensorStorage(right);
@@ -61,6 +79,12 @@ bool SameAttribute(const AttributeProto &left, const AttributeProto &right) {
   second.clear_name();
   first.clear_doc_string();
   second.clear_doc_string();
+  for (auto *attribute : {&first, &second}) {
+    if (attribute->has_t())
+      NormalizeTensorStorage(*attribute->mutable_t());
+    for (auto &tensor : attribute->ref_tensors())
+      NormalizeTensorStorage(tensor);
+  }
   return first.Equals(second);
 }
 

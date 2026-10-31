@@ -4,9 +4,12 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_extensions/patterns/function_pattern.h"
+#include "onnx_manipulations/parser.h"
+#include "onnx_manipulations/printer.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <gtest/gtest.h>
 #include <stdexcept>
 
@@ -149,6 +152,96 @@ TEST(FunctionPattern, OptimizesAndPreservesOutput) {
   EXPECT_EQ(builder.Nodes()[0].op_type(), "Identity");
   EXPECT_EQ(builder.Nodes()[0].input(0), "a");
   EXPECT_EQ(builder.Nodes()[0].output(0), "result");
+}
+
+TEST(FunctionPattern, ConstantTensorTextRoundTrip) {
+  for (const std::string type : {"float", "double", "int64", "uint64", "float16", "bool"}) {
+    SCOPED_TRACE(type);
+    const std::string op_type = type == "float" ? "Relu" : "Transpose";
+    const std::string values = type == "float" ? "0.25, 1.25" : "0, 1";
+    FunctionProto typed;
+    const auto status = OnnxParser::Parse(
+        typed, "<domain: \"patterns\", opset_import: [\"\" : 18]> body() => (y) { "
+               "a = Constant<value: tensor = " +
+                   type + "[2] payload {" + values + "}>() y = " + op_type + "(a) }");
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    auto raw = typed;
+    auto &tensor = *raw.mutable_node(0)->mutable_attribute(0)->mutable_t();
+    tensor.clr_float_data();
+    tensor.clr_double_data();
+    tensor.clr_int64_data();
+    tensor.clr_uint64_data();
+    tensor.clr_int32_data();
+    if (type == "float")
+      tensor.set_raw_data(std::string("\0\0\x80\x3e\0\0\xa0\x3f", 8));
+    else if (type == "double")
+      tensor.set_raw_data(std::string("\0\0\0\0\0\0\0\0\0\0\0\0\0\0\xf0\x3f", 16));
+    else if (type == "float16")
+      tensor.set_raw_data(std::string("\0\0\0\x3c", 4));
+    else if (type == "bool")
+      tensor.set_raw_data(std::string("\0\1", 2));
+    else
+      tensor.set_raw_data(std::string("\0\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0", 16));
+    FunctionProto parsed;
+    const auto parsed_status = OnnxParser::Parse(parsed, ProtoToString(raw));
+    ASSERT_TRUE(parsed_status.IsOK()) << parsed_status.ErrorMessage();
+    EXPECT_FALSE(parsed.node(0).attribute(0).t().is_raw_data());
+    for (const auto *source : {&raw, &parsed}) {
+      for (const auto *body : {&raw, &parsed}) {
+        GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+        builder.MakeNode("Constant", {}, {"a"}, "", "", source->node(0).attribute());
+        builder.MakeNode(op_type, {"a"}, {"y"});
+        builder.MakeOutput("y");
+        auto pattern = std::make_shared<FunctionPattern>(
+            *body, *body, 1, "ConstantBody", core::symbolic::Device::kUndefined, -1, true);
+        GraphGraph graph(builder,
+                         std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+        EXPECT_EQ(graph.Optimize().rewrites().size(), 1u);
+        ASSERT_EQ(builder.Nodes().size(), 1u);
+        EXPECT_EQ(builder.Nodes()[0].op_type(), "body");
+        EXPECT_EQ(builder.Nodes()[0].output(0), "y");
+      }
+    }
+    EXPECT_TRUE(raw.node(0).attribute(0).t().is_raw_data());
+    EXPECT_FALSE(parsed.node(0).attribute(0).t().is_raw_data());
+  }
+}
+
+TEST(FunctionPattern, ConstantTensorRequiresExactTypeShapeAndValues) {
+  FunctionProto body;
+  const auto status =
+      OnnxParser::Parse(body, R"(<domain: "patterns", opset_import: ["" : 18]> body() => (y) {
+        a = Constant<value: tensor = float[2] payload {0.25, 1.25}>()
+        y = Relu(a)
+      })");
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+  for (const std::string mismatch : {"value", "shape", "type"}) {
+    SCOPED_TRACE(mismatch);
+    auto node = body.node(0);
+    auto &tensor = *node.mutable_attribute(0)->mutable_t();
+    tensor.clr_float_data();
+    if (mismatch == "value") {
+      tensor.add_float_data(0.25f);
+      tensor.add_float_data(std::nextafter(1.25f, 2.0f));
+    } else if (mismatch == "shape") {
+      tensor.clr_dims();
+      tensor.add_dims(1);
+      tensor.add_dims(2);
+      tensor.add_float_data(0.25f);
+      tensor.add_float_data(1.25f);
+    } else {
+      tensor.set_data_type(TensorProto::DOUBLE);
+      tensor.add_double_data(0.25);
+      tensor.add_double_data(1.25);
+    }
+    GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeNode("Constant", {}, {"a"}, "", "", node.attribute());
+    builder.MakeNode("Relu", {"a"}, {"y"});
+    builder.MakeOutput("y");
+    GraphGraph graph(builder);
+    FunctionPattern pattern(body, body);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+  }
 }
 
 TEST(FunctionPattern, LocalCallsShareOneMultiOutputFunctionAndInferShapes) {

@@ -9,6 +9,7 @@ existing external weight files. The output path is required and must not exist.
     onnx-light optimize model.onnx --output model.opt.onnx
     python -m onnx_light optimize model.onnx -o model.opt.onnx --patterns L1,L2
     onnx-light optimize model.onnx -o model.opt.onnx --patterns NotNot,CastCast
+    onnx-light optimize model.onnx -o model.opt.onnx --report optimization.txt
 
 Command-line reference
 ----------------------

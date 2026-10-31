@@ -104,6 +104,32 @@ class TestMainOptimize(ExtTestCase):
                 sorted(path.name for path in Path(tmp).iterdir()), ["model.onnx", "raced.onnx"]
             )
 
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            report = Path(tmp) / "report.txt"
+            save(_make_model(), source)
+            pattern.destination = report
+            with self.assertRaises(FileExistsError):
+                main(
+                    [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--patterns",
+                        "CustomNotNot",
+                        "--report",
+                        str(report),
+                    ]
+                )
+            self.assertEqual(report.read_bytes(), b"concurrently created output")
+            self.assertNotIn("Not", [node.op_type for node in load(output).graph.node])
+            self.assertEqual(
+                sorted(path.name for path in Path(tmp).iterdir()),
+                ["model.onnx", "optimized.onnx", "report.txt"],
+            )
+
         unregister_pattern("CustomNotNot")
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -166,6 +192,92 @@ class TestMainOptimize(ExtTestCase):
                 self.assertEqual((operators.count("Not"), operators.count("Transpose")), expected)
                 self.assertEqual([value.name for value in result.graph.output], ["Y", "Z"])
                 self.assertEqual(source.read_bytes(), before)
+
+    def test_optimization_report(self):
+        for selection, matches in (("NotNot", 1), ("L1", 0)):
+            with self.subTest(patterns=selection), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.onnx"
+                output = Path(tmp) / "optimized.onnx"
+                directory = Path(tmp) / "reports"
+                directory.mkdir()
+                report = directory / "optimization.txt"
+                save(_make_model(), source)
+                before = source.read_bytes()
+                main(
+                    [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--patterns",
+                        selection,
+                        "--report",
+                        str(report),
+                    ]
+                )
+                text = report.read_text(encoding="utf-8")
+                self.assertIn("OptimizationReport(iterations=", text)
+                self.assertIn(f"rewrites={matches}", text)
+                self.assertIn("total_time_ns=", text)
+                self.assertIn("phases={matching:", text)
+                self.assertIn("patterns=[", text)
+                self.assertIn("subgraphs=[", text)
+                if matches:
+                    self.assertRegex(text, r"NotNot\(attempts=\d+, matches=1,")
+                self.assertTrue(text.endswith("\n"))
+                self.assertEqual(source.read_bytes(), before)
+                self.assertEqual(
+                    [node.op_type for node in load(output).graph.node].count("Not"),
+                    0 if matches else 2,
+                )
+                self.assertEqual(list(directory.iterdir()), [report])
+
+    def test_invalid_report_destinations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            existing = Path(tmp) / "report.txt"
+            existing.write_bytes(b"existing report")
+            save(_make_model(), source)
+            before = source.read_bytes()
+            destinations = [
+                (source, FileExistsError),
+                (existing, FileExistsError),
+                (Path(tmp), FileExistsError),
+                (output, ValueError),
+                (Path(tmp) / "missing" / "report.txt", FileNotFoundError),
+            ]
+            if os.name != "nt":
+                for name, target in (("link.txt", existing), ("dangling.txt", "absent.txt")):
+                    link = Path(tmp) / name
+                    link.symlink_to(target)
+                    destinations.append((link, FileExistsError))
+            for report, error in destinations:
+                with self.subTest(report=report), self.assertRaises(error):
+                    main(["optimize", str(source), "-o", str(output), "--report", str(report)])
+                self.assertFalse(output.exists())
+            self.assertEqual(source.read_bytes(), before)
+            self.assertEqual(existing.read_bytes(), b"existing report")
+
+    def test_report_cannot_replace_missing_external_weights(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            report = Path(tmp) / "missing.bin"
+            model = _make_model()
+            model.graph.initializer.append(
+                oh.make_tensor(
+                    "W",
+                    TensorProto.FLOAT,
+                    [256],
+                    external_data={"location": report.name, "length": "1024"},
+                )
+            )
+            save(model, source)
+            with self.assertRaisesRegex(ValueError, "external-data location"):
+                main(["optimize", str(source), "-o", str(output), "--report", str(report)])
+            self.assertFalse(output.exists())
+            self.assertFalse(report.exists())
 
     def test_external_weights_are_reused(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1448,7 +1448,7 @@ def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
 
 
 def _prepare_optimization_external_data(
-    model: ModelProto, model_path: str, output_path: str
+    model: ModelProto, model_path: str, output_path: str, report_path: str | None = None
 ) -> None:
     """Protects external locations and loads only bounded, small numeric payloads."""
     from .onnx import TensorProto
@@ -1456,7 +1456,11 @@ def _prepare_optimization_external_data(
     from .onnx_lib.external_data_helper import uses_external_data
 
     base_dir = os.path.dirname(model_path)
-    destination = os.path.normcase(os.path.realpath(output_path))
+    destinations = {
+        os.path.normcase(os.path.realpath(path))
+        for path in (output_path, report_path)
+        if path is not None
+    }
     resolved: dict[str, str] = {}
     packed_bits = {
         TensorProto.INT2: 2,
@@ -1476,7 +1480,7 @@ def _prepare_optimization_external_data(
             resolved[location] = os.path.normcase(
                 os.path.realpath(os.path.join(base_dir, location))
             )
-        if resolved[location] == destination:
+        if resolved[location] in destinations:
             raise ValueError(f"Output overlaps an external-data location: {location!r}")
         if tensor.HasField("raw_data") or tensor.data_type == TensorProto.STRING:
             continue
@@ -1518,6 +1522,18 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         raise FileExistsError(f"Output already exists: {output_path!r}")
     if os.path.splitext(output_path)[1] in {".textproto", ".pipeline", ".pipe-onnx"}:
         raise ValueError("The optimized output must use a binary ONNX model filename.")
+    report_path = os.path.abspath(args.report) if args.report is not None else None
+    if report_path is not None:
+        if os.path.lexists(report_path):
+            raise FileExistsError(f"Report already exists: {report_path!r}")
+        if os.path.normcase(os.path.realpath(report_path)) == os.path.normcase(
+            os.path.realpath(output_path)
+        ):
+            raise ValueError("The optimization report and output model paths must differ.")
+        if not os.path.isdir(os.path.dirname(report_path)):
+            raise FileNotFoundError(
+                f"Report directory not found: {os.path.dirname(report_path)!r}"
+            )
     patterns = _optimization_patterns(args.patterns)
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
@@ -1527,11 +1543,11 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
     model = load(model_path, load_external_data=False)
     if not isinstance(model, ModelProto):
         raise ValueError("optimize requires an ONNX model, not a pipeline.")
-    _prepare_optimization_external_data(model, model_path, output_path)
+    _prepare_optimization_external_data(model, model_path, output_path, report_path)
     builder = GraphBuilder(model)
     if args.verbose:
         print("[optimize] optimize")
-    GraphGraph(builder, patterns=patterns).optimize()
+    optimization = GraphGraph(builder, patterns=patterns).optimize(report=report_path is not None)
     result = builder.to_onnx()
     if args.verbose:
         print(f"[optimize] save into {output_path!r}")
@@ -1543,6 +1559,17 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         with open(staged, "xb") as stream:
             save_to_file_descriptor(result, stream.fileno())
         os.link(staged, output_path)
+    if report_path is not None:
+        _, report = optimization
+        if args.verbose:
+            print(f"[optimize] save report into {report_path!r}")
+        with tempfile.TemporaryDirectory(
+            prefix=".onnx-light-optimize-", dir=os.path.dirname(report_path)
+        ) as temporary:
+            staged = os.path.join(temporary, "report.txt")
+            with open(staged, "x", encoding="utf-8") as stream:
+                stream.write(f"{report}\n")
+            os.link(staged, report_path)
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:
@@ -2132,6 +2159,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "Comma-separated pattern names or registered groups (e.g. L1,L2 or NotNot,CastCast). "
             "Omit to use the optimizer's default patterns. Names are case-sensitive, not regexes."
         ),
+    )
+    optimize_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Export the optimization report as UTF-8 text to a new file.",
     )
     optimize_parser.add_argument(
         "--verbose", "-v", nargs="?", const=1, default=0, type=int, help="Print progress."

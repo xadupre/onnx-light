@@ -164,6 +164,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 import json
 import math
 import os
@@ -1506,12 +1507,54 @@ def _prepare_optimization_external_data(
         tensor.external_data.clear()
 
 
+@contextmanager
+def _optimization_report_destination(
+    path: str | None,
+) -> Iterator[tuple[str | None, int | None, str | None]]:
+    """Pins and validates the optimization report's destination directory."""
+    if path is None:
+        yield None, None, None
+        return
+
+    absolute_path = os.path.abspath(path)
+    directory = os.path.dirname(absolute_path)
+    name = os.path.basename(absolute_path)
+    if not os.path.isdir(directory):
+        raise FileNotFoundError(f"Report directory not found: {directory!r}")
+
+    if (
+        os.link in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.stat in os.supports_follow_symlinks
+    ):
+        directory_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            resolved_directory = os.path.realpath(directory)
+            resolved_stat = os.stat(resolved_directory)
+            descriptor_stat = os.fstat(directory_fd)
+            if (resolved_stat.st_dev, resolved_stat.st_ino) != (
+                descriptor_stat.st_dev,
+                descriptor_stat.st_ino,
+            ):
+                raise OSError("Report directory changed while validating its destination.")
+            try:
+                os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise FileExistsError(f"Report already exists: {absolute_path!r}")
+            yield os.path.join(resolved_directory, name), directory_fd, name
+        finally:
+            os.close(directory_fd)
+    else:
+        resolved_path = os.path.join(os.path.realpath(directory), name)
+        if os.path.lexists(resolved_path):
+            raise FileExistsError(f"Report already exists: {absolute_path!r}")
+        yield resolved_path, None, None
+
+
 def _cmd_optimize(args: argparse.Namespace) -> None:
     """Optimizes a model while preserving its external weight references."""
-    from .onnx import ModelProto, load, save_to_file_descriptor
-    from .onnx_core.optimization import GraphBuilder, GraphGraph
-    import tempfile
-
     model_path = os.path.abspath(args.model)
     output_path = os.path.abspath(args.output)
     if os.path.realpath(os.path.dirname(model_path)) != os.path.realpath(
@@ -1522,18 +1565,30 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         raise FileExistsError(f"Output already exists: {output_path!r}")
     if os.path.splitext(output_path)[1] in {".textproto", ".pipeline", ".pipe-onnx"}:
         raise ValueError("The optimized output must use a binary ONNX model filename.")
-    report_path = os.path.abspath(args.report) if args.report is not None else None
-    if report_path is not None:
-        if os.path.lexists(report_path):
-            raise FileExistsError(f"Report already exists: {report_path!r}")
-        if os.path.normcase(os.path.realpath(report_path)) == os.path.normcase(
-            os.path.realpath(output_path)
-        ):
+
+    with _optimization_report_destination(args.report) as destination:
+        report_path, report_directory_fd, report_name = destination
+        if report_path is not None and os.path.normcase(
+            os.path.realpath(report_path)
+        ) == os.path.normcase(os.path.realpath(output_path)):
             raise ValueError("The optimization report and output model paths must differ.")
-        if not os.path.isdir(os.path.dirname(report_path)):
-            raise FileNotFoundError(
-                f"Report directory not found: {os.path.dirname(report_path)!r}"
-            )
+        _cmd_optimize_with_destination(
+            args, model_path, output_path, report_path, report_directory_fd, report_name
+        )
+
+
+def _cmd_optimize_with_destination(
+    args: argparse.Namespace,
+    model_path: str,
+    output_path: str,
+    report_path: str | None,
+    report_directory_fd: int | None,
+    report_name: str | None,
+) -> None:
+    from .onnx import ModelProto, load, save_to_file_descriptor
+    from .onnx_core.optimization import GraphBuilder, GraphGraph
+    import tempfile
+
     patterns = _optimization_patterns(args.patterns)
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
@@ -1569,7 +1624,10 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
             staged = os.path.join(temporary, "report.txt")
             with open(staged, "x", encoding="utf-8") as stream:
                 stream.write(f"{report}\n")
-            os.link(staged, report_path)
+            if report_directory_fd is None:
+                os.link(staged, report_path)
+            else:
+                os.link(staged, report_name, dst_dir_fd=report_directory_fd)
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:

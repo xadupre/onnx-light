@@ -279,6 +279,76 @@ class TestMainOptimize(ExtTestCase):
             self.assertFalse(output.exists())
             self.assertFalse(report.exists())
 
+    def test_report_directory_symlink_cannot_be_retargeted_during_optimization(self):
+        if os.name == "nt":
+            self.skipTest("Directory symlinks are not available on Windows.")
+
+        from onnx_light.onnx_core.optimization import (
+            PatternOptimization,
+            register_pattern,
+            unregister_pattern,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_directory = Path(tmp)
+            source = model_directory / "model.onnx"
+            output = model_directory / "optimized.onnx"
+            report_directory = model_directory / "reports"
+            report_directory.mkdir()
+            report_link = model_directory / "reports-link"
+            report_link.symlink_to(report_directory, target_is_directory=True)
+            report = report_link / "missing.bin"
+            model = _make_model()
+            model.graph.initializer.append(
+                oh.make_tensor(
+                    "W",
+                    TensorProto.FLOAT,
+                    [256],
+                    external_data={"location": "missing.bin", "length": "1024"},
+                )
+            )
+            save(model, source)
+
+            class RetargetReportDirectory(PatternOptimization):
+                def __init__(self):
+                    super().__init__(priority=1, name="RetargetReportDirectory")
+
+                def fast_op_type(self):
+                    return {"Not"}
+
+                def match(self, graph, node):
+                    previous = graph.node_before(node.input[0])
+                    if previous is None or previous.op_type != "Not":
+                        return self.no_match(node, "no preceding Not")
+                    return self.result([previous, node], insert_at=node)
+
+                def apply(self, graph, nodes):
+                    del graph
+                    report_link.unlink()
+                    report_link.symlink_to(model_directory, target_is_directory=True)
+                    return [oh.make_node("Identity", [nodes[0].input[0]], list(nodes[1].output))]
+
+            pattern = RetargetReportDirectory()
+            register_pattern(pattern)
+            self.addCleanup(unregister_pattern, pattern.name)
+
+            main(
+                [
+                    "optimize",
+                    str(source),
+                    "-o",
+                    str(output),
+                    "--patterns",
+                    pattern.name,
+                    "--report",
+                    str(report),
+                ]
+            )
+
+            self.assertTrue(output.exists())
+            self.assertTrue((report_directory / report.name).exists())
+            self.assertFalse(model_directory.joinpath(report.name).exists())
+
     def test_external_weights_are_reused(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "model.onnx"

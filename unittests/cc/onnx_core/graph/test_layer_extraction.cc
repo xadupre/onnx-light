@@ -236,7 +236,8 @@ TEST(OperatorGroups, BothAlgorithmsShareMainOperatorNamingAndCollisionChecks) {
                  : core::graph::MakePartitionGroupReplacements(graph, nodes, {1024, 2, 2});
     ASSERT_EQ(replacement.size(), 2u);
     EXPECT_EQ(replacement[0].op_type(), prefix + "_MatMul_1");
-    EXPECT_EQ(replacement[1].op_type(), prefix + (repeated ? "_MatMul_1" : "_MatMul_2"));
+    EXPECT_EQ(replacement[1].op_type(), prefix + "_MatMul_1");
+    EXPECT_EQ(builder.LocalFunctions().size(), 1u);
   }
 }
 

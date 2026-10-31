@@ -106,6 +106,8 @@ without eligible groups is still saved and reports zero partition functions.
 Equivalent partitions reuse a single function definition, using the same
 body and interface comparison as repeated layers. Different attributes or
 embedded constants retain distinct functions; external weights remain call arguments.
+Each candidate definition is normalized once per extraction and indexed by a
+fingerprint; matching still compares bodies exactly, including hash collisions.
 
 Explaining interfaces
 --------------------

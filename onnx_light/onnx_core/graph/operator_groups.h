@@ -12,6 +12,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
@@ -106,12 +108,36 @@ std::vector<std::string>
 InlineOperatorGroupInputs(GraphProto &body, const OperatorGroup &group,
                           const std::vector<OperatorGroupInput> &producers);
 
-/// Finds an existing ai.rt function with the given prefix and an equivalent closed body.
-/// Compares positional interfaces, topology, attributes, tensor contents and opsets,
-/// ignoring local names, exporter provenance and recomputed shapes.
-/// Returns an empty string when no safely comparable definition matches.
-std::string FindOperatorGroupFunction(builder::GraphBuilder &source, const GraphProto &body,
-                                      const std::string &prefix);
+/// Reports candidate-side work performed by a function index.
+struct OperatorGroupFunctionStats {
+  std::size_t candidate_normalizations = 0;
+  std::size_t exact_comparisons = 0;
+};
+
+/// Caches and indexes normalized definitions for one append-only extraction operation.
+/// Binds the source and prefix explicitly; existing definitions and source opsets must
+/// remain unchanged while the cache is used. Tensor payloads remain shared.
+class OperatorGroupFunctions {
+public:
+  OperatorGroupFunctions(builder::GraphBuilder &source, std::string prefix);
+
+  /// Returns an equivalent function name, using exact comparisons within hash buckets.
+  /// Returns an empty string when no safely comparable definition matches.
+  std::string Find(const GraphProto &body);
+
+  /// Creates or reuses a function and advances suffix only for newly created names.
+  std::string Add(GraphProto body, std::size_t &suffix);
+
+  /// Returns cumulative candidate normalization and exact comparison counts.
+  const OperatorGroupFunctionStats &Stats() const noexcept { return stats_; }
+
+private:
+  builder::GraphBuilder &source_;
+  std::string prefix_;
+  std::size_t indexed_functions_ = 0;
+  OperatorGroupFunctionStats stats_;
+  std::unordered_map<std::size_t, std::vector<std::pair<std::string, GraphProto>>> definitions_;
+};
 
 /// Consumes a closed body to create or reuse a model-local ai.rt function with shared naming.
 std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,

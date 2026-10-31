@@ -361,16 +361,17 @@ InlineOperatorGroupInputs(GraphProto &body, const OperatorGroup &group,
   return arguments;
 }
 
-std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,
-                                     const std::string &prefix, std::size_t &suffix) {
-  if (const std::string existing = FindOperatorGroupFunction(source, body, prefix);
-      !existing.empty())
+OperatorGroupFunctions::OperatorGroupFunctions(builder::GraphBuilder &source, std::string prefix)
+    : source_(source), prefix_(std::move(prefix)) {}
+
+std::string OperatorGroupFunctions::Add(GraphProto body, std::size_t &suffix) {
+  if (const std::string existing = Find(body); !existing.empty())
     return existing;
-  const std::string name = MakeOperatorGroupFunctionName(source, body.node(), prefix, suffix);
+  const std::string name = MakeOperatorGroupFunctionName(source_, body.node(), prefix_, suffix);
   FunctionProto definition;
   definition.set_name(name);
   definition.set_domain("ai.rt");
-  for (const auto &[domain, version] : source.OpsetVersions()) {
+  for (const auto &[domain, version] : source_.OpsetVersions()) {
     auto &opset = *definition.add_opset_import();
     opset.set_domain(domain);
     opset.set_version(version);
@@ -386,8 +387,13 @@ std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto b
   for (auto &info : body.ref_value_info())
     *definition.add_value_info() = std::move(info);
   definition.ref_node() = std::move(body.ref_node());
-  source.ModelBuilder().MakeLocalFunction(definition);
+  source_.ModelBuilder().MakeLocalFunction(definition);
   return name;
+}
+
+std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,
+                                     const std::string &prefix, std::size_t &suffix) {
+  return OperatorGroupFunctions(source, prefix).Add(std::move(body), suffix);
 }
 
 void OperatorGroupProposal::Validate(std::size_t node_count) const {

@@ -1591,21 +1591,45 @@ bool CompatibleLayerOpsets(const GraphBuilder &candidate, const GraphBuilder &so
   return true;
 }
 
+std::size_t OperatorGroupFingerprint(const GraphProto &body) {
+  std::size_t hash = 0;
+  const auto add = [&](const std::string &value) {
+    hash ^= std::hash<std::string>{}(value) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+  };
+  for (const auto *values : {&body.input(), &body.output(), &body.value_info()}) {
+    add(std::to_string(values->size()));
+    for (const auto &value : *values)
+      add(value.SerializeAsString());
+  }
+  for (const auto &initializer : body.initializer()) {
+    add(initializer.name().value());
+    add(std::to_string(initializer.ContentHash(true)));
+  }
+  for (const auto &node : body.node()) {
+    add(node.Signature({node.input().begin(), node.input().end()}));
+    for (const auto &output : node.output())
+      add(output.value());
+    for (const auto &metadata : node.metadata_props())
+      add(metadata.SerializeAsString());
+  }
+  return hash;
+}
+
 } // namespace
 
-std::string FindOperatorGroupFunction(GraphBuilder &source, const GraphProto &body,
-                                      const std::string &prefix) {
+std::string OperatorGroupFunctions::Find(const GraphProto &body) {
   GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
   std::size_t work = 0;
-  if (!NormalizeLayerBody(normalized, source, {}, 0, work, false))
+  if (!NormalizeLayerBody(normalized, source_, {}, 0, work, false))
     return {};
-  GraphBuilder &builder = source.ModelBuilder();
-  for (const auto &local : builder.LocalFunctions()) {
+  GraphBuilder &builder = source_.ModelBuilder();
+  const auto &functions = builder.LocalFunctions();
+  while (indexed_functions_ < functions.size()) {
+    const auto &local = functions[indexed_functions_++];
     if (!local->IsLocalFunction(local->name(), "ai.rt", "") ||
-        !(local->name() == prefix || local->name().rfind(prefix + "_", 0) == 0) ||
-        local->Nodes().size() != body.node().size() ||
-        local->Inputs().size() != body.input().size() ||
-        local->Outputs().size() != body.output().size())
+        !(local->name() == prefix_ || local->name().rfind(prefix_ + "_", 0) == 0) ||
+        local->Nodes().size() > kMaxFunctionWork || local->Inputs().size() > kMaxPorts ||
+        local->Outputs().size() > kMaxPorts)
       continue;
     const auto *definition = builder.Shapes().GetLocalFunction(
         core::shapes::ShapesContext::LocalFunctionKey("ai.rt", local->name(), ""));
@@ -1614,10 +1638,20 @@ std::string FindOperatorGroupFunction(GraphBuilder &source, const GraphProto &bo
       continue;
     GraphProto candidate = local->BuildGraph();
     work = 0;
+    ++stats_.candidate_normalizations;
     if (NormalizeLayerBody(candidate, *local, {}, 0, work, true) &&
-        CompatibleLayerOpsets(*local, source, candidate) && normalized.Equals(candidate))
-      return local->name();
+        CompatibleLayerOpsets(*local, source_, candidate)) {
+      const auto fingerprint = OperatorGroupFingerprint(candidate);
+      definitions_[fingerprint].emplace_back(local->name(), std::move(candidate));
+    }
   }
+  const auto found = definitions_.find(OperatorGroupFingerprint(normalized));
+  if (found != definitions_.end())
+    for (const auto &[name, candidate] : found->second) {
+      ++stats_.exact_comparisons;
+      if (normalized.Equals(candidate))
+        return name;
+    }
   return {};
 }
 
@@ -1625,7 +1659,8 @@ namespace {
 
 NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
                     const std::vector<OperatorGroup> &boundaries, std::size_t occurrence,
-                    const std::vector<OperatorGroupInput> &producers, std::size_t &suffix) {
+                    const std::vector<OperatorGroupInput> &producers, std::size_t &suffix,
+                    OperatorGroupFunctions &functions) {
   GraphProto body;
   for (const std::string &name : boundary.inputs)
     *body.add_input() = ValueInfo(index, name);
@@ -1649,8 +1684,7 @@ NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
   source.SetOpsetVersion("ai.rt", 1);
   const std::string name = "RepeatedLayer_n" + std::to_string(occurrence) + "_p" +
                            std::to_string(boundary.node_indices.front());
-  const std::string function_name =
-      AddOperatorGroupFunction(source, std::move(body), "Layer", suffix);
+  const std::string function_name = functions.Add(std::move(body), suffix);
   return MakeNode(function_name.c_str(), inputs, boundary.outputs, "ai.rt", name.c_str());
 }
 
@@ -1706,8 +1740,9 @@ MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodePro
     throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
   const auto producers = FindCommonOperatorGroupInputs(graph, plan.groups);
   std::size_t suffix = 0;
+  OperatorGroupFunctions functions(graph.Builder(), "Layer");
   return MakeOperatorGroupReplacements(graph, plan, [&](std::size_t group) {
-    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix);
+    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix, functions);
   });
 }
 

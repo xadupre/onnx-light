@@ -56,8 +56,9 @@ References Validate(const FunctionProto &function, bool is_template) {
 }
 
 void NormalizeTensorStorage(TensorProto &tensor) {
-  if (tensor.data_type() == TensorProto::STRING || tensor.HasDeferredWeight() ||
-      tensor.data_location() == TensorProto::EXTERNAL || !tensor.external_data().empty())
+  if (tensor.data_type() == TensorProto::STRING || tensor.has_segment() ||
+      tensor.HasDeferredWeight() || tensor.data_location() == TensorProto::EXTERNAL ||
+      !tensor.external_data().empty())
     return;
   const auto value = core::runtime::TensorFromProto(tensor);
   VerifyTensor(tensor);

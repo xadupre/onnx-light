@@ -174,7 +174,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
-    from .onnx import AttributeProto, GraphProto, ModelProto, TensorProto
+    from .onnx import AttributeProto, FunctionProto, GraphProto, ModelProto, TensorProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -1414,8 +1414,9 @@ def _reject_optimization_training_info(model_path: str) -> None:
             stream.seek(length, os.SEEK_CUR)
 
 
-def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
+def _optimization_tensors(model: ModelProto | FunctionProto) -> Iterator[TensorProto]:
     """Visits tensors in graphs, attributes and local functions without copying payloads."""
+    from .onnx import ModelProto
 
     def walk_attributes(attributes: Iterable[AttributeProto]) -> Iterator[TensorProto]:
         for attribute in attributes:
@@ -1441,15 +1442,22 @@ def _optimization_tensors(model: ModelProto) -> Iterator[TensorProto]:
         for node in graph.node:
             yield from walk_attributes(node.attribute)
 
-    yield from walk_graph(model.graph)
-    for function in model.functions:
+    if isinstance(model, ModelProto):
+        yield from walk_graph(model.graph)
+        functions = model.functions
+    else:
+        functions = (model,)
+    for function in functions:
         yield from walk_attributes(function.attribute_proto)
         for node in function.node:
             yield from walk_attributes(node.attribute)
 
 
 def _prepare_optimization_external_data(
-    model: ModelProto, model_path: str, output_path: str, report_path: str | None = None
+    model: ModelProto | FunctionProto,
+    model_path: str,
+    output_path: str,
+    report_path: str | None = None,
 ) -> None:
     """Protects external locations and loads only bounded, small numeric payloads."""
     from .onnx import TensorProto
@@ -1585,11 +1593,40 @@ def _cmd_optimize_with_destination(
     report_directory_fd: int | None,
     report_name: str | None,
 ) -> None:
+    """Optimizes a model and publishes it with an optional report to validated destinations."""
     from .onnx import ModelProto, load, save_to_file_descriptor
-    from .onnx_core.optimization import GraphBuilder, GraphGraph
+    from .onnx.parser import parse_function
+    from .onnx_core.optimization import (
+        FunctionPattern,
+        GraphBuilder,
+        GraphGraph,
+        registered_pattern_names,
+    )
     import tempfile
 
     patterns = _optimization_patterns(args.patterns)
+    if args.function_pattern_as_function and not args.function_pattern:
+        raise ValueError("--function-pattern-as-function requires --function-pattern.")
+    custom_patterns = []
+    pattern_names = set(registered_pattern_names())
+    for index, (template_text, replacement_text) in enumerate(args.function_pattern):
+        template = parse_function(template_text)
+        replacement = parse_function(replacement_text)
+        for function in (template, replacement):
+            _prepare_optimization_external_data(function, model_path, output_path, report_path)
+        name = f"CommandLineFunctionPattern_{index}"
+        while name in pattern_names:
+            name += "_"
+        pattern_names.add(name)
+        custom_patterns.append(
+            FunctionPattern(
+                template,
+                replacement,
+                priority=0,
+                name=name,
+                as_function=args.function_pattern_as_function,
+            )
+        )
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
     if args.verbose:
@@ -1600,6 +1637,10 @@ def _cmd_optimize_with_destination(
         raise ValueError("optimize requires an ONNX model, not a pipeline.")
     _prepare_optimization_external_data(model, model_path, output_path, report_path)
     builder = GraphBuilder(model)
+    for pattern in custom_patterns:
+        builder.register_pattern(pattern)
+        if patterns is not None:
+            patterns.append(pattern.name)
     if args.verbose:
         print("[optimize] optimize")
     optimization = GraphGraph(builder, patterns=patterns).optimize(report=report_path is not None)
@@ -1627,6 +1668,7 @@ def _cmd_optimize_with_destination(
             if report_directory_fd is None:
                 os.link(staged, report_path)
             else:
+                assert report_name is not None
                 os.link(staged, report_name, dst_dir_fd=report_directory_fd)
 
 
@@ -2222,6 +2264,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--report",
         metavar="PATH",
         help="Export the optimization report as UTF-8 text to a new file.",
+    )
+    optimize_parser.add_argument(
+        "--function-pattern",
+        nargs=2,
+        action="append",
+        default=[],
+        metavar=("TEMPLATE", "REPLACEMENT"),
+        help=(
+            "Two quoted ONNX function texts parsed as a custom FunctionPattern. "
+            "Repeat to add patterns alongside the selected or default patterns."
+        ),
+    )
+    optimize_parser.add_argument(
+        "--function-pattern-as-function",
+        action="store_true",
+        help=(
+            "Emit local function calls for all --function-pattern replacements "
+            "instead of inlining."
+        ),
     )
     optimize_parser.add_argument(
         "--verbose", "-v", nargs="?", const=1, default=0, type=int, help="Print progress."

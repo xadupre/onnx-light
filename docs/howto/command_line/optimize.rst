@@ -85,3 +85,42 @@ symbolic links, the output model path and recorded external weight locations
 are protected. Like the model, the report is published through an exclusive
 hard link so failed writes leave no partial report. The model is saved first;
 if report publication fails, the completed model remains available.
+
+Text-defined function patterns
+------------------------------
+
+``--function-pattern TEMPLATE REPLACEMENT`` accepts two **quoted ONNX function
+texts**, not filenames or Python code. Each is parsed with
+:func:`~onnx_light.onnx.parser.parse_function` and used to construct a
+:class:`~onnx_light.onnx_core.optimization.FunctionPattern`. For example:
+
+.. code-block:: bash
+
+    onnx-light optimize model.onnx -o model.opt.onnx \
+        --function-pattern \
+        '<opset_import: ["": 18], domain: "patterns">
+         DoubleNeg (x) => (y) {
+             middle = Neg(x)
+             y = Neg(middle)
+         }' \
+        '<opset_import: ["": 18], domain: "patterns">
+         KeepInput (x) => (y) {
+             y = Identity(x)
+         }'
+
+Repeat ``--function-pattern`` to add several custom rewrites. They are added
+to the default patterns, or to the explicit ``--patterns`` selection, with
+priority 0. Registrations are local to this optimization; the process-global
+pattern registry is not modified. Invalid function texts and incompatible
+template/replacement interfaces are rejected before loading the model.
+Function inputs and outputs correspond by position, and operator domains,
+attributes and opsets follow the usual ``FunctionPattern`` matching rules.
+External tensor references in these texts are relative to the input model's
+directory and receive the same bounded small-tensor loading and output-location
+protection as model tensors.
+
+Replacements are inlined by default. Add ``--function-pattern-as-function``
+to emit model-local replacement function calls for all supplied pairs.
+Passing the same text as both template and replacement in this mode
+encapsulates the matched body without changing its computation. This flag
+requires at least one ``--function-pattern``.

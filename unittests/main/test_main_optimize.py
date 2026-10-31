@@ -78,6 +78,7 @@ class TestMainOptimize(ExtTestCase):
                 ):
                     source = Path(tmp) / "model.onnx"
                     output = Path(tmp) / "optimized.onnx"
+                    report = Path(tmp) / "report.txt"
                     model = _make_model()
                     save(model, source)
                     before = source.read_bytes()
@@ -89,12 +90,18 @@ class TestMainOptimize(ExtTestCase):
                         "--function-pattern",
                         _NOT_NOT_TEXT,
                         _IDENTITY_TEXT,
+                        "--report",
+                        str(report),
                     ]
                     if selection is not None:
                         args += ["--patterns", selection]
                     if as_function:
                         args += ["--function-pattern-as-function"]
                     main(args)
+                    self.assertRegex(
+                        report.read_text(encoding="utf-8"),
+                        r"CommandLineFunctionPattern_0\(attempts=\d+, matches=1,",
+                    )
                     result = load(output)
                     check_model(result)
                     operators = [node.op_type for node in result.graph.node]
@@ -177,25 +184,33 @@ class TestMainOptimize(ExtTestCase):
                 ["location": "optimized.onnx", "length": "1024"]> ()
         }
         """
-        for as_function in (False, True):
-            with self.subTest(as_function=as_function), tempfile.TemporaryDirectory() as tmp:
-                source = Path(tmp) / "model.onnx"
-                output = Path(tmp) / "optimized.onnx"
-                save(_make_model(), source)
-                args = [
-                    "optimize",
-                    str(source),
-                    "-o",
-                    str(output),
-                    "--function-pattern",
-                    _NOT_NOT_TEXT,
-                    replacement,
-                ]
-                if as_function:
-                    args += ["--function-pattern-as-function"]
-                with self.assertRaisesRegex(ValueError, "external-data location"):
-                    main(args)
-                self.assertFalse(output.exists())
+        for location in ("optimized.onnx", "report.txt"):
+            for as_function in (False, True):
+                with (
+                    self.subTest(location=location, as_function=as_function),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    source = Path(tmp) / "model.onnx"
+                    output = Path(tmp) / "optimized.onnx"
+                    report = Path(tmp) / "report.txt"
+                    save(_make_model(), source)
+                    args = [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--function-pattern",
+                        _NOT_NOT_TEXT,
+                        replacement.replace("optimized.onnx", location),
+                        "--report",
+                        str(report),
+                    ]
+                    if as_function:
+                        args += ["--function-pattern-as-function"]
+                    with self.assertRaisesRegex(ValueError, "external-data location"):
+                        main(args)
+                    self.assertFalse(output.exists())
+                    self.assertFalse(report.exists())
 
     def test_registered_custom_pattern(self):
         from onnx_light.onnx_core.optimization import (
@@ -256,6 +271,32 @@ class TestMainOptimize(ExtTestCase):
             self.assertEqual(output.read_bytes(), b"concurrently created output")
             self.assertEqual(
                 sorted(path.name for path in Path(tmp).iterdir()), ["model.onnx", "raced.onnx"]
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            report = Path(tmp) / "report.txt"
+            save(_make_model(), source)
+            pattern.destination = report
+            with self.assertRaises(FileExistsError):
+                main(
+                    [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--patterns",
+                        "CustomNotNot",
+                        "--report",
+                        str(report),
+                    ]
+                )
+            self.assertEqual(report.read_bytes(), b"concurrently created output")
+            self.assertNotIn("Not", [node.op_type for node in load(output).graph.node])
+            self.assertEqual(
+                sorted(path.name for path in Path(tmp).iterdir()),
+                ["model.onnx", "optimized.onnx", "report.txt"],
             )
 
         unregister_pattern("CustomNotNot")
@@ -320,6 +361,162 @@ class TestMainOptimize(ExtTestCase):
                 self.assertEqual((operators.count("Not"), operators.count("Transpose")), expected)
                 self.assertEqual([value.name for value in result.graph.output], ["Y", "Z"])
                 self.assertEqual(source.read_bytes(), before)
+
+    def test_optimization_report(self):
+        for selection, matches in (("NotNot", 1), ("L1", 0)):
+            with self.subTest(patterns=selection), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.onnx"
+                output = Path(tmp) / "optimized.onnx"
+                directory = Path(tmp) / "reports"
+                directory.mkdir()
+                report = directory / "optimization.txt"
+                save(_make_model(), source)
+                before = source.read_bytes()
+                main(
+                    [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--patterns",
+                        selection,
+                        "--report",
+                        str(report),
+                    ]
+                )
+                text = report.read_text(encoding="utf-8")
+                self.assertIn("OptimizationReport(iterations=", text)
+                self.assertIn(f"rewrites={matches}", text)
+                self.assertIn("total_time_ns=", text)
+                self.assertIn("phases={matching:", text)
+                self.assertIn("patterns=[", text)
+                self.assertIn("subgraphs=[", text)
+                if matches:
+                    self.assertRegex(text, r"NotNot\(attempts=\d+, matches=1,")
+                self.assertTrue(text.endswith("\n"))
+                self.assertEqual(source.read_bytes(), before)
+                self.assertEqual(
+                    [node.op_type for node in load(output).graph.node].count("Not"),
+                    0 if matches else 2,
+                )
+                self.assertEqual(list(directory.iterdir()), [report])
+
+    def test_invalid_report_destinations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            existing = Path(tmp) / "report.txt"
+            existing.write_bytes(b"existing report")
+            save(_make_model(), source)
+            before = source.read_bytes()
+            destinations = [
+                (source, FileExistsError),
+                (existing, FileExistsError),
+                (Path(tmp), FileExistsError),
+                (output, ValueError),
+                (Path(tmp) / "missing" / "report.txt", FileNotFoundError),
+            ]
+            if os.name != "nt":
+                for name, target in (("link.txt", existing), ("dangling.txt", "absent.txt")):
+                    link = Path(tmp) / name
+                    link.symlink_to(target)
+                    destinations.append((link, FileExistsError))
+            for report, error in destinations:
+                with self.subTest(report=report), self.assertRaises(error):
+                    main(["optimize", str(source), "-o", str(output), "--report", str(report)])
+                self.assertFalse(output.exists())
+            self.assertEqual(source.read_bytes(), before)
+            self.assertEqual(existing.read_bytes(), b"existing report")
+
+    def test_report_cannot_replace_missing_external_weights(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            report = Path(tmp) / "missing.bin"
+            model = _make_model()
+            model.graph.initializer.append(
+                oh.make_tensor(
+                    "W",
+                    TensorProto.FLOAT,
+                    [256],
+                    external_data={"location": report.name, "length": "1024"},
+                )
+            )
+            save(model, source)
+            with self.assertRaisesRegex(ValueError, "external-data location"):
+                main(["optimize", str(source), "-o", str(output), "--report", str(report)])
+            self.assertFalse(output.exists())
+            self.assertFalse(report.exists())
+
+    def test_report_directory_symlink_cannot_be_retargeted_during_optimization(self):
+        if os.name == "nt":
+            self.skipTest("Directory symlinks are not available on Windows.")
+
+        from onnx_light.onnx_core.optimization import (
+            PatternOptimization,
+            register_pattern,
+            unregister_pattern,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_directory = Path(tmp)
+            source = model_directory / "model.onnx"
+            output = model_directory / "optimized.onnx"
+            report_directory = model_directory / "reports"
+            report_directory.mkdir()
+            report_link = model_directory / "reports-link"
+            report_link.symlink_to(report_directory, target_is_directory=True)
+            report = report_link / "missing.bin"
+            model = _make_model()
+            model.graph.initializer.append(
+                oh.make_tensor(
+                    "W",
+                    TensorProto.FLOAT,
+                    [256],
+                    external_data={"location": "missing.bin", "length": "1024"},
+                )
+            )
+            save(model, source)
+
+            class RetargetReportDirectory(PatternOptimization):
+                def __init__(self):
+                    super().__init__(priority=1, name="RetargetReportDirectory")
+
+                def fast_op_type(self):
+                    return {"Not"}
+
+                def match(self, graph, node):
+                    previous = graph.node_before(node.input[0])
+                    if previous is None or previous.op_type != "Not":
+                        return self.no_match(node, "no preceding Not")
+                    return self.result([previous, node], insert_at=node)
+
+                def apply(self, graph, nodes):
+                    del graph
+                    report_link.unlink()
+                    report_link.symlink_to(model_directory, target_is_directory=True)
+                    return [oh.make_node("Identity", [nodes[0].input[0]], list(nodes[1].output))]
+
+            pattern = RetargetReportDirectory()
+            register_pattern(pattern)
+            self.addCleanup(unregister_pattern, pattern.name)
+
+            main(
+                [
+                    "optimize",
+                    str(source),
+                    "-o",
+                    str(output),
+                    "--patterns",
+                    pattern.name,
+                    "--report",
+                    str(report),
+                ]
+            )
+
+            self.assertTrue(output.exists())
+            self.assertTrue((report_directory / report.name).exists())
+            self.assertFalse(model_directory.joinpath(report.name).exists())
 
     def test_external_weights_are_reused(self):
         with tempfile.TemporaryDirectory() as tmp:

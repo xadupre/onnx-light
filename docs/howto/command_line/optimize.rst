@@ -69,6 +69,23 @@ cleanup and constant-folding passes still run with an explicit selection.
 Group members are validated too, including registrations that were removed
 after a group was created.
 
+Optimization report
+-------------------
+
+Use ``--report PATH`` to export the optimizer's report as UTF-8 text:
+
+.. code-block:: bash
+
+    onnx-light optimize model.onnx -o model.opt.onnx --report optimization.txt
+
+The report includes iteration and rewrite counts, phase timings in nanoseconds,
+per-pattern matching statistics and nested-subgraph statistics. Its parent
+directory must exist but need not be the model directory. Existing files and
+symbolic links, the output model path and recorded external weight locations
+are protected. Like the model, the report is published through an exclusive
+hard link so failed writes leave no partial report. The model is saved first;
+if report publication fails, the completed model remains available.
+
 Text-defined function patterns
 ------------------------------
 

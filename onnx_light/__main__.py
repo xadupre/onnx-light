@@ -164,6 +164,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 import json
 import math
 import os
@@ -1453,7 +1454,10 @@ def _optimization_tensors(model: ModelProto | FunctionProto) -> Iterator[TensorP
 
 
 def _prepare_optimization_external_data(
-    model: ModelProto | FunctionProto, model_path: str, output_path: str
+    model: ModelProto | FunctionProto,
+    model_path: str,
+    output_path: str,
+    report_path: str | None = None,
 ) -> None:
     """Protects external locations and loads only bounded, small numeric payloads."""
     from .onnx import TensorProto
@@ -1461,7 +1465,11 @@ def _prepare_optimization_external_data(
     from .onnx_lib.external_data_helper import uses_external_data
 
     base_dir = os.path.dirname(model_path)
-    destination = os.path.normcase(os.path.realpath(output_path))
+    destinations = {
+        os.path.normcase(os.path.realpath(path))
+        for path in (output_path, report_path)
+        if path is not None
+    }
     resolved: dict[str, str] = {}
     packed_bits = {
         TensorProto.INT2: 2,
@@ -1481,7 +1489,7 @@ def _prepare_optimization_external_data(
             resolved[location] = os.path.normcase(
                 os.path.realpath(os.path.join(base_dir, location))
             )
-        if resolved[location] == destination:
+        if resolved[location] in destinations:
             raise ValueError(f"Output overlaps an external-data location: {location!r}")
         if tensor.HasField("raw_data") or tensor.data_type == TensorProto.STRING:
             continue
@@ -1507,18 +1515,54 @@ def _prepare_optimization_external_data(
         tensor.external_data.clear()
 
 
+@contextmanager
+def _optimization_report_destination(
+    path: str | None,
+) -> Iterator[tuple[str | None, int | None, str | None]]:
+    """Pins and validates the optimization report's destination directory."""
+    if path is None:
+        yield None, None, None
+        return
+
+    absolute_path = os.path.abspath(path)
+    directory = os.path.dirname(absolute_path)
+    name = os.path.basename(absolute_path)
+    if not os.path.isdir(directory):
+        raise FileNotFoundError(f"Report directory not found: {directory!r}")
+
+    if (
+        os.link in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.stat in os.supports_follow_symlinks
+    ):
+        directory_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            resolved_directory = os.path.realpath(directory)
+            resolved_stat = os.stat(resolved_directory)
+            descriptor_stat = os.fstat(directory_fd)
+            if (resolved_stat.st_dev, resolved_stat.st_ino) != (
+                descriptor_stat.st_dev,
+                descriptor_stat.st_ino,
+            ):
+                raise OSError("Report directory changed while validating its destination.")
+            try:
+                os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise FileExistsError(f"Report already exists: {absolute_path!r}")
+            yield os.path.join(resolved_directory, name), directory_fd, name
+        finally:
+            os.close(directory_fd)
+    else:
+        resolved_path = os.path.join(os.path.realpath(directory), name)
+        if os.path.lexists(resolved_path):
+            raise FileExistsError(f"Report already exists: {absolute_path!r}")
+        yield resolved_path, None, None
+
+
 def _cmd_optimize(args: argparse.Namespace) -> None:
     """Optimizes a model while preserving its external weight references."""
-    from .onnx import ModelProto, load, save_to_file_descriptor
-    from .onnx.parser import parse_function
-    from .onnx_core.optimization import (
-        FunctionPattern,
-        GraphBuilder,
-        GraphGraph,
-        registered_pattern_names,
-    )
-    import tempfile
-
     model_path = os.path.abspath(args.model)
     output_path = os.path.abspath(args.output)
     if os.path.realpath(os.path.dirname(model_path)) != os.path.realpath(
@@ -1529,6 +1573,37 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         raise FileExistsError(f"Output already exists: {output_path!r}")
     if os.path.splitext(output_path)[1] in {".textproto", ".pipeline", ".pipe-onnx"}:
         raise ValueError("The optimized output must use a binary ONNX model filename.")
+
+    with _optimization_report_destination(args.report) as destination:
+        report_path, report_directory_fd, report_name = destination
+        if report_path is not None and os.path.normcase(
+            os.path.realpath(report_path)
+        ) == os.path.normcase(os.path.realpath(output_path)):
+            raise ValueError("The optimization report and output model paths must differ.")
+        _cmd_optimize_with_destination(
+            args, model_path, output_path, report_path, report_directory_fd, report_name
+        )
+
+
+def _cmd_optimize_with_destination(
+    args: argparse.Namespace,
+    model_path: str,
+    output_path: str,
+    report_path: str | None,
+    report_directory_fd: int | None,
+    report_name: str | None,
+) -> None:
+    """Optimizes a model and publishes it with an optional report to validated destinations."""
+    from .onnx import ModelProto, load, save_to_file_descriptor
+    from .onnx.parser import parse_function
+    from .onnx_core.optimization import (
+        FunctionPattern,
+        GraphBuilder,
+        GraphGraph,
+        registered_pattern_names,
+    )
+    import tempfile
+
     patterns = _optimization_patterns(args.patterns)
     if args.function_pattern_as_function and not args.function_pattern:
         raise ValueError("--function-pattern-as-function requires --function-pattern.")
@@ -1538,7 +1613,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         template = parse_function(template_text)
         replacement = parse_function(replacement_text)
         for function in (template, replacement):
-            _prepare_optimization_external_data(function, model_path, output_path)
+            _prepare_optimization_external_data(function, model_path, output_path, report_path)
         name = f"CommandLineFunctionPattern_{index}"
         while name in pattern_names:
             name += "_"
@@ -1560,7 +1635,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
     model = load(model_path, load_external_data=False)
     if not isinstance(model, ModelProto):
         raise ValueError("optimize requires an ONNX model, not a pipeline.")
-    _prepare_optimization_external_data(model, model_path, output_path)
+    _prepare_optimization_external_data(model, model_path, output_path, report_path)
     builder = GraphBuilder(model)
     for pattern in custom_patterns:
         builder.register_pattern(pattern)
@@ -1568,7 +1643,7 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
             patterns.append(pattern.name)
     if args.verbose:
         print("[optimize] optimize")
-    GraphGraph(builder, patterns=patterns).optimize()
+    optimization = GraphGraph(builder, patterns=patterns).optimize(report=report_path is not None)
     result = builder.to_onnx()
     if args.verbose:
         print(f"[optimize] save into {output_path!r}")
@@ -1580,6 +1655,21 @@ def _cmd_optimize(args: argparse.Namespace) -> None:
         with open(staged, "xb") as stream:
             save_to_file_descriptor(result, stream.fileno())
         os.link(staged, output_path)
+    if report_path is not None:
+        _, report = optimization
+        if args.verbose:
+            print(f"[optimize] save report into {report_path!r}")
+        with tempfile.TemporaryDirectory(
+            prefix=".onnx-light-optimize-", dir=os.path.dirname(report_path)
+        ) as temporary:
+            staged = os.path.join(temporary, "report.txt")
+            with open(staged, "x", encoding="utf-8") as stream:
+                stream.write(f"{report}\n")
+            if report_directory_fd is None:
+                os.link(staged, report_path)
+            else:
+                assert report_name is not None
+                os.link(staged, report_name, dst_dir_fd=report_directory_fd)
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:
@@ -2169,6 +2259,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "Comma-separated pattern names or registered groups (e.g. L1,L2 or NotNot,CastCast). "
             "Omit to use the optimizer's default patterns. Names are case-sensitive, not regexes."
         ),
+    )
+    optimize_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Export the optimization report as UTF-8 text to a new file.",
     )
     optimize_parser.add_argument(
         "--function-pattern",

@@ -20,6 +20,27 @@ from onnx_light.onnx import PipelineProto, TensorProto, load, save
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 
+_NOT_NOT_TEXT = """
+<opset_import: ["": 18], domain: "patterns">
+DoubleNot (x) => (y) {
+    middle = Not(x)
+    y = Not(middle)
+}
+"""
+_IDENTITY_TEXT = """
+<opset_import: ["": 18], domain: "patterns">
+KeepInput (x) => (y) {
+    y = Identity(x)
+}
+"""
+_TRANSPOSE_TEXT = """
+<opset_import: ["": 18], domain: "patterns">
+DoubleTranspose (x) => (y) {
+    middle = Transpose <perm: ints = [1, 0]> (x)
+    y = Transpose <perm: ints = [1, 0]> (middle)
+}
+"""
+
 
 def _make_model():
     """Builds independent double-negation and double-transpose paths."""
@@ -43,6 +64,139 @@ def _make_model():
 
 
 class TestMainOptimize(ExtTestCase):
+    def test_text_function_pattern_preserves_selection_and_execution(self):
+        from onnx_light.onnx.checker import check_model
+        from onnx_light.onnx_core.optimization import registered_pattern_names
+
+        evaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+        registered = registered_pattern_names()
+        for selection in (None, "L1"):
+            for as_function in (False, True):
+                with (
+                    self.subTest(selection=selection, as_function=as_function),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    source = Path(tmp) / "model.onnx"
+                    output = Path(tmp) / "optimized.onnx"
+                    model = _make_model()
+                    save(model, source)
+                    before = source.read_bytes()
+                    args = [
+                        "optimize",
+                        str(source),
+                        "-o",
+                        str(output),
+                        "--function-pattern",
+                        _NOT_NOT_TEXT,
+                        _IDENTITY_TEXT,
+                    ]
+                    if selection is not None:
+                        args += ["--patterns", selection]
+                    if as_function:
+                        args += ["--function-pattern-as-function"]
+                    main(args)
+                    result = load(output)
+                    check_model(result)
+                    operators = [node.op_type for node in result.graph.node]
+                    self.assertNotIn("Not", operators)
+                    self.assertEqual(operators.count("Transpose"), 0 if selection is None else 2)
+                    self.assertEqual(len(result.functions), int(as_function))
+                    if as_function:
+                        self.assertIn("KeepInput", operators)
+                        self.assertEqual(result.functions[0].domain, "patterns")
+                    feeds = {"X": numpy.array([[True, False, True], [False, True, False]])}
+                    for expected, actual in zip(
+                        evaluator(model).run(None, feeds), evaluator(result).run(None, feeds)
+                    ):
+                        self.assertEqualArray(expected, actual)
+                    self.assertEqual(source.read_bytes(), before)
+                    self.assertEqual(registered_pattern_names(), registered)
+
+    def test_multiple_text_function_patterns_in_subprocess(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "model.onnx"
+            output = Path(tmp) / "optimized.onnx"
+            save(_make_model(), source)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "onnx_light",
+                    "optimize",
+                    str(source),
+                    "-o",
+                    str(output),
+                    "--patterns",
+                    "L1",
+                    "--function-pattern",
+                    _NOT_NOT_TEXT,
+                    _IDENTITY_TEXT,
+                    "--function-pattern",
+                    _TRANSPOSE_TEXT,
+                    _IDENTITY_TEXT.replace("KeepInput", "KeepTransposeInput"),
+                    "--function-pattern-as-function",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = load(output)
+            self.assertEqual(
+                [node.op_type for node in result.graph.node], ["KeepInput", "KeepTransposeInput"]
+            )
+            self.assertEqual(len(result.functions), 2)
+
+    def test_invalid_text_function_patterns_are_rejected_before_model_io(self):
+        for options, message in (
+            (["--function-pattern", "invalid", _IDENTITY_TEXT], "Failed to parse function"),
+            (["--function-pattern", _NOT_NOT_TEXT, "invalid"], "Failed to parse function"),
+            (
+                [
+                    "--function-pattern",
+                    _NOT_NOT_TEXT,
+                    _IDENTITY_TEXT.replace("(x)", "(x, extra)"),
+                ],
+                "arities",
+            ),
+            (["--function-pattern-as-function"], "requires --function-pattern"),
+        ):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / "optimized.onnx"
+                with self.assertRaisesRegex(ValueError, message):
+                    main(
+                        ["optimize", str(Path(tmp) / "missing.onnx"), "-o", str(output), *options]
+                    )
+                self.assertFalse(output.exists())
+
+    def test_text_function_patterns_protect_external_locations(self):
+        replacement = """
+        <opset_import: ["": 18], domain: "patterns">
+        ExternalConstant (x) => (y) {
+            y = Constant <value: tensor = float[256] payload
+                ["location": "optimized.onnx", "length": "1024"]> ()
+        }
+        """
+        for as_function in (False, True):
+            with self.subTest(as_function=as_function), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "model.onnx"
+                output = Path(tmp) / "optimized.onnx"
+                save(_make_model(), source)
+                args = [
+                    "optimize",
+                    str(source),
+                    "-o",
+                    str(output),
+                    "--function-pattern",
+                    _NOT_NOT_TEXT,
+                    replacement,
+                ]
+                if as_function:
+                    args += ["--function-pattern-as-function"]
+                with self.assertRaisesRegex(ValueError, "external-data location"):
+                    main(args)
+                self.assertFalse(output.exists())
+
     def test_registered_custom_pattern(self):
         from onnx_light.onnx_core.optimization import (
             PatternOptimization,

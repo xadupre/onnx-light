@@ -363,6 +363,9 @@ InlineOperatorGroupInputs(GraphProto &body, const OperatorGroup &group,
 
 std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,
                                      const std::string &prefix, std::size_t &suffix) {
+  if (const std::string existing = FindOperatorGroupFunction(source, body, prefix);
+      !existing.empty())
+    return existing;
   const std::string name = MakeOperatorGroupFunctionName(source, body.node(), prefix, suffix);
   FunctionProto definition;
   definition.set_name(name);

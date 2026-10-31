@@ -106,7 +106,14 @@ std::vector<std::string>
 InlineOperatorGroupInputs(GraphProto &body, const OperatorGroup &group,
                           const std::vector<OperatorGroupInput> &producers);
 
-/// Consumes a closed body to create a model-local ai.rt function with shared naming.
+/// Finds an existing ai.rt function with the given prefix and an equivalent closed body.
+/// Compares positional interfaces, topology, attributes, tensor contents and opsets,
+/// ignoring local names, exporter provenance and recomputed shapes.
+/// Returns an empty string when no safely comparable definition matches.
+std::string FindOperatorGroupFunction(builder::GraphBuilder &source, const GraphProto &body,
+                                      const std::string &prefix);
+
+/// Consumes a closed body to create or reuse a model-local ai.rt function with shared naming.
 std::string AddOperatorGroupFunction(builder::GraphBuilder &source, GraphProto body,
                                      const std::string &prefix, std::size_t &suffix);
 

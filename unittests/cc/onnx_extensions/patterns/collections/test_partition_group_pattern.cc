@@ -61,10 +61,10 @@ TEST(PartitionGroupPattern, CallsCoreSelectionAndPreservesShapeAndNames) {
   auto builder = Chain(4);
   EXPECT_FALSE(Optimize(builder, 8, 2).rewrites().empty());
   ASSERT_EQ(builder.Nodes().size(), 2u);
-  ASSERT_EQ(builder.LocalFunctions().size(), 2u);
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].domain(), "ai.rt");
   EXPECT_EQ(builder.Nodes()[0].op_type(), "PartitionGroup_Neg_0");
-  EXPECT_EQ(builder.Nodes()[1].op_type(), "PartitionGroup_Neg_1");
+  EXPECT_EQ(builder.Nodes()[1].op_type(), "PartitionGroup_Neg_0");
   EXPECT_EQ(builder.Nodes()[0].input(0), "x");
   EXPECT_EQ(builder.Nodes()[0].output(0), "v1");
   EXPECT_EQ(builder.Nodes()[1].input(0), "v1");
@@ -72,7 +72,7 @@ TEST(PartitionGroupPattern, CallsCoreSelectionAndPreservesShapeAndNames) {
   EXPECT_TRUE(builder.HasShape("y"));
   VerifyModel(builder.ToModel());
   EXPECT_TRUE(Optimize(builder, 8, 2).rewrites().empty());
-  EXPECT_EQ(builder.LocalFunctions().size(), 2u);
+  EXPECT_EQ(builder.LocalFunctions().size(), 1u);
 }
 
 TEST(PartitionGroupPattern, RunsOnlyAtFirstNodeAndRevalidatesApply) {
@@ -88,6 +88,60 @@ TEST(PartitionGroupPattern, RunsOnlyAtFirstNodeAndRevalidatesApply) {
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 1u);
   EXPECT_EQ(replacement[0].op_type(), "PartitionGroup_Neg_0");
+}
+
+TEST(PartitionGroupPattern, ReusesBodiesWithDifferentExporterDiagnostics) {
+  auto builder = Chain(4);
+  auto model = builder.ToModel();
+  for (int i = 0; i < model.graph().node_size(); ++i) {
+    auto &node = *model.mutable_graph()->mutable_node(i);
+    node.set_name("node" + std::to_string(i));
+    node.set_doc_string("diagnostic" + std::to_string(i));
+    auto &metadata = *node.add_metadata_props();
+    metadata.set_key("namespace");
+    metadata.set_value("exporter" + std::to_string(i));
+  }
+  builder = GraphBuilder(model, SchemaLookup());
+  EXPECT_FALSE(Optimize(builder, 8, 2).rewrites().empty());
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), builder.Nodes()[1].op_type());
+  VerifyModel(builder.ToModel());
+}
+
+TEST(PartitionGroupPattern, OnlyReusesMatchingAttributesAndEmbeddedConstants) {
+  for (const bool constant : {false, true})
+    for (const bool different : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << constant << "," << different);
+      GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1}));
+      std::string input = "x";
+      for (size_t i = 0; i < 2; ++i) {
+        const std::string middle = "middle" + std::to_string(i);
+        const std::string output = i == 0 ? "hidden" : "y";
+        builder.MakeNode("Neg", {input}, {middle});
+        const float value = different && i == 1 ? 0.2f : 0.1f;
+        if (constant) {
+          const std::string weight = "weight" + std::to_string(i);
+          builder.MakeInitializer(MakeInitializer<float>(weight.c_str(), {1}, {value}));
+          builder.MakeNode("Add", {middle, weight}, {output});
+        } else {
+          utils::RepeatedProtoField<AttributeProto> attributes;
+          auto &alpha = attributes.add();
+          alpha.set_name("alpha");
+          alpha.set_type(AttributeProto::FLOAT);
+          alpha.set_f(value);
+          builder.MakeNode("LeakyRelu", {middle}, {output}, "", "", attributes);
+        }
+        input = output;
+      }
+      builder.MakeOutput("y");
+      EXPECT_FALSE(Optimize(builder, 8, 2).rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), 2u);
+      EXPECT_EQ(builder.LocalFunctions().size(), different ? 2u : 1u);
+      EXPECT_EQ(builder.Nodes()[0].op_type() == builder.Nodes()[1].op_type(), !different);
+      VerifyModel(builder.ToModel());
+    }
 }
 
 TEST(PartitionGroupPattern, LimitsAndDefaultSelectionArePreserved) {

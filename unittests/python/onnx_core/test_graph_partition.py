@@ -687,7 +687,7 @@ class TestPartitionGroupPattern(ExtTestCase):
         for boundary, maximum, shape, functions in (
             (7, 4, [], 0),
             (8, 4, [], 1),
-            (8, 2, [], 2),
+            (8, 2, [], 1),
             (1024, 4, ["N"], 0),
         ):
             with self.subTest(boundary=boundary, maximum=maximum, shape=shape):
@@ -775,7 +775,7 @@ class TestPartitionGroupPattern(ExtTestCase):
         builder = GraphBuilder(model)
         GraphGraph(builder, ["PartitionGroup"]).optimize()
         grouped = builder.to_model()
-        self.assertEqual(len(grouped.functions), 2)
+        self.assertEqual(len(grouped.functions), 1)
         checker.check_model(grouped)
         for condition in (False, True):
             feeds = {"cond": numpy.array(condition), "x": numpy.array(-3, dtype=numpy.float32)}

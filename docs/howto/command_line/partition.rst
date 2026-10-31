@@ -103,6 +103,9 @@ graph-value and registered-operator names. For example, a group containing
 
 The summary lists ``PartitionGroup`` definitions and their call sites. A model
 without eligible groups is still saved and reports zero partition functions.
+Equivalent partitions reuse a single function definition, using the same
+body and interface comparison as repeated layers. Different attributes or
+embedded constants retain distinct functions; external weights remain call arguments.
 
 Explaining interfaces
 --------------------

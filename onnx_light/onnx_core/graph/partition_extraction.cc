@@ -128,7 +128,8 @@ OperatorGroupProposal Groups(GraphGraph &graph, const GraphProto &snapshot,
 }
 
 NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const OperatorGroup &group,
-                    const ValueInfos &descriptors, size_t &suffix) {
+                    const ValueInfos &descriptors, size_t &suffix,
+                    OperatorGroupFunctions &functions) {
   auto &source = graph.Builder();
   source.SetOpsetVersion("ai.rt", 1);
   GraphProto body;
@@ -163,8 +164,7 @@ NodeProto MakeGroup(GraphGraph &graph, const GraphProto &snapshot, const Operato
   }
   const auto producers = FindCommonOperatorGroupInputs(graph, {&group, 1});
   const auto inputs = InlineOperatorGroupInputs(body, group, producers);
-  const std::string name =
-      AddOperatorGroupFunction(source, std::move(body), "PartitionGroup", suffix);
+  const std::string name = functions.Add(std::move(body), suffix);
   return MakeNode(name.c_str(), inputs, group.outputs, "ai.rt",
                   source.UniqueName("PartitionGroup").c_str());
 }
@@ -211,8 +211,9 @@ MakePartitionGroupReplacements(GraphGraph &graph, const std::vector<const NodePr
     throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
   const auto descriptors = Descriptors(snapshot);
   size_t suffix = 0;
+  OperatorGroupFunctions functions(graph.Builder(), "PartitionGroup");
   return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
-    return MakeGroup(graph, snapshot, proposal.groups[group], descriptors, suffix);
+    return MakeGroup(graph, snapshot, proposal.groups[group], descriptors, suffix, functions);
   });
 }
 

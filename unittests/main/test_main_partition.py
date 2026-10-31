@@ -207,16 +207,17 @@ class TestMainPartition(ExtTestCase):
                 for function in result.functions
                 if function.domain == "ai.rt" and function.name.startswith("PartitionGroup")
             ]
-            self.assertEqual(len(functions), 20)
+            self.assertEqual(len(functions), 1)
             self.assertEqual(functions[0].name, "PartitionGroup_MatMul_0")
             self.assertTrue(all(len(function.node) == 2 for function in functions))
             self.assertEqual(len(result.graph.node), 21)
             self.assertEqual(result.graph.node[0].op_type, "Reshape")
-            self.assertIn("20 partition function(s)", text.getvalue())
+            self.assertIn("1 partition function(s)", text.getvalue())
             self.assertIn("constant inputs <= 1 (5% of 21 model weights", text.getvalue())
             for node in list(result.graph.node)[1:]:
+                self.assertEqual(node.op_type, functions[0].name)
                 self.assertEqual(sum(name.startswith("W") for name in node.input), 1)
-            self.assertIn("1 call site(s)", text.getvalue())
+            self.assertIn("20 call site(s)", text.getvalue())
             self.assertIn("ai.rt::PartitionGroup_MatMul_0", text.getvalue())
             feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
             expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
@@ -261,7 +262,7 @@ class TestMainPartition(ExtTestCase):
                 text = StringIO()
                 with redirect_stdout(text):
                     main(["partition", "mincut", str(source), "-o", str(output), "-v", "1"])
-                self.assertIn("20 partition function(s)", text.getvalue())
+                self.assertIn("1 partition function(s)", text.getvalue())
                 result = load(output, load_external_data=True)
                 self.assertEqual(len(result.graph.node), 21)
                 self.assertTrue(result.graph.node[1].op_type.startswith("PartitionGroup_"))
@@ -278,8 +279,8 @@ class TestMainPartition(ExtTestCase):
     def test_mincut_respects_transfer_and_group_size_limits_without_reading_weights(self):
         for options, expected_groups in (
             (["--max-boundary-bytes", "127"], 0),
-            (["--max-boundary-bytes", "128"], 20),
-            (["--min-group-nodes", "2", "--max-group-nodes", "2"], 20),
+            (["--max-boundary-bytes", "128"], 1),
+            (["--min-group-nodes", "2", "--max-group-nodes", "2"], 1),
         ):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)

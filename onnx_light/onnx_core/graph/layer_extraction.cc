@@ -1273,8 +1273,11 @@ ValueInfoProto ValueInfo(Index &index, const std::string &name) {
   return value;
 }
 
-void ClearLayerAnalysis(GraphProto &scope) {
-  const auto clear_range = [](ValueInfoProto &value) {
+void ClearLayerAnalysis(GraphProto &scope,
+                        const std::unordered_set<std::string> &literal_values = {}) {
+  const auto clear_range = [&](ValueInfoProto &value) {
+    if (literal_values.contains(value.name().value()))
+      return;
     auto &metadata = value.ref_metadata_props();
     for (auto it = metadata.begin(); it != metadata.end();) {
       if (it->key() == core::symbolic::kValueInfoMinMetadataKey ||
@@ -1410,8 +1413,15 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
       !body.extended_initializer().empty() || !body.quantization_annotation().empty() ||
       !body.persistent_bindings().empty() || !SafeGraphDeclarations(body))
     return false;
+  // Literal ranges are compared exactly, rather than rejected as caller-specific.
+  std::unordered_set<std::string> literal_values;
+  for (const auto &node : body.node())
+    if (NormaliseDomain(node.domain()) == "ai.onnx" && node.op_type() == "Constant")
+      literal_values.insert(node.output().begin(), node.output().end());
   if (reject_ranges) {
-    const auto has_range = [](const ValueInfoProto &value) {
+    const auto has_range = [&](const ValueInfoProto &value) {
+      if (literal_values.contains(value.name().value()))
+        return false;
       return std::any_of(value.metadata_props().begin(), value.metadata_props().end(),
                          [](const auto &entry) {
                            return entry.key() == core::symbolic::kValueInfoMinMetadataKey ||
@@ -1423,7 +1433,7 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
         std::any_of(body.value_info().begin(), body.value_info().end(), has_range))
       return false;
   }
-  ClearLayerAnalysis(body);
+  ClearLayerAnalysis(body, literal_values);
   std::unordered_set<std::string> inferred;
   for (const auto &node : body.node())
     if (core::shapes::HasShapeInference(builder.Shapes(), node))
@@ -1475,10 +1485,12 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
       return false;
     node.clear_name();
     node.clear_doc_string();
-    // Exporter provenance does not change the computation.
+    // Recomputed node tags and exporter provenance do not change the computation.
     auto &metadata = node.ref_metadata_props();
     for (auto it = metadata.begin(); it != metadata.end();) {
-      if (it->key() == "namespace" || it->key() == "pkg.onnxscript.class_hierarchy" ||
+      if (it->key() == core::compute::kNodeTagMetadataKey ||
+          it->key() == core::compute::kValueTagMetadataKey || it->key() == "namespace" ||
+          it->key() == "pkg.onnxscript.class_hierarchy" ||
           it->key() == "pkg.onnxscript.name_scopes" || it->key() == "pkg.onnxscript.stack_trace" ||
           it->key() == "pkg.onnxscript.shape_inference_error")
         it = metadata.erase(it);
@@ -1579,17 +1591,45 @@ bool CompatibleLayerOpsets(const GraphBuilder &candidate, const GraphBuilder &so
   return true;
 }
 
-std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
+std::size_t OperatorGroupFingerprint(const GraphProto &body) {
+  std::size_t hash = 0;
+  const auto add = [&](const std::string &value) {
+    hash ^= std::hash<std::string>{}(value) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+  };
+  for (const auto *values : {&body.input(), &body.output(), &body.value_info()}) {
+    add(std::to_string(values->size()));
+    for (const auto &value : *values)
+      add(value.SerializeAsString());
+  }
+  for (const auto &initializer : body.initializer()) {
+    add(initializer.name().value());
+    add(std::to_string(initializer.ContentHash(true)));
+  }
+  for (const auto &node : body.node()) {
+    add(node.Signature({node.input().begin(), node.input().end()}));
+    for (const auto &output : node.output())
+      add(output.value());
+    for (const auto &metadata : node.metadata_props())
+      add(metadata.SerializeAsString());
+  }
+  return hash;
+}
+
+} // namespace
+
+std::string OperatorGroupFunctions::Find(const GraphProto &body) {
   GraphProto normalized = utils::CopyWithSharedTensorStorage(body);
   std::size_t work = 0;
-  if (!NormalizeLayerBody(normalized, source, {}, 0, work, false))
+  if (!NormalizeLayerBody(normalized, source_, {}, 0, work, false))
     return {};
-  GraphBuilder &builder = source.ModelBuilder();
-  for (const auto &local : builder.LocalFunctions()) {
+  GraphBuilder &builder = source_.ModelBuilder();
+  const auto &functions = builder.LocalFunctions();
+  while (indexed_functions_ < functions.size()) {
+    const auto &local = functions[indexed_functions_++];
     if (!local->IsLocalFunction(local->name(), "ai.rt", "") ||
-        !IsLayerName("ai.rt", local->name()) || local->Nodes().size() != body.node().size() ||
-        local->Inputs().size() != body.input().size() ||
-        local->Outputs().size() != body.output().size())
+        !(local->name() == prefix_ || local->name().rfind(prefix_ + "_", 0) == 0) ||
+        local->Nodes().size() > kMaxFunctionWork || local->Inputs().size() > kMaxPorts ||
+        local->Outputs().size() > kMaxPorts)
       continue;
     const auto *definition = builder.Shapes().GetLocalFunction(
         core::shapes::ShapesContext::LocalFunctionKey("ai.rt", local->name(), ""));
@@ -1598,16 +1638,29 @@ std::string FindLayerFunction(GraphBuilder &source, const GraphProto &body) {
       continue;
     GraphProto candidate = local->BuildGraph();
     work = 0;
+    ++stats_.candidate_normalizations;
     if (NormalizeLayerBody(candidate, *local, {}, 0, work, true) &&
-        CompatibleLayerOpsets(*local, source, candidate) && normalized.Equals(candidate))
-      return local->name();
+        CompatibleLayerOpsets(*local, source_, candidate)) {
+      const auto fingerprint = OperatorGroupFingerprint(candidate);
+      definitions_[fingerprint].emplace_back(local->name(), std::move(candidate));
+    }
   }
+  const auto found = definitions_.find(OperatorGroupFingerprint(normalized));
+  if (found != definitions_.end())
+    for (const auto &[name, candidate] : found->second) {
+      ++stats_.exact_comparisons;
+      if (normalized.Equals(candidate))
+        return name;
+    }
   return {};
 }
 
+namespace {
+
 NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
                     const std::vector<OperatorGroup> &boundaries, std::size_t occurrence,
-                    const std::vector<OperatorGroupInput> &producers, std::size_t &suffix) {
+                    const std::vector<OperatorGroupInput> &producers, std::size_t &suffix,
+                    OperatorGroupFunctions &functions) {
   GraphProto body;
   for (const std::string &name : boundary.inputs)
     *body.add_input() = ValueInfo(index, name);
@@ -1631,10 +1684,7 @@ NodeProto MakeLayer(Index &index, const OperatorGroup &boundary,
   source.SetOpsetVersion("ai.rt", 1);
   const std::string name = "RepeatedLayer_n" + std::to_string(occurrence) + "_p" +
                            std::to_string(boundary.node_indices.front());
-  if (const std::string existing = FindLayerFunction(source, body); !existing.empty())
-    return MakeNode(existing.c_str(), inputs, boundary.outputs, "ai.rt", name.c_str());
-  const std::string function_name =
-      AddOperatorGroupFunction(source, std::move(body), "Layer", suffix);
+  const std::string function_name = functions.Add(std::move(body), suffix);
   return MakeNode(function_name.c_str(), inputs, boundary.outputs, "ai.rt", name.c_str());
 }
 
@@ -1690,8 +1740,9 @@ MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodePro
     throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
   const auto producers = FindCommonOperatorGroupInputs(graph, plan.groups);
   std::size_t suffix = 0;
+  OperatorGroupFunctions functions(graph.Builder(), "Layer");
   return MakeOperatorGroupReplacements(graph, plan, [&](std::size_t group) {
-    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix);
+    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix, functions);
   });
 }
 

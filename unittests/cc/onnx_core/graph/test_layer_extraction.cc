@@ -236,7 +236,8 @@ TEST(OperatorGroups, BothAlgorithmsShareMainOperatorNamingAndCollisionChecks) {
                  : core::graph::MakePartitionGroupReplacements(graph, nodes, {1024, 2, 2});
     ASSERT_EQ(replacement.size(), 2u);
     EXPECT_EQ(replacement[0].op_type(), prefix + "_MatMul_1");
-    EXPECT_EQ(replacement[1].op_type(), prefix + (repeated ? "_MatMul_1" : "_MatMul_2"));
+    EXPECT_EQ(replacement[1].op_type(), prefix + "_MatMul_1");
+    EXPECT_EQ(builder.LocalFunctions().size(), 1u);
   }
 }
 
@@ -259,6 +260,55 @@ TEST(OperatorGroups, NamingRejectsEmptyBodiesAndDoesNotOverflowTheCounter) {
   EXPECT_THROW(core::graph::MakeOperatorGroupFunctionName(builder, builder.Nodes(),
                                                           "PartitionGroup", suffix),
                core::builder::BuilderError);
+}
+
+TEST(OperatorGroups, IndexesDistinctDefinitionsAndReusesEarlyAndLateMatches) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(1));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeNode("Neg", {"x"}, {"middle"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &alpha = attributes.add();
+  alpha.set_name("alpha");
+  alpha.set_type(AttributeProto::FLOAT);
+  alpha.set_f(0.1f);
+  builder.MakeNode("LeakyRelu", {"middle"}, {"y"}, "", "", attributes);
+  builder.MakeOutput("y");
+  const auto make_body = [&](size_t index) {
+    auto body = builder.BuildGraph();
+    body.mutable_node(1)->mutable_attribute(0)->set_f(static_cast<float>(index + 1) / 2000);
+    return body;
+  };
+  core::graph::OperatorGroupFunctions functions(builder, "PartitionGroup");
+  size_t suffix = 0;
+  for (size_t index = 0; index < 128; ++index)
+    ASSERT_EQ(functions.Add(make_body(index), suffix),
+              "PartitionGroup_Neg_" + std::to_string(index));
+  for (const size_t index : {0u, 63u, 127u, 0u})
+    EXPECT_EQ(functions.Add(make_body(index), suffix),
+              "PartitionGroup_Neg_" + std::to_string(index));
+  EXPECT_EQ(builder.LocalFunctions().size(), 128u);
+  EXPECT_EQ(suffix, 128u);
+  EXPECT_EQ(functions.Stats().candidate_normalizations, 128u);
+  EXPECT_EQ(functions.Stats().exact_comparisons, 4u);
+}
+
+TEST(OperatorGroups, FingerprintCollisionsStillRequireExactBodyEquality) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  AddRepeatedLayers(builder);
+  core::graph::OperatorGroupFunctions functions(builder, "Layer");
+  size_t suffix = 0;
+  const GraphProto original = builder.BuildGraph();
+  const std::string name = functions.Add(original, suffix);
+  ASSERT_EQ(functions.Find(original), name);
+  auto changed = builder.BuildGraph();
+  changed.mutable_node(0)->set_domain("ai.onnx");
+  const auto comparisons = functions.Stats().exact_comparisons;
+  // NodeProto::Signature normalizes the domain, but exact body equality does not.
+  EXPECT_TRUE(functions.Find(changed).empty());
+  EXPECT_EQ(functions.Stats().exact_comparisons, comparisons + 1);
+  EXPECT_EQ(functions.Find(original), name);
 }
 
 TEST(OperatorGroups, InlinesOnlySmallMaterializedConstantsCommonToAllFunctionInstances) {

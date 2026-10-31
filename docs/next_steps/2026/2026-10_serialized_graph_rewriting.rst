@@ -23,8 +23,8 @@ construction (``Apply``), in C++ or Python. ``MatchResult`` identifies one
 match. ``GraphGraph::Optimize`` returns a ``RewritingProto`` containing ordered
 ``LocalRewritingProto`` edits:
 matched node positions, added nodes and their positions, added/removed
-initializers and subgraph path. Reversible capture starts from the cleaned
-canonical graph, after all cleanups that redirect value references.
+initializers and subgraph path. Reversible capture starts from the graph supplied
+to the optimizer; replay does not require caller-side canonicalization.
 
 ``builder.ApplyRewritings(rewrites)`` reconstructs a ``GraphBuilder`` without
 running the matcher. Matched and removed positions refer to the graph
@@ -245,36 +245,35 @@ Removing ``b = Identity(a)`` redirects consumers of ``b``
 to ``a`` but does not identify which consumers already used ``a``. Inverting
 that substitution is deliberately outside the reversible-plan contract.
 
-Identity removal, duplicate-node elimination and initializer deduplication
-therefore run before capture, including in nested graphs. They establish the
-canonical graph and are not themselves recorded as reversible edits. Do not
-repeat these renaming cleanups between recorded rewrites; replacements may use
-fresh internal names but must preserve names at their boundaries.
+Identity removal, duplicate-node elimination and initializer deduplication are
+opt-in through ``GraphGraph::Canonicalize``. When explicitly requested, they
+establish a new reference graph before capture, including in nested graphs.
+They are not themselves recorded as reversible edits. Do not run these renaming
+cleanups between recorded rewrites; replacements may use fresh internal names
+but must preserve names at their boundaries.
 
 Inverse replay processes recorded edits in reverse application order. It
-restores only definitions removed by these edits, never Identity nodes or
-duplicate constants removed before capture. It validates positions, expected
+restores only definitions removed by these edits, never definitions removed by
+explicit canonicalization before capture. It validates positions, expected
 replacement definitions and subgraph paths, and explicitly
 rejects builders lacking the in-memory information needed for exact restoration. A
 failure must not leave the caller's builder partially restored.
 
-``GraphGraph::Optimize`` automatically canonicalizes before capture; no Python
-canonicalization method is needed. Export obtains the cleaned reference from
-the optimizing builder's in-memory undo history.
-Ancestor substitutions are applied before cleaning descendant scopes, so
-canonicalization is idempotent even when captured values become equivalent.
-Annotations for values removed by these cleanups are pruned before capturing
-the reference, including when no reversible edits follow.
-Shape/Size nodes are moved next to their producers before capturing edit
-positions, so subsequent canonical-model export does not invalidate those
-positions. This reordering preserves incremental tags and updates affected
-lifetime and memory metadata without rebuilding graph analysis.
+``GraphGraph::Optimize`` does not implicitly canonicalize. Its returned plan
+can be applied directly to the original model, and undo restores that reference,
+including existing Identity nodes, duplicate nodes and initializers, and
+annotations. Export obtains the reference from the optimizing builder's
+in-memory undo history.
+Explicit canonicalization applies ancestor substitutions before cleaning
+descendant scopes, prunes annotations for removed values, and moves Shape/Size
+nodes next to their producers. This reordering preserves incremental tags and
+updates affected lifetime and memory metadata without rebuilding graph analysis.
 Identity nodes and duplicate constants introduced by recorded replacements
 remain in place: cleaning them up would redirect references after capture and
 is outside the reversible-plan contract. Consequently, later patterns may not
 match across newly introduced Identity boundaries.
 ``GraphBuilder::UndoRewritings`` (Python: ``builder.undo_rewritings(plan)``)
-returns a new builder at the cleaned canonical state. It requires the builder
+returns a new builder at the pre-optimization state. It requires the builder
 that performed optimization and its matching plan. Exporting and reloading an
 optimized model does not retain this history; applying a serialized forward
 plan to a fresh builder does not recreate it either.
@@ -303,10 +302,9 @@ owned by branches that are hoisted into the restored model.
 None of this metadata or inverse history is serialized.
 The initial Python model is released as soon as the working builder has imported
 it, before optimization and inverse capture. Existing named plans are retained
-in private undo history when cleanup
-reports that the canonical reference is unchanged. Cleanup changes in nested
-graphs and functions invalidate those plans without another whole-model export
-or equality scan.
+in private undo history against the unchanged pre-optimization reference.
+Explicit canonicalization changes in nested graphs and functions invalidate
+those plans without another whole-model export or equality scan.
 
 Builder import/export and private undo definitions use explicit tensor-storage
 snapshots: message structure remains independent, while unchanged owned raw
@@ -421,12 +419,12 @@ Each PR depends on the preceding one.
      - Save/reload/replay matches direct optimization; compare inference
        outputs and states; plain exports use only standard ONNX fields.
    * - 5. Reversible capture
-     - Move reference-renaming cleanups before canonical capture. Retain
+     - Keep reference-renaming cleanups opt-in and outside capture. Retain
        removed definitions only in the optimizing builder and validate undo
        in reverse edit order, without adding proto fields.
-     - Optimization then in-memory undo restores the cleaned canonical graph,
-       including nested graphs and prepared constants, without resurrecting
-       pre-capture identities. Missing history or incompatible plans fail atomically.
+     - Optimization then in-memory undo restores the supplied reference graph,
+       including nested graphs, prepared constants and existing identities.
+       Missing history or incompatible plans fail atomically.
 
 Export workflow
 +++++++++++++++
@@ -455,23 +453,23 @@ plans against the earlier graph. The default
 ``OptimizationMode.kNone`` continues to export the current builder without
 running optimization. Only members of ``OptimizationMode`` are accepted.
 Both modes use the existing global and builder-local pattern registrations.
-The source remains at its finalized state; the independent working copy is
-automatically cleaned before capture. Bundled export recovers its canonical
+The source remains at its finalized state; capture starts from the independent
+working copy without implicit canonicalization. Bundled export recovers its
 reference using the working builder's in-memory undo history. Load external
 weights before optimization and use the existing
 external-data save options to relocate the payloads with either export.
 See :ref:`l-example-plot-pattern-replay`.
 
-1. Finalize the canonical model first, including cleanup, ordering, names,
+1. Finalize the reference model first, including export ordering, names,
    imports and external-data layout.
 2. Optimize an independent copy for each selected target, recording only
-   reversible edits after the renaming cleanups.
+   reversible edits against that reference.
    Capture constant computations as functions/calls instead of embedding
    computed weight payloads. The optimizer returns ``RewritingProto`` directly;
    optionally attach descriptive metadata. Verify replay against direct
    optimization before publishing the variant.
-   Inverse replay reconstructs the cleaned reference without retaining the
-   original Python canonical model or undoing pre-capture cleanups.
+   Inverse replay reconstructs the supplied reference without retaining the
+   original Python model.
 3. Export either the untouched canonical model, a bundled onnx-light model
    containing the canonical graph and rewrite map, or a standard ONNX model
    with one selected variant materialized and the extension map removed.

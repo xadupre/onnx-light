@@ -468,7 +468,7 @@ TEST(GraphGraph, CanonicalIdentityNamesAndMultipleInverseEdits) {
   EXPECT_EQ(builder.BuildGraph().output(0).name(), "y");
 }
 
-TEST(GraphGraph, CanonicalReferencePrunesAnnotatedIdentityValues) {
+TEST(GraphGraph, ReferencePreservesAnnotatedIdentityUntilCanonicalized) {
   for (const bool nested : {false, true}) {
     SCOPED_TRACE(nested);
     core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
@@ -511,21 +511,29 @@ TEST(GraphGraph, CanonicalReferencePrunesAnnotatedIdentityValues) {
     annotation.set_key("annotation");
     annotation.set_value("removed identity");
     core::builder::GraphBuilder builder(model, SchemaLookup());
-    source.RemoveIdentityNodes();
-    const auto canonical = source.BuildGraph();
+    const auto original = builder.BuildGraph();
     const auto plan =
         core::builder::GraphGraph(
             builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{})
             .Optimize();
     ASSERT_TRUE(plan.rewrites().empty());
-    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), canonical.SerializeAsString());
-    *model.mutable_graph() = canonical;
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original.SerializeAsString());
     EXPECT_EQ(core::builder::GraphBuilder(model, SchemaLookup())
                   .ApplyRewritings(plan)
                   .BuildGraph()
                   .SerializeAsString(),
-              canonical.SerializeAsString());
+              original.SerializeAsString());
     EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+              original.SerializeAsString());
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+    EXPECT_EQ(graph.Canonicalize(), 1u);
+    source.RemoveIdentityNodes();
+    const auto canonical = source.BuildGraph();
+    const auto canonical_plan = graph.Optimize();
+    EXPECT_TRUE(canonical_plan.rewrites().empty());
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), canonical.SerializeAsString());
+    EXPECT_EQ(builder.UndoRewritings(canonical_plan).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
   }
 }

@@ -762,7 +762,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
 
-    def test_to_onnx_bundle_keeps_positions_after_identity_cleanup_and_shape_hoisting(self):
+    def test_to_onnx_bundle_keeps_original_identity_and_shape_positions(self):
         for op_type in ("Shape", "Size"):
             with self.subTest(op_type=op_type):
                 model = oh.make_model(
@@ -792,10 +792,11 @@ class TestPatternOptimization(ExtTestCase):
                 optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
                 bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
                 self.assertEqual(
-                    [node.op_type for node in bundled.graph.node], ["Relu", op_type, "Cast"]
+                    [node.op_type for node in bundled.graph.node],
+                    ["Relu", "Cast", "Identity", op_type],
                 )
                 self.assertEqual(
-                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [2]
+                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [1]
                 )
                 with TemporaryDirectory() as directory:
                     path = Path(directory) / "bundle.onnx"
@@ -817,7 +818,7 @@ class TestPatternOptimization(ExtTestCase):
                 ):
                     self.assertEqualArray(actual, expected)
 
-    def test_to_onnx_drops_old_plans_when_function_canonicalization_changes_reference(self):
+    def test_to_onnx_keeps_old_plans_against_original_function_reference(self):
         model = _double_neg_model()
         model.functions.append(
             oh.make_function(
@@ -839,8 +840,10 @@ class TestPatternOptimization(ExtTestCase):
         source = builder.to_onnx()
         bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertEqual(bundled.graph.SerializeToString(), source.graph.SerializeToString())
-        self.assertEqual(set(bundled.rewritings), {"optimized"})
-        self.assertEqual([node.op_type for node in bundled.functions[0].node], ["Neg"])
+        self.assertEqual(set(bundled.rewritings), {"other", "optimized"})
+        self.assertEqual(
+            [node.op_type for node in bundled.functions[0].node], ["Identity", "Neg"]
+        )
         self.assertEqual(set(builder.to_onnx().rewritings), {"other"})
 
     def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
@@ -1255,7 +1258,7 @@ class TestPatternOptimization(ExtTestCase):
             onh.to_array(restored.initializer[0]), onh.to_array(canonical.initializer[0])
         )
 
-    def test_canonicalize_and_inverse_restore_only_captured_edits(self):
+    def test_inverse_restores_original_reference_without_canonicalization(self):
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -1270,20 +1273,19 @@ class TestPatternOptimization(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         reference = optim.GraphBuilder(model)
-        self.assertEqual(reference.remove_identity_nodes(), 1)
-        canonical = reference.build_graph().SerializeToString()
+        original = reference.build_graph().SerializeToString()
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         plan = graph.optimize()
         optimized = builder.build_graph().SerializeToString()
         self.assertEqual(
-            builder.undo_rewritings(plan).build_graph().SerializeToString(), canonical
+            builder.undo_rewritings(plan).build_graph().SerializeToString(), original
         )
         self.assertEqual(builder.build_graph().SerializeToString(), optimized)
         loaded = optim.RewritingProto()
         loaded.ParseFromString(plan.SerializeToString())
         self.assertEqual(
-            builder.undo_rewritings(loaded).build_graph().SerializeToString(), canonical
+            builder.undo_rewritings(loaded).build_graph().SerializeToString(), original
         )
         self.assertFalse(any(name.startswith("inverse_") for name in dir(plan)))
         self.assertFalse(any(name.startswith("inverse_") for name in dir(plan.rewrites[0])))

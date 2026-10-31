@@ -321,8 +321,9 @@ class GraphBuilder(_C.GraphBuilder):
         registrations, then exports the result without attached plans.
         Model export requires standard ONNX constructs.
 
-        With ``OptimizationMode.kRewritings``, returns the finalized canonical
+        With ``OptimizationMode.kRewritings``, returns the finalized reference
         ModelProto and attaches the captured plan as ``rewritings["optimized"]``.
+        Optimization does not implicitly canonicalize this reference.
         Requires ``kind=ProtoKind.kModel`` and rejects an existing plan with that
         name. Other named plans are retained. Optimization never edits the source
         builder; ordinary export finalization still runs before taking the copy.

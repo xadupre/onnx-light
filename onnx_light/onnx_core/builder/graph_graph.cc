@@ -1528,8 +1528,6 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     bool parallel) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
-  bool reference_changed = false;
-  CanonicalizeImpl(reference_changed);
   GraphBuilder *root = &builder_;
   while (root->parent_ != nullptr)
     root = root->parent_;
@@ -1539,7 +1537,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
   auto undo = std::make_shared<UndoState>();
-  if (&builder_ == root && !reference_changed)
+  if (&builder_ == root)
     undo->original_rewritings = utils::CopyWithSharedTensorStorage(root->rewritings_);
   if (&builder_ == root) {
     const auto capture_devices = [&](const auto &self,

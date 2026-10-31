@@ -2738,6 +2738,9 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
   builder.MakeNode("Identity", {"x"}, {"unused"});
   builder.MakeOutput("y");
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
 
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
@@ -2745,16 +2748,24 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
 
   const RewritingProto plan = graph.Optimize();
   const auto &rewrites = plan.rewrites();
-  ASSERT_EQ(rewrites.size(), 1u);
+  ASSERT_EQ(rewrites.size(), 2u);
   EXPECT_EQ(rewrites[0].pattern_name(), "CastCast");
   EXPECT_EQ(rewrites[0].matched_nodes().values(), std::vector<uint64_t>({0, 1}));
   EXPECT_EQ(rewrites[0].added_nodes().size(), 1u);
   EXPECT_EQ(rewrites[0].added_nodes_positions().values(), std::vector<uint64_t>({0}));
   EXPECT_TRUE(rewrites[0].added_initializers().empty());
+  EXPECT_EQ(rewrites[1].pattern_name(), "RemoveUnusedNodes");
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
   EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
+  EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                .ApplyRewritings(plan)
+                .BuildGraph()
+                .SerializeAsString(),
+            builder.BuildGraph().SerializeAsString());
+  EXPECT_EQ(builder.UndoRewritings(plan).BuildGraph().SerializeAsString(),
+            original.graph().SerializeAsString());
 }
 
 TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {

@@ -95,8 +95,9 @@ public:
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    * Replacement nodes whose inputs are all materialized constants are folded
    * into initializers before cleanup, subject to ``folding_options``.
-   * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
-   * passes may still remove nodes or initializers.
+   * ``remove_unused=false`` disables unused-node and initializer cleanup.
+   * Canonicalize is opt-in and is not called by Optimize; capture starts from
+   * the input graph.
    * ``parallel=true`` matches candidates concurrently when the pattern's
    * CanMatchInParallel returns true. Python-defined patterns are evaluated
    * sequentially, including in mixed native/Python pattern lists.
@@ -112,7 +113,8 @@ public:
    * retain references to the graph or matched nodes beyond the call.
    *
    * Returns:
-   *   Self-contained records of the applied rewrites, in application order.
+   *   Self-contained records of the applied rewrites, in application order,
+   *   replayable against the graph supplied to this optimizer.
    */
   RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
                           const ConstantFoldingOptions &folding_options = {},

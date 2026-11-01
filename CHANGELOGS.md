@@ -5,9 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.4] – Unreleased
 
+### New Features
+
+- Replaced `onnx-light layers` with `onnx-light partition layer` and added `partition mincut` for bounded transfer-aware grouping, with boundary-byte, group-size and constant-input limits. Both methods share core proposals and replacement scheduling while preserving large external-weight references ([#5725](https://github.com/xadupre/onnx-light/pull/5725)).
+- Added repeatable `optimize --function-pattern TEMPLATE REPLACEMENT` arguments accepting inline ONNX function texts, with builder-local registration and optional `--function-pattern-as-function` replacements alongside default or explicitly selected patterns ([#5755](https://github.com/xadupre/onnx-light/pull/5755)).
+- Added `optimize --report PATH` to export UTF-8 optimization statistics, including phase timings, per-pattern matching and nested-subgraph statistics. Report destinations are protected against existing files, links and external-weight collisions, including tensors introduced by custom function patterns ([#5753](https://github.com/xadupre/onnx-light/pull/5753)).
+
+### Improvements
+
+- Accelerated `FdReadStream` payload skipping by seeking over regular-file prefixes instead of reading and discarding them, preserving active limits, EOF handling and byte counts. Pipes and Linux pseudo-files retain buffered reads ([#5758](https://github.com/xadupre/onnx-light/pull/5758)).
+- Reused equivalent mincut partition functions through extraction-local fingerprints and exact body, interface and opset comparisons, normalizing each prior definition only once. Different attributes and embedded constants retain distinct functions; external weights remain call arguments ([#5751](https://github.com/xadupre/onnx-light/pull/5751)).
+- Simplified ONNX Python helpers with `functools.cache` and consolidated warning capture while preserving existing APIs ([#5744](https://github.com/xadupre/onnx-light/pull/5744)).
+
+### Fixes
+
+- Made optimizer rewriting plans replayable against the original graph in C++ and Python, with structural hashes, explicit simultaneous node moves and reversible default Shape/Size hoisting. Export no longer reorders nodes and canonicalization is opt-in; legacy plans missing either hash are rejected and must be regenerated ([#5757](https://github.com/xadupre/onnx-light/pull/5757)).
+- Preserved large inline tensor payloads and Constant attributes in both partition commands, including in-place rewriting, while keeping large external weights unloaded. Previously corrupted partition exports must be regenerated from the original model ([#5749](https://github.com/xadupre/onnx-light/pull/5749)).
+- Matched equivalent numeric tensor attributes in `FunctionPattern` across raw and typed storage, preserving exact dtype, shape and payload-bit comparisons without loading external or deferred tensors ([#5750](https://github.com/xadupre/onnx-light/pull/5750)).
+- Rejected dynamic or overridable axes/split inputs during opset downgrades instead of freezing runtime values, and removed omitted optional input slots while preserving shared values ([#5746](https://github.com/xadupre/onnx-light/pull/5746)).
+- Rejected sparse initializers explicitly during version conversion, including unused initializers and nested graphs, rather than discarding them or producing misleading errors ([#5748](https://github.com/xadupre/onnx-light/pull/5748)).
+- Validated segmented tensor bounds against the full shape and sized raw, typed, packed and external payloads by the segment length, with overflow checks and preserved bound presence during serialization ([#5742](https://github.com/xadupre/onnx-light/pull/5742)).
+- Fixed the installed SDK's `onnx_lib/common/visitor.h` to include the exported `onnx_proto/onnx.h`, restoring standalone C++ consumer builds ([#5738](https://github.com/xadupre/onnx-light/pull/5738)).
+
 ### Documentation & CI
 
+- Added C++ `QLinearMatMul` backend regressions for ties-to-even rounding before adding odd output zero points, covering signed/unsigned outputs and unsigned saturation ([#5740](https://github.com/xadupre/onnx-light/pull/5740)).
+- Kept CMake available after debug builds so CTest discovery no longer references a deleted isolated build environment ([#5731](https://github.com/xadupre/onnx-light/pull/5731)).
 - Made shared test helpers importable in reduced-wheel CI without shadowing the installed wheel ([#5730](https://github.com/xadupre/onnx-light/pull/5730)).
+- Updated cibuildwheel from `4.3.2` to `4.3.5` ([#5727](https://github.com/xadupre/onnx-light/pull/5727)).
 - Updated Ruff to `0.17.3` ([#5726](https://github.com/xadupre/onnx-light/pull/5726)).
 - Bumped the release version to `0.2.4`.
 

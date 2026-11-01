@@ -2305,21 +2305,25 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   if (move_shape_and_size_nodes) {
     const auto start = std::chrono::steady_clock::now();
     std::vector<std::size_t> order;
-    const std::size_t moved = builder_.MoveShapeAndSizeNodesImpl(false, false, &order);
+    std::vector<bool> relocatable_readers;
+    const std::size_t moved =
+        builder_.MoveShapeAndSizeNodesImpl(false, false, &order, &relocatable_readers);
     if (moved != 0) {
       LocalRewritingProto rewrite;
       rewrite.set_pattern_name("MoveShapeAndSizeNodes");
       std::vector<std::size_t> matched;
+      std::size_t recorded_moved = 0;
       for (std::size_t index = 0; index < order.size(); ++index) {
         const auto &node = builder_.nodes_[index];
-        if (index == order[index] || !GraphBuilder::IsShapeOrSizeNode(node))
+        if (!relocatable_readers[order[index]])
           continue;
+        recorded_moved += index != order[index];
         matched.push_back(order[index]);
         rewrite.ref_added_nodes().push_back(utils::CopyWithSharedTensorStorage(node));
         rewrite.add_added_nodes_positions(index);
       }
       std::sort(matched.begin(), matched.end());
-      if (matched.size() != moved)
+      if (recorded_moved != moved)
         throw BuilderError("GraphGraph::Optimize: incomplete Shape/Size relocation record.");
       for (std::size_t index : matched)
         rewrite.add_matched_nodes(index);
@@ -3319,6 +3323,7 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     index = end;
   }
   result.BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
+  result.preserve_replay_order_ = true;
   return result;
 }
 

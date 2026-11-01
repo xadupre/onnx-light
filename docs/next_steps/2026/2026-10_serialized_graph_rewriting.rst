@@ -271,7 +271,9 @@ optimizer records it as ``MoveShapeAndSizeNodes`` edits, including in nested
 graphs and functions, and reports its timing and moved-node count.
 ``move_shape_and_size_nodes=false`` disables this pass.
 Graph and function export also hoist metadata readers by default, unless
-explicitly disabled or the reference carries named plans or undo history.
+explicitly disabled, the reference carries named plans or undo history,
+or the builder is an unmodified replay result. Replay results preserve their
+captured order on export without acquiring undo history.
 Export still validates dependencies and recomputes lifetime and memory metadata.
 Restoration guarantees the same nodes in a valid topological order, not an
 arbitrary original insertion order.

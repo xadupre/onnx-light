@@ -794,13 +794,13 @@ class TestPatternOptimization(ExtTestCase):
                     self.assertEqual(list(plan.rewrites[0].added_nodes_positions), [1])
                 restored = builder.undo_rewritings(plan)
                 self.assertEqual(restored.build_graph().SerializeToString(), original)
-                replayed = (
-                    optim.GraphBuilder(model)
-                    .apply_rewritings(plan)
-                    .to_onnx(move_shape_and_size_nodes=hoist)
-                )
+                replayed = optim.GraphBuilder(model).apply_rewritings(plan).to_onnx()
                 self.assertEqual(
                     replayed.graph.SerializeToString(), exported.graph.SerializeToString()
+                )
+                self.assertEqual(
+                    [node.op_type for node in optim.GraphBuilder(model).to_onnx().graph.node],
+                    ["Relu", "Shape", "Neg"],
                 )
 
     def test_canonicalization_is_disabled_by_default_and_explicitly_selectable(self):

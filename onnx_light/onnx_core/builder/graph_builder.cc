@@ -585,6 +585,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   }
   name_ = std::move(other.name_);
   rewriting_undo_ = std::move(other.rewriting_undo_);
+  preserve_replay_order_ = other.preserve_replay_order_;
   is_local_function_ = other.is_local_function_;
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);
@@ -915,6 +916,7 @@ void GraphBuilder::InvalidateRewritings() {
   for (GraphBuilder *builder = this; builder != nullptr; builder = builder->parent_) {
     builder->rewritings_.clear();
     builder->rewriting_undo_.reset();
+    builder->preserve_replay_order_ = false;
   }
 }
 
@@ -2851,10 +2853,12 @@ bool GraphBuilder::IsShapeOrSizeNode(const NodeProto &node) {
 std::size_t GraphBuilder::MoveShapeAndSizeNodes() { return MoveShapeAndSizeNodesImpl(true); }
 
 std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive, bool preserve_rewritings,
-                                                    std::vector<std::size_t> *node_order) {
+                                                    std::vector<std::size_t> *node_order,
+                                                    std::vector<bool> *relocatable_readers) {
   if (preserve_rewritings) {
     for (const GraphBuilder *scope = this; scope != nullptr; scope = scope->parent_)
-      if (scope->rewriting_undo_ != nullptr || !scope->rewritings_.empty())
+      if (scope->rewriting_undo_ != nullptr || !scope->rewritings_.empty() ||
+          scope->preserve_replay_order_)
         return 0;
   }
   // Reorder nested builders first so each scope hoists its own Shape/Size nodes.
@@ -2960,6 +2964,8 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive, bool preserv
 
   if (node_order != nullptr)
     *node_order = std::move(order);
+  if (relocatable_readers != nullptr)
+    *relocatable_readers = std::move(is_relocatable);
   return moved + local_moved;
 }
 

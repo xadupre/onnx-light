@@ -624,15 +624,74 @@ TEST(GraphGraph, RecordedShapeAndSizeHoistingPreservesReplayAndUndo) {
           EXPECT_EQ(restored.Rewritings().count("existing"), 1u);
           auto replayed = restored.ApplyRewritings(loaded);
           EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
-          const auto replayed_model = replayed.ToModel(0, hoist);
+          EXPECT_TRUE(replayed.Rewritings().empty());
+          EXPECT_THROW(replayed.UndoRewritings(loaded), core::builder::BuilderError);
+          auto moved_replayed = std::move(replayed);
+          const auto replayed_model = moved_replayed.ToModel();
           std::string difference;
           EXPECT_TRUE(replayed_model.graph().Equals(exported.graph(), &difference)) << difference;
           ASSERT_EQ(replayed_model.functions().size(), exported.functions().size());
           for (std::size_t i = 0; i < exported.functions().size(); ++i)
             EXPECT_TRUE(replayed_model.functions(i).Equals(exported.functions(i), &difference))
                 << difference;
+          if (scope_kind == "root" && !hoist) {
+            moved_replayed.MakeNode("Identity", {"q"}, {"extra"});
+            moved_replayed.MakeOutput("extra");
+            EXPECT_EQ(moved_replayed.ToModel().graph().node(1).op_type(), reader);
+          }
         }
       }
+    }
+  }
+}
+
+TEST(GraphGraph, RecordsCompleteRelocatableReaderSetForReplayAndUndo) {
+  for (const std::string reader : {"Shape", "Size"}) {
+    const std::vector<std::vector<NodeProto>> cases = {
+        {MakeNode("Relu", {"x"}, {"p"}), MakeNode(reader.c_str(), {"x"}, {"sx"}),
+         MakeNode(reader.c_str(), {"p"}, {"s"})},
+        {MakeNode("Relu", {"x"}, {"p"}), MakeNode("Neg", {"z"}, {"q"}),
+         MakeNode(reader.c_str(), {"p"}, {"sp"}), MakeNode(reader.c_str(), {"q"}, {"sq"})},
+        {MakeNode("Relu", {"x"}, {"p"}), MakeNode("Neg", {"z"}, {"q"}),
+         MakeNode("Abs", {"x"}, {"r"}), MakeNode(reader.c_str(), {"q"}, {"sq"}),
+         MakeNode(reader.c_str(), {"p"}, {"sp"})}};
+    const std::vector<std::vector<std::string>> outputs = {
+        {"sx", "s"}, {"sp", "sq"}, {"r", "sq", "sp"}};
+    const std::vector<std::vector<std::string>> expected_order = {
+        {"p", "s", "sx"}, {"p", "sp", "q", "sq"}, {"p", "sp", "q", "sq", "r"}};
+    for (std::size_t index = 0; index < cases.size(); ++index) {
+      SCOPED_TRACE(reader + "/" + std::to_string(index));
+      core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+      source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      source.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      for (const auto &node : cases[index])
+        source.MakeNode(node.op_type().value(), {std::string(node.input(0))},
+                        {std::string(node.output(0))});
+      for (const auto &output : outputs[index])
+        source.MakeOutput(output);
+      const auto original = source.BuildGraph();
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = false;
+      core::builder::OptimizationReport report;
+      const auto plan =
+          core::builder::GraphGraph(
+              source, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{})
+              .Optimize(-1, &report, folding, false);
+      ASSERT_EQ(plan.rewrites().size(), 1u);
+      EXPECT_EQ(report.moved_shape_and_size_nodes, 1u);
+      const auto &rewrite = plan.rewrites(0);
+      EXPECT_EQ(rewrite.pattern_name(), "MoveShapeAndSizeNodes");
+      EXPECT_EQ(rewrite.matched_nodes().size(), index == 0 ? 1u : 2u);
+      for (std::size_t node = 0; node < expected_order[index].size(); ++node)
+        EXPECT_EQ(source.Nodes()[node].output(0), expected_order[index][node]);
+      const auto optimized = source.ToModel();
+      RewritingProto loaded;
+      ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      auto restored = source.UndoRewritings(loaded);
+      EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original.SerializeAsString());
+      auto replayed = restored.ApplyRewritings(loaded);
+      std::string difference;
+      EXPECT_TRUE(replayed.ToModel().graph().Equals(optimized.graph(), &difference)) << difference;
     }
   }
 }

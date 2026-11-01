@@ -730,6 +730,7 @@ public:
   /// Applies ordered captured rewrites and returns a new, validated builder.
   /// Preserves the source builder, maintains dependency-consistent node order,
   /// and merges added functions and opset imports. Requires a root model builder.
+  /// Default export preserves the replayed order without granting undo history.
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
@@ -847,7 +848,8 @@ private:
 
   static bool IsShapeOrSizeNode(const NodeProto &node);
   std::size_t MoveShapeAndSizeNodesImpl(bool recursive, bool preserve_rewritings = false,
-                                        std::vector<std::size_t> *node_order = nullptr);
+                                        std::vector<std::size_t> *node_order = nullptr,
+                                        std::vector<bool> *relocatable_readers = nullptr);
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
@@ -1057,6 +1059,7 @@ private:
   ModelProto model_template_;
   ModelProto::rewritings_t rewritings_;
   std::shared_ptr<const detail::RewritingUndoState> rewriting_undo_;
+  bool preserve_replay_order_ = false;
   GraphProto graph_template_;
   FunctionProto function_template_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;

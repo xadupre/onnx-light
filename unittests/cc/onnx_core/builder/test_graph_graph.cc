@@ -538,92 +538,100 @@ TEST(GraphGraph, ReferencePreservesAnnotatedIdentityUntilCanonicalized) {
   }
 }
 
-TEST(GraphGraph, ExportPreservesShapeAndSizeOrderForReplayAndUndo) {
+TEST(GraphGraph, RecordedShapeAndSizeHoistingPreservesReplayAndUndo) {
   for (const std::string scope_kind : {"root", "subgraph", "function"}) {
     for (const std::string reader : {"Shape", "Size"}) {
       for (const bool rewrite : {false, true}) {
-        SCOPED_TRACE(scope_kind + "/" + reader + "/" + std::to_string(rewrite));
-        core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
-        source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-        source.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-        auto *scope = &source;
-        if (scope_kind == "subgraph") {
-          source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
-          scope = &source.MakeSubgraph("then_branch");
-        } else if (scope_kind == "function") {
-          source.SetOpsetVersion("local", 1);
-          scope = &source.MakeLocalFunction("Body", "local");
-          scope->MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-          scope->MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-        }
-        scope->MakeNode("Relu", {"x"}, {"p"});
-        scope->MakeNode("Neg", {"z"}, {"q"});
-        scope->MakeNode(reader, {"p"}, {"s"});
-        scope->MakeOutput("q");
-        scope->MakeOutput("s");
-        if (scope_kind == "subgraph") {
-          auto &other = source.MakeSubgraph("else_branch");
-          other.MakeNode("Identity", {"z"}, {"q"});
-          other.MakeNode(reader, {"x"}, {"s"});
-          other.MakeOutput("q");
-          other.MakeOutput("s");
-          utils::RepeatedProtoField<AttributeProto> attributes;
-          for (const std::string name : {"then_branch", "else_branch"}) {
-            auto &reference = attributes.add();
-            reference.set_name(name + "_ref");
-            reference.set_type(AttributeProto::STRING);
-            reference.set_s(name);
+        for (const bool hoist : {false, true}) {
+          SCOPED_TRACE(scope_kind + "/" + reader + "/" + std::to_string(rewrite) + "/" +
+                       std::to_string(hoist));
+          core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+          source.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+          source.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+          auto *scope = &source;
+          if (scope_kind == "subgraph") {
+            source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+            scope = &source.MakeSubgraph("then_branch");
+          } else if (scope_kind == "function") {
+            source.SetOpsetVersion("local", 1);
+            scope = &source.MakeLocalFunction("Body", "local");
+            scope->MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+            scope->MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
           }
-          source.MakeNode("If", {"condition"}, {"selected_q", "selected_s"}, "", "", attributes);
-        } else if (scope_kind == "function") {
-          source.MakeNode("Body", {"x", "z"}, {"selected_q", "selected_s"}, "local");
+          scope->MakeNode("Relu", {"x"}, {"p"});
+          scope->MakeNode("Neg", {"z"}, {"q"});
+          scope->MakeNode(reader, {"p"}, {"s"});
+          scope->MakeOutput("q");
+          scope->MakeOutput("s");
+          if (scope_kind == "subgraph") {
+            auto &other = source.MakeSubgraph("else_branch");
+            other.MakeNode("Identity", {"z"}, {"q"});
+            other.MakeNode(reader, {"x"}, {"s"});
+            other.MakeOutput("q");
+            other.MakeOutput("s");
+            utils::RepeatedProtoField<AttributeProto> attributes;
+            for (const std::string name : {"then_branch", "else_branch"}) {
+              auto &reference = attributes.add();
+              reference.set_name(name + "_ref");
+              reference.set_type(AttributeProto::STRING);
+              reference.set_s(name);
+            }
+            source.MakeNode("If", {"condition"}, {"selected_q", "selected_s"}, "", "", attributes);
+          } else if (scope_kind == "function") {
+            source.MakeNode("Body", {"x", "z"}, {"selected_q", "selected_s"}, "local");
+          }
+          if (scope != &source) {
+            source.MakeOutput("selected_q");
+            source.MakeOutput("selected_s");
+          }
+          source.AddRewriting("existing", RewritingProto{});
+          const auto original = source.BuildGraph();
+          std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns;
+          if (rewrite)
+            patterns.push_back(std::make_shared<ReplaceIndependentNeg>());
+          core::builder::GraphGraph optimizer(source, std::move(patterns));
+          core::builder::ConstantFoldingOptions folding;
+          folding.enabled = false;
+          core::builder::OptimizationReport report;
+          const auto plan =
+              optimizer.Optimize(-1, &report, folding, false, {}, false, false, hoist);
+          EXPECT_EQ(plan.rewrites().empty() && plan.replaced_function_ids().empty(),
+                    !rewrite && !hoist);
+          EXPECT_EQ(report.moved_shape_and_size_nodes, hoist ? 1u : 0u);
+          EXPECT_NE(report.ToString().find("MoveShapeAndSizeNodes"), std::string::npos);
+          const auto optimized = source.BuildGraph();
+          const auto named_plan_count = source.Rewritings().count("existing");
+          const auto expect_order = [&](const auto &nodes) {
+            ASSERT_EQ(nodes.size(), 3u);
+            EXPECT_EQ(nodes[0].op_type(), "Relu");
+            EXPECT_EQ(nodes[hoist ? 2 : 1].op_type(), rewrite ? "Abs" : "Neg");
+            EXPECT_EQ(nodes[hoist ? 1 : 2].op_type(), reader);
+          };
+          expect_order(scope->Nodes());
+          if (scope_kind == "function")
+            expect_order(scope->ToFunction("local").node());
+          else if (scope_kind == "subgraph")
+            expect_order(scope->ToGraph().node());
+          source.ToGraph();
+          const auto exported = source.ToModel();
+          EXPECT_EQ(source.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
+          EXPECT_EQ(exported.rewritings().count("existing"), named_plan_count);
+          expect_order(scope->Nodes());
+          RewritingProto loaded;
+          ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+          auto restored = source.UndoRewritings(loaded);
+          EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original.SerializeAsString());
+          EXPECT_EQ(restored.Rewritings().count("existing"), 1u);
+          auto replayed = restored.ApplyRewritings(loaded);
+          EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
+          const auto replayed_model = replayed.ToModel(0, hoist);
+          std::string difference;
+          EXPECT_TRUE(replayed_model.graph().Equals(exported.graph(), &difference)) << difference;
+          ASSERT_EQ(replayed_model.functions().size(), exported.functions().size());
+          for (std::size_t i = 0; i < exported.functions().size(); ++i)
+            EXPECT_TRUE(replayed_model.functions(i).Equals(exported.functions(i), &difference))
+                << difference;
         }
-        if (scope != &source) {
-          source.MakeOutput("selected_q");
-          source.MakeOutput("selected_s");
-        }
-        source.AddRewriting("existing", RewritingProto{});
-        const auto original = source.BuildGraph();
-        std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns;
-        if (rewrite)
-          patterns.push_back(std::make_shared<ReplaceIndependentNeg>());
-        core::builder::GraphGraph optimizer(source, std::move(patterns));
-        core::builder::ConstantFoldingOptions folding;
-        folding.enabled = false;
-        const auto plan = optimizer.Optimize(-1, nullptr, folding, false);
-        EXPECT_EQ(plan.rewrites().empty() && plan.replaced_function_ids().empty(), !rewrite);
-        const auto optimized = source.BuildGraph();
-        const auto named_plan_count = source.Rewritings().count("existing");
-        const auto expect_order = [&](const auto &nodes) {
-          ASSERT_EQ(nodes.size(), 3u);
-          EXPECT_EQ(nodes[0].op_type(), "Relu");
-          EXPECT_EQ(nodes[1].op_type(), rewrite ? "Abs" : "Neg");
-          EXPECT_EQ(nodes[2].op_type(), reader);
-        };
-        expect_order(scope->Nodes());
-        if (scope_kind == "function")
-          expect_order(scope->ToFunction("local").node());
-        else if (scope_kind == "subgraph")
-          expect_order(scope->ToGraph().node());
-        source.ToGraph();
-        const auto exported = source.ToModel();
-        EXPECT_EQ(source.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
-        EXPECT_EQ(exported.rewritings().count("existing"), named_plan_count);
-        expect_order(scope->Nodes());
-        RewritingProto loaded;
-        ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-        auto restored = source.UndoRewritings(loaded);
-        EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original.SerializeAsString());
-        EXPECT_EQ(restored.Rewritings().count("existing"), 1u);
-        auto replayed = restored.ApplyRewritings(loaded);
-        EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
-        const auto replayed_model = replayed.ToModel();
-        std::string difference;
-        EXPECT_TRUE(replayed_model.graph().Equals(exported.graph(), &difference)) << difference;
-        ASSERT_EQ(replayed_model.functions().size(), exported.functions().size());
-        for (std::size_t i = 0; i < exported.functions().size(); ++i)
-          EXPECT_TRUE(replayed_model.functions(i).Equals(exported.functions(i), &difference))
-              << difference;
       }
     }
   }

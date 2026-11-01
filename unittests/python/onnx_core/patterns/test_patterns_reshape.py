@@ -49,6 +49,7 @@ class TestPatternsReshape(ExtTestCase):
         required_patterns: set[str] | None = None,
         forbidden_patterns: set[str] | None = None,
         expected_initializer_names: set[str] | None = None,
+        canonicalize: bool = False,
     ):
         """Optimizes a model and checks its topology and numerical equivalence."""
         checker.check_model(model)
@@ -56,7 +57,7 @@ class TestPatternsReshape(ExtTestCase):
 
         builder = optimization.GraphBuilder(model)
         graph = optimization.GraphGraph(builder, patterns)
-        rewrites = graph.optimize().rewrites
+        rewrites = graph.optimize(canonicalize=canonicalize).rewrites
         optimized = builder.to_onnx()
         checker.check_model(optimized)
 
@@ -144,6 +145,7 @@ class TestPatternsReshape(ExtTestCase):
             expected_ops,
             required_patterns=required,
             forbidden_patterns=forbidden,
+            canonicalize=True,
         )
 
     def test_reshape_matmul_reshape_static(self):

@@ -3051,8 +3051,7 @@ TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
   for (std::size_t i = 0; i < graph.node().size(); ++i) {
     EXPECT_EQ(function.node(i).SerializeAsString(), graph.node(i).SerializeAsString());
   }
-  EXPECT_EQ(function.node(1).op_type(), "Abs");
-  EXPECT_EQ(function.node(2).op_type(), "Shape");
+  EXPECT_EQ(function.node(1).op_type(), "Shape");
   ASSERT_EQ(function.value_info().size(),
             graph.input().size() + graph.output().size() + graph.value_info().size());
   const auto check_value_info = [&](const auto &values) {

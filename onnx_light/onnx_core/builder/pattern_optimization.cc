@@ -77,8 +77,8 @@ std::string SubgraphOptimizationStatistics::ToString() const {
 }
 
 int64_t OptimizationReport::TotalTimeNs() const noexcept {
-  return matching_time_ns + rewriting_time_ns + cleanup_time_ns + constant_folding_time_ns +
-         subgraph_optimization_time_ns;
+  return matching_time_ns + rewriting_time_ns + cleanup_time_ns + move_shape_and_size_time_ns +
+         constant_folding_time_ns + subgraph_optimization_time_ns;
 }
 
 std::string OptimizationReport::ToString() const {
@@ -86,8 +86,10 @@ std::string OptimizationReport::ToString() const {
   os << "OptimizationReport(iterations=" << iterations << ", rewrites=" << rewrites
      << ", total_time_ns=" << TotalTimeNs() << ", phases={matching: " << matching_time_ns
      << ", rewriting: " << rewriting_time_ns << ", cleanup: " << cleanup_time_ns
+     << ", MoveShapeAndSizeNodes: " << move_shape_and_size_time_ns
      << ", constant_folding: " << constant_folding_time_ns
-     << ", subgraph_optimization: " << subgraph_optimization_time_ns << "}, patterns=[";
+     << ", subgraph_optimization: " << subgraph_optimization_time_ns
+     << "}, moved_shape_and_size_nodes=" << moved_shape_and_size_nodes << ", patterns=[";
   for (std::size_t i = 0; i < patterns.size(); ++i) {
     if (i != 0) {
       os << ", ";

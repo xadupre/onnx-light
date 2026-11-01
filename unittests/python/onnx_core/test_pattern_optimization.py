@@ -762,6 +762,67 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
 
+    def test_shape_and_size_hoisting_is_recorded_and_can_be_disabled(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "shape_order (float[2,3] x, float[2,3] z) => (float[2,3] q, int64[2] s) {\n"
+            "  p = Relu(x)\n"
+            "  q = Neg(z)\n"
+            "  s = Shape(p)\n"
+            "}\n"
+        )
+        folding = ConstantFoldingOptions()
+        folding.enabled = False
+        for hoist in (False, True):
+            with self.subTest(hoist=hoist):
+                builder = optim.GraphBuilder(model)
+                original = builder.build_graph().SerializeToString()
+                plan, report = optim.GraphGraph(builder, False).optimize(
+                    report=True, folding_options=folding, move_shape_and_size_nodes=hoist
+                )
+                expected_ops = ["Relu", "Shape", "Neg"] if hoist else ["Relu", "Neg", "Shape"]
+                exported = builder.to_onnx(move_shape_and_size_nodes=hoist)
+                self.assertEqual([node.op_type for node in exported.graph.node], expected_ops)
+                self.assertEqual(report.moved_shape_and_size_nodes, int(hoist))
+                self.assertIn("MoveShapeAndSizeNodes", str(report))
+                self.assertEqual(
+                    [rewrite.pattern_name for rewrite in plan.rewrites],
+                    ["MoveShapeAndSizeNodes"] if hoist else [],
+                )
+                if hoist:
+                    self.assertEqual(list(plan.rewrites[0].matched_nodes), [2])
+                    self.assertEqual(list(plan.rewrites[0].added_nodes_positions), [1])
+                restored = builder.undo_rewritings(plan)
+                self.assertEqual(restored.build_graph().SerializeToString(), original)
+                replayed = (
+                    optim.GraphBuilder(model)
+                    .apply_rewritings(plan)
+                    .to_onnx(move_shape_and_size_nodes=hoist)
+                )
+                self.assertEqual(
+                    replayed.graph.SerializeToString(), exported.graph.SerializeToString()
+                )
+
+    def test_canonicalization_is_disabled_by_default_and_explicitly_selectable(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "reference (float[2] x) => (float[2] y) {\n"
+            "  a = Identity(x)\n"
+            "  y = Neg(a)\n"
+            "}\n"
+        )
+        for canonicalize in (False, True):
+            with self.subTest(canonicalize=canonicalize):
+                builder = optim.GraphBuilder(model)
+                graph = optim.GraphGraph(builder, False)
+                plan = graph.optimize(canonicalize=True) if canonicalize else graph.optimize()
+                restored = builder.undo_rewritings(plan).build_graph()
+                self.assertEqual(
+                    [node.op_type for node in restored.node],
+                    ["Neg"] if canonicalize else ["Identity", "Neg"],
+                )
+                self.assertEqual(list(restored.node[-1].input), ["x" if canonicalize else "a"])
+
     def test_to_onnx_bundle_keeps_original_identity_and_shape_positions(self):
         for op_type in ("Shape", "Size"):
             with self.subTest(op_type=op_type):

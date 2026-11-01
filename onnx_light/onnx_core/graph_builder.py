@@ -312,6 +312,8 @@ class GraphBuilder(_C.GraphBuilder):
         domain: str = "",
         *,
         optimize: OptimizationMode = OptimizationMode.kNone,
+        canonicalize: bool = False,
+        move_shape_and_size_nodes: bool = True,
     ) -> ModelProto | GraphProto | FunctionProto:
         """Exports the current graph, an optimized copy, or captured rewritings.
 
@@ -323,15 +325,18 @@ class GraphBuilder(_C.GraphBuilder):
 
         With ``OptimizationMode.kRewritings``, returns the finalized reference
         ModelProto and attaches the captured plan as ``rewritings["optimized"]``.
-        Optimization does not implicitly canonicalize this reference.
+        ``canonicalize=True`` explicitly cleans this reference before capture;
+        it is disabled by default. Shape/Size hoisting is enabled by default
+        and can be disabled with ``move_shape_and_size_nodes=False``.
         Requires ``kind=ProtoKind.kModel`` and rejects an existing plan with that
-        name. Other named plans are retained. Optimization never edits the source
-        builder; ordinary export finalization still runs before taking the copy.
+        name. Other named plans are retained unless explicit canonicalization
+        changes their reference. Optimization never edits the source builder;
+        ordinary export finalization still runs before taking the copy.
         """
         if not isinstance(optimize, OptimizationMode):
             raise TypeError("optimize must be an OptimizationMode.")
         if optimize is OptimizationMode.kNone:
-            return super().to_onnx(kind, ir_version, domain)
+            return super().to_onnx(kind, ir_version, domain, move_shape_and_size_nodes)
         if not isinstance(kind, _C.ProtoKind):
             raise TypeError("kind must be a ProtoKind.")
         if optimize is OptimizationMode.kRewritings and kind != ProtoKind.kModel:
@@ -339,7 +344,7 @@ class GraphBuilder(_C.GraphBuilder):
 
         from .optimization import GraphGraph
 
-        canonical = super().to_model(ir_version)
+        canonical = super().to_model(ir_version, move_shape_and_size_nodes)
         if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
             raise ValueError("A rewriting plan named 'optimized' already exists.")
         working = GraphBuilder(
@@ -349,14 +354,18 @@ class GraphBuilder(_C.GraphBuilder):
         working.copy_device_targets_from(self)
         for pattern in self.registered_patterns():
             working.register_pattern(pattern)
-        plan = GraphGraph(working).optimize()
+        plan = GraphGraph(working).optimize(
+            canonicalize=canonicalize, move_shape_and_size_nodes=move_shape_and_size_nodes
+        )
         if optimize is OptimizationMode.kRewritings:
             restored = working.undo_rewritings(plan)
             restored.add_rewriting("optimized", plan)
-            return restored.to_model(ir_version)
+            return restored.to_model(ir_version, move_shape_and_size_nodes)
         if kind == ProtoKind.kModel:
-            return working.to_standard_model(ir_version)
-        return working.to_onnx(kind, ir_version, domain)
+            return working.to_standard_model(ir_version, move_shape_and_size_nodes)
+        return working.to_onnx(
+            kind, ir_version, domain, move_shape_and_size_nodes=move_shape_and_size_nodes
+        )
 
 
 __all__ = [

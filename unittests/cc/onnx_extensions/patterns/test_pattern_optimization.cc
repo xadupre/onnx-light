@@ -2837,7 +2837,8 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
   EXPECT_GE(report.patterns[0].match_time_ns, 0);
   EXPECT_GE(report.patterns[0].apply_time_ns, 0);
   EXPECT_EQ(report.TotalTimeNs(), report.matching_time_ns + report.rewriting_time_ns +
-                                      report.cleanup_time_ns + report.constant_folding_time_ns);
+                                      report.cleanup_time_ns + report.constant_folding_time_ns +
+                                      report.move_shape_and_size_time_ns);
   EXPECT_NE(report.ToString().find("phases={matching:"), std::string::npos);
   EXPECT_NE(report.ToString().find("CastCast(attempts=3, matches=1"), std::string::npos);
 }
@@ -3060,6 +3061,7 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   EXPECT_NE(report.ToString().find("Subgraph(path=body/leaf"), std::string::npos);
   EXPECT_EQ(report.TotalTimeNs(), report.matching_time_ns + report.rewriting_time_ns +
                                       report.cleanup_time_ns + report.constant_folding_time_ns +
+                                      report.move_shape_and_size_time_ns +
                                       report.subgraph_optimization_time_ns);
 
   const GraphProto optimized = builder.BuildGraph();

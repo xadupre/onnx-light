@@ -376,6 +376,8 @@ class GraphGraph(_C.GraphGraph):
             remove_unused: bool = True,
             callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
             parallel: bool = False,
+            canonicalize: bool = False,
+            move_shape_and_size_nodes: bool = True,
         ) -> RewritingProto: ...
 
         @overload
@@ -388,6 +390,8 @@ class GraphGraph(_C.GraphGraph):
             remove_unused: bool = True,
             callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
             parallel: bool = False,
+            canonicalize: bool = False,
+            move_shape_and_size_nodes: bool = True,
         ) -> tuple[RewritingProto, OptimizationReport]: ...
 
         @overload
@@ -400,6 +404,8 @@ class GraphGraph(_C.GraphGraph):
             remove_unused: bool = True,
             callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
             parallel: bool = False,
+            canonicalize: bool = False,
+            move_shape_and_size_nodes: bool = True,
         ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
 
     def optimize(
@@ -411,8 +417,17 @@ class GraphGraph(_C.GraphGraph):
         remove_unused: bool = True,
         callback: Callable[[GraphGraph, MatchResult], bool | None] | None = None,
         parallel: bool = False,
+        canonicalize: bool = False,
+        move_shape_and_size_nodes: bool = True,
     ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]:
         """Returns sequential proto edits and optionally their optimization report.
+
+        ``canonicalize=True`` explicitly cleans the reference before capture.
+        It is disabled by default. Undo restores that reference, which retains
+        the original nodes when canonicalization is disabled.
+        ``move_shape_and_size_nodes=True`` records Shape/Size hoisting after
+        optimization and reports its timing and moved-node count. Disable it
+        explicitly to retain the existing metadata-reader placement.
 
         Calls ``callback(graph, match)`` for each eligible, disjoint pattern match,
         including matches in nested subgraphs, before reserving its nodes.
@@ -439,6 +454,8 @@ class GraphGraph(_C.GraphGraph):
             remove_unused=remove_unused,
             callback=callback,
             parallel=parallel,
+            canonicalize=canonicalize,
+            move_shape_and_size_nodes=move_shape_and_size_nodes,
         )
 
 

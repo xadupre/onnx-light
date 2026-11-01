@@ -264,11 +264,17 @@ can be applied directly to the original model, and undo restores that reference,
 including existing Identity nodes, duplicate nodes and initializers, and
 annotations. Export obtains the reference from the optimizing builder's
 in-memory undo history.
-Graph and function export preserve the existing topological order, including
-non-adjacent Shape/Size readers, and do not clear named plans or undo history.
-They still validate dependencies and recompute lifetime and memory metadata.
-Shape/Size hoisting is opt-in through ``MoveShapeAndSizeNodes`` or
-``GraphGraph::Canonicalize`` before capture.
+``canonicalize=true`` (Python: ``canonicalize=True``) explicitly selects a
+cleaned reference before capture; replay and undo then use that reference.
+Shape/Size hoisting remains enabled by default to reduce peak memory. The
+optimizer records it as ``MoveShapeAndSizeNodes`` edits, including in nested
+graphs and functions, and reports its timing and moved-node count.
+``move_shape_and_size_nodes=false`` disables this pass.
+Graph and function export also hoist metadata readers by default, unless
+explicitly disabled or the reference carries named plans or undo history.
+Export still validates dependencies and recomputes lifetime and memory metadata.
+Restoration guarantees the same nodes in a valid topological order, not an
+arbitrary original insertion order.
 Explicit canonicalization applies ancestor substitutions before cleaning
 descendant scopes, prunes annotations for removed values, and moves Shape/Size
 nodes next to their producers. This reordering preserves incremental tags and

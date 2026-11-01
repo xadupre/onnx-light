@@ -1409,12 +1409,12 @@ void GraphGraph::Rebuild() {
   RebuildSuccessors();
 }
 
-std::size_t GraphGraph::Canonicalize() {
+std::size_t GraphGraph::Canonicalize(bool move_shape_and_size_nodes) {
   bool reference_changed = false;
-  return CanonicalizeImpl(reference_changed);
+  return CanonicalizeImpl(reference_changed, move_shape_and_size_nodes);
 }
 
-std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
+std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed, bool move_shape_and_size_nodes) {
   std::size_t removed = 0;
   const auto original_nodes = utils::CopyWithSharedTensorStorage(builder_.nodes_);
   GraphBuilder::InitializerContentIndex inherited;
@@ -1510,13 +1510,14 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
   }
   for (const auto &function : builder_.local_functions_) {
     GraphGraph child(*function, patterns_);
-    removed += child.CanonicalizeImpl(reference_changed);
+    removed += child.CanonicalizeImpl(reference_changed, move_shape_and_size_nodes);
   }
   for (const auto &subgraph : builder_.subgraphs_) {
     GraphGraph child(*subgraph, patterns_);
-    removed += child.CanonicalizeImpl(reference_changed);
+    removed += child.CanonicalizeImpl(reference_changed, move_shape_and_size_nodes);
   }
-  reference_changed |= builder_.MoveShapeAndSizeNodesImpl(false) != 0;
+  if (move_shape_and_size_nodes)
+    reference_changed |= builder_.MoveShapeAndSizeNodesImpl(false) != 0;
   computed_constants_.clear();
   Rebuild();
   return removed + local_removed;
@@ -1525,9 +1526,17 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed) {
 RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
                                     const ConstantFoldingOptions &folding_options,
                                     bool remove_unused, const OptimizationCallback &callback,
-                                    bool parallel) {
+                                    bool parallel, bool canonicalize,
+                                    bool move_shape_and_size_nodes) {
   if (max_iter < -1)
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
+  int64_t canonicalization_time_ns = 0;
+  if (canonicalize) {
+    const auto start = std::chrono::steady_clock::now();
+    bool reference_changed = false;
+    CanonicalizeImpl(reference_changed, false);
+    canonicalization_time_ns = ElapsedNanoseconds(start);
+  }
   GraphBuilder *root = &builder_;
   while (root->parent_ != nullptr)
     root = root->parent_;
@@ -1617,7 +1626,9 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   } original_functions_scope{original_functions_, original_functions_};
   original_functions_ = &original_functions_by_key;
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
-                             *undo, callback, parallel);
+                             *undo, callback, parallel, move_shape_and_size_nodes);
+  if (report != nullptr)
+    report->cleanup_time_ns += canonicalization_time_ns;
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
   capture_functions(capture_functions, *root, optimized_functions, &original_definitions);
   for (const auto &function : optimized_functions) {
@@ -1719,7 +1730,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                                         const ConstantFoldingOptions &folding_options,
                                         bool remove_unused, RewritingProto &collection,
                                         detail::RewritingUndoState &undo,
-                                        const OptimizationCallback &callback, bool parallel) {
+                                        const OptimizationCallback &callback, bool parallel,
+                                        bool move_shape_and_size_nodes) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1757,7 +1769,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                            original_functions_);
     RewritingProto child_rewrites = child_graph.OptimizeImpl(
         max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options,
-        remove_unused, collection, undo, callback, parallel);
+        remove_unused, collection, undo, callback, parallel, move_shape_and_size_nodes);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -1769,6 +1781,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
         throw BuilderError("GraphGraph::Optimize: nested rewrite count is inconsistent.");
       function_body_rewrites += child_report.rewrites - graph_rewrites;
       report->subgraph_optimization_time_ns += elapsed_time_ns;
+      report->moved_shape_and_size_nodes += child_report.moved_shape_and_size_nodes;
       for (std::size_t i = 0; i < report->patterns.size(); ++i) {
         report->patterns[i].attempts += child_report.patterns[i].attempts;
         report->patterns[i].matches += child_report.patterns[i].matches;
@@ -1811,12 +1824,13 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
                              folding_options, remove_unused, collection, child_undo, callback,
-                             parallel);
+                             parallel, move_shape_and_size_nodes);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
       function_body_rewrites += child_report.rewrites;
       report->subgraph_optimization_time_ns += elapsed_time_ns;
+      report->moved_shape_and_size_nodes += child_report.moved_shape_and_size_nodes;
       for (std::size_t i = 0; i < report->patterns.size(); ++i) {
         report->patterns[i].attempts += child_report.patterns[i].attempts;
         report->patterns[i].matches += child_report.patterns[i].matches;
@@ -2287,6 +2301,42 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       break;
     }
     ++priority_index;
+  }
+  if (move_shape_and_size_nodes) {
+    const auto start = std::chrono::steady_clock::now();
+    std::vector<std::size_t> order;
+    const std::size_t moved = builder_.MoveShapeAndSizeNodesImpl(false, false, &order);
+    if (moved != 0) {
+      LocalRewritingProto rewrite;
+      rewrite.set_pattern_name("MoveShapeAndSizeNodes");
+      std::vector<std::size_t> matched;
+      for (std::size_t index = 0; index < order.size(); ++index) {
+        const auto &node = builder_.nodes_[index];
+        if (index == order[index] || !GraphBuilder::IsShapeOrSizeNode(node))
+          continue;
+        matched.push_back(order[index]);
+        rewrite.ref_added_nodes().push_back(utils::CopyWithSharedTensorStorage(node));
+        rewrite.add_added_nodes_positions(index);
+      }
+      std::sort(matched.begin(), matched.end());
+      if (matched.size() != moved)
+        throw BuilderError("GraphGraph::Optimize: incomplete Shape/Size relocation record.");
+      for (std::size_t index : matched)
+        rewrite.add_matched_nodes(index);
+      for (const auto &name : graph_path)
+        rewrite.add_graph_path(name);
+      UndoState::Edit inverse;
+      inverse.after.ref_node() = utils::CopyWithSharedTensorStorage(rewrite.added_nodes());
+      for (auto &node : inverse.after.ref_node())
+        builder_.MaterializeGraphReferences(node);
+      applied.push_back(std::move(rewrite));
+      undo.edits.push_back(std::move(inverse));
+      Rebuild();
+    }
+    if (report != nullptr) {
+      report->moved_shape_and_size_nodes += moved;
+      report->move_shape_and_size_time_ns += ElapsedNanoseconds(start);
+    }
   }
   if (report != nullptr)
     report->rewrites = applied.size() + function_body_rewrites;

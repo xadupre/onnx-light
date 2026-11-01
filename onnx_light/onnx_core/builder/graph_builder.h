@@ -538,8 +538,8 @@ public:
   /// input exists. Emitting it immediately after its producer -- instead of
   /// wherever it happened to be inserted -- lets the producer's output be
   /// released as early as possible, which improves the peak-memory analysis run
-  /// at finalisation. This pass is opt-in, directly or through
-  /// GraphGraph::Canonicalize; export preserves the existing topological order.
+  /// at finalisation. This pass runs by default during optimization and export.
+  /// Export does not reorder a reference carrying named plans or undo history.
   ///
   /// Each such node is relocated to directly follow the node producing its
   /// input, preserving the relative order of several ``Shape`` / ``Size`` nodes
@@ -785,19 +785,19 @@ public:
 
   /// Returns the finalized :cpp:class:`GraphProto`.
   /// Stably orders dependencies, including lexical subgraph captures, before
-  /// recomputing lifetime and memory metadata. Does not hoist Shape/Size nodes,
-  /// preserving captured rewrite positions and undo history for valid graphs.
+  /// hoisting Shape/Size nodes and recomputing lifetime and memory metadata.
+  /// Preserves captured rewrite positions and undo history for valid graphs.
   /// Throws on cyclic dependencies or undefined inputs. Mutates node order.
-  GraphProto ToGraph();
+  GraphProto ToGraph(bool move_shape_and_size_nodes = true);
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
   /// Exports local functions from the builder and its nested scopes.
   ///
   /// @param ir_version IR version to write; ``0`` selects the library default.
-  ModelProto ToModel(int64_t ir_version = 0);
+  ModelProto ToModel(int64_t ir_version = 0, bool move_shape_and_size_nodes = true);
 
   /// Returns a standard ONNX model, rejecting structured extensions and named plans.
-  ModelProto ToStandardModel(int64_t ir_version = 0);
+  ModelProto ToStandardModel(int64_t ir_version = 0, bool move_shape_and_size_nodes = true);
 
   /// Returns the finalized nodes wrapped in a :cpp:class:`FunctionProto`.
   /// Materializes dense initializers as Constant nodes without changing the
@@ -807,7 +807,7 @@ public:
   /// Constant at the selected opset rather than increasing the opset.
   ///
   /// @param domain Function domain.
-  FunctionProto ToFunction(const std::string &domain = "");
+  FunctionProto ToFunction(const std::string &domain = "", bool move_shape_and_size_nodes = true);
 
   /// Collects referenced names not defined by graph inputs, dense, extended or
   /// sparse initializers, or node outputs into ``out``. Resolves nested-subgraph
@@ -845,7 +845,9 @@ private:
   RemoveDuplicateNodesImpl(bool recursive,
                            std::unordered_map<std::string, std::string> *applied_renames = nullptr);
 
-  std::size_t MoveShapeAndSizeNodesImpl(bool recursive);
+  static bool IsShapeOrSizeNode(const NodeProto &node);
+  std::size_t MoveShapeAndSizeNodesImpl(bool recursive, bool preserve_rewritings = false,
+                                        std::vector<std::size_t> *node_order = nullptr);
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
@@ -979,7 +981,8 @@ private:
                               bool include_initializer_constants = true) const;
   void ValidateInitializerConstants() const;
   void PrependInitializerConstants(FunctionProto &function) const;
-  FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
+  FunctionProto ExportFunction(const std::string &domain, bool model_scoped,
+                               bool move_shape_and_size_nodes = true);
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();

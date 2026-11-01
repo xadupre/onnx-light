@@ -55,11 +55,11 @@ def _run(model, feeds):
     return ReferenceEvaluator(model).run(None, feeds)
 
 
-def _optimize(model, pattern_name: str, *, report: bool = False):
+def _optimize(model, pattern_name: str, *, report: bool = False, canonicalize: bool = False):
     builder = optimization.GraphBuilder(model)
     pattern = getattr(optimization, f"{pattern_name}Pattern")()
     graph = optimization.GraphGraph(builder, [pattern])
-    result = graph.optimize(report=report)
+    result = graph.optimize(report=report, canonicalize=canonicalize)
     if report:
         plan, statistics = result
         result = plan.rewrites, statistics
@@ -436,7 +436,7 @@ class TestPatternsAlgebra(ExtTestCase):
             with self.subTest(case=case):
                 model, expected_ops = self._same_children_model(case)
                 original_inputs = _node_inputs(model)
-                optimized, rewrites = _optimize(model, "SameChildren")
+                optimized, rewrites = _optimize(model, "SameChildren", canonicalize=True)
 
                 self.assertEqual(expected_ops, _op_types(optimized))
                 self.assertEqual(0, len(optimized.graph.initializer))
@@ -458,7 +458,7 @@ class TestPatternsAlgebra(ExtTestCase):
         )
         feeds = {"X": _range(2, 3, 4)}
         original_inputs = _node_inputs(model)
-        optimized, rewrites = _optimize(model, "SameChildrenFromInput")
+        optimized, rewrites = _optimize(model, "SameChildrenFromInput", canonicalize=True)
 
         self.assertEqual(["Cast", "Add"], _op_types(optimized))
         self.assertEqual(0, len(optimized.graph.initializer))
@@ -496,7 +496,7 @@ class TestPatternsAlgebra(ExtTestCase):
             [_initializer("one", np.array([1], dtype=np.float32))],
         )
         feeds = {"X": _range(2, 3, 4)}
-        optimized, rewrites = _optimize(model, "SameChildren")
+        optimized, rewrites = _optimize(model, "SameChildren", canonicalize=True)
 
         self.assertEqual(["Add", "Add", "Add", "Add", "Sum"], _op_types(optimized))
         self.assertEqual(1, len(optimized.graph.initializer))
@@ -517,7 +517,7 @@ class TestPatternsAlgebra(ExtTestCase):
             ],
         )
         feeds = {"X": _range(2, 3)}
-        optimized, rewrites = _optimize(model, "SameChildren")
+        optimized, rewrites = _optimize(model, "SameChildren", canonicalize=True)
 
         self.assertEqual(["Cast", "Cast"], _op_types(optimized))
         self.assertEqual(0, _rewrite_count(rewrites, "SameChildren"))
@@ -543,7 +543,7 @@ class TestPatternsAlgebra(ExtTestCase):
     def test_same_children_duplicate_shape_local_deterministic_cleanup(self):
         model = self._shape_children_model()
         feeds = {"X": _range(2, 2, 3, 4), "Y": _range(2, 1, 3, 4)}
-        optimized, rewrites = _optimize(model, "SameChildren")
+        optimized, rewrites = _optimize(model, "SameChildren", canonicalize=True)
 
         self.assertEqual(["Shape", "Expand", "Mul"], _op_types(optimized))
         self.assertEqual(0, _rewrite_count(rewrites, "SameChildren"))
@@ -556,7 +556,7 @@ class TestPatternsAlgebra(ExtTestCase):
             with self.subTest(pattern_name=pattern_name):
                 model = self._shape_children_model()
                 original_inputs = _node_inputs(model)
-                optimized, rewrites = _optimize(model, pattern_name)
+                optimized, rewrites = _optimize(model, pattern_name, canonicalize=True)
 
                 self.assertEqual(["Shape", "Expand", "Mul"], _op_types(optimized))
                 self.assertEqual(0, len(optimized.graph.initializer))

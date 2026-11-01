@@ -697,11 +697,14 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
         EXPECT_THROW(mixed_graph.Optimize(-1, nullptr, folding), core::builder::BuilderError);
         EXPECT_EQ(mixed.BuildGraph().SerializeAsString(), before);
       } else {
-        EXPECT_FALSE(mixed_graph.Optimize(-1, nullptr, folding).rewrites().empty());
+        const auto plan = mixed_graph.Optimize(-1, nullptr, folding);
+        EXPECT_FALSE(plan.rewrites().empty());
         ASSERT_EQ(mixed.Nodes().size(), 1u);
         EXPECT_EQ(mixed.Nodes()[0].op_type(), "ShiftedCausalMask");
-        // Constant folding retains its model-scoped replay preparation helper.
-        EXPECT_EQ(mixed.LocalFunctions().size(), fold_constants ? 2u : 1u);
+        // Only actual folds add model-scoped replay preparation helpers.
+        EXPECT_EQ(mixed.LocalFunctions().size(), plan.added_functions().size());
+        for (const auto &function : plan.added_functions())
+          EXPECT_TRUE(HasFunction(mixed, function.name().value())) << function.name().value();
         EXPECT_EQ(mixed.LocalFunction("ShiftedCausalMask").Initializers().size(), 4u);
         ExpectTopologicalGraph(mixed);
         EXPECT_NO_THROW(mixed_graph.Optimize(-1, nullptr, folding));

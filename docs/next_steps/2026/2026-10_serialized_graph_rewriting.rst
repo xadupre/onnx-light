@@ -42,10 +42,10 @@ builder can receive another plan, including an empty plan, without exporting fir
 New producers are inserted before existing consumers whenever their own inputs
 permit it. Otherwise, only blocked consumers and their affected consumers are
 displaced. Independent retained nodes keep their relative order. Mutations do
-not topologically sort the graph, and export only uses that fallback if a
-dependency-order violation is actually detected.
+not topologically sort the graph, and export rejects a dependency-order
+violation rather than repairing it outside the captured plan.
 
-The two rewrite messages support binary serialization and Python bindings.
+The rewrite and move messages support binary serialization and Python bindings.
 Records contain a diagnostic pattern name, not a live pattern pointer or
 timings. Timing remains in ``OptimizationReport``. ``ModelProto.rewritings`` stores
 independently named plans against the canonical graph.
@@ -110,7 +110,7 @@ ranks incrementally; it does not rescan or sort the full live order per edit.
 New and modified proto messages
 +++++++++++++++++++++++++++++++
 
-The wire schema is below. The first two messages use onnx-light's existing
+The wire schema is below. These messages use onnx-light's existing
 ``BEGIN_PROTO`` / ``FIELD_*`` layer, parser and serializer, without adding a
 protobuf compiler or ``libprotobuf``. Step 3 added the
 ``ModelProto.rewritings`` field.
@@ -135,13 +135,48 @@ protobuf compiler or ``libprotobuf``. Step 3 added the
      repeated uint64 removed_extended_initializers = 13;
    }
 
+   message MoveNodeProto {
+     optional uint64 from_position = 1;
+     optional uint64 to_position = 2;
+     repeated string graph_path = 3;
+     string function_id = 4;
+   }
+
    message RewritingProto {
      repeated LocalRewritingProto rewrites = 1;
      repeated OperatorSetIdProto required_opset_imports = 2;
      repeated StringStringEntryProto metadata_props = 3;
      repeated FunctionProto added_functions = 4;
      repeated string replaced_function_ids = 5;
+     optional uint64 hash_before = 6;
+     optional uint64 hash_after = 7;
+     repeated MoveNodeProto moved_nodes = 8;
    }
+
+The two hashes belong to the complete plan, not its individual edits. They
+combine the positioned-node hashes from the root graph, nested graphs and local
+functions. Each node hash includes its zero-based position, normalized domain,
+operator type and counts of inputs, outputs and attributes. BLAKE3 produces the
+64-bit hashes from explicitly little-endian integers. Names, attribute values
+and tensor contents are not hashed; weights are neither loaded nor serialized
+for hashing. This is a structural compatibility check, not a semantic identity
+or authentication mechanism: swapping structurally identical nodes or changing
+connections without changing their counts may leave the hash unchanged.
+
+Replay verifies ``hash_before`` before any edit and ``hash_after`` after all
+ordinary edits and moves. Plans missing either hash are rejected explicitly,
+including empty legacy plans. ``GraphBuilder::CaptureRewritings`` creates the
+hashes for manually assembled plans through validated replay on an independent
+builder; normal replay never silently upgrades an unhashed plan.
+
+``moved_nodes`` is a final simultaneous stage. Within each scope, all sources
+refer to the order after the last ordinary edit, and all destinations refer to
+the final order. Unselected nodes fill the remaining slots in their original
+relative order. Duplicate sources or destinations, missing fields, out-of-range
+positions and dependency-invalid orders are errors. ``function_id`` selects a
+local function using the same escaped identity as function replacements; an
+empty identity selects the root graph. ``graph_path`` then selects a nested
+node-attribute graph within that scope.
 
 Replacing an existing function requires its identity in ``replaced_function_ids``
 as well as its replacement in ``added_functions``. Identities use
@@ -150,6 +185,10 @@ within components; default-domain aliases normalize to the empty domain.
 Conflicting additional definitions without an explicit replacement remain errors.
 New helpers cannot silently override operations in existing function bodies,
 including nested graphs and function attribute defaults.
+Optimization retains model-scoped source functions when their former owning
+subgraph is removed and installs preparation helpers before the final moves and
+hash. The optimizing builder and replay therefore expose the same function
+catalogue, including unused definitions.
 
 Removal positions are relative to the corresponding initializer list before
 each edit: ``removed_initializers`` indexes dense initializers,
@@ -267,16 +306,15 @@ in-memory undo history.
 ``canonicalize=true`` (Python: ``canonicalize=True``) explicitly selects a
 cleaned reference before capture; replay and undo then use that reference.
 Shape/Size hoisting remains enabled by default to reduce peak memory. The
-optimizer records it as ``MoveShapeAndSizeNodes`` edits, including in nested
+optimizer records it in the final ``moved_nodes`` stage, including in nested
 graphs and functions, and reports its timing and moved-node count.
 ``move_shape_and_size_nodes=false`` disables this pass.
-Graph and function export also hoist metadata readers by default, unless
-explicitly disabled, the reference carries named plans or undo history,
-or the builder is an unmodified replay result. Replay results preserve their
-captured order on export without acquiring undo history.
-Export still validates dependencies and recomputes lifetime and memory metadata.
-Restoration guarantees the same nodes in a valid topological order, not an
-arbitrary original insertion order.
+Graph and function export do not reorder or optimize nodes. They validate
+dependencies and recompute lifetime and memory metadata without changing the
+reference represented by the final hash. There is no replay-order protection
+flag or export-time optimization outside the plan.
+Undo checks the final hash, reverses the simultaneous moves, undoes ordinary
+edits in reverse order, and checks the initial hash on the restored model.
 Explicit canonicalization applies ancestor substitutions before cleaning
 descendant scopes, prunes annotations for removed values, and moves Shape/Size
 nodes next to their producers. This reordering preserves incremental tags and

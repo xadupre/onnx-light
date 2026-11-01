@@ -86,6 +86,13 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   function.set_name("Prepare");
   function.set_domain("custom");
   source.add_replaced_function_ids("custom:Prepare");
+  source.set_hash_before(0);
+  source.set_hash_after(UINT64_MAX);
+  auto &move = *source.add_moved_nodes();
+  move.set_from_position(UINT64_MAX);
+  move.set_to_position(0);
+  move.set_function_id("custom:Body");
+  move.add_graph_path("nested");
   std::string bytes;
   ASSERT_TRUE(source.SerializeToString(bytes));
   RewritingProto loaded;
@@ -94,6 +101,10 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
   EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
   EXPECT_EQ(loaded.replaced_function_ids(0), "custom:Prepare");
+  EXPECT_TRUE(loaded.has_hash_before());
+  EXPECT_EQ(loaded.hash_after(), UINT64_MAX);
+  EXPECT_EQ(loaded.moved_nodes(0).from_position(), UINT64_MAX);
+  EXPECT_TRUE(loaded.moved_nodes(0).has_to_position());
   EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(0), 1u);
   EXPECT_EQ(loaded.rewrites(0).removed_extended_initializers(1), UINT64_MAX);
   RewritingProto copied;
@@ -104,6 +115,72 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   LocalRewritingProto local;
   ASSERT_TRUE(local.ParseFromString(local_bytes));
   EXPECT_TRUE(local.Equals(edit));
+}
+
+TEST(onnx_proto, RewritingHashTracksPositionedNodeStructureWithoutWeights) {
+  ModelProto model;
+  auto *graph = model.mutable_graph();
+  *graph->add_node() = MakeNode("Relu", {"x"}, {"a"});
+  *graph->add_node() = MakeNode("Neg", {"x"}, {"b"});
+  auto *weight = graph->add_initializer();
+  weight->set_name("unloaded");
+  weight->set_data_location(TensorProto::EXTERNAL);
+  auto *location = weight->add_external_data();
+  location->set_key("location");
+  location->set_value("missing-rewriting-hash-weights.bin");
+  const auto initial = model.RewritingHash();
+  graph->ref_node()[0].ref_input().clear();
+  graph->ref_node()[0].add_input("another_name");
+  graph->ref_node()[0].set_name("annotation");
+  EXPECT_EQ(model.RewritingHash(), initial);
+  graph->ref_node()[0].add_input("extra");
+  EXPECT_NE(model.RewritingHash(), initial);
+  graph->ref_node()[0].ref_input().clear();
+  graph->ref_node()[0].add_input("another_name");
+  graph->ref_node()[0].set_domain("custom");
+  EXPECT_NE(model.RewritingHash(), initial);
+  graph->ref_node()[0].set_domain("");
+  std::swap(graph->ref_node()[0], graph->ref_node()[1]);
+  EXPECT_NE(model.RewritingHash(), initial);
+  std::swap(graph->ref_node()[0], graph->ref_node()[1]);
+  auto *attribute = graph->ref_node()[0].add_attribute();
+  attribute->set_name("parameter");
+  attribute->set_type(AttributeProto::INT);
+  attribute->set_i(1);
+  const auto with_parameter = model.RewritingHash();
+  EXPECT_NE(with_parameter, initial);
+  attribute->set_i(2);
+  EXPECT_EQ(model.RewritingHash(), with_parameter);
+}
+
+TEST(onnx_proto, RewritingHashIncludesSubgraphsAndFunctions) {
+  ModelProto model;
+  auto *node = model.mutable_graph()->add_node();
+  node->set_op_type("If");
+  auto *attribute = node->add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  *attribute->mutable_g()->add_node() = MakeNode("Neg", {"x"}, {"y"});
+  auto *function = model.add_functions();
+  function->set_domain("local");
+  function->set_name("Body");
+  *function->add_node() = MakeNode("Relu", {"x"}, {"y"});
+  const auto initial = model.RewritingHash();
+  attribute->mutable_g()->ref_node()[0].set_op_type("Abs");
+  EXPECT_NE(model.RewritingHash(), initial);
+  attribute->mutable_g()->ref_node()[0].set_op_type("Neg");
+  function->ref_node()[0].set_op_type("Sigmoid");
+  EXPECT_NE(model.RewritingHash(), initial);
+  function->ref_node()[0].set_op_type("Relu");
+  EXPECT_EQ(model.RewritingHash(), initial);
+  function->set_domain("ai.onnx");
+  auto *other = model.add_functions();
+  other->set_domain("a");
+  other->set_name("Other");
+  *other->add_node() = MakeNode("Abs", {"x"}, {"y"});
+  const auto aliased = model.RewritingHash();
+  function->set_domain("");
+  EXPECT_EQ(model.RewritingHash(), aliased);
 }
 
 TEST(onnx_proto, RewritingProtoRejectsRetiredRenamingField) {

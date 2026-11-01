@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 import re
 from typing import TYPE_CHECKING, Literal, TypeAlias, overload
 
-from ..onnx_lib import GraphProto, LocalRewritingProto, ModelProto, RewritingProto
+from ..onnx_lib import GraphProto, LocalRewritingProto, ModelProto, MoveNodeProto, RewritingProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 from ..onnx_py import _onnxpypatterns as _patterns  # type: ignore[attr-defined]
 from .graph_builder import (
@@ -538,6 +538,7 @@ __all__ = [
     "MatMulScaleFusionPattern",
     "MatchResult",
     "MaxReluPattern",
+    "MoveNodeProto",
     "MulMulMatMulPattern",
     "MulMulMulScalarPattern",
     "MulUnsqueezeUnsqueezePattern",

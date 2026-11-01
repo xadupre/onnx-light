@@ -2391,33 +2391,33 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("copy_device_targets_from", &GraphBuilder::CopyDeviceTargetsFrom, nb::arg("source"),
            "Copies devices from an equivalent builder, including nested scopes and exported "
            "functions; rejects incompatible scopes before changing devices.")
-      .def("to_graph", &GraphBuilder::ToGraph, nb::arg("move_shape_and_size_nodes") = true,
-           "Returns the finalised GraphProto.")
+      .def("rewriting_hash", &GraphBuilder::RewritingHash,
+           "Returns the combined positioned-node structural hash without reading weights.")
+      .def("capture_rewritings", &GraphBuilder::CaptureRewritings, nb::arg("rewrites"),
+           "Creates a hashed plan by validated replay of manually assembled edits.")
+      .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
-           nb::arg("move_shape_and_size_nodes") = true,
            "Returns the finalised graph wrapped in a ModelProto.")
       .def("to_standard_model", &GraphBuilder::ToStandardModel, nb::arg("ir_version") = 0,
-           nb::arg("move_shape_and_size_nodes") = true,
            "Returns a standard model, rejecting unsupported structured constructs.")
       .def("to_function", &GraphBuilder::ToFunction, nb::arg("domain") = "",
-           nb::arg("move_shape_and_size_nodes") = true,
            "Returns the finalised nodes wrapped in a FunctionProto.")
       .def(
           "to_onnx",
           [](GraphBuilder &self, core::builder::ProtoKind kind, int64_t ir_version,
-             const std::string &domain, bool move_shape_and_size_nodes) -> nb::object {
+             const std::string &domain) -> nb::object {
             switch (kind) {
             case core::builder::ProtoKind::kModel:
-              return nb::cast(self.ToModel(ir_version, move_shape_and_size_nodes));
+              return nb::cast(self.ToModel(ir_version));
             case core::builder::ProtoKind::kGraph:
-              return nb::cast(self.ToGraph(move_shape_and_size_nodes));
+              return nb::cast(self.ToGraph());
             case core::builder::ProtoKind::kFunction:
-              return nb::cast(self.ToFunction(domain, move_shape_and_size_nodes));
+              return nb::cast(self.ToFunction(domain));
             }
             throw BuilderError("GraphBuilder: unknown export kind.");
           },
           nb::arg("kind").noconvert() = core::builder::ProtoKind::kModel, nb::arg("ir_version") = 0,
-          nb::arg("domain") = "", nb::arg("move_shape_and_size_nodes") = true,
+          nb::arg("domain") = "",
           "Returns a ModelProto by default; accepts ProtoKind.kGraph or ProtoKind.kFunction "
           "for other proto types.");
 }

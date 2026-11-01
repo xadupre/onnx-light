@@ -331,12 +331,12 @@ class GraphBuilder(_C.GraphBuilder):
         Requires ``kind=ProtoKind.kModel`` and rejects an existing plan with that
         name. Other named plans are retained unless explicit canonicalization
         changes their reference. Optimization never edits the source builder;
-        ordinary export finalization still runs before taking the copy.
+        export never reorders the graph.
         """
         if not isinstance(optimize, OptimizationMode):
             raise TypeError("optimize must be an OptimizationMode.")
         if optimize is OptimizationMode.kNone:
-            return super().to_onnx(kind, ir_version, domain, move_shape_and_size_nodes)
+            return super().to_onnx(kind, ir_version, domain)
         if not isinstance(kind, _C.ProtoKind):
             raise TypeError("kind must be a ProtoKind.")
         if optimize is OptimizationMode.kRewritings and kind != ProtoKind.kModel:
@@ -344,7 +344,7 @@ class GraphBuilder(_C.GraphBuilder):
 
         from .optimization import GraphGraph
 
-        canonical = super().to_model(ir_version, move_shape_and_size_nodes)
+        canonical = super().to_model(ir_version)
         if optimize is OptimizationMode.kRewritings and "optimized" in canonical.rewritings:
             raise ValueError("A rewriting plan named 'optimized' already exists.")
         working = GraphBuilder(
@@ -360,12 +360,10 @@ class GraphBuilder(_C.GraphBuilder):
         if optimize is OptimizationMode.kRewritings:
             restored = working.undo_rewritings(plan)
             restored.add_rewriting("optimized", plan)
-            return restored.to_model(ir_version, move_shape_and_size_nodes)
+            return restored.to_model(ir_version)
         if kind == ProtoKind.kModel:
-            return working.to_standard_model(ir_version, move_shape_and_size_nodes)
-        return working.to_onnx(
-            kind, ir_version, domain, move_shape_and_size_nodes=move_shape_and_size_nodes
-        )
+            return working.to_standard_model(ir_version)
+        return working.to_onnx(kind, ir_version, domain)
 
 
 __all__ = [

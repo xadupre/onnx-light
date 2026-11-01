@@ -654,6 +654,115 @@ GraphProto *FindGraph(GraphProto &root, const utils::RepeatedStringField &path) 
   return graph;
 }
 
+void RequireRewritingHashes(const RewritingProto &plan) {
+  if (!plan.has_hash_before() || !plan.has_hash_after())
+    throw BuilderError("RewritingProto: hash_before and hash_after are required; regenerate "
+                       "the rewriting plan.");
+}
+
+using NodeMoveScope = std::pair<std::string, std::vector<std::string>>;
+
+NodeMoveScope NodeMoveScopeKey(const MoveNodeProto &move) {
+  std::vector<std::string> path;
+  path.reserve(move.graph_path().size());
+  for (const auto &component : move.graph_path())
+    path.push_back(component.value());
+  return {move.function_id().value(), std::move(path)};
+}
+
+std::vector<std::size_t>
+MoveNodeOrder(std::size_t count, const std::vector<const MoveNodeProto *> &moves, bool inverse) {
+  const auto empty = std::numeric_limits<std::size_t>::max();
+  std::vector<std::size_t> order(count, empty);
+  std::vector<bool> selected(count, false);
+  for (const auto *move : moves) {
+    if (!move->has_from_position() || !move->has_to_position())
+      throw BuilderError("MoveNodeProto: from_position and to_position are required.");
+    const auto from = CheckedPosition(inverse ? move->to_position() : move->from_position());
+    const auto to = CheckedPosition(inverse ? move->from_position() : move->to_position());
+    if (from >= count || to >= count)
+      throw BuilderError("MoveNodeProto: node position is out of range.");
+    if (selected[from] || order[to] != empty)
+      throw BuilderError("MoveNodeProto: duplicate source or destination position.");
+    selected[from] = true;
+    order[to] = from;
+  }
+  std::size_t retained = 0;
+  for (auto &position : order) {
+    if (position != empty)
+      continue;
+    while (retained < count && selected[retained])
+      ++retained;
+    if (retained == count)
+      throw BuilderError("MoveNodeProto: incomplete relocation permutation.");
+    position = retained++;
+  }
+  return order;
+}
+
+utils::RepeatedProtoField<NodeProto> &MoveNodes(ModelProto &model, const MoveNodeProto &move) {
+  auto *nodes = &model.mutable_graph()->ref_node();
+  if (!move.function_id().empty()) {
+    nodes = nullptr;
+    for (auto &function : model.ref_functions())
+      if (ShapesContext::LocalFunctionKey(function.domain(), function.name(),
+                                          function.overload()) == move.function_id().value()) {
+        if (nodes != nullptr)
+          throw BuilderError("MoveNodeProto: ambiguous local function.");
+        nodes = &function.ref_node();
+      }
+    if (nodes == nullptr)
+      throw BuilderError("MoveNodeProto: unknown local function.");
+  }
+  for (const auto &component : move.graph_path()) {
+    GraphProto *found = nullptr;
+    const auto visit = [&](GraphProto &graph) {
+      if (graph.name().value() != component.value())
+        return;
+      if (found != nullptr)
+        throw BuilderError("MoveNodeProto: ambiguous subgraph path.");
+      found = &graph;
+    };
+    for (auto &node : *nodes)
+      for (auto &attribute : node.ref_attribute()) {
+        if (attribute.has_g())
+          visit(*attribute.mutable_g());
+        for (auto &graph : attribute.ref_graphs())
+          visit(graph);
+      }
+    if (found == nullptr)
+      throw BuilderError("MoveNodeProto: unknown subgraph path.");
+    nodes = &found->ref_node();
+  }
+  return *nodes;
+}
+
+void UndoNodeMoves(ModelProto &model, const utils::RepeatedProtoField<MoveNodeProto> &moves) {
+  using Nodes = utils::RepeatedProtoField<NodeProto>;
+  std::map<Nodes *, std::vector<const MoveNodeProto *>> groups;
+  std::map<NodeMoveScope, Nodes *> scopes;
+  for (const auto &move : moves) {
+    const auto [scope, inserted] = scopes.emplace(NodeMoveScopeKey(move), nullptr);
+    if (inserted)
+      scope->second = &MoveNodes(model, move);
+    groups[scope->second].push_back(&move);
+  }
+  std::vector<std::pair<Nodes *, std::vector<std::size_t>>> orders;
+  for (const auto &[nodes, group] : groups)
+    orders.emplace_back(nodes, MoveNodeOrder(nodes->size(), group, true));
+  std::stable_sort(orders.begin(), orders.end(), [&](const auto &left, const auto &right) {
+    return groups.at(left.first).front()->graph_path().size() >
+           groups.at(right.first).front()->graph_path().size();
+  });
+  for (const auto &[nodes, order] : orders) {
+    Nodes moved;
+    moved.reserve(nodes->size());
+    for (const auto position : order)
+      moved.push_back(std::move((*nodes)[position]));
+    *nodes = std::move(moved);
+  }
+}
+
 // A Fenwick tree counts live entries before a fixed ordering rank.
 class LiveRanks {
 public:
@@ -1543,6 +1652,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   GraphProto canonical;
   if (&builder_ == root)
     canonical = root->BuildGraph();
+  const uint64_t hash_before = builder_.RewritingHash();
   const auto original_struct_types = root->Shapes().StructTypes();
   const auto original_opsets = root->opsets_;
   auto undo = std::make_shared<UndoState>();
@@ -1626,7 +1736,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   } original_functions_scope{original_functions_, original_functions_};
   original_functions_ = &original_functions_by_key;
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
-                             *undo, callback, parallel, move_shape_and_size_nodes);
+                             *undo, callback, parallel);
   if (report != nullptr)
     report->cleanup_time_ns += canonicalization_time_ns;
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
@@ -1703,6 +1813,85 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
       ProjectPreparedGraph(undo->edits[i].before, prepared, path);
       ProjectPreparedGraph(undo->edits[i].after, prepared, path);
     }
+  }
+  // Replay retains model-scoped source functions and imports preparation helpers.
+  for (const auto &opset : result.required_opset_imports())
+    root->SetOpsetVersion(RewriteDomain(opset.domain().value()), static_cast<int>(opset.version()));
+  std::set<FunctionKey> owned_functions;
+  const auto collect_owned = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      owned_functions.emplace(RewriteDomain(function->function_domain_), function->name_,
+                              function->function_template_.overload().value());
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect_owned(collect_owned, *root);
+  const auto retain_function = [&](const FunctionProto &function) {
+    if (owned_functions.insert(Identity(function)).second)
+      root->ImportLocalFunction(function);
+  };
+  for (const auto &function : result.added_functions())
+    retain_function(function);
+  const auto &retained_functions =
+      &builder_ == root ? undo->original_functions : original_definitions;
+  for (const auto &function : retained_functions)
+    retain_function(function);
+  result.set_hash_before(hash_before);
+  if (move_shape_and_size_nodes) {
+    const auto start = std::chrono::steady_clock::now();
+    std::size_t moved = 0;
+    std::set<std::string> recorded_functions;
+    const auto relocate = [&](const auto &self, GraphBuilder &scope,
+                              const std::vector<std::string> &path, const std::string &function_id,
+                              bool exported_graph, bool record) -> void {
+      std::unordered_set<const GraphBuilder *> referenced;
+      for (const auto &node : scope.nodes_)
+        for (const auto *subgraph : scope.ReferencedSubgraphs(node))
+          referenced.insert(subgraph);
+      for (const auto &subgraph : scope.subgraphs_) {
+        auto child_path = path;
+        child_path.push_back(subgraph->name_);
+        const bool exported = exported_graph && referenced.count(subgraph.get()) != 0;
+        self(self, *subgraph, child_path, function_id, exported, record && exported);
+      }
+      for (const auto &function : scope.local_functions_) {
+        const auto identity = ShapesContext::LocalFunctionKey(
+            function->function_domain_, function->name_, function->function_template_.overload());
+        self(self, *function, {}, identity, true, recorded_functions.insert(identity).second);
+      }
+      if (!exported_graph)
+        return;
+      std::vector<std::size_t> order;
+      std::vector<bool> readers;
+      const auto local_moved = scope.MoveShapeAndSizeNodesImpl(false, &order, &readers);
+      moved += local_moved;
+      if (local_moved == 0 || !record)
+        return;
+      const auto prefix = scope.is_local_function_ ? scope.initializers_.size() : 0;
+      for (std::size_t position = 0; position < order.size(); ++position) {
+        if (!readers[order[position]])
+          continue;
+        auto &move = *result.add_moved_nodes();
+        move.set_from_position(order[position] + prefix);
+        move.set_to_position(position + prefix);
+        for (const auto &component : path)
+          move.add_graph_path(component);
+        if (!function_id.empty())
+          move.set_function_id(function_id);
+      }
+    };
+    relocate(relocate, builder_, {}, "", true, true);
+    if (moved != 0)
+      Rebuild();
+    if (report != nullptr) {
+      report->moved_shape_and_size_nodes = moved;
+      report->move_shape_and_size_time_ns = ElapsedNanoseconds(start);
+    }
+  }
+  result.set_hash_after(builder_.RewritingHash());
+  if (&builder_ == root) {
     undo->plan = utils::CopyWithSharedTensorStorage(result);
     root->rewriting_undo_ = std::move(undo);
   }
@@ -1730,8 +1919,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                                         const ConstantFoldingOptions &folding_options,
                                         bool remove_unused, RewritingProto &collection,
                                         detail::RewritingUndoState &undo,
-                                        const OptimizationCallback &callback, bool parallel,
-                                        bool move_shape_and_size_nodes) {
+                                        const OptimizationCallback &callback, bool parallel) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1769,7 +1957,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                            original_functions_);
     RewritingProto child_rewrites = child_graph.OptimizeImpl(
         max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options,
-        remove_unused, collection, undo, callback, parallel, move_shape_and_size_nodes);
+        remove_unused, collection, undo, callback, parallel);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -1824,7 +2012,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
                              folding_options, remove_unused, collection, child_undo, callback,
-                             parallel, move_shape_and_size_nodes);
+                             parallel);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
@@ -2301,46 +2489,6 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       break;
     }
     ++priority_index;
-  }
-  if (move_shape_and_size_nodes) {
-    const auto start = std::chrono::steady_clock::now();
-    std::vector<std::size_t> order;
-    std::vector<bool> relocatable_readers;
-    const std::size_t moved =
-        builder_.MoveShapeAndSizeNodesImpl(false, false, &order, &relocatable_readers);
-    if (moved != 0) {
-      LocalRewritingProto rewrite;
-      rewrite.set_pattern_name("MoveShapeAndSizeNodes");
-      std::vector<std::size_t> matched;
-      std::size_t recorded_moved = 0;
-      for (std::size_t index = 0; index < order.size(); ++index) {
-        const auto &node = builder_.nodes_[index];
-        if (!relocatable_readers[order[index]])
-          continue;
-        recorded_moved += index != order[index];
-        matched.push_back(order[index]);
-        rewrite.ref_added_nodes().push_back(utils::CopyWithSharedTensorStorage(node));
-        rewrite.add_added_nodes_positions(index);
-      }
-      std::sort(matched.begin(), matched.end());
-      if (recorded_moved != moved)
-        throw BuilderError("GraphGraph::Optimize: incomplete Shape/Size relocation record.");
-      for (std::size_t index : matched)
-        rewrite.add_matched_nodes(index);
-      for (const auto &name : graph_path)
-        rewrite.add_graph_path(name);
-      UndoState::Edit inverse;
-      inverse.after.ref_node() = utils::CopyWithSharedTensorStorage(rewrite.added_nodes());
-      for (auto &node : inverse.after.ref_node())
-        builder_.MaterializeGraphReferences(node);
-      applied.push_back(std::move(rewrite));
-      undo.edits.push_back(std::move(inverse));
-      Rebuild();
-    }
-    if (report != nullptr) {
-      report->moved_shape_and_size_nodes += moved;
-      report->move_shape_and_size_time_ns += ElapsedNanoseconds(start);
-    }
   }
   if (report != nullptr)
     report->rewrites = applied.size() + function_body_rewrites;
@@ -2951,9 +3099,105 @@ GraphBuilder GraphBuilder::ApplyRewritings(const std::string &name) const {
   return result;
 }
 
+ModelProto GraphBuilder::RewritingReference() const {
+  ModelProto model = model_template_;
+  *model.mutable_graph() = BuildGraph();
+  model.clr_functions();
+  const auto collect = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect(collect, *this);
+  return model;
+}
+
+uint64_t GraphBuilder::RewritingHash() const { return RewritingReference().RewritingHash(); }
+
+void GraphBuilder::ApplyNodeMoves(const utils::RepeatedProtoField<MoveNodeProto> &moves) {
+  if (moves.empty())
+    return;
+  std::map<std::string, std::vector<GraphBuilder *>> functions;
+  const auto collect = [&](const auto &self, GraphBuilder &scope) -> void {
+    for (const auto &function : scope.local_functions_) {
+      functions[ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                                function->function_template_.overload())]
+          .push_back(function.get());
+      self(self, *function);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  collect(collect, *this);
+  std::map<GraphBuilder *, std::vector<const MoveNodeProto *>> groups;
+  std::map<NodeMoveScope, std::vector<GraphBuilder *>> scopes;
+  for (const auto &move : moves) {
+    const auto [scope, inserted] =
+        scopes.emplace(NodeMoveScopeKey(move), std::vector<GraphBuilder *>{});
+    if (inserted) {
+      scope->second = {this};
+      if (!move.function_id().empty()) {
+        const auto found = functions.find(move.function_id().value());
+        if (found == functions.end())
+          throw BuilderError("MoveNodeProto: unknown local function.");
+        scope->second = found->second;
+      }
+      for (auto *&target : scope->second)
+        for (const auto &component : move.graph_path())
+          target = &NamedBuilderOrThrow(target->subgraphs_, component.value(), "subgraph");
+    }
+    for (auto *target : scope->second)
+      groups[target].push_back(&move);
+  }
+  std::map<GraphBuilder *, std::vector<std::size_t>> orders;
+  for (const auto &[scope, group] : groups) {
+    auto order = MoveNodeOrder(scope->nodes_.size(), group, false);
+    scope->ValidateNodeOrder(&order);
+    orders.emplace(scope, std::move(order));
+  }
+  for (const auto &[scope, order] : orders) {
+    utils::RepeatedProtoField<NodeProto> moved;
+    moved.reserve(scope->nodes_.size());
+    for (const auto position : order)
+      moved.push_back(std::move(scope->nodes_[position]));
+    scope->nodes_ = std::move(moved);
+    std::vector<std::vector<std::string>> references(scope->nodes_.size());
+    for (std::size_t position = 0; position < scope->nodes_.size(); ++position)
+      scope->CollectNodeReferences(scope->nodes_[position], references[position]);
+    scope->compute_.UpdateNodes(scope->nodes_, order, references, {}, scope->device_,
+                                scope->MemoryNodeMaterializer());
+    scope->RefreshAfterMutation();
+    scope->InvalidateRewritings();
+  }
+}
+
 GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const {
+  return ReplayRewritings(rewrites, nullptr);
+}
+
+RewritingProto GraphBuilder::CaptureRewritings(const RewritingProto &rewrites) const {
+  if (rewrites.has_hash_before() || rewrites.has_hash_after())
+    throw BuilderError("CaptureRewritings: the plan already contains hashes.");
+  std::pair<uint64_t, uint64_t> hashes;
+  ReplayRewritings(rewrites, &hashes);
+  auto result = utils::CopyWithSharedTensorStorage(rewrites);
+  result.set_hash_before(hashes.first);
+  result.set_hash_after(hashes.second);
+  return result;
+}
+
+GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
+                                            std::pair<uint64_t, uint64_t> *captured_hashes) const {
   if (parent_ != nullptr || is_local_function_)
     throw BuilderError("ApplyRewritings requires a root model builder.");
+  if (captured_hashes == nullptr)
+    RequireRewritingHashes(rewrites);
+  const auto hash_before = RewritingHash();
+  if (captured_hashes == nullptr && hash_before != rewrites.hash_before())
+    throw BuilderError("ApplyRewritings: initial structural hash mismatch.");
   ModelProto model = model_template_;
   model.ref_struct_types() = Shapes().StructTypes();
   for (const auto &[domain, version] : opsets_)
@@ -3322,19 +3566,27 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     }
     index = end;
   }
+  result.ApplyNodeMoves(rewrites.moved_nodes());
   result.BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
-  result.preserve_replay_order_ = true;
+  const auto hash_after = result.RewritingHash();
+  if (captured_hashes == nullptr && hash_after != rewrites.hash_after())
+    throw BuilderError("ApplyRewritings: final structural hash mismatch.");
+  if (captured_hashes != nullptr)
+    *captured_hashes = {hash_before, hash_after};
   return result;
 }
 
 GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const {
+  RequireRewritingHashes(rewrites);
+  if (RewritingHash() != rewrites.hash_after())
+    throw BuilderError("UndoRewritings: final structural hash mismatch before undo.");
   if (parent_ != nullptr || is_local_function_ || rewriting_undo_ == nullptr)
     throw BuilderError("UndoRewritings: requires an in-memory root-model capture.");
   const auto &undo = *rewriting_undo_;
   if (!rewrites.Equals(undo.plan))
     throw BuilderError("UndoRewritings: plan does not match the in-memory capture.");
-  ModelProto model = model_template_;
-  *model.mutable_graph() = BuildGraph();
+  ModelProto model = RewritingReference();
+  UndoNodeMoves(model, rewrites.moved_nodes());
   const auto prepared = PreparationOutputs(rewrites);
   std::size_t index = rewrites.rewrites().size();
   while (index != 0) {
@@ -3436,6 +3688,8 @@ GraphBuilder GraphBuilder::UndoRewritings(const RewritingProto &rewrites) const 
   };
   restore_devices(restore_devices, result, undo.devices);
   result.rewritings_ = utils::CopyWithSharedTensorStorage(undo.original_rewritings);
+  if (result.RewritingHash() != rewrites.hash_before())
+    throw BuilderError("UndoRewritings: initial structural hash mismatch after undo.");
   return result;
 }
 

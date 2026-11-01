@@ -115,7 +115,7 @@ public:
    * retain references to the graph or matched nodes beyond the call.
    *
    * Returns:
-   *   Self-contained records of the applied rewrites, in application order,
+   *   Self-contained edits, global structural hashes and final simultaneous moves,
    *   replayable against the input graph, or its explicitly canonicalized
    *   reference when ``canonicalize=true``.
    */
@@ -253,8 +253,7 @@ private:
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
                               RewritingProto &collection, detail::RewritingUndoState &undo,
-                              const OptimizationCallback &callback, bool parallel,
-                              bool move_shape_and_size_nodes);
+                              const OptimizationCallback &callback, bool parallel);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

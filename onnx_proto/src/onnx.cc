@@ -2206,6 +2206,38 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(removed_extended_initializers));
 }
 
+IMPLEMENT_PROTO(MoveNodeProto)
+SerializeSizeResult MoveNodeProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, from_position)
+  SIZE_FIELD(size, options, stream, to_position)
+  SIZE_REPEATED_FIELD(size, options, stream, graph_path)
+  SIZE_FIELD(size, options, stream, function_id)
+  return size;
+}
+void MoveNodeProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                      SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, from_position)
+  WRITE_FIELD(options, stream, to_position)
+  WRITE_REPEATED_FIELD(options, stream, graph_path)
+  WRITE_FIELD(options, stream, function_id)
+}
+bool MoveNodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, MoveNodeProto)
+  READ_FIELD(options, stream, from_position)
+  READ_FIELD(options, stream, to_position)
+  READ_REPEATED_FIELD(options, stream, graph_path)
+  READ_FIELD(options, stream, function_id)
+  READ_END(options, stream, MoveNodeProto)
+  return true;
+}
+void MoveNodeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(from_position),
+                                 NAME_EXIST_VALUE(to_position), NAME_EXIST_VALUE(graph_path),
+                                 NAME_EXIST_VALUE(function_id));
+}
+
 IMPLEMENT_PROTO(RewritingProto)
 SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                   SerializeOptions &options) const {
@@ -2215,6 +2247,9 @@ SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stre
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, added_functions)
   SIZE_REPEATED_FIELD(size, options, stream, replaced_function_ids)
+  SIZE_FIELD(size, options, stream, hash_before)
+  SIZE_FIELD(size, options, stream, hash_after)
+  SIZE_REPEATED_FIELD(size, options, stream, moved_nodes)
   return size;
 }
 void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2224,6 +2259,9 @@ void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, added_functions)
   WRITE_REPEATED_FIELD(options, stream, replaced_function_ids)
+  WRITE_FIELD(options, stream, hash_before)
+  WRITE_FIELD(options, stream, hash_after)
+  WRITE_REPEATED_FIELD(options, stream, moved_nodes)
 }
 bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, RewritingProto)
@@ -2232,6 +2270,9 @@ bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, metadata_props)
   READ_REPEATED_FIELD(options, stream, added_functions)
   READ_REPEATED_FIELD(options, stream, replaced_function_ids)
+  READ_FIELD(options, stream, hash_before)
+  READ_FIELD(options, stream, hash_after)
+  READ_REPEATED_FIELD(options, stream, moved_nodes)
   READ_END(options, stream, RewritingProto)
   return true;
 }
@@ -2240,7 +2281,8 @@ void RewritingProto::PrintToStringStream(std::stringstream &ss,
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(rewrites), NAME_EXIST_VALUE(required_opset_imports),
       NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions),
-      NAME_EXIST_VALUE(replaced_function_ids));
+      NAME_EXIST_VALUE(replaced_function_ids), NAME_EXIST_VALUE(hash_before),
+      NAME_EXIST_VALUE(hash_after), NAME_EXIST_VALUE(moved_nodes));
 }
 
 // ModelProto
@@ -3103,12 +3145,24 @@ bool VisitProtoFields(const LocalRewritingProto &left, Right &right, Visitor &&v
 }
 
 template <typename Right, typename Visitor>
+bool VisitProtoFields(const MoveNodeProto &left, Right &right, Visitor &&visitor) {
+  VISIT_FIELD(from_position)
+  VISIT_FIELD(to_position)
+  VISIT_FIELD(graph_path)
+  VISIT_FIELD(function_id)
+  return true;
+}
+
+template <typename Right, typename Visitor>
 bool VisitProtoFields(const RewritingProto &left, Right &right, Visitor &&visitor) {
   VISIT_FIELD(rewrites)
   VISIT_FIELD(required_opset_imports)
   VISIT_FIELD(metadata_props)
   VISIT_FIELD(added_functions)
   VISIT_FIELD(replaced_function_ids)
+  VISIT_FIELD(hash_before)
+  VISIT_FIELD(hash_after)
+  VISIT_FIELD(moved_nodes)
   return true;
 }
 
@@ -3589,7 +3643,99 @@ int64_t AttributeContentHash(const AttributeProto &attribute) {
   return hasher.Finalize();
 }
 
+class RewritingHasher {
+public:
+  RewritingHasher() { blake3_hasher_init(&hasher_); }
+
+  void Add(uint64_t value) {
+    uint8_t bytes[8];
+    for (std::size_t index = 0; index < sizeof(bytes); ++index)
+      bytes[index] = static_cast<uint8_t>(value >> (8 * index));
+    blake3_hasher_update(&hasher_, bytes, sizeof(bytes));
+  }
+
+  void Add(const std::string &value) {
+    Add(static_cast<uint64_t>(value.size()));
+    blake3_hasher_update(&hasher_, value.data(), value.size());
+  }
+
+  uint64_t Finalize() const {
+    uint8_t bytes[8];
+    blake3_hasher_finalize(&hasher_, bytes, sizeof(bytes));
+    uint64_t value = 0;
+    for (std::size_t index = 0; index < sizeof(bytes); ++index)
+      value |= static_cast<uint64_t>(bytes[index]) << (8 * index);
+    return value;
+  }
+
+private:
+  blake3_hasher hasher_;
+};
+
+void HashRewritingNodes(RewritingHasher &combined,
+                        const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t depth);
+
+void HashRewritingGraphs(RewritingHasher &combined,
+                         const utils::RepeatedProtoField<AttributeProto> &attributes,
+                         std::size_t depth) {
+  for (std::size_t index = 0; index < attributes.size(); ++index) {
+    const auto &attribute = attributes[index];
+    if (attribute.has_g()) {
+      combined.Add(uint64_t{1});
+      combined.Add(static_cast<uint64_t>(index));
+      HashRewritingNodes(combined, attribute.g().node(), depth + 1);
+    }
+    for (std::size_t graph = 0; graph < attribute.graphs().size(); ++graph) {
+      combined.Add(uint64_t{2});
+      combined.Add(static_cast<uint64_t>(index));
+      combined.Add(static_cast<uint64_t>(graph));
+      HashRewritingNodes(combined, attribute.graphs(graph).node(), depth + 1);
+    }
+  }
+  combined.Add(uint64_t{0});
+}
+
+void HashRewritingNodes(RewritingHasher &combined,
+                        const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t depth) {
+  EXT_ENFORCE(depth < 64, "RewritingHash: graph nesting exceeds 64.");
+  combined.Add(static_cast<uint64_t>(nodes.size()));
+  for (std::size_t position = 0; position < nodes.size(); ++position) {
+    const auto &node = nodes[position];
+    RewritingHasher hash;
+    hash.Add(static_cast<uint64_t>(position));
+    hash.Add(node.domain().value() == "ai.onnx" ? std::string() : node.domain().value());
+    hash.Add(node.op_type().value());
+    hash.Add(static_cast<uint64_t>(node.input().size()));
+    hash.Add(static_cast<uint64_t>(node.output().size()));
+    hash.Add(static_cast<uint64_t>(node.attribute().size()));
+    combined.Add(hash.Finalize());
+    HashRewritingGraphs(combined, node.attribute(), depth);
+  }
+}
+
 } // namespace
+
+uint64_t ModelProto::RewritingHash() const {
+  RewritingHasher hash;
+  HashRewritingNodes(hash, graph().node(), 0);
+  std::vector<const FunctionProto *> ordered;
+  ordered.reserve(functions().size());
+  for (const auto &function : functions())
+    ordered.push_back(&function);
+  std::sort(ordered.begin(), ordered.end(), [](const auto *left, const auto *right) {
+    const auto domain = [](const FunctionProto *function) {
+      return function->domain().value() == "ai.onnx" ? std::string() : function->domain().value();
+    };
+    return std::make_tuple(domain(left), left->name().value(), left->overload().value()) <
+           std::make_tuple(domain(right), right->name().value(), right->overload().value());
+  });
+  hash.Add(static_cast<uint64_t>(ordered.size()));
+  for (const auto *function : ordered) {
+    HashRewritingNodes(hash, function->node(), 0);
+    HashRewritingGraphs(hash, function->attribute_proto(), 0);
+  }
+  return hash.Finalize();
+}
 
 void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options) {
   ParseScopeCallbackVisitor(options).Visit(model);
@@ -3645,6 +3791,7 @@ void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_
     CHECK_DEFERRED_CASE(SparseTensorProto, SparseTensorProto)
     CHECK_DEFERRED_CASE(LocalRewritingProto, LocalRewritingProto)
     CHECK_DEFERRED_CASE(RewritingProto, RewritingProto)
+    CHECK_DEFERRED_CASE(MoveNodeProto, MoveNodeProto)
     CHECK_DEFERRED_CASE(FunctionProto, FunctionProto)
     CHECK_DEFERRED_CASE(OperatorSetIdProto, OperatorSetIdProto)
     CHECK_DEFERRED_CASE(ValueInfoProto, ValueInfoProto)
@@ -3704,6 +3851,7 @@ DEFINE_PROTO_EQUALS(TensorProto::Segment)
 DEFINE_PROTO_EQUALS(SparseTensorProto)
 DEFINE_PROTO_EQUALS(LocalRewritingProto)
 DEFINE_PROTO_EQUALS(RewritingProto)
+DEFINE_PROTO_EQUALS(MoveNodeProto)
 DEFINE_PROTO_EQUALS(FunctionProto)
 DEFINE_PROTO_EQUALS(OperatorSetIdProto)
 DEFINE_PROTO_EQUALS(ValueInfoProto)
@@ -3770,6 +3918,7 @@ void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const vo
     COPY_PROTO_CASE(SparseTensorProto, SparseTensorProto)
     COPY_PROTO_CASE(LocalRewritingProto, LocalRewritingProto)
     COPY_PROTO_CASE(RewritingProto, RewritingProto)
+    COPY_PROTO_CASE(MoveNodeProto, MoveNodeProto)
     COPY_PROTO_CASE(FunctionProto, FunctionProto)
     COPY_PROTO_CASE(OperatorSetIdProto, OperatorSetIdProto)
     COPY_PROTO_CASE(ValueInfoProto, ValueInfoProto)

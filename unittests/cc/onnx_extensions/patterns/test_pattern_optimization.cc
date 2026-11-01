@@ -500,6 +500,11 @@ RewritingProto PreparationPlan() {
   return plan;
 }
 
+core::builder::GraphBuilder ApplyCapturedRewritings(const core::builder::GraphBuilder &source,
+                                                    const RewritingProto &plan) {
+  return source.ApplyRewritings(source.CaptureRewritings(plan));
+}
+
 ModelProto PreparationModel() {
   ModelProto model;
   model.set_producer_name("canonical");
@@ -564,9 +569,10 @@ TEST(PatternOptimization, NamedVariantsRoundTripSelectIndependentlyAndKeepCanoni
   ScopedAddKernel kernel;
   core::builder::GraphBuilder source(PreparationModel(), SchemaLookup());
   const auto canonical = source.ToModel();
-  source.AddRewriting("prepared", PreparationPlan());
-  source.AddRewriting("unchanged", RewritingProto{});
-  EXPECT_THROW(source.AddRewriting("prepared", RewritingProto{}), core::builder::BuilderError);
+  source.AddRewriting("prepared", source.CaptureRewritings(PreparationPlan()));
+  source.AddRewriting("unchanged", source.CaptureRewritings(RewritingProto{}));
+  EXPECT_THROW(source.AddRewriting("prepared", source.CaptureRewritings(RewritingProto{})),
+               core::builder::BuilderError);
   EXPECT_THROW(source.AddRewriting("", RewritingProto{}), core::builder::BuilderError);
   const auto bundled = source.ToModel();
   EXPECT_TRUE(bundled.graph().Equals(canonical.graph()));
@@ -585,7 +591,7 @@ TEST(PatternOptimization, NamedVariantsRoundTripSelectIndependentlyAndKeepCanoni
   EXPECT_EQ(restored.Rewritings().size(), 2u);
   EXPECT_THROW(restored.ApplyRewritings("absent"), core::builder::BuilderError);
   EXPECT_THROW(restored.ToStandardModel(), core::builder::BuilderError);
-  EXPECT_TRUE(restored.ApplyRewritings(RewritingProto{}).Rewritings().empty());
+  EXPECT_TRUE(ApplyCapturedRewritings(restored, RewritingProto{}).Rewritings().empty());
 }
 
 TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
@@ -599,7 +605,7 @@ TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
   for (std::size_t i = 0; i < mutations.size(); ++i) {
     SCOPED_TRACE(i);
     core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
-    builder.AddRewriting("variant", RewritingProto{});
+    builder.AddRewriting("variant", builder.CaptureRewritings(RewritingProto{}));
     mutations[i](builder);
     EXPECT_TRUE(builder.Rewritings().empty());
     EXPECT_FALSE(builder.ToModel().has_rewritings());
@@ -610,14 +616,14 @@ TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
   function.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   function.MakeNode("Identity", {"x"}, {"y"});
   function.MakeOutput("y");
-  parent.AddRewriting("variant", RewritingProto{});
+  parent.AddRewriting("variant", parent.CaptureRewritings(RewritingProto{}));
   function.MakeNode("Neg", {"y"}, {"extra"});
   EXPECT_TRUE(parent.Rewritings().empty());
   auto &body = parent.MakeSubgraph("body");
   body.MakeNode("Identity", {"a"}, {"out"});
   body.MakeOutput("out");
   AddSubgraphReference(parent, "body", "body", "subgraph_out");
-  parent.AddRewriting("nested", RewritingProto{});
+  parent.AddRewriting("nested", parent.CaptureRewritings(RewritingProto{}));
   body.MakeNode("Neg", {"out"}, {"unused"});
   EXPECT_TRUE(parent.Rewritings().empty());
 }
@@ -630,7 +636,7 @@ TEST(PatternOptimization, NamedVariantsSurviveExportButInvalidateOnExplicitReord
   builder.MakeNode("Shape", {"a"}, {"s"});
   builder.MakeOutput("b");
   builder.MakeOutput("s");
-  builder.AddRewriting("before_finalization", RewritingProto{});
+  builder.AddRewriting("before_finalization", builder.CaptureRewritings(RewritingProto{}));
   const auto finalized = builder.ToModel();
   ASSERT_EQ(finalized.graph().node_size(), 3);
   EXPECT_EQ(finalized.graph().node(1).op_type(), "Neg");
@@ -642,7 +648,7 @@ TEST(PatternOptimization, NamedVariantsSurviveExportButInvalidateOnExplicitReord
   const auto reordered = builder.ToModel();
   EXPECT_EQ(reordered.graph().node(1).op_type(), "Shape");
   EXPECT_FALSE(reordered.has_rewritings());
-  builder.AddRewriting("finalized", RewritingProto{});
+  builder.AddRewriting("finalized", builder.CaptureRewritings(RewritingProto{}));
   EXPECT_EQ(builder.ToModel().rewritings_size(), 1);
 }
 
@@ -650,6 +656,8 @@ TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidP
   core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
   RewritingProto invalid;
   invalid.add_rewrites()->add_matched_nodes(UINT64_MAX);
+  invalid.set_hash_before(builder.RewritingHash());
+  invalid.set_hash_after(builder.RewritingHash());
   builder.AddRewriting("invalid", invalid);
   EXPECT_THROW(builder.ApplyRewritings("invalid"), core::builder::BuilderError);
   RewritingProto unavailable;
@@ -657,7 +665,7 @@ TEST(PatternOptimization, NamedVariantsDiagnoseMissingImplementationsAndInvalidP
   edit.add_matched_nodes(0);
   edit.ref_added_nodes().push_back(MakeNode("MissingVariantKernel", {"a", "b"}, {"y"}));
   edit.add_added_nodes_positions(0);
-  builder.AddRewriting("missing", unavailable);
+  builder.AddRewriting("missing", builder.CaptureRewritings(unavailable));
   EXPECT_THROW(
       {
         try {
@@ -695,7 +703,7 @@ TEST(PatternOptimization, NamedVariantsUseRuntimeFallbackDespiteShapeRegistratio
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
     builder.MakeNode("F", {"x"}, {"y"}, "variant.fallback");
     builder.MakeOutput("y", core::symbolic::TensorType::kFloat, Shape());
-    builder.AddRewriting("variant", RewritingProto{});
+    builder.AddRewriting("variant", builder.CaptureRewritings(RewritingProto{}));
     const core::runtime::Tensors feeds{core::runtime::Tensor::FromFloat("x", {2}, {2, 3})};
     EXPECT_FLOAT_EQ(core::runtime::RunModel(builder.ToModel(), feeds)[0].AsFloat()[0], 2);
     auto applied = builder.ApplyRewritings("variant").ToModel();
@@ -718,7 +726,7 @@ TEST(PatternOptimization, NamedVariantsCheckRuntimePrecedenceAtTheSelectedDevice
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("F", {"x"}, {"y"}, domain);
   builder.MakeOutput("y", core::symbolic::TensorType::kFloat, Shape());
-  builder.AddRewriting("variant", RewritingProto{});
+  builder.AddRewriting("variant", builder.CaptureRewritings(RewritingProto{}));
   EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
   builder.set_device(core::symbolic::Device::kGPU0);
   EXPECT_NO_THROW(builder.ApplyRewritings("variant"));
@@ -776,7 +784,7 @@ TEST(PatternOptimization, NamedVariantsCheckControlFlowAndBoundFunctionGraphs) {
       model.mutable_graph()->ref_node()[0] = mode == 0 ? conditional : call;
       core::builder::GraphBuilder builder(model, SchemaLookup());
       builder.set_device(core::symbolic::Device::kGPU0);
-      builder.AddRewriting("variant", RewritingProto{});
+      builder.AddRewriting("variant", builder.CaptureRewritings(RewritingProto{}));
       if (missing && mode != 2)
         EXPECT_THROW(builder.ApplyRewritings("variant"), core::builder::BuilderError);
       else
@@ -818,7 +826,7 @@ TEST(PatternOptimization, NamedRewritingsRequireSequenceMapPackingCallback) {
   body.add_output(item);
   graph.ref_node().push_back(std::move(node));
   core::builder::GraphBuilder builder(model, SchemaLookup());
-  builder.AddRewriting("mapped", RewritingProto{});
+  builder.AddRewriting("mapped", builder.CaptureRewritings(RewritingProto{}));
   EXPECT_THROW(builder.ApplyRewritings("mapped"), core::builder::BuilderError);
 
   core::runtime::RegisterSequenceMapPackFn([&](core::runtime::RuntimeContext &,
@@ -854,11 +862,12 @@ TEST(PatternOptimization, ModelReplayPreparesDependentOutputsBeforeRemovingSourc
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
   const auto replayed =
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
-  EXPECT_EQ(replayed.SerializeAsString(), core::builder::GraphBuilder(original, SchemaLookup())
-                                              .ApplyRewritings(plan)
-                                              .ToModel()
-                                              .SerializeAsString());
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), loaded)
+          .ToModel();
+  EXPECT_EQ(replayed.SerializeAsString(),
+            ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+                .ToModel()
+                .SerializeAsString());
   EXPECT_EQ(original.SerializeAsString(), original_bytes);
   EXPECT_EQ(replayed.producer_name(), "canonical");
   ASSERT_EQ(replayed.functions().size(), 1u);
@@ -928,8 +937,9 @@ TEST(PatternOptimization, ModelReplayRejectsInvalidPreparationAndConflictingDefi
     ModelProto model = PreparationModel();
     RewritingProto plan = PreparationPlan();
     invalid[i](model, plan);
-    EXPECT_THROW(core::builder::GraphBuilder(model, SchemaLookup()).ApplyRewritings(plan).ToModel(),
-                 core::builder::BuilderError);
+    EXPECT_THROW(
+        ApplyCapturedRewritings(core::builder::GraphBuilder(model, SchemaLookup()), plan).ToModel(),
+        core::builder::BuilderError);
   }
 }
 
@@ -951,9 +961,9 @@ TEST(PatternOptimization, AcceptsIdenticalFunctionsAndRejectsConflictingBodies) 
         plan.ref_added_functions()[0].ref_node()[0].set_op_type("Mul");
       }
       if (changed_builder || changed_definition) {
-        EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+        EXPECT_THROW(ApplyCapturedRewritings(builder, plan), core::builder::BuilderError);
       } else {
-        const auto result = builder.ApplyRewritings(plan).ToModel();
+        const auto result = ApplyCapturedRewritings(builder, plan).ToModel();
         ASSERT_EQ(result.functions_size(), 1);
         EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 12);
       }
@@ -975,7 +985,7 @@ TEST(PatternOptimization, ModelReplayRetainsFunctionsUsedByReplacementNodes) {
       MakeNode("Prepare", {"a", "b"}, {"y", "unused"}, "test.prepare"));
   edit.add_added_nodes_positions(0);
   const auto result =
-      core::builder::GraphBuilder(model, SchemaLookup()).ApplyRewritings(plan).ToModel();
+      ApplyCapturedRewritings(core::builder::GraphBuilder(model, SchemaLookup()), plan).ToModel();
   ASSERT_EQ(result.functions().size(), 1u);
   EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
 }
@@ -1006,9 +1016,9 @@ TEST(PatternOptimization, ReplayUsesOperatorSignaturesDespiteCollidingDefinition
         edit.add_added_nodes_positions(0);
         core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
         if (outputs == 2) {
-          EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+          EXPECT_THROW(ApplyCapturedRewritings(builder, plan), core::builder::BuilderError);
         } else {
-          const auto result = builder.ApplyRewritings(plan).ToModel();
+          const auto result = ApplyCapturedRewritings(builder, plan).ToModel();
           EXPECT_EQ(result.functions_size(), 1);
           EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
         }
@@ -1053,9 +1063,9 @@ TEST(PatternOptimization, PreparationValidatesEffectiveKernelsInsteadOfIgnoredBo
       plan.ref_added_functions()[0].ref_node()[0] = MakeNode("RandomNormalLike", {"A"}, {"C"});
     core::builder::GraphBuilder builder(PreparationModel(), SchemaLookup());
     if (random_native) {
-      EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+      EXPECT_THROW(ApplyCapturedRewritings(builder, plan), core::builder::BuilderError);
     } else {
-      const auto result = builder.ApplyRewritings(plan).ToModel();
+      const auto result = ApplyCapturedRewritings(builder, plan).ToModel();
       EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 12);
     }
     EXPECT_EQ(executions, 0);
@@ -1072,8 +1082,8 @@ TEST(PatternOptimization, ModelReplayRejectsRecipesReadingNewInputDefaults) {
     auto &type = *input.mutable_type()->mutable_tensor_type();
     type.set_elem_type(TensorProto::FLOAT);
     type.mutable_shape()->add_dim()->set_dim_value(1);
-    EXPECT_THROW(core::builder::GraphBuilder(model, SchemaLookup())
-                     .ApplyRewritings(PreparationPlan())
+    EXPECT_THROW(ApplyCapturedRewritings(core::builder::GraphBuilder(model, SchemaLookup()),
+                                         PreparationPlan())
                      .ToModel(),
                  core::builder::BuilderError);
   }
@@ -1115,7 +1125,8 @@ TEST(PatternOptimization, ModelReplayPreservesDistinctFunctionDomainsAndOverload
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     const auto result =
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), loaded)
+            .ToModel();
     ASSERT_EQ(result.functions().size(), 2u);
     EXPECT_EQ(result.functions(0).domain(), "first.test");
     EXPECT_EQ(result.functions(1).overload().value(), overloaded ? "twice" : "");
@@ -1197,7 +1208,8 @@ TEST(PatternOptimization, ModelReplayUsesNonCollidingOverloadedFunctionSignature
   call.set_overload("pair");
   edit.ref_added_nodes().push_back(std::move(call));
   const auto replayed =
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel();
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .ToModel();
   EXPECT_EQ(replayed.graph().node(0).overload(), "pair");
   EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 3);
 }
@@ -1221,7 +1233,8 @@ TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
     function.add_output("C");
     plan.ref_added_functions().push_back(function);
     EXPECT_THROW(
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel(),
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+            .ToModel(),
         core::builder::BuilderError);
     auto &edit = *plan.add_rewrites();
     edit.add_matched_nodes(0);
@@ -1240,7 +1253,7 @@ TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     core::builder::GraphBuilder builder(original, SchemaLookup());
-    EXPECT_THROW(builder.ApplyRewritings(loaded), core::builder::BuilderError);
+    EXPECT_THROW(ApplyCapturedRewritings(builder, loaded), core::builder::BuilderError);
     EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original.graph().SerializeAsString());
   }
 }
@@ -1262,8 +1275,9 @@ TEST(PatternOptimization, RejectsCollidingFunctionLookupNames) {
       plan.ref_added_functions().push_back(first);
     }
     plan.ref_added_functions().push_back(second);
-    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
-                 core::builder::BuilderError);
+    EXPECT_THROW(
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan),
+        core::builder::BuilderError);
   }
 }
 
@@ -1298,6 +1312,7 @@ TEST(PatternOptimization, UpdatesOnlyAffectedShapesAndRefreshesRemovedLastUses) 
   replace.add_matched_nodes(1);
   replace.add_added_nodes_positions(1);
   replace.ref_added_nodes().push_back(MakeNode("Identity", {"X"}, {"p"}));
+  plan = source.CaptureRewritings(plan);
   ScopedAbsShapeCounter counter;
   auto result = source.ApplyRewritings(plan);
   EXPECT_EQ(counter.calls, 1u);
@@ -1361,7 +1376,7 @@ TEST(PatternOptimization, PreservesExistingTagsWhenReplacingInputConsumers) {
     rewrite.add_matched_nodes(1);
     rewrite.ref_added_nodes().push_back(MakeNode("Neg", {"X"}, {"Y"}));
     rewrite.add_added_nodes_positions(0);
-    const auto result = source.ApplyRewritings(plan);
+    const auto result = ApplyCapturedRewritings(source, plan);
     EXPECT_EQ(result.Nodes()[0].input(0), "X");
     for (const std::string name : {"X", "Y", "Z"}) {
       EXPECT_EQ(source.Compute().ValueTags().at(name), declared_tag ? "shape" : "weight");
@@ -1399,7 +1414,7 @@ TEST(PatternOptimization, PreservesExistingTagsWhenRewritingMixedTagInputs) {
       rewrite.add_added_nodes_positions(1);
       rewrite.ref_added_nodes().push_back(MakeNode("Identity", {"fresh"}, {"Y"}));
     }
-    auto result = source.ApplyRewritings(plan);
+    auto result = ApplyCapturedRewritings(source, plan);
     for (const std::string name : {"X", "S", "Y", "Z"}) {
       EXPECT_EQ(result.Compute().ValueTags().at(name), source.Compute().ValueTags().at(name));
     }
@@ -1425,7 +1440,7 @@ TEST(PatternOptimization, PreservesOutputOnlyTagsWhenFoldingToInitializers) {
   rewrite.add_matched_nodes(0);
   rewrite.add_added_initializer_positions(0);
   rewrite.ref_added_initializers().push_back(MakeInitializer<int64_t>("p", {1}, {2}));
-  const auto result = source.ApplyRewritings(plan);
+  const auto result = ApplyCapturedRewritings(source, plan);
   EXPECT_TRUE(result.Nodes().empty());
   ASSERT_EQ(result.Initializers().size(), 1u);
   EXPECT_EQ(result.Compute().ValueTags().at("p"), "shape");
@@ -1453,7 +1468,7 @@ TEST(PatternOptimization, RefreshesReplacedCapturesWithoutAParentShapeFunction) 
   nested.add_added_nodes_positions(0);
   auto &rewrite = *plan.add_rewrites();
   rewrite.add_removed_initializers(0);
-  auto result = source.ApplyRewritings(plan);
+  auto result = ApplyCapturedRewritings(source, plan);
   auto &updated = result.Subgraph("body");
   EXPECT_EQ(updated.Nodes()[0].input(0), "b");
   EXPECT_FALSE(updated.HasShape("a"));
@@ -1491,8 +1506,8 @@ TEST(PatternOptimization, ModelReplayDistinguishesFunctionNamesFromOverloads) {
   output.set_name("z");
   output.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
   original.mutable_graph()->ref_output().push_back(output);
-  const auto replayed = core::builder::GraphBuilder(original, SchemaLookup())
-                            .ApplyRewritings(RewritingProto{})
+  const auto replayed = ApplyCapturedRewritings(
+                            core::builder::GraphBuilder(original, SchemaLookup()), RewritingProto{})
                             .ToModel();
   ASSERT_EQ(replayed.graph().node_size(), 2);
   EXPECT_EQ(replayed.graph().node(0).op_type(), "F:pair");
@@ -1721,7 +1736,7 @@ TEST(PatternOptimization, IgnoresOperatorOverridesInsideReachableFunctions) {
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
       EXPECT_NO_THROW(
-          core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded));
+          ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), loaded));
       const auto functions = original.functions();
       original.ref_functions().clear();
       original.add_function(override);
@@ -1755,7 +1770,8 @@ TEST(PatternOptimization, GraphReplayKeepsReachableFunctionImportsIndependent) {
   opset.set_domain("function.local");
   opset.set_version(1);
   EXPECT_NO_THROW(
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph());
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .BuildGraph());
 }
 
 TEST(PatternOptimization, IgnoresOperatorOverridesInsideNestedFunctionGraphs) {
@@ -1795,7 +1811,8 @@ TEST(PatternOptimization, IgnoresOperatorOverridesInsideNestedFunctionGraphs) {
   override.add_output("C");
   override.add_opset("", 18);
   override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
-  EXPECT_NO_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan));
+  EXPECT_NO_THROW(
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan));
   const auto functions = original.functions();
   original.ref_functions().clear();
   original.add_function(override);
@@ -1862,7 +1879,8 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
     const auto replayed =
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), loaded)
+            .ToModel();
     const auto outputs = core::runtime::RunModel(replayed, {});
     EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], explicit_binding ? 1 : 2);
     if (explicit_binding) {
@@ -2047,6 +2065,7 @@ TEST(PatternOptimization, ReplayBatchesIndependentEditsWithoutRepeatedGraphInfer
   ModelProto original;
   *original.mutable_graph() = builder.BuildGraph();
   AddOpsetImports(original, builder);
+  plan = builder.CaptureRewritings(plan);
   ScopedAbsShapeCounter counter;
   const auto replayed =
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
@@ -2080,7 +2099,8 @@ TEST(PatternOptimization, ReplayBatchStillValidatesLaterSequentialEdits) {
     invalid->add_added_nodes(MakeNode("Neg", {"x"}, {"second"}));
     invalid->add_added_nodes_positions(1);
     EXPECT_THROW(
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph(),
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+            .BuildGraph(),
         core::builder::BuilderError);
   }
 }
@@ -2108,14 +2128,16 @@ TEST(PatternOptimization, ReplayRejectsForwardReferencesAcrossEdits) {
     first->add_matched_nodes(position);
     first->add_added_nodes(MakeNode("Neg", {"later"}, {"a"}));
     first->add_added_nodes_positions(position);
-    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
-                 core::builder::BuilderError);
+    EXPECT_THROW(
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan),
+        core::builder::BuilderError);
     auto *second = plan.add_rewrites();
     second->add_matched_nodes(position + 1);
     second->add_added_nodes(MakeNode("Neg", {"x"}, {"later"}));
     second->add_added_nodes_positions(position + 1);
-    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
-                 core::builder::BuilderError);
+    EXPECT_THROW(
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan),
+        core::builder::BuilderError);
   }
 }
 
@@ -2156,14 +2178,14 @@ TEST(PatternOptimization, ReplayPreservesCustomFunctionsNamedLikeNativeOperators
       for (const auto &edit : plan.rewrites()) {
         RewritingProto single;
         *single.add_rewrites() = edit;
-        *sequential.mutable_graph() = core::builder::GraphBuilder(sequential, SchemaLookup())
-                                          .ApplyRewritings(single)
-                                          .BuildGraph();
+        *sequential.mutable_graph() =
+            ApplyCapturedRewritings(core::builder::GraphBuilder(sequential, SchemaLookup()), single)
+                .BuildGraph();
       }
-      EXPECT_TRUE(core::builder::GraphBuilder(original, SchemaLookup())
-                      .ApplyRewritings(plan)
-                      .BuildGraph()
-                      .Equals(sequential.graph()));
+      EXPECT_TRUE(
+          ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+              .BuildGraph()
+              .Equals(sequential.graph()));
     }
   }
 }
@@ -2218,12 +2240,11 @@ TEST(PatternOptimization, ReplayReadsPreviouslyProducedInputsFromUpdatedState) {
     for (const auto &edit : plan.rewrites()) {
       RewritingProto single;
       *single.add_rewrites() = edit;
-      *sequential.mutable_graph() = core::builder::GraphBuilder(sequential, SchemaLookup())
-                                        .ApplyRewritings(single)
-                                        .BuildGraph();
+      *sequential.mutable_graph() =
+          ApplyCapturedRewritings(core::builder::GraphBuilder(sequential, SchemaLookup()), single)
+              .BuildGraph();
     }
-    EXPECT_TRUE(core::builder::GraphBuilder(original, SchemaLookup())
-                    .ApplyRewritings(plan)
+    EXPECT_TRUE(ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
                     .BuildGraph()
                     .Equals(sequential.graph()));
   }
@@ -2250,7 +2271,8 @@ TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
     edit.add_added_nodes_positions(0);
     mutate(plan, edit);
     EXPECT_THROW(
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph(),
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+            .BuildGraph(),
         core::builder::BuilderError);
   };
   const uint64_t maximum = std::numeric_limits<uint64_t>::max();
@@ -2345,7 +2367,8 @@ TEST(PatternOptimization, ReplayRejectsInitializerNameAndInputDefaultConflicts) 
       *edit.add_added_initializers() = tensor;
       edit.add_added_initializer_positions(remove ? 0 : 1);
       EXPECT_THROW(
-          core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph(),
+          ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+              .BuildGraph(),
           core::builder::BuilderError);
     }
   }
@@ -2371,7 +2394,8 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
     *edit.add_added_initializers() = tensor;
     edit.add_added_initializer_positions(0);
     EXPECT_THROW(
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph(),
+        ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+            .BuildGraph(),
         core::builder::BuilderError);
   }
   RewritingProto plan;
@@ -2380,7 +2404,8 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   *edit.add_added_initializers() = MakeInitializer<float>("fresh", {1}, {4.0f});
   edit.add_added_initializer_positions(1);
   const GraphProto replayed =
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .BuildGraph();
   ASSERT_EQ(replayed.initializer().size(), 2u);
   EXPECT_EQ(replayed.initializer(0).SerializeAsString(),
             original.graph().initializer(0).SerializeAsString());
@@ -2426,7 +2451,7 @@ TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
       }
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-      EXPECT_THROW(source.ApplyRewritings(loaded), core::builder::BuilderError);
+      EXPECT_THROW(ApplyCapturedRewritings(source, loaded), core::builder::BuilderError);
       EXPECT_EQ(source.ToModel().SerializeAsString(), original);
       EXPECT_EQ(source.Compute().ValueTags(), tags);
       EXPECT_EQ(source.Compute().NodeTags(), node_tags);
@@ -2450,7 +2475,7 @@ TEST(PatternOptimization, ReplayAllowsFreshInitializerWithRewrittenReferences) {
   edit.add_removed_initializers(0);
   edit.ref_added_initializers().push_back(MakeInitializer<float>("fresh", {2}, {3.0f, 4.0f}));
   edit.add_added_initializer_positions(0);
-  const auto result = source.ApplyRewritings(plan);
+  const auto result = ApplyCapturedRewritings(source, plan);
   ASSERT_EQ(result.Initializers().size(), 1u);
   EXPECT_EQ(result.Initializers()[0].name(), "fresh");
   EXPECT_EQ(result.Initializers()[0].SerializeAsString(),
@@ -2469,7 +2494,7 @@ TEST(PatternOptimization, ReplayAllowsFirstInputDefault) {
   auto &edit = *plan.add_rewrites();
   edit.ref_added_initializers().push_back(MakeInitializer<float>("p", {2}, {1.0f, 2.0f}));
   edit.add_added_initializer_positions(0);
-  const auto result = source.ApplyRewritings(plan);
+  const auto result = ApplyCapturedRewritings(source, plan);
   ASSERT_EQ(result.Initializers().size(), 1u);
   EXPECT_EQ(result.Initializers()[0].name(), "p");
   EXPECT_EQ(result.GetShape("p"), source.GetShape("p"));
@@ -2499,7 +2524,8 @@ TEST(PatternOptimization, ReplayPositionsInitializersAmongRetainedValues) {
   *edit.add_added_initializers() = tensor;
   edit.add_added_initializer_positions(0);
   const GraphProto replayed =
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .BuildGraph();
   ASSERT_EQ(replayed.initializer().size(), 2u);
   EXPECT_EQ(replayed.initializer(0).name(), "new");
   EXPECT_EQ(replayed.initializer(1).name(), "retained");
@@ -3212,7 +3238,7 @@ TEST(PatternOptimization, NormalizesFunctionReplacementsInOneBatch) {
     plan.ref_added_functions().push_back(std::move(replacement));
   }
   lookups = 0;
-  const auto result = source.ApplyRewritings(plan);
+  const auto result = ApplyCapturedRewritings(source, plan);
   for (std::size_t index = 0; index < count; ++index) {
     const auto &function = result.LocalFunction("F" + std::to_string(index));
     ASSERT_EQ(function.Nodes().size(), 1u);
@@ -3868,7 +3894,8 @@ TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
   rewrite.add_added_initializer_positions(0);
 
   const GraphProto replayed =
-      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).BuildGraph();
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .BuildGraph();
   ASSERT_EQ(replayed.initializer_size(), 1);
   EXPECT_EQ(replayed.initializer(0).name().value(), "weight");
   ASSERT_EQ(replayed.node_size(), 1);

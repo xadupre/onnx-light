@@ -12,6 +12,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     MapProto,
     Message,
     ModelProto,
+    MoveNodeProto,
     NodeDeviceConfigurationProto,
     NodeProto,
     OperatorSetIdProto,

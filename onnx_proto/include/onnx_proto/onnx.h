@@ -1641,7 +1641,14 @@ FIELD_REPEATED(uint64_t, removed_extended_initializers, 13,
                "Removed extended initializer positions before this edit.")
 END_PROTO()
 
-BEGIN_PROTO(RewritingProto, "Stores ordered sequential graph edits.")
+BEGIN_PROTO(MoveNodeProto, "Moves one node in the final simultaneous relocation stage.")
+FIELD_OPTIONAL(uint64_t, from_position, 1, "Node position before the relocation stage.")
+FIELD_OPTIONAL(uint64_t, to_position, 2, "Node position after the relocation stage.")
+FIELD_REPEATED_STR(utils::String, graph_path, 3, "Subgraph path after the ordinary edits.")
+FIELD_STR(function_id, 4, "Optional escaped domain:name[:overload] local-function identity.")
+END_PROTO()
+
+BEGIN_PROTO(RewritingProto, "Stores ordered edits followed by simultaneous node moves.")
 FIELD_REPEATED_PROTO(LocalRewritingProto, rewrites, 1, "Edits in application order.")
 FIELD_REPEATED_PROTO(OperatorSetIdProto, required_opset_imports, 2, "Required additional imports.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 3, "Descriptive metadata.")
@@ -1649,6 +1656,9 @@ FIELD_REPEATED_PROTO(FunctionProto, added_functions, 4, "Shared additional funct
 FIELD_REPEATED_STR(
     utils::String, replaced_function_ids, 5,
     "Escaped domain:name[:overload] identities explicitly replaced by added_functions.")
+FIELD_OPTIONAL(uint64_t, hash_before, 6, "Structural hash before applying this complete plan.")
+FIELD_OPTIONAL(uint64_t, hash_after, 7, "Structural hash after all edits and node moves.")
+FIELD_REPEATED_PROTO(MoveNodeProto, moved_nodes, 8, "Simultaneous moves after all ordinary edits.")
 END_PROTO()
 
 // ModelProto
@@ -1742,6 +1752,9 @@ ModelProto &operator=(const ModelProto &other) {
   return *this;
 }
 ModelProto &operator=(ModelProto &&other) noexcept = default;
+/** Returns the combined structural hashes of positioned nodes in graphs and functions.
+ *  Includes domain, operator type and input/output/attribute counts, not names or tensor data. */
+uint64_t RewritingHash() const;
 /** Returns tensor names across initializers, sparse tensors, attributes, functions and rewrites.
  *  Names may repeat, including empty names; name-based operations reject ambiguous matches. */
 std::vector<std::string> WeightNames() const;

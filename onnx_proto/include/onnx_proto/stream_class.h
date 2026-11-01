@@ -77,6 +77,7 @@ enum class ProtoId : uint16_t {
   LocalRewritingProto,
   RewritingProto,
   ExtendedInitializerProto,
+  MoveNodeProto,
 };
 
 } // namespace onnx_light::proto_serialization_detail

@@ -84,7 +84,7 @@ struct OptimizationReport {
   int64_t rewriting_time_ns = 0;
   /// Time spent in cleanup passes for this graph, excluding subgraphs.
   int64_t cleanup_time_ns = 0;
-  /// Time spent hoisting Shape/Size nodes in this graph, excluding subgraphs.
+  /// Time spent in the final Shape/Size hoisting stage, including nested scopes.
   int64_t move_shape_and_size_time_ns = 0;
   /// Number of Shape/Size readers relocated in this graph and its children.
   std::size_t moved_shape_and_size_nodes = 0;

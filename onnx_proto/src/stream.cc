@@ -67,6 +67,15 @@ private:
 };
 #endif
 
+#if defined(_WIN32)
+intptr_t ReadFdHandle(int fd) {
+#if defined(_MSC_VER)
+  ScopedInvalidParameterHandler guard;
+#endif
+  return ::_get_osfhandle(fd);
+}
+#endif
+
 std::filesystem::path normalized_model_parent(const std::string &model_path) {
   std::filesystem::path parent = std::filesystem::path(model_path).parent_path();
   if (parent.empty()) {
@@ -1081,10 +1090,13 @@ int64_t FdReadStream::InitLimit(int fd) noexcept {
   ::lseek(fd, cur, SEEK_SET);
   return end >= cur ? static_cast<int64_t>(end - cur) : 0; // remaining bytes
 #else
-  // Avoid probing descriptor positions on Windows. Some CRT calls can trigger
-  // fail-fast invalid-parameter handling for invalid/closed descriptors, while
-  // ParseFromFileDescriptor read-failure paths are expected to return false.
-  (void)fd;
+  const intptr_t handle = ReadFdHandle(fd);
+  if (handle != -1 && ::GetFileType(reinterpret_cast<HANDLE>(handle)) == FILE_TYPE_DISK) {
+    LARGE_INTEGER zero = {}, current, end;
+    if (::SetFilePointerEx(reinterpret_cast<HANDLE>(handle), zero, &current, FILE_CURRENT) &&
+        ::GetFileSizeEx(reinterpret_cast<HANDLE>(handle), &end) && current.QuadPart >= 0)
+      return end.QuadPart >= current.QuadPart ? end.QuadPart - current.QuadPart : 0;
+  }
   return INT64_MAX;
 #endif
 }
@@ -1120,15 +1132,7 @@ bool FdReadStream::EnsureAvailable() const {
     n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
   } while (n < 0 && errno == EINTR);
 #else
-#if defined(_MSC_VER)
-  intptr_t handle = -1;
-  {
-    ScopedInvalidParameterHandler guard;
-    handle = ::_get_osfhandle(fd_);
-  }
-#else
-  const intptr_t handle = ::_get_osfhandle(fd_);
-#endif
+  const intptr_t handle = ReadFdHandle(fd_);
   if (handle == -1) {
     errno = EBADF;
     n = -1;
@@ -1168,16 +1172,18 @@ bool FdReadStream::NotEnd() const {
 bool FdReadStream::Next(const void **data, int *size) {
   EXT_ENFORCE(data != nullptr && size != nullptr,
               "FdReadStream::Next: output pointers must not be null.");
-  if (!EnsureAvailable()) {
+  if (pos_ >= limit_ || !EnsureAvailable()) {
     *data = nullptr;
     *size = 0;
+    last_returned_ = 0;
     return false;
   }
   *data = buffer_ + position_;
-  *size = available_;
-  last_returned_ = available_;
-  position_ += available_;
-  available_ = 0;
+  *size = static_cast<int>(std::min<int64_t>(available_, limit_ - pos_));
+  last_returned_ = *size;
+  position_ += *size;
+  available_ -= *size;
+  pos_ += *size;
   return true;
 }
 
@@ -1186,13 +1192,61 @@ void FdReadStream::BackUp(int count) {
               ".");
   position_ -= count;
   available_ += count;
+  pos_ -= count;
   last_returned_ = 0;
 }
 
 bool FdReadStream::Skip(int count) {
-  if (count < 0 || pos_ < 0 || (limit_ != INT64_MAX && limit_ - pos_ < count))
+  if (count < 0 || pos_ < 0 || limit_ - pos_ < count)
     return false;
-  int64_t remaining = count;
+  return SkipForward(count);
+}
+
+bool FdReadStream::SkipForward(int64_t remaining) {
+  last_returned_ = 0;
+  const int consumed = static_cast<int>(std::min<int64_t>(remaining, available_));
+  position_ += consumed;
+  available_ -= consumed;
+  pos_ += consumed;
+  remaining -= consumed;
+  if (remaining == 0)
+    return true;
+
+  // A seek can succeed beyond EOF. Bound it by the live file size, not just
+  // limit_, which may be a sub-limit or predate a file truncation. Verify read
+  // access as well: seeking alone also succeeds on write-only descriptors.
+  int64_t skipped = 0;
+#if !defined(_WIN32)
+  struct stat info;
+  const int flags = ::fcntl(fd_, F_GETFL);
+  if (flags >= 0 && (flags & O_ACCMODE) != O_WRONLY && ::fstat(fd_, &info) == 0 &&
+      S_ISREG(info.st_mode)) {
+    const auto current = ::lseek(fd_, 0, SEEK_CUR);
+    if (current >= 0 && info.st_size > current) {
+      const auto distance = std::min<int64_t>(remaining, info.st_size - current);
+      if (::lseek(fd_, static_cast<off_t>(distance), SEEK_CUR) >= 0)
+        skipped = distance;
+    }
+  }
+#else
+  const intptr_t handle = ReadFdHandle(fd_);
+  if (handle != -1 && ::GetFileType(reinterpret_cast<HANDLE>(handle)) == FILE_TYPE_DISK) {
+    DWORD bytes_read = 0;
+    LARGE_INTEGER zero = {}, current, end;
+    if (::ReadFile(reinterpret_cast<HANDLE>(handle), buffer_, 0, &bytes_read, nullptr) &&
+        ::SetFilePointerEx(reinterpret_cast<HANDLE>(handle), zero, &current, FILE_CURRENT) &&
+        ::GetFileSizeEx(reinterpret_cast<HANDLE>(handle), &end) && current.QuadPart >= 0 &&
+        end.QuadPart > current.QuadPart) {
+      LARGE_INTEGER distance;
+      distance.QuadPart = std::min<int64_t>(remaining, end.QuadPart - current.QuadPart);
+      if (::SetFilePointerEx(reinterpret_cast<HANDLE>(handle), distance, nullptr, FILE_CURRENT))
+        skipped = distance.QuadPart;
+    }
+  }
+#endif
+  pos_ += skipped;
+  total_read_ += skipped;
+  remaining -= skipped;
   while (remaining > 0) {
     if (!EnsureAvailable())
       return false;
@@ -1258,7 +1312,6 @@ const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
     if (to_copy < avail)
       BackUp(avail - to_copy);
   }
-  pos_ += n_bytes;
   if (owned)
     owned_blocks_.push_back(std::move(owned));
   return pre_allocated_buffer;
@@ -1267,15 +1320,8 @@ const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
 void FdReadStream::skip_bytes(offset_t n_bytes) {
   EXT_ENFORCE(n_bytes >= 0, "[FdReadStream::skip_bytes] n_bytes must be non-negative.");
   CanRead(static_cast<uint64_t>(n_bytes), "[FdReadStream::skip_bytes]");
-  while (n_bytes > 0) {
-    EXT_ENFORCE(EnsureAvailable(), "[FdReadStream::skip_bytes] EOF reached with ", n_bytes,
-                " bytes still needed at pos=", pos_);
-    int consumed = static_cast<int>(std::min<int64_t>(n_bytes, available_));
-    position_ += consumed;
-    available_ -= consumed;
-    pos_ += consumed;
-    n_bytes -= consumed;
-  }
+  EXT_ENFORCE(SkipForward(n_bytes), "[FdReadStream::skip_bytes] EOF reached at pos=", pos_,
+              " while skipping ", n_bytes, " bytes.");
 }
 
 //////////////////////

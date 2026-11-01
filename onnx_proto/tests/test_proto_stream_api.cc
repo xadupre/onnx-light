@@ -653,6 +653,240 @@ TEST(proto_stream_api, FdReadStreamPreservesRecursionLimit) {
   std::filesystem::remove(path);
 }
 
+class FdReadStreamTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    path = std::filesystem::temp_directory_path() /
+           (std::string("onnx_light_fd_skip_") +
+            ::testing::UnitTest::GetInstance()->current_test_info()->name() + ".bin");
+  }
+  void TearDown() override {
+    if (fd >= 0)
+      CloseFd(fd);
+    std::filesystem::remove(path);
+  }
+  void Open(const std::string &payload, int64_t prefix = 0) {
+    {
+      std::ofstream out(path, std::ios::binary);
+      out.seekp(prefix);
+      out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+      ASSERT_TRUE(out.good());
+    }
+    fd = OpenTempFdForRead(path.string());
+    ASSERT_GE(fd, 0);
+  }
+  std::filesystem::path path;
+  int fd = -1;
+};
+
+TEST_F(FdReadStreamTest, BufferedAndUnbufferedSkips) {
+  Open("0123456789abcdef");
+  utils::FdReadStream stream(fd, 4);
+  uint8_t byte;
+  stream.read_bytes(1, &byte);
+  EXPECT_EQ(byte, '0');
+  EXPECT_EQ(TellFd(fd), 4);
+  stream.skip_bytes(2);
+  EXPECT_EQ(TellFd(fd), 4);
+  EXPECT_EQ(stream.tell(), 3);
+  EXPECT_EQ(stream.ByteCount(), 3);
+  ASSERT_TRUE(stream.Skip(6));
+  EXPECT_EQ(TellFd(fd), 9);
+  EXPECT_EQ(stream.tell(), 9);
+  EXPECT_EQ(stream.ByteCount(), 9);
+  stream.read_bytes(1, &byte);
+  EXPECT_EQ(byte, '9');
+  stream.skip_bytes(0);
+  EXPECT_EQ(stream.tell(), 10);
+  EXPECT_EQ(stream.ByteCount(), 10);
+  stream.skip_bytes(5);
+  EXPECT_EQ(TellFd(fd), 15);
+  stream.read_bytes(1, &byte);
+  EXPECT_EQ(byte, 'f');
+  EXPECT_FALSE(stream.NotEnd());
+  EXPECT_FALSE(stream.failed());
+}
+
+TEST_F(FdReadStreamTest, NonzeroInitialOffsetAndLargeSkip) {
+  constexpr int64_t prefix = (int64_t{1} << 31) + 123;
+  Open("payload", prefix);
+  ASSERT_EQ(SeekFd(fd, 17), 17);
+  utils::FdReadStream stream(fd, 64 * 1024);
+  stream.skip_bytes(prefix - 17);
+  EXPECT_EQ(TellFd(fd), prefix);
+  EXPECT_EQ(stream.tell(), prefix - 17);
+  EXPECT_EQ(stream.ByteCount(), prefix - 17);
+  uint8_t payload[7];
+  stream.read_bytes(7, payload);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(payload), 7), "payload");
+  EXPECT_EQ(stream.tell(), prefix - 17 + 7);
+  EXPECT_EQ(stream.ByteCount(), stream.tell());
+}
+
+TEST_F(FdReadStreamTest, ZeroCopyAndNestedLimits) {
+  Open("0123456789abcdef");
+  utils::FdReadStream stream(fd, 4);
+  const void *data;
+  int size;
+  ASSERT_TRUE(stream.Next(&data, &size));
+  ASSERT_EQ(size, 4);
+  stream.BackUp(2);
+  EXPECT_EQ(stream.tell(), 2);
+  EXPECT_EQ(stream.ByteCount(), 2);
+  stream.LimitToNext(1);
+  ASSERT_TRUE(stream.Next(&data, &size));
+  EXPECT_EQ(std::string(static_cast<const char *>(data), size), "2");
+  EXPECT_FALSE(stream.NotEnd());
+  stream.BackUp(1);
+  stream.Restore();
+  EXPECT_EQ(stream.tell(), 2);
+  EXPECT_EQ(stream.ByteCount(), 2);
+  stream.LimitToNext(7);
+  stream.LimitToNext(3);
+  EXPECT_FALSE(stream.Skip(4));
+  EXPECT_THROW(stream.skip_bytes(4), std::runtime_error);
+  EXPECT_EQ(stream.tell(), 2);
+  ASSERT_TRUE(stream.Skip(3));
+  EXPECT_EQ(stream.tell(), 5);
+  EXPECT_EQ(stream.ByteCount(), 5);
+  EXPECT_FALSE(stream.Next(&data, &size));
+  EXPECT_EQ(data, nullptr);
+  EXPECT_EQ(size, 0);
+  stream.Restore();
+  ASSERT_TRUE(stream.Next(&data, &size));
+  EXPECT_EQ(std::string(static_cast<const char *>(data), size), "5678");
+  EXPECT_EQ(stream.tell(), 9);
+  EXPECT_FALSE(stream.Skip(1));
+  stream.Restore();
+  ASSERT_TRUE(stream.Next(&data, &size));
+  EXPECT_EQ(std::string(static_cast<const char *>(data), size), "9abc");
+  stream.BackUp(3);
+  stream.skip_bytes(2);
+  EXPECT_THROW(stream.BackUp(1), std::runtime_error);
+  ASSERT_TRUE(stream.Next(&data, &size));
+  EXPECT_EQ(std::string(static_cast<const char *>(data), size), "c");
+  EXPECT_EQ(stream.ByteCount(), stream.tell());
+}
+
+TEST_F(FdReadStreamTest, RejectsInvalidDistancesAndEof) {
+  Open("data");
+  utils::FdReadStream stream(fd, 2);
+  EXPECT_FALSE(stream.Skip(-1));
+  EXPECT_THROW(stream.skip_bytes(-1), std::runtime_error);
+  EXPECT_FALSE(stream.Skip(5));
+  EXPECT_THROW(stream.skip_bytes(std::numeric_limits<int64_t>::max()), std::runtime_error);
+  EXPECT_EQ(stream.tell(), 0);
+  EXPECT_EQ(TellFd(fd), 0);
+  stream.skip_bytes(4);
+  EXPECT_EQ(stream.tell(), 4);
+  EXPECT_EQ(stream.ByteCount(), 4);
+  EXPECT_FALSE(stream.Skip(1));
+  EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
+  EXPECT_FALSE(stream.NotEnd());
+  EXPECT_FALSE(stream.failed());
+}
+
+TEST_F(FdReadStreamTest, TruncationDoesNotAllowSeekingPastEof) {
+  Open("0123456789");
+  utils::FdReadStream stream(fd, 2);
+  std::filesystem::resize_file(path, 3);
+  EXPECT_FALSE(stream.Skip(8));
+  EXPECT_EQ(stream.tell(), 3);
+  EXPECT_EQ(stream.ByteCount(), 3);
+  EXPECT_EQ(TellFd(fd), 3);
+  EXPECT_FALSE(stream.failed());
+  EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
+}
+
+TEST_F(FdReadStreamTest, InvalidAndClosedDescriptorsReportFailure) {
+  utils::FdReadStream invalid(-1, 2);
+  EXPECT_FALSE(invalid.Skip(1));
+  EXPECT_TRUE(invalid.failed());
+  EXPECT_THROW(invalid.skip_bytes(1), std::runtime_error);
+  Open("data");
+  utils::FdReadStream closed(fd, 2);
+  CloseFd(fd);
+  fd = -1;
+  EXPECT_FALSE(closed.Skip(1));
+  EXPECT_TRUE(closed.failed());
+  EXPECT_THROW(closed.skip_bytes(1), std::runtime_error);
+}
+
+TEST_F(FdReadStreamTest, WriteOnlyDescriptorReportsFailure) {
+  fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+  {
+    utils::FdWriteStream writer(fd);
+    writer.write_raw_bytes(reinterpret_cast<const uint8_t *>("data"), 4);
+  }
+  ASSERT_EQ(SeekFd(fd, 0), 0);
+  utils::FdReadStream stream(fd, 2);
+  EXPECT_FALSE(stream.Skip(1));
+  EXPECT_TRUE(stream.failed());
+  EXPECT_EQ(stream.tell(), 0);
+  EXPECT_EQ(stream.ByteCount(), 0);
+  EXPECT_EQ(TellFd(fd), 0);
+  EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
+}
+
+TEST_F(FdReadStreamTest, PipesRetainBufferedFallback) {
+  int descriptors[2];
+#if defined(_WIN32)
+  ASSERT_EQ(::_pipe(descriptors, 4096, _O_BINARY), 0);
+  ASSERT_EQ(::_write(descriptors[1], "0123456789", 10), 10);
+#else
+  ASSERT_EQ(::pipe(descriptors), 0);
+  ASSERT_EQ(::write(descriptors[1], "0123456789", 10), 10);
+#endif
+  fd = descriptors[0];
+  CloseFd(descriptors[1]);
+  utils::FdReadStream stream(fd, 4);
+  ASSERT_TRUE(stream.Skip(2));
+  stream.skip_bytes(5);
+  EXPECT_EQ(stream.tell(), 7);
+  EXPECT_EQ(stream.ByteCount(), 7);
+  uint8_t byte;
+  stream.read_bytes(1, &byte);
+  EXPECT_EQ(byte, '7');
+  EXPECT_FALSE(stream.Skip(3));
+  EXPECT_EQ(stream.tell(), 10);
+  EXPECT_EQ(stream.ByteCount(), 10);
+  EXPECT_FALSE(stream.failed());
+  EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
+}
+
+#if defined(__linux__)
+TEST_F(FdReadStreamTest, LargePrefixDoesNotReadProportionalBytesOrCalls) {
+  constexpr int64_t prefix = 32 * 1024 * 1024;
+  Open("payload", prefix);
+  utils::FdReadStream stream(fd, 4096);
+  const auto read_io = []() {
+    std::ifstream in("/proc/self/io");
+    std::string key;
+    uint64_t value, bytes = 0, calls = 0;
+    while (in >> key >> value) {
+      if (key == "rchar:")
+        bytes = value;
+      if (key == "syscr:")
+        calls = value;
+    }
+    return std::make_pair(bytes, calls);
+  };
+  const auto before = read_io();
+  ASSERT_GT(before.second, 0u);
+  stream.skip_bytes(prefix / 2);
+  ASSERT_TRUE(stream.Skip(static_cast<int>(prefix / 2)));
+  uint8_t payload[7];
+  stream.read_bytes(7, payload);
+  const auto after = read_io();
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(payload), 7), "payload");
+  // Includes the small /proc/self/io read itself; no prefix bytes should be read.
+  EXPECT_LT(after.first - before.first, 4096u);
+  EXPECT_LE(after.second - before.second, 4u);
+  EXPECT_EQ(stream.ByteCount(), prefix + 7);
+}
+#endif
+
 TEST(proto_stream_api, SerializeToStringWithOptionsReturnsTrue) {
   AttributeProto attr = MakeIntAttr();
   SerializeOptions sopts;

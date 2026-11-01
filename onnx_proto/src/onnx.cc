@@ -3672,6 +3672,13 @@ private:
   blake3_hasher hasher_;
 };
 
+std::string NormaliseRewritingDomain(const std::string &domain) {
+  auto normalized = NormaliseDomain(domain);
+  if (normalized == kDefaultOnnxDomain)
+    normalized.clear();
+  return normalized;
+}
+
 void HashRewritingNodes(RewritingHasher &combined,
                         const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t depth);
 
@@ -3703,7 +3710,7 @@ void HashRewritingNodes(RewritingHasher &combined,
     const auto &node = nodes[position];
     RewritingHasher hash;
     hash.Add(static_cast<uint64_t>(position));
-    hash.Add(node.domain().value() == "ai.onnx" ? std::string() : node.domain().value());
+    hash.Add(NormaliseRewritingDomain(node.domain().value()));
     hash.Add(node.op_type().value());
     hash.Add(static_cast<uint64_t>(node.input().size()));
     hash.Add(static_cast<uint64_t>(node.output().size()));
@@ -3724,7 +3731,7 @@ uint64_t ModelProto::RewritingHash() const {
     ordered.push_back(&function);
   std::sort(ordered.begin(), ordered.end(), [](const auto *left, const auto *right) {
     const auto domain = [](const FunctionProto *function) {
-      return function->domain().value() == "ai.onnx" ? std::string() : function->domain().value();
+      return NormaliseRewritingDomain(function->domain().value());
     };
     return std::make_tuple(domain(left), left->name().value(), left->overload().value()) <
            std::make_tuple(domain(right), right->name().value(), right->overload().value());

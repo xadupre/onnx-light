@@ -4669,7 +4669,9 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
   for (const ValueInfoProto &value_info : value_infos_) {
     function.add_value_info(value_info);
   }
-  for (const auto &entry : opsets_) {
+  std::vector<std::pair<std::string, int>> ordered_opsets(opsets_.begin(), opsets_.end());
+  std::sort(ordered_opsets.begin(), ordered_opsets.end());
+  for (const auto &entry : ordered_opsets) {
     function.add_opset(entry.first, entry.second);
   }
   for (const NodeProto &node : nodes_) {

@@ -133,6 +133,11 @@ TEST(onnx_proto, RewritingHashTracksPositionedNodeStructureWithoutWeights) {
   graph->ref_node()[0].add_input("another_name");
   graph->ref_node()[0].set_name("annotation");
   EXPECT_EQ(model.RewritingHash(), initial);
+  for (const std::string domain : {"ai.onnx", "onnx.ai"}) {
+    graph->ref_node()[0].set_domain(domain);
+    EXPECT_EQ(model.RewritingHash(), initial) << domain;
+  }
+  graph->ref_node()[0].set_domain("");
   graph->ref_node()[0].add_input("extra");
   EXPECT_NE(model.RewritingHash(), initial);
   graph->ref_node()[0].ref_input().clear();
@@ -179,8 +184,10 @@ TEST(onnx_proto, RewritingHashIncludesSubgraphsAndFunctions) {
   other->set_name("Other");
   *other->add_node() = MakeNode("Abs", {"x"}, {"y"});
   const auto aliased = model.RewritingHash();
-  function->set_domain("");
-  EXPECT_EQ(model.RewritingHash(), aliased);
+  for (const std::string domain : {"", "onnx.ai"}) {
+    function->set_domain(domain);
+    EXPECT_EQ(model.RewritingHash(), aliased) << domain;
+  }
 }
 
 TEST(onnx_proto, RewritingProtoRejectsRetiredRenamingField) {

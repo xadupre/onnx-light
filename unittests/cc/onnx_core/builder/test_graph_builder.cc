@@ -733,6 +733,32 @@ TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
     EXPECT_NE(opset.domain(), "ai.onnx");
 }
 
+TEST(GraphBuilder, FunctionExportsIgnoreOpsetInsertionOrder) {
+  std::vector<FunctionProto> functions;
+  for (const bool reversed : {false, true}) {
+    core::builder::GraphBuilder builder("Body", SchemaLookup());
+    const std::vector<std::pair<std::string, int>> imports = {
+        {"", 18}, {"local", 1}, {"vendor", 2}};
+    for (std::size_t index = 0; index < imports.size(); ++index) {
+      const auto &[domain, version] = imports[reversed ? imports.size() - index - 1 : index];
+      builder.SetOpsetVersion(domain, version);
+    }
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeNode("Relu", {"x"}, {"y"});
+    builder.MakeOutput("y");
+    functions.push_back(builder.ToFunction("local"));
+  }
+  std::string difference;
+  EXPECT_TRUE(functions[0].Equals(functions[1], &difference)) << difference;
+
+  ModelProto model;
+  model.add_opset("", 18);
+  model.mutable_graph()->set_name("root");
+  *model.add_functions() = functions[0];
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  EXPECT_TRUE(imported.ToModel().functions(0).Equals(functions[0], &difference)) << difference;
+}
+
 TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
   using core::builder::GraphBuilder;
   using core::symbolic::Device;

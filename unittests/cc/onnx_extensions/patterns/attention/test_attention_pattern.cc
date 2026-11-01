@@ -700,7 +700,8 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
         EXPECT_FALSE(mixed_graph.Optimize(-1, nullptr, folding).rewrites().empty());
         ASSERT_EQ(mixed.Nodes().size(), 1u);
         EXPECT_EQ(mixed.Nodes()[0].op_type(), "ShiftedCausalMask");
-        EXPECT_EQ(mixed.LocalFunctions().size(), 1u);
+        // Constant folding retains its model-scoped replay preparation helper.
+        EXPECT_EQ(mixed.LocalFunctions().size(), fold_constants ? 2u : 1u);
         EXPECT_EQ(mixed.LocalFunction("ShiftedCausalMask").Initializers().size(), 4u);
         ExpectTopologicalGraph(mixed);
         EXPECT_NO_THROW(mixed_graph.Optimize(-1, nullptr, folding));

@@ -538,8 +538,10 @@ public:
   /// input exists. Emitting it immediately after its producer -- instead of
   /// wherever it happened to be inserted -- lets the producer's output be
   /// released as early as possible, which improves the peak-memory analysis run
-  /// at finalisation. This pass runs by default during optimization and export.
-  /// Export does not reorder a reference carrying named plans or undo history.
+  /// at finalisation. This pass runs by default during optimization, where its
+  /// moves are recorded for replay, or when explicitly requested through this
+  /// method. Export only validates node order and never runs this pass,
+  /// regardless of named plans or undo history.
   ///
   /// Each such node is relocated to directly follow the node producing its
   /// input, preserving the relative order of several ``Shape`` / ``Size`` nodes

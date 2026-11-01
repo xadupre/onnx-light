@@ -1192,9 +1192,15 @@ protected:
   static int AdaptiveBlockSize(int64_t limit) noexcept;
   /** Fills the internal buffer when it has no unread bytes. */
   bool EnsureAvailable() const;
+
+private:
   /** Skips a validated forward distance, returning false on EOF or a read error. */
+#if !defined(_WIN32) && (defined(__GNUC__) || defined(__clang__))
+  __attribute__((visibility("hidden")))
+#endif
   bool SkipForward(int64_t remaining);
 
+protected:
   int fd_;
   int block_size_;
   char *buffer_;

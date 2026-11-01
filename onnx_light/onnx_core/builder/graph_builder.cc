@@ -4458,9 +4458,6 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
 
 GraphProto GraphBuilder::ToGraph() {
   SortNodesTopologically();
-  // Hoist Shape/Size nodes next to their producers before exporting so the
-  // finalisation analyses (in-place reuse, peak memory) see the tighter order.
-  MoveShapeAndSizeNodes();
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
@@ -4559,7 +4556,6 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   }
   ValidateInitializerConstants();
   SortNodesTopologically();
-  MoveShapeAndSizeNodes();
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }

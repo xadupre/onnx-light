@@ -538,8 +538,8 @@ public:
   /// input exists. Emitting it immediately after its producer -- instead of
   /// wherever it happened to be inserted -- lets the producer's output be
   /// released as early as possible, which improves the peak-memory analysis run
-  /// at finalisation. This pass is called automatically before the builder is
-  /// exported into an ONNX proto.
+  /// at finalisation. This pass is opt-in, directly or through
+  /// GraphGraph::Canonicalize; export preserves the existing topological order.
   ///
   /// Each such node is relocated to directly follow the node producing its
   /// input, preserving the relative order of several ``Shape`` / ``Size`` nodes
@@ -785,7 +785,8 @@ public:
 
   /// Returns the finalized :cpp:class:`GraphProto`.
   /// Stably orders dependencies, including lexical subgraph captures, before
-  /// hoisting Shape/Size nodes and recomputing lifetime and memory metadata.
+  /// recomputing lifetime and memory metadata. Does not hoist Shape/Size nodes,
+  /// preserving captured rewrite positions and undo history for valid graphs.
   /// Throws on cyclic dependencies or undefined inputs. Mutates node order.
   GraphProto ToGraph();
 

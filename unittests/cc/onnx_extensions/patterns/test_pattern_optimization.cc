@@ -622,7 +622,7 @@ TEST(PatternOptimization, NamedVariantsInvalidateOnCanonicalMutations) {
   EXPECT_TRUE(parent.Rewritings().empty());
 }
 
-TEST(PatternOptimization, NamedVariantsInvalidateOnFinalizationReordering) {
+TEST(PatternOptimization, NamedVariantsSurviveExportButInvalidateOnExplicitReordering) {
   core::builder::GraphBuilder builder("canonical", SchemaLookup(), {{"", 18}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Neg", {"x"}, {"a"});
@@ -633,9 +633,15 @@ TEST(PatternOptimization, NamedVariantsInvalidateOnFinalizationReordering) {
   builder.AddRewriting("before_finalization", RewritingProto{});
   const auto finalized = builder.ToModel();
   ASSERT_EQ(finalized.graph().node_size(), 3);
-  EXPECT_EQ(finalized.graph().node(1).op_type(), "Shape");
-  EXPECT_FALSE(finalized.has_rewritings());
+  EXPECT_EQ(finalized.graph().node(1).op_type(), "Neg");
+  EXPECT_EQ(finalized.graph().node(2).op_type(), "Shape");
+  EXPECT_EQ(finalized.rewritings().count("before_finalization"), 1u);
+  EXPECT_EQ(builder.Rewritings().count("before_finalization"), 1u);
+  EXPECT_EQ(builder.MoveShapeAndSizeNodes(), 1u);
   EXPECT_TRUE(builder.Rewritings().empty());
+  const auto reordered = builder.ToModel();
+  EXPECT_EQ(reordered.graph().node(1).op_type(), "Shape");
+  EXPECT_FALSE(reordered.has_rewritings());
   builder.AddRewriting("finalized", RewritingProto{});
   EXPECT_EQ(builder.ToModel().rewritings_size(), 1);
 }

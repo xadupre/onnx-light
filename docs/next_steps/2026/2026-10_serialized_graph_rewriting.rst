@@ -264,6 +264,11 @@ can be applied directly to the original model, and undo restores that reference,
 including existing Identity nodes, duplicate nodes and initializers, and
 annotations. Export obtains the reference from the optimizing builder's
 in-memory undo history.
+Graph and function export preserve the existing topological order, including
+non-adjacent Shape/Size readers, and do not clear named plans or undo history.
+They still validate dependencies and recompute lifetime and memory metadata.
+Shape/Size hoisting is opt-in through ``MoveShapeAndSizeNodes`` or
+``GraphGraph::Canonicalize`` before capture.
 Explicit canonicalization applies ancestor substitutions before cleaning
 descendant scopes, prunes annotations for removed values, and moves Shape/Size
 nodes next to their producers. This reordering preserves incremental tags and

@@ -158,6 +158,7 @@ canonical graph. Loading a model never selects or executes a variant:
    │   ├── added_nodes, initializer_calls → NodeProto (↑)
    │   ├── added_initializers → TensorProto (↑)
    │   └── metadata_props → StringStringEntryProto
+   ├── moved_nodes → MoveNodeProto
    ├── required_opset_imports → OperatorSetIdProto
    ├── added_functions → FunctionProto (↑)
    └── metadata_props → StringStringEntryProto

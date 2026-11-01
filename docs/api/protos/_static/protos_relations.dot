@@ -25,6 +25,7 @@ digraph protos {
         OptionalProto;
         RewritingProto;
         LocalRewritingProto;
+        MoveNodeProto;
     }
 
     subgraph cluster_data {
@@ -89,6 +90,7 @@ digraph protos {
     ModelProto -> RewritingProto [label="rewritings"];
 
     RewritingProto -> LocalRewritingProto [label="rewrites"];
+    RewritingProto -> MoveNodeProto [label="moved_nodes"];
     RewritingProto -> OperatorSetIdProto [label="required_opset_imports"];
     RewritingProto -> FunctionProto [label="added_functions"];
     RewritingProto -> StringStringEntryProto [label="metadata_props"];

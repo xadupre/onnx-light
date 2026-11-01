@@ -16,7 +16,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #ifdef __linux__
+#include <linux/magic.h>
 #include <sys/syscall.h>
+#include <sys/vfs.h>
 #if defined(SYS_openat2) && __has_include(<linux/openat2.h>)
 #include <linux/openat2.h>
 #define ONNX_LIGHT_HAS_OPENAT2
@@ -73,6 +75,21 @@ intptr_t ReadFdHandle(int fd) {
   ScopedInvalidParameterHandler guard;
 #endif
   return ::_get_osfhandle(fd);
+}
+#endif
+
+#if !defined(_WIN32)
+bool HasReliableFileSize(int fd, struct stat &info) {
+  if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode))
+    return false;
+#if defined(__linux__)
+  // procfs and sysfs expose regular files with synthetic extents.
+  struct statfs filesystem;
+  if (::fstatfs(fd, &filesystem) != 0 || filesystem.f_type == PROC_SUPER_MAGIC ||
+      filesystem.f_type == SYSFS_MAGIC)
+    return false;
+#endif
+  return true;
 }
 #endif
 
@@ -1081,8 +1098,7 @@ int64_t FdReadStream::InitLimit(int fd) noexcept {
 #if !defined(_WIN32)
   const int flags = ::fcntl(fd, F_GETFL);
   struct stat info;
-  if (flags < 0 || (flags & O_ACCMODE) == O_WRONLY || ::fstat(fd, &info) != 0 ||
-      !S_ISREG(info.st_mode))
+  if (flags < 0 || (flags & O_ACCMODE) == O_WRONLY || !HasReliableFileSize(fd, info))
     return INT64_MAX;
   auto cur = ::lseek(fd, 0, SEEK_CUR);
   if (cur < 0)
@@ -1228,8 +1244,7 @@ bool FdReadStream::SkipForward(int64_t remaining) {
 #if !defined(_WIN32)
   struct stat info;
   const int flags = ::fcntl(fd_, F_GETFL);
-  if (flags >= 0 && (flags & O_ACCMODE) != O_WRONLY && ::fstat(fd_, &info) == 0 &&
-      S_ISREG(info.st_mode)) {
+  if (flags >= 0 && (flags & O_ACCMODE) != O_WRONLY && HasReliableFileSize(fd_, info)) {
     const auto current = ::lseek(fd_, 0, SEEK_CUR);
     if (current >= 0 && info.st_size > current) {
       const auto distance = std::min<int64_t>(remaining, info.st_size - current);

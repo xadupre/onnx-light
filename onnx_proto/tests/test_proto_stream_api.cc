@@ -7,6 +7,7 @@
 #include "onnx.h"
 #include "onnx_helper.h"
 #include "windows_junction.h"
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -858,6 +859,75 @@ TEST_F(FdReadStreamTest, CharacterDevicesRetainUnboundedInput) {
   ASSERT_GT(size, 0);
   EXPECT_EQ(static_cast<const uint8_t *>(data)[0], 0);
   EXPECT_FALSE(stream.failed());
+}
+
+TEST_F(FdReadStreamTest, ProcFilesRetainReadableInputAndLimits) {
+  const std::string source = "/proc/self/cmdline";
+  fd = ::open(source.c_str(), O_RDONLY);
+  if (fd < 0 && (errno == ENOENT || errno == EACCES))
+    GTEST_SKIP() << source << " is unavailable.";
+  ASSERT_GE(fd, 0);
+  const std::string payload = ReadWholeFile(source);
+  ASSERT_GT(payload.size(), 3u);
+  struct stat info;
+  ASSERT_EQ(::fstat(fd, &info), 0);
+  ASSERT_TRUE(S_ISREG(info.st_mode));
+  ASSERT_EQ(info.st_size, 0);
+
+  google::protobuf::io::FileInputStream stream(fd, 4);
+  stream.LimitToNext(3);
+  const void *data = nullptr;
+  int size = 0;
+  ASSERT_TRUE(stream.Next(&data, &size));
+  EXPECT_EQ(std::string(static_cast<const char *>(data), size), payload.substr(0, 3));
+  EXPECT_FALSE(stream.NotEnd());
+  EXPECT_FALSE(stream.Skip(1));
+  EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
+  EXPECT_EQ(stream.ByteCount(), 3);
+  stream.Restore();
+  std::string remainder;
+  while (stream.Next(&data, &size))
+    remainder.append(static_cast<const char *>(data), size);
+  EXPECT_EQ(remainder, payload.substr(3));
+  EXPECT_EQ(stream.ByteCount(), static_cast<int64_t>(payload.size()));
+  EXPECT_FALSE(stream.failed());
+}
+
+TEST_F(FdReadStreamTest, SyntheticFileSizeDoesNotAllowSkippingPastEof) {
+  const std::string source = "/sys/devices/system/cpu/online";
+  fd = ::open(source.c_str(), O_RDONLY);
+  if (fd < 0 && (errno == ENOENT || errno == EACCES))
+    GTEST_SKIP() << source << " is unavailable.";
+  ASSERT_GE(fd, 0);
+  const std::string payload = ReadWholeFile(source);
+  ASSERT_GT(payload.size(), 1u);
+  ASSERT_LT(payload.size(), 1000u);
+  struct stat info;
+  ASSERT_EQ(::fstat(fd, &info), 0);
+  ASSERT_TRUE(S_ISREG(info.st_mode));
+  ASSERT_GT(info.st_size, 1000);
+
+  for (const bool buffered : {false, true}) {
+    for (const bool binary_api : {false, true}) {
+      SCOPED_TRACE(buffered);
+      SCOPED_TRACE(binary_api);
+      ASSERT_EQ(SeekFd(fd, 0), 0);
+      utils::FdReadStream stream(fd, 4);
+      if (buffered) {
+        uint8_t byte;
+        stream.read_bytes(1, &byte);
+        EXPECT_EQ(byte, static_cast<uint8_t>(payload[0]));
+      }
+      if (binary_api)
+        EXPECT_THROW(stream.skip_bytes(1000), std::runtime_error);
+      else
+        EXPECT_FALSE(stream.Skip(1000));
+      EXPECT_EQ(stream.tell(), static_cast<int64_t>(payload.size()));
+      EXPECT_EQ(stream.ByteCount(), stream.tell());
+      EXPECT_FALSE(stream.NotEnd());
+      EXPECT_FALSE(stream.failed());
+    }
+  }
 }
 #endif
 

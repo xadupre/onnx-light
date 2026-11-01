@@ -1150,11 +1150,12 @@ public:
    *  out as a stable pointer, but a short-lived owned copy is fine since ONNX
    *  messages hold RefStrings/spans only as long as the source stream is alive. */
   virtual const uint8_t *read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) override;
-  /** Advances the read position by *n_bytes* using lseek. */
+  /** Advances by *n_bytes*, consuming buffered bytes before seeking on regular files.
+   *  Falls back to buffered reads for nonseekable descriptors. */
   virtual void skip_bytes(offset_t n_bytes) override;
   /** Returns false: fd streams do not support zero-copy pointer-into-buffer mode. */
   virtual bool CanNoCopy() const override { return false; }
-  /** Returns the number of bytes consumed up to the start of the current block. */
+  /** Returns the number of bytes consumed, including bytes skipped by seeking. */
   virtual int64_t ByteCount() const override {
     return total_read_ - static_cast<int64_t>(available_);
   }
@@ -1183,15 +1184,23 @@ public:
 protected:
   virtual void LimitTo(uint64_t len) override { limit_ = static_cast<int64_t>(len); }
 
-  /** Computes the remaining byte count from the current fd position to the end
-   *  of the file via lseek.  Returns INT64_MAX when lseek is unavailable
-   *  (non-regular files such as pipes or sockets). */
+  /** Computes the remaining byte count from the current fd position to the file end.
+   *  Returns INT64_MAX when the descriptor cannot report a seekable file size.
+   *  Uses native Windows handles to avoid unsafe CRT position probes. */
   static int64_t InitLimit(int fd) noexcept;
   /** Selects a bounded read buffer from the known remaining input size. */
   static int AdaptiveBlockSize(int64_t limit) noexcept;
   /** Fills the internal buffer when it has no unread bytes. */
   bool EnsureAvailable() const;
 
+private:
+  /** Skips a validated forward distance, returning false on EOF or a read error. */
+#if !defined(_WIN32) && (defined(__GNUC__) || defined(__clang__))
+  __attribute__((visibility("hidden")))
+#endif
+  bool SkipForward(int64_t remaining);
+
+protected:
   int fd_;
   int block_size_;
   char *buffer_;
@@ -1199,7 +1208,7 @@ protected:
   mutable int position_;
   int last_returned_;
   mutable int64_t total_read_;
-  /** Logical read position for the BinaryStream interface (updated by read_bytes/skip_bytes). */
+  /** Logical read position shared by the BinaryStream and zero-copy interfaces. */
   int64_t pos_;
   /** Effective end position: file-remaining-bytes at construction, or an active sub-limit. */
   int64_t limit_;

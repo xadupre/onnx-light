@@ -3,6 +3,7 @@
 // return bool (true on success) and ByteSizeLong() reports the serialized size
 // without performing a real serialization (it delegates to SerializeSize()).
 #include "external_data_internal.h"
+#include "google_protobuf_compat.h"
 #include "onnx.h"
 #include "onnx_helper.h"
 #include "windows_junction.h"
@@ -828,6 +829,37 @@ TEST_F(FdReadStreamTest, WriteOnlyDescriptorReportsFailure) {
   EXPECT_EQ(TellFd(fd), 0);
   EXPECT_THROW(stream.skip_bytes(1), std::runtime_error);
 }
+
+TEST_F(FdReadStreamTest, EmptyWriteOnlyDescriptorReportsReadFailure) {
+  fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+
+  utils::FdReadStream stream(fd, 2);
+  const void *data = nullptr;
+  int size = -1;
+  EXPECT_FALSE(stream.Next(&data, &size));
+  EXPECT_EQ(data, nullptr);
+  EXPECT_EQ(size, 0);
+  EXPECT_TRUE(stream.failed());
+
+  AttributeProto parsed;
+  EXPECT_FALSE(parsed.ParseFromFileDescriptor(fd));
+}
+
+#if defined(__linux__)
+TEST_F(FdReadStreamTest, CharacterDevicesRetainUnboundedInput) {
+  fd = ::open("/dev/zero", O_RDONLY);
+  ASSERT_GE(fd, 0);
+
+  google::protobuf::io::FileInputStream stream(fd, 4);
+  const void *data = nullptr;
+  int size = 0;
+  ASSERT_TRUE(stream.Next(&data, &size));
+  ASSERT_GT(size, 0);
+  EXPECT_EQ(static_cast<const uint8_t *>(data)[0], 0);
+  EXPECT_FALSE(stream.failed());
+}
+#endif
 
 TEST_F(FdReadStreamTest, PipesRetainBufferedFallback) {
   int descriptors[2];

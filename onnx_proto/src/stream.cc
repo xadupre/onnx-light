@@ -1079,6 +1079,11 @@ bool FdWriteStream::Flush() {
 
 int64_t FdReadStream::InitLimit(int fd) noexcept {
 #if !defined(_WIN32)
+  const int flags = ::fcntl(fd, F_GETFL);
+  struct stat info;
+  if (flags < 0 || (flags & O_ACCMODE) == O_WRONLY || ::fstat(fd, &info) != 0 ||
+      !S_ISREG(info.st_mode))
+    return INT64_MAX;
   auto cur = ::lseek(fd, 0, SEEK_CUR);
   if (cur < 0)
     return INT64_MAX; // non-seekable fd (pipe, socket, etc.)
@@ -1092,6 +1097,10 @@ int64_t FdReadStream::InitLimit(int fd) noexcept {
 #else
   const intptr_t handle = ReadFdHandle(fd);
   if (handle != -1 && ::GetFileType(reinterpret_cast<HANDLE>(handle)) == FILE_TYPE_DISK) {
+    char probe;
+    DWORD bytes_read = 0;
+    if (!::ReadFile(reinterpret_cast<HANDLE>(handle), &probe, 0, &bytes_read, nullptr))
+      return INT64_MAX;
     LARGE_INTEGER zero = {}, current, end;
     if (::SetFilePointerEx(reinterpret_cast<HANDLE>(handle), zero, &current, FILE_CURRENT) &&
         ::GetFileSizeEx(reinterpret_cast<HANDLE>(handle), &end) && current.QuadPart >= 0)

@@ -4,7 +4,7 @@
 Separating cleanup from reversible rewrites
 ==========================================
 
-Cleanups that redirect value references establish the canonical graph before
+Explicit cleanups that redirect value references establish the canonical graph before
 capture. Reversible records restore this cleaned graph, not the source graph
 containing the removed identities and duplicate initializers.
 """
@@ -53,7 +53,7 @@ model = oh.make_model(
 
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, standard_patterns(["Cast"]))
-rewrites = graph.optimize()
+rewrites = graph.optimize(canonicalize=True)
 canonical = oh.make_model(
     builder.undo_rewritings(rewrites).build_graph(), opset_imports=[oh.make_opsetid("", 18)]
 )

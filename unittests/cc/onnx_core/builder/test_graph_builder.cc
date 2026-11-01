@@ -733,6 +733,32 @@ TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
     EXPECT_NE(opset.domain(), "ai.onnx");
 }
 
+TEST(GraphBuilder, FunctionExportsIgnoreOpsetInsertionOrder) {
+  std::vector<FunctionProto> functions;
+  for (const bool reversed : {false, true}) {
+    core::builder::GraphBuilder builder("Body", SchemaLookup());
+    const std::vector<std::pair<std::string, int>> imports = {
+        {"", 18}, {"local", 1}, {"vendor", 2}};
+    for (std::size_t index = 0; index < imports.size(); ++index) {
+      const auto &[domain, version] = imports[reversed ? imports.size() - index - 1 : index];
+      builder.SetOpsetVersion(domain, version);
+    }
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeNode("Relu", {"x"}, {"y"});
+    builder.MakeOutput("y");
+    functions.push_back(builder.ToFunction("local"));
+  }
+  std::string difference;
+  EXPECT_TRUE(functions[0].Equals(functions[1], &difference)) << difference;
+
+  ModelProto model;
+  model.add_opset("", 18);
+  model.mutable_graph()->set_name("root");
+  *model.add_functions() = functions[0];
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  EXPECT_TRUE(imported.ToModel().functions(0).Equals(functions[0], &difference)) << difference;
+}
+
 TEST(GraphBuilder, CopyDeviceTargetsPreservesReferencedScopesAndFunctions) {
   using core::builder::GraphBuilder;
   using core::symbolic::Device;
@@ -3051,7 +3077,8 @@ TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
   for (std::size_t i = 0; i < graph.node().size(); ++i) {
     EXPECT_EQ(function.node(i).SerializeAsString(), graph.node(i).SerializeAsString());
   }
-  EXPECT_EQ(function.node(1).op_type(), "Shape");
+  EXPECT_EQ(function.node(1).op_type(), "Abs");
+  EXPECT_EQ(function.node(2).op_type(), "Shape");
   ASSERT_EQ(function.value_info().size(),
             graph.input().size() + graph.output().size() + graph.value_info().size());
   const auto check_value_info = [&](const auto &values) {
@@ -3285,7 +3312,7 @@ TEST(GraphBuilder, RewritingPreservesTagsWhenConsumerIsRemoved) {
 
   RewritingProto plan;
   plan.add_rewrites()->add_matched_nodes(0);
-  const auto rewritten = builder.ApplyRewritings(plan);
+  const auto rewritten = builder.ApplyRewritings(builder.CaptureRewritings(plan));
   ASSERT_EQ(rewritten.Nodes().size(), 1u);
   EXPECT_EQ(rewritten.Nodes()[0].op_type().value(), "Neg");
   ASSERT_EQ(rewritten.Initializers().size(), 1u);
@@ -5773,7 +5800,7 @@ TEST(GraphBuilderStructured, StandardExportRejectsInlineAndNestedTypes) {
   EXPECT_THROW(structured.ToStandardModel(), core::builder::BuilderError);
 }
 
-TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
+TEST(GraphBuilderStructured, RejectsInvalidExportOrderAndRebuildsAfterIdentityRemoval) {
   core::builder::GraphBuilder builder("sort", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeEncodedInitializer(BuilderEncoded("weight"));
@@ -5781,6 +5808,9 @@ TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
   builder.MakeNode("Identity", {"middle"}, {"last"});
   builder.MakeOutput("last");
   auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  std::swap(nodes[0], nodes[1]);
+  EXPECT_THROW(builder.ToGraph(), core::builder::BuilderError);
+  EXPECT_EQ(nodes[0].input(0), "middle");
   std::swap(nodes[0], nodes[1]);
   auto graph = builder.ToGraph();
   ASSERT_EQ(graph.node().size(), 2u);

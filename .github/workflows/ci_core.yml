@@ -403,6 +403,9 @@ jobs:
         # to that CI measurement and allow the deferred APIs plus the pipeline
         # and recursive-submessage export validators (one symbol each).
         # Keep the 5% margin and dependency allowlist.
+        # MoveNodeProto adds six public methods and three shared-proto RTTI/vtable
+        # symbols; ModelProto::RewritingHash adds one public method. Account for
+        # exactly these ten ABI additions while retaining the existing size caps.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -411,7 +414,7 @@ jobs:
             --max-installed-size 1903824 \
             --max-text-size 1373642 \
             --size-budget-margin-percent 5 \
-            --max-dynamic-symbols 914 \
+            --max-dynamic-symbols 924 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

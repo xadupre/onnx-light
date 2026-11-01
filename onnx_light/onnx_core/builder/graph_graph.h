@@ -86,7 +86,7 @@ public:
   void SetTargetDevice(symbolic::Device device);
 
   /// Establishes canonical value names and export-stable Shape/Size ordering before capture.
-  std::size_t Canonicalize();
+  std::size_t Canonicalize(bool move_shape_and_size_nodes = true);
 
   /**
    * Applies patterns and cleanup passes until convergence.
@@ -95,8 +95,11 @@ public:
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    * Replacement nodes whose inputs are all materialized constants are folded
    * into initializers before cleanup, subject to ``folding_options``.
-   * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
-   * passes may still remove nodes or initializers.
+   * ``remove_unused=false`` disables unused-node and initializer cleanup.
+   * ``canonicalize=true`` explicitly establishes a cleaned reference before
+   * capture. By default, capture starts from the input graph.
+   * ``move_shape_and_size_nodes=true`` records metadata-reader hoisting after
+   * pattern optimization. It is enabled by default and reported separately.
    * ``parallel=true`` matches candidates concurrently when the pattern's
    * CanMatchInParallel returns true. Python-defined patterns are evaluated
    * sequentially, including in mixed native/Python pattern lists.
@@ -112,12 +115,15 @@ public:
    * retain references to the graph or matched nodes beyond the call.
    *
    * Returns:
-   *   Self-contained records of the applied rewrites, in application order.
+   *   Self-contained edits, global structural hashes and final simultaneous moves,
+   *   replayable against the input graph, or its explicitly canonicalized
+   *   reference when ``canonicalize=true``.
    */
   RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
                           const ConstantFoldingOptions &folding_options = {},
                           bool remove_unused = true, const OptimizationCallback &callback = {},
-                          bool parallel = false);
+                          bool parallel = false, bool canonicalize = false,
+                          bool move_shape_and_size_nodes = true);
 
   /// Returns the patterns owned by this graph optimizer.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -222,7 +228,7 @@ public:
 private:
   using OriginalFunctions = std::unordered_map<std::string, const FunctionProto *>;
 
-  std::size_t CanonicalizeImpl(bool &reference_changed);
+  std::size_t CanonicalizeImpl(bool &reference_changed, bool move_shape_and_size_nodes = true);
   void Rebuild();
   void RebuildSuccessors();
   std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused,

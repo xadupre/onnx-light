@@ -705,9 +705,11 @@ class TestPatternOptimization(ExtTestCase):
     def test_named_variants_model_map_and_explicit_selection(self):
         value = oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])
         model = oh.make_model(oh.make_graph([], "canonical", [value], [value]))
-        model.add_rewriting("first", optim.RewritingProto())
+        source = optim.GraphBuilder(model)
+        model.add_rewriting("first", source.capture_rewritings(optim.RewritingProto()))
         second = optim.RewritingProto()
         second.metadata_props.add(key="target", value="second")
+        second = source.capture_rewritings(second)
         model.rewritings["second"] = second
         loaded = ModelProto()
         loaded.ParseFromString(model.SerializeToString())
@@ -762,7 +764,104 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(builder.to_onnx().SerializeToString(), before)
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
 
-    def test_to_onnx_bundle_keeps_positions_after_identity_cleanup_and_shape_hoisting(self):
+    def test_shape_and_size_hoisting_is_recorded_and_can_be_disabled(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "shape_order (float[2,3] x, float[2,3] z) => (float[2,3] q, int64[2] s) {\n"
+            "  p = Relu(x)\n"
+            "  q = Neg(z)\n"
+            "  s = Shape(p)\n"
+            "}\n"
+        )
+        folding = ConstantFoldingOptions()
+        folding.enabled = False
+        for hoist in (False, True):
+            with self.subTest(hoist=hoist):
+                builder = optim.GraphBuilder(model)
+                original = builder.build_graph().SerializeToString()
+                plan, report = optim.GraphGraph(builder, False).optimize(
+                    report=True, folding_options=folding, move_shape_and_size_nodes=hoist
+                )
+                expected_ops = ["Relu", "Shape", "Neg"] if hoist else ["Relu", "Neg", "Shape"]
+                exported = builder.to_onnx(move_shape_and_size_nodes=hoist)
+                self.assertEqual([node.op_type for node in exported.graph.node], expected_ops)
+                self.assertEqual(report.moved_shape_and_size_nodes, int(hoist))
+                self.assertIn("MoveShapeAndSizeNodes", str(report))
+                self.assertEqual(len(plan.moved_nodes), int(hoist))
+                if hoist:
+                    self.assertEqual(plan.moved_nodes[0].from_position, 2)
+                    self.assertEqual(plan.moved_nodes[0].to_position, 1)
+                restored = builder.undo_rewritings(plan)
+                self.assertEqual(restored.build_graph().SerializeToString(), original)
+                replayed = optim.GraphBuilder(model).apply_rewritings(plan).to_onnx()
+                self.assertEqual(
+                    replayed.graph.SerializeToString(), exported.graph.SerializeToString()
+                )
+                self.assertEqual(
+                    [node.op_type for node in optim.GraphBuilder(model).to_onnx().graph.node],
+                    ["Relu", "Neg", "Shape"],
+                )
+
+    def test_canonicalization_is_disabled_by_default_and_explicitly_selectable(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "reference (float[2] x) => (float[2] y) {\n"
+            "  a = Identity(x)\n"
+            "  y = Neg(a)\n"
+            "}\n"
+        )
+        for canonicalize in (False, True):
+            with self.subTest(canonicalize=canonicalize):
+                builder = optim.GraphBuilder(model)
+                graph = optim.GraphGraph(builder, False)
+                plan = graph.optimize(canonicalize=True) if canonicalize else graph.optimize()
+                restored = builder.undo_rewritings(plan).build_graph()
+                self.assertEqual(
+                    [node.op_type for node in restored.node],
+                    ["Neg"] if canonicalize else ["Identity", "Neg"],
+                )
+                self.assertEqual(list(restored.node[-1].input), ["x" if canonicalize else "a"])
+
+    def test_rewriting_hash_and_replay_do_not_read_unused_external_weights(self):
+        weight = TensorProto(
+            name="unloaded",
+            data_type=TensorProto.FLOAT,
+            dims=[1024],
+            data_location=TensorProto.EXTERNAL,
+        )
+        weight.external_data.add(key="location", value="missing-rewriting-hash-weights.bin")
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Relu", ["x"], ["p"]),
+                    oh.make_node("Neg", ["x"], ["q"]),
+                    oh.make_node("Shape", ["p"], ["s"]),
+                ],
+                "lazy_hash",
+                [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+                [
+                    oh.make_tensor_value_info("q", TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("s", TensorProto.INT64, [1]),
+                ],
+                initializer=[weight],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        before = builder.rewriting_hash()
+        self.assertEqual(before, model.rewriting_hash())
+        folding = ConstantFoldingOptions()
+        folding.enabled = False
+        plan = optim.GraphGraph(builder, False).optimize(
+            folding_options=folding, remove_unused=False
+        )
+        self.assertEqual(plan.hash_before, before)
+        self.assertEqual(plan.hash_after, builder.rewriting_hash())
+        replayed = optim.GraphBuilder(model).apply_rewritings(plan)
+        self.assertEqual(replayed.rewriting_hash(), plan.hash_after)
+        self.assertEqual(builder.undo_rewritings(plan).rewriting_hash(), before)
+
+    def test_to_onnx_bundle_keeps_original_identity_and_shape_positions(self):
         for op_type in ("Shape", "Size"):
             with self.subTest(op_type=op_type):
                 model = oh.make_model(
@@ -792,10 +891,11 @@ class TestPatternOptimization(ExtTestCase):
                 optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
                 bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
                 self.assertEqual(
-                    [node.op_type for node in bundled.graph.node], ["Relu", op_type, "Cast"]
+                    [node.op_type for node in bundled.graph.node],
+                    ["Relu", "Cast", "Identity", op_type],
                 )
                 self.assertEqual(
-                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [2]
+                    list(bundled.rewritings["optimized"].rewrites[0].matched_nodes), [1]
                 )
                 with TemporaryDirectory() as directory:
                     path = Path(directory) / "bundle.onnx"
@@ -817,7 +917,7 @@ class TestPatternOptimization(ExtTestCase):
                 ):
                     self.assertEqualArray(actual, expected)
 
-    def test_to_onnx_drops_old_plans_when_function_canonicalization_changes_reference(self):
+    def test_to_onnx_keeps_old_plans_against_original_function_reference(self):
         model = _double_neg_model()
         model.functions.append(
             oh.make_function(
@@ -839,8 +939,10 @@ class TestPatternOptimization(ExtTestCase):
         source = builder.to_onnx()
         bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertEqual(bundled.graph.SerializeToString(), source.graph.SerializeToString())
-        self.assertEqual(set(bundled.rewritings), {"optimized"})
-        self.assertEqual([node.op_type for node in bundled.functions[0].node], ["Neg"])
+        self.assertEqual(set(bundled.rewritings), {"other", "optimized"})
+        self.assertEqual(
+            [node.op_type for node in bundled.functions[0].node], ["Identity", "Neg"]
+        )
         self.assertEqual(set(builder.to_onnx().rewritings), {"other"})
 
     def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
@@ -999,7 +1101,9 @@ class TestPatternOptimization(ExtTestCase):
                 ],
             )
         )
-        bundled.rewritings["optimized"] = plan
+        plan.hash_before = None
+        plan.hash_after = None
+        bundled.rewritings["optimized"] = optim.GraphBuilder(bundled).capture_rewritings(plan)
         with TemporaryDirectory() as directory:
             source = Path(directory) / "source"
             target = Path(directory) / "target"
@@ -1184,6 +1288,16 @@ class TestPatternOptimization(ExtTestCase):
 
     def test_rewriting_proto_binary_roundtrip_all_fields(self):
         plan = optim.RewritingProto()
+        self.assertIsNone(plan.hash_before)
+        self.assertFalse(plan.HasField("hash_before"))
+        plan.hash_before = 0
+        plan.hash_after = 2**64 - 1
+        move = plan.moved_nodes.add()
+        self.assertIsNone(move.from_position)
+        move.from_position = 2**64 - 1
+        move.to_position = 0
+        move.graph_path.extend(["branch"])
+        move.function_id = "local:Body"
         edit = plan.rewrites.add()
         edit.pattern_name = "Serialized"
         edit.graph_path.extend(["branch", "leaf"])
@@ -1202,6 +1316,15 @@ class TestPatternOptimization(ExtTestCase):
         parsed = optim.RewritingProto()
         parsed.ParseFromString(plan.SerializeToString())
         self.assertEqual(parsed.SerializeToString(), plan.SerializeToString())
+        self.assertEqual(parsed.hash_before, 0)
+        self.assertEqual(parsed.hash_after, 2**64 - 1)
+        self.assertEqual(parsed.moved_nodes[0].from_position, 2**64 - 1)
+        self.assertEqual(parsed.moved_nodes[0].to_position, 0)
+        parsed.hash_before = None
+        self.assertFalse(parsed.HasField("hash_before"))
+        for invalid in (-1, 2**64):
+            with self.subTest(invalid=invalid), self.assertRaises((TypeError, RuntimeError)):
+                parsed.hash_after = invalid
         local = optim.LocalRewritingProto()
         local.ParseFromString(edit.SerializeToString())
         self.assertEqual(list(local.matched_nodes), [0, 2**64 - 1])
@@ -1255,7 +1378,7 @@ class TestPatternOptimization(ExtTestCase):
             onh.to_array(restored.initializer[0]), onh.to_array(canonical.initializer[0])
         )
 
-    def test_canonicalize_and_inverse_restore_only_captured_edits(self):
+    def test_inverse_restores_original_reference_without_canonicalization(self):
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -1270,20 +1393,19 @@ class TestPatternOptimization(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         reference = optim.GraphBuilder(model)
-        self.assertEqual(reference.remove_identity_nodes(), 1)
-        canonical = reference.build_graph().SerializeToString()
+        original = reference.build_graph().SerializeToString()
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         plan = graph.optimize()
         optimized = builder.build_graph().SerializeToString()
         self.assertEqual(
-            builder.undo_rewritings(plan).build_graph().SerializeToString(), canonical
+            builder.undo_rewritings(plan).build_graph().SerializeToString(), original
         )
         self.assertEqual(builder.build_graph().SerializeToString(), optimized)
         loaded = optim.RewritingProto()
         loaded.ParseFromString(plan.SerializeToString())
         self.assertEqual(
-            builder.undo_rewritings(loaded).build_graph().SerializeToString(), canonical
+            builder.undo_rewritings(loaded).build_graph().SerializeToString(), original
         )
         self.assertFalse(any(name.startswith("inverse_") for name in dir(plan)))
         self.assertFalse(any(name.startswith("inverse_") for name in dir(plan.rewrites[0])))
@@ -1341,6 +1463,9 @@ class TestPatternOptimization(ExtTestCase):
         plan.required_opset_imports.append(oh.make_opsetid("local.test", 1))
         plan.rewrites[0].added_nodes[0].op_type = "Negate"
         plan.rewrites[0].added_nodes[0].domain = "local.test"
+        plan.hash_before = None
+        plan.hash_after = None
+        plan = optim.GraphBuilder(model).capture_rewritings(plan)
         loaded = optim.RewritingProto()
         loaded.ParseFromString(plan.SerializeToString())
         result = optim.apply_rewritings_to_model(model, loaded)
@@ -1749,6 +1874,7 @@ class TestPatternOptimization(ExtTestCase):
             [edit.pattern_name for edit in plan.rewrites], ["NegNeg", "RemoveUnusedNodes"]
         )
         reordered = optim.RewritingProto(rewrites=[plan.rewrites[1], plan.rewrites[0]])
+        reordered = optim.GraphBuilder(model).capture_rewritings(reordered)
         loaded = optim.RewritingProto()
         loaded.ParseFromString(reordered.SerializeToString())
         self.assertEqual(

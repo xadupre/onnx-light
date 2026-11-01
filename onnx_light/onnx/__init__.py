@@ -25,6 +25,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     MapProto,
     Message,
     ModelProto,
+    MoveNodeProto,
     NodeDeviceConfigurationProto,
     NodeProto,
     OperatorSetIdProto,

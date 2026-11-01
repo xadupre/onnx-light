@@ -11,6 +11,7 @@
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <numeric>
 #include <string>
@@ -120,6 +121,73 @@ public:
 private:
   core::runtime::NodeKernelFn previous_;
 };
+
+TEST(TransposeTransposePattern, ReplaysOriginalGraphWithoutCanonicalization) {
+  onnx_patterns::RegisterPatterns();
+  for (bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    source.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+    auto *scope = &source;
+    if (nested) {
+      source.MakeInput("condition", core::symbolic::TensorType::kBool, Shape({}));
+      scope = &source.MakeSubgraph("then_branch");
+    }
+    scope->MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
+    scope->MakeInitializer(MakeInitializer<float>("duplicate", {2, 3}, {1, 2, 3, 4, 5, 6}));
+    scope->MakeNode("Identity", {"x"}, {"a"});
+    scope->MakeNode("Transpose", {"a"}, {"t"}, "", "", PermAttr({1, 0}));
+    scope->MakeNode("Transpose", {"t"}, {"b"}, "", "", PermAttr({1, 0}));
+    scope->MakeNode("Add", {"b", "weight"}, {"first"});
+    scope->MakeNode("Add", {"b", "weight"}, {"second"});
+    scope->MakeNode("Add", {"first", "second"}, {"sum"});
+    scope->MakeNode("Add", {"sum", "duplicate"}, {"result"});
+    scope->MakeOutput("result");
+    if (nested) {
+      auto &other = source.MakeSubgraph("else_branch");
+      other.MakeNode("Neg", {"x"}, {"result"});
+      other.MakeOutput("result");
+      utils::RepeatedProtoField<AttributeProto> references;
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto &reference = references.add();
+        reference.set_name(std::string(name) + "_ref");
+        reference.set_type(AttributeProto::STRING);
+        reference.set_s(name);
+      }
+      source.MakeNode("If", {"condition"}, {"selected"}, "", "", references);
+      source.MakeOutput("selected");
+    }
+    ModelProto original;
+    original.set_ir_version(10);
+    original.add_opset("", 28);
+    *original.mutable_graph() = source.BuildGraph();
+    core::builder::GraphBuilder builder(original, SchemaLookup());
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(core::builder::CreateRegisteredPattern("TransposeTranspose"));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    const auto plan = graph.Optimize();
+    ASSERT_EQ(plan.rewrites().size(), 1u);
+    EXPECT_EQ(plan.rewrites(0).pattern_name(), "TransposeTranspose");
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const auto optimized = builder.ToModel(original.ir_version());
+    EXPECT_NO_THROW(VerifyModel(optimized));
+    auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+    const auto saved = replayed.ToModel(original.ir_version());
+    EXPECT_NO_THROW(VerifyModel(saved));
+    EXPECT_EQ(saved.graph().SerializeAsString(), optimized.graph().SerializeAsString());
+    EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                  .ApplyRewritings(plan)
+                  .ToModel(original.ir_version())
+                  .graph()
+                  .SerializeAsString(),
+              optimized.graph().SerializeAsString());
+    auto restored = builder.UndoRewritings(loaded);
+    EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original.graph().SerializeAsString());
+    EXPECT_EQ(restored.ApplyRewritings(loaded).ToModel().graph().SerializeAsString(),
+              optimized.graph().SerializeAsString());
+  }
+}
 
 TEST(TransposeConstantFolding, FoldsRewrittenFloatInitializer) {
   ScopedTransposeKernel kernel;

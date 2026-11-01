@@ -553,22 +553,9 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
         }
       }
     }
-    const std::string function_name = function.name().value();
-    const std::string function_domain = function.domain().value();
-    // ONNX functions have an independent namespace and are identified by all
-    // three fields, not by graph value names or the bare function name.
-    auto child =
-        std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_, local_registry_);
-    child->is_local_function_ = true;
-    child->function_domain_ = function_domain;
-    child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
-    child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
-    child->parent_ = this;
-    GraphBuilder &local = *child;
-    local_functions_.push_back(std::move(child));
-    local.ImportFunction(function);
+    ImportLocalFunction(function);
     imported_functions.insert(
-        MakeFunctionIdentifier(function_domain, function_name, function.overload()));
+        MakeFunctionIdentifier(function.domain(), function.name(), function.overload()));
   }
   ImportGraph(model.graph());
   rewritings_ = utils::CopyWithSharedTensorStorage(model.rewritings());
@@ -2834,11 +2821,9 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
   return removed + local_removed;
 }
 
-namespace {
-
 // Returns true when ``node`` is a default-domain Shape or Size node reading a
 // single named input, i.e. a node that only inspects its input's metadata.
-bool IsShapeOrSizeNode(const NodeProto &node) {
+bool GraphBuilder::IsShapeOrSizeNode(const NodeProto &node) {
   const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
   if (!domain.empty()) {
     return false;
@@ -2850,19 +2835,19 @@ bool IsShapeOrSizeNode(const NodeProto &node) {
   return node.input().size() == 1 && !std::string(node.input(0)).empty();
 }
 
-} // namespace
-
 std::size_t GraphBuilder::MoveShapeAndSizeNodes() { return MoveShapeAndSizeNodesImpl(true); }
 
-std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
+std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive,
+                                                    std::vector<std::size_t> *node_order,
+                                                    std::vector<bool> *relocatable_readers) {
   // Reorder nested builders first so each scope hoists its own Shape/Size nodes.
   std::size_t moved = 0;
   if (recursive) {
     for (const auto &function : local_functions_) {
-      moved += function->MoveShapeAndSizeNodes();
+      moved += function->MoveShapeAndSizeNodesImpl(true);
     }
     for (const auto &subgraph : subgraphs_) {
-      moved += subgraph->MoveShapeAndSizeNodes();
+      moved += subgraph->MoveShapeAndSizeNodesImpl(true);
     }
   }
 
@@ -2956,6 +2941,10 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
   RefreshAfterMutation();
   InvalidateRewritings();
 
+  if (node_order != nullptr)
+    *node_order = std::move(order);
+  if (relocatable_readers != nullptr)
+    *relocatable_readers = std::move(is_relocatable);
   return moved + local_moved;
 }
 
@@ -3890,6 +3879,20 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const FunctionProto &function) {
   return local;
 }
 
+GraphBuilder &GraphBuilder::ImportLocalFunction(const FunctionProto &function) {
+  auto child = std::make_unique<GraphBuilder>(function.name().value(), schema_lookup_, opsets_,
+                                              local_registry_);
+  child->is_local_function_ = true;
+  child->function_domain_ = function.domain().value();
+  child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
+  child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
+  child->parent_ = this;
+  GraphBuilder &local = *child;
+  local_functions_.push_back(std::move(child));
+  local.ImportFunction(function);
+  return local;
+}
+
 GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   if (FindNamedBuilder(subgraphs_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a subgraph named '" + name + "' already exists.");
@@ -4091,60 +4094,33 @@ std::string GraphBuilder::ToString() const {
 
 // ── Finalization ───────────────────────────────────────────────────────
 
-void GraphBuilder::SortNodesTopologically() {
-  for (const auto &child : local_functions_) {
-    child->SortNodesTopologically();
-  }
-  std::unordered_set<std::string> available = inherited_names_;
-  for (const auto &input : inputs_) {
+void GraphBuilder::ValidateNodeOrder(const std::vector<std::size_t> *order) const {
+  auto available = inherited_names_;
+  for (const auto &input : inputs_)
     available.insert(input.name().value());
-  }
-  for (const auto &initializer : initializers_) {
+  for (const auto &initializer : initializers_)
     available.insert(initializer.name().value());
-  }
-  for (const auto &initializer : extended_initializers_) {
+  for (const auto &initializer : extended_initializers_)
     available.insert(initializer.name().value());
-  }
-  for (const auto &initializer : graph_template_.sparse_initializer()) {
+  for (const auto &initializer : graph_template_.sparse_initializer())
     available.insert(initializer.values().name().value());
-  }
-  std::vector<std::vector<std::string>> references(nodes_.size());
-  for (std::size_t i = 0; i < nodes_.size(); ++i)
-    CollectNodeReferences(nodes_[i], references[i]);
-  auto defined = available;
-  bool reordered = false;
-  for (std::size_t i = 0; i < nodes_.size(); ++i) {
-    if (std::any_of(references[i].begin(), references[i].end(),
-                    [&](const auto &name) { return defined.count(name) == 0; })) {
-      reordered = true;
-      break;
-    }
-    for (const auto &output : nodes_[i].output()) {
-      if (!output.empty() && !defined.insert(output.value()).second) {
+  for (std::size_t position = 0; position < nodes_.size(); ++position) {
+    const auto &node = nodes_[order == nullptr ? position : (*order)[position]];
+    std::vector<std::string> references;
+    CollectNodeReferences(node, references);
+    for (const auto &name : references)
+      if (available.count(name) == 0)
+        throw BuilderError("GraphBuilder: node '" + node.op_type().value() +
+                           "' reads an undefined or later value '" + name + "'.");
+    for (const auto &output : node.output())
+      if (!output.empty() && !available.insert(output.value()).second)
         throw BuilderError("GraphBuilder: multiple definitions of '" + output.value() + "'.");
-      }
-    }
   }
-  if (reordered) {
-    const auto order = TopologicalNodeOrder(nodes_, available, references);
-    utils::RepeatedProtoField<NodeProto> sorted;
-    sorted.reserve(nodes_.size());
-    for (std::size_t i : order) {
-      sorted.push_back(std::move(nodes_[i]));
-    }
-    nodes_ = std::move(sorted);
-  }
-  for (const NodeProto &node : nodes_) {
-    for (GraphBuilder *child : ReferencedSubgraphs(node)) {
-      child->inherited_names_ = available;
-      child->SortNodesTopologically();
-    }
-    for (std::size_t i = 0; i < node.output().size(); ++i) {
-      available.insert(node.output(i));
-    }
-  }
-  if (reordered) {
-    RebuildMetadata();
+  if (order == nullptr) {
+    for (const auto &function : local_functions_)
+      function->ValidateNodeOrder();
+    for (const auto &subgraph : subgraphs_)
+      subgraph->ValidateNodeOrder();
   }
 }
 
@@ -4457,10 +4433,7 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
 }
 
 GraphProto GraphBuilder::ToGraph() {
-  SortNodesTopologically();
-  // Hoist Shape/Size nodes next to their producers before exporting so the
-  // finalisation analyses (in-place reuse, peak memory) see the tighter order.
-  MoveShapeAndSizeNodes();
+  ValidateNodeOrder();
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
@@ -4558,8 +4531,7 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
         "produce a model / graph instead.");
   }
   ValidateInitializerConstants();
-  SortNodesTopologically();
-  MoveShapeAndSizeNodes();
+  ValidateNodeOrder();
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
@@ -4697,7 +4669,9 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
   for (const ValueInfoProto &value_info : value_infos_) {
     function.add_value_info(value_info);
   }
-  for (const auto &entry : opsets_) {
+  std::vector<std::pair<std::string, int>> ordered_opsets(opsets_.begin(), opsets_.end());
+  std::sort(ordered_opsets.begin(), ordered_opsets.end());
+  for (const auto &entry : ordered_opsets) {
     function.add_opset(entry.first, entry.second);
   }
   for (const NodeProto &node : nodes_) {

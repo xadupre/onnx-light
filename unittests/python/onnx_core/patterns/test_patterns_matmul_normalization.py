@@ -183,7 +183,15 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         evaluator.register_custom_kernel("", "ReduceMean", self._reduce_mean_kernel)
         return evaluator.run(None, feeds)
 
-    def _optimize(self, model, patterns, *, check_model: bool = True, schema_lookup: bool = True):
+    def _optimize(
+        self,
+        model,
+        patterns,
+        *,
+        check_model: bool = True,
+        schema_lookup: bool = True,
+        canonicalize: bool = False,
+    ):
         """Optimizes a model with an isolated GraphGraph."""
         if check_model:
             checker.check_model(model)
@@ -193,7 +201,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             else optimization.GraphBuilder(model, schema_lookup=None)
         )
         graph = optimization.GraphGraph(builder, patterns)
-        rewrites, report = graph.optimize(report=True)
+        rewrites, report = graph.optimize(report=True, canonicalize=canonicalize)
         optimized = builder.to_onnx()
         if check_model:
             checker.check_model(optimized)
@@ -224,10 +232,15 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         rtol: float = 1e-6,
         check_model: bool = True,
         schema_lookup: bool = True,
+        canonicalize: bool = False,
     ):
         """Checks a successful rewrite, topology, initializers, and values."""
         optimized, rewrites, report = self._optimize(
-            model, patterns, check_model=check_model, schema_lookup=schema_lookup
+            model,
+            patterns,
+            check_model=check_model,
+            schema_lookup=schema_lookup,
+            canonicalize=canonicalize,
         )
         self.assertEqual(expected_ops, [node.op_type for node in optimized.graph.node])
         self.assertIn(required_pattern, {rewrite.pattern_name for rewrite in rewrites})
@@ -2071,6 +2084,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["SoftmaxCrossEntropyLossCast"],
             ["SoftmaxCrossEntropyLoss"],
             required_pattern="SoftmaxCrossEntropyLossCast",
+            canonicalize=True,
             initializer_count=0,
             atol=2e-3,
             rtol=2e-3,

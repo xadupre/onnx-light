@@ -2349,7 +2349,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("rewrites"),
           "Applies captured rewrites and returns a new validated GraphBuilder.")
       .def("undo_rewritings", &GraphBuilder::UndoRewritings, nb::arg("rewrites"),
-           "Restores canonical cleanup using this builder's non-serialized optimization history.")
+           "Restores the pre-optimization state using this builder's non-serialized history.")
       .def("add_rewriting", &GraphBuilder::AddRewriting, nb::arg("name"), nb::arg("rewrites"),
            "Adds an independent named plan, rejecting duplicate names.")
       .def(
@@ -2391,6 +2391,10 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("copy_device_targets_from", &GraphBuilder::CopyDeviceTargetsFrom, nb::arg("source"),
            "Copies devices from an equivalent builder, including nested scopes and exported "
            "functions; rejects incompatible scopes before changing devices.")
+      .def("rewriting_hash", &GraphBuilder::RewritingHash,
+           "Returns the combined positioned-node structural hash without reading weights.")
+      .def("capture_rewritings", &GraphBuilder::CaptureRewritings, nb::arg("rewrites"),
+           "Creates a hashed plan by validated replay of manually assembled edits.")
       .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
            "Returns the finalised graph wrapped in a ModelProto.")

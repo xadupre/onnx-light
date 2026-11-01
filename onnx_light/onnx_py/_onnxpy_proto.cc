@@ -3450,18 +3450,46 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   DECLARE_REPEATED_FIELD_PROTO(LocalRewritingProto, rep_local_rewriting);
   define_repeated_field_type_proto(rep_local_rewriting, rep_local_rewriting_proto);
 
+  PYDEFINE_PROTO(m, MoveNodeProto)
+      .PYFIELD_OPTIONAL_INT(MoveNodeProto, from_position)
+      .PYFIELD_OPTIONAL_INT(MoveNodeProto, to_position)
+      .PYFIELD(MoveNodeProto, graph_path)
+      .PYFIELD_STR(MoveNodeProto, function_id);
+  PYADD_PROTO_SERIALIZATION(MoveNodeProto);
+  nb_MoveNodeProto.def(
+      "HasField",
+      [](const MoveNodeProto &self, const std::string &field_name) {
+        if (field_name == "from_position")
+          return self.has_from_position();
+        if (field_name == "to_position")
+          return self.has_to_position();
+        if (field_name == "function_id")
+          return self.has_function_id();
+        throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
+      },
+      nb::arg("field_name"));
+  DECLARE_REPEATED_FIELD_PROTO(MoveNodeProto, rep_move_node);
+  define_repeated_field_type_proto(rep_move_node, rep_move_node_proto);
+
   PYDEFINE_PROTO(m, RewritingProto)
       .PYFIELD(RewritingProto, rewrites)
       .PYFIELD(RewritingProto, required_opset_imports)
       .PYFIELD(RewritingProto, metadata_props)
       .PYFIELD(RewritingProto, added_functions)
-      .PYFIELD(RewritingProto, replaced_function_ids);
+      .PYFIELD(RewritingProto, replaced_function_ids)
+      .PYFIELD_OPTIONAL_INT(RewritingProto, hash_before)
+      .PYFIELD_OPTIONAL_INT(RewritingProto, hash_after)
+      .PYFIELD(RewritingProto, moved_nodes);
   PYADD_PROTO_SERIALIZATION(RewritingProto);
   nb_RewritingProto
       .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })
       .def(
           "HasField",
-          [](const RewritingProto &, const std::string &field_name) -> bool {
+          [](const RewritingProto &self, const std::string &field_name) -> bool {
+            if (field_name == "hash_before")
+              return self.has_hash_before();
+            if (field_name == "hash_after")
+              return self.has_hash_after();
             throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
           },
           nb::arg("field_name"));
@@ -3470,6 +3498,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   nb::bind_map<ModelProto::rewritings_t>(m, "RewritingMap");
 
   PYDEFINE_PROTO(m, ModelProto)
+      .def("rewriting_hash", &ModelProto::RewritingHash,
+           "Returns the combined positioned-node structural hash without reading weights.")
       .PYFIELD_STR(ModelProto, producer_name)
       .PYFIELD_STR(ModelProto, producer_version)
       .PYFIELD_STR(ModelProto, domain)

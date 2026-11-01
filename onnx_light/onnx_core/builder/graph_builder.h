@@ -538,8 +538,10 @@ public:
   /// input exists. Emitting it immediately after its producer -- instead of
   /// wherever it happened to be inserted -- lets the producer's output be
   /// released as early as possible, which improves the peak-memory analysis run
-  /// at finalisation. This pass is called automatically before the builder is
-  /// exported into an ONNX proto.
+  /// at finalisation. This pass runs by default during optimization, where its
+  /// moves are recorded for replay, or when explicitly requested through this
+  /// method. Export only validates node order and never runs this pass,
+  /// regardless of named plans or undo history.
   ///
   /// Each such node is relocated to directly follow the node producing its
   /// input, preserving the relative order of several ``Shape`` / ``Size`` nodes
@@ -730,6 +732,7 @@ public:
   /// Applies ordered captured rewrites and returns a new, validated builder.
   /// Preserves the source builder, maintains dependency-consistent node order,
   /// and merges added functions and opset imports. Requires a root model builder.
+  /// Checks both structural hashes and applies simultaneous node moves last.
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
@@ -738,6 +741,11 @@ public:
   /// Matches functions across source scopes by domain, name and overload, preserving
   /// their original scope paths in diagnostics even when reconstruction hoists them.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
+  /// Creates a hashed plan from manually assembled edits by validated replay.
+  /// Requires an unhashed plan and preserves the source builder.
+  RewritingProto CaptureRewritings(const RewritingProto &rewrites) const;
+  /// Returns the combined positioned-node structural hash without reading weights.
+  uint64_t RewritingHash() const;
 
   /// Reverses a complete captured plan atomically, without undoing canonical cleanup.
   /// Uses undo information retained only by the builder that ran GraphGraph::Optimize.
@@ -784,9 +792,8 @@ public:
   // ── Finalization ─────────────────────────────────────────────────────
 
   /// Returns the finalized :cpp:class:`GraphProto`.
-  /// Stably orders dependencies, including lexical subgraph captures, before
-  /// hoisting Shape/Size nodes and recomputing lifetime and memory metadata.
-  /// Throws on cyclic dependencies or undefined inputs. Mutates node order.
+  /// Validates dependencies and recomputes lifetime and memory metadata.
+  /// Does not reorder nodes or perform optimization.
   GraphProto ToGraph();
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
@@ -844,7 +851,15 @@ private:
   RemoveDuplicateNodesImpl(bool recursive,
                            std::unordered_map<std::string, std::string> *applied_renames = nullptr);
 
-  std::size_t MoveShapeAndSizeNodesImpl(bool recursive);
+  static bool IsShapeOrSizeNode(const NodeProto &node);
+  std::size_t MoveShapeAndSizeNodesImpl(bool recursive,
+                                        std::vector<std::size_t> *node_order = nullptr,
+                                        std::vector<bool> *relocatable_readers = nullptr);
+  ModelProto RewritingReference() const;
+  GraphBuilder ReplayRewritings(const RewritingProto &rewrites,
+                                std::pair<uint64_t, uint64_t> *captured_hashes) const;
+  void ApplyNodeMoves(const utils::RepeatedProtoField<MoveNodeProto> &moves);
+  void ValidateNodeOrder(const std::vector<std::size_t> *order = nullptr) const;
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
@@ -967,6 +982,7 @@ private:
 
   // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
   void ImportFunction(const FunctionProto &function);
+  GraphBuilder &ImportLocalFunction(const FunctionProto &function);
 
   // Rebuilds owned definitions on demand for function calls and graph-valued
   // inference, including direct optimizer edits to nested builders. Ordinary
@@ -980,8 +996,6 @@ private:
   void PrependInitializerConstants(FunctionProto &function) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
-  // Orders producers before consumers, including lexical subgraph captures.
-  void SortNodesTopologically();
   void ApplyRewriting(const LocalRewritingProto &rewrite,
                       const utils::RepeatedProtoField<FunctionProto> &functions);
   // Returns an empty permutation when no insertion is necessary. Otherwise

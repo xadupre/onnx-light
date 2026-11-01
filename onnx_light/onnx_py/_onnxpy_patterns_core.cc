@@ -106,6 +106,8 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def_ro("matching_time_ns", &OptimizationReport::matching_time_ns)
       .def_ro("rewriting_time_ns", &OptimizationReport::rewriting_time_ns)
       .def_ro("cleanup_time_ns", &OptimizationReport::cleanup_time_ns)
+      .def_ro("move_shape_and_size_time_ns", &OptimizationReport::move_shape_and_size_time_ns)
+      .def_ro("moved_shape_and_size_nodes", &OptimizationReport::moved_shape_and_size_nodes)
       .def_ro("constant_folding_time_ns", &OptimizationReport::constant_folding_time_ns)
       .def_ro("subgraph_optimization_time_ns", &OptimizationReport::subgraph_optimization_time_ns)
       .def_ro("patterns", &OptimizationReport::patterns)
@@ -191,7 +193,8 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report,
              const core::builder::ConstantFoldingOptions &folding_options, bool remove_unused,
-             nb::object callback, bool parallel) -> nb::object {
+             nb::object callback, bool parallel, bool canonicalize,
+             bool move_shape_and_size_nodes) -> nb::object {
             GraphGraph::OptimizationCallback on_match;
             if (!callback.is_none()) {
               if (!PyCallable_Check(callback.ptr()))
@@ -204,17 +207,20 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
             }
             if (!report) {
               return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused,
-                                             on_match, parallel));
+                                             on_match, parallel, canonicalize,
+                                             move_shape_and_size_nodes));
             }
             OptimizationReport statistics;
-            RewritingProto rewrites = graph.Optimize(max_iter, &statistics, folding_options,
-                                                     remove_unused, on_match, parallel);
+            RewritingProto rewrites =
+                graph.Optimize(max_iter, &statistics, folding_options, remove_unused, on_match,
+                               parallel, canonicalize, move_shape_and_size_nodes);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
           nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
           nb::arg("folding_options") = core::builder::ConstantFoldingOptions{},
           nb::arg("remove_unused") = true, nb::arg("callback") = nb::none(),
-          nb::arg("parallel") = false)
+          nb::arg("parallel") = false, nb::arg("canonicalize") = false,
+          nb::arg("move_shape_and_size_nodes") = true)
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

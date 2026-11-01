@@ -697,10 +697,14 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
         EXPECT_THROW(mixed_graph.Optimize(-1, nullptr, folding), core::builder::BuilderError);
         EXPECT_EQ(mixed.BuildGraph().SerializeAsString(), before);
       } else {
-        EXPECT_FALSE(mixed_graph.Optimize(-1, nullptr, folding).rewrites().empty());
+        const auto plan = mixed_graph.Optimize(-1, nullptr, folding);
+        EXPECT_FALSE(plan.rewrites().empty());
         ASSERT_EQ(mixed.Nodes().size(), 1u);
         EXPECT_EQ(mixed.Nodes()[0].op_type(), "ShiftedCausalMask");
-        EXPECT_EQ(mixed.LocalFunctions().size(), 1u);
+        // Only actual folds add model-scoped replay preparation helpers.
+        EXPECT_EQ(mixed.LocalFunctions().size(), plan.added_functions().size());
+        for (const auto &function : plan.added_functions())
+          EXPECT_TRUE(HasFunction(mixed, function.name().value())) << function.name().value();
         EXPECT_EQ(mixed.LocalFunction("ShiftedCausalMask").Initializers().size(), 4u);
         ExpectTopologicalGraph(mixed);
         EXPECT_NO_THROW(mixed_graph.Optimize(-1, nullptr, folding));
@@ -1279,22 +1283,25 @@ TEST(AttentionPatternsTopology, OptimizeProducesTopologicalGraphs) {
   core::builder::GraphBuilder cos_sin =
       MakeCosSinBuilder(TensorProto::DataType::FLOAT, core::symbolic::TensorType::kFloat, true);
   OptimizeAndVerify<onnx_patterns::FunctionCosSinCachePattern>(cos_sin);
-  ASSERT_EQ(cos_sin.Nodes().size(), 1u);
-  EXPECT_EQ(cos_sin.Nodes()[0].op_type().value(), "CosSinCacheWithRange_to10");
-  EXPECT_EQ(cos_sin.Nodes()[0].input()[2].value(), "weight_source");
+  ASSERT_EQ(cos_sin.Nodes().size(), 2u);
+  EXPECT_EQ(cos_sin.Nodes()[0].op_type().value(), "Identity");
+  EXPECT_EQ(cos_sin.Nodes()[1].op_type().value(), "CosSinCacheWithRange_to10");
+  EXPECT_EQ(cos_sin.Nodes()[1].input()[2].value(), "weights");
 
   core::builder::GraphBuilder attention =
       MakeAttentionBuilder(-std::numeric_limits<float>::infinity(), false, true, 1.0F, true);
   OptimizeAndVerify<onnx_patterns::FunctionAttentionPattern>(attention);
-  ASSERT_EQ(attention.Nodes().size(), 1u);
-  EXPECT_EQ(attention.Nodes()[0].op_type().value(), "LocalAttention_to1");
-  EXPECT_EQ(attention.Nodes()[0].input()[2].value(), "values");
+  ASSERT_EQ(attention.Nodes().size(), 2u);
+  EXPECT_EQ(attention.Nodes()[0].op_type().value(), "Identity");
+  EXPECT_EQ(attention.Nodes()[1].op_type().value(), "LocalAttention_to1");
+  EXPECT_EQ(attention.Nodes()[1].input()[2].value(), "late_values");
 
   core::builder::GraphBuilder function_gqa = MakeFunctionGqaBuilder(true);
   OptimizeAndVerify<onnx_patterns::FunctionAttentionGQAPattern>(function_gqa);
-  ASSERT_EQ(function_gqa.Nodes().size(), 1u);
-  EXPECT_EQ(function_gqa.Nodes()[0].op_type().value(), "LocalAttentionGQASW_to1");
-  EXPECT_EQ(function_gqa.Nodes()[0].input()[2].value(), "values_source");
+  ASSERT_EQ(function_gqa.Nodes().size(), 2u);
+  EXPECT_EQ(function_gqa.Nodes()[0].op_type().value(), "Identity");
+  EXPECT_EQ(function_gqa.Nodes()[1].op_type().value(), "LocalAttentionGQASW_to1");
+  EXPECT_EQ(function_gqa.Nodes()[1].input()[2].value(), "values");
 
   core::builder::GraphBuilder attention_gqa = MakeAttentionGqaBuilder();
   OptimizeAndVerify<onnx_patterns::AttentionGQAPattern>(attention_gqa);

@@ -312,6 +312,8 @@ class GraphBuilder(_C.GraphBuilder):
         domain: str = "",
         *,
         optimize: OptimizationMode = OptimizationMode.kNone,
+        canonicalize: bool = False,
+        move_shape_and_size_nodes: bool = True,
     ) -> ModelProto | GraphProto | FunctionProto:
         """Exports the current graph, an optimized copy, or captured rewritings.
 
@@ -321,11 +323,15 @@ class GraphBuilder(_C.GraphBuilder):
         registrations, then exports the result without attached plans.
         Model export requires standard ONNX constructs.
 
-        With ``OptimizationMode.kRewritings``, returns the finalized canonical
+        With ``OptimizationMode.kRewritings``, returns the finalized reference
         ModelProto and attaches the captured plan as ``rewritings["optimized"]``.
+        ``canonicalize=True`` explicitly cleans this reference before capture;
+        it is disabled by default. Shape/Size hoisting is enabled by default
+        and can be disabled with ``move_shape_and_size_nodes=False``.
         Requires ``kind=ProtoKind.kModel`` and rejects an existing plan with that
-        name. Other named plans are retained. Optimization never edits the source
-        builder; ordinary export finalization still runs before taking the copy.
+        name. Other named plans are retained unless explicit canonicalization
+        changes their reference. Optimization never edits the source builder;
+        export never reorders the graph.
         """
         if not isinstance(optimize, OptimizationMode):
             raise TypeError("optimize must be an OptimizationMode.")
@@ -348,7 +354,9 @@ class GraphBuilder(_C.GraphBuilder):
         working.copy_device_targets_from(self)
         for pattern in self.registered_patterns():
             working.register_pattern(pattern)
-        plan = GraphGraph(working).optimize()
+        plan = GraphGraph(working).optimize(
+            canonicalize=canonicalize, move_shape_and_size_nodes=move_shape_and_size_nodes
+        )
         if optimize is OptimizationMode.kRewritings:
             restored = working.undo_rewritings(plan)
             restored.add_rewriting("optimized", plan)

@@ -65,7 +65,7 @@ class TestPackageVersionConsistency(unittest.TestCase):
         self.assertEqual(pyproject_version, cpp_documented_version)
         self.assertEqual(pyproject_version, cmake_version)
         self.assertEqual(pyproject_version, proto_cmake_version)
-        self.assertIn(pyproject_version, changelog_versions)
+        self.assertEqual(pyproject_version, changelog_versions[0])
 
     def test_changelog_documents_current_version_bump(self):
         """Verifies the current version's changelog entry documents its version bump."""

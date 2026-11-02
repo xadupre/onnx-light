@@ -1699,8 +1699,20 @@ bool TryDifferenceLinearCombination(const std::string &expr1, const std::string 
 static SimplifyResult make_simplified(const AddVisitorResult &res) {
   if (res.coeffs_empty())
     return res.const_term;
-  if (res.coeffs.size() == 1 && res.coeffs[0].second == 1 && res.const_term == 0)
-    return res.coeffs[0].first;
+  if (res.const_term == 0) {
+    const std::string *only_var = nullptr;
+    for (const auto &[var, coeff] : res.coeffs) {
+      if (coeff == 0)
+        continue;
+      if (coeff != 1 || only_var != nullptr) {
+        only_var = nullptr;
+        break;
+      }
+      only_var = &var;
+    }
+    if (only_var != nullptr)
+      return *only_var;
+  }
 
   std::string result;
   for (const auto &[var, coeff] : res.coeffs) {

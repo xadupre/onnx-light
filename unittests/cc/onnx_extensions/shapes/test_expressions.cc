@@ -444,6 +444,39 @@ TEST(DimOperations, DimAdd_symbolic) {
   EXPECT_NE(s.find('1'), std::string::npos);
 }
 
+TEST(DimOperations, ComposedMaximumRoundTrip) {
+  const DimType workspace = dim_max(DimType{int64_t{1234}}, DimType{std::string{"scratch"}});
+  const DimType during = dim_add(DimType{int64_t{8240}}, workspace);
+  const DimType released = dim_sub(during, DimType{int64_t{48}});
+  for (const int64_t scratch : {128, 1234, 4096}) {
+    const std::unordered_map<std::string, int64_t> context{{"scratch", scratch}};
+    const int64_t expected_workspace = scratch > 1234 ? scratch : 1234;
+    EXPECT_EQ(evaluate_expression(dim_to_string(workspace), context), expected_workspace);
+    EXPECT_EQ(evaluate_expression(dim_to_string(during), context), 8240 + expected_workspace);
+    EXPECT_EQ(evaluate_expression(dim_to_string(released), context), 8192 + expected_workspace);
+    EXPECT_EQ(
+        evaluate_expression(dim_to_string(dim_add(workspace, DimType{int64_t{8240}})), context),
+        8240 + expected_workspace);
+  }
+}
+
+TEST(SimplifyExpressions, ExtremaTermsPreserveGrouping) {
+  const std::vector<std::string> expressions{
+      "8240+(1234^scratch)", "8240-(1234^scratch)", "2*(1234^scratch)+48", "-2*(1234^scratch)+48",
+      "8240+(1234&scratch)", "8240-(1234&scratch)", "2*(1234&scratch)+48", "-2*(1234&scratch)+48"};
+  for (const auto &expression : expressions) {
+    const std::string simplified = simplify_result_to_string(simplify_expression(expression));
+    SCOPED_TRACE(expression + " -> " + simplified);
+    for (const int64_t scratch : {128, 1234, 4096}) {
+      const std::unordered_map<std::string, int64_t> context{{"scratch", scratch}};
+      EXPECT_EQ(evaluate_expression(simplified, context), evaluate_expression(expression, context));
+      EXPECT_EQ(
+          evaluate_expression(simplify_result_to_string(simplify_expression(simplified)), context),
+          evaluate_expression(expression, context));
+    }
+  }
+}
+
 TEST(DimOperations, DimAddUsesCache) {
   SimplifiedExpressionCache cache;
   const DimType a{std::string{"a"}};

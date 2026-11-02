@@ -1710,7 +1710,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
 void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
                                           Device device, const NodeMaterializerFn &materialize) {
   if (peak_memory_.size() <= node_index) {
-    peak_memory_.resize(node_index + 1);
+    peak_memory_.resize(node_index + 1, PeakMemoryEstimate::Exact(SymDim(int64_t{0})));
   }
   std::vector<SymShape> input_shapes;
   input_shapes.reserve(node.input().size());

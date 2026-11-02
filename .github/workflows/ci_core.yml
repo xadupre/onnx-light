@@ -500,6 +500,12 @@ jobs:
       - name: Install CMake and build dependencies
         run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
 
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install ninja
+          ninja --version
+
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
         env:
@@ -580,8 +586,10 @@ jobs:
         with:
           arch: x86
 
-      - name: Install CMake
-        run: python -m pip install "cmake>=4.0"
+      - name: Install CMake and Ninja
+        run: |
+          python -m pip install "cmake>=4.0" ninja
+          ninja --version
 
       - name: Configure 32-bit CMake build
         env:

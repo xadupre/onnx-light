@@ -565,37 +565,37 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
  * total_sequence_length)``. The number of elements in that buffer is
  * multiplied by 4 bytes (the ``float32`` accumulation type used for the
  * scores). Only the rank-4 ``(batch, num_heads, sequence, head_size)`` form
- * of ``Q``/``K`` is handled; when fewer than three inputs are provided, when
- * either input is not rank 4, or when any contributing dimension is symbolic,
- * the function returns ``0`` (no concrete estimate available).
+ * of ``Q``/``K`` is handled. Symbolic dimensions remain in the byte expression.
+ * Missing inputs or unsupported ranks produce an unresolved worst-case bound.
  *
  * @param device       Device on which the operator executes (currently does
  *                     not affect the estimate).
  * @param input_shapes Shapes of the node's inputs, in order; ``input_shapes[0]``
  *                     is ``Q`` and ``input_shapes[1]`` is ``K``.
- * @returns The estimated peak scratch memory in bytes, or ``0`` when no
- *          concrete estimate can be produced.
+ * @returns The worst-case and average score-buffer bytes, equal when resolved.
  * @throws std::invalid_argument if a contributing dimension is negative or
  *         the scratch allocation exceeds ``int64_t``.
  */
-int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
 
 /**
  * Estimates peak scratch memory for a ``LinearAttention`` node.
  *
  * The estimate uses the exact optional past-state shape when available, and
  * otherwise uses the conservative full packed key/value hidden dimensions for
- * the recurrent state. It returns zero when the required concrete dimensions
- * are unavailable.
+ * the recurrent state. Symbolic dimensions are preserved. Missing shapes
+ * produce an unresolved worst-case bound. Without the exact state shape, no
+ * average is inferred from the conservative upper bound.
  *
  * @param device       Device on which the operator executes.
  * @param input_shapes Shapes of query, key, value, and optional inputs.
- * @returns The estimated peak scratch memory in bytes, or ``0`` when no
- *          concrete estimate can be produced.
+ * @returns The worst-case and optional average state-buffer byte expressions.
  * @throws std::invalid_argument if a contributing dimension is negative or
  *         the scratch allocation exceeds ``int64_t``.
  */
-int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes);
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes);
 
 /**
  * Computes the output :cpp:class:`SymTensor`(s) of a ``LinearAttention``

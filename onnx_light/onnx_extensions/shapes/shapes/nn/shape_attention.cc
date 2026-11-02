@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
@@ -329,21 +330,20 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
   }
 }
 
-int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes) {
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryAttention(Device, const std::vector<SymShape> &input_shapes) {
   // The score buffer accumulation type; scores are held in float32.
   constexpr int64_t kScoreElementBytes = 4;
 
   // Q and K carry the dimensions needed for the QK^T score buffer. Without
-  // both, or without the rank-4 (batch, num_heads, sequence, head_size)
-  // layout, no concrete estimate can be produced.
-  (void)device;
+  // both, or without the rank-4 layout, the bound remains unresolved.
   if (input_shapes.size() < 2) {
-    return 0;
+    return core::shapes::UnknownPeakMemory("", "Attention");
   }
   const SymShape &q_shape = input_shapes[0];
   const SymShape &k_shape = input_shapes[1];
   if (q_shape.Rank() != 4 || k_shape.Rank() != 4) {
-    return 0;
+    return core::shapes::UnknownPeakMemory("", "Attention");
   }
 
   // Score buffer: (batch, q_num_heads, q_sequence_length, kv_sequence_length).
@@ -351,28 +351,36 @@ int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &i
   const SymDim &q_num_heads = q_shape[1];
   const SymDim &q_seq_len = q_shape[2];
   const SymDim &kv_seq_len = k_shape[2];
-  if (!batch.IsInt() || !q_num_heads.IsInt() || !q_seq_len.IsInt() || !kv_seq_len.IsInt()) {
-    return 0;
+  const SymDim *dimensions[] = {&batch, &q_num_heads, &q_seq_len, &kv_seq_len};
+  const char *names[] = {"batch", "q_num_heads", "q_seq_len", "kv_seq_len"};
+  bool empty = false;
+  bool unresolved = false;
+  bool concrete = true;
+  for (size_t i = 0; i < 4; ++i) {
+    const SymDim &dim = *dimensions[i];
+    EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0, "Negative Attention scratch dimension '",
+                        names[i], "': ", dim.ToString(), ".");
+    empty |= dim.IsInt() && dim.AsInt() == 0;
+    concrete &= dim.IsInt();
+    unresolved |= dim.IsExpr() && (dim.AsExpr().empty() || dim.AsExpr() == "?");
   }
-
-  const auto dimension = [](const char *name, const SymDim &dim) {
-    const int64_t value = dim.AsInt();
-    EXT_ENFORCE_INVALID(value >= 0, "Negative Attention scratch dimension '", name, "': ", value,
-                        ".");
-    return value;
-  };
-  const int64_t dimensions[] = {dimension("batch", batch), dimension("q_num_heads", q_num_heads),
-                                dimension("q_seq_len", q_seq_len),
-                                dimension("kv_seq_len", kv_seq_len)};
-  for (int64_t dim : dimensions) {
-    if (dim == 0)
-      return 0;
+  if (empty)
+    return core::shapes::PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
+  if (unresolved)
+    return core::shapes::UnknownPeakMemory("", "Attention");
+  if (concrete) {
+    int64_t bytes = kScoreElementBytes;
+    for (const SymDim *dim : dimensions)
+      bytes = core::shapes::CheckedDimensionMultiply(bytes, dim->AsInt());
+    return core::shapes::PeakMemoryEstimate::Exact(SymDim(bytes));
   }
-  int64_t bytes = kScoreElementBytes;
-  for (int64_t dim : dimensions) {
-    bytes = core::shapes::CheckedDimensionMultiply(bytes, dim);
-  }
-  return bytes;
+  std::vector<core::expressions::DimType> factors;
+  factors.reserve(5);
+  factors.emplace_back(kScoreElementBytes);
+  for (const SymDim *dim : dimensions)
+    factors.push_back(core::symbolic::ToDimType(*dim));
+  return core::shapes::PeakMemoryEstimate::Exact(
+      core::symbolic::FromDimType(core::expressions::dim_multi_mul(factors)));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

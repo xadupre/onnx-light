@@ -26,11 +26,19 @@ memory rather than its output shapes. Mirroring the shape dispatch table, it
 maps an ``(domain, op_type, device)`` identifier to a
 :cpp:type:`core::shapes::ComputePeakMemoryFn` — a function that takes the
 :cpp:enum:`Device` the operator runs on followed by the
-:cpp:class:`SymShape` of each input and returns the estimated scratch memory
-in bytes. Functions are registered with
+:cpp:class:`SymShape` of each input and returns a
+:cpp:class:`core::shapes::PeakMemoryEstimate`, containing a mandatory
+``worst_case`` :cpp:class:`SymDim` and an optional ``average_case``.
+Both represent scratch bytes and preserve symbolic dimensions.
+Functions are registered with
 :cpp:func:`RegisterComputePeakMemoryFn` and looked up through
 :cpp:func:`ComputePeakMemory`; operators without a registered function report
-``0`` by default. ``onnx_shapes`` populates the built-in estimators (for
+an explicit unresolved worst-case symbol, not zero. That symbol denotes an
+operator-wide upper bound covering every invocation and device, which the caller
+must supply before checking a memory budget. An average is absent unless justified;
+deterministic workspace
+requirements have equal worst and average estimates.
+``onnx_shapes`` populates the built-in estimators (for
 example ``Attention``) via
 :cpp:func:`onnx_light::onnx_shapes::RegisterPeakMemoryFunctions`, and the
 Python bindings expose :func:`compute_peak_memory` together with the

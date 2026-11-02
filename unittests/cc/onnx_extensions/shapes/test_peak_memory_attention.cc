@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
@@ -36,7 +37,7 @@ TEST(ComputePeakMemoryAttention, StaticRank4ReturnsScoreBufferBytes) {
   const int64_t expected = 2 * 4 * 8 * 32 * 4;
   EXPECT_EQ(
       onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
-      expected);
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(expected)));
 }
 
 TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
@@ -50,7 +51,7 @@ TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
   inputs[0] = Rank4(large, large, large, 1);
   inputs[1] = Rank4(large, large, 0, 1);
   EXPECT_EQ(core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
-            0);
+            core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
 }
 
 TEST(ComputePeakMemoryAttention, NamesNegativeDimensionsEvenWithZeroFactors) {
@@ -71,39 +72,50 @@ TEST(ComputePeakMemoryAttention, NamesNegativeDimensionsEvenWithZeroFactors) {
   }
 }
 
-// A symbolic contributing dimension yields no concrete estimate.
-TEST(ComputePeakMemoryAttention, SymbolicDimensionReturnsZero) {
+TEST(ComputePeakMemoryAttention, PreservesSymbolicDimensionsAndExactAverage) {
   std::vector<core::symbolic::SymShape> inputs = {
       core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4),
                                core::symbolic::SymDim(8), core::symbolic::SymDim(16)},
       Rank4(2, 4, 32, 16),
       Rank4(2, 4, 32, 16),
   };
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  const auto estimate =
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs);
+  ASSERT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_EQ(core::expressions::evaluate_expression(estimate.worst_case.AsExpr(), {{"N", 3}}),
+            3 * 4 * 8 * 32 * 4);
+  ASSERT_TRUE(estimate.average_case);
+  EXPECT_EQ(*estimate.average_case, estimate.worst_case);
+  inputs[0][1] = core::symbolic::SymDim(int64_t{-1});
+  EXPECT_THROW(
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
 }
 
 // Non-rank-4 inputs (e.g. the packed rank-3 form) yield no concrete estimate.
-TEST(ComputePeakMemoryAttention, NonRank4ReturnsZero) {
+TEST(ComputePeakMemoryAttention, NonRank4ReturnsUnresolvedBound) {
   const std::vector<core::symbolic::SymShape> inputs = {
       core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(8),
                                core::symbolic::SymDim(64)},
       core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(32),
                                core::symbolic::SymDim(64)},
   };
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  const auto estimate =
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs);
+  EXPECT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_FALSE(estimate.average_case);
 }
 
 // Fewer than two inputs yields no concrete estimate.
-TEST(ComputePeakMemoryAttention, TooFewInputsReturnsZero) {
+TEST(ComputePeakMemoryAttention, TooFewInputsReturnsUnresolvedBound) {
   const std::vector<core::symbolic::SymShape> inputs = {Rank4(2, 4, 8, 16)};
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  EXPECT_TRUE(
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs)
+          .worst_case.IsExpr());
 }
 
 // RegisterPeakMemoryFunctions wires Attention into the core dispatch table so
-// ComputePeakMemory resolves it; unregistered operators still return 0.
+// ComputePeakMemory resolves it; unregistered operators retain an unresolved bound.
 TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   onnx_shapes::RegisterPeakMemoryFunctions();
   const auto &table = core::shapes::PeakMemoryDispatchTable();
@@ -116,10 +128,10 @@ TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   };
   EXPECT_EQ(
       core::shapes::ComputePeakMemory("ai.onnx", "Attention", core::symbolic::Device::kCPU, inputs),
-      1 * 2 * 4 * 16 * 4);
-  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
-                                            core::symbolic::Device::kCPU, inputs),
-            0);
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{1 * 2 * 4 * 16 * 4})));
+  EXPECT_TRUE(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
+                                              core::symbolic::Device::kCPU, inputs)
+                  .worst_case.IsExpr());
 }
 
 } // namespace Test

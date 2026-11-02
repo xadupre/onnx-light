@@ -236,8 +236,11 @@ TEST(GraphBuilderControlflow, OpsetRefreshSynchronizesLoopFormalInputsAndConsume
     for (auto *current : {&scope, &scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
       core::compute::ComputeContext expected;
       const GraphProto graph = current->ToGraph();
+      expected.Shapes() = current->Shapes().MakeChildContext(graph);
+      expected.Shapes().ComputeShapes(graph.node());
       const auto tags = expected.ComputeValueAndNodeTags(graph);
-      expected.ComputeInPlaceReuseGraph(graph, current->Shapes(), false, tags.first);
+      expected.ComputeInPlaceReuseGraph(graph, expected.Shapes(), false, tags.first);
+      expected.ComputePeakMemory(graph, current->device());
       EXPECT_EQ(current->Compute().Reuse(), expected.Reuse());
       EXPECT_EQ(current->Compute().Memory(), expected.Memory());
     }

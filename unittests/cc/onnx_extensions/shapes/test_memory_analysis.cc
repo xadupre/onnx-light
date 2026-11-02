@@ -126,7 +126,7 @@ TEST(MemoryAnalysis, RejectsScratchPlusTensorOverflow) {
   const auto device = core::symbolic::MakeGPUDevice(123);
   core::shapes::RegisterComputePeakMemoryFn(
       "", "Identity", device,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return std::numeric_limits<int64_t>::max() - 7;
       });
   GraphProto graph;
@@ -136,7 +136,7 @@ TEST(MemoryAnalysis, RejectsScratchPlusTensorOverflow) {
   EXPECT_THROW(ctx.Compute(graph, device), std::invalid_argument);
   core::shapes::RegisterComputePeakMemoryFn(
       "", "Identity", device,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return std::numeric_limits<int64_t>::max() - 8;
       });
   ASSERT_NO_THROW(ctx.Compute(graph, device));
@@ -147,9 +147,8 @@ TEST(MemoryAnalysis, RejectsNegativeScratchWithoutTensorProfiles) {
   const auto device = core::symbolic::MakeGPUDevice(124);
   core::shapes::RegisterComputePeakMemoryFn(
       "", "Identity", device,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) -> int64_t {
-        return -1;
-      });
+      [](core::symbolic::Device, const NodeProto &,
+         const std::vector<core::symbolic::SymShape> &) -> int64_t { return -1; });
   GraphProto graph;
   MemoryInput(graph, "X", {1});
   MemoryNode(graph, "Identity", {"X"}, "Y");
@@ -162,7 +161,7 @@ TEST(MemoryAnalysis, AppendingScratchLeavesUncomputedGapsAtZero) {
   const auto device = core::symbolic::MakeGPUDevice(125);
   core::shapes::RegisterComputePeakMemoryFn(
       "", "Identity", device,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return int64_t{37};
       });
   GraphProto graph;
@@ -314,7 +313,7 @@ TEST(MemoryAnalysis, FunctionWorkspaceDoesNotTreatMaxOfAveragesAsAverageOfMax) {
   const auto device = core::symbolic::MakeGPUDevice(199);
   core::shapes::RegisterComputePeakMemoryFn(
       "", "Identity", device,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return core::shapes::PeakMemoryEstimate{core::symbolic::SymDim(int64_t{100}),
                                                 core::symbolic::SymDim(int64_t{50})};
       });
@@ -457,7 +456,8 @@ TEST(MemoryAnalysis, RegisteredContribOperatorPrecedesLocalFunction) {
         });
     core::shapes::RegisterComputePeakMemoryFn(
         registration_domain, name, core::symbolic::Device::kCPU,
-        [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) { return 16; });
+        [](core::symbolic::Device, const NodeProto &,
+           const std::vector<core::symbolic::SymShape> &) { return 16; });
   }
   const auto shape_count = core::shapes::DispatchTable().size();
   const auto memory_count = core::shapes::PeakMemoryDispatchTable().size();

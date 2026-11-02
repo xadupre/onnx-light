@@ -233,7 +233,9 @@ A peak-memory function estimates the scratch (non-output) memory a kernel needs,
 so a scheduler can size buffers. Operators without an estimator retain an
 unresolved symbolic upper bound, never a zero-memory assumption.
 The registry mirrors shape inference. The signature is
-``PeakMemoryEstimate(Device, const std::vector<SymShape> &)``.
+``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.
+Every registered estimator receives the node, including its attributes and
+optional input names. Shape-only queries supply only its domain and operator type.
 The result contains a mandatory ``SymDim worst_case`` and an optional
 ``SymDim average_case``. All values are bytes excluding inputs and outputs.
 
@@ -262,7 +264,10 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
 
    .. code-block:: cpp
 
-       {"ai.onnx:Attention", nn::ComputePeakMemoryAttention},
+       {"ai.onnx:Attention",
+        [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
+          return nn::ComputePeakMemoryAttention(device, node, inputs);
+        }},
 
 As with shape functions, :cpp:func:`RegisterPeakMemoryFunctions` (same
 file) copies these builtins into the shared ``core::shapes`` peak-memory

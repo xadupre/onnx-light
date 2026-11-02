@@ -55,12 +55,7 @@ std::unordered_set<std::string> &TypeOnlyTensorShapeInputs() {
 // Returns the mutable peak-memory dispatch table singleton. Only
 // :cpp:func:`RegisterComputePeakMemoryFn` writes to it;
 // :cpp:func:`PeakMemoryDispatchTable` exposes a read-only view for lookups.
-std::unordered_map<std::string, ComputePeakMemoryFn> &MutablePeakMemoryDispatchTable() {
-  static std::unordered_map<std::string, ComputePeakMemoryFn> table;
-  return table;
-}
-
-std::unordered_map<std::string, ComputePeakMemoryNodeFn> &NodePeakMemoryDispatchTable() {
+std::unordered_map<std::string, ComputePeakMemoryNodeFn> &MutablePeakMemoryDispatchTable() {
   static std::unordered_map<std::string, ComputePeakMemoryNodeFn> table;
   return table;
 }
@@ -133,28 +128,13 @@ bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node) {
          DispatchTable().count(DispatchKey(node.domain(), node.op_type())) != 0;
 }
 
-const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {
+const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispatchTable() {
   return MutablePeakMemoryDispatchTable();
 }
 
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 Device device, ComputePeakMemoryFn fn) {
-  const auto key = DispatchKey(domain, op_type, device);
-  NodePeakMemoryDispatchTable().erase(key);
-  MutablePeakMemoryDispatchTable()[key] = std::move(fn);
-}
-
-void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
                                  Device device, ComputePeakMemoryNodeFn fn) {
-  const auto key = DispatchKey(domain, op_type, device);
-  NodePeakMemoryDispatchTable()[key] = fn;
-  MutablePeakMemoryDispatchTable()[key] =
-      [domain, op_type, fn = std::move(fn)](Device target, const std::vector<SymShape> &inputs) {
-        NodeProto node;
-        node.set_domain(domain);
-        node.set_op_type(op_type);
-        return fn(target, node, inputs);
-      };
+  MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
 PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::string &op_type) {
@@ -170,22 +150,18 @@ PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::strin
 
 PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::string &op_type,
                                      Device device, const std::vector<SymShape> &input_shapes) {
-  const auto &table = MutablePeakMemoryDispatchTable();
-  auto it = table.find(DispatchKey(domain, op_type, device));
-  if (it == table.end()) {
-    return UnknownPeakMemory(domain, op_type);
-  }
-  const PeakMemoryEstimate estimate = it->second(device, input_shapes);
-  ValidatePeakMemoryEstimate(estimate, domain, op_type);
-  return estimate;
+  NodeProto node;
+  node.set_domain(domain);
+  node.set_op_type(op_type);
+  return ComputePeakMemory(device, node, input_shapes);
 }
 
 PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
                                      const std::vector<SymShape> &input_shapes) {
-  const auto &table = NodePeakMemoryDispatchTable();
+  const auto &table = MutablePeakMemoryDispatchTable();
   auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
   if (it == table.end())
-    return ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    return UnknownPeakMemory(node.domain(), node.op_type());
   const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
   ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
   return estimate;

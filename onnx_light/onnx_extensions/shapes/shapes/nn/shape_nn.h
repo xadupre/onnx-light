@@ -555,8 +555,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
 
 /**
  * Estimates the peak scratch memory (in bytes) required to evaluate an
- * ``Attention`` node, following the
- * :cpp:type:`core::shapes::ComputePeakMemoryFn` convention: it takes the
+ * ``Attention`` node through a shape-only convenience overload. It takes the
  * :cpp:enum:`Device` the operator runs on followed by the shapes of the
  * node's inputs.
  *
@@ -595,7 +594,7 @@ ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_sha
  * @param device Device on which the operator executes.
  * @param node Attention node, including head attributes and optional cache input names.
  * @param input_shapes Input shapes in node input order, including empty optional slots.
- * @returns The worst-case and average score-buffer bytes, equal when resolved.
+ * @returns The worst-case bytes, with an average only when the formula is exact.
  */
 core::shapes::PeakMemoryEstimate
 ComputePeakMemoryAttention(Device device, const NodeProto &node,

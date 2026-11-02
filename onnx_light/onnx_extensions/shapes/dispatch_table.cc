@@ -1340,16 +1340,23 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
   return table;
 }
 
-using ::onnx_light::core::shapes::ComputePeakMemoryFn;
+using ::onnx_light::core::shapes::ComputePeakMemoryNodeFn;
 
 // Built-in table of every ``onnx_shapes`` peak-memory function, keyed by
 // ``"<domain>:<op_type>"``. Mirrors :cpp:func:`BuiltinShapeFunctions`; only
 // used to populate the shared ``core::shapes`` peak-memory dispatch table via
 // :cpp:func:`RegisterPeakMemoryFunctions`. Unregistered operators retain an
 // unresolved worst-case bound through :cpp:func:`core::shapes::ComputePeakMemory`.
-const std::unordered_map<std::string, ComputePeakMemoryFn> &BuiltinPeakMemoryFunctions() {
-  static const std::unordered_map<std::string, ComputePeakMemoryFn> table = {
-      {"ai.onnx:LinearAttention", nn::ComputePeakMemoryLinearAttention},
+const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemoryFunctions() {
+  static const std::unordered_map<std::string, ComputePeakMemoryNodeFn> table = {
+      {"ai.onnx:Attention",
+       [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
+         return nn::ComputePeakMemoryAttention(device, node, inputs);
+       }},
+      {"ai.onnx:LinearAttention",
+       [](Device device, const NodeProto &, const std::vector<SymShape> &inputs) {
+         return nn::ComputePeakMemoryLinearAttention(device, inputs);
+       }},
   };
   return table;
 }
@@ -1394,12 +1401,6 @@ void RegisterPeakMemoryFunctions() {
           key.substr(0, sep), key.substr(sep + 1), ::onnx_light::core::shapes::Device::kCPU,
           entry.second);
     }
-    ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(
-        "", "Attention", ::onnx_light::core::shapes::Device::kCPU,
-        [](shapes::Device device, const NodeProto &node,
-           const std::vector<shapes::SymShape> &inputs) {
-          return shapes::nn::ComputePeakMemoryAttention(device, node, inputs);
-        });
     return true;
   }();
   (void)kRegistered;

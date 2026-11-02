@@ -24,8 +24,8 @@ Peak-memory estimation
 A second, parallel registry estimates each operator's peak *computation*
 memory rather than its output shapes. Mirroring the shape dispatch table, it
 maps an ``(domain, op_type, device)`` identifier to a
-:cpp:type:`core::shapes::ComputePeakMemoryFn` — a function that takes the
-:cpp:enum:`Device` the operator runs on followed by the
+:cpp:type:`core::shapes::ComputePeakMemoryNodeFn` — a function that takes the
+:cpp:enum:`Device` the operator runs on, the :cpp:class:`NodeProto`, and the
 :cpp:class:`SymShape` of each input and returns a
 :cpp:class:`core::shapes::PeakMemoryEstimate`, containing a mandatory
 ``worst_case`` :cpp:class:`SymDim` and an optional ``average_case``.
@@ -44,10 +44,8 @@ example ``Attention``) via
 Python bindings expose :func:`compute_peak_memory` together with the
 ``Device`` enum.
 
-Estimators needing attributes or optional input names register a
-:cpp:type:`core::shapes::ComputePeakMemoryNodeFn` with signature
+Every estimator uses the same callback signature,
 ``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.
-Both callback types use the same validation and symbolic worst/average contract.
 Native node-aware calls forward attributes; shape-only calls supply a node with
 only its domain and operator type, leaving attribute-dependent bounds unresolved.
 

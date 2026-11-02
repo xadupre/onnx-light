@@ -50,10 +50,10 @@ class TestPackageVersionConsistency(unittest.TestCase):
             r'@return Version string "([^"]+)"', cpp_version, "onnx_light/_version.cc"
         )
         cmake_version = self._extract(
-            r"project\(onnx_light VERSION ([0-9]+\.[0-9]+\.[0-9]+)", cmake, "CMakeLists.txt"
+            r"project\(onnx_light VERSION ([0-9]+(?:\.[0-9]+){2,3}) ", cmake, "CMakeLists.txt"
         )
         proto_cmake_version = self._extract(
-            r"project\(onnx_proto VERSION ([0-9]+\.[0-9]+\.[0-9]+)",
+            r"project\(onnx_proto VERSION ([0-9]+(?:\.[0-9]+){2,3}) ",
             proto_cmake,
             "onnx_proto/CMakeLists.txt",
         )

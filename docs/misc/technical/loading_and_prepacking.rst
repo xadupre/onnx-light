@@ -43,6 +43,27 @@ borrowed and must not be used after the store is destroyed.
 Independent sessions have independent stores by default. Sharing a store must
 be explicit, and all sharing sessions must serialize their runs.
 
+Preparations may declare ``KernelPreparationInfo::consumed_inputs`` and confirm
+successful replacement through ``KernelPreparation::sources_consumed``. A
+consuming kernel must use the prepared representation for every inference shape,
+including decoding, and never fall back to the retired source.
+
+Retirement requires explicit exclusive ownership through
+``RuntimeSession::SetConsumableInitializers`` or ``consume_initializers`` on a
+mutable-model session. Only non-overridable, single-consumer raw initializers
+that are not graph outputs or quantization parameters are eligible. After all
+preparations reading a source finish successfully, the runtime removes its
+context view and clears its model payload, retaining metadata and the packed
+representation. Unsupported preparations and failures leave the original intact.
+This avoids a persistent original-plus-packed copy; the temporary preparation
+peak still includes both buffers.
+
+``ReferenceEvaluator`` leaves sources reusable unless
+``consume_initializers=True`` is explicitly requested; a consumed model must not
+be shared, reused for generation, or used to reset its resolved session.
+The owning single-model loader supports retirement;
+pipeline generation retains reusable sources for its fresh invocation sessions.
+
 ``RuntimeSession::prepared_bytes()`` sums live buffer sizes in the store,
 including allocated but unpublished values. It excludes free retained
 capacity and the context's execution and I/O arenas. There is no preparation

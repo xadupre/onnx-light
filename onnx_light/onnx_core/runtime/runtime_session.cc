@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
@@ -109,6 +110,24 @@ OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProt
   return versions;
 }
 
+void VerifyConcreteShape(const std::string &name, const core::symbolic::SymShape &declared,
+                         std::span<const int64_t> shape, core::shapes::ShapesContext &bindings) {
+  if (declared.FitsConcreteShape(shape.size(), shape.data(), bindings)) {
+    return;
+  }
+  std::string concrete = "[";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if (i > 0) {
+      concrete.push_back(',');
+    }
+    concrete += std::to_string(shape[i]);
+  }
+  concrete.push_back(']');
+  EXT_ENFORCE_INVALID(false, "RuntimeSession: tensor '", name, "' has concrete shape ", concrete,
+                      " which is incompatible with its declared (possibly symbolic) shape ",
+                      declared.ToString(), ".");
+}
+
 } // namespace
 
 RuntimeSession::~RuntimeSession() = default;
@@ -121,6 +140,14 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
+    : RuntimeSession(model, std::move(options), nullptr) {}
+
+RuntimeSession::RuntimeSession(ModelProto &model, RuntimeSessionOptions options)
+    : RuntimeSession(model, std::move(options),
+                     model.has_graph() ? model.mutable_graph() : nullptr) {}
+
+RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options,
+                               GraphProto *consumable)
     : default_plan_(model), plan_(default_plan_),
       value_store_(SessionValueStore(std::move(options.value_store))),
       check_shapes_(options.check_shapes),
@@ -136,6 +163,12 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
   model_functions_ = detail::ModelFunctions(model);
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
+  if (options.consume_initializers) {
+    EXT_ENFORCE_INVALID(
+        consumable != nullptr,
+        "RuntimeSession: initializer consumption requires an exclusive mutable model.");
+    SetConsumableInitializers(*consumable);
+  }
   struct_type_catalogue_.emplace();
   struct_type_catalogue_->Build(model);
   quantization_parameters_ = QuantizationParameterCatalogue::Build(model);
@@ -285,6 +318,74 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
   }
 }
 
+void RuntimeSession::SetConsumableInitializers(GraphProto &graph) {
+  EXT_ENFORCE_INVALID(!kernels_initialized_ && initializer_graph_ == &graph,
+                      "RuntimeSession: initializer ownership must be granted before declaration.");
+  consumable_initializers_.clear();
+  consumable_initializer_names_.clear();
+  std::unordered_map<std::string, size_t> readers;
+  for (const auto &node : graph.node())
+    for (const auto &name : CollectNodeInputs(node))
+      ++readers[name];
+  std::unordered_set<std::string> preserved;
+  for (const auto &output : graph.output())
+    preserved.insert(output.name());
+  for (const auto &annotation : graph.quantization_annotation())
+    for (const auto &mapping : annotation.quant_parameter_tensor_names())
+      preserved.insert(mapping.value());
+  for (auto &tensor : graph.ref_initializer())
+    if (immutable_initializer_names_.contains(tensor.name()) && readers[tensor.name()] == 1 &&
+        !preserved.contains(tensor.name()) &&
+        (tensor.is_raw_data() || tensor.data_location() == TensorProto::EXTERNAL)) {
+      consumable_initializer_names_.insert(tensor.name());
+      consumable_initializers_.emplace(tensor.name(), ConsumableInitializer{&tensor});
+    }
+}
+
+void RuntimeSession::ConsumePreparationSources(size_t index, RuntimeContext &rt) {
+  for (const auto &name : preparations_[index].info.source_inputs) {
+    if (!consumable_initializer_names_.contains(name) || consumed_initializer_names_.contains(name))
+      continue;
+    bool claimed = false;
+    bool ready = true;
+    for (size_t consumer : preparation_source_consumers_.at(name)) {
+      const auto &preparation = preparations_[consumer];
+      ready = ready && preparation_complete_[consumer];
+      if (std::find(preparation.info.consumed_inputs.begin(),
+                    preparation.info.consumed_inputs.end(),
+                    name) != preparation.info.consumed_inputs.end()) {
+        claimed = true;
+        ready = ready && preparation_complete_[consumer] && preparation.sources_consumed();
+      }
+    }
+    if (!claimed || !ready)
+      continue;
+    auto &source = consumable_initializers_.at(name);
+    auto &tensor = *source.tensor;
+    const size_t required_index = source.required_input_index;
+    EXT_ENFORCE_INVALID(required_index < required_inputs_.size() &&
+                            required_inputs_[required_index] == name,
+                        "RuntimeSession: consumed source is not a required input: ", name);
+    const size_t bytes = rt.Get(name).size_bytes();
+    EXT_ENFORCE_INVALID(bytes == tensor.raw_data().size() &&
+                            rt.Get(name).bytes() == tensor.raw_data().data(),
+                        "RuntimeSession: consumed source is not the owned initializer: ", name);
+    EXT_ENFORCE_INVALID(bytes <= std::numeric_limits<size_t>::max() - consumed_initializer_bytes_,
+                        "RuntimeSession: consumed initializer byte count overflows.");
+    consumed_initializer_bytes_ += bytes;
+    rt.Remove(name);
+    tensor.ref_raw_data().clear();
+    consumed_initializer_names_.insert(name);
+    if (required_index != required_inputs_.size() - 1) {
+      required_inputs_[required_index] = std::move(required_inputs_.back());
+      const auto moved = consumable_initializers_.find(required_inputs_[required_index]);
+      if (moved != consumable_initializers_.end())
+        moved->second.required_input_index = required_index;
+    }
+    required_inputs_.pop_back();
+  }
+}
+
 std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   std::unordered_set<std::string> seeded;
   if (struct_type_catalogue_)
@@ -293,7 +394,8 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
     rt.set_quantization_parameters(quantization_parameters_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
-      if (!rt.HasValue(initializer.name()) &&
+      if (!consumed_initializer_names_.contains(initializer.name()) &&
+          !rt.HasValue(initializer.name()) &&
           (initializer.HasDeferredWeight() ||
            initializer.data_location() != TensorProto::EXTERNAL || initializer.is_raw_data())) {
         rt.Set(initializer.name(), Tensor::BorrowInitializer(initializer),
@@ -449,12 +551,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       const auto found = imports->find(domain);
       EXT_ENFORCE_INVALID(found != imports->end(),
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
-      const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
-                                         imports, EffectiveModelFunctions());
+      KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
+                                   imports, EffectiveModelFunctions());
+      kernel_context.consumable_inputs = &consumable_initializer_names_;
       prepared.instance =
           ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     } else {
       KernelContext kernel_context = rt.kernel_ctx();
+      kernel_context.consumable_inputs = &consumable_initializer_names_;
       kernel_context.model_functions = EffectiveModelFunctions();
       prepared.instance =
           ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
@@ -543,6 +647,16 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     const auto &preparation = preparations_[index];
     EXT_ENFORCE_INVALID(preparation.execute && preparation.estimate_memory,
                         "RuntimeSession: preparation requires execution and memory callbacks.");
+    for (const auto &name : preparation.info.consumed_inputs) {
+      const auto inputs = CollectNodeInputs(*nodes[preparation_node_indices_[index]]);
+      EXT_ENFORCE_INVALID(consumable_initializer_names_.contains(name) &&
+                              preparation.sources_consumed &&
+                              std::find(inputs.begin(), inputs.end(), name) != inputs.end() &&
+                              std::find(preparation.info.source_inputs.begin(),
+                                        preparation.info.source_inputs.end(),
+                                        name) != preparation.info.source_inputs.end(),
+                          "RuntimeSession: invalid consumed preparation source: ", name);
+    }
     for (size_t dependency : preparation.info.dependencies) {
       EXT_ENFORCE_INVALID(dependency < index,
                           "RuntimeSession: preparation dependency must precede its consumer.");
@@ -566,6 +680,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // :cpp:func:`Run` can verify the RuntimeContext supplies them before it
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
+  for (size_t index = 0; index < required_inputs_.size(); ++index) {
+    const auto source = consumable_initializers_.find(required_inputs_[index]);
+    if (source != consumable_initializers_.end())
+      source->second.required_input_index = index;
+  }
   kernels_initialized_ = true;
 }
 
@@ -706,6 +825,7 @@ void RuntimeSession::ExecutePreparationsImpl(
       preparation_peak_bytes_ = std::max(preparation_peak_bytes_, memory_limit - remaining);
       preparation.execute(rt);
       preparation_complete_[index] = true;
+      ConsumePreparationSources(index, rt);
       preparation_budget_blocked_.erase(index);
       --pending_preparation_count_;
       for (size_t dependent : preparation_dependents_[index])
@@ -872,22 +992,7 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
   if (it == declared_shapes_.end() || !rt.Has(name)) {
     return;
   }
-  const core::symbolic::SymShape &declared = it->second;
-  const Tensor &tensor = rt.Get(name);
-  if (declared.FitsConcreteShape(tensor.shape.size(), tensor.shape.data(), bindings)) {
-    return;
-  }
-  std::string concrete = "[";
-  for (size_t i = 0; i < tensor.shape.size(); ++i) {
-    if (i > 0) {
-      concrete.push_back(',');
-    }
-    concrete += std::to_string(tensor.shape[i]);
-  }
-  concrete.push_back(']');
-  EXT_ENFORCE_INVALID(false, "RuntimeSession: tensor '", name, "' has concrete shape ", concrete,
-                      " which is incompatible with its declared (possibly symbolic) shape ",
-                      declared.ToString(), ".");
+  VerifyConcreteShape(name, it->second, rt.Get(name).shape, bindings);
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
@@ -973,6 +1078,13 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   if (check_shapes) {
     for (const std::string &name : required_inputs_) {
       VerifyDeclaredShape(name, rt, shape_bindings);
+    }
+    for (const std::string &name : consumed_initializer_names_) {
+      const auto declared = declared_shapes_.find(name);
+      if (declared != declared_shapes_.end()) {
+        const TensorProto &tensor = *consumable_initializers_.at(name).tensor;
+        VerifyConcreteShape(name, declared->second, tensor.dims().values(), shape_bindings);
+      }
     }
   }
   // Replay the plan's ordered action list. Each kExecuteNode action invokes

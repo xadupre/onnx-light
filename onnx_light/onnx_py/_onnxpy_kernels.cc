@@ -870,7 +870,7 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt, nb::handle source =
 
 class ReferenceEvaluatorRunner {
 public:
-  ReferenceEvaluatorRunner(const ModelProto &model, std::vector<std::string> input_names,
+  ReferenceEvaluatorRunner(ModelProto &model, std::vector<std::string> input_names,
                            std::unordered_set<std::string> map_inputs,
                            std::unordered_set<std::string> sequence_inputs,
                            std::vector<std::string> output_names, RuntimeSessionOptions options)
@@ -900,6 +900,8 @@ public:
         options_(std::move(options)) {}
 
   void Reset() {
+    if (session_ != nullptr && session_->consumed_initializer_bytes() != 0)
+      throw std::invalid_argument("Cannot reset a session after consuming initializer payloads.");
     session_.reset();
     plan_.reset();
   }
@@ -1025,7 +1027,7 @@ private:
     }
   }
 
-  const ModelProto *model_ = nullptr;
+  ModelProto *model_ = nullptr;
   const GraphProto *graph_ = nullptr;
   const FunctionProto *function_ = nullptr;
   std::vector<std::string> input_names_;
@@ -2033,6 +2035,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               &RuntimeSessionOptions::allow_external_output_allocators,
               "When ``True``, :func:`RuntimeSession.run` does not require a node's "
               "allocator-backed outputs to be owned by the session's unique allocator.")
+      .def_rw("consume_initializers", &RuntimeSessionOptions::consume_initializers,
+              "Grants exclusive ownership of initializer payloads to preparations.")
       .def_rw("persistent_tensor_initial_capacity",
               &RuntimeSessionOptions::persistent_tensor_initial_capacity,
               "Sets the initial capacity along a kernel's append axis for contiguous persistent "
@@ -2102,7 +2106,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "alive for at least as long as the session.")
       .def(
           "__init__",
-          [](RuntimeSession *self, const ModelProto &model, const RuntimeSessionOptions &options) {
+          [](RuntimeSession *self, ModelProto &model, const RuntimeSessionOptions &options) {
             new (self) RuntimeSession(model, options);
           },
           nb::arg("model"), nb::arg("options"), nb::keep_alive<1, 2>(),
@@ -2328,7 +2332,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "cached RuntimeSession, and expose its outputs in one Python-to-C++ call.")
       .def(
           "__init__",
-          [](ReferenceEvaluatorRunner *self, const ModelProto &model,
+          [](ReferenceEvaluatorRunner *self, ModelProto &model,
              std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
              std::unordered_set<std::string> sequence_inputs, std::vector<std::string> output_names,
              RuntimeSessionOptions options) {

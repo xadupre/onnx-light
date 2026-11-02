@@ -357,7 +357,7 @@ struct ModelLoadingPlan {
 std::vector<std::unique_ptr<RuntimeSession>>
 LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeContext &rt,
              const RuntimeSessionOptions &session_options, const RuntimeLoadOptions &load_options,
-             RuntimeLoadStatistics &statistics) {
+             RuntimeLoadStatistics &statistics, bool consume_initializers = false) {
   std::vector<ModelLoadingPlan> plans;
   plans.reserve(models.size());
   for (auto *model : models) {
@@ -424,7 +424,6 @@ LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeCon
           session_options.value_store ? session_options.value_store->prepared_bytes() : 0);
   if (statistics.peak_admitted_bytes > load_options.memory_limit)
     throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
-  const size_t preparation_limit = load_options.memory_limit - source_reservation;
   const std::string base = std::filesystem::absolute(path).parent_path().string();
   std::vector<std::unique_ptr<RuntimeSession>> sessions;
   sessions.reserve(models.size());
@@ -460,6 +459,8 @@ LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeCon
     if (load_options.overlap_preparation && !external.empty())
       statistics.peak_queued_tensors = 1;
     auto session = std::make_unique<RuntimeSession>(model, session_options);
+    if (consume_initializers)
+      session->SetConsumableInitializers(model.ref_graph());
     for (TensorProto *tensor : preloaded_initializers) {
       tensor->set_data_location(TensorProto::DEFAULT);
       tensor->clr_external_data();
@@ -480,13 +481,19 @@ LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeCon
       const size_t prepared_before = session->prepared_bytes();
       const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
       Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
-      session->ExecutePreparations(rt, preparation_limit,
-                                   tensor == nullptr ? std::span<const std::string>{}
-                                                     : std::span<const std::string>(&name, 1));
-      statistics.peak_admitted_bytes =
-          std::max(statistics.peak_admitted_bytes,
-                   Add(source_reservation,
-                       std::max(session->preparation_peak_bytes(), session->prepared_bytes())));
+      size_t released;
+      do {
+        const size_t consumed_before = session->consumed_initializer_bytes();
+        session->ExecutePreparations(rt, load_options.memory_limit - source_reservation,
+                                     tensor == nullptr ? std::span<const std::string>{}
+                                                       : std::span<const std::string>(&name, 1));
+        statistics.peak_admitted_bytes =
+            std::max(statistics.peak_admitted_bytes,
+                     Add(source_reservation,
+                         std::max(session->preparation_peak_bytes(), session->prepared_bytes())));
+        released = session->consumed_initializer_bytes() - consumed_before;
+        source_reservation -= released;
+      } while (released != 0);
       const size_t prepared_after = session->prepared_bytes();
       Trace(load_options, RuntimeLoadPhase::kPreparationFinished, name,
             prepared_after > prepared_before ? prepared_after - prepared_before : 0);
@@ -560,7 +567,7 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
   if (!model_.ParseFromStream(stream, parse_options) || !model_.has_graph())
     throw std::invalid_argument("Runtime loader failed to parse a model graph.");
   ModelProto *models[] = {&model_};
-  auto sessions = LoadSessions(models, path, rt, session_options, load_options, statistics_);
+  auto sessions = LoadSessions(models, path, rt, session_options, load_options, statistics_, true);
   session_ = std::move(sessions.front());
 }
 
@@ -570,6 +577,9 @@ LoadedRuntimePipeline::LoadedRuntimePipeline(const std::string &path, RuntimeCon
                                              RuntimeSessionOptions session_options,
                                              RuntimeLoadOptions load_options)
     : session_options_(std::move(session_options)) {
+  if (session_options_.consume_initializers)
+    throw std::invalid_argument(
+        "Runtime pipeline generation requires reusable initializer sources.");
   utils::FileStream stream(path);
   ParseOptions parse_options;
   if (!pipeline_.ParseFromStream(stream, parse_options))

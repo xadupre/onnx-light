@@ -352,6 +352,14 @@ class ReferenceEvaluator:
         arena for the other lifetime domain; pass the same allocator as both
         ``allocator`` and ``io_allocator`` to request single-allocator
         behaviour explicitly.
+    consume_initializers:
+        Allows preparations to replace exclusively consumed initializer payloads.
+        Defaults to ``False``. Passing ``True`` transfers the supplied model's
+        payload ownership: do not reuse/share that model or reset
+        its resolved kernels afterward. Shared, overridable, and graph-output
+        initializers remain unchanged. Prepared kernels must support every
+        inference shape without reading the retired representation. Model-based
+        generation requires reusable sources and must leave this option disabled.
 
     Example
     -------
@@ -381,8 +389,13 @@ class ReferenceEvaluator:
         io_allocator: Any = None,
         cpu_execution: Any = None,
         cpu_execution_counters: bool = False,
+        consume_initializers: bool = False,
     ) -> None:
+        if not isinstance(consume_initializers, bool):
+            raise TypeError("consume_initializers must be a bool.")
         proto = self._load_proto(proto)
+        if consume_initializers and not isinstance(proto, ModelProto):
+            raise TypeError("Initializer consumption requires a ModelProto.")
         if not isinstance(verbose, int):
             raise TypeError(f"verbose must be an integer, not {type(verbose).__name__}.")
         if verbose < 0:
@@ -532,6 +545,7 @@ class ReferenceEvaluator:
         self._session_options = _runtime.RuntimeSessionOptions(
             cpu_execution=self._cpu_execution, cpu_execution_counters=cpu_execution_counters
         )
+        self._session_options.consume_initializers = consume_initializers
         self._runner = _runtime.ReferenceEvaluatorRunner(
             execution_root,
             self._input_names,
@@ -871,6 +885,8 @@ class ReferenceEvaluator:
         """
         if self._model is None:
             raise ValueError("generate requires a ModelProto, not a graph or function.")
+        if self._session_options.consume_initializers:
+            raise ValueError("generate requires consume_initializers=False.")
         options = _runtime.GenerationOptions()
         options.max_new_tokens = max_new_tokens
         options.temperature = temperature
@@ -885,6 +901,10 @@ class ReferenceEvaluator:
         else:
             if not isinstance(embedding, ReferenceEvaluator) or embedding._model is None:
                 raise TypeError("Embedding must be a ModelProto ReferenceEvaluator.")
+            if embedding._session_options.consume_initializers:
+                raise ValueError(
+                    "generate requires consume_initializers=False for the embedding evaluator."
+                )
             result = _runtime.generate_pipeline(
                 self._model,
                 self._ctx,

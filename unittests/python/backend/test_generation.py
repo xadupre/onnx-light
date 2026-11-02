@@ -228,6 +228,40 @@ class TestGeneration(ExtTestCase):
         failure_events = decoder.events()[before_failure:]
         self.assertTrue({"Gather", "Abs"} <= {event.op_type for event in failure_events})
 
+    def test_split_embedding_rejects_initializer_consumption_on_either_evaluator(self):
+        prompt = {"input_ids": numpy.array([[0, 1]], dtype=numpy.int64)}
+        for consume_decoder, consume_embedding in (
+            (False, False),
+            (False, True),
+            (True, False),
+            (True, True),
+        ):
+            with self.subTest(decoder=consume_decoder, embedding=consume_embedding):
+                embedding_model = parser.parse_model(
+                    '<ir_version: 10, opset_import: ["" : 23]>'
+                    "embedding (int64[B, S] input_ids) => (float[B, S, 3] inputs_embeds)"
+                    "{ inputs_embeds = Gather(table, input_ids) }"
+                )
+                embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
+                decoder_model = parser.parse_model(
+                    '<ir_version: 10, opset_import: ["" : 23]>'
+                    "decoder (float[B, S, 3] inputs_embeds) => (float[B, S, 3] logits)"
+                    "{ logits = Identity(inputs_embeds) }"
+                )
+                embedding = ReferenceEvaluator(
+                    embedding_model, consume_initializers=consume_embedding
+                )
+                decoder = ReferenceEvaluator(decoder_model, consume_initializers=consume_decoder)
+                embedding.run(None, prompt)
+                if consume_decoder or consume_embedding:
+                    with self.assertRaisesRegex(ValueError, "consume_initializers=False"):
+                        decoder.generate(prompt, max_new_tokens=2, embedding=embedding)
+                else:
+                    numpy.testing.assert_array_equal(
+                        decoder.generate(prompt, max_new_tokens=2, embedding=embedding),
+                        [[0, 1, 2, 0]],
+                    )
+
     def test_split_embedding_model_scoped_nested_parameter_references(self):
         """Resolves embedding-only nested values against the embedding catalogue."""
         embedding_model = oh.make_model(

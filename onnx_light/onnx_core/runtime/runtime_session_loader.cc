@@ -479,17 +479,21 @@ LoadSessions(std::span<ModelProto *> models, const std::string &path, RuntimeCon
         rt.Set(tensor->name(), Tensor::BorrowInitializer(*tensor), RuntimeEventKind::kInitializer);
       }
       const size_t prepared_before = session->prepared_bytes();
-      const size_t consumed_before = session->consumed_initializer_bytes();
       const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
       Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
-      session->ExecutePreparations(rt, load_options.memory_limit - source_reservation,
-                                   tensor == nullptr ? std::span<const std::string>{}
-                                                     : std::span<const std::string>(&name, 1));
-      statistics.peak_admitted_bytes =
-          std::max(statistics.peak_admitted_bytes,
-                   Add(source_reservation,
-                       std::max(session->preparation_peak_bytes(), session->prepared_bytes())));
-      source_reservation -= session->consumed_initializer_bytes() - consumed_before;
+      size_t released;
+      do {
+        const size_t consumed_before = session->consumed_initializer_bytes();
+        session->ExecutePreparations(rt, load_options.memory_limit - source_reservation,
+                                     tensor == nullptr ? std::span<const std::string>{}
+                                                       : std::span<const std::string>(&name, 1));
+        statistics.peak_admitted_bytes =
+            std::max(statistics.peak_admitted_bytes,
+                     Add(source_reservation,
+                         std::max(session->preparation_peak_bytes(), session->prepared_bytes())));
+        released = session->consumed_initializer_bytes() - consumed_before;
+        source_reservation -= released;
+      } while (released != 0);
       const size_t prepared_after = session->prepared_bytes();
       Trace(load_options, RuntimeLoadPhase::kPreparationFinished, name,
             prepared_after > prepared_before ? prepared_after - prepared_before : 0);

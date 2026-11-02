@@ -2106,7 +2106,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "alive for at least as long as the session.")
       .def(
           "__init__",
-          [](RuntimeSession *self, const ModelProto &model, const RuntimeSessionOptions &options) {
+          [](RuntimeSession *self, ModelProto &model, const RuntimeSessionOptions &options) {
             new (self) RuntimeSession(model, options);
           },
           nb::arg("model"), nb::arg("options"), nb::keep_alive<1, 2>(),

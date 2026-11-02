@@ -74,6 +74,19 @@ _MODEL_SRC = (
 
 
 class TestRunNodesBindings(ExtTestCase):
+    def test_model_session_accepts_initializer_consumption_option(self):
+        for consume in (False, True):
+            with self.subTest(consume=consume):
+                model = parser.parse_model(_MODEL_SRC)
+                options = rt.RuntimeSessionOptions()
+                options.consume_initializers = consume
+                session = rt.RuntimeSession(model, options)
+                ctx = rt.RuntimeContext()
+                ctx.set("x", _make_float_tensor("x", [-1.0, -2.0, -3.0]))
+                ctx.set("z", _make_float_tensor("z", [1.0, 1.0, 1.0]))
+                session.run(ctx)
+                self.assertEqual(_unpack_floats(ctx.get("y")), (2.0, 3.0, 4.0))
+
     def test_model_session_uses_import_without_context_opset(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

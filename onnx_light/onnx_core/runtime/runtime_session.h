@@ -588,7 +588,11 @@ private:
   std::exception_ptr preparation_failure_;
   std::unordered_set<std::string> seeded_initializer_names_;
   const GraphProto *initializer_graph_ = nullptr;
-  GraphProto *consumable_initializer_graph_ = nullptr;
+  struct ConsumableInitializer {
+    TensorProto *tensor;
+    size_t required_input_index = std::numeric_limits<size_t>::max();
+  };
+  std::unordered_map<std::string, ConsumableInitializer> consumable_initializers_;
   std::unordered_set<std::string> consumable_initializer_names_;
   std::unordered_set<std::string> consumed_initializer_names_;
   size_t consumed_initializer_bytes_ = 0;

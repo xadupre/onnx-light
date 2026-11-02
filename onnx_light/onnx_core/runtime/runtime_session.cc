@@ -302,7 +302,7 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 void RuntimeSession::SetConsumableInitializers(GraphProto &graph) {
   EXT_ENFORCE_INVALID(!kernels_initialized_ && initializer_graph_ == &graph,
                       "RuntimeSession: initializer ownership must be granted before declaration.");
-  consumable_initializer_graph_ = &graph;
+  consumable_initializers_.clear();
   consumable_initializer_names_.clear();
   std::unordered_map<std::string, size_t> readers;
   for (const auto &node : graph.node())
@@ -314,16 +314,18 @@ void RuntimeSession::SetConsumableInitializers(GraphProto &graph) {
   for (const auto &annotation : graph.quantization_annotation())
     for (const auto &mapping : annotation.quant_parameter_tensor_names())
       preserved.insert(mapping.value());
-  for (const auto &tensor : graph.initializer())
+  for (auto &tensor : graph.ref_initializer())
     if (immutable_initializer_names_.contains(tensor.name()) && readers[tensor.name()] == 1 &&
         !preserved.contains(tensor.name()) &&
-        (tensor.is_raw_data() || tensor.data_location() == TensorProto::EXTERNAL))
+        (tensor.is_raw_data() || tensor.data_location() == TensorProto::EXTERNAL)) {
       consumable_initializer_names_.insert(tensor.name());
+      consumable_initializers_.emplace(tensor.name(), ConsumableInitializer{&tensor});
+    }
 }
 
 void RuntimeSession::ConsumePreparationSources(size_t index, RuntimeContext &rt) {
   for (const auto &name : preparations_[index].info.source_inputs) {
-    if (consumed_initializer_names_.contains(name))
+    if (!consumable_initializer_names_.contains(name) || consumed_initializer_names_.contains(name))
       continue;
     bool claimed = false;
     bool ready = true;
@@ -339,22 +341,29 @@ void RuntimeSession::ConsumePreparationSources(size_t index, RuntimeContext &rt)
     }
     if (!claimed || !ready)
       continue;
-    for (auto &tensor : consumable_initializer_graph_->ref_initializer()) {
-      if (tensor.name() != name)
-        continue;
-      const size_t bytes = rt.Get(name).size_bytes();
-      EXT_ENFORCE_INVALID(bytes == tensor.raw_data().size() &&
-                              rt.Get(name).bytes() == tensor.raw_data().data(),
-                          "RuntimeSession: consumed source is not the owned initializer: ", name);
-      EXT_ENFORCE_INVALID(bytes <= std::numeric_limits<size_t>::max() - consumed_initializer_bytes_,
-                          "RuntimeSession: consumed initializer byte count overflows.");
-      consumed_initializer_bytes_ += bytes;
-      rt.Remove(name);
-      tensor.ref_raw_data().clear();
-      consumed_initializer_names_.insert(name);
-      std::erase(required_inputs_, name);
-      break;
+    auto &source = consumable_initializers_.at(name);
+    auto &tensor = *source.tensor;
+    const size_t required_index = source.required_input_index;
+    EXT_ENFORCE_INVALID(required_index < required_inputs_.size() &&
+                            required_inputs_[required_index] == name,
+                        "RuntimeSession: consumed source is not a required input: ", name);
+    const size_t bytes = rt.Get(name).size_bytes();
+    EXT_ENFORCE_INVALID(bytes == tensor.raw_data().size() &&
+                            rt.Get(name).bytes() == tensor.raw_data().data(),
+                        "RuntimeSession: consumed source is not the owned initializer: ", name);
+    EXT_ENFORCE_INVALID(bytes <= std::numeric_limits<size_t>::max() - consumed_initializer_bytes_,
+                        "RuntimeSession: consumed initializer byte count overflows.");
+    consumed_initializer_bytes_ += bytes;
+    rt.Remove(name);
+    tensor.ref_raw_data().clear();
+    consumed_initializer_names_.insert(name);
+    if (required_index != required_inputs_.size() - 1) {
+      required_inputs_[required_index] = std::move(required_inputs_.back());
+      const auto moved = consumable_initializers_.find(required_inputs_[required_index]);
+      if (moved != consumable_initializers_.end())
+        moved->second.required_input_index = required_index;
     }
+    required_inputs_.pop_back();
   }
 }
 
@@ -652,6 +661,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // :cpp:func:`Run` can verify the RuntimeContext supplies them before it
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
+  for (size_t index = 0; index < required_inputs_.size(); ++index) {
+    const auto source = consumable_initializers_.find(required_inputs_[index]);
+    if (source != consumable_initializers_.end())
+      source->second.required_input_index = index;
+  }
   kernels_initialized_ = true;
 }
 

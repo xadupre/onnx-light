@@ -642,6 +642,39 @@ TEST(KernelLifecycle, ConsumedPreparationSourcesRespectOwnershipAndOtherReaders)
   }
 }
 
+TEST(KernelLifecycle, SharedSourcePreparationsRemainReusableAtScale) {
+  for (bool consume : {false, true}) {
+    SCOPED_TRACE(consume);
+    ModelProto model = MakeGemmModel(false);
+    auto &graph = model.ref_graph();
+    const auto original = graph.node(0);
+    graph.ref_node().clear();
+    graph.ref_output().clear();
+    constexpr size_t count = 1024;
+    for (size_t index = 0; index < count; ++index) {
+      auto *node = graph.add_node();
+      *node = original;
+      node->ref_output()[0] = "Y" + std::to_string(index);
+      graph.add_output()->set_name(node->output(0));
+    }
+    RuntimeContext rt;
+    const auto record = std::make_shared<PreparationRecord>();
+    ASSERT_TRUE(rt.RegisterKernelFn(
+        "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+        [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+          return std::make_unique<DeclarativeKernel>(record, ctx);
+        }));
+    RuntimeSession session(model,
+                           core::runtime::RuntimeSessionOptions{.consume_initializers = consume});
+    session.Prepare(rt);
+    EXPECT_EQ(record->executed.size(), 2 * count);
+    EXPECT_EQ(session.consumed_initializer_bytes(), 0u);
+    EXPECT_TRUE(rt.HasValue("B"));
+    EXPECT_EQ(graph.initializer(0).raw_data().size(), 6 * sizeof(float));
+    EXPECT_TRUE(session.pending_preparations().empty());
+  }
+}
+
 TEST(KernelLifecycle, PreparationWaitsForRuntimeTuningBeforeExecuting) {
   const ModelProto model = MakeGemmModel(false);
   RuntimeContext rt;

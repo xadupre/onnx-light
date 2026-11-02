@@ -16,6 +16,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 
 namespace utils::detail {
 
+/**
+ * Copies model structure while retaining proven in-memory tensor allocations.
+ * Snapshots other borrowed byte fields in the source first, so overwriting a mapped
+ * source file cannot invalidate the caller's model, even if a later write fails.
+ * Uses the authoritative proto field traversal, including nested and encoded payloads.
+ */
+ONNX_LIGHT_PROTO_API ModelProto MakeExternalDataExportCopy(ModelProto &model);
+
 /** Applies node, graph, and function parse callbacks to live scopes in child-first order. */
 void ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options);
 

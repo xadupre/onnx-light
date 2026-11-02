@@ -53,7 +53,19 @@ struct ImportedDLPackOwner {
   }
 };
 
-TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
+utils::ByteSpan::BorrowedStorage PythonBufferStorage(nb::handle array, nb::handle ndarray) {
+  if (PyBytes_CheckExact(array.ptr()) || PyByteArray_CheckExact(array.ptr()))
+    return utils::ByteSpan::BorrowedStorage::kMemory;
+  nb::object base = nb::borrow<nb::object>(array);
+  while (reinterpret_cast<PyObject *>(Py_TYPE(base.ptr())) == ndarray.ptr()) {
+    if (nb::cast<bool>(base.attr("flags").attr("owndata")))
+      return utils::ByteSpan::BorrowedStorage::kMemory;
+    base = base.attr("base");
+  }
+  return utils::ByteSpan::BorrowedStorage::kUnknown;
+}
+
+TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name, nb::handle ndarray) {
   if (!nb::hasattr(array, "__dlpack__") || !nb::hasattr(array, "__dlpack_device__"))
     throw nb::type_error("TensorProto.from_dlpack requires the DLPack array protocol.");
   const auto device = nb::cast<std::pair<int, int>>(array.attr("__dlpack_device__")());
@@ -154,7 +166,13 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   static const uint8_t empty_data = 0;
   const auto *data =
       size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
-  result.ref_raw_data().assign_borrowed(data, size, std::move(owner));
+  auto storage = PythonBufferStorage(array, ndarray);
+  if (nb::isinstance<TensorProto>(array)) {
+    const auto &raw = nb::cast<const TensorProto &>(array).ref_raw_data();
+    if (raw.is_memory_borrowed() && raw.data() == data && raw.size() == size)
+      storage = utils::ByteSpan::BorrowedStorage::kMemory;
+  }
+  result.ref_raw_data().assign_borrowed(data, size, std::move(owner), storage);
   try {
     ValidateDLPack(result);
   } catch (const DLPackBufferError &error) {
@@ -317,16 +335,6 @@ struct RawDataCallback {
   nb::object on_tensor;
 };
 
-ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
-  // Fully reparse through bytes to ensure every borrowed span in the model
-  // becomes owned before serialization paths that may mutate buffers/metadata.
-  std::string serialized;
-  model.SerializeToString(serialized);
-  ModelProto owned;
-  owned.ParseFromString(serialized);
-  return owned;
-}
-
 // --------------------------------------------------------------------------
 // Convenience builder helpers exposed as proto methods. The Python-level
 // type inference for attributes/tensors lives in ``onnx_light.onnx_proto._helper``
@@ -376,22 +384,6 @@ NodeProto &AddNodeImpl(ProtoT &proto, nb::object op_type, nb::object inputs, nb:
   nb::object built = helper.attr("make_node")(op_type, inputs, outputs, **kwargs);
   NodeProto *stored = proto.add_node(nb::cast<const NodeProto &>(built));
   return *stored;
-}
-
-bool HasBorrowedRawData(const ModelProto &model) {
-  if (!model.has_graph()) {
-    return false;
-  }
-  // IteratorTensorProto currently exposes a mutable GraphProto traversal API.
-  // The scan is read-only, so cast away constness only to walk the graph.
-  auto &mutable_model = const_cast<ModelProto &>(model);
-  IteratorTensorProto it(&mutable_model.ref_graph());
-  while (it.next()) {
-    if (it->ref_raw_data().is_borrowed()) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Applies a single ``field=value`` keyword argument to a proto instance,
@@ -810,8 +802,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             cls *to_write = &self;
             std::optional<ModelProto> owned_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
-              if (!external_data_file.empty() && HasBorrowedRawData(self)) {
-                owned_copy = MakeOwnedModelProtoCopy(self);
+              if (!external_data_file.empty()) {
+                owned_copy = utils::detail::MakeExternalDataExportCopy(self);
                 to_write = &(*owned_copy);
               }
             }
@@ -840,7 +832,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "output. If ``external_data_file`` is not empty, big "
           "weights are stored in this (depending on ``options.raw_data_threshold``). "
           "When writing to two files, temporary external-data metadata is cleared so the "
-          "in-memory model stays unchanged.")
+          "model's values and metadata stay unchanged. Borrowed buffers not proven independent "
+          "of files are first snapshotted in the source, even if a later write fails; their "
+          "addresses and ownership may change.")
       .def(
           "SerializeToFileDescriptor",
           [](cls &self, int fd, nb::object options) {
@@ -1330,6 +1324,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
 void AddOnnxPyProto(nb::module_ &m) {
   m.doc() = "onnx from python without protobuf but using the same format";
   m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
+  const nb::object ndarray = nb::module_::import_("numpy").attr("ndarray");
 
   m.def(
       "utils_onnx_read_varint64",
@@ -2442,7 +2437,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           TensorProto::DOC_raw_data)
       .def(
           "_set_raw_data_from_buffer",
-          [](TensorProto &self, nb::handle array) {
+          [ndarray](TensorProto &self, nb::handle array) {
             auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{}, [](Py_buffer *buffer) {
               nb::gil_scoped_acquire gil;
               PyBuffer_Release(buffer);
@@ -2455,14 +2450,20 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             const auto *data =
                 buffer->buf ? static_cast<const uint8_t *>(buffer->buf) : &empty_data;
             const size_t size = static_cast<size_t>(buffer->len);
-            self.set_raw_data_with_deleter(data, size, [buffer = std::move(buffer)]() {});
+            const auto storage = PythonBufferStorage(array, ndarray);
+            self.ref_raw_data().assign_borrowed(data, size, std::move(buffer), storage);
           },
           nb::arg("array"),
           "Borrows a contiguous buffer as raw_data and retains its exporter until final release.")
-      .def_static("from_dlpack", &TensorProtoFromDLPack, nb::arg("array"), nb::arg("name") = "",
-                  "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
-                  "Borrows read-only raw_data and retains the producer's managed allocation. "
-                  "Uses stream=None; asynchronous synchronization and copying are unsupported.")
+      .def_static(
+          "from_dlpack",
+          [ndarray](nb::object array, const std::string &name) {
+            return TensorProtoFromDLPack(std::move(array), name, ndarray);
+          },
+          nb::arg("array"), nb::arg("name") = "",
+          "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
+          "Borrows read-only raw_data and retains the producer's managed allocation. "
+          "Uses stream=None; asynchronous synchronization and copying are unsupported.")
       .def(
           "__copy__",
           [](const TensorProto &self) {

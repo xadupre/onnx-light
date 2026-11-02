@@ -3446,6 +3446,57 @@ bool VisitProtoFields(const OptionalProto &left, Right &right, Visitor &&visitor
 
 #undef VISIT_FIELD
 
+class ExternalDataStorageVisitor {
+public:
+  template <typename T> bool operator()(const char *, bool, bool present, const T &, T &value) {
+    if (present)
+      Visit(value);
+    return true;
+  }
+
+  template <typename T> void Visit(T &value) {
+    if constexpr (std::is_same_v<T, utils::ByteSpan>) {
+      // A null managed pointer can still have a lifetime-retaining control block.
+      if (value.is_borrowed() && (!value.is_memory_borrowed() || value.owner().use_count() == 0)) {
+        utils::ByteSpan snapshot;
+        const auto &raw = std::as_const(value);
+        snapshot.assign(raw.data(), raw.size());
+        snapshots_.push_back({&value, std::move(snapshot), value.owner()});
+      }
+    } else if constexpr (requires { T::proto_id; }) {
+      VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      if (value.has_value())
+        Visit(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (auto &entry : value)
+        Visit(entry.second);
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (auto &element : value)
+          Visit(element);
+    }
+  }
+
+  void Apply() {
+    for (auto &snapshot : snapshots_)
+      *snapshot.destination = std::move(snapshot.bytes);
+  }
+
+private:
+  struct Snapshot {
+    utils::ByteSpan *destination;
+    utils::ByteSpan bytes;
+    std::shared_ptr<void> owner;
+  };
+  // Retain every original owner until all aliases have been snapshotted and replaced.
+  std::vector<Snapshot> snapshots_;
+};
+
 class DeferredSourceVisitor {
 public:
   template <typename T>
@@ -3746,6 +3797,13 @@ uint64_t ModelProto::RewritingHash() const {
 
 void utils::detail::ApplyParseScopeCallbacks(ModelProto &model, const ParseOptions &options) {
   ParseScopeCallbackVisitor(options).Visit(model);
+}
+
+ModelProto utils::detail::MakeExternalDataExportCopy(ModelProto &model) {
+  ExternalDataStorageVisitor visitor;
+  visitor.Visit(model);
+  visitor.Apply();
+  return utils::CopyWithSharedTensorStorage(model);
 }
 
 void utils::detail::CollectLayoutTensors(void *source, uint16_t proto_id,

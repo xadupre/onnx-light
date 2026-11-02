@@ -1,5 +1,6 @@
 #include "onnx.h"
 #include "onnx_dlpack.h"
+#include "onnx_helper.h"
 #include <fstream>
 #include <functional>
 #include <gtest/gtest.h>
@@ -12,6 +13,172 @@
 #endif
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+TEST(SharedPayloadCopy, ExternalExportRetainsMemoryOwnersAndSnapshotsUnprovenStorage) {
+  ModelProto source;
+  auto allocation = std::make_shared<std::vector<uint8_t>>(8, 7);
+  std::weak_ptr<std::vector<uint8_t>> lifetime = allocation;
+  auto *memory = source.mutable_graph()->add_initializer();
+  memory->ref_raw_data().assign_borrowed(allocation->data(), allocation->size(), allocation,
+                                         utils::ByteSpan::BorrowedStorage::kMemory);
+  uint8_t bytes[] = {1, 2, 3};
+  auto *unknown = source.mutable_graph()->add_initializer();
+  bool released = false;
+  unknown->ref_raw_data().assign_with_deleter(bytes, sizeof(bytes), [&] { released = true; });
+  const auto expected = source.SerializeAsString();
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  EXPECT_EQ(exported.SerializeAsString(), expected);
+  EXPECT_EQ(source.SerializeAsString(), expected);
+  EXPECT_TRUE(memory->raw_data().is_memory_borrowed());
+  EXPECT_EQ(std::as_const(*memory).raw_data().data(), allocation->data());
+  EXPECT_EQ(std::as_const(exported).graph().initializer(0).raw_data().data(), allocation->data());
+  EXPECT_FALSE(unknown->raw_data().is_borrowed());
+  EXPECT_TRUE(released);
+  bytes[0] = 9;
+  EXPECT_EQ(source.SerializeAsString(), expected);
+  exported.ref_graph().ref_initializer()[0].set_raw_data("changed");
+  EXPECT_EQ(source.SerializeAsString(), expected);
+  auto retained = utils::detail::MakeExternalDataExportCopy(source);
+  source.Clear();
+  allocation.reset();
+  EXPECT_FALSE(lifetime.expired());
+  retained.Clear();
+  EXPECT_TRUE(lifetime.expired());
+}
+
+TEST(SharedPayloadCopy, ExternalExportRetainsNullPointerLifetimeTokens) {
+  ModelProto source;
+  auto allocation = std::make_shared<std::vector<uint8_t>>(8, 7);
+  std::weak_ptr<std::vector<uint8_t>> lifetime = allocation;
+  const auto *address = allocation->data();
+  std::shared_ptr<void> owner(nullptr, [allocation](void *) {});
+  ASSERT_FALSE(owner);
+  ASSERT_GT(owner.use_count(), 0);
+  source.mutable_graph()->add_initializer()->ref_raw_data().assign_borrowed(
+      address, allocation->size(), owner, utils::ByteSpan::BorrowedStorage::kMemory);
+  allocation.reset();
+  owner.reset();
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  EXPECT_EQ(std::as_const(source).graph().initializer(0).raw_data().data(), address);
+  EXPECT_EQ(std::as_const(exported).graph().initializer(0).raw_data().data(), address);
+  source.Clear();
+  EXPECT_FALSE(lifetime.expired());
+  exported.Clear();
+  EXPECT_TRUE(lifetime.expired());
+}
+
+TEST(SharedPayloadCopy, ExternalExportSnapshotsNestedAndEncodedRawFieldsThroughSchema) {
+  std::vector<std::shared_ptr<std::string>> allocations;
+  const auto borrow = [&](utils::ByteSpan &raw, const std::string &bytes) {
+    auto storage = std::make_shared<std::string>(bytes);
+    raw.assign_borrowed(reinterpret_cast<const uint8_t *>(storage->data()), storage->size(),
+                        storage);
+    allocations.push_back(std::move(storage));
+  };
+  const auto populate = [&](TensorProto *tensor, const std::string &bytes) {
+    tensor->set_data_type(TensorProto::UINT8);
+    tensor->add_dims(bytes.size());
+    borrow(tensor->ref_raw_data(), bytes);
+  };
+  ModelProto source;
+  auto *graph = source.mutable_graph();
+  populate(graph->add_initializer(), "initializer");
+  populate(graph->add_sparse_initializer()->mutable_values(), "sparse values");
+  populate(graph->mutable_sparse_initializer(0)->mutable_indices(), "sparse indices");
+  populate(graph->add_node()->add_attribute()->mutable_g()->add_initializer(), "nested");
+  populate(source.add_functions()->add_attribute_proto()->mutable_t(), "function");
+  auto *encoded = graph->add_extended_initializer()->mutable_encoded_value();
+  borrow(encoded->ref_raw_data(), "encoded");
+  populate(encoded->mutable_affine()->mutable_scale(), "scale");
+  populate(encoded->mutable_affine()->mutable_zero_point(), "zero");
+  populate(source.add_struct_types()->mutable_structure()->add_field()->mutable_constant(),
+           "struct constant");
+  populate(source.add_struct_types()->mutable_decoder()->add_attribute_proto()->mutable_t(),
+           "codec");
+  RewritingProto rewriting;
+  populate(rewriting.add_added_functions()->add_attribute_proto()->mutable_t(), "rewrite");
+  source.add_rewritings("plan", rewriting);
+  const auto expected = source.SerializeAsString();
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  for (auto &storage : allocations)
+    std::fill(storage->begin(), storage->end(), '\0');
+  EXPECT_EQ(source.SerializeAsString(), expected);
+  EXPECT_EQ(exported.SerializeAsString(), expected);
+}
+
+TEST(SharedPayloadCopy, ExternalExportProvenanceSurvivesCopiesButNotReplacementOwners) {
+  auto owner = std::make_shared<std::vector<uint8_t>>(4, 3);
+  utils::ByteSpan memory;
+  memory.assign_borrowed(owner->data(), owner->size(), owner,
+                         utils::ByteSpan::BorrowedStorage::kMemory);
+  auto copied = memory;
+  auto shared = memory.SharedCopy();
+  utils::ByteSpan moved = std::move(copied);
+  ModelProto source;
+  for (auto *span : {&memory, &shared, &moved}) {
+    source.mutable_graph()->add_initializer()->ref_raw_data() = *span;
+  }
+  shared.attach_deleter([owner] {});
+  source.mutable_graph()->add_initializer()->ref_raw_data() = shared;
+  moved.assign_borrowed(owner->data(), owner->size());
+  source.mutable_graph()->add_initializer()->ref_raw_data() = moved;
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  for (int i = 0; i < 5; ++i) {
+    const auto &raw = exported.graph().initializer(i).raw_data();
+    EXPECT_EQ(raw.is_borrowed(), i < 3);
+    if (i < 3)
+      EXPECT_EQ(raw.data(), owner->data());
+    else
+      EXPECT_NE(raw.data(), owner->data());
+  }
+}
+
+TEST(SharedPayloadCopy, ExternalExportSnapshotsAllAliasesBeforeReleasingAnyOwner) {
+  ModelProto source;
+  uint8_t bytes[] = {1, 2, 3};
+  auto *first = source.mutable_graph()->add_initializer();
+  first->ref_raw_data().assign_with_deleter(bytes, sizeof(bytes), [&] {
+    std::fill(std::begin(bytes), std::end(bytes), 0);
+    for (const auto &tensor : source.graph().initializer())
+      EXPECT_FALSE(tensor.raw_data().is_borrowed());
+  });
+  source.mutable_graph()->add_initializer()->ref_raw_data().assign_borrowed(bytes, sizeof(bytes));
+  const auto expected = source.SerializeAsString();
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  EXPECT_EQ(source.SerializeAsString(), expected);
+  EXPECT_EQ(exported.SerializeAsString(), expected);
+}
+
+TEST(SharedPayloadCopy, ExternalExportAllocationFailurePreservesSourceOwnersAndAliases) {
+#if defined(__linux__)
+  bool released = false;
+  ModelProto source;
+  const uint8_t bytes[] = {1, 2, 3};
+  auto *first = source.mutable_graph()->add_initializer();
+  first->ref_raw_data().assign_with_deleter(bytes, sizeof(bytes), [&] { released = true; });
+  auto large = std::make_shared<std::vector<uint8_t>>(64 * 1024 * 1024, 7);
+  source.mutable_graph()->add_initializer()->ref_raw_data().assign_borrowed(large->data(),
+                                                                            large->size(), large);
+  struct rlimit previous;
+  ASSERT_EQ(getrlimit(RLIMIT_AS, &previous), 0);
+  std::ifstream statm("/proc/self/statm");
+  size_t pages = 0;
+  ASSERT_TRUE(static_cast<bool>(statm >> pages));
+  const long page_size = sysconf(_SC_PAGESIZE);
+  ASSERT_GT(page_size, 0);
+  struct rlimit limited = previous;
+  limited.rlim_cur = pages * static_cast<size_t>(page_size) + 8 * 1024 * 1024;
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &limited), 0);
+  EXPECT_THROW(utils::detail::MakeExternalDataExportCopy(source), std::bad_alloc);
+  ASSERT_EQ(setrlimit(RLIMIT_AS, &previous), 0);
+  EXPECT_FALSE(released);
+  EXPECT_TRUE(first->raw_data().is_borrowed());
+  EXPECT_EQ(std::as_const(*first).raw_data().data(), bytes);
+  EXPECT_EQ(std::as_const(source).graph().initializer(1).raw_data().data(), large->data());
+#else
+  GTEST_SKIP() << "Requires Linux address-space accounting.";
+#endif
+}
 
 template <typename T> void CheckRawSetterAliasing() {
   const std::string payload = "aligned payload!!";

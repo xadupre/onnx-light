@@ -17,12 +17,16 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-// Operators without a registered peak-memory function report 0 by default.
-TEST(CoreShapesPeakMemory, DefaultsToZeroWhenUnregistered) {
+TEST(CoreShapesPeakMemory, DefaultsToUnresolvedMaximumWhenUnregistered) {
   const core::shapes::Device device = core::shapes::Device::kCPU;
   const std::vector<core::shapes::SymShape> input_shapes;
-  EXPECT_EQ(
-      core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemoryFn", device, input_shapes), 0);
+  const auto estimate =
+      core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemoryFn", device, input_shapes);
+  ASSERT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_FALSE(estimate.worst_case.AsExpr().empty());
+  EXPECT_FALSE(estimate.average_case);
+  EXPECT_EQ(estimate,
+            core::shapes::ComputePeakMemory("", "OpWithoutPeakMemoryFn", device, input_shapes));
 }
 
 // A registered peak-memory function is invoked with the device and the input
@@ -40,9 +44,10 @@ TEST(CoreShapesPeakMemory, RegisteredFunctionIsDispatched) {
       });
 
   const std::vector<core::shapes::SymShape> input_shapes(2);
-  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryRegisteredOp",
-                                            core::shapes::Device::kCPU, input_shapes),
-            4096);
+  const auto estimate = core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryRegisteredOp",
+                                                        core::shapes::Device::kCPU, input_shapes);
+  EXPECT_EQ(estimate.worst_case.AsInt(), 4096);
+  EXPECT_FALSE(estimate.average_case);
   EXPECT_EQ(seen_device, core::shapes::Device::kCPU);
   EXPECT_EQ(seen_num_inputs, 2u);
 
@@ -102,15 +107,50 @@ TEST(CoreShapesPeakMemory, DeviceIsPartOfIdentifier) {
   // Resolved for the device it was registered with.
   EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp", gpu, input_shapes),
             777);
-  // The default host device has no entry, so it reports 0.
-  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp",
-                                            core::shapes::Device::kCPU, input_shapes),
-            0);
+  EXPECT_TRUE(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp",
+                                              core::shapes::Device::kCPU, input_shapes)
+                  .worst_case.IsExpr());
 
   const auto &table = core::shapes::PeakMemoryDispatchTable();
   EXPECT_EQ(table.find("ai.onnx:PeakMemoryDeviceOp"), table.end());
   EXPECT_NE(table.find("ai.onnx:PeakMemoryDeviceOp:" + std::to_string(static_cast<int32_t>(gpu))),
             table.end());
+}
+
+TEST(CoreShapesPeakMemory, ReturnsDistinctSymbolicWorstAndAverageCases) {
+  using core::shapes::PeakMemoryEstimate;
+  using core::symbolic::SymDim;
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", "SymbolicScratch", core::shapes::Device::kCPU,
+      [](core::shapes::Device, const std::vector<core::shapes::SymShape> &) {
+        return PeakMemoryEstimate{SymDim("128*N"), SymDim("64*N")};
+      });
+  const auto estimate =
+      core::shapes::ComputePeakMemory("", "SymbolicScratch", core::shapes::Device::kCPU, {});
+  EXPECT_EQ(estimate.worst_case.AsExpr(), "128*N");
+  ASSERT_TRUE(estimate.average_case);
+  EXPECT_EQ(estimate.average_case->AsExpr(), "64*N");
+}
+
+TEST(CoreShapesPeakMemory, RejectsInvalidWorstAndAverageCases) {
+  using core::shapes::PeakMemoryEstimate;
+  using core::symbolic::SymDim;
+  const PeakMemoryEstimate invalid[] = {
+      {SymDim(""), std::nullopt},
+      {SymDim(int64_t{10}), SymDim(int64_t{-1})},
+      {SymDim(int64_t{10}), SymDim(int64_t{11})},
+      {SymDim(int64_t{10}), SymDim("")},
+  };
+  for (const auto &estimate : invalid) {
+    core::shapes::RegisterComputePeakMemoryFn(
+        "", "InvalidScratch", core::shapes::Device::kCPU,
+        [estimate](core::shapes::Device, const std::vector<core::shapes::SymShape> &) {
+          return estimate;
+        });
+    EXPECT_THROW(
+        core::shapes::ComputePeakMemory("", "InvalidScratch", core::shapes::Device::kCPU, {}),
+        std::invalid_argument);
+  }
 }
 
 } // namespace Test

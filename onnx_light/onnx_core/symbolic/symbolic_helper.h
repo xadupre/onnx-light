@@ -20,4 +20,9 @@ inline expressions::DimType ToDimType(const SymDim &d) {
   return expressions::DimType{d.AsExpr()};
 }
 
+/// Converts an integer or symbolic expression into a SymDim.
+inline SymDim FromDimType(const expressions::DimType &d) {
+  return std::visit([](const auto &value) { return SymDim(value); }, d);
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::symbolic

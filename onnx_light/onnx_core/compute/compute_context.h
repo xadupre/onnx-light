@@ -36,6 +36,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
+using ::onnx_light::core::shapes::PeakMemoryEstimate;
 using ::onnx_light::core::shapes::ShapesContext;
 
 // The symbolic value descriptors live in ``core::symbolic``; bring them
@@ -631,26 +632,28 @@ public:
   /// Computes the estimated peak scratch memory for every node of ``graph``
   /// using the shapes already inferred into the owned :cpp:class:`ShapesContext`
   /// (via :cpp:func:`ComputeShapes`), storing one entry per node in
-  /// ``graph.node()`` order. Nodes whose estimate is zero keep a ``0`` entry.
+  /// ``graph.node()`` order. Unknown bounds remain symbolic, never zero.
   ///
   /// @param graph   Graph whose nodes are analysed, in topological order.
   /// @param device  Logical device passed to the peak-memory dispatch function.
   /// @return A reference to the stored per-node peak-memory vector.
-  const std::vector<int64_t> &ComputePeakMemory(const GraphProto &graph,
-                                                Device device = Device::kUndefined);
+  const std::vector<PeakMemoryEstimate> &ComputePeakMemory(const GraphProto &graph,
+                                                           Device device = Device::kUndefined);
 
   /// Computes per-node peak scratch memory directly for a function.
-  const std::vector<int64_t> &ComputePeakMemory(const FunctionProto &function,
-                                                Device device = Device::kUndefined);
+  const std::vector<PeakMemoryEstimate> &ComputePeakMemory(const FunctionProto &function,
+                                                           Device device = Device::kUndefined);
 
   /// Read-only access to the per-node peak-memory estimates computed by
   /// :cpp:func:`ComputePeakMemory`. Empty before it has been called.
-  const std::vector<int64_t> &PeakMemory() const noexcept { return peak_memory_; }
+  const std::vector<PeakMemoryEstimate> &PeakMemory() const noexcept { return peak_memory_; }
 
   /// Peak-memory estimate for the node at ``node_index``.
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
-  int64_t NodePeakMemory(std::size_t node_index) const { return peak_memory_.at(node_index); }
+  const PeakMemoryEstimate &NodePeakMemory(std::size_t node_index) const {
+    return peak_memory_.at(node_index);
+  }
 
   // ── High-level orchestration ─────────────────────────────────────────
 
@@ -692,7 +695,8 @@ public:
   /// :cpp:func:`ShapesContext::ApplyInferredShapesToGraph`), the in-place /
   /// release / shape-tag information into node ``metadata_props`` (via
   /// :cpp:func:`WriteToMetadata`) and the per-node peak-memory estimates under
-  /// :cpp:var:`kNodePeakMemoryMetadataKey`.
+  /// :cpp:var:`kNodePeakMemoryMaxMetadataKey` and the optional average key.
+  /// Concrete positive maxima also refresh the legacy allocation hint.
   ///
   /// @param graph  Graph whose value_info and node metadata are mutated in
   ///        place; must be the same graph passed to :cpp:func:`Compute` /
@@ -803,7 +807,7 @@ private:
 
   template <typename GraphOrFunction> void WriteToMetadataImpl(GraphOrFunction &graph) const;
 
-  const std::vector<int64_t> &
+  const std::vector<PeakMemoryEstimate> &
   ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto> &nodes, Device device);
 
   void WritePeakMemoryToNodes(utils::RepeatedProtoField<NodeProto> &nodes) const;
@@ -832,7 +836,7 @@ private:
   // Old profiles may be retained after shape inference is restarted for another scope.
   bool memory_matches_shapes_ = false;
   ShapesContext shapes_;
-  std::vector<int64_t> peak_memory_;
+  std::vector<PeakMemoryEstimate> peak_memory_;
   ComputeEventLog events_;
   bool events_enabled_ = false;
 

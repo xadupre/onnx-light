@@ -2415,11 +2415,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="peak_memory",
         help=(
-            "Also compute the estimated peak scratch memory for each node and "
-            "record it in each node's metadata_props under the key "
-            "``onnx_light.peak_memory``. Only nodes with a registered "
-            "peak-memory function and fully concrete input shapes produce a "
-            "non-zero entry; all other nodes are left untouched."
+            "Also compute symbolic worst-case scratch memory for each node under "
+            "``onnx_light.peak_memory_max`` and, when justified, an average under "
+            "``onnx_light.peak_memory_average``. Unknown maxima remain unresolved "
+            "symbols. Positive concrete maxima also refresh the legacy "
+            "``onnx_light.peak_memory`` allocation hint."
         ),
     )
     fillshape_parser.add_argument(

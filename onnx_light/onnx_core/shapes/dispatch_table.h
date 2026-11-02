@@ -6,8 +6,10 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "onnx_core/shapes/shapes_context.h"
@@ -80,27 +82,39 @@ bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node);
 bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node);
 
 /**
- * Signature of every per-operator peak-memory function registered in
- * :cpp:func:`PeakMemoryDispatchTable`. Mirroring :cpp:type:`ComputeShapeFn`,
- * but for memory rather than shapes, it estimates the peak amount of
- * scratch/working memory (in bytes) an operator's computation needs, in
- * addition to its declared inputs and outputs.
+ * Describes extra scratch bytes, excluding declared inputs and outputs.
+ * ``worst_case`` is always present, as a nonnegative integer or a nonempty
+ * symbolic expression. An unresolved symbol requires a caller-supplied bound
+ * before memory admission; it never means zero bytes.
  *
- * The function takes the :cpp:enum:`Device` on which the operator executes
- * followed by the :cpp:class:`SymShape` of each of its inputs, and returns
- * the estimated peak memory as an ``int64_t``. The returned value is the
- * extra scratch/working memory the computation allocates; it excludes the
- * memory already accounted for by the operator's inputs and outputs. When no
- * function is registered for an operator the default is to return ``0`` (see
- * :cpp:func:`ComputePeakMemory`).
+ * ``average_case`` is absent when no justified expectation is available.
+ * Deterministic workspace requirements have equal worst and average cases.
  */
-using ComputePeakMemoryFn = std::function<int64_t(Device, const std::vector<SymShape> &)>;
+struct PeakMemoryEstimate {
+  symbolic::SymDim worst_case{"peak_memory_unknown"};
+  std::optional<symbolic::SymDim> average_case;
+
+  PeakMemoryEstimate() = default;
+  /// Constructs a concrete upper bound without assuming an average.
+  PeakMemoryEstimate(int64_t bytes) : worst_case(bytes) {}
+  PeakMemoryEstimate(symbolic::SymDim maximum, std::optional<symbolic::SymDim> average)
+      : worst_case(std::move(maximum)), average_case(std::move(average)) {}
+  static PeakMemoryEstimate Exact(symbolic::SymDim bytes) { return {bytes, bytes}; }
+  bool operator==(const PeakMemoryEstimate &) const = default;
+};
+
+/// Returns an unresolved operator-wide bound, covering every invocation and device.
+PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::string &op_type);
+
+/// Estimates worst-case and optional average scratch bytes from symbolic input shapes.
+using ComputePeakMemoryFn =
+    std::function<PeakMemoryEstimate(Device, const std::vector<SymShape> &)>;
 
 /**
  * Returns the ``(normalised_domain, op_type) -> ComputePeakMemoryFn``
  * dispatch table. Empty until libraries populate it via
  * :cpp:func:`RegisterComputePeakMemoryFn`; operators without an entry
- * report a peak memory of ``0`` through :cpp:func:`ComputePeakMemory`.
+ * report an unresolved symbolic worst-case bound through :cpp:func:`ComputePeakMemory`.
  */
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable();
 
@@ -131,16 +145,15 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
  *
  * Looks the operator up in the shared :cpp:func:`PeakMemoryDispatchTable`
  * and forwards to its registered :cpp:type:`ComputePeakMemoryFn`. When no
- * function is registered for the operator the default is to return ``0``.
+ * function is registered, returns an unresolved symbolic worst-case bound.
  *
  * @param domain       The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type      The ONNX operator type name (e.g. ``"Abs"``).
  * @param device       The device on which the operator executes.
  * @param input_shapes The shapes of the operator's inputs, in order.
- * @returns The estimated peak memory in bytes, or ``0`` when the operator
- *          has no registered peak-memory function.
+ * @returns The mandatory worst-case and optional average scratch estimates.
  */
-int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
-                          const std::vector<SymShape> &input_shapes);
+PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::string &op_type,
+                                     Device device, const std::vector<SymShape> &input_shapes);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

@@ -1345,8 +1345,8 @@ using ::onnx_light::core::shapes::ComputePeakMemoryFn;
 // Built-in table of every ``onnx_shapes`` peak-memory function, keyed by
 // ``"<domain>:<op_type>"``. Mirrors :cpp:func:`BuiltinShapeFunctions`; only
 // used to populate the shared ``core::shapes`` peak-memory dispatch table via
-// :cpp:func:`RegisterPeakMemoryFunctions`. Operators without an entry report a
-// peak memory of ``0`` through :cpp:func:`core::shapes::ComputePeakMemory`.
+// :cpp:func:`RegisterPeakMemoryFunctions`. Unregistered operators retain an
+// unresolved worst-case bound through :cpp:func:`core::shapes::ComputePeakMemory`.
 const std::unordered_map<std::string, ComputePeakMemoryFn> &BuiltinPeakMemoryFunctions() {
   static const std::unordered_map<std::string, ComputePeakMemoryFn> table = {
       {"ai.onnx:Attention", nn::ComputePeakMemoryAttention},

@@ -142,12 +142,11 @@ void ValidateScopeAllocations(const GraphOrFunction &scope,
   }
 }
 
-void ValidateScratchTotal(const NodeMemoryProfile &profile, int64_t scratch) {
-  EXT_ENFORCE_INVALID(scratch >= 0, "Memory analysis: negative scratch allocation.");
+void ValidateScratchTotal(const NodeMemoryProfile &profile, const PeakMemoryEstimate &scratch) {
   const auto &total = std::get<expressions::DimType>(profile.at(kNodeMemoryTotalBytesKey));
   // Checks the combined footprint without changing the tensor-only profile.
-  if (std::holds_alternative<int64_t>(total))
-    expressions::dim_add(total, expressions::DimType{scratch});
+  if (std::holds_alternative<int64_t>(total) && scratch.worst_case.IsInt())
+    expressions::dim_add(total, symbolic::ToDimType(scratch.worst_case));
 }
 
 std::string EncodeLifetimeName(const std::string &name, bool encode) {
@@ -307,10 +306,11 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   return profile;
 }
 
-void UpdateNodeMemoryBoundaries(NodeMemoryProfile &profile, int64_t scratch,
+void UpdateNodeMemoryBoundaries(NodeMemoryProfile &profile, const SymDim &scratch,
                                 expressions::SimplifiedExpressionCache *cache) {
-  const expressions::DimType during = expressions::dim_add(
-      NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), scratch, cache);
+  const expressions::DimType during =
+      expressions::dim_add(NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey),
+                           symbolic::ToDimType(scratch), cache);
   NodeMemoryProfileScalar(profile, kNodeMemoryDuringBytesKey) = during;
   NodeMemoryProfileScalar(profile, kNodeMemoryReleasedBytesKey) = expressions::dim_sub(
       during, NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey), cache);
@@ -318,8 +318,37 @@ void UpdateNodeMemoryBoundaries(NodeMemoryProfile &profile, int64_t scratch,
 
 struct FunctionBodyMemoryEstimate {
   expressions::DimType internal_peak = int64_t{0};
-  int64_t workspace_peak = 0;
+  PeakMemoryEstimate workspace_peak = PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
+  bool has_body = false;
 };
+
+PeakMemoryEstimate MaxWorkspace(const PeakMemoryEstimate &a, const PeakMemoryEstimate &b,
+                                expressions::SimplifiedExpressionCache *cache = nullptr) {
+  if (b.worst_case.IsInt() && b.worst_case.AsInt() == 0)
+    return a;
+  if (a.worst_case.IsInt() && a.worst_case.AsInt() == 0)
+    return b;
+  const SymDim maximum = symbolic::FromDimType(expressions::dim_max(
+      symbolic::ToDimType(a.worst_case), symbolic::ToDimType(b.worst_case), cache));
+  // The maximum of expectations is not the expectation of the maximum.
+  const bool exact = a.average_case && b.average_case && *a.average_case == a.worst_case &&
+                     *b.average_case == b.worst_case;
+  return {maximum, exact ? std::optional<SymDim>{maximum} : std::nullopt};
+}
+
+PeakMemoryEstimate NodeWorkspace(const NodeProto &node, const ShapesContext &ctx, Device device,
+                                 const std::vector<SymShape> &inputs,
+                                 const FunctionBodyMemoryEstimate &body) {
+  if (body.has_body) {
+    const std::string key =
+        NormaliseDomain(node.domain()) + ":" + node.op_type() + symbolic::DeviceKeySuffix(device);
+    if (!shapes::PeakMemoryDispatchTable().contains(key))
+      return body.workspace_peak;
+  }
+  const auto estimate = shapes::ComputePeakMemory(node.domain(), node.op_type(), device, inputs);
+  return body.has_body ? MaxWorkspace(estimate, body.workspace_peak, &ctx.ExpressionCache())
+                       : estimate;
+}
 
 using FunctionAttributeMap = std::unordered_map<std::string, const AttributeProto *>;
 
@@ -365,7 +394,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   EXT_ENFORCE_INVALID(!validate_allocations || inserted,
                       "Memory analysis: recursive local function '", function_key, "'.");
   if (!inserted)
-    return {};
+    return {int64_t{0}, shapes::UnknownPeakMemory(node.domain(), node.op_type()), true};
   struct PopFunction {
     std::unordered_set<std::string> &active;
     const std::string &key;
@@ -396,7 +425,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
           ctx.HasEncodedValue(actual))) {
       EXT_ENFORCE_INVALID(!validate_allocations,
                           "Memory analysis: unresolved local-function input '", actual, "'.");
-      return {};
+      return {int64_t{0}, shapes::UnknownPeakMemory(node.domain(), node.op_type()), true};
     }
     body_shapes.CopyValueFrom(function->input(i), ctx, actual);
   }
@@ -479,6 +508,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   }
 
   FunctionBodyMemoryEstimate estimate;
+  estimate.has_body = true;
   expressions::DimType live = int64_t{0};
   for (std::size_t index = 0; index < bound_nodes.size(); ++index) {
     const NodeProto &inner = bound_nodes[index];
@@ -490,11 +520,10 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
       else
         input_shapes.emplace_back();
     }
-    int64_t workspace =
-        shapes::ComputePeakMemory(inner.domain(), inner.op_type(), device, input_shapes);
     const FunctionBodyMemoryEstimate nested = EstimateFunctionBodyMemory(
         inner, body_shapes, device, active_functions, validate_allocations);
-    workspace = std::max(workspace, nested.workspace_peak);
+    const PeakMemoryEstimate workspace =
+        NodeWorkspace(inner, body_shapes, device, input_shapes, nested);
     live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
                                 &expression_cache);
     const expressions::DimType peak =
@@ -502,7 +531,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
     estimate.internal_peak = expressions::dim_max(estimate.internal_peak, peak, &expression_cache);
     live = expressions::dim_sub(live, allocations_ending[index].Build(&expression_cache),
                                 &expression_cache);
-    estimate.workspace_peak = std::max(estimate.workspace_peak, workspace);
+    estimate.workspace_peak = MaxWorkspace(estimate.workspace_peak, workspace, &expression_cache);
   }
   return estimate;
 }
@@ -1667,8 +1696,9 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
         update_sum(name, true);
     NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) =
         already_sum.Build(&expression_cache);
-    UpdateNodeMemoryBoundaries(profile, index < peak_memory_.size() ? peak_memory_[index] : 0,
-                               &expression_cache);
+    UpdateNodeMemoryBoundaries(
+        profile, index < peak_memory_.size() ? peak_memory_[index].worst_case : SymDim(int64_t{0}),
+        &expression_cache);
   }
   incr_memory_alive_ = std::move(alive);
   memory_matches_shapes_ = true;
@@ -1680,7 +1710,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
 void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
                                           Device device, const NodeMaterializerFn &materialize) {
   if (peak_memory_.size() <= node_index) {
-    peak_memory_.resize(node_index + 1, 0);
+    peak_memory_.resize(node_index + 1);
   }
   std::vector<SymShape> input_shapes;
   input_shapes.reserve(node.input().size());
@@ -1692,12 +1722,10 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
     }
   }
   peak_memory_[node_index] =
-      shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-  peak_memory_[node_index] =
-      std::max(peak_memory_[node_index],
-               EstimateFunctionBodyMemory(node, shapes_, device, materialize).workspace_peak);
+      NodeWorkspace(node, shapes_, device, input_shapes,
+                    EstimateFunctionBodyMemory(node, shapes_, device, materialize));
   if (memory_matches_shapes_ && node_index < memory_.size()) {
-    UpdateNodeMemoryBoundaries(memory_[node_index], peak_memory_[node_index],
+    UpdateNodeMemoryBoundaries(memory_[node_index], peak_memory_[node_index].worst_case,
                                &shapes_.ExpressionCache());
   }
 }
@@ -1919,7 +1947,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
       after_sum.Add(entry.second.bytes);
     }
     NodeMemoryProfileScalar(profile, kNodeMemoryAfterBytesKey) = after_sum.Build(&expression_cache);
-    UpdateNodeMemoryBoundaries(profile, 0, &expression_cache);
+    UpdateNodeMemoryBoundaries(profile, SymDim(int64_t{0}), &expression_cache);
   }
 
   reuse_ = std::move(result);
@@ -2095,20 +2123,20 @@ ComputeContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes,
   return shapes_;
 }
 
-const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
-                                                              Device device) {
+const std::vector<PeakMemoryEstimate> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
+                                                                         Device device) {
   return ComputePeakMemoryNodes(graph.node(), device);
 }
 
-const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const FunctionProto &function,
-                                                              Device device) {
+const std::vector<PeakMemoryEstimate> &
+ComputeContext::ComputePeakMemory(const FunctionProto &function, Device device) {
   return ComputePeakMemoryNodes(function.node(), device);
 }
 
-const std::vector<int64_t> &
+const std::vector<PeakMemoryEstimate> &
 ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                                        Device device) {
-  peak_memory_.assign(static_cast<std::size_t>(nodes.size()), 0);
+  peak_memory_.assign(static_cast<std::size_t>(nodes.size()), {});
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &node = nodes[i];
     std::vector<SymShape> input_shapes;
@@ -2120,13 +2148,11 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
         input_shapes.emplace_back();
       }
     }
-    peak_memory_[static_cast<std::size_t>(i)] =
-        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-    peak_memory_[static_cast<std::size_t>(i)] =
-        std::max(peak_memory_[static_cast<std::size_t>(i)],
-                 EstimateFunctionBodyMemory(node, shapes_, device).workspace_peak);
+    peak_memory_[i] = NodeWorkspace(node, shapes_, device, input_shapes,
+                                    EstimateFunctionBodyMemory(node, shapes_, device));
     if (memory_matches_shapes_ && i < memory_.size()) {
-      UpdateNodeMemoryBoundaries(memory_[i], peak_memory_[i], &shapes_.ExpressionCache());
+      UpdateNodeMemoryBoundaries(memory_[i], peak_memory_[i].worst_case,
+                                 &shapes_.ExpressionCache());
     }
   }
   return peak_memory_;
@@ -2173,10 +2199,7 @@ void ComputeContext::WriteToFunction(FunctionProto &function) const {
 void ComputeContext::WritePeakMemoryToNodes(utils::RepeatedProtoField<NodeProto> &nodes) const {
   if (peak_memory_.size() == static_cast<std::size_t>(nodes.size())) {
     for (std::size_t i = 0; i < nodes.size(); ++i) {
-      const int64_t peak = peak_memory_[static_cast<std::size_t>(i)];
-      if (peak > 0) {
-        nodes[i].add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
-      }
+      WritePeakMemoryEstimate(nodes[i], peak_memory_[i]);
     }
   }
 }

@@ -23,34 +23,39 @@ class TestPeakMemoryBindings(ExtTestCase):
         k = si.SymShape([2, 4, 32, 16])
         v = si.SymShape([2, 4, 32, 16])
         # batch * q_num_heads * q_seq * kv_seq * 4 bytes.
-        self.assertEqual(
-            si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k, v]),
-            2 * 4 * 8 * 32 * 4,
-        )
+        estimate = si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k, v])
+        self.assertIsInstance(estimate, si.PeakMemoryEstimate)
+        self.assertIsInstance(estimate.worst_case, si.SymDim)
+        self.assertEqual(estimate.worst_case.value(), 2 * 4 * 8 * 32 * 4)
+        self.assertEqual(estimate.average_case.value(), estimate.worst_case.value())
 
-    def test_compute_peak_memory_symbolic_returns_zero(self):
+    def test_compute_peak_memory_preserves_symbolic_dimensions(self):
         q = si.SymShape(["N", 4, 8, 16])
         k = si.SymShape([2, 4, 32, 16])
-        self.assertEqual(
-            si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k]), 0
-        )
+        estimate = si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k])
+        self.assertEqual(estimate.worst_case.value(), "4096*N")
+        self.assertEqual(estimate.average_case.value(), estimate.worst_case.value())
 
     def test_compute_peak_memory_empty_domain(self):
         q = si.SymShape([1, 2, 4, 8])
         k = si.SymShape([1, 2, 16, 8])
         self.assertEqual(
-            si.compute_peak_memory("", "Attention", si.Device.kCPU, [q, k]), 1 * 2 * 4 * 16 * 4
+            si.compute_peak_memory("", "Attention", si.Device.kCPU, [q, k]).worst_case.value(),
+            1 * 2 * 4 * 16 * 4,
         )
 
-    def test_compute_peak_memory_unregistered_returns_zero(self):
+    def test_compute_peak_memory_unregistered_has_unresolved_maximum(self):
         q = si.SymShape([2, 4, 8, 16])
-        self.assertEqual(si.compute_peak_memory("ai.onnx", "NoSuchOp", si.Device.kCPU, [q]), 0)
+        estimate = si.compute_peak_memory("ai.onnx", "NoSuchOp", si.Device.kCPU, [q])
+        self.assertTrue(estimate.worst_case.is_expr())
+        self.assertTrue(estimate.worst_case.value())
+        self.assertIsNone(estimate.average_case)
 
     def test_node_peak_memory_key_constant(self):
         self.assertEqual(si.NODE_PEAK_MEMORY_KEY, "onnx_light.peak_memory")
 
     def test_write_peak_memory_no_registered_op(self):
-        """Nodes with no registered peak-memory function produce no metadata entry."""
+        """Preserves an unresolved bound for operators without an estimator."""
         add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
@@ -62,7 +67,10 @@ class TestPeakMemoryBindings(ExtTestCase):
 
         si.write_peak_memory_to_metadata(ctx, graph)
 
-        self.assertEqual(len(graph.node[0].metadata_props), 0)
+        meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
+        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
+        self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
+        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
 
     def test_write_peak_memory_with_device_argument(self):
         """write_peak_memory_to_metadata accepts an explicit Device argument."""
@@ -73,7 +81,9 @@ class TestPeakMemoryBindings(ExtTestCase):
 
         ctx = si.ShapesContext()
         si.write_peak_memory_to_metadata(ctx, graph, si.Device.kCPU)
-        self.assertEqual(len(graph.node[0].metadata_props), 0)
+        meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
+        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
+        self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
 
     def test_write_peak_memory_attention(self):
         """Attention nodes with static shapes get a peak-memory metadata entry."""
@@ -98,9 +108,11 @@ class TestPeakMemoryBindings(ExtTestCase):
         # batch=2, heads=4, q_seq=8, kv_seq=32, float32=4 bytes
         expected = 2 * 4 * 8 * 32 * 4
         self.assertEqual(int(meta[si.NODE_PEAK_MEMORY_KEY]), expected)
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], str(expected))
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], str(expected))
 
-    def test_write_peak_memory_symbolic_produces_no_entry(self):
-        """Attention nodes with symbolic shapes produce no peak-memory entry."""
+    def test_write_peak_memory_refreshes_symbolic_estimates_and_concrete_hint(self):
+        """Preserves symbolic bounds and removes stale hints and averages."""
         attention = oh.make_node(
             "Attention", inputs=["Q", "K", "V"], outputs=["out"], domain="ai.onnx"
         )
@@ -115,10 +127,21 @@ class TestPeakMemoryBindings(ExtTestCase):
         ctx.set("K", si.SymTensor(onnxl.TensorProto.FLOAT, [2, 4, 32, 16]))
         ctx.set("V", si.SymTensor(onnxl.TensorProto.FLOAT, [2, 4, 32, 16]))
 
+        ctx.set("Q", si.SymTensor(onnxl.TensorProto.FLOAT, [2, 4, 8, 16]))
         si.write_peak_memory_to_metadata(ctx, graph)
-
-        # Symbolic batch dimension → peak memory returns 0 → no entry.
-        self.assertEqual(len(graph.node[0].metadata_props), 0)
+        self.assertIn(si.NODE_PEAK_MEMORY_KEY, {kv.key for kv in graph.node[0].metadata_props})
+        ctx.set("Q", si.SymTensor(onnxl.TensorProto.FLOAT, ["N", 4, 8, 16]))
+        si.write_peak_memory_to_metadata(ctx, graph)
+        meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "4096*N")
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], "4096*N")
+        self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
+        graph.node[0].op_type = "UnknownScratch"
+        si.write_peak_memory_to_metadata(ctx, graph)
+        meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
+        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
+        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
+        self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
 
 
 if __name__ == "__main__":

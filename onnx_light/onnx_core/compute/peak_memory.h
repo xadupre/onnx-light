@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
@@ -14,20 +15,27 @@ using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::Device;
 
 /**
- * Metadata key under which :cpp:func:`WritePeakMemoryToMetadata` records,
- * for every node with a non-zero peak-memory estimate, the estimated peak
- * scratch memory in bytes. The associated value is the decimal string
- * representation of the ``int64_t`` byte count.
+ * Legacy concrete allocation hint, read by execution plans. Contains only
+ * positive decimal byte counts, never expressions. Its absence is not a
+ * zero-memory guarantee; complete analysis uses the mandatory maximum key.
  */
 constexpr const char *kNodePeakMemoryMetadataKey = "onnx_light.peak_memory";
+/// Mandatory worst-case expression, including unresolved bounds.
+constexpr const char *kNodePeakMemoryMaxMetadataKey = "onnx_light.peak_memory_max";
+/// Optional average-case expression.
+constexpr const char *kNodePeakMemoryAverageMetadataKey = "onnx_light.peak_memory_average";
+
+/// Writes both estimates and refreshes the legacy concrete allocation hint.
+void WritePeakMemoryEstimate(NodeProto &node, const shapes::PeakMemoryEstimate &estimate);
 
 /**
  * Computes the estimated peak scratch memory for every node of ``graph``
  * using the shapes already inferred into ``ctx``, and records the result in
- * ``metadata_props`` under :cpp:var:`kNodePeakMemoryMetadataKey`. Nodes
- * whose estimated peak memory is zero (either the operator has no registered
- * peak-memory function or all relevant input shapes are symbolic) are left
- * untouched.
+ * ``metadata_props`` under :cpp:var:`kNodePeakMemoryMaxMetadataKey` and, when
+ * available, :cpp:var:`kNodePeakMemoryAverageMetadataKey`. Unknown bounds are
+ * preserved symbolically. Positive concrete maxima also refresh
+ * :cpp:var:`kNodePeakMemoryMetadataKey` without passing expressions to legacy
+ * execution-plan allocation hints.
  *
  * The peak memory accounts only for the extra scratch/working memory an
  * operator's computation allocates, not the memory already accounted for by

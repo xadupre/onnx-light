@@ -4323,6 +4323,8 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       core::compute::kNotUsedAfterMetadataKey,
       core::compute::kReleaseAfterShapeTagMetadataKey,
       core::compute::kNodePeakMemoryMetadataKey,
+      core::compute::kNodePeakMemoryMaxMetadataKey,
+      core::compute::kNodePeakMemoryAverageMetadataKey,
       core::compute::kConstantMetadataKey,
       core::compute::kNodeTagMetadataKey,
       core::compute::kValueTagMetadataKey,

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
@@ -30,7 +31,8 @@ TEST(ComputePeakMemoryLinearAttention, StaticPackedInputsReturnConservativeState
       Rank3(2, 8, 32),
   };
   EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
-                                                                      inputs),
+                                                                      inputs)
+                .worst_case.AsInt(),
             2 * 64 * 32 * 4);
 }
 
@@ -42,9 +44,10 @@ TEST(ComputePeakMemoryLinearAttention, PastStateReturnsExactStateBytes) {
       core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(8),
                                core::symbolic::SymDim(8), core::symbolic::SymDim(4)},
   };
-  EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
-                                                                      inputs),
-            2 * 8 * 8 * 4 * 4);
+  EXPECT_EQ(
+      onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
+                                                                inputs),
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{2 * 8 * 8 * 4 * 4})));
 }
 
 TEST(ComputePeakMemoryLinearAttention, RejectsOverflowWithAndWithoutPastState) {
@@ -66,14 +69,14 @@ TEST(ComputePeakMemoryLinearAttention, RejectsOverflowWithAndWithoutPastState) {
                                core::symbolic::SymDim(large), core::symbolic::SymDim(int64_t{0})};
   EXPECT_EQ(
       core::shapes::ComputePeakMemory("", "LinearAttention", core::symbolic::Device::kCPU, inputs),
-      0);
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
 }
 
-TEST(ComputePeakMemoryLinearAttention, IncompleteOrSymbolicInputsReturnZero) {
+TEST(ComputePeakMemoryLinearAttention, IncompleteAndSymbolicInputsKeepTheirBounds) {
   const std::vector<core::symbolic::SymShape> too_few = {Rank3(2, 8, 64), Rank3(2, 8, 64)};
-  EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
-                                                                      too_few),
-            0);
+  EXPECT_TRUE(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(
+                  core::symbolic::Device::kCPU, too_few)
+                  .worst_case.IsExpr());
 
   const std::vector<core::symbolic::SymShape> symbolic = {
       core::symbolic::SymShape{core::symbolic::SymDim("batch"), core::symbolic::SymDim(8),
@@ -81,9 +84,12 @@ TEST(ComputePeakMemoryLinearAttention, IncompleteOrSymbolicInputsReturnZero) {
       Rank3(2, 8, 64),
       Rank3(2, 8, 32),
   };
-  EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU,
-                                                                      symbolic),
-            0);
+  const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(
+      core::symbolic::Device::kCPU, symbolic);
+  ASSERT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_EQ(core::expressions::evaluate_expression(estimate.worst_case.AsExpr(), {{"batch", 3}}),
+            3 * 64 * 32 * 4);
+  EXPECT_FALSE(estimate.average_case);
 }
 
 TEST(ComputePeakMemoryLinearAttention, RegisteredInCoreDispatchTable) {
@@ -97,7 +103,8 @@ TEST(ComputePeakMemoryLinearAttention, RegisteredInCoreDispatchTable) {
       Rank3(1, 4, 16),
   };
   EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "LinearAttention",
-                                            core::symbolic::Device::kCPU, inputs),
+                                            core::symbolic::Device::kCPU, inputs)
+                .worst_case.AsInt(),
             32 * 16 * 4);
 }
 

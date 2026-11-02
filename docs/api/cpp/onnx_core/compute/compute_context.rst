@@ -31,7 +31,7 @@ it, and a smaller output still owns the full reused allocation.
 
 Call ``ComputeInPlaceReuseGraph`` after shape inference, then
 ``ComputePeakMemory`` with the desired device (or use ``Compute``).
-``during_bytes`` includes the peak scratch estimate; ``released_bytes`` is
+``during_bytes`` includes the worst-case scratch expression; ``released_bytes`` is
 ``during_bytes - after_bytes`` and includes scratch deallocation, temporary
 function-body allocations and unused outputs. Before scratch estimation the
 scratch contribution is zero. Graph inputs protected from overwriting remain
@@ -43,6 +43,19 @@ Python exposes the same entries through ``node_memory`` / ``memory`` and the
 ``NODE_MEMORY_BEFORE_BYTES_KEY``, ``NODE_MEMORY_DURING_BYTES_KEY``,
 ``NODE_MEMORY_AFTER_BYTES_KEY`` and ``NODE_MEMORY_RELEASED_BYTES_KEY`` constants
 in ``onnx_light.onnx_core.shape_inference``.
+
+``NodePeakMemory(i)`` / Python ``node_peak_memory(i)`` return a
+``PeakMemoryEstimate`` with ``worst_case`` and optional ``average_case``.
+The Python fields are ``SymDim`` objects; ``.value()`` returns their integer or
+expression string. Unknown scratch requirements remain unresolved symbols and
+must be bounded before admitting execution against a memory budget.
+For local functions, the maximum of average workspace estimates is not treated
+as an average of the maximum; it is retained only when justified.
+
+Export writes ``onnx_light.peak_memory_max`` and, when available,
+``onnx_light.peak_memory_average``. The existing ``onnx_light.peak_memory``
+remains a positive concrete allocation hint for execution plans, not a complete
+memory-budget guarantee. Recomputing estimates removes stale hints and averages.
 
 .. doxygenfile:: onnx_core/compute/compute_context.h
    :project: onnx-light

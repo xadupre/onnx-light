@@ -49,6 +49,10 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
 
     node.add_metadata(core::compute::kNodePeakMemoryMetadataKey,
                       std::to_string(kStaticAttentionPeakMemoryBytes));
+    node.add_metadata(core::compute::kNodePeakMemoryMaxMetadataKey,
+                      std::to_string(kStaticAttentionPeakMemoryBytes));
+    node.add_metadata(core::compute::kNodePeakMemoryAverageMetadataKey,
+                      std::to_string(kStaticAttentionPeakMemoryBytes));
     registry.emplace_back(std::move(tc));
   }
 
@@ -64,7 +68,9 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
     GraphProto *graph = model.add_graph();
     graph->set_name(name);
 
-    AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
+    NodeProto &node = AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
+    node.add_metadata(core::compute::kNodePeakMemoryMaxMetadataKey, "4096*batch");
+    node.add_metadata(core::compute::kNodePeakMemoryAverageMetadataKey, "4096*batch");
 
     AppendValueInfo(*graph->add_input(), "Q", DataType::FLOAT,
                     {DimSpec("batch"), DimSpec(4), DimSpec(8), DimSpec(16)});

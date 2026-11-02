@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -135,12 +136,11 @@ TEST(CoreShapesPeakMemory, ReturnsDistinctSymbolicWorstAndAverageCases) {
 TEST(CoreShapesPeakMemory, RejectsInvalidWorstAndAverageCases) {
   using core::shapes::PeakMemoryEstimate;
   using core::symbolic::SymDim;
-  const PeakMemoryEstimate invalid[] = {
-      {SymDim(""), std::nullopt},
-      {SymDim(int64_t{10}), SymDim(int64_t{-1})},
-      {SymDim(int64_t{10}), SymDim(int64_t{11})},
-      {SymDim(int64_t{10}), SymDim("")},
-  };
+  std::vector<PeakMemoryEstimate> invalid;
+  invalid.emplace_back(SymDim(""), std::nullopt);
+  invalid.emplace_back(SymDim(int64_t{10}), SymDim(int64_t{-1}));
+  invalid.emplace_back(SymDim(int64_t{10}), SymDim(int64_t{11}));
+  invalid.emplace_back(SymDim(int64_t{10}), SymDim(""));
   for (const auto &estimate : invalid) {
     core::shapes::RegisterComputePeakMemoryFn(
         "", "InvalidScratch", core::shapes::Device::kCPU,

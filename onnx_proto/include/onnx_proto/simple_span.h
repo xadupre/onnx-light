@@ -286,6 +286,9 @@ private:
  */
 class ONNX_LIGHT_PROTO_API ByteSpan : public Span {
 public:
+  /** Describes whether borrowed storage is known to be independent of files. */
+  enum class BorrowedStorage : uint8_t { kUnknown, kMemory };
+
   /** Constructs an empty buffer (owned mode, no allocation). */
   ByteSpan() = default;
 
@@ -295,7 +298,7 @@ public:
   /** Copy constructor: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan(const ByteSpan &other)
       : Span(nullptr, 0), borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_),
-        align_(other.align_), owner_(other.owner_) {
+        borrowed_storage_(other.borrowed_storage_), align_(other.align_), owner_(other.owner_) {
     if (other.aligned_owned_) {
       // Re-allocate and re-align, then copy only the logical data bytes.
       const size_t n = other.size_;
@@ -331,6 +334,7 @@ public:
     result.aligned_owned_ = aligned_owned_;
     result.align_ = align_;
     result.owner_ = owner_;
+    result.borrowed_storage_ = borrowed_storage_;
     result.ptr_ = ptr_;
     result.size_ = size_;
     if (!borrowed_)
@@ -350,7 +354,8 @@ public:
   /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
   inline ByteSpan(ByteSpan &&other) noexcept
       : Span(other.ptr_, other.size_), owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
-        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)),
+        aligned_owned_(other.aligned_owned_), borrowed_storage_(other.borrowed_storage_),
+        align_(other.align_), owner_(std::move(other.owner_)),
         export_guard_(std::move(other.export_guard_)) {
     other.ptr_ = nullptr;
     other.size_ = 0;
@@ -369,6 +374,7 @@ public:
       align_ = other.align_;
       owner_ = std::move(other.owner_);
       export_guard_ = std::move(other.export_guard_);
+      borrowed_storage_ = other.borrowed_storage_;
       ptr_ = other.ptr_;
       size_ = other.size_;
       other.ptr_ = nullptr;
@@ -404,6 +410,11 @@ public:
 
   /** Returns the token retaining borrowed storage, or an empty token when caller-owned. */
   inline const std::shared_ptr<void> &owner() const { return owner_; }
+
+  /** Returns whether the borrowed allocation is explicitly known to be independent of files. */
+  inline bool is_memory_borrowed() const {
+    return borrowed_ && borrowed_storage_ == BorrowedStorage::kMemory;
+  }
 
   /** Retains an owned-storage export lease, or the lifetime owner of borrowed storage. */
   std::shared_ptr<void> acquire_export_guard() const;
@@ -570,7 +581,8 @@ public:
 
   /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
    *  The pointed-to buffer MUST outlive this ByteSpan. */
-  inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {}) {
+  inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {},
+                              BorrowedStorage storage = BorrowedStorage::kUnknown) {
     if (ptr == nullptr && sz == 0) {
       clear();
       return;
@@ -583,6 +595,7 @@ public:
     aligned_owned_ = false;
     align_ = 0;
     owner_ = std::move(owner);
+    borrowed_storage_ = storage;
   }
 
   /** Sets borrowed mode with a custom deleter.  Stores ptr/size without any copy and arranges for
@@ -615,6 +628,7 @@ public:
     export_guard_.reset();
     owner_ = std::shared_ptr<void>(static_cast<void *>(nullptr),
                                    [d = std::forward<Deleter>(deleter)](void *) { d(); });
+    borrowed_storage_ = BorrowedStorage::kUnknown;
   }
 
   /** Clears all data and resets to the empty owned state. */
@@ -719,6 +733,7 @@ private:
   mutable OwnedByteBuffer owned_;
   bool borrowed_ = false;
   bool aligned_owned_ = false;
+  BorrowedStorage borrowed_storage_ = BorrowedStorage::kUnknown;
   /** Stored alignment for aligned-owned mode; used to re-align on copy. */
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */

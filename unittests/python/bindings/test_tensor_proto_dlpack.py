@@ -11,7 +11,16 @@ import weakref
 import numpy
 
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx import FileLoadMode, GraphProto, ModelProto, ParseOptions, TensorProto
+from onnx_light.onnx import (
+    FileLoadMode,
+    GraphProto,
+    ModelProto,
+    ParseOptions,
+    SerializeOptions,
+    TensorProto,
+    load_model,
+    save_model,
+)
 import onnx_light.onnx.numpy_helper as onh
 
 
@@ -79,6 +88,224 @@ class CapsuleProducer:
 
 
 class TestTensorProtoDLPack(ExtTestCase):
+    def test_external_save_shares_numpy_storage_and_isolates_callbacks(self):
+        from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+        for construction in ("dlpack", "builder", "reimport"):
+            for threads in (1, 2):
+                with (
+                    self.subTest(construction=construction, threads=threads),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    array = numpy.arange(1024, dtype=numpy.float32).reshape(32, 32)
+                    address = array.ctypes.data
+                    if construction == "builder":
+                        builder = GraphBuilder()
+                        builder.init(array, name="weight", copy=False)
+                        model = builder.to_onnx()
+                        del builder
+                    else:
+                        imported = TensorProto.from_dlpack(array, name="weight")
+                        if construction == "reimport":
+                            imported = TensorProto.from_dlpack(imported, name="weight")
+                        model = ModelProto()
+                        model.graph.initializer.append(imported)
+                        del imported
+                    model.graph.node.add(op_type="Identity", input=["weight"], output=["output"])
+                    tensor = model.graph.initializer[0]
+                    before = model.SerializeToString()
+                    lifetime = weakref.ref(array)
+                    expected = array.copy()
+                    del array
+                    seen = []
+
+                    def callback(node, graph):
+                        seen.append(capsule_tensor(graph.initializer[0].__dlpack__()).data)
+                        self.assertIsNotNone(lifetime())
+                        node.doc_string = "export only"
+
+                    options = SerializeOptions()
+                    options.num_threads = threads
+                    options.min_parallel_block_size = 0
+                    options.raw_data_threshold = 0
+                    options.node_callback = callback
+                    path = os.path.join(directory, "model.onnx")
+                    weights = os.path.join(directory, "weights.bin")
+                    model.SerializeToFile(path, options, weights)
+                    self.assertEqual(seen, [address])
+                    self.assertEqual(model.SerializeToString(), before)
+                    self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+                    restored = load_model(path, load_external_data=True)
+                    self.assertEqual(restored.graph.node[0].doc_string, "export only")
+                    numpy.testing.assert_array_equal(
+                        numpy.from_dlpack(restored.graph.initializer[0]), expected
+                    )
+
+                    def fail(node, graph):
+                        self.assertEqual(
+                            capsule_tensor(graph.initializer[0].__dlpack__()).data, address
+                        )
+                        raise ValueError("export callback failure")
+
+                    options.node_callback = fail
+                    with self.assertRaisesRegex(ValueError, "export callback failure"):
+                        model.SerializeToFile(path, options, weights)
+                    self.assertEqual(model.SerializeToString(), before)
+                    self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+                    options.node_callback = None
+                    options.max_serialized_size_bytes = 1
+                    with self.assertRaisesRegex(RuntimeError, "max_serialized_size"):
+                        model.SerializeToFile(path, options, weights)
+                    self.assertIsNotNone(lifetime())
+                    del tensor, model
+                    gc.collect()
+                    self.assertIsNone(lifetime())
+
+    def test_external_save_retains_owner_after_callback_clears_source(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+                array = numpy.arange(512 * 1024, dtype=numpy.float32)
+                expected = array.copy()
+                lifetime = weakref.ref(array)
+                model = ModelProto()
+                model.graph.initializer.append(TensorProto.from_dlpack(array, name="weight"))
+                model.graph.node.add(op_type="Identity", input=["weight"], output=["output"])
+                del array
+
+                def callback(node, graph):
+                    model.Clear()
+                    gc.collect()
+                    self.assertIsNotNone(lifetime())
+                    if fail:
+                        raise ValueError("export callback failure")
+
+                options = SerializeOptions()
+                options.num_threads = 2
+                options.min_parallel_block_size = 0
+                options.raw_data_threshold = 0
+                options.node_callback = callback
+                path = os.path.join(directory, "model.onnx")
+                weights = os.path.join(directory, "weights.bin")
+                if fail:
+                    with self.assertRaisesRegex(ValueError, "export callback failure"):
+                        model.SerializeToFile(path, options, weights)
+                else:
+                    model.SerializeToFile(path, options, weights)
+                    restored = load_model(path, load_external_data=True)
+                    numpy.testing.assert_array_equal(
+                        numpy.from_dlpack(restored.graph.initializer[0]), expected
+                    )
+                gc.collect()
+                self.assertIsNone(lifetime())
+
+    def test_external_save_same_path_preserves_mapped_sources(self):
+        for ownership in ("mapping", "callback", "callback_failure", "dlpack", "wrapped"):
+            with self.subTest(ownership=ownership), tempfile.TemporaryDirectory() as directory:
+                expected = numpy.arange(1024, dtype=numpy.float32)
+                model = ModelProto()
+                model.graph.initializer.append(TensorProto.from_dlpack(expected, name="weight"))
+                path = os.path.join(directory, "model.onnx")
+                save_model(
+                    model,
+                    path,
+                    save_as_external_data=True,
+                    location="weights.bin",
+                    size_threshold=0,
+                )
+                released = []
+                options = ParseOptions()
+                options.no_copy = True
+                options.num_threads = 1
+                if ownership.startswith("callback"):
+
+                    def callback(tensor, graph):
+                        view = numpy.from_dlpack(tensor)
+
+                        def cleanup():
+                            released.append(view.size)
+
+                        return cleanup
+
+                    options.raw_data_callback = callback
+                model = ModelProto()
+                model.ParseFromFile(path, options, os.path.join(directory, "weights.bin"))
+                if ownership in ("dlpack", "wrapped"):
+                    tensor = model.graph.initializer[0]
+                    producer = tensor if ownership == "dlpack" else numpy.from_dlpack(tensor)
+                    imported = TensorProto.from_dlpack(producer, name="weight")
+                    replacement = ModelProto()
+                    replacement.graph.initializer.append(imported)
+                    del tensor, producer, imported, model
+                    model = replacement
+                if ownership == "callback_failure":
+
+                    def reject(tensor, graph, buffer, size_only):
+                        raise ValueError("mapped export failure")
+
+                    with self.assertRaisesRegex(ValueError, "mapped export failure"):
+                        save_model(
+                            model,
+                            path,
+                            save_as_external_data=True,
+                            location="weights.bin",
+                            size_threshold=0,
+                            raw_data_callback=reject,
+                        )
+                    numpy.testing.assert_array_equal(
+                        numpy.from_dlpack(model.graph.initializer[0]), expected
+                    )
+                save_model(
+                    model,
+                    path,
+                    save_as_external_data=True,
+                    location="weights.bin",
+                    size_threshold=0,
+                )
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(model.graph.initializer[0]), expected
+                )
+                restored = load_model(path, load_external_data=True)
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(restored.graph.initializer[0]), expected
+                )
+                if ownership.startswith("callback"):
+                    self.assertEqual(released, [expected.size])
+                del restored, model
+
+    def test_external_save_numpy_mapping_views_are_not_classified_as_heap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "mapped.bin")
+            mapping = numpy.memmap(path, mode="w+", dtype=numpy.float32, shape=(32,))
+            try:
+                mapping[:] = numpy.arange(32, dtype=numpy.float32)
+                expected = mapping.copy()
+                for producer in (mapping, numpy.asarray(mapping), numpy.asarray(mapping)[4:]):
+                    with self.subTest(type=type(producer), shape=producer.shape):
+                        model = ModelProto()
+                        model.graph.initializer.append(
+                            TensorProto.from_dlpack(producer, name="weight")
+                        )
+                        saved = os.path.join(directory, "model.onnx")
+                        save_model(
+                            model,
+                            saved,
+                            save_as_external_data=True,
+                            location="weights.bin",
+                            size_threshold=0,
+                        )
+                        self.assertNotEqual(
+                            capsule_tensor(model.graph.initializer[0].__dlpack__()).data,
+                            producer.ctypes.data,
+                        )
+                        numpy.testing.assert_array_equal(
+                            numpy.from_dlpack(model.graph.initializer[0]),
+                            expected[-producer.size :],
+                        )
+                        del model
+                del producer
+            finally:
+                mapping._mmap.close()
+
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_import_numpy(self):
         for dtype in (

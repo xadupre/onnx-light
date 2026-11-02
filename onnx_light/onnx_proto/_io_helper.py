@@ -129,8 +129,12 @@ def save(
     """
     Saves the ModelProto or PipelineProto to the specified path and optionally,
     serializes tensors with raw data as external data before saving.
-    When external data is used, serialization writes through a temporary view,
-    so the input in-memory ModelProto is left unchanged.
+    When external data is used, serialization writes through an independent
+    metadata copy. Proven in-memory borrowed NumPy allocations retain their
+    address and owner. Other borrowed byte buffers are first snapshotted in the
+    source model, including on a later save failure, so overwriting a mapped
+    source file cannot invalidate the caller's model. Values and metadata stay
+    unchanged, but these snapshots can change buffer addresses and release owners.
     PipelineProto does not support external-weight output.
 
     :param proto: should be an in-memory ModelProto or PipelineProto.

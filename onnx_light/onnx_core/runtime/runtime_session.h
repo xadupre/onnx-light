@@ -93,6 +93,8 @@ struct RuntimeSessionOptions {
   std::shared_ptr<ValueStore> value_store = nullptr;
   /// Immutable names inherited from a caller after binding function inputs.
   std::unordered_set<std::string> immutable_inputs = {};
+  /// Transfers initializer payloads to preparations. The supplied model must not be reused.
+  bool consume_initializers = false;
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */
@@ -179,6 +181,7 @@ public:
    */
   explicit RuntimeSession(const ModelProto &model, int verbose = 0);
   RuntimeSession(const ModelProto &model, RuntimeSessionOptions options);
+  RuntimeSession(ModelProto &model, RuntimeSessionOptions options);
 
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
@@ -415,6 +418,11 @@ public:
   /// before the first :cpp:func:`Run`. The graph and its backing storage must
   /// remain immutable and outlive the session and its initializer views.
   void SetInitializers(const GraphProto &graph);
+  /// Grants exclusive payload ownership before initialization. Metadata remains available;
+  /// successfully replaced single-consumer raw payloads are removed from graph and context.
+  /// The caller must not reuse/share the model or construct new sessions from it afterward.
+  void SetConsumableInitializers(GraphProto &graph);
+  size_t consumed_initializer_bytes() const noexcept { return consumed_initializer_bytes_; }
 
   /**
    * Returns the list of input names referenced by ``nodes`` that are not
@@ -465,6 +473,7 @@ protected:
                     const std::unordered_set<std::string> &preparable_inputs) const;
 
 private:
+  RuntimeSession(const ModelProto &model, RuntimeSessionOptions options, GraphProto *consumable);
   /// A node's kernel instance built once during
   /// :cpp:func:`InitializeKernels`, together with the normalised ``domain``
   /// and ``op_type`` fused into a single ``"<domain>:<op_type>"`` key (the
@@ -490,6 +499,7 @@ private:
                                const std::unordered_set<std::string> &available_outputs);
   void QueuePreparation(size_t index);
   void QueuePreparationsForSource(const std::string &name);
+  void ConsumePreparationSources(size_t index, RuntimeContext &rt);
   int32_t
   TuningElementType(const NodeProto &node, const KernelBase &kernel, const RuntimeContext &rt,
                     const std::unordered_set<std::string> *available_outputs = nullptr) const;
@@ -578,6 +588,10 @@ private:
   std::exception_ptr preparation_failure_;
   std::unordered_set<std::string> seeded_initializer_names_;
   const GraphProto *initializer_graph_ = nullptr;
+  GraphProto *consumable_initializer_graph_ = nullptr;
+  std::unordered_set<std::string> consumable_initializer_names_;
+  std::unordered_set<std::string> consumed_initializer_names_;
+  size_t consumed_initializer_bytes_ = 0;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
   std::unordered_set<std::string> immutable_initializer_names_;

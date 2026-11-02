@@ -72,6 +72,33 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    def test_initializer_consumption_ownership_defaults(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        self.assertFalse(ReferenceEvaluator(model)._session_options.consume_initializers)
+        self.assertFalse(
+            ReferenceEvaluator(model.SerializeToString())._session_options.consume_initializers
+        )
+        self.assertTrue(
+            ReferenceEvaluator(
+                model, consume_initializers=True
+            )._session_options.consume_initializers
+        )
+        self.assertFalse(
+            ReferenceEvaluator(
+                model.SerializeToString(), consume_initializers=False
+            )._session_options.consume_initializers
+        )
+
+    def test_initializer_consumption_rejects_invalid_configuration(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        for value in (0, "yes", []):
+            with self.subTest(value=value), self.assertRaisesRegex(TypeError, "must be a bool"):
+                ReferenceEvaluator(model, consume_initializers=value)
+        with self.assertRaisesRegex(TypeError, "requires a ModelProto"):
+            ReferenceEvaluator(model.graph, consume_initializers=True)
+        with self.assertRaisesRegex(ValueError, "consume_initializers=False"):
+            ReferenceEvaluator(model, consume_initializers=True).generate({})
+
     def test_if_accepts_empty_tensor_output(self):
         branches = []
         for name in ("then", "else"):

@@ -50,6 +50,9 @@ jobs:
           CIBW_BUILD: "cp312-* cp313-* cp314-*"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          # Each Python version uses a separate build/{wheel_tag} directory.
+          # Remove the previous native build before starting the next wheel.
+          CIBW_BEFORE_BUILD_LINUX: rm -rf "{project}/build"
           # The default cibuildwheel manylinux2014 image ships GCC 10, which
           # rejects some of our recursive container templates (e.g. the
           # n-gram trie in kernel_tf_idf_vectorizer.cc that stores an

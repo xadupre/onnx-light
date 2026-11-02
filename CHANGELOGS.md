@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Bumped the release version to `0.2.5`.
 
+## [0.2.4.1] – Unreleased
+
+### Documentation & CI
+
+- Bumped the release version to `0.2.4.1`.
+- Removed stale native build directories before each Linux release wheel build to prevent disk exhaustion.
+
 ## [0.2.4] – Unreleased
 
 ### New Features

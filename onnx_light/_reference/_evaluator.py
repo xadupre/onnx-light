@@ -901,6 +901,10 @@ class ReferenceEvaluator:
         else:
             if not isinstance(embedding, ReferenceEvaluator) or embedding._model is None:
                 raise TypeError("Embedding must be a ModelProto ReferenceEvaluator.")
+            if embedding._session_options.consume_initializers:
+                raise ValueError(
+                    "generate requires consume_initializers=False for the embedding evaluator."
+                )
             result = _runtime.generate_pipeline(
                 self._model,
                 self._ctx,

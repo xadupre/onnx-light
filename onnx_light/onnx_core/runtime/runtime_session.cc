@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
@@ -107,6 +108,24 @@ OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProt
                         "RuntimeSession: duplicate opset import for domain '", domain, "'.");
   }
   return versions;
+}
+
+void VerifyConcreteShape(const std::string &name, const core::symbolic::SymShape &declared,
+                         std::span<const int64_t> shape, core::shapes::ShapesContext &bindings) {
+  if (declared.FitsConcreteShape(shape.size(), shape.data(), bindings)) {
+    return;
+  }
+  std::string concrete = "[";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if (i > 0) {
+      concrete.push_back(',');
+    }
+    concrete += std::to_string(shape[i]);
+  }
+  concrete.push_back(']');
+  EXT_ENFORCE_INVALID(false, "RuntimeSession: tensor '", name, "' has concrete shape ", concrete,
+                      " which is incompatible with its declared (possibly symbolic) shape ",
+                      declared.ToString(), ".");
 }
 
 } // namespace
@@ -973,22 +992,7 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
   if (it == declared_shapes_.end() || !rt.Has(name)) {
     return;
   }
-  const core::symbolic::SymShape &declared = it->second;
-  const Tensor &tensor = rt.Get(name);
-  if (declared.FitsConcreteShape(tensor.shape.size(), tensor.shape.data(), bindings)) {
-    return;
-  }
-  std::string concrete = "[";
-  for (size_t i = 0; i < tensor.shape.size(); ++i) {
-    if (i > 0) {
-      concrete.push_back(',');
-    }
-    concrete += std::to_string(tensor.shape[i]);
-  }
-  concrete.push_back(']');
-  EXT_ENFORCE_INVALID(false, "RuntimeSession: tensor '", name, "' has concrete shape ", concrete,
-                      " which is incompatible with its declared (possibly symbolic) shape ",
-                      declared.ToString(), ".");
+  VerifyConcreteShape(name, it->second, rt.Get(name).shape, bindings);
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
@@ -1074,6 +1078,13 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   if (check_shapes) {
     for (const std::string &name : required_inputs_) {
       VerifyDeclaredShape(name, rt, shape_bindings);
+    }
+    for (const std::string &name : consumed_initializer_names_) {
+      const auto declared = declared_shapes_.find(name);
+      if (declared != declared_shapes_.end()) {
+        const TensorProto &tensor = *consumable_initializers_.at(name).tensor;
+        VerifyConcreteShape(name, declared->second, tensor.dims().values(), shape_bindings);
+      }
     }
   }
   // Replay the plan's ordered action list. Each kExecuteNode action invokes

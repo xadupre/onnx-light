@@ -642,6 +642,84 @@ TEST(KernelLifecycle, ConsumedPreparationSourcesRespectOwnershipAndOtherReaders)
   }
 }
 
+TEST(KernelLifecycle, ConsumedSourcesStillRejectDeclaredShapeMismatch) {
+  for (bool consume : {false, true}) {
+    for (bool check_shapes : {false, true}) {
+      SCOPED_TRACE(testing::Message()
+                   << "consume=" << consume << ", check_shapes=" << check_shapes);
+      ModelProto model = MakeGemmModel(false);
+      auto *weight_info = model.ref_graph().add_value_info();
+      weight_info->set_name("B");
+      auto *weight_type = weight_info->mutable_type()->mutable_tensor_type();
+      weight_type->set_elem_type(TensorProto::FLOAT);
+      weight_type->mutable_shape()->add_dim()->set_dim_value(4);
+      weight_type->mutable_shape()->add_dim()->set_dim_value(2);
+      RuntimeContext rt;
+      const auto record = std::make_shared<PreparationRecord>();
+      record->consume = consume;
+      ASSERT_TRUE(rt.RegisterKernelFn(
+          "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+          [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+            return std::make_unique<DeclarativeKernel>(record, ctx);
+          }));
+      RuntimeSession session(model, core::runtime::RuntimeSessionOptions{
+                                        .check_shapes = check_shapes,
+                                        .consume_initializers = consume,
+                                    });
+      session.Prepare(rt);
+      EXPECT_EQ(model.graph().initializer(0).raw_data().empty(), consume);
+      rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+      for (size_t run = 0; run < 2; ++run) {
+        if (check_shapes) {
+          EXPECT_THROW(session.Run(rt), std::invalid_argument);
+          EXPECT_EQ(record->runs, 0);
+        } else {
+          EXPECT_NO_THROW(session.Run(rt));
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelLifecycle, ConsumedSourcesBindSymbolicDimensionsOnEveryRun) {
+  for (bool consume : {false, true}) {
+    SCOPED_TRACE(consume);
+    ModelProto model = MakeGemmModel(false);
+    auto *input_type = model.ref_graph().mutable_input(0)->mutable_type()->mutable_tensor_type();
+    input_type->set_elem_type(TensorProto::FLOAT);
+    input_type->mutable_shape()->add_dim()->set_dim_value(1);
+    input_type->mutable_shape()->add_dim()->set_dim_param("K");
+    auto *weight_info = model.ref_graph().add_value_info();
+    weight_info->set_name("B");
+    auto *weight_type = weight_info->mutable_type()->mutable_tensor_type();
+    weight_type->set_elem_type(TensorProto::FLOAT);
+    weight_type->mutable_shape()->add_dim()->set_dim_param("K");
+    weight_type->mutable_shape()->add_dim()->set_dim_value(2);
+    RuntimeContext rt;
+    const auto record = std::make_shared<PreparationRecord>();
+    record->consume = consume;
+    ASSERT_TRUE(rt.RegisterKernelFn(
+        "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+        [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+          return std::make_unique<DeclarativeKernel>(record, ctx);
+        }));
+    RuntimeSession session(model, core::runtime::RuntimeSessionOptions{
+                                      .check_shapes = true,
+                                      .consume_initializers = consume,
+                                  });
+    session.Prepare(rt);
+    for (int64_t columns : {3, 4, 3}) {
+      rt.Put("A", Tensor::FromFloat("A", {1, columns}, std::vector<float>(columns, 1)));
+      if (columns == 4)
+        EXPECT_THROW(session.Run(rt), std::invalid_argument);
+      else
+        EXPECT_NO_THROW(session.Run(rt));
+    }
+    EXPECT_EQ(record->runs, 2);
+    EXPECT_EQ(model.graph().initializer(0).raw_data().empty(), consume);
+  }
+}
+
 TEST(KernelLifecycle, SharedSourcePreparationsRemainReusableAtScale) {
   for (bool consume : {false, true}) {
     SCOPED_TRACE(consume);

@@ -1540,10 +1540,9 @@ struct AddVisitorResult {
   }
 };
 
-// Returns true if `var` contains `//`, `/:`, or `%` outside balanced parentheses,
-// meaning the expression needs to be wrapped in parens when used as a
-// multiplicand (since `*`, `//`, and `/:` share the same precedence level).
-static bool needs_mul_parens(const std::string &var) {
+// Returns true if `var` contains max/min outside balanced parentheses, or
+// division/modulo when used as a multiplicand.
+static bool needs_term_parens(const std::string &var, bool multiplicand) {
   int depth = 0;
   for (size_t i = 0; i < var.size(); ++i) {
     char c = var[i];
@@ -1552,6 +1551,10 @@ static bool needs_mul_parens(const std::string &var) {
     else if (c == ')')
       --depth;
     else if (depth == 0) {
+      if (c == '^' || c == '&')
+        return true;
+      if (!multiplicand)
+        continue;
       if (c == '%')
         return true;
       if (i + 1 < var.size() && var[i] == '/' && (var[i + 1] == '/' || var[i + 1] == ':'))
@@ -1696,28 +1699,38 @@ bool TryDifferenceLinearCombination(const std::string &expr1, const std::string 
 static SimplifyResult make_simplified(const AddVisitorResult &res) {
   if (res.coeffs_empty())
     return res.const_term;
+  if (res.const_term == 0) {
+    const std::string *only_var = nullptr;
+    for (const auto &[var, coeff] : res.coeffs) {
+      if (coeff == 0)
+        continue;
+      if (coeff != 1 || only_var != nullptr) {
+        only_var = nullptr;
+        break;
+      }
+      only_var = &var;
+    }
+    if (only_var != nullptr)
+      return *only_var;
+  }
 
   std::string result;
   for (const auto &[var, coeff] : res.coeffs) {
     if (coeff == 0)
       continue;
+    const std::string term =
+        needs_term_parens(var, coeff != 1 && coeff != -1) ? "(" + var + ")" : var;
     if (coeff == 1) {
       result += "+";
-      result += var;
+      result += term;
     } else if (coeff == -1) {
       result += "-";
-      result += var;
+      result += term;
     } else {
       result += (coeff > 0) ? "+" : "";
       result += std::to_string(coeff);
       result += "*";
-      if (needs_mul_parens(var)) {
-        result += "(";
-        result += var;
-        result += ")";
-      } else {
-        result += var;
-      }
+      result += term;
     }
   }
   if (res.const_term != 0) {

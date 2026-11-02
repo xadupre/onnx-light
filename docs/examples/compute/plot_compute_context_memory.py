@@ -201,13 +201,17 @@ print(separator)
 #
 # :meth:`ComputeContext.compute` also estimates the extra scratch memory each
 # operator needs on top of its inputs and outputs. Operators without a
-# registered peak-memory function (or whose relevant shapes stay symbolic)
-# report ``0``.
+# registered peak-memory function retain an unresolved worst-case symbol.
+# Symbolic dimensions remain in estimates; an unjustified average is absent.
 
 print("\nPer-node peak scratch memory (bytes):")
 for node_index, node in enumerate(model.graph.node):
     peak = compute_context.node_peak_memory(node_index)
-    print(f"  node{node_index} {node.op_type:>8}: {peak}")
+    average = None if peak.average_case is None else peak.average_case.value()
+    print(
+        f"  node{node_index} {node.op_type:>8}: "
+        f"max={peak.worst_case.value()}, average={average}"
+    )
 
 
 #####################################

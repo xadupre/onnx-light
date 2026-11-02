@@ -1161,9 +1161,10 @@ TEST(ComputeContext, IncludesLocalFunctionWorkspaceInIncrementalAndFullPeakMemor
   core::compute::ComputeContext context;
   context.ComputeShapes(model);
   context.AppendNodePeakMemory(model.graph().node(0), 0, core::symbolic::Device::kCPU);
-  EXPECT_EQ(context.NodePeakMemory(0), 1 * 2 * 4 * 16 * 4);
+  EXPECT_EQ(context.NodePeakMemory(0).worst_case.AsInt(), 1 * 2 * 4 * 16 * 4);
   EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU),
-            (std::vector<int64_t>{1 * 2 * 4 * 16 * 4}));
+            (std::vector<core::shapes::PeakMemoryEstimate>{core::shapes::PeakMemoryEstimate::Exact(
+                core::symbolic::SymDim(int64_t{1 * 2 * 4 * 16 * 4}))}));
 }
 
 TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {

@@ -158,6 +158,43 @@ TEST(MemoryAnalysis, RejectsNegativeScratchWithoutTensorProfiles) {
   EXPECT_THROW(ctx.ComputePeakMemory(graph, device), std::invalid_argument);
 }
 
+TEST(MemoryAnalysis, AppendingScratchLeavesUncomputedGapsAtZero) {
+  const auto device = core::symbolic::MakeGPUDevice(125);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", "Identity", device,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return int64_t{37};
+      });
+  GraphProto graph;
+  MemoryInput(graph, "X", {2});
+  MemoryNode(graph, "Identity", {"X"}, "A");
+  MemoryNode(graph, "Identity", {"A"}, "B");
+  MemoryNode(graph, "Identity", {"B"}, "Y");
+  graph.add_output()->set_name("Y");
+  core::compute::ComputeContext ctx(core::compute::ComputeContext::MemoryProfiling::kExplicit);
+  ctx.ComputeShapes(graph);
+  ctx.ComputeInPlaceReuseGraph(graph, ctx.Shapes());
+  ctx.AppendNodePeakMemory(graph.node(2), 2, device);
+  ASSERT_EQ(ctx.PeakMemory().size(), 3);
+  for (std::size_t index : {0, 1}) {
+    EXPECT_EQ(ctx.NodePeakMemory(index),
+              core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
+  }
+  EXPECT_EQ(ctx.NodePeakMemory(2).worst_case.AsInt(), 37);
+  ctx.RefreshIncrementalMemory(graph.node(), ctx.Shapes(), device);
+  for (std::size_t index = 0; index < 3; ++index) {
+    const auto &during = std::get<core::expressions::DimType>(
+        ctx.NodeMemory(index).at(core::compute::kNodeMemoryDuringBytesKey));
+    ASSERT_TRUE(std::holds_alternative<int64_t>(during));
+    EXPECT_EQ(std::get<int64_t>(during), MemoryTotal(ctx, index) + (index == 2 ? 37 : 0));
+  }
+  ctx.AppendNodePeakMemory(graph.node(1), 1, device);
+  EXPECT_EQ(ctx.NodePeakMemory(0),
+            core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
+  EXPECT_EQ(ctx.NodePeakMemory(1).worst_case.AsInt(), 37);
+  EXPECT_EQ(ctx.NodePeakMemory(2).worst_case.AsInt(), 37);
+}
+
 TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
   GraphProto first;
   MemoryInput(first, "X", {int64_t{1} << 59});
@@ -173,7 +210,7 @@ TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
   MemoryNode(second, "Attention", {"Q", "K", "V"}, "Y");
   ctx.ComputeShapes(second);
   ASSERT_NO_THROW(ctx.ComputePeakMemory(second));
-  EXPECT_EQ(ctx.NodePeakMemory(0), int64_t{1} << 62);
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), int64_t{1} << 62);
   EXPECT_EQ(ctx.NodeMemory(0), original_profile);
   ModelProto model;
   *model.mutable_graph() = second;
@@ -269,6 +306,42 @@ TEST(MemoryAnalysis, RejectsGraphValuedAttributesWithoutAnalysingTheirAllocation
     } catch (const std::invalid_argument &error) {
       EXPECT_NE(std::string(error.what()).find("does not support graph-valued attributes on If"),
                 std::string::npos);
+    }
+  }
+}
+
+TEST(MemoryAnalysis, FunctionWorkspaceDoesNotTreatMaxOfAveragesAsAverageOfMax) {
+  const auto device = core::symbolic::MakeGPUDevice(199);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", "Identity", device,
+      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        return core::shapes::PeakMemoryEstimate{core::symbolic::SymDim(int64_t{100}),
+                                                core::symbolic::SymDim(int64_t{50})};
+      });
+  for (int count : {1, 2}) {
+    ModelProto model;
+    model.add_opset("", 23);
+    model.add_opset("local.average", 1);
+    auto &graph = *model.mutable_graph();
+    MemoryInput(graph, "X", {2});
+    MemoryNode(graph, "Workspace", {"X"}, "Y").set_domain("local.average");
+    graph.add_output()->set_name("Y");
+    auto &function = *model.add_functions();
+    function.set_domain("local.average");
+    function.set_name("Workspace");
+    function.add_opset("", 23);
+    function.add_input("x");
+    function.add_output("y");
+    MemoryNode(function, "Identity", {"x"}, count == 1 ? "y" : "a");
+    if (count == 2)
+      MemoryNode(function, "Identity", {"a"}, "y");
+    core::compute::ComputeContext ctx;
+    ctx.Compute(model, device);
+    const auto &estimate = ctx.NodePeakMemory(0);
+    EXPECT_EQ(estimate.worst_case.AsInt(), 100);
+    EXPECT_EQ(estimate.average_case.has_value(), count == 1);
+    if (estimate.average_case) {
+      EXPECT_EQ(estimate.average_case->AsInt(), 50);
     }
   }
 }

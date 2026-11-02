@@ -3,10 +3,8 @@ import unittest
 
 from pathlib import Path
 
-from onnx_light.ext_test_case import ExtTestCase
 
-
-class TestCiCoreWindowsJobs(ExtTestCase):
+class TestCiCoreWindowsJobs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
@@ -60,6 +58,30 @@ class TestCiCoreWindowsJobs(ExtTestCase):
                 r"run: ctest --test-dir build --output-on-failure -C Release --timeout 240"
             ),
         )
+
+    def test_windows_ninja_is_installed_and_verified_before_configuration(self):
+        """Ensures both Windows builds provide their selected generator explicitly."""
+        for job_name, setup_name, build_name in (
+            ("core_tests", "Install Ninja (Windows)", "Build and Install package (Windows)"),
+            ("windows_x86_build", "Install CMake and Ninja", "Configure 32-bit CMake build"),
+        ):
+            with self.subTest(job=job_name):
+                match = re.search(
+                    rf"(?ms)^  {job_name}:\s*$(.*?)(?=^  \w+:\s*$|\Z)", self.content
+                )
+                self.assertIsNotNone(match)
+                job = match.group(1)
+                setup_marker = f"- name: {setup_name}\n"
+                self.assertIn(setup_marker, job)
+                setup = job.split(setup_marker, 1)[1].split("\n      - ", 1)[0]
+                self.assertRegex(setup, r"python -m pip install[^\n]*\bninja\b")
+                self.assertIn("ninja --version", setup)
+                self.assertLess(
+                    setup.index("python -m pip install"), setup.index("ninja --version")
+                )
+                self.assertLess(job.index(setup_marker), job.index(f"- name: {build_name}\n"))
+                if job_name == "core_tests":
+                    self.assertIn("if: runner.os == 'Windows'", setup)
 
     def _job_needs(self, job_name):
         """Returns the list of job names in the ``needs`` clause of ``job_name``."""

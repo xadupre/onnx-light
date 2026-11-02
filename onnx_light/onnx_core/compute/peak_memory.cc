@@ -6,10 +6,27 @@
 
 #include "onnx_core/shapes/dispatch_table.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::compute {
+
+void WritePeakMemoryEstimate(NodeProto &node, const shapes::PeakMemoryEstimate &estimate) {
+  auto &metadata = node.ref_metadata_props();
+  metadata.erase(std::remove_if(metadata.begin(), metadata.end(),
+                                [](const auto &entry) {
+                                  return entry.key() == kNodePeakMemoryMetadataKey ||
+                                         entry.key() == kNodePeakMemoryMaxMetadataKey ||
+                                         entry.key() == kNodePeakMemoryAverageMetadataKey;
+                                }),
+                 metadata.end());
+  node.add_metadata(kNodePeakMemoryMaxMetadataKey, estimate.worst_case.ToString());
+  if (estimate.average_case)
+    node.add_metadata(kNodePeakMemoryAverageMetadataKey, estimate.average_case->ToString());
+  if (estimate.worst_case.IsInt() && estimate.worst_case.AsInt() > 0)
+    node.add_metadata(kNodePeakMemoryMetadataKey, estimate.worst_case.ToString());
+}
 
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
   for (NodeProto &node : *graph.mutable_node()) {
@@ -22,10 +39,7 @@ void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Devi
         input_shapes.emplace_back();
       }
     }
-    const int64_t peak = shapes::ComputePeakMemory(device, node, input_shapes);
-    if (peak > 0) {
-      node.add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
-    }
+    WritePeakMemoryEstimate(node, shapes::ComputePeakMemory(device, node, input_shapes));
   }
 }
 

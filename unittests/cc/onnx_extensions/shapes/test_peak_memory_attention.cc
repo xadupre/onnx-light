@@ -4,12 +4,14 @@
 
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -63,7 +65,7 @@ TEST(ComputePeakMemoryAttention, StaticRank4ReturnsScoreBufferBytes) {
   const int64_t expected = 2 * 4 * 8 * 32 * 4;
   EXPECT_EQ(
       onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
-      expected);
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(expected)));
 }
 
 TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
@@ -77,7 +79,7 @@ TEST(ComputePeakMemoryAttention, RejectsOverflowAndPreservesZero) {
   inputs[0] = Rank4(large, large, large, 1);
   inputs[1] = Rank4(large, large, 0, 1);
   EXPECT_EQ(core::shapes::ComputePeakMemory("", "Attention", core::symbolic::Device::kCPU, inputs),
-            0);
+            core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
 }
 
 TEST(ComputePeakMemoryAttention, NamesNegativeDimensionsEvenWithZeroFactors) {
@@ -98,35 +100,46 @@ TEST(ComputePeakMemoryAttention, NamesNegativeDimensionsEvenWithZeroFactors) {
   }
 }
 
-// A symbolic contributing dimension yields no concrete estimate.
-TEST(ComputePeakMemoryAttention, SymbolicDimensionReturnsZero) {
+TEST(ComputePeakMemoryAttention, PreservesSymbolicDimensionsAndExactAverage) {
   std::vector<core::symbolic::SymShape> inputs = {
       core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4),
                                core::symbolic::SymDim(8), core::symbolic::SymDim(16)},
       Rank4(2, 4, 32, 16),
       Rank4(2, 4, 32, 16),
   };
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  const auto estimate =
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs);
+  ASSERT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_EQ(core::expressions::evaluate_expression(estimate.worst_case.AsExpr(), {{"N", 3}}),
+            3 * 4 * 8 * 32 * 4);
+  ASSERT_TRUE(estimate.average_case);
+  EXPECT_EQ(*estimate.average_case, estimate.worst_case);
+  inputs[0][1] = core::symbolic::SymDim(int64_t{-1});
+  EXPECT_THROW(
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs),
+      std::invalid_argument);
 }
 
 // The shape-only API cannot infer head counts from packed hidden dimensions.
-TEST(ComputePeakMemoryAttention, PackedWithoutAttributesReturnsZero) {
+TEST(ComputePeakMemoryAttention, PackedWithoutAttributesReturnsUnresolvedBound) {
   const std::vector<core::symbolic::SymShape> inputs = {
       core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(8),
                                core::symbolic::SymDim(64)},
       core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(32),
                                core::symbolic::SymDim(64)},
   };
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  const auto estimate =
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs);
+  EXPECT_TRUE(estimate.worst_case.IsExpr());
+  EXPECT_FALSE(estimate.average_case);
 }
 
 TEST(ComputePeakMemoryAttention, EquivalentLayoutsIncludeCachesAndGroupedQueryHeads) {
   for (int64_t kv_heads : {1, 2}) {
     for (int64_t past : {-1, 0, 7}) {
       SCOPED_TRACE(::testing::Message() << "kv_heads=" << kv_heads << " past=" << past);
-      const int64_t expected = 2 * 2 * 8 * (32 + (past < 0 ? 0 : past)) * 4;
+      const auto expected = core::shapes::PeakMemoryEstimate::Exact(
+          core::symbolic::SymDim(int64_t{2 * 2 * 8 * (32 + (past < 0 ? 0 : past)) * 4}));
       for (bool packed : {false, true}) {
         auto node = AttentionNode(packed, 2, kv_heads);
         std::vector<core::symbolic::SymShape> inputs =
@@ -198,7 +211,7 @@ TEST(ComputePeakMemoryAttention, PackedRejectsInvalidHeadsAndOverflow) {
       std::invalid_argument);
   EXPECT_EQ(core::shapes::ComputePeakMemory(device, node,
                                             {Packed(large, 0, 64), Packed(large, large, 64)}),
-            0);
+            core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
 }
 
 TEST(ComputePeakMemoryAttention, CacheUnknownNegativeAndOverflow) {
@@ -219,13 +232,35 @@ TEST(ComputePeakMemoryAttention, CacheUnknownNegativeAndOverflow) {
     inputs[4] =
         core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
                                  core::symbolic::SymDim("past"), core::symbolic::SymDim(32)};
-    EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 0);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs),
+              core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
+    inputs[0][packed ? 1 : 2] = core::symbolic::SymDim(8);
+    const auto estimate = core::shapes::ComputePeakMemory(device, node, inputs);
+    ASSERT_TRUE(estimate.worst_case.IsExpr());
+    EXPECT_EQ(core::expressions::evaluate_expression(estimate.worst_case.AsExpr(), {{"past", 7}}),
+              1 * 2 * 8 * 39 * 4);
+    ASSERT_TRUE(estimate.average_case);
+    EXPECT_EQ(*estimate.average_case, estimate.worst_case);
     inputs.resize(4);
-    EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 0);
+    const auto missing = core::shapes::ComputePeakMemory(device, node, inputs);
+    EXPECT_EQ(missing, core::shapes::UnknownPeakMemory("", "Attention"));
     inputs.push_back(Rank4(1, 2, 7, 32));
     inputs.push_back(Rank4(1, 2, 8, 32));
     node.add_input("past_value");
     EXPECT_THROW(core::shapes::ComputePeakMemory(device, node, inputs), std::invalid_argument);
+    inputs[4][2] = core::symbolic::SymDim("past_key");
+    inputs[5][2] = core::symbolic::SymDim("past_value");
+    const auto symbolic = core::shapes::ComputePeakMemory(device, node, inputs);
+    ASSERT_TRUE(symbolic.worst_case.IsExpr());
+    for (int64_t past_key : {2, 13}) {
+      EXPECT_EQ(core::expressions::evaluate_expression(symbolic.worst_case.AsExpr(),
+                                                       {{"past_key", past_key}, {"past_value", 7}}),
+                1 * 2 * 8 * (32 + std::max(past_key, int64_t{7})) * 4);
+    }
+    EXPECT_FALSE(symbolic.average_case);
+    inputs[4][2] = core::symbolic::SymDim("?");
+    EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs),
+              core::shapes::UnknownPeakMemory("", "Attention"));
   }
 }
 
@@ -260,7 +295,8 @@ TEST(ComputePeakMemoryAttention, LocalFunctionBodyReceivesHeadAttributes) {
   core::compute::ComputeContext ctx;
   ctx.ComputeShapes(model);
   ctx.ComputePeakMemory(graph);
-  EXPECT_EQ(ctx.NodePeakMemory(0), 1 * 2 * 8 * 8 * 4);
+  EXPECT_EQ(ctx.NodePeakMemory(0), core::shapes::PeakMemoryEstimate::Exact(
+                                       core::symbolic::SymDim(int64_t{1 * 2 * 8 * 8 * 4})));
 }
 
 TEST(ComputePeakMemoryAttention, PackedSymbolicDimensionsAndOptionalCacheSlots) {
@@ -271,14 +307,27 @@ TEST(ComputePeakMemoryAttention, PackedSymbolicDimensionsAndOptionalCacheSlots) 
   node.add_input("past_value");
   std::vector<core::symbolic::SymShape> inputs = {Packed(1, 8, 64),     Packed(1, 32, 64), {}, {},
                                                   Rank4(1, 2, 100, 32), Rank4(1, 2, 7, 32)};
-  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 1 * 2 * 8 * 39 * 4);
+  const auto expected =
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{1 * 2 * 8 * 39 * 4}));
+  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), expected);
   for (std::size_t axis : {0, 1}) {
     auto symbolic = inputs;
     symbolic[0][axis] = core::symbolic::SymDim("unknown");
-    EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, symbolic), 0);
+    const auto estimate = core::shapes::ComputePeakMemory(device, node, symbolic);
+    ASSERT_TRUE(estimate.worst_case.IsExpr());
+    EXPECT_EQ(
+        core::expressions::evaluate_expression(estimate.worst_case.AsExpr(), {{"unknown", 3}}),
+        (axis == 0 ? 3 * 2 * 8 : 1 * 2 * 3) * 39 * 4);
+    ASSERT_TRUE(estimate.average_case);
+    EXPECT_EQ(*estimate.average_case, estimate.worst_case);
+    for (const auto *placeholder : {"", "?"}) {
+      symbolic[0][axis] = core::symbolic::SymDim(placeholder);
+      EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, symbolic),
+                core::shapes::UnknownPeakMemory("", "Attention"));
+    }
   }
   inputs[0][2] = core::symbolic::SymDim("hidden");
-  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 1 * 2 * 8 * 39 * 4);
+  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), expected);
   inputs[0][0] = core::symbolic::SymDim("batch");
   inputs[5][2] = core::symbolic::SymDim(-1);
   EXPECT_THROW(core::shapes::ComputePeakMemory(device, node, inputs), std::invalid_argument);
@@ -337,7 +386,8 @@ TEST(ComputePeakMemoryAttention, ScratchRemainsSeparateFromStructuralReuse) {
     };
     EXPECT_EQ(bytes("output_allocation_bytes"), 0);
     ctx.ComputePeakMemory(graph, core::symbolic::Device::kCPU);
-    EXPECT_EQ(ctx.NodePeakMemory(3), 131072);
+    EXPECT_EQ(ctx.NodePeakMemory(3),
+              core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{131072})));
     EXPECT_EQ(bytes("before_bytes"), 65536);
     EXPECT_EQ(bytes("during_bytes"), 196608);
     EXPECT_EQ(bytes("after_bytes"), 65536);
@@ -347,21 +397,28 @@ TEST(ComputePeakMemoryAttention, ScratchRemainsSeparateFromStructuralReuse) {
     EXPECT_EQ(bytes("during_bytes"), 196608);
 
     core::compute::WritePeakMemoryToMetadata(graph, ctx.Shapes());
-    ASSERT_EQ(graph.node(3).metadata_props().size(), 1u);
-    EXPECT_EQ(graph.node(3).metadata_props(0).key(), core::compute::kNodePeakMemoryMetadataKey);
-    EXPECT_EQ(graph.node(3).metadata_props(0).value(), "131072");
+    const auto &metadata = graph.node(3).metadata_props();
+    ASSERT_EQ(metadata.size(), 3u);
+    for (const auto *key : {core::compute::kNodePeakMemoryMaxMetadataKey,
+                            core::compute::kNodePeakMemoryAverageMetadataKey,
+                            core::compute::kNodePeakMemoryMetadataKey}) {
+      EXPECT_TRUE(std::any_of(metadata.begin(), metadata.end(), [&](const auto &entry) {
+        return entry.key() == key && entry.value() == "131072";
+      }));
+    }
   }
 }
 
 // Fewer than two inputs yields no concrete estimate.
-TEST(ComputePeakMemoryAttention, TooFewInputsReturnsZero) {
+TEST(ComputePeakMemoryAttention, TooFewInputsReturnsUnresolvedBound) {
   const std::vector<core::symbolic::SymShape> inputs = {Rank4(2, 4, 8, 16)};
-  EXPECT_EQ(
-      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs), 0);
+  EXPECT_TRUE(
+      onnx_shapes::shapes::nn::ComputePeakMemoryAttention(core::symbolic::Device::kCPU, inputs)
+          .worst_case.IsExpr());
 }
 
 // RegisterPeakMemoryFunctions wires Attention into the core dispatch table so
-// ComputePeakMemory resolves it; unregistered operators still return 0.
+// ComputePeakMemory resolves it; unregistered operators retain an unresolved bound.
 TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   onnx_shapes::RegisterPeakMemoryFunctions();
   const auto &table = core::shapes::PeakMemoryDispatchTable();
@@ -374,10 +431,10 @@ TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   };
   EXPECT_EQ(
       core::shapes::ComputePeakMemory("ai.onnx", "Attention", core::symbolic::Device::kCPU, inputs),
-      1 * 2 * 4 * 16 * 4);
-  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
-                                            core::symbolic::Device::kCPU, inputs),
-            0);
+      core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{1 * 2 * 4 * 16 * 4})));
+  EXPECT_TRUE(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
+                                              core::symbolic::Device::kCPU, inputs)
+                  .worst_case.IsExpr());
 }
 
 } // namespace Test

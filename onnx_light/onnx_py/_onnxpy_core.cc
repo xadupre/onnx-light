@@ -1329,16 +1329,22 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .value("kCPU", Device::kCPU, "The host CPU.")
       .value("kGPU0", Device::kGPU0, "The first GPU device.");
 
+  nb::class_<onnx_shapes::PeakMemoryEstimate>(
+      shape_mod, "PeakMemoryEstimate", "Symbolic worst-case and optional average scratch bytes.")
+      .def_ro("worst_case", &onnx_shapes::PeakMemoryEstimate::worst_case)
+      .def_ro("average_case", &onnx_shapes::PeakMemoryEstimate::average_case);
+
   shape_mod.def(
       "compute_peak_memory",
       [](const std::string &domain, const std::string &op_type, Device device,
-         const std::vector<SymShape> &input_shapes) -> int64_t {
+         const std::vector<SymShape> &input_shapes) {
         return onnx_shapes::ComputePeakMemory(domain, op_type, device, input_shapes);
       },
       nb::arg("domain"), nb::arg("op_type"), nb::arg("device"), nb::arg("input_shapes"),
       "Returns the estimated peak scratch memory (in bytes) for ``(domain, op_type)`` executed "
-      "on ``device`` with inputs of shape ``input_shapes``. Operators without a registered "
-      "peak-memory function return ``0``. Built-in ``onnx_shapes`` operators (e.g. "
+      "on ``device`` with inputs of shape ``input_shapes``, as a ``PeakMemoryEstimate``. "
+      "Unregistered operators have an unresolved symbolic worst case, never zero. "
+      "Built-in ``onnx_shapes`` operators (e.g. "
       "``Attention``) are registered from C++ via ``RegisterPeakMemoryFunctions``.");
 
   shape_mod.def(
@@ -1468,6 +1474,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_compute::kNodeMemoryIntermediatesKey;
   shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_compute::kNodeMemoryOutputsKey;
   shape_mod.attr("NODE_PEAK_MEMORY_KEY") = onnx_compute::kNodePeakMemoryMetadataKey;
+  shape_mod.attr("NODE_PEAK_MEMORY_MAX_KEY") = onnx_compute::kNodePeakMemoryMaxMetadataKey;
+  shape_mod.attr("NODE_PEAK_MEMORY_AVERAGE_KEY") = onnx_compute::kNodePeakMemoryAverageMetadataKey;
 
   auto with_node_list = [](nb::handle nodes, auto &&fn) {
     if (nb::isinstance<utils::RepeatedProtoField<NodeProto>>(nodes)) {
@@ -1768,11 +1776,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           },
           nb::arg("graph"), nb::arg("device") = Device::kUndefined,
           "Computes the per-node peak scratch memory of ``graph`` using the shapes already "
-          "inferred into this context, storing (and returning) one ``int`` per node.")
+          "inferred into this context, storing one ``PeakMemoryEstimate`` per node.")
       .def_prop_ro(
           "peak_memory", [](const onnx_compute::ComputeContext &self) { return self.PeakMemory(); },
           "The per-node peak-memory estimates computed by :meth:`compute_peak_memory`, as a list "
-          "with one ``int`` per node. Empty before it has been called.")
+          "with one ``PeakMemoryEstimate`` per node. Empty before it has been called.")
       .def(
           "node_peak_memory",
           [](const onnx_compute::ComputeContext &self, std::size_t node_index) {
@@ -1810,7 +1818,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "Pushes every computed result into ``graph``: the inferred shapes into "
           "``graph.value_info`` / outputs, the in-place / release / shape-tag information into "
           "node ``metadata_props`` (see :meth:`write_to_metadata`) and the per-node peak-memory "
-          "estimates under ``onnx_light.peak_memory``.")
+          "worst-case estimates under ``onnx_light.peak_memory_max`` and justified averages "
+          "under ``onnx_light.peak_memory_average``. Positive concrete maxima also refresh "
+          "the legacy ``onnx_light.peak_memory`` allocation hint.")
       .def(
           "write_to_model",
           [](const onnx_compute::ComputeContext &self, ModelProto &model) {
@@ -1867,9 +1877,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       nb::arg("ctx"), nb::arg("graph"), nb::arg("device") = Device::kUndefined,
       "Computes the estimated peak scratch memory for every node of ``graph`` using the "
       "shapes already inferred into ``ctx``, and records the result in each node's "
-      "``metadata_props`` under the key ``onnx_light.peak_memory``. Nodes whose estimated "
-      "peak memory is zero (either the operator has no registered peak-memory function or "
-      "all relevant input shapes are symbolic) are left untouched.\n\n"
+      "``metadata_props`` under ``onnx_light.peak_memory_max`` and, when justified, "
+      "``onnx_light.peak_memory_average``. Unknown maxima remain unresolved symbols. "
+      "Positive concrete maxima also refresh the legacy ``onnx_light.peak_memory`` "
+      "allocation hint. Stale estimates are removed.\n\n"
       "The peak memory accounts only for the extra scratch/working memory an operator's "
       "computation allocates, not the memory already accounted for by its inputs and outputs.\n\n"
       "``device`` defaults to :attr:`Device.kUndefined` (no device information).");

@@ -1300,6 +1300,8 @@ void ClearLayerAnalysis(GraphProto &scope,
       core::compute::kNotUsedAfterMetadataKey,
       core::compute::kReleaseAfterShapeTagMetadataKey,
       core::compute::kNodePeakMemoryMetadataKey,
+      core::compute::kNodePeakMemoryMaxMetadataKey,
+      core::compute::kNodePeakMemoryAverageMetadataKey,
       core::compute::kConstantMetadataKey,
       core::compute::kLifetimeNamesEncodingMetadataKey};
   for (auto &node : scope.ref_node()) {

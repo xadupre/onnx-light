@@ -6,6 +6,7 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_core import shape_inference as si
+from onnx_light.onnx_core.expressions import evaluate_expression
 
 
 class TestInPlaceReuse(ExtTestCase):
@@ -94,9 +95,14 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(first[si.NODE_MEMORY_BEFORE_BYTES_KEY], 16)
         self.assertEqual(first[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
         self.assertEqual(final[si.NODE_MEMORY_BEFORE_BYTES_KEY], 48)
-        self.assertEqual(final[si.NODE_MEMORY_DURING_BYTES_KEY], 48)
+        maximum = ctx.node_peak_memory(1).worst_case
+        self.assertTrue(maximum.is_expr())
+        bounds = {maximum.value(): 64}
+        self.assertEqual(evaluate_expression(final[si.NODE_MEMORY_DURING_BYTES_KEY], bounds), 112)
         self.assertEqual(final[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
-        self.assertEqual(final[si.NODE_MEMORY_RELEASED_BYTES_KEY], 0)
+        self.assertEqual(
+            evaluate_expression(final[si.NODE_MEMORY_RELEASED_BYTES_KEY], bounds), 64
+        )
         self.assertEqual(final, ctx.node_memory(1))
 
     def test_value_read_twice_reused_only_at_last_use(self):
@@ -950,9 +956,10 @@ class TestInPlaceReuse(ExtTestCase):
         # In-place reuse was computed for every node.
         self.assertEqual(len(ctx), 3)
         self.assertEqual(self._reuse_pairs(ctx.reuse), [[], [(0, 0)], [(0, 0)]])
-        # Peak memory has one entry per node (Abs has no scratch).
-        self.assertEqual(list(ctx.peak_memory), [0, 0, 0])
-        self.assertEqual(ctx.node_peak_memory(0), 0)
+        # Abs has no registered scratch estimator.
+        self.assertEqual(len(ctx.peak_memory), 3)
+        self.assertTrue(all(peak.worst_case.is_expr() for peak in ctx.peak_memory))
+        self.assertTrue(ctx.node_peak_memory(0).worst_case.is_expr())
 
     def test_compute_write_to_model(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
@@ -981,7 +988,8 @@ class TestInPlaceReuse(ExtTestCase):
         shapes = ctx.compute_shapes(model)
         self.assertTrue(shapes.has("Y"))
         peak = ctx.compute_peak_memory(model.graph)
-        self.assertEqual(list(peak), [0])
+        self.assertEqual(len(peak), 1)
+        self.assertTrue(peak[0].worst_case.is_expr())
 
     def test_compute_shapes_node_list_with_input_shapes(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Neg", ["A"], ["Y"])]

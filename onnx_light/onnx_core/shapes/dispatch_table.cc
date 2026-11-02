@@ -65,6 +65,24 @@ std::unordered_map<std::string, ComputePeakMemoryNodeFn> &NodePeakMemoryDispatch
   return table;
 }
 
+void ValidatePeakMemoryEstimate(const PeakMemoryEstimate &estimate, const std::string &domain,
+                                const std::string &op_type) {
+  const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
+  for (const symbolic::SymDim *dim :
+       {&estimate.worst_case, estimate.average_case ? &*estimate.average_case : nullptr}) {
+    if (dim == nullptr)
+      continue;
+    EXT_ENFORCE_INVALID(!dim->IsInt() || dim->AsInt() >= 0, "Negative peak-memory estimate for ",
+                        identifier, ".");
+    EXT_ENFORCE_INVALID(!dim->IsExpr() || !dim->AsExpr().empty(),
+                        "Empty peak-memory expression for ", identifier, ".");
+  }
+  EXT_ENFORCE_INVALID(!estimate.average_case || !estimate.worst_case.IsInt() ||
+                          !estimate.average_case->IsInt() ||
+                          estimate.average_case->AsInt() <= estimate.worst_case.AsInt(),
+                      "Average peak-memory estimate exceeds worst case for ", identifier, ".");
+}
+
 } // namespace
 
 const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
@@ -139,28 +157,38 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
       };
 }
 
-int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
-                          const std::vector<SymShape> &input_shapes) {
+PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::string &op_type) {
+  const std::string key = DispatchKey(domain, op_type, Device::kUndefined);
+  std::string symbol = "peak_memory_max_";
+  constexpr char hex[] = "0123456789abcdef";
+  for (unsigned char c : key) {
+    symbol.push_back(hex[c >> 4]);
+    symbol.push_back(hex[c & 15]);
+  }
+  return {symbolic::SymDim(std::move(symbol)), std::nullopt};
+}
+
+PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::string &op_type,
+                                     Device device, const std::vector<SymShape> &input_shapes) {
   const auto &table = MutablePeakMemoryDispatchTable();
   auto it = table.find(DispatchKey(domain, op_type, device));
   if (it == table.end()) {
-    return 0;
+    return UnknownPeakMemory(domain, op_type);
   }
-  const int64_t bytes = it->second(device, input_shapes);
-  const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
-  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", identifier, ".");
-  return bytes;
+  const PeakMemoryEstimate estimate = it->second(device, input_shapes);
+  ValidatePeakMemoryEstimate(estimate, domain, op_type);
+  return estimate;
 }
 
-int64_t ComputePeakMemory(Device device, const NodeProto &node,
-                          const std::vector<SymShape> &input_shapes) {
+PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
+                                     const std::vector<SymShape> &input_shapes) {
   const auto &table = NodePeakMemoryDispatchTable();
   auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
   if (it == table.end())
     return ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-  const int64_t bytes = it->second(device, node, input_shapes);
-  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", node.op_type(), ".");
-  return bytes;
+  const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
+  ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
+  return estimate;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

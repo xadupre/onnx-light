@@ -55,14 +55,20 @@ struct PreparationRecord {
   bool fail = false;
   bool fail_declaration = false;
   int runs = 0;
+  bool consume = false;
+  bool consume_success = true;
 };
 
 class DeclarativeKernel final : public KernelBase {
 public:
-  explicit DeclarativeKernel(std::shared_ptr<PreparationRecord> record)
-      : KernelBase(KernelContext{}), record_(std::move(record)) {}
+  explicit DeclarativeKernel(std::shared_ptr<PreparationRecord> record,
+                             const KernelContext &ctx = KernelContext{})
+      : KernelBase(ctx), record_(std::move(record)) {}
 
-  bool HasPreparations(const std::unordered_set<std::string> &) const override { return true; }
+  bool HasPreparations(const std::unordered_set<std::string> &) const override {
+    return !record_->consume ||
+           (ctx_.consumable_inputs != nullptr && ctx_.consumable_inputs->contains(record_->source));
+  }
 
   int32_t TuningInputIndex() const noexcept override { return record_->tune ? 0 : -1; }
 
@@ -83,6 +89,10 @@ public:
     for (int stage : {1, 2}) {
       core::runtime::KernelPreparation preparation;
       preparation.info.source_inputs = {record_->source};
+      if (record_->consume && stage == 2) {
+        preparation.info.consumed_inputs = {record_->source};
+        preparation.sources_consumed = [record = record_] { return record->consume_success; };
+      }
       preparation.info.representation = "test";
       if (stage == 2)
         preparation.info.dependencies = {first};
@@ -575,6 +585,172 @@ TEST(KernelLifecycle, PreexistingGemmWeightIsNotImplicitlyImmutable) {
   session.Run(rt);
   EXPECT_EQ(rt.Get("Y").AsFloat()[0], 0);
   EXPECT_EQ(rt.Get("Y").AsFloat()[1], 0);
+}
+
+TEST(KernelLifecycle, ConsumedPreparationSourcesRespectOwnershipAndOtherReaders) {
+  for (int scenario = 0; scenario < 7; ++scenario) {
+    SCOPED_TRACE(scenario);
+    bool released = false;
+    ModelProto model = MakeGemmModel(scenario == 2);
+    auto &graph = model.ref_graph();
+    auto &weight = graph.ref_initializer()[0];
+    weight.attach_raw_data_deleter([&] { released = true; });
+    if (scenario == 3) {
+      auto *node = graph.add_node();
+      node->set_op_type("Gemm");
+      node->add_input("A");
+      node->add_input("B");
+      node->add_output("Z");
+      graph.add_output()->set_name("Z");
+    }
+    if (scenario == 4)
+      graph.add_output()->set_name("B");
+    RuntimeContext rt;
+    auto record = std::make_shared<PreparationRecord>();
+    record->consume = true;
+    record->consume_success = scenario != 5;
+    record->fail = scenario == 6;
+    ASSERT_TRUE(rt.RegisterKernelFn(
+        "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+        [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+          return std::make_unique<DeclarativeKernel>(record, ctx);
+        }));
+    if (scenario == 1) {
+      const ModelProto &borrowed = model;
+      const core::runtime::RuntimeSessionOptions options{.consume_initializers = true};
+      EXPECT_THROW(RuntimeSession(borrowed, options), std::invalid_argument);
+    }
+    RuntimeSession session(
+        model, core::runtime::RuntimeSessionOptions{.consume_initializers = scenario != 1});
+    if (scenario == 6) {
+      EXPECT_THROW(session.Prepare(rt), std::invalid_argument);
+    } else {
+      session.Prepare(rt);
+    }
+    const bool consumed = scenario == 0;
+    EXPECT_EQ(released, consumed);
+    EXPECT_EQ(session.consumed_initializer_bytes(), consumed ? 6 * sizeof(float) : 0U);
+    EXPECT_EQ(weight.raw_data().size(), consumed ? 0U : 6 * sizeof(float));
+    if (consumed) {
+      EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+      EXPECT_FALSE(rt.HasValue("B"));
+      rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+      session.Run(rt);
+      session.Run(rt);
+      EXPECT_FALSE(rt.HasValue("B"));
+    }
+  }
+}
+
+TEST(KernelLifecycle, ConsumedSourcesStillRejectDeclaredShapeMismatch) {
+  for (bool consume : {false, true}) {
+    for (bool check_shapes : {false, true}) {
+      SCOPED_TRACE(testing::Message()
+                   << "consume=" << consume << ", check_shapes=" << check_shapes);
+      ModelProto model = MakeGemmModel(false);
+      auto *weight_info = model.ref_graph().add_value_info();
+      weight_info->set_name("B");
+      auto *weight_type = weight_info->mutable_type()->mutable_tensor_type();
+      weight_type->set_elem_type(TensorProto::FLOAT);
+      weight_type->mutable_shape()->add_dim()->set_dim_value(4);
+      weight_type->mutable_shape()->add_dim()->set_dim_value(2);
+      RuntimeContext rt;
+      const auto record = std::make_shared<PreparationRecord>();
+      record->consume = consume;
+      ASSERT_TRUE(rt.RegisterKernelFn(
+          "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+          [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+            return std::make_unique<DeclarativeKernel>(record, ctx);
+          }));
+      RuntimeSession session(model, core::runtime::RuntimeSessionOptions{
+                                        .check_shapes = check_shapes,
+                                        .consume_initializers = consume,
+                                    });
+      session.Prepare(rt);
+      EXPECT_EQ(model.graph().initializer(0).raw_data().empty(), consume);
+      rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+      for (size_t run = 0; run < 2; ++run) {
+        if (check_shapes) {
+          EXPECT_THROW(session.Run(rt), std::invalid_argument);
+          EXPECT_EQ(record->runs, 0);
+        } else {
+          EXPECT_NO_THROW(session.Run(rt));
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelLifecycle, ConsumedSourcesBindSymbolicDimensionsOnEveryRun) {
+  for (bool consume : {false, true}) {
+    SCOPED_TRACE(consume);
+    ModelProto model = MakeGemmModel(false);
+    auto *input_type = model.ref_graph().mutable_input(0)->mutable_type()->mutable_tensor_type();
+    input_type->set_elem_type(TensorProto::FLOAT);
+    input_type->mutable_shape()->add_dim()->set_dim_value(1);
+    input_type->mutable_shape()->add_dim()->set_dim_param("K");
+    auto *weight_info = model.ref_graph().add_value_info();
+    weight_info->set_name("B");
+    auto *weight_type = weight_info->mutable_type()->mutable_tensor_type();
+    weight_type->set_elem_type(TensorProto::FLOAT);
+    weight_type->mutable_shape()->add_dim()->set_dim_param("K");
+    weight_type->mutable_shape()->add_dim()->set_dim_value(2);
+    RuntimeContext rt;
+    const auto record = std::make_shared<PreparationRecord>();
+    record->consume = consume;
+    ASSERT_TRUE(rt.RegisterKernelFn(
+        "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+        [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+          return std::make_unique<DeclarativeKernel>(record, ctx);
+        }));
+    RuntimeSession session(model, core::runtime::RuntimeSessionOptions{
+                                      .check_shapes = true,
+                                      .consume_initializers = consume,
+                                  });
+    session.Prepare(rt);
+    for (int64_t columns : {3, 4, 3}) {
+      rt.Put("A", Tensor::FromFloat("A", {1, columns}, std::vector<float>(columns, 1)));
+      if (columns == 4)
+        EXPECT_THROW(session.Run(rt), std::invalid_argument);
+      else
+        EXPECT_NO_THROW(session.Run(rt));
+    }
+    EXPECT_EQ(record->runs, 2);
+    EXPECT_EQ(model.graph().initializer(0).raw_data().empty(), consume);
+  }
+}
+
+TEST(KernelLifecycle, SharedSourcePreparationsRemainReusableAtScale) {
+  for (bool consume : {false, true}) {
+    SCOPED_TRACE(consume);
+    ModelProto model = MakeGemmModel(false);
+    auto &graph = model.ref_graph();
+    const auto original = graph.node(0);
+    graph.ref_node().clear();
+    graph.ref_output().clear();
+    constexpr size_t count = 1024;
+    for (size_t index = 0; index < count; ++index) {
+      auto *node = graph.add_node();
+      *node = original;
+      node->ref_output()[0] = "Y" + std::to_string(index);
+      graph.add_output()->set_name(node->output(0));
+    }
+    RuntimeContext rt;
+    const auto record = std::make_shared<PreparationRecord>();
+    ASSERT_TRUE(rt.RegisterKernelFn(
+        "ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+        [record](const NodeProto &, RuntimeContext &, const KernelContext &ctx) {
+          return std::make_unique<DeclarativeKernel>(record, ctx);
+        }));
+    RuntimeSession session(model,
+                           core::runtime::RuntimeSessionOptions{.consume_initializers = consume});
+    session.Prepare(rt);
+    EXPECT_EQ(record->executed.size(), 2 * count);
+    EXPECT_EQ(session.consumed_initializer_bytes(), 0u);
+    EXPECT_TRUE(rt.HasValue("B"));
+    EXPECT_EQ(graph.initializer(0).raw_data().size(), 6 * sizeof(float));
+    EXPECT_TRUE(session.pending_preparations().empty());
+  }
 }
 
 TEST(KernelLifecycle, PreparationWaitsForRuntimeTuningBeforeExecuting) {

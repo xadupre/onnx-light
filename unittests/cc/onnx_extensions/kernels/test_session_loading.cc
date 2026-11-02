@@ -65,6 +65,62 @@ private:
   bool ready_ = false;
 };
 
+class LoadingConsumedWeight : public KernelBase {
+public:
+  LoadingConsumedWeight(const NodeProto &node, const KernelContext &ctx, std::string gate,
+                        std::shared_ptr<size_t> executions)
+      : KernelBase(ctx), gate_(std::move(gate)), executions_(std::move(executions)) {
+    set_node(node);
+  }
+
+  bool HasPreparations(const std::unordered_set<std::string> &) const override {
+    return ctx_.consumable_inputs != nullptr && ctx_.consumable_inputs->contains(node_->input(1));
+  }
+
+  void DeclarePreparations(const std::unordered_set<std::string> &,
+                           std::vector<KernelPreparation> &preparations) override {
+    KernelPreparation preparation;
+    preparation.info.source_inputs = {node_->input(1)};
+    if (!gate_.empty())
+      preparation.info.source_inputs.push_back(gate_);
+    preparation.info.consumed_inputs = {node_->input(1)};
+    preparation.estimate_memory = [this](const RuntimeContext &rt) {
+      return KernelPreparationMemory{.temporary_bytes = 40,
+                                     .prepared_bytes = rt.Get(node_->input(1)).size_bytes()};
+    };
+    preparation.execute = [this](RuntimeContext &rt) {
+      const auto &source = rt.Get(node_->input(1));
+      std::vector<uint8_t> workspace(40);
+      if (source.size_bytes() > workspace.size())
+        throw std::invalid_argument("LoadingConsumedWeight source exceeds its workspace.");
+      std::memcpy(workspace.data(), source.bytes(), source.size_bytes());
+      auto &store = rt.value_store();
+      auto packed = store.AllocateTensor(static_cast<int32_t>(source.data_type), source.shape,
+                                         source.size_bytes());
+      std::memcpy(packed.mutable_bytes(), workspace.data(), source.size_bytes());
+      slot_ = store.Bind(node_->input(1) + ".packed");
+      store.Publish(slot_, RuntimeValue(std::move(packed)));
+      ready_ = true;
+      ++*executions_;
+    };
+    preparation.sources_consumed = [this] { return ready_; };
+    preparations.push_back(std::move(preparation));
+  }
+
+  void Run(RuntimeContext &rt) override {
+    const auto &packed = rt.value_store().Get(slot_).tensor;
+    const std::vector<float> values(packed.AsFloat(), packed.AsFloat() + packed.element_count());
+    rt.Put(node_->output(0),
+           Tensor::FromFloat(node_->output(0), packed.shape, values, rt.allocator()));
+  }
+
+private:
+  std::string gate_;
+  std::shared_ptr<size_t> executions_;
+  ValueStore::Slot slot_;
+  bool ready_ = false;
+};
+
 class RuntimeSessionLoading : public testing::Test {
 protected:
   void SetUp() override {
@@ -896,6 +952,79 @@ TEST_F(RuntimeSessionLoading, PreparationBudgetRejectsWithoutLazyFallback) {
   EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::length_error);
   EXPECT_FALSE(rt.Has("B0"));
   EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, RetiredSourcesAdmitAllPackingAtTheExactBudget) {
+  const auto original = ReadModel().graph().initializer(0);
+  for (size_t count : {2u, 3u}) {
+    auto model = ReadModel();
+    auto &graph = model.ref_graph();
+    graph.ref_initializer().clear();
+    graph.ref_node().clear();
+    graph.ref_output().clear();
+    for (size_t index = 0; index < count; ++index) {
+      const auto suffix = std::to_string(index);
+      auto *weight = graph.add_initializer();
+      *weight = original;
+      weight->set_name("B" + suffix);
+      graph.add_node(MakeNode("LoadingConsumedWeight", {"A", "B" + suffix}, {"Y" + suffix}));
+      graph.add_output()->set_name("Y" + suffix);
+    }
+    SaveModel(model);
+    for (bool overlap : {false, true}) {
+      for (size_t shortfall : {0u, 1u}) {
+        SCOPED_TRACE(testing::Message()
+                     << count << " weights, overlap=" << overlap << ", shortfall=" << shortfall);
+        RuntimeContext rt;
+        const auto executions = std::make_shared<size_t>(0);
+        ASSERT_TRUE(rt.RegisterKernelFn(
+            "ai.onnx", "LoadingConsumedWeight", core::symbolic::Device::kCPU,
+            [executions, count](const NodeProto &node, RuntimeContext &, const KernelContext &ctx) {
+              const std::string last = "B" + std::to_string(count - 1);
+              return std::make_unique<LoadingConsumedWeight>(
+                  node, ctx, node.input(1) == last ? std::string{} : last, executions);
+            }));
+        std::vector<size_t> released(count, 0);
+        RuntimeLoadOptions options;
+        options.overlap_preparation = overlap;
+        options.memory_limit = count * 48 + 64 - shortfall;
+        options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+          tensor.LoadExternalData(base);
+          const size_t index = std::stoul(tensor.name().value().substr(1));
+          tensor.attach_raw_data_deleter([&, index] { ++released[index]; });
+        };
+        if (shortfall != 0) {
+          EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::length_error);
+          EXPECT_EQ(*executions, 0u);
+          EXPECT_FALSE(rt.Has("B0"));
+          continue;
+        }
+        LoadedRuntimeSession loaded(Path(), rt, {}, options);
+        EXPECT_EQ(*executions, count);
+        EXPECT_EQ(released, std::vector<size_t>(count, 1));
+        EXPECT_EQ(loaded.session().consumed_initializer_bytes(), count * 24);
+        EXPECT_EQ(loaded.session().prepared_bytes(), count * 24);
+        EXPECT_EQ(loaded.statistics().peak_admitted_bytes, options.memory_limit);
+        EXPECT_TRUE(loaded.session().pending_preparations().empty());
+        EXPECT_EQ(loaded.session().required_inputs(), (std::vector<std::string>{"A"}));
+        for (const auto &weight : loaded.model().graph().initializer()) {
+          EXPECT_TRUE(weight.raw_data().empty());
+          EXPECT_FALSE(rt.HasValue(weight.name()));
+        }
+        rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+        for (size_t run = 0; run < 2; ++run) {
+          loaded.session().Run(rt);
+          for (size_t index = 0; index < count; ++index) {
+            const auto &output = rt.Get("Y" + std::to_string(index));
+            EXPECT_EQ(
+                (std::vector<float>{output.AsFloat(), output.AsFloat() + output.element_count()}),
+                (std::vector<float>{1, 2, 3, 4, 5, 6}));
+            EXPECT_FALSE(rt.HasValue("B" + std::to_string(index)));
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST_F(RuntimeSessionLoading, PreservesCallerInitializerOverrides) {

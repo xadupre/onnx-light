@@ -53,6 +53,8 @@ struct KernelPreparationMemory {
 struct KernelPreparationInfo {
   size_t index = 0;
   std::vector<std::string> source_inputs;
+  /// Sources replaced for every inference shape after successful preparation.
+  std::vector<std::string> consumed_inputs;
   std::string representation;
   std::vector<std::string> output_slots;
   std::vector<size_t> dependencies;
@@ -70,6 +72,8 @@ struct KernelPreparation {
   KernelPreparationInfo info;
   std::function<KernelPreparationMemory(const RuntimeContext &)> estimate_memory;
   std::function<void(RuntimeContext &)> execute;
+  /// Confirms that all consumed_inputs were replaced, including zero-new-byte cache hits.
+  std::function<bool()> sources_consumed;
 };
 
 /// Immutable opset imports owned by a model or function session.
@@ -130,6 +134,9 @@ struct KernelContext {
   const OpsetImports *opset_imports = nullptr;
   /// Effective model-local functions. Borrowed from the owning model session.
   const FunctionMap *model_functions = nullptr;
+  /// Single-consumer, non-output initializers whose owner explicitly permits retirement.
+  /// Borrowed from the session; null for ordinary borrowed-model sessions.
+  const std::unordered_set<std::string> *consumable_inputs = nullptr;
 
   KernelContext() = default;
   explicit KernelContext(OpsetId opset_, RawBufferAllocator *allocator_ = nullptr,

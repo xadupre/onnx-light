@@ -963,9 +963,9 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
   EXPECT_TRUE(ctx.Shapes().Has("Y"));
   // In-place reuse / release info was computed for every node.
   EXPECT_EQ(ctx.Size(), 3u);
-  // Peak memory has one entry per node (Abs has no scratch, so all zero).
+  // Abs has no registered estimator, so its scratch bound remains unresolved.
   ASSERT_EQ(ctx.PeakMemory().size(), 3u);
-  EXPECT_EQ(ctx.NodePeakMemory(0), 0);
+  EXPECT_TRUE(ctx.NodePeakMemory(0).worst_case.IsExpr());
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
@@ -981,15 +981,20 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
   EXPECT_EQ(ComputeResultLifetimeInfo(graph, false)[1].release_after,
             (std::vector<std::string>{"A"}));
   const auto scalar = [&](std::size_t i, const char *key) {
-    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
+    const auto &value = std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key));
+    if (std::holds_alternative<int64_t>(value))
+      return std::get<int64_t>(value);
+    return core::expressions::evaluate_expression(
+        std::get<std::string>(value),
+        {{core::shapes::UnknownPeakMemory("", "Abs").worst_case.AsExpr(), 64}});
   };
   EXPECT_EQ(scalar(0, core::compute::kNodeMemoryBeforeBytesKey), 48);
-  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 160);
   EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey), 96);
   EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 96);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 160);
   EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 0);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 64);
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
@@ -1028,8 +1033,15 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
     EXPECT_EQ(scalar(1, core::compute::kNodeMemoryTotalBytesKey), 288);
   }
   ctx.ComputePeakMemory(graph, core::symbolic::Device::kGPU0);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
+  const auto &maximum = ctx.NodePeakMemory(1).worst_case;
+  ASSERT_TRUE(maximum.IsExpr());
+  for (const auto &[key, base] : {std::pair{core::compute::kNodeMemoryDuringBytesKey, 288},
+                                  std::pair{core::compute::kNodeMemoryReleasedBytesKey, 144}}) {
+    const auto &expression =
+        std::get<std::string>(std::get<core::expressions::DimType>(ctx.NodeMemory(1).at(key)));
+    EXPECT_EQ(core::expressions::evaluate_expression(expression, {{maximum.AsExpr(), 64}}),
+              base + 64);
+  }
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesPreserveSymbolicSizes) {
@@ -1145,7 +1157,10 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToFunction) {
   ComputeContext ctx;
   ctx.ComputeShapes(function, {{"X", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4})}});
   ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes(), false, {{"A", "shape"}});
-  EXPECT_EQ(ctx.ComputePeakMemory(function), (std::vector<int64_t>{0, 0}));
+  const auto &peaks = ctx.ComputePeakMemory(function);
+  ASSERT_EQ(peaks.size(), 2u);
+  EXPECT_TRUE(peaks[0].worst_case.IsExpr());
+  EXPECT_TRUE(peaks[1].worst_case.IsExpr());
   ctx.WriteToFunction(function);
   ctx.WriteToFunction(function);
 
@@ -1203,7 +1218,7 @@ TEST(OnnxOptimInPlaceReuse, FunctionPeakMemoryWritesMetadata) {
   ctx.Shapes().Set("Y", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
   ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes());
   EXPECT_EQ(ctx.ComputePeakMemory(function, core::symbolic::Device::kCPU),
-            (std::vector<int64_t>{128}));
+            (std::vector<core::shapes::PeakMemoryEstimate>{128}));
   ctx.WriteToFunction(function);
   bool found_peak = false;
   for (const auto &entry : function.node()[0].metadata_props()) {

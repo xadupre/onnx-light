@@ -1439,6 +1439,9 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
         follow_up->ref_added_nodes().push_back(MakeNode("Abs", {"X"}, {"Y"}));
         follow_up->add_added_nodes_positions(0);
         expected.ref_node()[0].set_op_type("Abs");
+        ModelProto expected_model = original;
+        *expected_model.mutable_graph() = std::move(expected);
+        expected = core::builder::GraphBuilder(expected_model, SchemaLookup()).ToGraph();
         loaded.reset_hash_before();
         loaded.reset_hash_after();
         loaded = core::builder::GraphBuilder(original, SchemaLookup()).CaptureRewritings(loaded);

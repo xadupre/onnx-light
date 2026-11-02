@@ -230,34 +230,32 @@ Register a peak memory function
 -------------------------------
 
 A peak-memory function estimates the scratch (non-output) memory a kernel needs,
-so a scheduler can size buffers. It is optional — operators without one report a
-peak of ``0``. The registry mirrors shape inference. The signature is
-``int64_t(Device, const std::vector<SymShape> &)``.
+so a scheduler can size buffers. Operators without an estimator retain an
+unresolved symbolic upper bound, never a zero-memory assumption.
+The registry mirrors shape inference. The signature is
+``PeakMemoryEstimate(Device, const std::vector<SymShape> &)``.
+The result contains a mandatory ``SymDim worst_case`` and an optional
+``SymDim average_case``. All values are bytes excluding inputs and outputs.
 
 
 1. **Implement it** next to the shape function, e.g.
    ``shapes/nn/shape_attention.cc`` (declared in ``shapes/nn/shape_nn.h``):
 
-   .. code-block:: cpp
+   Preserve symbolic dimensions with the checked helpers in
+   ``onnx_core/expressions/expressions.h`` and the conversions in
+   ``onnx_core/symbolic/symbolic_helper.h``. Use
+   ``PeakMemoryEstimate::Exact(bytes)`` only when the workspace requirement is
+   deterministic; otherwise return ``{maximum, average}``, leaving the average
+   ``std::nullopt`` when unjustified. A concrete ``int64_t`` return is also
+   accepted as a concrete upper bound without an average.
 
-       int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes) {
-         constexpr int64_t kScoreElementBytes = 4;  // scores held in float32
-         (void)device;
-         if (input_shapes.size() < 2)
-           return 0;
-         const SymShape &q_shape = input_shapes[0];
-         const SymShape &k_shape = input_shapes[1];
-         if (q_shape.Rank() != 4 || k_shape.Rank() != 4)
-           return 0;
-         const SymDim &batch = q_shape[0];
-         const SymDim &q_num_heads = q_shape[1];
-         const SymDim &q_seq_len = q_shape[2];
-         const SymDim &kv_seq_len = k_shape[2];
-         if (!batch.IsInt() || !q_num_heads.IsInt() || !q_seq_len.IsInt() || !kv_seq_len.IsInt())
-           return 0;  // no concrete estimate for symbolic dimensions
-         return batch.AsInt() * q_num_heads.AsInt() * q_seq_len.AsInt() * kv_seq_len.AsInt() *
-                kScoreElementBytes;
-       }
+   If required shapes or an estimation rule are unavailable, return
+   ``core::shapes::UnknownPeakMemory(domain, op_type)``. Its mandatory
+   maximum is a valid symbolic upper-bound identifier which must be resolved
+   for every invocation and device before checking a memory budget.
+   Do not invent a finite bound or substitute
+   zero. See :cpp:func:`ComputePeakMemoryAttention` for symbolic score-buffer
+   arithmetic and negative-dimension/overflow validation.
 
 2. **Register it** by adding an entry to the ``BuiltinPeakMemoryFunctions``
    table in ``onnx_light/onnx_extensions/shapes/dispatch_table.cc``:

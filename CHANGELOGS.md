@@ -5,8 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.5] – Unreleased
 
+### New Features
+
+- Added symbolic `PeakMemoryEstimate` results with mandatory `worst_case` and optional justified `average_case` bounds, propagated through dispatch, memory profiles, metadata and Python bindings. Unknown workspace remains explicitly unresolved rather than zero. Native consumers must rebuild; Python callers now access `estimate.worst_case.value()` and the optional `estimate.average_case.value()`. Legacy integer-returning C++ callbacks remain source-compatible as upper bounds without an assumed average ([#5769](https://github.com/xadupre/onnx-light/pull/5769)).
+- Allowed successful kernel preparations to retire exclusively owned initializer sources after all preparations reading them complete, avoiding persistent duplication of packed weights. Enabled this in the owning single-model loader and through explicit C++ consumption options or Python `ReferenceEvaluator(..., consume_initializers=True)`. Borrowed/reusable models and generation pipelines retain their sources; temporary packing peaks may still include both representations ([#5765](https://github.com/xadupre/onnx-light/pull/5765)).
+
+### Improvements
+
+- Replaced Python external-data export's full-model serialize/reparse copy with a structural copy sharing eligible tensor storage. Recognized NumPy and bytes/bytearray buffers retain their owners; unproven borrowed buffers are conservatively snapshotted in the source model, preserving values and metadata but potentially changing source addresses and aliasing even if a later save step fails ([#5764](https://github.com/xadupre/onnx-light/pull/5764)).
+
+### Fixes
+
+- Preserved symbolic max/min grouping in sums, differences and coefficient products, preventing arithmetic round trips from changing expression values and underestimating memory profiles ([#5772](https://github.com/xadupre/onnx-light/pull/5772)).
+
 ### Documentation & CI
 
+- Installed and verified Ninja explicitly before Windows x64 and x86 core builds ([#5770](https://github.com/xadupre/onnx-light/pull/5770)).
 - Bumped the release version to `0.2.5`.
 
 ## [0.2.4.1] – Unreleased

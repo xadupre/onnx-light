@@ -564,8 +564,10 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
  * logical shape is ``(batch, q_num_heads, q_sequence_length,
  * total_sequence_length)``. The number of elements in that buffer is
  * multiplied by 4 bytes (the ``float32`` accumulation type used for the
- * scores). Only the rank-4 ``(batch, num_heads, sequence, head_size)`` form
- * of ``Q``/``K`` is handled; when fewer than three inputs are provided, when
+ * scores). Optional rank-4 past key/value inputs at positions 4/5 contribute
+ * their sequence length to the total. Only the rank-4
+ * ``(batch, num_heads, sequence, head_size)`` form of ``Q``/``K`` is handled
+ * by this shape-only overload; when fewer than two inputs are provided, when
  * either input is not rank 4, or when any contributing dimension is symbolic,
  * the function returns ``0`` (no concrete estimate available).
  *
@@ -579,6 +581,23 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
  *         the scratch allocation exceeds ``int64_t``.
  */
 int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
+
+/**
+ * Estimates Attention score-buffer scratch for rank-3 or rank-4 inputs.
+ * The packed rank-3 layout uses the node's positive ``q_num_heads`` and
+ * ``kv_num_heads`` attributes; without them no concrete estimate is available.
+ * The estimate is ``batch * q_num_heads * q_seq * (kv_seq + past_seq) * 4``
+ * bytes, independently of tensor dtype and structural output-buffer reuse.
+ * Missing or symbolic contributing shapes yield zero; negative dimensions,
+ * invalid head counts and arithmetic overflow raise ``std::invalid_argument``.
+ *
+ * @param device Device on which the operator executes.
+ * @param node Attention node, including head attributes and optional cache input names.
+ * @param input_shapes Input shapes in node input order, including empty optional slots.
+ * @returns The static float32 score-buffer estimate in bytes, not a runtime measurement.
+ */
+int64_t ComputePeakMemoryAttention(Device device, const NodeProto &node,
+                                   const std::vector<SymShape> &input_shapes);
 
 /**
  * Estimates peak scratch memory for a ``LinearAttention`` node.

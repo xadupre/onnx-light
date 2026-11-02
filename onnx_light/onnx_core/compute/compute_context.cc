@@ -490,8 +490,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
       else
         input_shapes.emplace_back();
     }
-    int64_t workspace =
-        shapes::ComputePeakMemory(inner.domain(), inner.op_type(), device, input_shapes);
+    int64_t workspace = shapes::ComputePeakMemory(device, inner, input_shapes);
     const FunctionBodyMemoryEstimate nested = EstimateFunctionBodyMemory(
         inner, body_shapes, device, active_functions, validate_allocations);
     workspace = std::max(workspace, nested.workspace_peak);
@@ -1691,8 +1690,7 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
       input_shapes.emplace_back();
     }
   }
-  peak_memory_[node_index] =
-      shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+  peak_memory_[node_index] = shapes::ComputePeakMemory(device, node, input_shapes);
   peak_memory_[node_index] =
       std::max(peak_memory_[node_index],
                EstimateFunctionBodyMemory(node, shapes_, device, materialize).workspace_peak);
@@ -2121,7 +2119,7 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
       }
     }
     peak_memory_[static_cast<std::size_t>(i)] =
-        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+        shapes::ComputePeakMemory(device, node, input_shapes);
     peak_memory_[static_cast<std::size_t>(i)] =
         std::max(peak_memory_[static_cast<std::size_t>(i)],
                  EstimateFunctionBodyMemory(node, shapes_, device).workspace_peak);

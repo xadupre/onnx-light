@@ -330,40 +330,85 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
 }
 
 int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  return ComputePeakMemoryAttention(device, NodeProto{}, input_shapes);
+}
+
+int64_t ComputePeakMemoryAttention(Device device, const NodeProto &node,
+                                   const std::vector<SymShape> &input_shapes) {
   // The score buffer accumulation type; scores are held in float32.
   constexpr int64_t kScoreElementBytes = 4;
 
   // Q and K carry the dimensions needed for the QK^T score buffer. Without
-  // both, or without the rank-4 (batch, num_heads, sequence, head_size)
-  // layout, no concrete estimate can be produced.
+  // both, or without a supported layout, no concrete estimate can be produced.
   (void)device;
   if (input_shapes.size() < 2) {
     return 0;
   }
   const SymShape &q_shape = input_shapes[0];
   const SymShape &k_shape = input_shapes[1];
-  if (q_shape.Rank() != 4 || k_shape.Rank() != 4) {
+  const bool packed = q_shape.Rank() == 3;
+  if ((!packed && q_shape.Rank() != 4) || k_shape.Rank() != q_shape.Rank()) {
     return 0;
+  }
+
+  SymDim q_num_heads = packed ? SymDim(int64_t{0}) : q_shape[1];
+  if (packed) {
+    int64_t heads = 0, kv_heads = 0;
+    bool has_q = false, has_kv = false;
+    ReadHeadAttributes(node, heads, has_q, kv_heads, has_kv);
+    if (!has_q || !has_kv)
+      return 0;
+    EXT_ENFORCE_INVALID(heads > 0 && kv_heads > 0,
+                        "Attention scratch: q_num_heads and kv_num_heads must be positive.");
+    EXT_ENFORCE_INVALID(heads % kv_heads == 0,
+                        "Attention scratch: q_num_heads must be a multiple of kv_num_heads.");
+    q_num_heads = SymDim(heads);
   }
 
   // Score buffer: (batch, q_num_heads, q_sequence_length, kv_sequence_length).
   const SymDim &batch = q_shape[0];
-  const SymDim &q_num_heads = q_shape[1];
-  const SymDim &q_seq_len = q_shape[2];
-  const SymDim &kv_seq_len = k_shape[2];
-  if (!batch.IsInt() || !q_num_heads.IsInt() || !q_seq_len.IsInt() || !kv_seq_len.IsInt()) {
+  const SymDim &q_seq_len = q_shape[packed ? 1 : 2];
+  const SymDim &kv_seq_len = k_shape[packed ? 1 : 2];
+  const auto validate_dimension = [](const char *name, const SymDim &dim) {
+    if (dim.IsInt()) {
+      const int64_t value = dim.AsInt();
+      EXT_ENFORCE_INVALID(value >= 0, "Negative Attention scratch dimension '", name, "': ", value,
+                          ".");
+    }
+  };
+  validate_dimension("batch", batch);
+  validate_dimension("q_num_heads", q_num_heads);
+  validate_dimension("q_seq_len", q_seq_len);
+  validate_dimension("kv_seq_len", kv_seq_len);
+  SymDim past_seq_len(int64_t{0});
+  bool has_past = false;
+  for (std::size_t i : {std::size_t{4}, std::size_t{5}}) {
+    // Shape-only callers have no input names; empty shapes denote omitted inputs.
+    const bool present =
+        node.input_size() == 0
+            ? i < input_shapes.size() && input_shapes[i].Rank() != 0
+            : i < static_cast<std::size_t>(node.input_size()) && !node.input(i).empty();
+    if (!present)
+      continue;
+    if (i >= input_shapes.size() || input_shapes[i].Rank() != 4)
+      return 0;
+    const SymDim &length = input_shapes[i][2];
+    validate_dimension("past_seq_len", length);
+    if (has_past && past_seq_len.IsInt() && length.IsInt())
+      EXT_ENFORCE_INVALID(past_seq_len.AsInt() == length.AsInt(),
+                          "Attention scratch: past key/value sequence lengths must match.");
+    if (!has_past || !length.IsInt())
+      past_seq_len = length;
+    has_past = true;
+  }
+  if (!batch.IsInt() || !q_num_heads.IsInt() || !q_seq_len.IsInt() || !kv_seq_len.IsInt() ||
+      !past_seq_len.IsInt()) {
     return 0;
   }
 
-  const auto dimension = [](const char *name, const SymDim &dim) {
-    const int64_t value = dim.AsInt();
-    EXT_ENFORCE_INVALID(value >= 0, "Negative Attention scratch dimension '", name, "': ", value,
-                        ".");
-    return value;
-  };
-  const int64_t dimensions[] = {dimension("batch", batch), dimension("q_num_heads", q_num_heads),
-                                dimension("q_seq_len", q_seq_len),
-                                dimension("kv_seq_len", kv_seq_len)};
+  const int64_t dimensions[] = {
+      batch.AsInt(), q_num_heads.AsInt(), q_seq_len.AsInt(),
+      core::shapes::CheckedDimensionAdd(kv_seq_len.AsInt(), past_seq_len.AsInt())};
   for (int64_t dim : dimensions) {
     if (dim == 0)
       return 0;

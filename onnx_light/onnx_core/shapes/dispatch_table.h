@@ -96,6 +96,10 @@ bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node);
  */
 using ComputePeakMemoryFn = std::function<int64_t(Device, const std::vector<SymShape> &)>;
 
+/** Node-aware scratch estimator, with access to attributes and optional input names. */
+using ComputePeakMemoryNodeFn =
+    std::function<int64_t(Device, const NodeProto &, const std::vector<SymShape> &)>;
+
 /**
  * Returns the ``(normalised_domain, op_type) -> ComputePeakMemoryFn``
  * dispatch table. Empty until libraries populate it via
@@ -126,6 +130,14 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
                                  Device device, ComputePeakMemoryFn fn);
 
 /**
+ * Registers (or replaces) a node-aware scratch estimator for the same identifier.
+ * Shape-only calls pass a node containing only the domain and operator type.
+ * Both overloads replace any previous estimator, including one of the other kind.
+ */
+void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
+                                 Device device, ComputePeakMemoryNodeFn fn);
+
+/**
  * Returns the estimated peak memory (in bytes) for (@p domain, @p op_type)
  * executed on @p device with inputs of shape @p input_shapes.
  *
@@ -141,6 +153,14 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
  *          has no registered peak-memory function.
  */
 int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
+                          const std::vector<SymShape> &input_shapes);
+
+/**
+ * Returns estimated scratch bytes for a node, forwarding its attributes to node-aware
+ * estimators and falling back to shape-only estimators when applicable.
+ * Input shapes retain node input positions; absent optional inputs have empty shapes.
+ */
+int64_t ComputePeakMemory(Device device, const NodeProto &node,
                           const std::vector<SymShape> &input_shapes);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

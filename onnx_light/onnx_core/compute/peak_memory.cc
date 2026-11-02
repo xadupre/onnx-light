@@ -22,8 +22,7 @@ void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Devi
         input_shapes.emplace_back();
       }
     }
-    const int64_t peak =
-        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+    const int64_t peak = shapes::ComputePeakMemory(device, node, input_shapes);
     if (peak > 0) {
       node.add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
     }

@@ -60,6 +60,11 @@ std::unordered_map<std::string, ComputePeakMemoryFn> &MutablePeakMemoryDispatchT
   return table;
 }
 
+std::unordered_map<std::string, ComputePeakMemoryNodeFn> &NodePeakMemoryDispatchTable() {
+  static std::unordered_map<std::string, ComputePeakMemoryNodeFn> table;
+  return table;
+}
+
 } // namespace
 
 const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
@@ -116,7 +121,22 @@ const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTa
 
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
                                  Device device, ComputePeakMemoryFn fn) {
-  MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
+  const auto key = DispatchKey(domain, op_type, device);
+  NodePeakMemoryDispatchTable().erase(key);
+  MutablePeakMemoryDispatchTable()[key] = std::move(fn);
+}
+
+void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
+                                 Device device, ComputePeakMemoryNodeFn fn) {
+  const auto key = DispatchKey(domain, op_type, device);
+  NodePeakMemoryDispatchTable()[key] = fn;
+  MutablePeakMemoryDispatchTable()[key] =
+      [domain, op_type, fn = std::move(fn)](Device target, const std::vector<SymShape> &inputs) {
+        NodeProto node;
+        node.set_domain(domain);
+        node.set_op_type(op_type);
+        return fn(target, node, inputs);
+      };
 }
 
 int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
@@ -129,6 +149,17 @@ int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type,
   const int64_t bytes = it->second(device, input_shapes);
   const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
   EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", identifier, ".");
+  return bytes;
+}
+
+int64_t ComputePeakMemory(Device device, const NodeProto &node,
+                          const std::vector<SymShape> &input_shapes) {
+  const auto &table = NodePeakMemoryDispatchTable();
+  auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
+  if (it == table.end())
+    return ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+  const int64_t bytes = it->second(device, node, input_shapes);
+  EXT_ENFORCE_INVALID(bytes >= 0, "Negative peak-memory estimate for ", node.op_type(), ".");
   return bytes;
 }
 

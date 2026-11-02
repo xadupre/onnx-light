@@ -1349,7 +1349,6 @@ using ::onnx_light::core::shapes::ComputePeakMemoryFn;
 // peak memory of ``0`` through :cpp:func:`core::shapes::ComputePeakMemory`.
 const std::unordered_map<std::string, ComputePeakMemoryFn> &BuiltinPeakMemoryFunctions() {
   static const std::unordered_map<std::string, ComputePeakMemoryFn> table = {
-      {"ai.onnx:Attention", nn::ComputePeakMemoryAttention},
       {"ai.onnx:LinearAttention", nn::ComputePeakMemoryLinearAttention},
   };
   return table;
@@ -1395,6 +1394,12 @@ void RegisterPeakMemoryFunctions() {
           key.substr(0, sep), key.substr(sep + 1), ::onnx_light::core::shapes::Device::kCPU,
           entry.second);
     }
+    ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(
+        "", "Attention", ::onnx_light::core::shapes::Device::kCPU,
+        [](shapes::Device device, const NodeProto &node,
+           const std::vector<shapes::SymShape> &inputs) {
+          return shapes::nn::ComputePeakMemoryAttention(device, node, inputs);
+        });
     return true;
   }();
   (void)kRegistered;

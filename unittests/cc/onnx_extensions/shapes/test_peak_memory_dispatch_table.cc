@@ -113,4 +113,40 @@ TEST(CoreShapesPeakMemory, DeviceIsPartOfIdentifier) {
             table.end());
 }
 
+TEST(CoreShapesPeakMemory, NodeAwareRegistrationPreservesLegacyCallsAndReplacement) {
+  const auto device = core::shapes::Device::kCPU;
+  NodeProto node;
+  node.set_domain("ai.onnx");
+  node.set_op_type("NodeAwarePeakMemoryOp");
+  auto *attr = node.add_attribute();
+  attr->set_name("bytes");
+  attr->set_type(AttributeProto::INT);
+  attr->set_i(128);
+  const core::shapes::ComputePeakMemoryNodeFn estimator =
+      [](core::shapes::Device, const NodeProto &current,
+         const std::vector<core::shapes::SymShape> &inputs) -> int64_t {
+    EXPECT_EQ(current.op_type(), "NodeAwarePeakMemoryOp");
+    EXPECT_EQ(inputs.size(), 2u);
+    return current.attribute_size() == 0 ? 16 : current.attribute(0).i();
+  };
+  const std::vector<core::shapes::SymShape> inputs(2);
+  core::shapes::RegisterComputePeakMemoryFn("", node.op_type(), device, estimator);
+  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 128);
+  EXPECT_EQ(core::shapes::ComputePeakMemory("", node.op_type(), device, inputs), 16);
+  EXPECT_EQ(core::shapes::ComputePeakMemory(core::symbolic::MakeGPUDevice(0), node, inputs), 0);
+  EXPECT_EQ(core::shapes::ComputePeakMemory(core::shapes::Device::kUndefined, node, inputs), 128);
+  node.mutable_attribute(0)->set_i(-1);
+  EXPECT_THROW(core::shapes::ComputePeakMemory(device, node, inputs), std::invalid_argument);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", node.op_type(), device,
+      [](core::shapes::Device, const std::vector<core::shapes::SymShape> &) -> int64_t {
+        return 32;
+      });
+  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 32);
+  EXPECT_EQ(core::shapes::ComputePeakMemory("", node.op_type(), device, inputs), 32);
+  node.mutable_attribute(0)->set_i(64);
+  core::shapes::RegisterComputePeakMemoryFn("", node.op_type(), device, estimator);
+  EXPECT_EQ(core::shapes::ComputePeakMemory(device, node, inputs), 64);
+}
+
 } // namespace Test

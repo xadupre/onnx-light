@@ -304,6 +304,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                         del model
                 del producer
             finally:
+                # NumPy has no public close API; explicitly release the backing mapping.
                 mapping._mmap.close()
 
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")

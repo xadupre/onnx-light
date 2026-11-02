@@ -3456,6 +3456,7 @@ public:
 
   template <typename T> void Visit(T &value) {
     if constexpr (std::is_same_v<T, utils::ByteSpan>) {
+      // A null managed pointer can still have a lifetime-retaining control block.
       if (value.is_borrowed() && (!value.is_memory_borrowed() || value.owner().use_count() == 0)) {
         utils::ByteSpan snapshot;
         const auto &raw = std::as_const(value);

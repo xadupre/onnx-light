@@ -53,10 +53,9 @@ struct ImportedDLPackOwner {
   }
 };
 
-utils::ByteSpan::BorrowedStorage PythonBufferStorage(nb::handle array) {
+utils::ByteSpan::BorrowedStorage PythonBufferStorage(nb::handle array, nb::handle ndarray) {
   if (PyBytes_CheckExact(array.ptr()) || PyByteArray_CheckExact(array.ptr()))
     return utils::ByteSpan::BorrowedStorage::kMemory;
-  const auto ndarray = nb::module_::import_("numpy").attr("ndarray");
   nb::object base = nb::borrow<nb::object>(array);
   while (reinterpret_cast<PyObject *>(Py_TYPE(base.ptr())) == ndarray.ptr()) {
     if (nb::cast<bool>(base.attr("flags").attr("owndata")))
@@ -66,7 +65,7 @@ utils::ByteSpan::BorrowedStorage PythonBufferStorage(nb::handle array) {
   return utils::ByteSpan::BorrowedStorage::kUnknown;
 }
 
-TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
+TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name, nb::handle ndarray) {
   if (!nb::hasattr(array, "__dlpack__") || !nb::hasattr(array, "__dlpack_device__"))
     throw nb::type_error("TensorProto.from_dlpack requires the DLPack array protocol.");
   const auto device = nb::cast<std::pair<int, int>>(array.attr("__dlpack_device__")());
@@ -167,7 +166,7 @@ TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
   static const uint8_t empty_data = 0;
   const auto *data =
       size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
-  auto storage = PythonBufferStorage(array);
+  auto storage = PythonBufferStorage(array, ndarray);
   if (nb::isinstance<TensorProto>(array)) {
     const auto &raw = nb::cast<const TensorProto &>(array).ref_raw_data();
     if (raw.is_memory_borrowed() && raw.data() == data && raw.size() == size)
@@ -1325,6 +1324,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
 void AddOnnxPyProto(nb::module_ &m) {
   m.doc() = "onnx from python without protobuf but using the same format";
   m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
+  const nb::object ndarray = nb::module_::import_("numpy").attr("ndarray");
 
   m.def(
       "utils_onnx_read_varint64",
@@ -2437,7 +2437,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           TensorProto::DOC_raw_data)
       .def(
           "_set_raw_data_from_buffer",
-          [](TensorProto &self, nb::handle array) {
+          [ndarray](TensorProto &self, nb::handle array) {
             auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{}, [](Py_buffer *buffer) {
               nb::gil_scoped_acquire gil;
               PyBuffer_Release(buffer);
@@ -2450,15 +2450,20 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             const auto *data =
                 buffer->buf ? static_cast<const uint8_t *>(buffer->buf) : &empty_data;
             const size_t size = static_cast<size_t>(buffer->len);
-            const auto storage = PythonBufferStorage(array);
+            const auto storage = PythonBufferStorage(array, ndarray);
             self.ref_raw_data().assign_borrowed(data, size, std::move(buffer), storage);
           },
           nb::arg("array"),
           "Borrows a contiguous buffer as raw_data and retains its exporter until final release.")
-      .def_static("from_dlpack", &TensorProtoFromDLPack, nb::arg("array"), nb::arg("name") = "",
-                  "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
-                  "Borrows read-only raw_data and retains the producer's managed allocation. "
-                  "Uses stream=None; asynchronous synchronization and copying are unsupported.")
+      .def_static(
+          "from_dlpack",
+          [ndarray](nb::object array, const std::string &name) {
+            return TensorProtoFromDLPack(std::move(array), name, ndarray);
+          },
+          nb::arg("array"), nb::arg("name") = "",
+          "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
+          "Borrows read-only raw_data and retains the producer's managed allocation. "
+          "Uses stream=None; asynchronous synchronization and copying are unsupported.")
       .def(
           "__copy__",
           [](const TensorProto &self) {

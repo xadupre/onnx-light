@@ -46,6 +46,27 @@ TEST(SharedPayloadCopy, ExternalExportRetainsMemoryOwnersAndSnapshotsUnprovenSto
   EXPECT_TRUE(lifetime.expired());
 }
 
+TEST(SharedPayloadCopy, ExternalExportRetainsNullPointerLifetimeTokens) {
+  ModelProto source;
+  auto allocation = std::make_shared<std::vector<uint8_t>>(8, 7);
+  std::weak_ptr<std::vector<uint8_t>> lifetime = allocation;
+  const auto *address = allocation->data();
+  std::shared_ptr<void> owner(nullptr, [allocation](void *) {});
+  ASSERT_FALSE(owner);
+  ASSERT_GT(owner.use_count(), 0);
+  source.mutable_graph()->add_initializer()->ref_raw_data().assign_borrowed(
+      address, allocation->size(), owner, utils::ByteSpan::BorrowedStorage::kMemory);
+  allocation.reset();
+  owner.reset();
+  auto exported = utils::detail::MakeExternalDataExportCopy(source);
+  EXPECT_EQ(std::as_const(source).graph().initializer(0).raw_data().data(), address);
+  EXPECT_EQ(std::as_const(exported).graph().initializer(0).raw_data().data(), address);
+  source.Clear();
+  EXPECT_FALSE(lifetime.expired());
+  exported.Clear();
+  EXPECT_TRUE(lifetime.expired());
+}
+
 TEST(SharedPayloadCopy, ExternalExportSnapshotsNestedAndEncodedRawFieldsThroughSchema) {
   std::vector<std::shared_ptr<std::string>> allocations;
   const auto borrow = [&](utils::ByteSpan &raw, const std::string &bytes) {

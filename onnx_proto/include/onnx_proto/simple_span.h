@@ -638,6 +638,7 @@ public:
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
+    borrowed_storage_ = BorrowedStorage::kUnknown;
     aligned_owned_ = false;
     align_ = 0;
     owner_.reset();

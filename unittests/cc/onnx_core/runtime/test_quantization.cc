@@ -310,6 +310,58 @@ TEST(Quantization, Nvfp4WeightsRejectsInvalidInputsAndScales) {
   EXPECT_THROW(QuantizeNvfp4Weights(nonfinite, scales, 1), std::invalid_argument);
 }
 
+TEST(Quantization, Nvfp4WeightsReportsScaleFailureStageAndGroup) {
+  const auto source = Tensor::FromFloat("", {1, 32}, std::vector<float>(32, 0));
+  auto rejects = [&](const Tensor &scales, float global, const char *message) {
+    try {
+      QuantizeNvfp4Weights(source, scales, global);
+      FAIL() << "Expected invalid NVFP4 scales.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+    }
+  };
+  rejects(
+      Tensor::FromFloat("", {1, 2}, {1, 1.f / 1024}), 1,
+      "NVFP4 WEIGHT local scale rounds to zero or a nonfinite value after FP8 rounding in group 1");
+  rejects(Tensor::FromFloat("", {1, 2}, {1, 448}), std::numeric_limits<float>::min(),
+          "NVFP4 WEIGHT effective scale overflow or nonfinite value in group 1");
+}
+
+TEST(Quantization, Nvfp4WeightsValidatesEmittedCodesAndReportsWirePosition) {
+  const auto scales = Tensor::FromFloat("", {1, 2}, {1, 1});
+  std::vector<float> values(32, 0);
+  values[19] = std::numeric_limits<float>::max();
+  auto rejects = [](auto operation) {
+    try {
+      operation();
+      FAIL() << "Expected nonfinite NVFP4 reconstruction.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(
+          std::string(error.what())
+              .find(
+                  "NVFP4 WEIGHT reconstruction overflow or nonfinite value in group 1, element 3"),
+          std::string::npos)
+          << error.what();
+    }
+  };
+  rejects([&] {
+    QuantizeNvfp4Weights(Tensor::FromFloat("", {1, 32}, values), scales,
+                         std::numeric_limits<float>::min());
+  });
+  values[19] = std::numeric_limits<float>::max() / 2;
+  EXPECT_NO_THROW(QuantizeNvfp4Weights(Tensor::FromFloat("", {1, 32}, values), scales,
+                                       std::numeric_limits<float>::min()));
+  auto encoded = QuantizeNvfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, 0)),
+                                      scales, std::numeric_limits<float>::min());
+  auto weights = ExportNvfp4Weights(encoded);
+  weights.weight_packed.mutable_bytes()[9] = 0x70;
+  rejects([&] { ImportNvfp4Weights(weights); });
+  (*encoded.mutable_raw_data())[9] = 0x70;
+  rejects([&] { ExportNvfp4Weights(encoded); });
+  rejects([&] { DequantizeTensor(encoded); });
+  rejects([&] { DequantizeTensorProto(encoded); });
+}
+
 TEST(Quantization, Nvfp4WeightsExtremeScalingAndReconstruction) {
   const auto source =
       Tensor::FromFloat("", {1, 16},

@@ -1235,24 +1235,47 @@ StructTypeProto Nvfp4Schema(const Nvfp4Geometry &geometry) {
   return root;
 }
 
+EncodedValueProto MakeNvfp4Value(const Nvfp4Geometry &geometry, float global) {
+  EncodedValueProto result;
+  ByteWriter payload(*result.mutable_raw_data(), geometry.total_bytes);
+  payload.position = geometry.packed_bytes + geometry.scale_bytes;
+  payload.Put(std::bit_cast<uint32_t>(global), 4);
+  payload.Finish();
+  *result.mutable_struct_type() = Nvfp4Schema(geometry);
+  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.rows);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.cols);
+  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  return result;
+}
+
 void ValidateNvfp4Tensor(const Tensor &tensor, int32_t dtype, const Shape &shape, size_t bytes) {
   EXT_ENFORCE_INVALID(tensor.data_type == dtype && tensor.shape == shape &&
                           tensor.size_bytes() == bytes && tensor.bytes() != nullptr,
                       "Invalid NVFP4 WEIGHT tensor type, shape or storage.");
 }
 
-float Nvfp4EffectiveScale(uint8_t local, float global) {
+float Nvfp4EffectiveScale(uint8_t local, float global, size_t group) {
   const float scale = Float8E4M3FNBitsToFloat(local);
   EXT_ENFORCE_INVALID(std::isfinite(global) && global > 0 && std::isfinite(scale) && scale > 0,
-                      "NVFP4 WEIGHT scales must be positive and finite.");
-  const float effective = RoundFloat(scale / global);
-  EXT_ENFORCE_INVALID(effective > 0, "NVFP4 WEIGHT effective scale rounds to zero.");
+                      "NVFP4 WEIGHT scales must be positive and finite in group ", group, ".");
+  volatile float effective = scale / global;
+  EXT_ENFORCE_INVALID(std::isfinite(effective),
+                      "NVFP4 WEIGHT effective scale overflow or nonfinite value in group ", group,
+                      ".");
+  EXT_ENFORCE_INVALID(effective > 0, "NVFP4 WEIGHT effective scale rounds to zero in group ", group,
+                      ".");
   return effective;
 }
 
-float Nvfp4Reconstruct(uint8_t code, float effective) {
+float Nvfp4Reconstruct(uint8_t code, float effective, size_t group, size_t element) {
   const float level = code & 8 ? -kNvfp4Levels[code & 7] : kNvfp4Levels[code & 7];
-  return RoundFloat(level * effective);
+  volatile float reconstructed = level * effective;
+  EXT_ENFORCE_INVALID(std::isfinite(reconstructed),
+                      "NVFP4 WEIGHT reconstruction overflow or nonfinite value in group ", group,
+                      ", element ", element, ".");
+  return reconstructed;
 }
 
 struct Nvfp4PackedValue {
@@ -1263,11 +1286,11 @@ struct Nvfp4PackedValue {
 
 void ValidateNvfp4Reconstruction(const Nvfp4PackedValue &value) {
   for (size_t group = 0; group < value.geometry.scale_bytes; ++group) {
-    const float effective = Nvfp4EffectiveScale(value.scales[group], value.global);
+    const float effective = Nvfp4EffectiveScale(value.scales[group], value.global, group);
     for (size_t j = 0; j < 8; ++j) {
       const uint8_t byte = value.packed[group * 8 + j];
-      Nvfp4Reconstruct(byte & 15, effective);
-      Nvfp4Reconstruct(byte >> 4, effective);
+      Nvfp4Reconstruct(byte & 15, effective, group, j * 2);
+      Nvfp4Reconstruct(byte >> 4, effective, group, j * 2 + 1);
     }
   }
 }
@@ -1521,11 +1544,11 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
     const auto packed = ParseNvfp4Value(encoded, catalogue);
     std::vector<float> values(packed.geometry.count);
     for (size_t group = 0; group < packed.geometry.scale_bytes; ++group) {
-      const float effective = Nvfp4EffectiveScale(packed.scales[group], packed.global);
+      const float effective = Nvfp4EffectiveScale(packed.scales[group], packed.global, group);
       for (size_t j = 0; j < 8; ++j) {
         const uint8_t byte = packed.packed[group * 8 + j];
-        values[group * 16 + j * 2] = Nvfp4Reconstruct(byte & 15, effective);
-        values[group * 16 + j * 2 + 1] = Nvfp4Reconstruct(byte >> 4, effective);
+        values[group * 16 + j * 2] = Nvfp4Reconstruct(byte & 15, effective, group, j * 2);
+        values[group * 16 + j * 2 + 1] = Nvfp4Reconstruct(byte >> 4, effective, group, j * 2 + 1);
       }
     }
     return {{packed.geometry.rows, packed.geometry.cols}, TensorProto::FLOAT, std::move(values)};
@@ -1556,20 +1579,10 @@ EncodedValueProto ImportNvfp4Weights(const Nvfp4Weights &weights) {
                                {weights.weight_packed.bytes(), geometry.packed_bytes},
                                {weights.weight_scale.bytes(), geometry.scale_bytes},
                                weights.weight_global_scale});
-  EncodedValueProto result;
-  ByteWriter payload(*result.mutable_raw_data(), geometry.total_bytes);
-  for (size_t i = 0; i < geometry.packed_bytes; ++i)
-    payload.Put(weights.weight_packed.bytes()[i], 1);
-  for (size_t i = 0; i < geometry.scale_bytes; ++i)
-    payload.Put(weights.weight_scale.bytes()[i], 1);
-  payload.Put(std::bit_cast<uint32_t>(weights.weight_global_scale), 4);
-  payload.Finish();
-  *result.mutable_struct_type() = Nvfp4Schema(geometry);
-  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
-  logical->set_elem_type(TensorProto::FLOAT);
-  logical->mutable_shape()->add_dim()->set_dim_value(geometry.rows);
-  logical->mutable_shape()->add_dim()->set_dim_value(geometry.cols);
-  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  auto result = MakeNvfp4Value(geometry, weights.weight_global_scale);
+  auto *bytes = result.mutable_raw_data()->data();
+  std::memcpy(bytes, weights.weight_packed.bytes(), geometry.packed_bytes);
+  std::memcpy(bytes + geometry.packed_bytes, weights.weight_scale.bytes(), geometry.scale_bytes);
   return result;
 }
 
@@ -1604,12 +1617,9 @@ EncodedValueProto QuantizeNvfp4Weights(const Tensor &tensor, const Tensor &local
                       Product(geometry.scale_bytes, float_scales ? sizeof(float) : 1));
   EXT_ENFORCE_INVALID(std::isfinite(global_scale) && global_scale > 0,
                       "NVFP4 WEIGHT global scale must be positive and finite.");
-  Nvfp4Weights weights{MakeOutputTensor(TensorProto::UINT8, {geometry.rows, geometry.cols / 2},
-                                        geometry.packed_bytes, nullptr),
-                       MakeOutputTensor(TensorProto::FLOAT8E4M3FN,
-                                        {geometry.rows, geometry.cols / 16}, geometry.scale_bytes,
-                                        nullptr),
-                       global_scale};
+  auto result = MakeNvfp4Value(geometry, global_scale);
+  auto *packed = result.mutable_raw_data()->data();
+  auto *scales = packed + geometry.packed_bytes;
   for (size_t group = 0; group < geometry.scale_bytes; ++group) {
     uint8_t scale;
     if (float_scales) {
@@ -1617,22 +1627,33 @@ EncodedValueProto QuantizeNvfp4Weights(const Tensor &tensor, const Tensor &local
       EXT_ENFORCE_INVALID(std::isfinite(raw) && raw > 0,
                           "NVFP4 WEIGHT local scales must be positive and finite.");
       scale = FloatToFloat8E4M3FNBits(raw);
+      const float rounded = Float8E4M3FNBitsToFloat(scale);
+      EXT_ENFORCE_INVALID(std::isfinite(rounded) && rounded > 0,
+                          "NVFP4 WEIGHT local scale rounds to zero or a nonfinite value after FP8 "
+                          "rounding in group ",
+                          group, ".");
     } else {
       scale = local_scales.bytes()[group];
     }
-    const float effective = Nvfp4EffectiveScale(scale, global_scale);
-    weights.weight_scale.mutable_bytes()[group] = scale;
+    const float effective = Nvfp4EffectiveScale(scale, global_scale, group);
+    volatile float largest_reconstruction = kNvfp4Levels.back() * effective;
+    const bool check_codes = !std::isfinite(largest_reconstruction);
+    scales[group] = scale;
     for (size_t j = 0; j < 8; ++j) {
       const size_t index = group * 16 + j * 2;
       const float low = Load<float>(tensor.bytes() + index * sizeof(float));
       const float high = Load<float>(tensor.bytes() + (index + 1) * sizeof(float));
       EXT_ENFORCE_INVALID(std::isfinite(low) && std::isfinite(high),
                           "NVFP4 WEIGHT source must be finite.");
-      weights.weight_packed.mutable_bytes()[group * 8 + j] =
-          Nvfp4Code(low, effective) | (Nvfp4Code(high, effective) << 4);
+      const uint8_t low_code = Nvfp4Code(low, effective);
+      const uint8_t high_code = Nvfp4Code(high, effective);
+      if (check_codes) {
+        Nvfp4Reconstruct(low_code, effective, group, j * 2);
+        Nvfp4Reconstruct(high_code, effective, group, j * 2 + 1);
+      }
+      packed[group * 8 + j] = low_code | (high_code << 4);
     }
   }
-  auto result = ImportNvfp4Weights(weights);
   result.set_name(tensor.name);
   return result;
 }

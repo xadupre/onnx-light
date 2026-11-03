@@ -337,7 +337,6 @@ PeakMemoryEstimate MaxWorkspace(const PeakMemoryEstimate &a, const PeakMemoryEst
 }
 
 PeakMemoryEstimate NodeWorkspace(const NodeProto &node, const ShapesContext &ctx, Device device,
-                                 const std::vector<SymShape> &inputs,
                                  const FunctionBodyMemoryEstimate &body) {
   if (body.has_body) {
     const std::string key =
@@ -345,7 +344,7 @@ PeakMemoryEstimate NodeWorkspace(const NodeProto &node, const ShapesContext &ctx
     if (!shapes::PeakMemoryDispatchTable().contains(key))
       return body.workspace_peak;
   }
-  const auto estimate = shapes::ComputePeakMemory(device, node, inputs);
+  const auto estimate = shapes::ComputePeakMemory(ctx, device, node);
   return body.has_body ? MaxWorkspace(estimate, body.workspace_peak, &ctx.ExpressionCache())
                        : estimate;
 }
@@ -512,18 +511,9 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   expressions::DimType live = int64_t{0};
   for (std::size_t index = 0; index < bound_nodes.size(); ++index) {
     const NodeProto &inner = bound_nodes[index];
-    std::vector<SymShape> input_shapes;
-    input_shapes.reserve(inner.input().size());
-    for (const std::string &input : inner.input()) {
-      if (!input.empty() && body_shapes.Has(input))
-        input_shapes.push_back(body_shapes.Get(input).Shape());
-      else
-        input_shapes.emplace_back();
-    }
     const FunctionBodyMemoryEstimate nested = EstimateFunctionBodyMemory(
         inner, body_shapes, device, active_functions, validate_allocations);
-    const PeakMemoryEstimate workspace =
-        NodeWorkspace(inner, body_shapes, device, input_shapes, nested);
+    const PeakMemoryEstimate workspace = NodeWorkspace(inner, body_shapes, device, nested);
     live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
                                 &expression_cache);
     const expressions::DimType peak =
@@ -1712,18 +1702,8 @@ void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t nod
   if (peak_memory_.size() <= node_index) {
     peak_memory_.resize(node_index + 1, PeakMemoryEstimate::Exact(SymDim(int64_t{0})));
   }
-  std::vector<SymShape> input_shapes;
-  input_shapes.reserve(node.input().size());
-  for (const auto &input_name : node.input()) {
-    if (!input_name.empty() && shapes_.Has(input_name)) {
-      input_shapes.push_back(shapes_.Get(input_name).Shape());
-    } else {
-      input_shapes.emplace_back();
-    }
-  }
-  peak_memory_[node_index] =
-      NodeWorkspace(node, shapes_, device, input_shapes,
-                    EstimateFunctionBodyMemory(node, shapes_, device, materialize));
+  peak_memory_[node_index] = NodeWorkspace(
+      node, shapes_, device, EstimateFunctionBodyMemory(node, shapes_, device, materialize));
   if (memory_matches_shapes_ && node_index < memory_.size()) {
     UpdateNodeMemoryBoundaries(memory_[node_index], peak_memory_[node_index].worst_case,
                                &shapes_.ExpressionCache());
@@ -2139,17 +2119,8 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
   peak_memory_.assign(static_cast<std::size_t>(nodes.size()), {});
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &node = nodes[i];
-    std::vector<SymShape> input_shapes;
-    input_shapes.reserve(node.input().size());
-    for (const auto &input_name : node.input()) {
-      if (!input_name.empty() && shapes_.Has(input_name)) {
-        input_shapes.push_back(shapes_.Get(input_name).Shape());
-      } else {
-        input_shapes.emplace_back();
-      }
-    }
-    peak_memory_[i] = NodeWorkspace(node, shapes_, device, input_shapes,
-                                    EstimateFunctionBodyMemory(node, shapes_, device));
+    peak_memory_[i] =
+        NodeWorkspace(node, shapes_, device, EstimateFunctionBodyMemory(node, shapes_, device));
     if (memory_matches_shapes_ && i < memory_.size()) {
       UpdateNodeMemoryBoundaries(memory_[i], peak_memory_[i].worst_case,
                                  &shapes_.ExpressionCache());

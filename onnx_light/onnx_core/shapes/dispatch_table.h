@@ -165,4 +165,13 @@ PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::strin
 PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
                                      const std::vector<SymShape> &input_shapes);
 
+/**
+ * Returns additional peak memory using descriptors from a shapes context.
+ * Missing named inputs yield an unknown bound for registered estimators, not
+ * scalar shapes. Omitted optional inputs retain their empty positional shapes.
+ * Unregistered operators return zero, including with incomplete descriptors.
+ */
+PeakMemoryEstimate ComputePeakMemory(const ShapesContext &ctx, Device device,
+                                     const NodeProto &node);
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

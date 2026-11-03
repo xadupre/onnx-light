@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/runtime_session.h"
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/elementwise_helpers.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -140,6 +141,34 @@ TEST(SimpleTensorShape, VectorRankValidationPrecedesCopyAndAssignment) {
   EXPECT_EQ(shape, (Shape{2, 3}));
   EXPECT_THROW(shape = std::vector<int64_t>(dims), std::invalid_argument);
   EXPECT_EQ(shape, (Shape{2, 3}));
+}
+
+TEST(SimpleTensorShape, BinaryBroadcastKeepsStridesInlineThroughMaximumRank) {
+  for (const size_t rank : {size_t{3}, Shape::kMaxRank}) {
+    SCOPED_TRACE(rank);
+    Shape a, b;
+    a.assign(rank, 1);
+    b.assign(rank, 1);
+    a[0] = 2;
+    b[rank - 1] = 3;
+    const auto x = Tensor::FromFloat("X", a, {2, 3});
+    const auto y = Tensor::FromFloat("Y", b, {5, 7, 11});
+    const auto info =
+        core::runtime::detail::CheckBinaryBroadcast("Mul", "FLOAT", DataType::FLOAT, x, y);
+    const auto begin = reinterpret_cast<std::uintptr_t>(&info);
+    const auto end = begin + sizeof(info);
+    for (const auto *strides : {&info.strides_x, &info.strides_y}) {
+      const auto data = reinterpret_cast<std::uintptr_t>(strides->data());
+      EXPECT_GE(data, begin);
+      EXPECT_LE(data + rank * sizeof(int64_t), end);
+    }
+    const auto output = core::runtime::detail::BinaryElementwiseAlloc<float, float>(
+        "Mul", "FLOAT", DataType::FLOAT, x, y, [](float u, float v) { return u * v; });
+    const std::vector<float> expected{10, 14, 22, 15, 21, 33};
+    ASSERT_EQ(output.element_count(), static_cast<int64_t>(expected.size()));
+    for (size_t i = 0; i < expected.size(); ++i)
+      EXPECT_FLOAT_EQ(output.AsFloat()[i], expected[i]);
+  }
 }
 
 TEST(SimpleTensorSharing, InlineStorageSurvivesSourceWithoutPayloadCopy) {

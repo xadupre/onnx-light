@@ -6,7 +6,6 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_core import shape_inference as si
-from onnx_light.onnx_core.expressions import evaluate_expression
 
 
 class TestInPlaceReuse(ExtTestCase):
@@ -96,13 +95,10 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(first[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
         self.assertEqual(final[si.NODE_MEMORY_BEFORE_BYTES_KEY], 48)
         maximum = ctx.node_peak_memory(1).worst_case
-        self.assertTrue(maximum.is_expr())
-        bounds = {maximum.value(): 64}
-        self.assertEqual(evaluate_expression(final[si.NODE_MEMORY_DURING_BYTES_KEY], bounds), 112)
+        self.assertEqual(maximum.value(), 0)
+        self.assertEqual(final[si.NODE_MEMORY_DURING_BYTES_KEY], 48)
         self.assertEqual(final[si.NODE_MEMORY_AFTER_BYTES_KEY], 48)
-        self.assertEqual(
-            evaluate_expression(final[si.NODE_MEMORY_RELEASED_BYTES_KEY], bounds), 64
-        )
+        self.assertEqual(final[si.NODE_MEMORY_RELEASED_BYTES_KEY], 0)
         self.assertEqual(final, ctx.node_memory(1))
 
     def test_value_read_twice_reused_only_at_last_use(self):

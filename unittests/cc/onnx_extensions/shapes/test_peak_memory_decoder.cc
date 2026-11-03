@@ -140,6 +140,69 @@ TEST(ComputePeakMemoryDecoder, UnsupportedQueriesRetainUnresolvedBounds) {
             PeakMemoryEstimate::Exact(SymDim(int64_t{0})));
 }
 
+TEST(ComputePeakMemoryDecoder, PartialContextsDoNotTurnMissingInputsIntoScalars) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  for (const auto *op : {"Gather", "RMSNormalization", "UnregisteredDecoderOp"}) {
+    SCOPED_TRACE(op);
+    GraphProto graph;
+    auto &node = *graph.add_node();
+    node.set_op_type(op);
+    node.add_input("X");
+    node.add_input("W");
+    node.add_output("Y");
+    core::compute::ComputeContext ctx;
+    ctx.Shapes().Set(
+        "X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {2, 3, 4}));
+    const bool registered = std::string(op) != "UnregisteredDecoderOp";
+    const auto missing = registered ? core::shapes::UnknownPeakMemory("", op)
+                                    : PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
+    const auto check_metadata = [&](const PeakMemoryEstimate &expected) {
+      core::compute::WritePeakMemoryToMetadata(graph, ctx.Shapes(), Device::kCPU);
+      bool found = false;
+      for (const auto &entry : node.metadata_props()) {
+        if (entry.key() == core::compute::kNodePeakMemoryMaxMetadataKey) {
+          found = true;
+          EXPECT_EQ(entry.value(), expected.worst_case.ToString());
+        }
+      }
+      EXPECT_TRUE(found);
+    };
+    ctx.ComputePeakMemory(graph);
+    EXPECT_EQ(ctx.NodePeakMemory(0), missing);
+    ctx.AppendNodePeakMemory(node, 0);
+    EXPECT_EQ(ctx.NodePeakMemory(0), missing);
+    check_metadata(missing);
+
+    ctx.Shapes().Set("W",
+                     core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+    const auto scalar = DecoderPeakMemory(op, {{2, 3, 4}, {}});
+    ASSERT_TRUE(scalar.worst_case.IsInt());
+    ctx.ComputePeakMemory(graph);
+    EXPECT_EQ(ctx.NodePeakMemory(0), scalar);
+    ctx.AppendNodePeakMemory(node, 0);
+    EXPECT_EQ(ctx.NodePeakMemory(0), scalar);
+    check_metadata(scalar);
+  }
+}
+
+TEST(ComputePeakMemoryDecoder, ContextQueriesPreserveOmittedOptionalInputSlots) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  GraphProto graph;
+  auto &node = *graph.add_node();
+  node.set_op_type("Slice");
+  for (const auto *input : {"X", "starts", "ends", "", "steps"})
+    node.add_input(input);
+  node.add_output("Y");
+  core::compute::ComputeContext ctx;
+  ctx.Shapes().Set("X",
+                   core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {8, 16}));
+  for (const auto *input : {"starts", "ends", "steps"})
+    ctx.Shapes().Set(input,
+                     core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {2}));
+  ctx.ComputePeakMemory(graph);
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 64);
+}
+
 TEST(ComputePeakMemoryDecoder, RejectsInvalidDimensionsAndOverflow) {
   const int64_t large = std::numeric_limits<int64_t>::max();
   EXPECT_THROW(DecoderPeakMemory("MatMul", {{2, 3}, {4, 5}}), std::invalid_argument);

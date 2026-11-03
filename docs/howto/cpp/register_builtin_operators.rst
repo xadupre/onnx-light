@@ -277,8 +277,8 @@ Decoder peak-memory coverage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The CPU registrations include bounds for the portable native decoder kernels.
-They count additional tensor allocations, not declared inputs/outputs,
-shape/stride bookkeeping, allocator bookkeeping or shared thread-pool overhead:
+They count additional heap buffers, not declared inputs/outputs,
+inline shape/stride storage, allocator bookkeeping or shared thread-pool overhead:
 
 * ``MatMul``: ``4 * (elements(A) + elements(B) + elements(Y))``, including
   broadcast batches and vector operands. This covers the simultaneously live
@@ -294,13 +294,17 @@ shape/stride bookkeeping, allocator bookkeeping or shared thread-pool overhead:
   some have disjoint lifetimes.
 * ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
   ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
-  no per-operator registration is needed.
+  no per-operator registration is needed. Binary broadcast strides use inline
+  ``Shape`` storage for every supported rank, including equal-shape and scalar
+  fast paths, so they require no additional heap buffers.
 
 Registered estimators can explicitly return unresolved bounds when required
 shapes are missing or contain placeholder dimensions. Symbolic dimensions yield
 expressions where peak memory depends on them; negative dimensions and concrete
 overflow are rejected. Missing estimators, including for other devices or
 domains, return zero instead.
+Context-based queries distinguish missing named input descriptors from known
+scalars; empty optional input slots keep their positions.
 
 An optimized runtime such as ``onnx-light-cpu`` must register its own estimator
 **after** calling ``RegisterPeakMemoryFunctions`` if its kernels allocate different

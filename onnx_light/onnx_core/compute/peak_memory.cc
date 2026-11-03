@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
@@ -30,16 +29,7 @@ void WritePeakMemoryEstimate(NodeProto &node, const shapes::PeakMemoryEstimate &
 
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
   for (NodeProto &node : *graph.mutable_node()) {
-    std::vector<symbolic::SymShape> input_shapes;
-    input_shapes.reserve(node.input().size());
-    for (const auto &input_name : node.input()) {
-      if (!input_name.empty() && ctx.Has(input_name)) {
-        input_shapes.push_back(ctx.Get(input_name).Shape());
-      } else {
-        input_shapes.emplace_back();
-      }
-    }
-    WritePeakMemoryEstimate(node, shapes::ComputePeakMemory(device, node, input_shapes));
+    WritePeakMemoryEstimate(node, shapes::ComputePeakMemory(ctx, device, node));
   }
 }
 

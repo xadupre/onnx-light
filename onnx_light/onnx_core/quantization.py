@@ -1,6 +1,7 @@
 """Converts tensors to portable, self-describing quantized values.
 
 Portable profiles describe onnx-light representations, not vendor binary layouts.
+The separate NVFP4 weight codec preserves FP8 local scales and a FLOAT32 global scale.
 ORT_MATMULNBITS_INT2/INT4/INT8 produce ONNX Runtime operator inputs, not internal
 kernel prepacking. No profile performs calibration. See :doc:`/howto/python/quantized_values`.
 """
@@ -15,6 +16,10 @@ QuantizationBlockParameters = runtime.QuantizationBlockParameters
 QuantizationRun = runtime.QuantizationRun
 QuantizationPlan = runtime.QuantizationPlan
 MatMulNBitsInputs = runtime.MatMulNBitsInputs
+Nvfp4Weights = runtime.Nvfp4Weights
+quantize_nvfp4_weights = runtime.quantize_nvfp4_weights
+export_nvfp4_weights = runtime.export_nvfp4_weights
+import_nvfp4_weights = runtime.import_nvfp4_weights
 quantization_formats = runtime.quantization_formats
 quantization_format_name = runtime.quantization_format_name
 parse_quantization_format = runtime.parse_quantization_format
@@ -108,6 +113,7 @@ def add_quantization_parameters(
 
 __all__ = [
     "MatMulNBitsInputs",
+    "Nvfp4Weights",
     "QuantizationBlockLayout",
     "QuantizationBlockParameters",
     "QuantizationFormat",
@@ -120,6 +126,8 @@ __all__ = [
     "dequantize_tensor",
     "dequantize_tensor_proto",
     "export_matmul_nbits_inputs",
+    "export_nvfp4_weights",
+    "import_nvfp4_weights",
     "make_matmul_nbits_plan",
     "make_quantization_plan",
     "make_quantization_type",
@@ -128,6 +136,7 @@ __all__ = [
     "parse_quantization_format",
     "quantization_format_name",
     "quantization_formats",
+    "quantize_nvfp4_weights",
     "quantize_tensor",
     "quantize_tensor_proto",
     "quantize_tensor_shared",

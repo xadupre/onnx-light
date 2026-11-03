@@ -43,17 +43,18 @@ NodeProto DecoderNode(const std::string &op, const std::string &attribute, int64
 
 } // namespace
 
-TEST(ComputePeakMemoryDecoder, MatMulIncludesPromotedInputsAndBroadcastOutput) {
+TEST(ComputePeakMemoryDecoder, MatMulIncludesPromotionsAndPreallocatedOutputTemporary) {
+  EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 2}}).worst_case.AsInt(), 72);
   EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).worst_case.AsInt(),
-            4 * (2 * 3 + 3 * 5 + 2 * 5));
+            4 * (2 * 3 + 3 * 5) + 6 * (2 * 5));
   EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 1, 3, 4}, {1, 7, 4, 5}}).worst_case.AsInt(),
-            4 * (2 * 3 * 4 + 7 * 4 * 5 + 2 * 7 * 3 * 5));
-  EXPECT_EQ(DecoderPeakMemory("MatMul", {{3}, {3}}).worst_case.AsInt(), 4 * (3 + 3 + 1));
-  EXPECT_EQ(DecoderPeakMemory("MatMul", {{3}, {3, 5}}).worst_case.AsInt(), 4 * (3 + 15 + 5));
-  EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3}}).worst_case.AsInt(), 4 * (6 + 3 + 2));
+            4 * (2 * 3 * 4 + 7 * 4 * 5) + 6 * (2 * 7 * 3 * 5));
+  EXPECT_EQ(DecoderPeakMemory("MatMul", {{3}, {3}}).worst_case.AsInt(), 4 * (3 + 3) + 6);
+  EXPECT_EQ(DecoderPeakMemory("MatMul", {{3}, {3, 5}}).worst_case.AsInt(), 4 * (3 + 15) + 6 * 5);
+  EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3}}).worst_case.AsInt(), 4 * (6 + 3) + 6 * 2);
   EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, SymDim(int64_t{0})}, {SymDim(int64_t{0}), 5}})
                 .worst_case.AsInt(),
-            4 * 10);
+            6 * 10);
   EXPECT_FALSE(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).average_case);
 }
 
@@ -106,7 +107,7 @@ TEST(ComputePeakMemoryDecoder, SymbolicBoundsResolveWithDimensionBindings) {
   const auto matmul = DecoderPeakMemory("MatMul", {{SymDim("N"), 3}, {3, 5}});
   ASSERT_TRUE(matmul.worst_case.IsExpr());
   EXPECT_EQ(core::expressions::evaluate_expression(matmul.worst_case.AsExpr(), {{"N", 2}}),
-            4 * (6 + 15 + 10));
+            4 * (6 + 15) + 6 * 10);
   const auto gather = DecoderPeakMemory("Gather", {{8, 16}, {SymDim("N")}});
   EXPECT_EQ(core::expressions::evaluate_expression(gather.worst_case.AsExpr(), {{"N", 7}}), 56);
   const auto slice = DecoderPeakMemory("Slice", {{8, 16}, {SymDim("N")}, {SymDim("N")}});
@@ -208,6 +209,9 @@ TEST(ComputePeakMemoryDecoder, RejectsInvalidDimensionsAndOverflow) {
   EXPECT_THROW(DecoderPeakMemory("MatMul", {{2, 3}, {4, 5}}), std::invalid_argument);
   EXPECT_THROW(DecoderPeakMemory("MatMul", {{2, 3, 4}, {7, 4, 5}}), std::invalid_argument);
   EXPECT_THROW(DecoderPeakMemory("MatMul", {{large, 2}, {2, 1}}), std::invalid_argument);
+  EXPECT_THROW(
+      DecoderPeakMemory("MatMul", {{large / 6 + 1, SymDim(int64_t{0})}, {SymDim(int64_t{0}), 1}}),
+      std::invalid_argument);
   EXPECT_THROW(DecoderPeakMemory("Gather", {{8}, {large}}), std::invalid_argument);
   EXPECT_THROW(DecoderPeakMemory("Slice", {{8}, {large}, {large}}), std::invalid_argument);
   EXPECT_THROW(DecoderPeakMemory("RMSNormalization", {{large}, {large}}), std::invalid_argument);
@@ -241,13 +245,13 @@ TEST(ComputePeakMemoryDecoder, PublicAnalysisIncludesPeakMemoryAndDefaultsMissin
   graph.add_output()->set_name("Y");
   core::compute::ComputeContext ctx;
   ctx.Compute(graph);
-  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 48);
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 56);
   const auto &memory = ctx.NodeMemory(0);
   const auto total = std::get<int64_t>(
       std::get<core::expressions::DimType>(memory.at(core::compute::kNodeMemoryTotalBytesKey)));
   EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
                 memory.at(core::compute::kNodeMemoryDuringBytesKey))),
-            total + 48);
+            total + 56);
   // An unregistered operator adds zero to its during-node total.
   node = graph.add_node();
   node->set_op_type("Abs");
@@ -285,7 +289,8 @@ TEST(ComputePeakMemoryDecoder, RuntimeReplacementSurvivesRepeatedBuiltinRegistra
           .worst_case.AsInt(),
       123);
   core::shapes::RegisterComputePeakMemoryFn("", "MatMul", Device::kCPU, portable);
-  EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).worst_case.AsInt(), 4 * (6 + 15 + 10));
+  EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).worst_case.AsInt(),
+            4 * (6 + 15) + 6 * 10);
 }
 
 } // namespace Test

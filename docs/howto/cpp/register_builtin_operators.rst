@@ -280,11 +280,13 @@ The CPU registrations include bounds for the portable native decoder kernels.
 They count additional heap buffers, not declared inputs/outputs,
 inline shape/stride storage, allocator bookkeeping or shared thread-pool overhead:
 
-* ``MatMul``: ``4 * (elements(A) + elements(B) + elements(Y))``, including
+* ``MatMul``: ``4 * (elements(A) + elements(B)) + 6 * elements(Y)``, including
   broadcast batches and vector operands. This covers the simultaneously live
-  float32 promotions of half-precision inputs and output. Because the estimator
-  receives shapes rather than dtypes, this is also the conservative bound for
-  dtype paths that need no promotion; no average is asserted.
+  float32 promotions of half-precision inputs and output, plus the temporary
+  half-precision result created before copying into a preallocated output.
+  Because the estimator receives shapes rather than dtypes, this is also the
+  conservative bound for dtype paths that need no promotion; no average is
+  asserted.
 * ``Gather``: exactly ``8 * elements(indices)`` for the INT64 index copy.
 * ``Slice``: ``32 * length(starts)`` for four simultaneously live INT64 arrays,
   including synthesized axes and steps.

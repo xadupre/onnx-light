@@ -1410,12 +1410,14 @@ PeakMemoryEstimate DecoderMatMulPeakMemory(Device, const NodeProto &node,
     output.PushBack(a[a.Rank() - 2]);
   if (b.Rank() != 1)
     output.PushBack(b[b.Rank() - 1]);
-  // kernel_matmul.cc keeps promoted A, B and Y alive until demotion.
+  // The preallocated-output path also holds a temporary demoted Y while
+  // promoted A, B and Y are alive, before copying into the declared output.
   // Other supported dtypes compute directly into the declared output.
-  return {PeakMemoryMultiply(SymDim(int64_t{4}), PeakMemoryAdd(PeakMemoryAdd(PeakMemoryElements(a),
-                                                                             PeakMemoryElements(b)),
-                                                               PeakMemoryElements(output))),
-          std::nullopt};
+  return {
+      PeakMemoryAdd(PeakMemoryMultiply(SymDim(int64_t{4}),
+                                       PeakMemoryAdd(PeakMemoryElements(a), PeakMemoryElements(b))),
+                    PeakMemoryMultiply(SymDim(int64_t{6}), PeakMemoryElements(output))),
+      std::nullopt};
 }
 
 PeakMemoryEstimate DecoderGatherPeakMemory(Device, const NodeProto &node,

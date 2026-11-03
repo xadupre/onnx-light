@@ -418,7 +418,7 @@ TEST(ComputePeakMemoryAttention, TooFewInputsReturnsUnresolvedBound) {
 }
 
 // RegisterPeakMemoryFunctions wires Attention into the core dispatch table so
-// ComputePeakMemory resolves it; unregistered operators retain an unresolved bound.
+// ComputePeakMemory resolves it; unregistered operators default to zero.
 TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   onnx_shapes::RegisterPeakMemoryFunctions();
   const auto &table = core::shapes::PeakMemoryDispatchTable();
@@ -432,9 +432,10 @@ TEST(ComputePeakMemoryAttention, RegisteredInCoreDispatchTable) {
   EXPECT_EQ(
       core::shapes::ComputePeakMemory("ai.onnx", "Attention", core::symbolic::Device::kCPU, inputs),
       core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{1 * 2 * 4 * 16 * 4})));
-  EXPECT_TRUE(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
-                                              core::symbolic::Device::kCPU, inputs)
-                  .worst_case.IsExpr());
+  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemory",
+                                            core::symbolic::Device::kCPU, inputs)
+                .worst_case.AsInt(),
+            0);
 }
 
 } // namespace Test

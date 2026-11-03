@@ -13,7 +13,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
@@ -40,8 +39,9 @@ struct BroadcastInfo {
   Shape shape;
   Shape shape_x;
   Shape shape_y;
-  std::vector<int64_t> strides_x;
-  std::vector<int64_t> strides_y;
+  // Strides have the same fixed rank limit as shapes and need no heap buffer.
+  Shape strides_x;
+  Shape strides_y;
   int64_t element_count = 0;
   int64_t nx = 0;
   int64_t ny = 0;

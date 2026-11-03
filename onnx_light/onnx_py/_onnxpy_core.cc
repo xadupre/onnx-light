@@ -1330,7 +1330,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .value("kGPU0", Device::kGPU0, "The first GPU device.");
 
   nb::class_<onnx_shapes::PeakMemoryEstimate>(
-      shape_mod, "PeakMemoryEstimate", "Symbolic worst-case and optional average scratch bytes.")
+      shape_mod, "PeakMemoryEstimate", "Symbolic worst-case and optional average peak memory.")
       .def_ro("worst_case", &onnx_shapes::PeakMemoryEstimate::worst_case)
       .def_ro("average_case", &onnx_shapes::PeakMemoryEstimate::average_case);
 
@@ -1341,9 +1341,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return onnx_shapes::ComputePeakMemory(domain, op_type, device, input_shapes);
       },
       nb::arg("domain"), nb::arg("op_type"), nb::arg("device"), nb::arg("input_shapes"),
-      "Returns the estimated peak scratch memory (in bytes) for ``(domain, op_type)`` executed "
+      "Returns the estimated additional peak memory (in bytes) for ``(domain, op_type)`` executed "
       "on ``device`` with inputs of shape ``input_shapes``, as a ``PeakMemoryEstimate``. "
-      "Unregistered operators have an unresolved symbolic worst case, never zero. "
+      "Unregistered operators default to zero. "
       "Built-in ``onnx_shapes`` operators (e.g. "
       "``Attention``) are registered from C++ via ``RegisterPeakMemoryFunctions``.");
 

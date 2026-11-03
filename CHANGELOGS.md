@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.6] – Unreleased
 
+### Improvements
+
+- Extended native CPU additional peak-memory estimates for MatMul, Gather, Slice and RMSNormalization, including half-precision output temporaries. Restored zero for missing estimators while preserving explicit unknown bounds from registered estimators, distinguished missing input descriptors from scalars, and eliminated heap allocations for binary broadcast strides ([#5795](https://github.com/xadupre/onnx-light/pull/5795)).
+
+### Fixes
+
+- Recognized dotted symbolic names in expression variable extraction and renaming, allowing qualified dimensions such as `component.model.past_sequence_len` to be replaced inside arithmetic expressions without changing division or function-call handling ([#5797](https://github.com/xadupre/onnx-light/pull/5797)).
+
 ### Documentation & CI
 
 - Bumped the release version to `0.2.6`.

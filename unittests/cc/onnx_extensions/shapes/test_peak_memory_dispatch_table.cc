@@ -18,16 +18,25 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-TEST(CoreShapesPeakMemory, DefaultsToUnresolvedMaximumWhenUnregistered) {
+TEST(CoreShapesPeakMemory, DefaultsToZeroWhenUnregistered) {
   const core::shapes::Device device = core::shapes::Device::kCPU;
   const std::vector<core::shapes::SymShape> input_shapes;
   const auto estimate =
       core::shapes::ComputePeakMemory("ai.onnx", "OpWithoutPeakMemoryFn", device, input_shapes);
-  ASSERT_TRUE(estimate.worst_case.IsExpr());
-  EXPECT_FALSE(estimate.worst_case.AsExpr().empty());
-  EXPECT_FALSE(estimate.average_case);
+  EXPECT_EQ(estimate, core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
   EXPECT_EQ(estimate,
             core::shapes::ComputePeakMemory("", "OpWithoutPeakMemoryFn", device, input_shapes));
+}
+
+TEST(CoreShapesPeakMemory, RegisteredUnresolvedEstimateIsNotReplacedByZero) {
+  const auto expected = core::shapes::UnknownPeakMemory("", "ExplicitUnresolvedPeakMemory");
+  core::shapes::RegisterComputePeakMemoryFn(
+      "", "ExplicitUnresolvedPeakMemory", core::shapes::Device::kCPU,
+      [expected](core::shapes::Device, const NodeProto &,
+                 const std::vector<core::shapes::SymShape> &) { return expected; });
+  EXPECT_EQ(core::shapes::ComputePeakMemory("", "ExplicitUnresolvedPeakMemory",
+                                            core::shapes::Device::kCPU, {}),
+            expected);
 }
 
 // A registered peak-memory function is invoked with the device, node and input
@@ -107,9 +116,10 @@ TEST(CoreShapesPeakMemory, DeviceIsPartOfIdentifier) {
   // Resolved for the device it was registered with.
   EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp", gpu, input_shapes),
             777);
-  EXPECT_TRUE(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp",
-                                              core::shapes::Device::kCPU, input_shapes)
-                  .worst_case.IsExpr());
+  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp",
+                                            core::shapes::Device::kCPU, input_shapes)
+                .worst_case.AsInt(),
+            0);
 
   const auto &table = core::shapes::PeakMemoryDispatchTable();
   EXPECT_EQ(table.find("ai.onnx:PeakMemoryDeviceOp"), table.end());
@@ -141,7 +151,7 @@ TEST(CoreShapesPeakMemory, NodeAwareRegistrationSupportsShapeQueriesAndReplaceme
       128);
   EXPECT_EQ(core::shapes::ComputePeakMemory("", node.op_type(), device, inputs), 16);
   EXPECT_EQ(core::shapes::ComputePeakMemory(core::symbolic::MakeGPUDevice(0), node, inputs),
-            core::shapes::UnknownPeakMemory(node.domain(), node.op_type()));
+            core::shapes::PeakMemoryEstimate::Exact(core::symbolic::SymDim(int64_t{0})));
   EXPECT_EQ(core::shapes::ComputePeakMemory(core::shapes::Device::kUndefined, node, inputs), 128);
   node.mutable_attribute(0)->set_i(-1);
   EXPECT_THROW(core::shapes::ComputePeakMemory(device, node, inputs), std::invalid_argument);

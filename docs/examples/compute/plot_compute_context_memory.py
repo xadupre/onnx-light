@@ -196,15 +196,15 @@ print(separator)
 
 
 #####################################
-# Per-node peak scratch memory
-# ++++++++++++++++++++++++++++
+# Per-node peak memory
+# ++++++++++++++++++++
 #
-# :meth:`ComputeContext.compute` also estimates the extra scratch memory each
+# :meth:`ComputeContext.compute` also estimates the additional peak memory each
 # operator needs on top of its inputs and outputs. Operators without a
-# registered peak-memory function retain an unresolved worst-case symbol.
+# registered peak-memory function default to zero.
 # Symbolic dimensions remain in estimates; an unjustified average is absent.
 
-print("\nPer-node peak scratch memory (bytes):")
+print("\nPer-node peak memory (bytes):")
 for node_index, node in enumerate(model.graph.node):
     peak = compute_context.node_peak_memory(node_index)
     average = None if peak.average_case is None else peak.average_case.value()

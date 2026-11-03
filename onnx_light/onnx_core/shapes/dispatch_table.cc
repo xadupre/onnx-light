@@ -161,8 +161,30 @@ PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
   const auto &table = MutablePeakMemoryDispatchTable();
   auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
   if (it == table.end())
-    return UnknownPeakMemory(node.domain(), node.op_type());
+    return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
   const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
+  ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
+  return estimate;
+}
+
+PeakMemoryEstimate ComputePeakMemory(const ShapesContext &ctx, Device device,
+                                     const NodeProto &node) {
+  const auto &table = MutablePeakMemoryDispatchTable();
+  const auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
+  if (it == table.end())
+    return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
+  std::vector<SymShape> input_shapes;
+  input_shapes.reserve(node.input_size());
+  for (const auto &input : node.input()) {
+    if (input.empty()) {
+      input_shapes.emplace_back();
+    } else {
+      if (!ctx.Has(input))
+        return UnknownPeakMemory(node.domain(), node.op_type());
+      input_shapes.push_back(ctx.Get(input).Shape());
+    }
+  }
+  const auto estimate = it->second(device, node, input_shapes);
   ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
   return estimate;
 }

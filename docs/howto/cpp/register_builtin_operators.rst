@@ -20,7 +20,7 @@ independent pieces, each registered in its own static table:
   ``lib_onnx_shape``;
 * a **light op schema** – the operator definition (inputs, outputs, type
   constraints, documentation), in ``lib_onnx_op``;
-* an optional **peak memory** function – estimates the scratch memory the
+* an optional **peak memory** function – estimates the additional peak memory the
   kernel needs, also in ``lib_onnx_shape``.
 
 Each piece uses ``Abs`` (an element-wise unary math op) as the running example.
@@ -229,9 +229,8 @@ builder-map entry above.
 Register a peak memory function
 -------------------------------
 
-A peak-memory function estimates the scratch (non-output) memory a kernel needs,
-so a scheduler can size buffers. Operators without an estimator retain an
-unresolved symbolic upper bound, never a zero-memory assumption.
+A peak-memory function estimates the additional peak memory a kernel needs,
+excluding its inputs and outputs. Operators without an estimator default to zero.
 The registry mirrors shape inference. The signature is
 ``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.
 Every registered estimator receives the node, including its attributes and
@@ -273,6 +272,49 @@ As with shape functions, :cpp:func:`RegisterPeakMemoryFunctions` (same
 file) copies these builtins into the shared ``core::shapes`` peak-memory
 dispatch table via
 :cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`.
+
+Decoder peak-memory coverage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The CPU registrations include bounds for the portable native decoder kernels.
+They count additional heap buffers, not declared inputs/outputs,
+inline shape/stride storage, allocator bookkeeping or shared thread-pool overhead:
+
+* ``MatMul``: ``4 * (elements(A) + elements(B)) + 6 * elements(Y)``, including
+  broadcast batches and vector operands. This covers the simultaneously live
+  float32 promotions of half-precision inputs and output, plus the temporary
+  half-precision result created before copying into a preallocated output.
+  Because the estimator receives shapes rather than dtypes, this is also the
+  conservative bound for dtype paths that need no promotion; no average is
+  asserted.
+* ``Gather``: exactly ``8 * elements(indices)`` for the INT64 index copy.
+* ``Slice``: ``32 * length(starts)`` for four simultaneously live INT64 arrays,
+  including synthesized axes and steps.
+* ``RMSNormalization``: ``8 * (max(1, normalized_elements) + rank(scale) +
+  normalized_rank) + 4 * (elements(X) + elements(scale))``. This conservatively
+  sums the index/coordinate buffers and half-precision promotions even though
+  some have disjoint lifetimes.
+* ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
+  ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
+  no per-operator registration is needed. Binary broadcast strides use inline
+  ``Shape`` storage for every supported rank, including equal-shape and scalar
+  fast paths, so they require no additional heap buffers.
+
+Registered estimators can explicitly return unresolved bounds when required
+shapes are missing or contain placeholder dimensions. Symbolic dimensions yield
+expressions where peak memory depends on them; negative dimensions and concrete
+overflow are rejected. Missing estimators, including for other devices or
+domains, return zero instead.
+Context-based queries distinguish missing named input descriptors from known
+scalars; empty optional input slots keep their positions.
+
+An optimized runtime such as ``onnx-light-cpu`` must register its own estimator
+**after** calling ``RegisterPeakMemoryFunctions`` if its kernels allocate different
+workspace (for example packed MatMul buffers). Registering the same domain,
+operator and device replaces the portable estimate; calling the idempotent
+builtin registration again does not overwrite that replacement. A runtime must
+not reuse a portable bound for an implementation it does not cover. Unknown
+phases must remain unknown in both per-node totals and the model peak.
 
 See also
 --------

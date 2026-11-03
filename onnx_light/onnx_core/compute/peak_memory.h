@@ -29,15 +29,16 @@ constexpr const char *kNodePeakMemoryAverageMetadataKey = "onnx_light.peak_memor
 void WritePeakMemoryEstimate(NodeProto &node, const shapes::PeakMemoryEstimate &estimate);
 
 /**
- * Computes the estimated peak scratch memory for every node of ``graph``
+ * Computes the estimated additional peak memory for every node of ``graph``
  * using the shapes already inferred into ``ctx``, and records the result in
  * ``metadata_props`` under :cpp:var:`kNodePeakMemoryMaxMetadataKey` and, when
  * available, :cpp:var:`kNodePeakMemoryAverageMetadataKey`. Unknown bounds are
- * preserved symbolically. Positive concrete maxima also refresh
+ * preserved symbolically when explicitly returned by an estimator; missing
+ * estimators default to zero. Positive concrete maxima also refresh
  * :cpp:var:`kNodePeakMemoryMetadataKey` without passing expressions to legacy
  * execution-plan allocation hints.
  *
- * The peak memory accounts only for the extra scratch/working memory an
+ * The peak memory accounts only for the additional memory an
  * operator's computation allocates, not the memory already accounted for by
  * its inputs and outputs.
  *

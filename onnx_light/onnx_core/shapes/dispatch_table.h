@@ -82,7 +82,7 @@ bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node);
 bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node);
 
 /**
- * Describes extra scratch bytes, excluding declared inputs and outputs.
+ * Describes additional peak memory in bytes, excluding declared inputs and outputs.
  * ``worst_case`` is always present, as a nonnegative integer or a nonempty
  * symbolic expression. An unresolved symbol requires a caller-supplied bound
  * before memory admission; it never means zero bytes.
@@ -106,7 +106,7 @@ struct PeakMemoryEstimate {
 /// Returns an unresolved operator-wide bound, covering every invocation and device.
 PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::string &op_type);
 
-/** Node-aware scratch estimator, with access to attributes and optional input names. */
+/** Node-aware peak-memory estimator, with access to attributes and optional input names. */
 using ComputePeakMemoryNodeFn =
     std::function<PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)>;
 
@@ -114,7 +114,7 @@ using ComputePeakMemoryNodeFn =
  * Returns the ``(normalised_domain, op_type) -> ComputePeakMemoryNodeFn``
  * dispatch table. Empty until libraries populate it via
  * :cpp:func:`RegisterComputePeakMemoryFn`; operators without an entry
- * report an unresolved symbolic worst-case bound through :cpp:func:`ComputePeakMemory`.
+ * report zero additional peak memory through :cpp:func:`ComputePeakMemory`.
  */
 const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispatchTable();
 
@@ -146,24 +146,32 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
  *
  * Looks the operator up in the shared :cpp:func:`PeakMemoryDispatchTable`
  * and forwards a node containing only its domain and operator type to its registered
- * :cpp:type:`ComputePeakMemoryNodeFn`. When no function is registered, returns an
- * unresolved symbolic worst-case bound.
+ * :cpp:type:`ComputePeakMemoryNodeFn`. When no function is registered, returns zero.
  *
  * @param domain       The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type      The ONNX operator type name (e.g. ``"Abs"``).
  * @param device       The device on which the operator executes.
  * @param input_shapes The shapes of the operator's inputs, in order.
- * @returns The mandatory worst-case and optional average scratch estimates.
+ * @returns The mandatory worst-case and optional average peak-memory estimates.
  */
 PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::string &op_type,
                                      Device device, const std::vector<SymShape> &input_shapes);
 
 /**
- * Returns estimated scratch bytes for a node, forwarding it to the registered estimator.
- * Unregistered operators return an unresolved symbolic worst-case bound.
+ * Returns additional peak memory for a node, forwarding it to the registered estimator.
+ * Unregistered operators return zero.
  * Input shapes retain node input positions; absent optional inputs have empty shapes.
  */
 PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
                                      const std::vector<SymShape> &input_shapes);
+
+/**
+ * Returns additional peak memory using descriptors from a shapes context.
+ * Missing named inputs yield an unknown bound for registered estimators, not
+ * scalar shapes. Omitted optional inputs retain their empty positional shapes.
+ * Unregistered operators return zero, including with incomplete descriptors.
+ */
+PeakMemoryEstimate ComputePeakMemory(const ShapesContext &ctx, Device device,
+                                     const NodeProto &node);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

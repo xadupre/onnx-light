@@ -97,8 +97,8 @@ public:
     // Identifier
     if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
       size_t start = pos_;
-      while (pos_ < input_.size() &&
-             (std::isalnum(static_cast<unsigned char>(input_[pos_])) || input_[pos_] == '_'))
+      while (pos_ < input_.size() && (std::isalnum(static_cast<unsigned char>(input_[pos_])) ||
+                                      input_[pos_] == '_' || input_[pos_] == '.'))
         ++pos_;
       return ReturnToken(token, {TokenKind::Name, input_.substr(start, pos_ - start)});
     }

@@ -16,6 +16,8 @@
  * Shape expressions are strings that contain integer constants, symbolic
  * variable names, and the arithmetic operators `+`, `-`, `*`, `//`, `%`,
  * `^` (encodes `max`), and `&` (encodes `min`).
+ * Variable names start with a letter or underscore and may contain letters,
+ * digits, underscores, and dots (e.g. `component.model.past_sequence_len`).
  *
  * The typical workflow is:
  *

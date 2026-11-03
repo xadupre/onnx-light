@@ -299,6 +299,44 @@ TEST(RenameExpressions, RenameExpression) {
   EXPECT_EQ(rename_expression("s52+seq_length", {{"s52", "B"}}), "B+seq_length");
 }
 
+TEST(RenameExpressions, QualifiedNames) {
+  const std::string name = "component.model.past_sequence_len";
+  const std::string expression = name + " + sequence_len";
+  EXPECT_EQ(parse_expression_tokens(name), (std::unordered_set<std::string>{name}));
+  EXPECT_EQ(parse_expression_tokens(expression),
+            (std::unordered_set<std::string>{name, "sequence_len"}));
+  EXPECT_EQ(rename_expression(name, {{name, "cache_len"}}), "cache_len");
+  EXPECT_EQ(rename_expression(expression, {{name, "cache_len"}}), "cache_len+sequence_len");
+  EXPECT_EQ(rename_expression(expression, {{"sequence_len", "current_len"}}),
+            name + "+current_len");
+  EXPECT_EQ(rename_expression(expression, {{name, "cache_len"}, {"sequence_len", "current_len"}}),
+            "cache_len+current_len");
+  EXPECT_EQ(rename_expression(expression, {{"component", "other"}, {"past_sequence_len", "past"}}),
+            name + "+sequence_len");
+  EXPECT_EQ(rename_expression("sequence_len", {{"sequence_len", name}}), name);
+}
+
+TEST(RenameExpressions, QualifiedNamesPreserveOperatorsAndCalls) {
+  const std::string expression =
+      "custom.fn(component.model.past_sequence_len//2, sequence_len/:2) + model.layers.0.width";
+  EXPECT_EQ(parse_expression_tokens(expression),
+            (std::unordered_set<std::string>{"component.model.past_sequence_len", "sequence_len",
+                                             "model.layers.0.width"}));
+  EXPECT_EQ(rename_expression(expression, {{"component.model.past_sequence_len", "cache_len"},
+                                           {"sequence_len", "current_len"},
+                                           {"custom.fn", "not_a_variable"}}),
+            "custom.fn(cache_len//2,current_len/:2)+model.layers.0.width");
+  EXPECT_EQ(rename_expression("2*(component.model.past_sequence_len + sequence_len)-1",
+                              {{"component.model.past_sequence_len", "cache_len"}}),
+            "2*(cache_len+sequence_len)-1");
+  EXPECT_EQ(rename_expression("Max(component.model.past_sequence_len, sequence_len)",
+                              {{"component.model.past_sequence_len", "cache_len"}}),
+            "cache_len^sequence_len");
+  NodePtr tree;
+  EXPECT_FALSE(try_parse("component.model.past_sequence_len/sequence_len", tree));
+  EXPECT_FALSE(try_parse("1.5 + sequence_len", tree));
+}
+
 TEST(RenameExpressions, ParseExpressionTokens_SyntaxError) {
   std::string inv = "a +";
   auto result = parse_expression_tokens(inv);

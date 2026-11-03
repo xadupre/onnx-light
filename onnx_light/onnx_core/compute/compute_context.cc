@@ -345,7 +345,7 @@ PeakMemoryEstimate NodeWorkspace(const NodeProto &node, const ShapesContext &ctx
     if (!shapes::PeakMemoryDispatchTable().contains(key))
       return body.workspace_peak;
   }
-  const auto estimate = shapes::ComputePeakMemory(node.domain(), node.op_type(), device, inputs);
+  const auto estimate = shapes::ComputePeakMemory(device, node, inputs);
   return body.has_body ? MaxWorkspace(estimate, body.workspace_peak, &ctx.ExpressionCache())
                        : estimate;
 }

@@ -1000,7 +1000,9 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
   core::shapes::RegisterComputePeakMemoryFn(
       "test.memory_boundaries", "Scratch", core::symbolic::Device::kCPU,
-      [](core::symbolic::Device, const std::vector<SymShape> &) { return int64_t{128}; });
+      [](core::symbolic::Device, const NodeProto &, const std::vector<SymShape> &) {
+        return int64_t{128};
+      });
   GraphProto graph;
   AddInput(graph, "X", {3, 4});
   AddOutput(graph, "Y", {3, 8});
@@ -1200,7 +1202,8 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToFunction) {
 TEST(OnnxOptimInPlaceReuse, FunctionPeakMemoryWritesMetadata) {
   core::shapes::RegisterComputePeakMemoryFn(
       "test.function", "Scratch", core::symbolic::Device::kCPU,
-      [](core::symbolic::Device device, const std::vector<SymShape> &input_shapes) -> int64_t {
+      [](core::symbolic::Device device, const NodeProto &,
+         const std::vector<SymShape> &input_shapes) -> int64_t {
         EXPECT_EQ(device, core::symbolic::Device::kCPU);
         EXPECT_EQ(input_shapes.size(), 2u);
         EXPECT_EQ(input_shapes[0], (SymShape{3, 4}));

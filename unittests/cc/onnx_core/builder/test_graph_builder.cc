@@ -512,7 +512,7 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
       });
   core::shapes::RegisterComputePeakMemoryFn(
       domain, "Expand", core::symbolic::Device::kCPU,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return int64_t{1234};
       });
 
@@ -687,7 +687,7 @@ TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) 
                                        });
   core::shapes::RegisterComputePeakMemoryFn(
       domain, "Copy", core::symbolic::Device::kCPU,
-      [](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return int64_t{37};
       });
   core::builder::GraphBuilder body("WithGraph", SchemaLookup(), {{"", 28}, {domain, 1}});
@@ -1350,7 +1350,8 @@ TEST(GraphBuilder, SetOpsetVersionRefreshesShapesWithoutComputingScratch) {
   const auto peak_calls = std::make_shared<std::size_t>(0);
   core::shapes::RegisterComputePeakMemoryFn(
       "opset_batch_test", "Probe", core::symbolic::Device::kCPU,
-      [peak_calls](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+      [peak_calls](core::symbolic::Device, const NodeProto &,
+                   const std::vector<core::symbolic::SymShape> &) {
         ++*peak_calls;
         return 0;
       });
@@ -2303,7 +2304,8 @@ TEST(GraphBuilder, ScratchIsComputedOncePerNodeAtExportNotDuringConstruction) {
   const auto peak_calls = std::make_shared<std::size_t>(0);
   core::shapes::RegisterComputePeakMemoryFn(
       "late_output_memory_test", "Probe", core::symbolic::Device::kCPU,
-      [peak_calls](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &inputs) {
+      [peak_calls](core::symbolic::Device, const NodeProto &,
+                   const std::vector<core::symbolic::SymShape> &inputs) {
         ++*peak_calls;
         return inputs[0].Rank() == 1 ? inputs[0][0].AsInt() : int64_t{0};
       });

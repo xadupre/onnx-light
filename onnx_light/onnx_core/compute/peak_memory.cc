@@ -39,8 +39,7 @@ void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Devi
         input_shapes.emplace_back();
       }
     }
-    WritePeakMemoryEstimate(
-        node, shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes));
+    WritePeakMemoryEstimate(node, shapes::ComputePeakMemory(device, node, input_shapes));
   }
 }
 

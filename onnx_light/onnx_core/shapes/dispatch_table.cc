@@ -55,9 +55,27 @@ std::unordered_set<std::string> &TypeOnlyTensorShapeInputs() {
 // Returns the mutable peak-memory dispatch table singleton. Only
 // :cpp:func:`RegisterComputePeakMemoryFn` writes to it;
 // :cpp:func:`PeakMemoryDispatchTable` exposes a read-only view for lookups.
-std::unordered_map<std::string, ComputePeakMemoryFn> &MutablePeakMemoryDispatchTable() {
-  static std::unordered_map<std::string, ComputePeakMemoryFn> table;
+std::unordered_map<std::string, ComputePeakMemoryNodeFn> &MutablePeakMemoryDispatchTable() {
+  static std::unordered_map<std::string, ComputePeakMemoryNodeFn> table;
   return table;
+}
+
+void ValidatePeakMemoryEstimate(const PeakMemoryEstimate &estimate, const std::string &domain,
+                                const std::string &op_type) {
+  const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
+  for (const symbolic::SymDim *dim :
+       {&estimate.worst_case, estimate.average_case ? &*estimate.average_case : nullptr}) {
+    if (dim == nullptr)
+      continue;
+    EXT_ENFORCE_INVALID(!dim->IsInt() || dim->AsInt() >= 0, "Negative peak-memory estimate for ",
+                        identifier, ".");
+    EXT_ENFORCE_INVALID(!dim->IsExpr() || !dim->AsExpr().empty(),
+                        "Empty peak-memory expression for ", identifier, ".");
+  }
+  EXT_ENFORCE_INVALID(!estimate.average_case || !estimate.worst_case.IsInt() ||
+                          !estimate.average_case->IsInt() ||
+                          estimate.average_case->AsInt() <= estimate.worst_case.AsInt(),
+                      "Average peak-memory estimate exceeds worst case for ", identifier, ".");
 }
 
 } // namespace
@@ -110,12 +128,12 @@ bool HasShapeInference(const ShapesContext &shapes, const NodeProto &node) {
          DispatchTable().count(DispatchKey(node.domain(), node.op_type())) != 0;
 }
 
-const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {
+const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispatchTable() {
   return MutablePeakMemoryDispatchTable();
 }
 
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 Device device, ComputePeakMemoryFn fn) {
+                                 Device device, ComputePeakMemoryNodeFn fn) {
   MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
@@ -132,26 +150,20 @@ PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::strin
 
 PeakMemoryEstimate ComputePeakMemory(const std::string &domain, const std::string &op_type,
                                      Device device, const std::vector<SymShape> &input_shapes) {
+  NodeProto node;
+  node.set_domain(domain);
+  node.set_op_type(op_type);
+  return ComputePeakMemory(device, node, input_shapes);
+}
+
+PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
+                                     const std::vector<SymShape> &input_shapes) {
   const auto &table = MutablePeakMemoryDispatchTable();
-  auto it = table.find(DispatchKey(domain, op_type, device));
-  if (it == table.end()) {
-    return UnknownPeakMemory(domain, op_type);
-  }
-  const PeakMemoryEstimate estimate = it->second(device, input_shapes);
-  const std::string identifier = domain.empty() ? op_type : domain + ":" + op_type;
-  for (const symbolic::SymDim *dim :
-       {&estimate.worst_case, estimate.average_case ? &*estimate.average_case : nullptr}) {
-    if (dim == nullptr)
-      continue;
-    EXT_ENFORCE_INVALID(!dim->IsInt() || dim->AsInt() >= 0, "Negative peak-memory estimate for ",
-                        identifier, ".");
-    EXT_ENFORCE_INVALID(!dim->IsExpr() || !dim->AsExpr().empty(),
-                        "Empty peak-memory expression for ", identifier, ".");
-  }
-  EXT_ENFORCE_INVALID(!estimate.average_case || !estimate.worst_case.IsInt() ||
-                          !estimate.average_case->IsInt() ||
-                          estimate.average_case->AsInt() <= estimate.worst_case.AsInt(),
-                      "Average peak-memory estimate exceeds worst case for ", identifier, ".");
+  auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
+  if (it == table.end())
+    return UnknownPeakMemory(node.domain(), node.op_type());
+  const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
+  ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
   return estimate;
 }
 

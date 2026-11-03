@@ -274,6 +274,48 @@ file) copies these builtins into the shared ``core::shapes`` peak-memory
 dispatch table via
 :cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`.
 
+Decoder workspace coverage
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The CPU registrations include bounds for the portable native decoder kernels.
+They count tensor workspace, not declared inputs/outputs, inline shape/stride
+storage, allocator bookkeeping or shared thread-pool overhead:
+
+* ``MatMul``: ``4 * (elements(A) + elements(B) + elements(Y))``, including
+  broadcast batches and vector operands. This covers the simultaneously live
+  float32 promotions of half-precision inputs and output. Because the estimator
+  receives shapes rather than dtypes, this is also the conservative bound for
+  dtype paths that need no promotion; no average is asserted.
+* ``Gather``: exactly ``8 * elements(indices)`` for the INT64 index copy.
+* ``Slice``: ``32 * length(starts)`` for four simultaneously live INT64 arrays,
+  including synthesized axes and steps.
+* ``RMSNormalization``: ``8 * (max(1, normalized_elements) + rank(scale) +
+  normalized_rank) + 4 * (elements(X) + elements(scale))``. This conservatively
+  sums the index/coordinate buffers and half-precision promotions even though
+  some have disjoint lifetimes.
+* ``Mul``, ``Sub``, ``GreaterOrEqual`` and ``And``: exactly
+  ``16 * max(rank(A), rank(B))`` for the two heap-backed INT64 stride arrays,
+  including equal-shape, scalar-broadcast and empty-output fast paths.
+* ``Swish``, ``Where``, ``CumSum``,
+  ``Shape``, ``Unsqueeze`` and ``Transpose``: zero tensor workspace, justified
+  by their direct-to-output implementations (half conversion is per-element).
+* ``Cast``: zero tensor workspace for explicitly supported numeric targets.
+  Shape-only queries lacking ``to``, STRING targets and unhandled target types
+  retain unresolved bounds.
+
+Missing required shapes, placeholder dimensions and unregistered devices or
+operators remain unresolved. Symbolic dimensions yield expressions where the
+workspace depends on them; negative dimensions and concrete overflow are rejected.
+These are static bounds, not measured process-memory peaks.
+
+An optimized runtime such as ``onnx-light-cpu`` must register its own estimator
+**after** calling ``RegisterPeakMemoryFunctions`` if its kernels allocate different
+workspace (for example packed MatMul buffers). Registering the same domain,
+operator and device replaces the portable estimate; calling the idempotent
+builtin registration again does not overwrite that replacement. A runtime must
+not reuse a portable bound for an implementation it does not cover. Unknown
+phases must remain unknown in both per-node totals and the model peak.
+
 See also
 --------
 

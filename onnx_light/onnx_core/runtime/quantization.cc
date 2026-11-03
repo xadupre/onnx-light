@@ -1195,6 +1195,130 @@ struct DecodedValues {
   std::variant<std::vector<float>, std::vector<double>> values;
 };
 
+constexpr const char *kNvfp4WeightsName = "onnx_light.nvfp4_weights.v1";
+constexpr std::array<float, 8> kNvfp4Levels = {0, .5f, 1, 1.5f, 2, 3, 4, 6};
+
+struct Nvfp4Geometry {
+  int64_t rows, cols;
+  size_t count, packed_bytes, scale_bytes, total_bytes;
+
+  Nvfp4Geometry(int64_t r, int64_t c) : rows(r), cols(c) {
+    EXT_ENFORCE_INVALID(r > 0 && c > 0 && c % 16 == 0,
+                        "NVFP4 WEIGHT requires positive [rows,cols] with cols divisible by 16.");
+    count = Product(r, c);
+    EXT_ENFORCE_INVALID(count <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
+                        "NVFP4 WEIGHT element count exceeds INT64.");
+    Product(count, sizeof(float));
+    packed_bytes = count / 2;
+    scale_bytes = count / 16;
+    EXT_ENFORCE_INVALID(packed_bytes <= std::numeric_limits<size_t>::max() - scale_bytes - 4,
+                        "NVFP4 WEIGHT payload size overflow.");
+    total_bytes = packed_bytes + scale_bytes + 4;
+  }
+};
+
+StructTypeProto Nvfp4Schema(const Nvfp4Geometry &geometry) {
+  StructTypeProto root;
+  root.set_name(kNvfp4WeightsName);
+  auto constant = [&](const char *name, int64_t value) {
+    auto *tensor = AddField(root, name)->mutable_constant();
+    tensor->set_data_type(TensorProto::INT64);
+    tensor->add_int64_data(value);
+  };
+  constant("group_size", 16);
+  constant("axis", 1);
+  constant("reconstruction_dtype", TensorProto::FLOAT);
+  constant("fp32_local_div_global_rne_e2m1_low_first", 1);
+  Array(root, "weight_packed", TensorProto::UINT8, {geometry.rows, geometry.cols / 2});
+  Array(root, "weight_scale", TensorProto::FLOAT8E4M3FN, {geometry.rows, geometry.cols / 16});
+  Array(root, "weight_global_scale", TensorProto::FLOAT, {});
+  return root;
+}
+
+void ValidateNvfp4Tensor(const Tensor &tensor, int32_t dtype, const Shape &shape, size_t bytes) {
+  EXT_ENFORCE_INVALID(tensor.data_type == dtype && tensor.shape == shape &&
+                          tensor.size_bytes() == bytes && tensor.bytes() != nullptr,
+                      "Invalid NVFP4 WEIGHT tensor type, shape or storage.");
+}
+
+float Nvfp4EffectiveScale(uint8_t local, float global) {
+  const float scale = Float8E4M3FNBitsToFloat(local);
+  EXT_ENFORCE_INVALID(std::isfinite(global) && global > 0 && std::isfinite(scale) && scale > 0,
+                      "NVFP4 WEIGHT scales must be positive and finite.");
+  const float effective = RoundFloat(scale / global);
+  EXT_ENFORCE_INVALID(effective > 0, "NVFP4 WEIGHT effective scale rounds to zero.");
+  return effective;
+}
+
+float Nvfp4Reconstruct(uint8_t code, float effective) {
+  const float level = code & 8 ? -kNvfp4Levels[code & 7] : kNvfp4Levels[code & 7];
+  return RoundFloat(level * effective);
+}
+
+struct Nvfp4PackedValue {
+  Nvfp4Geometry geometry;
+  std::span<const uint8_t> packed, scales;
+  float global;
+};
+
+void ValidateNvfp4Reconstruction(const Nvfp4PackedValue &value) {
+  for (size_t group = 0; group < value.geometry.scale_bytes; ++group) {
+    const float effective = Nvfp4EffectiveScale(value.scales[group], value.global);
+    for (size_t j = 0; j < 8; ++j) {
+      const uint8_t byte = value.packed[group * 8 + j];
+      Nvfp4Reconstruct(byte & 15, effective);
+      Nvfp4Reconstruct(byte >> 4, effective);
+    }
+  }
+}
+
+Nvfp4PackedValue ParseNvfp4Value(const EncodedValueProto &encoded,
+                                 const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(!encoded.has_parameter_ref(),
+                      "NVFP4 WEIGHT does not support shared parameters.");
+  const auto layout = catalogue.ValidateEncodedValue(encoded);
+  EXT_ENFORCE_INVALID(!layout.external && layout.root && layout.record_count == 1,
+                      "Expected one loaded NVFP4 WEIGHT record.");
+  EXT_ENFORCE_INVALID(encoded.has_logical_type() && encoded.logical_type().has_tensor_type(),
+                      "NVFP4 WEIGHT requires a logical FLOAT matrix.");
+  const auto &logical = encoded.logical_type().tensor_type();
+  EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT && logical.has_shape() &&
+                          logical.shape().dim().size() == 2 &&
+                          logical.shape().dim(0).has_dim_value() &&
+                          logical.shape().dim(1).has_dim_value(),
+                      "NVFP4 WEIGHT requires a concrete logical FLOAT matrix.");
+  Nvfp4Geometry geometry(logical.shape().dim(0).dim_value(), logical.shape().dim(1).dim_value());
+  StructTypeProto actual = *layout.root;
+  actual.clear_type_id();
+  std::string difference;
+  EXT_ENFORCE_INVALID(actual.Equals(Nvfp4Schema(geometry), &difference),
+                      "NVFP4 WEIGHT descriptor does not match its versioned schema: ", difference);
+  EXT_ENFORCE_INVALID(encoded.raw_data().size() == geometry.total_bytes,
+                      "NVFP4 WEIGHT payload size mismatch.");
+  const std::span<const uint8_t> bytes{encoded.raw_data().data(), encoded.raw_data().size()};
+  ByteReader reader{bytes, geometry.packed_bytes + geometry.scale_bytes};
+  Nvfp4PackedValue result{geometry, bytes.first(geometry.packed_bytes),
+                          bytes.subspan(geometry.packed_bytes, geometry.scale_bytes),
+                          std::bit_cast<float>(static_cast<uint32_t>(reader.Get(4)))};
+  ValidateNvfp4Reconstruction(result);
+  return result;
+}
+
+uint8_t Nvfp4Code(float value, float effective) {
+  volatile float normalized = value / effective;
+  const float magnitude = std::min(std::abs(normalized), 6.f);
+  uint8_t best = 0;
+  float error = magnitude;
+  for (uint8_t code = 1; code < kNvfp4Levels.size(); ++code) {
+    const float next = std::abs(magnitude - kNvfp4Levels[code]);
+    if (next < error || (next == error && code % 2 == 0)) {
+      best = code;
+      error = next;
+    }
+  }
+  return best | (normalized < 0 ? 8 : 0);
+}
+
 struct QuantizationHeader {
   const StructTypeProto *root;
   QuantizationFormat format;
@@ -1392,6 +1516,20 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 }
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value() == kNvfp4WeightsName) {
+    const auto packed = ParseNvfp4Value(encoded, catalogue);
+    std::vector<float> values(packed.geometry.count);
+    for (size_t group = 0; group < packed.geometry.scale_bytes; ++group) {
+      const float effective = Nvfp4EffectiveScale(packed.scales[group], packed.global);
+      for (size_t j = 0; j < 8; ++j) {
+        const uint8_t byte = packed.packed[group * 8 + j];
+        values[group * 16 + j * 2] = Nvfp4Reconstruct(byte & 15, effective);
+        values[group * 16 + j * 2 + 1] = Nvfp4Reconstruct(byte >> 4, effective);
+      }
+    }
+    return {{packed.geometry.rows, packed.geometry.cols}, TensorProto::FLOAT, std::move(values)};
+  }
   auto header = ReadQuantizationHeader(encoded, catalogue);
   if (ReconstructionType(header.root->name().value()) == TensorProto::FLOAT) {
     EXT_ENFORCE_INVALID(OrtBits(header.format) == 0,
@@ -1402,6 +1540,102 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
 }
 
 } // namespace
+
+EncodedValueProto ImportNvfp4Weights(const Nvfp4Weights &weights) {
+  EXT_ENFORCE_INVALID(weights.weight_packed.shape.size() == 2,
+                      "NVFP4 WEIGHT packed weights must be a matrix.");
+  const int64_t packed_cols = weights.weight_packed.shape[1];
+  EXT_ENFORCE_INVALID(packed_cols > 0 && packed_cols <= std::numeric_limits<int64_t>::max() / 2,
+                      "NVFP4 WEIGHT packed columns overflow.");
+  const Nvfp4Geometry geometry(weights.weight_packed.shape[0], packed_cols * 2);
+  ValidateNvfp4Tensor(weights.weight_packed, TensorProto::UINT8, {geometry.rows, packed_cols},
+                      geometry.packed_bytes);
+  ValidateNvfp4Tensor(weights.weight_scale, TensorProto::FLOAT8E4M3FN,
+                      {geometry.rows, geometry.cols / 16}, geometry.scale_bytes);
+  ValidateNvfp4Reconstruction({geometry,
+                               {weights.weight_packed.bytes(), geometry.packed_bytes},
+                               {weights.weight_scale.bytes(), geometry.scale_bytes},
+                               weights.weight_global_scale});
+  EncodedValueProto result;
+  ByteWriter payload(*result.mutable_raw_data(), geometry.total_bytes);
+  for (size_t i = 0; i < geometry.packed_bytes; ++i)
+    payload.Put(weights.weight_packed.bytes()[i], 1);
+  for (size_t i = 0; i < geometry.scale_bytes; ++i)
+    payload.Put(weights.weight_scale.bytes()[i], 1);
+  payload.Put(std::bit_cast<uint32_t>(weights.weight_global_scale), 4);
+  payload.Finish();
+  *result.mutable_struct_type() = Nvfp4Schema(geometry);
+  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.rows);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.cols);
+  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  return result;
+}
+
+Nvfp4Weights ExportNvfp4Weights(const EncodedValueProto &value,
+                                const StructTypeCatalogue &catalogue) {
+  const auto packed = ParseNvfp4Value(value, catalogue);
+  auto copy = [](const char *name, int32_t dtype, const Shape &shape,
+                 std::span<const uint8_t> bytes) {
+    Tensor tensor = MakeOutputTensor(dtype, shape, bytes.size(), nullptr);
+    tensor.name = name;
+    std::memcpy(tensor.mutable_bytes(), bytes.data(), bytes.size());
+    return tensor;
+  };
+  return {copy("weight_packed", TensorProto::UINT8,
+               {packed.geometry.rows, packed.geometry.cols / 2}, packed.packed),
+          copy("weight_scale", TensorProto::FLOAT8E4M3FN,
+               {packed.geometry.rows, packed.geometry.cols / 16}, packed.scales),
+          packed.global};
+}
+
+EncodedValueProto QuantizeNvfp4Weights(const Tensor &tensor, const Tensor &local_scales,
+                                       float global_scale) {
+  EXT_ENFORCE_INVALID(tensor.shape.size() == 2, "NVFP4 WEIGHT source must be a matrix.");
+  const Nvfp4Geometry geometry(tensor.shape[0], tensor.shape[1]);
+  ValidateNvfp4Tensor(tensor, TensorProto::FLOAT, tensor.shape,
+                      Product(geometry.count, sizeof(float)));
+  EXT_ENFORCE_INVALID(local_scales.data_type == TensorProto::FLOAT ||
+                          local_scales.data_type == TensorProto::FLOAT8E4M3FN,
+                      "NVFP4 WEIGHT local scales must be FLOAT or FLOAT8E4M3FN.");
+  const bool float_scales = local_scales.data_type == TensorProto::FLOAT;
+  ValidateNvfp4Tensor(local_scales, local_scales.data_type, {geometry.rows, geometry.cols / 16},
+                      Product(geometry.scale_bytes, float_scales ? sizeof(float) : 1));
+  EXT_ENFORCE_INVALID(std::isfinite(global_scale) && global_scale > 0,
+                      "NVFP4 WEIGHT global scale must be positive and finite.");
+  Nvfp4Weights weights{MakeOutputTensor(TensorProto::UINT8, {geometry.rows, geometry.cols / 2},
+                                        geometry.packed_bytes, nullptr),
+                       MakeOutputTensor(TensorProto::FLOAT8E4M3FN,
+                                        {geometry.rows, geometry.cols / 16}, geometry.scale_bytes,
+                                        nullptr),
+                       global_scale};
+  for (size_t group = 0; group < geometry.scale_bytes; ++group) {
+    uint8_t scale;
+    if (float_scales) {
+      const float raw = Load<float>(local_scales.bytes() + group * sizeof(float));
+      EXT_ENFORCE_INVALID(std::isfinite(raw) && raw > 0,
+                          "NVFP4 WEIGHT local scales must be positive and finite.");
+      scale = FloatToFloat8E4M3FNBits(raw);
+    } else {
+      scale = local_scales.bytes()[group];
+    }
+    const float effective = Nvfp4EffectiveScale(scale, global_scale);
+    weights.weight_scale.mutable_bytes()[group] = scale;
+    for (size_t j = 0; j < 8; ++j) {
+      const size_t index = group * 16 + j * 2;
+      const float low = Load<float>(tensor.bytes() + index * sizeof(float));
+      const float high = Load<float>(tensor.bytes() + (index + 1) * sizeof(float));
+      EXT_ENFORCE_INVALID(std::isfinite(low) && std::isfinite(high),
+                          "NVFP4 WEIGHT source must be finite.");
+      weights.weight_packed.mutable_bytes()[group * 8 + j] =
+          Nvfp4Code(low, effective) | (Nvfp4Code(high, effective) << 4);
+    }
+  }
+  auto result = ImportNvfp4Weights(weights);
+  result.set_name(tensor.name);
+  return result;
+}
 
 MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
                                           const StructTypeCatalogue &catalogue) {

@@ -1356,6 +1356,23 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Extracts owned ORT input tensors and attributes without dequantizing.");
+  nb::class_<core::runtime::Nvfp4Weights>(rt_mod, "Nvfp4Weights")
+      .def(nb::init<>())
+      .def_rw("weight_packed", &core::runtime::Nvfp4Weights::weight_packed)
+      .def_rw("weight_scale", &core::runtime::Nvfp4Weights::weight_scale)
+      .def_rw("weight_global_scale", &core::runtime::Nvfp4Weights::weight_global_scale);
+  rt_mod.def("quantize_nvfp4_weights", &core::runtime::QuantizeNvfp4Weights, nb::arg("tensor"),
+             nb::arg("local_scales"), nb::arg("global_scale"),
+             "Encodes FLOAT matrix weights with FP8 local scales and a FLOAT global scale.");
+  rt_mod.def(
+      "export_nvfp4_weights",
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::ExportNvfp4Weights);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Exports owned packed weights and both scale levels without numerical conversion.");
+  rt_mod.def("import_nvfp4_weights", &core::runtime::ImportNvfp4Weights, nb::arg("weights"),
+             "Serializes complete NVFP4 weight parameters without requantization.");
   rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
              nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
   rt_mod.def(

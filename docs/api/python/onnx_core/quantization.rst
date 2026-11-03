@@ -14,6 +14,10 @@ vendor-compatible binary formats.
 The explicit ``ORT_MATMULNBITS_INT2/INT4/INT8`` profiles are the exception:
 ``make_matmul_nbits_plan`` and ``export_matmul_nbits_inputs`` produce the
 standard ONNX Runtime operator inputs, not internal kernel prepacking.
+The separate ``quantize_nvfp4_weights``, ``export_nvfp4_weights`` and
+``import_nvfp4_weights`` APIs preserve a complete fixed-weight NVFP4 hierarchy
+(FP8 local scales and a FLOAT32 global scale), unlike the portable ``nvfp4``
+profile. They do not implement activation-local dynamic scaling.
 
 For :ref:`model-level shared parameters <l-shared-quantization-parameters>`,
 ``add_quantization_parameters`` declares a fixed set and

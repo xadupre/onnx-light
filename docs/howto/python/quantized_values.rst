@@ -25,6 +25,94 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-nvfp4-weights:
+
+Complete NVFP4 weights
+----------------------
+
+``quantize_nvfp4_weights`` implements a **separate** complete weight contract,
+``onnx_light.nvfp4_weights.v1``. The existing ``QuantizationFormat.NVFP4``
+(``nvfp4``) remains the portable E2M1 numerical profile with caller-supplied
+effective scales; its payload and decoding are unchanged.
+
+The complete contract follows the symmetric, group-size-16 weight layout in
+`compressed-tensors at eb058d630f7344099459b6795b1e3eeffdda4b40
+<https://github.com/vllm-project/compressed-tensors/blob/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors/nvfp4/base.py>`_,
+including ``nvfp4/helpers.py``, ``quantization/lifecycle/forward_helpers.py``
+and the NVFP4 weight presets at that revision. It uses the FLOAT32 arithmetic
+path, not the compressor's default BFLOAT16 decompression output.
+The presets round calibrated local scales to FP8 before compression. In contrast,
+calling the upstream compressor directly with arbitrary unrounded FLOAT scales
+quantizes before its storage cast; this codec intentionally does not reproduce
+that inconsistent parameter combination.
+
+* Weights are a nonempty, row-major FLOAT matrix ``[N, K]``. Groups run along
+  axis 1, never across rows; ``K`` must be divisible by 16. Incomplete groups,
+  empty matrices and nonfinite weights are rejected, not padded or replaced.
+* The caller supplies local scales ``[N, K/16]`` as FLOAT or FLOAT8E4M3FN and
+  one finite, strictly positive FLOAT32 global scale. This is a fixed-parameter
+  codec; it does not perform calibration.
+* FLOAT local scales are rounded **first** to E4M3FN, nearest-even, with finite
+  saturation at 448. Local scales must be strictly positive before and after
+  rounding. Thus an all-zero weight group still requires a positive local scale;
+  zero scales, negative scales, NaNs, and values rounding to zero are rejected.
+* For each group, the effective reconstruction scale is
+  ``float32(float32(local_fp8) / global_scale)``. It must remain finite and
+  strictly positive. Each weight is divided by that rounded scale in FLOAT32,
+  saturated to ``[-6, 6]``, then rounded to E2M1, nearest-even.
+  The magnitude levels are ``[0, .5, 1, 1.5, 2, 3, 4, 6]``.
+  Negative normalized values rounding to E2M1 zero retain a negative-zero code.
+  An input ``-0.0``, or normalization underflow to ``-0.0``, encodes as positive
+  zero, following upstream's strict ``normalized < 0`` sign test.
+* Codes use bit 3 for sign and bits 0--2 for magnitude. Consecutive columns
+  occupy the low then high nibble of each byte. There is no hardware swizzle.
+  Reconstruction multiplies the decoded E2M1 value by the rounded effective
+  scale in FLOAT32. Nonfinite reconstructions are rejected.
+
+These rules assume IEEE round-to-nearest-even, gradual underflow and no
+fast-math. They do **not** substitute an arbitrary precombined scale for the
+hierarchy: FP8 local rounding and the subsequent FLOAT32 division can change
+both codes and reconstructed values.
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light import onnx
+    from onnx_light.onnx_core import quantization
+    from onnx_light.onnx_py._onnxpykernels import runtime
+
+    def tensor(name, array):
+        return runtime.tensor_from_numpy(
+            name, onnx.TensorProto.FLOAT, list(array.shape), array.view(numpy.uint8).reshape(-1)
+        )
+
+    weights = tensor("W", numpy.ones((2, 32), dtype=numpy.float32))
+    local = tensor("scale", numpy.ones((2, 2), dtype=numpy.float32))
+    encoded = quantization.quantize_nvfp4_weights(weights, local, 2.0)
+    restored = quantization.dequantize_tensor(encoded)
+    parameters = quantization.export_nvfp4_weights(encoded)
+    encoded_again = quantization.import_nvfp4_weights(parameters)
+
+The ordinary ``EncodedValueProto.SerializeToString`` / ``ParseFromString``
+methods serialize the complete value. Its inline descriptor identifies the
+version, grouping, matrix shape and FLOAT32 reconstruction; its payload retains
+the packed bytes, FP8 local scale bytes and original FLOAT32 global scale.
+The raw payload is row-major packed bytes, followed by row-major local-scale
+bytes, followed by the four little-endian bytes of the global FLOAT32, with no
+padding. Descriptor constants occupy no payload bytes.
+``export_nvfp4_weights`` returns independent owned ``weight_packed``
+(UINT8 ``[N, K/2]``), ``weight_scale`` (FLOAT8E4M3FN ``[N, K/16]``) and
+``weight_global_scale`` (Python float exactly representing the stored FLOAT32).
+``import_nvfp4_weights`` validates and serializes these without requantization.
+This is lossless parameter export, not a general checkpoint importer.
+Both ``dequantize_tensor`` and ``dequantize_tensor_proto`` decode this format.
+
+**Activation-local dynamic scaling is not supported.** Weight support does not
+implement or imply parity with the upstream NVFP4 activation preset, its
+calibration, training algorithms, or accelerated matrix multiplication.
+The portable plan factory and shared-parameter catalogue are not constructors
+for this separate fixed weight codec.
+
 Reconstruction precision
 ------------------------
 

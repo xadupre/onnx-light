@@ -24,6 +24,37 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Complete NVFP4 weights
+----------------------
+
+The complete fixed-weight codec is distinct from the existing portable
+``QuantizationFormat::kNvfp4``. It preserves E2M1 packed values, E4M3FN local
+scales for groups of 16 along matrix axis 1, and a FLOAT32 global scale.
+See :ref:`the complete numerical contract <l-nvfp4-weights>` for the
+pinned compressed-tensors reference, rounding order, packing and rejection
+policies. Activation-local dynamic scaling is **not** supported.
+
+.. code-block:: cpp
+
+    // Both inputs are FLOAT tensors; K must be a positive multiple of 16.
+    Tensor weights = Tensor::FromFloat("W", {2, 32}, std::vector<float>(64, 1.f));
+    Tensor local = Tensor::FromFloat("scale", {2, 2}, std::vector<float>(4, 1.f));
+    EncodedValueProto encoded = QuantizeNvfp4Weights(weights, local, 2.f);
+    Tensor restored = DequantizeTensor(encoded);
+    Nvfp4Weights parameters = ExportNvfp4Weights(encoded);
+    EncodedValueProto imported = ImportNvfp4Weights(parameters);
+
+``Nvfp4Weights`` owns ``weight_packed`` (UINT8 ``[N,K/2]``),
+``weight_scale`` (FLOAT8E4M3FN ``[N,K/16]``), and ``weight_global_scale``
+(``float``). Export/import preserves these parameters exactly without
+requantization. The self-describing ``onnx_light.nvfp4_weights.v1`` descriptor
+and payload also survive ordinary ``EncodedValueProto`` wire serialization.
+The encoder accepts FLOAT or FLOAT8E4M3FN local scales; FLOAT scales are rounded
+to FP8 before the FLOAT32 local/global division. Zero groups require positive
+local scales, just like nonzero groups. The codec rejects incomplete groups,
+nonfinite inputs, invalid scale shapes and zero/nonfinite effective scales.
+It performs no calibration and does not change the portable plan API.
+
 Reconstruction precision
 ------------------------
 

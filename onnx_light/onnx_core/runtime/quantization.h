@@ -492,6 +492,39 @@ struct MatMulNBitsInputs {
 MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
                                           const StructTypeCatalogue &catalogue = {});
 
+/** Stores owned NVFP4 WEIGHT inputs, with low-nibble-first E2M1 weights and E4M3FN scales. */
+struct Nvfp4Weights {
+  Tensor weight_packed;
+  Tensor weight_scale;
+  float weight_global_scale = 0;
+};
+
+/**
+ * Quantizes FLOAT [rows,cols] weights using groups of 16 along axis 1.
+ *
+ * Requires positive dimensions, cols divisible by 16, finite weights, positive finite global
+ * scale and FLOAT or FLOAT8E4M3FN local scales shaped [rows,cols/16].
+ * FLOAT local scales round to E4M3FN nearest-even with finite saturation at 448.
+ * This follows calibration's rounded-local contract, not arbitrary compressor calls that
+ * normalize with unrounded FLOAT scales before converting their storage to FP8.
+ * Nonpositive/nonfinite local scales, including positive values rounding to zero, are rejected.
+ * Each effective scale is separately rounded FP32(local_fp8/global); zero/nonfinite effective
+ * scales and nonfinite reconstructed outputs are rejected, including for all-zero groups.
+ * Normalization rounds to FP32 before clamping to [-6,6] and E2M1 nearest-even quantization.
+ * Negative nonzero normalized values rounding to E2M1 zero retain their sign.
+ * Input -0 and values whose FP32 normalization underflows to -0 become positive zero.
+ * The distinct v1 WEIGHT schema preserves local FP8 bytes and the FP32 global scale exactly.
+ */
+EncodedValueProto QuantizeNvfp4Weights(const Tensor &tensor, const Tensor &local_scales,
+                                       float global_scale);
+
+/** Extracts owned NVFP4 inputs after validating the complete schema and reconstruction. */
+Nvfp4Weights ExportNvfp4Weights(const EncodedValueProto &value,
+                                const StructTypeCatalogue &catalogue = {});
+
+/** Imports NVFP4 inputs losslessly with logical FLOAT shape [rows,packed_cols*2]. */
+EncodedValueProto ImportNvfp4Weights(const Nvfp4Weights &weights);
+
 /** Quantizes a finite floating-point tensor into an owned, self-describing encoded value. */
 RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan);
 

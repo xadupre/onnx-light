@@ -44,18 +44,17 @@ class TestPeakMemoryBindings(ExtTestCase):
             1 * 2 * 4 * 16 * 4,
         )
 
-    def test_compute_peak_memory_unregistered_has_unresolved_maximum(self):
+    def test_compute_peak_memory_unregistered_defaults_to_zero(self):
         q = si.SymShape([2, 4, 8, 16])
         estimate = si.compute_peak_memory("ai.onnx", "NoSuchOp", si.Device.kCPU, [q])
-        self.assertTrue(estimate.worst_case.is_expr())
-        self.assertTrue(estimate.worst_case.value())
-        self.assertIsNone(estimate.average_case)
+        self.assertEqual(estimate.worst_case.value(), 0)
+        self.assertEqual(estimate.average_case.value(), 0)
 
     def test_node_peak_memory_key_constant(self):
         self.assertEqual(si.NODE_PEAK_MEMORY_KEY, "onnx_light.peak_memory")
 
     def test_write_peak_memory_no_registered_op(self):
-        """Preserves an unresolved bound for operators without an estimator."""
+        """Uses zero for operators without an estimator."""
         add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
@@ -68,9 +67,9 @@ class TestPeakMemoryBindings(ExtTestCase):
         si.write_peak_memory_to_metadata(ctx, graph)
 
         meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
-        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "0")
         self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
-        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], "0")
 
     def test_write_peak_memory_with_device_argument(self):
         """write_peak_memory_to_metadata accepts an explicit Device argument."""
@@ -82,7 +81,7 @@ class TestPeakMemoryBindings(ExtTestCase):
         ctx = si.ShapesContext()
         si.write_peak_memory_to_metadata(ctx, graph, si.Device.kCPU)
         meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
-        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "0")
         self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
 
     def test_write_peak_memory_attention(self):
@@ -136,11 +135,11 @@ class TestPeakMemoryBindings(ExtTestCase):
         self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "4096*N")
         self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], "4096*N")
         self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
-        graph.node[0].op_type = "UnknownScratch"
+        graph.node[0].op_type = "UnregisteredPeakMemory"
         si.write_peak_memory_to_metadata(ctx, graph)
         meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
-        self.assertTrue(meta[si.NODE_PEAK_MEMORY_MAX_KEY])
-        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "0")
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], "0")
         self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
 
 

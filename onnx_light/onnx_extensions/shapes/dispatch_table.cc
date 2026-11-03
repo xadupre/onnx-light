@@ -1347,57 +1347,59 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
 using ::onnx_light::core::shapes::ComputePeakMemoryNodeFn;
 using ::onnx_light::core::shapes::PeakMemoryEstimate;
 
-// These bounds describe the portable CPU kernels' tensor workspace, excluding
+// These bounds describe the portable CPU kernels' additional peak memory, excluding
 // declared inputs/outputs, inline Shape storage and runtime/thread-pool overhead.
 // The shape-only interface cannot select a dtype: promotion bounds therefore
 // cover FLOAT16/BFLOAT16 too. Optimized runtimes must replace these registrations
 // when their implementations use different workspace.
-bool ScratchShapesAvailable(const std::vector<SymShape> &inputs, size_t minimum, size_t maximum) {
+bool PeakMemoryShapesAvailable(const std::vector<SymShape> &inputs, size_t minimum,
+                               size_t maximum) {
   bool available = inputs.size() >= minimum && inputs.size() <= maximum;
   for (const auto &shape : inputs) {
     for (const auto &dim : shape.Dims()) {
-      EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0, "Negative decoder scratch dimension.");
+      EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0,
+                          "Negative decoder peak-memory dimension.");
       available &= !dim.IsExpr() || (!dim.AsExpr().empty() && dim.AsExpr() != "?");
     }
   }
   return available;
 }
 
-SymDim ScratchAdd(const SymDim &a, const SymDim &b) {
+SymDim PeakMemoryAdd(const SymDim &a, const SymDim &b) {
   if (a.IsInt() && b.IsInt())
     return SymDim(core::shapes::CheckedDimensionAdd(a.AsInt(), b.AsInt()));
   return core::symbolic::FromDimType(
       core::expressions::dim_add(core::symbolic::ToDimType(a), core::symbolic::ToDimType(b)));
 }
 
-SymDim ScratchMultiply(const SymDim &a, const SymDim &b) {
+SymDim PeakMemoryMultiply(const SymDim &a, const SymDim &b) {
   if (a.IsInt() && b.IsInt())
     return SymDim(core::shapes::CheckedDimensionMultiply(a.AsInt(), b.AsInt()));
   return core::symbolic::FromDimType(
       core::expressions::dim_mul(core::symbolic::ToDimType(a), core::symbolic::ToDimType(b)));
 }
 
-SymDim ScratchElements(const SymShape &shape, size_t begin = 0) {
+SymDim PeakMemoryElements(const SymShape &shape, size_t begin = 0) {
   // Validate all dimensions before a zero-sized factor can short-circuit.
   for (size_t i = begin; i < shape.Rank(); ++i)
     if (shape[i].IsInt() && shape[i].AsInt() == 0)
       return SymDim(int64_t{0});
   SymDim count(int64_t{1});
   for (size_t i = begin; i < shape.Rank(); ++i)
-    count = ScratchMultiply(count, shape[i]);
+    count = PeakMemoryMultiply(count, shape[i]);
   return count;
 }
 
-PeakMemoryEstimate DecoderMatMulScratch(Device, const NodeProto &node,
-                                        const std::vector<SymShape> &inputs) {
-  if (!ScratchShapesAvailable(inputs, 2, 2) || inputs[0].Empty() || inputs[1].Empty())
+PeakMemoryEstimate DecoderMatMulPeakMemory(Device, const NodeProto &node,
+                                           const std::vector<SymShape> &inputs) {
+  if (!PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty() || inputs[1].Empty())
     return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
   const auto &a = inputs[0];
   const auto &b = inputs[1];
   const SymDim &ka = a[a.Rank() - 1];
   const SymDim &kb = b[b.Rank() == 1 ? 0 : b.Rank() - 2];
   EXT_ENFORCE_INVALID(!ka.IsInt() || !kb.IsInt() || ka.AsInt() == kb.AsInt(),
-                      "MatMul scratch: incompatible inner dimensions.");
+                      "MatMul peak memory: incompatible inner dimensions.");
   SymShape ap, bp;
   for (size_t i = 0; i + 2 < a.Rank(); ++i)
     ap.PushBack(a[i]);
@@ -1410,23 +1412,24 @@ PeakMemoryEstimate DecoderMatMulScratch(Device, const NodeProto &node,
     output.PushBack(b[b.Rank() - 1]);
   // kernel_matmul.cc keeps promoted A, B and Y alive until demotion.
   // Other supported dtypes compute directly into the declared output.
-  return {ScratchMultiply(SymDim(int64_t{4}),
-                          ScratchAdd(ScratchAdd(ScratchElements(a), ScratchElements(b)),
-                                     ScratchElements(output))),
+  return {PeakMemoryMultiply(SymDim(int64_t{4}), PeakMemoryAdd(PeakMemoryAdd(PeakMemoryElements(a),
+                                                                             PeakMemoryElements(b)),
+                                                               PeakMemoryElements(output))),
           std::nullopt};
 }
 
-PeakMemoryEstimate DecoderGatherScratch(Device, const NodeProto &node,
-                                        const std::vector<SymShape> &inputs) {
-  if (!ScratchShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
+PeakMemoryEstimate DecoderGatherPeakMemory(Device, const NodeProto &node,
+                                           const std::vector<SymShape> &inputs) {
+  if (!PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
     return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
   // ReadIndicesAsInt64 copies both INT32 and INT64 indices, including scalars.
-  return PeakMemoryEstimate::Exact(ScratchMultiply(SymDim(int64_t{8}), ScratchElements(inputs[1])));
+  return PeakMemoryEstimate::Exact(
+      PeakMemoryMultiply(SymDim(int64_t{8}), PeakMemoryElements(inputs[1])));
 }
 
-PeakMemoryEstimate DecoderSliceScratch(Device, const NodeProto &node,
-                                       const std::vector<SymShape> &inputs) {
-  if (!ScratchShapesAvailable(inputs, 3, 5) || inputs[1].Rank() != 1 || inputs[2].Rank() != 1)
+PeakMemoryEstimate DecoderSlicePeakMemory(Device, const NodeProto &node,
+                                          const std::vector<SymShape> &inputs) {
+  if (!PeakMemoryShapesAvailable(inputs, 3, 5) || inputs[1].Rank() != 1 || inputs[2].Rank() != 1)
     return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
   for (size_t i = 2; i < inputs.size(); ++i) {
     if (inputs[i].Rank() > 1 ||
@@ -1436,12 +1439,12 @@ PeakMemoryEstimate DecoderSliceScratch(Device, const NodeProto &node,
   }
   // ComputeSliceLayout simultaneously holds four INT64 arrays of length n:
   // starts, ends, axes and steps. Missing optional arrays are synthesized.
-  return {ScratchMultiply(SymDim(int64_t{32}), inputs[1][0]), std::nullopt};
+  return {PeakMemoryMultiply(SymDim(int64_t{32}), inputs[1][0]), std::nullopt};
 }
 
-PeakMemoryEstimate DecoderRMSNormalizationScratch(Device, const NodeProto &node,
-                                                  const std::vector<SymShape> &inputs) {
-  if (!ScratchShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
+PeakMemoryEstimate DecoderRMSNormalizationPeakMemory(Device, const NodeProto &node,
+                                                     const std::vector<SymShape> &inputs) {
+  if (!PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
     return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
   const auto &x = inputs[0];
   const auto &scale = inputs[1];
@@ -1454,98 +1457,38 @@ PeakMemoryEstimate DecoderRMSNormalizationScratch(Device, const NodeProto &node,
     }
   }
   const int64_t rank = static_cast<int64_t>(x.Rank());
-  EXT_ENFORCE_INVALID(axis >= -rank && axis < rank, "RMSNormalization scratch: axis out of range.");
+  EXT_ENFORCE_INVALID(axis >= -rank && axis < rank,
+                      "RMSNormalization peak memory: axis out of range.");
   if (axis < 0)
     axis += rank;
   const auto normalized_rank = x.Rank() - static_cast<size_t>(axis);
   EXT_ENFORCE_INVALID(scale.Rank() <= normalized_rank,
-                      "RMSNormalization scratch: scale rank exceeds normalized rank.");
-  const SymDim norm = ScratchElements(x, static_cast<size_t>(axis));
+                      "RMSNormalization peak memory: scale rank exceeds normalized rank.");
+  const SymDim norm = PeakMemoryElements(x, static_cast<size_t>(axis));
   const SymDim index_count = core::symbolic::FromDimType(
       core::expressions::dim_max(core::symbolic::ToDimType(norm), int64_t{1}));
   // scale_index is at least one INT64. Coordinate/stride buffers and the
   // half-precision promotions have disjoint lifetimes; summing bounds is safe
   // without claiming an average for this dtype-independent estimate.
-  const SymDim indexing = ScratchMultiply(
+  const SymDim indexing = PeakMemoryMultiply(
       SymDim(int64_t{8}),
-      ScratchAdd(index_count, SymDim(static_cast<int64_t>(scale.Rank() + normalized_rank))));
-  const SymDim promotion =
-      ScratchMultiply(SymDim(int64_t{4}), ScratchAdd(ScratchElements(x), ScratchElements(scale)));
-  return {ScratchAdd(indexing, promotion), std::nullopt};
-}
-
-ComputePeakMemoryNodeFn DecoderStreamingScratch(size_t minimum, size_t maximum) {
-  return [minimum, maximum](Device, const NodeProto &node,
-                            const std::vector<SymShape> &inputs) -> PeakMemoryEstimate {
-    if (!ScratchShapesAvailable(inputs, minimum, maximum))
-      return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
-    return PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
-  };
-}
-
-PeakMemoryEstimate DecoderBinaryScratch(Device, const NodeProto &node,
-                                        const std::vector<SymShape> &inputs) {
-  if (!ScratchShapesAvailable(inputs, 2, 2))
-    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
-  const auto output = core::shapes::BroadcastShapes(inputs[0], inputs[1]);
-  // CheckBinaryBroadcastInOut holds two heap-backed INT64 stride arrays,
-  // even when an equal-shape/scalar/empty fast path skips the general loop.
-  return PeakMemoryEstimate::Exact(SymDim(int64_t{16} * static_cast<int64_t>(output.Rank())));
-}
-
-PeakMemoryEstimate DecoderCastScratch(Device device, const NodeProto &node,
-                                      const std::vector<SymShape> &inputs) {
-  // Numeric targets stream conversions into the output, including parsing
-  // STRING inputs. Do not promise workspace bounds for STRING/unknown targets.
-  for (const auto &attr : node.attribute()) {
-    if (attr.name() == "to" && attr.type() == AttributeProto::INT) {
-      switch (attr.i()) {
-      case TensorProto::FLOAT:
-      case TensorProto::DOUBLE:
-      case TensorProto::FLOAT16:
-      case TensorProto::BFLOAT16:
-      case TensorProto::BOOL:
-      case TensorProto::INT8:
-      case TensorProto::INT16:
-      case TensorProto::INT32:
-      case TensorProto::INT64:
-      case TensorProto::UINT8:
-      case TensorProto::UINT16:
-      case TensorProto::UINT32:
-      case TensorProto::UINT64:
-        return DecoderStreamingScratch(1, 1)(device, node, inputs);
-      default:
-        break;
-      }
-    }
-  }
-  return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+      PeakMemoryAdd(index_count, SymDim(static_cast<int64_t>(scale.Rank() + normalized_rank))));
+  const SymDim promotion = PeakMemoryMultiply(
+      SymDim(int64_t{4}), PeakMemoryAdd(PeakMemoryElements(x), PeakMemoryElements(scale)));
+  return {PeakMemoryAdd(indexing, promotion), std::nullopt};
 }
 
 // Built-in table of every ``onnx_shapes`` peak-memory function, keyed by
 // ``"<domain>:<op_type>"``. Mirrors :cpp:func:`BuiltinShapeFunctions`; only
 // used to populate the shared ``core::shapes`` peak-memory dispatch table via
-// :cpp:func:`RegisterPeakMemoryFunctions`. Unregistered operators retain an
-// unresolved worst-case bound through :cpp:func:`core::shapes::ComputePeakMemory`.
+// :cpp:func:`RegisterPeakMemoryFunctions`. Unregistered operators use zero
+// additional peak memory through :cpp:func:`core::shapes::ComputePeakMemory`.
 const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemoryFunctions() {
   static const std::unordered_map<std::string, ComputePeakMemoryNodeFn> table = {
-      {"ai.onnx:MatMul", DecoderMatMulScratch},
-      {"ai.onnx:Gather", DecoderGatherScratch},
-      {"ai.onnx:Slice", DecoderSliceScratch},
-      {"ai.onnx:RMSNormalization", DecoderRMSNormalizationScratch},
-      {"ai.onnx:Cast", DecoderCastScratch},
-      {"ai.onnx:Mul", DecoderBinaryScratch},
-      {"ai.onnx:Sub", DecoderBinaryScratch},
-      {"ai.onnx:GreaterOrEqual", DecoderBinaryScratch},
-      {"ai.onnx:And", DecoderBinaryScratch},
-      // These kernels stream into outputs, with per-element half conversion
-      // rather than full-tensor promotion. Shape/stride state is inline.
-      {"ai.onnx:Swish", DecoderStreamingScratch(1, 1)},
-      {"ai.onnx:Where", DecoderStreamingScratch(3, 3)},
-      {"ai.onnx:CumSum", DecoderStreamingScratch(2, 2)},
-      {"ai.onnx:Shape", DecoderStreamingScratch(1, 1)},
-      {"ai.onnx:Unsqueeze", DecoderStreamingScratch(1, 2)},
-      {"ai.onnx:Transpose", DecoderStreamingScratch(1, 1)},
+      {"ai.onnx:MatMul", DecoderMatMulPeakMemory},
+      {"ai.onnx:Gather", DecoderGatherPeakMemory},
+      {"ai.onnx:Slice", DecoderSlicePeakMemory},
+      {"ai.onnx:RMSNormalization", DecoderRMSNormalizationPeakMemory},
       {"ai.onnx:Attention",
        [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
          return nn::ComputePeakMemoryAttention(device, node, inputs);

@@ -963,9 +963,9 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
   EXPECT_TRUE(ctx.Shapes().Has("Y"));
   // In-place reuse / release info was computed for every node.
   EXPECT_EQ(ctx.Size(), 3u);
-  // Abs has no registered estimator, so its scratch bound remains unresolved.
+  // Abs has no registered estimator, so its additional peak memory is zero.
   ASSERT_EQ(ctx.PeakMemory().size(), 3u);
-  EXPECT_TRUE(ctx.NodePeakMemory(0).worst_case.IsExpr());
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 0);
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
@@ -981,20 +981,15 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesRetainReusedBuffers) {
   EXPECT_EQ(ComputeResultLifetimeInfo(graph, false)[1].release_after,
             (std::vector<std::string>{"A"}));
   const auto scalar = [&](std::size_t i, const char *key) {
-    const auto &value = std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key));
-    if (std::holds_alternative<int64_t>(value))
-      return std::get<int64_t>(value);
-    return core::expressions::evaluate_expression(
-        std::get<std::string>(value),
-        {{core::shapes::UnknownPeakMemory("", "Abs").worst_case.AsExpr(), 64}});
+    return std::get<int64_t>(std::get<core::expressions::DimType>(ctx.NodeMemory(i).at(key)));
   };
   EXPECT_EQ(scalar(0, core::compute::kNodeMemoryBeforeBytesKey), 48);
-  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 160);
+  EXPECT_EQ(scalar(0, core::compute::kNodeMemoryDuringBytesKey), 96);
   EXPECT_EQ(scalar(0, core::compute::kNodeMemoryAfterBytesKey), 96);
   EXPECT_EQ(scalar(1, core::compute::kNodeMemoryBeforeBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 160);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 96);
   EXPECT_EQ(scalar(1, core::compute::kNodeMemoryAfterBytesKey), 96);
-  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 64);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 0);
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
@@ -1161,8 +1156,8 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToFunction) {
   ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes(), false, {{"A", "shape"}});
   const auto &peaks = ctx.ComputePeakMemory(function);
   ASSERT_EQ(peaks.size(), 2u);
-  EXPECT_TRUE(peaks[0].worst_case.IsExpr());
-  EXPECT_TRUE(peaks[1].worst_case.IsExpr());
+  EXPECT_EQ(peaks[0].worst_case.AsInt(), 0);
+  EXPECT_EQ(peaks[1].worst_case.AsInt(), 0);
   ctx.WriteToFunction(function);
   ctx.WriteToFunction(function);
 

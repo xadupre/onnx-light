@@ -21,7 +21,7 @@ independent pieces, each registered in its own static table:
   ``lib_onnx_shape``;
 * a **light op schema** – the operator definition (inputs, outputs, type
   constraints, documentation), in ``lib_onnx_op``;
-* an optional **peak memory** function – estimates the scratch memory the
+* an optional **peak memory** function – estimates the additional peak memory the
   kernel needs, also in ``lib_onnx_shape``.
 
 Each piece uses ``Abs`` (an element-wise unary math op) as the running example.
@@ -128,10 +128,10 @@ The new schema shows up in :mod:`onnx_light.onnx.defs` (``get_schema``,
 Register a peak memory function
 -------------------------------
 
-A peak-memory function estimates the scratch (non-output) memory a kernel needs,
+A peak-memory function estimates the additional (non-output) peak memory a kernel needs,
 so a scheduler can size buffers. It is optional — operators without one report a
 peak of ``0``. The registry mirrors shape inference. The signature is
-``int64_t(Device, const std::vector<SymShape> &)``.
+``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.
 
 
 Query the estimate through

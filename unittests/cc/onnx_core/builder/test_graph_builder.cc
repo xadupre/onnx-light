@@ -515,6 +515,12 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
       [](core::symbolic::Device, const NodeProto &, const std::vector<core::symbolic::SymShape> &) {
         return int64_t{1234};
       });
+  core::shapes::RegisterComputePeakMemoryFn(domain, "Project", core::symbolic::Device::kCPU,
+                                            [](core::symbolic::Device, const NodeProto &node,
+                                               const std::vector<core::symbolic::SymShape> &) {
+                                              return core::shapes::UnknownPeakMemory(
+                                                  node.domain(), node.op_type());
+                                            });
 
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"ai.rt", 1}});
   builder.set_device(core::symbolic::Device::kCPU);

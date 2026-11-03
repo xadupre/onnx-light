@@ -20,7 +20,7 @@ independent pieces, each registered in its own static table:
   ``lib_onnx_shape``;
 * a **light op schema** – the operator definition (inputs, outputs, type
   constraints, documentation), in ``lib_onnx_op``;
-* an optional **peak memory** function – estimates the scratch memory the
+* an optional **peak memory** function – estimates the additional peak memory the
   kernel needs, also in ``lib_onnx_shape``.
 
 Each piece uses ``Abs`` (an element-wise unary math op) as the running example.
@@ -229,9 +229,8 @@ builder-map entry above.
 Register a peak memory function
 -------------------------------
 
-A peak-memory function estimates the scratch (non-output) memory a kernel needs,
-so a scheduler can size buffers. Operators without an estimator retain an
-unresolved symbolic upper bound, never a zero-memory assumption.
+A peak-memory function estimates the additional peak memory a kernel needs,
+excluding its inputs and outputs. Operators without an estimator default to zero.
 The registry mirrors shape inference. The signature is
 ``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.
 Every registered estimator receives the node, including its attributes and
@@ -274,12 +273,12 @@ file) copies these builtins into the shared ``core::shapes`` peak-memory
 dispatch table via
 :cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`.
 
-Decoder workspace coverage
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Decoder peak-memory coverage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The CPU registrations include bounds for the portable native decoder kernels.
-They count tensor workspace, not declared inputs/outputs, inline shape/stride
-storage, allocator bookkeeping or shared thread-pool overhead:
+They count additional tensor allocations, not declared inputs/outputs,
+shape/stride bookkeeping, allocator bookkeeping or shared thread-pool overhead:
 
 * ``MatMul``: ``4 * (elements(A) + elements(B) + elements(Y))``, including
   broadcast batches and vector operands. This covers the simultaneously live
@@ -293,20 +292,15 @@ storage, allocator bookkeeping or shared thread-pool overhead:
   normalized_rank) + 4 * (elements(X) + elements(scale))``. This conservatively
   sums the index/coordinate buffers and half-precision promotions even though
   some have disjoint lifetimes.
-* ``Mul``, ``Sub``, ``GreaterOrEqual`` and ``And``: exactly
-  ``16 * max(rank(A), rank(B))`` for the two heap-backed INT64 stride arrays,
-  including equal-shape, scalar-broadcast and empty-output fast paths.
-* ``Swish``, ``Where``, ``CumSum``,
-  ``Shape``, ``Unsqueeze`` and ``Transpose``: zero tensor workspace, justified
-  by their direct-to-output implementations (half conversion is per-element).
-* ``Cast``: zero tensor workspace for explicitly supported numeric targets.
-  Shape-only queries lacking ``to``, STRING targets and unhandled target types
-  retain unresolved bounds.
+* ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
+  ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
+  no per-operator registration is needed.
 
-Missing required shapes, placeholder dimensions and unregistered devices or
-operators remain unresolved. Symbolic dimensions yield expressions where the
-workspace depends on them; negative dimensions and concrete overflow are rejected.
-These are static bounds, not measured process-memory peaks.
+Registered estimators can explicitly return unresolved bounds when required
+shapes are missing or contain placeholder dimensions. Symbolic dimensions yield
+expressions where peak memory depends on them; negative dimensions and concrete
+overflow are rejected. Missing estimators, including for other devices or
+domains, return zero instead.
 
 An optimized runtime such as ``onnx-light-cpu`` must register its own estimator
 **after** calling ``RegisterPeakMemoryFunctions`` if its kernels allocate different

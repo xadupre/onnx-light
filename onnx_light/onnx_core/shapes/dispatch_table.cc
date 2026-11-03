@@ -161,7 +161,7 @@ PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
   const auto &table = MutablePeakMemoryDispatchTable();
   auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
   if (it == table.end())
-    return UnknownPeakMemory(node.domain(), node.op_type());
+    return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
   const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
   ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
   return estimate;

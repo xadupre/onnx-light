@@ -48,7 +48,7 @@ void RegisterShapeFunctions();
  * :cpp:func:`RegisterShapeFunctions` for the peak-memory dispatch table:
  * idempotent, guarded by a function-local static, and must be called
  * explicitly before :cpp:func:`core::shapes::ComputePeakMemory` can resolve a
- * built-in operator (unregistered operators retain an unresolved worst-case bound).
+ * built-in operator (unregistered operators default to zero).
  */
 void RegisterPeakMemoryFunctions();
 

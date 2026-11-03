@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(onnx_proto VERSION 0.2.6 LANGUAGES C CXX)
+project(onnx_proto VERSION 0.2.7 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)

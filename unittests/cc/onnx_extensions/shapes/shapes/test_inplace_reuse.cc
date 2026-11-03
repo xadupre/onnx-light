@@ -1031,14 +1031,9 @@ TEST(OnnxOptimInPlaceReuse, MemoryBoundariesIncludeFinalReleasesAndScratch) {
   }
   ctx.ComputePeakMemory(graph, core::symbolic::Device::kGPU0);
   const auto &maximum = ctx.NodePeakMemory(1).worst_case;
-  ASSERT_TRUE(maximum.IsExpr());
-  for (const auto &[key, base] : {std::pair{core::compute::kNodeMemoryDuringBytesKey, 288},
-                                  std::pair{core::compute::kNodeMemoryReleasedBytesKey, 144}}) {
-    const auto &expression =
-        std::get<std::string>(std::get<core::expressions::DimType>(ctx.NodeMemory(1).at(key)));
-    EXPECT_EQ(core::expressions::evaluate_expression(expression, {{maximum.AsExpr(), 64}}),
-              base + 64);
-  }
+  EXPECT_EQ(maximum.AsInt(), 0);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryDuringBytesKey), 288);
+  EXPECT_EQ(scalar(1, core::compute::kNodeMemoryReleasedBytesKey), 144);
 }
 
 TEST(OnnxOptimInPlaceReuse, MemoryBoundariesPreserveSymbolicSizes) {

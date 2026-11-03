@@ -733,12 +733,7 @@ TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) 
   builder.MakeOutput("Z");
   EXPECT_TRUE(builder.Compute().PeakMemory().empty());
   const ModelProto model = builder.ToModel();
-  const auto workspace_bytes = [](const core::shapes::PeakMemoryEstimate &estimate) {
-    return core::expressions::evaluate_expression(
-        estimate.worst_case.AsExpr(),
-        {{core::shapes::UnknownPeakMemory("", "If").worst_case.AsExpr(), 16}});
-  };
-  EXPECT_EQ(workspace_bytes(builder.Compute().PeakMemory().at(0)), 37);
+  EXPECT_EQ(builder.Compute().PeakMemory().at(0).worst_case.AsInt(), 37);
   const auto &intermediates = std::get<core::compute::TaggedMemory>(
       builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey));
   ASSERT_NE(intermediates.find(""), intermediates.end());
@@ -747,9 +742,10 @@ TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) 
   context.ComputeShapes(model);
   context.ComputeInPlaceReuseGraph(model.graph(), context.Shapes(), false,
                                    context.ComputeValueAndNodeTags(model.graph()).first);
-  EXPECT_EQ(
-      workspace_bytes(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU).at(0)),
-      37);
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU)
+                .at(0)
+                .worst_case.AsInt(),
+            37);
   EXPECT_EQ(builder.Compute().NodeMemory(0), context.NodeMemory(0));
 }
 

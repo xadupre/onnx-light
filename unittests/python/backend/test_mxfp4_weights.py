@@ -7,9 +7,9 @@ import numpy
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
-from onnx_light.onnx_core import quantization
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+quantization = import_or_skip("onnx_light.onnx_core.quantization")
 
 
 class TestMxfp4Weights(ExtTestCase):
@@ -55,6 +55,14 @@ class TestMxfp4Weights(ExtTestCase):
         proto = runtime.dequantize_tensor_proto(parsed)
         self.assertEqual(proto.data_type, onnx.TensorProto.FLOAT)
 
+    def test_reference_scale_selection(self):
+        weights = self.tensor(numpy.ones((1, 32), dtype=numpy.float32))
+        parameters = quantization.export_mxfp4_weights(
+            quantization.quantize_mxfp4_weights(weights)
+        )
+        self.assertEqual(parameters.weight_scale.raw_data(), bytes([125]))
+        self.assertEqual(parameters.weight_packed.raw_data(), bytes([0x66] * 16))
+
     def test_scale_boundaries_zero_groups_and_validation(self):
         zeros = self.tensor(numpy.zeros((1, 32), dtype=numpy.float32))
         encoded = quantization.quantize_mxfp4_weights(zeros)
@@ -77,6 +85,8 @@ class TestMxfp4Weights(ExtTestCase):
         with self.assertRaises(ValueError):
             quantization.quantize_mxfp4_weights(incomplete)
 
-        parameters.weight_scale.raw_data = bytes([255])
+        parameters.weight_scale = runtime.tensor_from_numpy(
+            "weight_scale", onnx.TensorProto.UINT8, [1, 1], numpy.array([255], dtype=numpy.uint8)
+        )
         with self.assertRaises(ValueError):
             quantization.import_mxfp4_weights(parameters)

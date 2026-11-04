@@ -38,9 +38,12 @@ at eb058d630f7344099459b6795b1e3eeffdda4b40
 * Input is a finite FLOAT matrix ``[N,K]``. Groups are consecutive columns on
   axis 1; ``K`` must be a positive multiple of 32. Incomplete groups, empty
   matrices and nonfinite inputs are rejected, not padded.
-* Each group scale is ``2**floor(log2(max(abs(group))/6))``. An all-zero group
-  uses scale one. Scales smaller than the E8M0 range saturate to ``2**-127``.
-  The stored UINT8 scale is the biased exponent (bias 127); ``0xff`` is invalid.
+* For each nonzero group, ``round_to_power_2(max(abs(group)))`` is computed
+  using the pinned helper's E2M1 mantissa threshold, then divided by four
+  (the E2M1 exponent offset of 2) to obtain the scale. An all-zero group uses
+  scale one. The scale exponent is clamped to ``[-127, 125]`` to keep FLOAT
+  reconstruction finite. The stored UINT8 scale is the biased exponent (bias
+  127); ``0xff`` is invalid.
 * Values are divided by the selected scale in FLOAT32, saturated to ``[-6,6]``,
   then rounded to E2M1 with midpoint ties to even. Negative normalized values
   that round to zero retain the sign bit; input ``-0.0`` and normalized ``-0.0``

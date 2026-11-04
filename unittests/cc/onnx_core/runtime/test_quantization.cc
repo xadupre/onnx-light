@@ -145,6 +145,13 @@ TEST(Quantization, Mxfp4WeightsPinnedPackingAndLosslessImport) {
   EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
   ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), row);
   EXPECT_EQ(ImportMxfp4Weights(weights).raw_data(), encoded.raw_data());
+
+  const auto unit = ExportMxfp4Weights(
+      QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, 1.f))));
+  EXPECT_EQ(unit.weight_scale.bytes()[0], 125);
+  EXPECT_EQ(std::vector<uint8_t>(unit.weight_packed.bytes(),
+                                 unit.weight_packed.bytes() + unit.weight_packed.size_bytes()),
+            std::vector<uint8_t>(16, 0x66));
 }
 
 TEST(Quantization, Mxfp4WeightsTiesSaturationAndZeroGroups) {

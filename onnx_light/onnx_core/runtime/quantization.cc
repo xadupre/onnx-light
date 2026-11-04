@@ -1380,7 +1380,7 @@ StructTypeProto Mxfp4Schema(const Mxfp4Geometry &geometry) {
   constant("group_size", 32);
   constant("axis", 1);
   constant("reconstruction_dtype", TensorProto::FLOAT);
-  constant("e8m0_bias127_floor_log2_max_abs_div6", 1);
+  constant("e8m0_bias127_round_power2_max_abs_offset2_clamp125", 1);
   constant("e2m1_low_nibble_first_nearest_even_saturate6", 1);
   constant("reject_incomplete_groups_and_nonfinite_inputs", 1);
   Array(root, "weight_packed", TensorProto::UINT8, {geometry.rows, geometry.cols / 2});
@@ -1839,6 +1839,18 @@ Mxfp4Weights ExportMxfp4Weights(const EncodedValueProto &value,
           copy("weight_scale", {packed.geometry.rows, packed.geometry.cols / 32}, packed.scales)};
 }
 
+static int Mxfp4ScaleExponent(float maximum) {
+  if (maximum == 0)
+    return 0;
+  constexpr int kFloat32MantissaBits = 23;
+  constexpr int kE2m1MantissaBits = 1;
+  constexpr uint32_t kExponentMask = 0x7f800000;
+  constexpr uint32_t kRoundingOffset = 1u << (kFloat32MantissaBits - kE2m1MantissaBits - 1);
+  const uint32_t rounded = (std::bit_cast<uint32_t>(maximum) + kRoundingOffset) & kExponentMask;
+  const int exponent = static_cast<int>(rounded >> 23) - 129;
+  return std::clamp(exponent, -127, 125);
+}
+
 EncodedValueProto QuantizeMxfp4Weights(const Tensor &tensor) {
   EXT_ENFORCE_INVALID(tensor.shape.size() == 2, "MXFP4 WEIGHT source must be a matrix.");
   const Mxfp4Geometry geometry(tensor.shape[0], tensor.shape[1]);
@@ -1854,10 +1866,7 @@ EncodedValueProto QuantizeMxfp4Weights(const Tensor &tensor) {
       EXT_ENFORCE_INVALID(std::isfinite(value), "MXFP4 WEIGHT source must be finite.");
       maximum = std::max(maximum, std::abs(value));
     }
-    const float unrounded_scale = maximum / 6.f;
-    const int exponent =
-        maximum == 0 ? 0 : (unrounded_scale > 0 ? std::ilogb(unrounded_scale) : -127);
-    const int e8m0_exponent = std::clamp(exponent, -127, 127);
+    const int e8m0_exponent = Mxfp4ScaleExponent(maximum);
     scales[group] = static_cast<uint8_t>(e8m0_exponent + 127);
     const float scale = Mxfp4Scale(scales[group], group);
     for (size_t j = 0; j < 16; ++j) {

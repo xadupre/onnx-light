@@ -1361,6 +1361,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("weight_packed", &core::runtime::Nvfp4Weights::weight_packed)
       .def_rw("weight_scale", &core::runtime::Nvfp4Weights::weight_scale)
       .def_rw("weight_global_scale", &core::runtime::Nvfp4Weights::weight_global_scale);
+  nb::class_<core::runtime::Mxfp4Weights>(rt_mod, "Mxfp4Weights")
+      .def(nb::init<>())
+      .def_rw("weight_packed", &core::runtime::Mxfp4Weights::weight_packed)
+      .def_rw("weight_scale", &core::runtime::Mxfp4Weights::weight_scale);
+  rt_mod.def("quantize_mxfp4_weights", &core::runtime::QuantizeMxfp4Weights, nb::arg("tensor"),
+             "Encodes FLOAT matrix weights with E8M0 group scales.");
+  rt_mod.def(
+      "export_mxfp4_weights",
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::ExportMxfp4Weights);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Exports owned packed weights and E8M0 scale bytes without numerical conversion.");
+  rt_mod.def("import_mxfp4_weights", &core::runtime::ImportMxfp4Weights, nb::arg("weights"),
+             "Serializes complete MXFP4 weight parameters without requantization.");
   rt_mod.def("quantize_nvfp4_weights", &core::runtime::QuantizeNvfp4Weights, nb::arg("tensor"),
              nb::arg("local_scales"), nb::arg("global_scale"),
              "Encodes FLOAT matrix weights with FP8 local scales and a FLOAT global scale.");

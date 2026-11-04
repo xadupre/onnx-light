@@ -126,6 +126,88 @@ ModelProto SharedModel(const QuantizationPlan &plan, const EncodedValueProto &en
 
 } // namespace
 
+TEST(Quantization, Mxfp4WeightsPinnedPackingAndLosslessImport) {
+  // Source-derived from compressed-tensors at
+  // eb058d630f7344099459b6795b1e3eeffdda4b40.
+  const std::vector<float> values{0,    .5f,  1,    1.5f,  2,    3,    4,    6,
+                                  -0.f, -.5f, -1.f, -1.5f, -2.f, -3.f, -4.f, -6.f};
+  auto row = values;
+  row.insert(row.end(), values.begin(), values.end());
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("weight", {1, 32}, row));
+  EXPECT_EQ(encoded.struct_type().name().value(), "onnx_light.mxfp4_weights.v1");
+  const auto weights = ExportMxfp4Weights(encoded);
+  const std::vector<uint8_t> expected{0x10, 0x32, 0x54, 0x76, 0x90, 0xba, 0xdc, 0xfe,
+                                      0x10, 0x32, 0x54, 0x76, 0x90, 0xba, 0xdc, 0xfe};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + expected.size()),
+            expected);
+  ASSERT_EQ(weights.weight_scale.size_bytes(), 1u);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), row);
+  EXPECT_EQ(ImportMxfp4Weights(weights).raw_data(), encoded.raw_data());
+}
+
+TEST(Quantization, Mxfp4WeightsTiesSaturationAndZeroGroups) {
+  std::vector<float> values{.25f, .75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.f, -.25f, -0.f, 6.f};
+  values.resize(32, 0.f);
+  auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto weights = ExportMxfp4Weights(encoded);
+  const std::vector<uint8_t> expected{0x20, 0x42, 0x64, 0x86, 0x70};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + expected.size()),
+            expected);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  const auto decoded = DequantizeTensor(encoded);
+  EXPECT_FALSE(std::signbit(decoded.AsFloat()[8]));
+  EXPECT_TRUE(std::signbit(decoded.AsFloat()[7]));
+
+  values.assign(32, 0.f);
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto zero_weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(zero_weights.weight_scale.bytes()[0], 127);
+  EXPECT_EQ(std::vector<uint8_t>(zero_weights.weight_packed.bytes(),
+                                 zero_weights.weight_packed.bytes() +
+                                     zero_weights.weight_packed.size_bytes()),
+            std::vector<uint8_t>(16, 0));
+  ExpectValues(DequantizeTensor(encoded), values);
+
+  values[0] = 100.f;
+  values[1] = -100.f;
+  values[2] = -std::numeric_limits<float>::denorm_min();
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto saturated_weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(saturated_weights.weight_packed.bytes()[0], 0xf7);
+  EXPECT_EQ(saturated_weights.weight_packed.bytes()[1], 0x00);
+
+  values.assign(32, 0.f);
+  values[0] = 6.f * std::ldexp(1.f, -127);
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_scale.bytes()[0], 0);
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_packed.bytes()[0], 7);
+  ExpectValues(DequantizeTensor(encoded), values);
+
+  values.assign(32, 0.f);
+  values[0] = std::numeric_limits<float>::max();
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_scale.bytes()[0], 252);
+  EXPECT_TRUE(std::isfinite(DequantizeTensor(encoded).AsFloat()[0]));
+}
+
+TEST(Quantization, Mxfp4WeightsRejectsInvalidLayoutsAndScaleBytes) {
+  EXPECT_THROW(QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 31}, std::vector<float>(31))),
+               std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp4Weights(Tensor::FromFloat("", {0, 32}, {})), std::invalid_argument);
+  auto nonfinite = Tensor::FromFloat("", {1, 32}, std::vector<float>(32));
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  std::memcpy(nonfinite.mutable_bytes(), &nan, sizeof(nan));
+  EXPECT_THROW(QuantizeMxfp4Weights(nonfinite), std::invalid_argument);
+
+  auto weights = ExportMxfp4Weights(
+      QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32))));
+  weights.weight_scale.mutable_bytes()[0] = 0xff;
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+}
+
 TEST(Quantization, Nvfp4WeightsGoldenPackingAndLosslessImport) {
   const std::vector<float> values{0,    .5f,  1,  1.5f,  2,  3,  4,  6,
                                   -0.f, -.5f, -1, -1.5f, -2, -3, -4, -6};

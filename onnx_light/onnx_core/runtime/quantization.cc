@@ -1197,6 +1197,8 @@ struct DecodedValues {
 
 constexpr const char *kNvfp4WeightsName = "onnx_light.nvfp4_weights.v1";
 constexpr std::array<float, 8> kNvfp4Levels = {0, .5f, 1, 1.5f, 2, 3, 4, 6};
+constexpr const char *kMxfp4WeightsName = "onnx_light.mxfp4_weights.v1";
+constexpr std::array<float, 8> kMxfp4Levels = {0, .5f, 1, 1.5f, 2, 3, 4, 6};
 
 struct Nvfp4Geometry {
   int64_t rows, cols;
@@ -1254,6 +1256,12 @@ void ValidateNvfp4Tensor(const Tensor &tensor, int32_t dtype, const Shape &shape
   EXT_ENFORCE_INVALID(tensor.data_type == dtype && tensor.shape == shape &&
                           tensor.size_bytes() == bytes && tensor.bytes() != nullptr,
                       "Invalid NVFP4 WEIGHT tensor type, shape or storage.");
+}
+
+void ValidateMxfp4Tensor(const Tensor &tensor, int32_t dtype, const Shape &shape, size_t bytes) {
+  EXT_ENFORCE_INVALID(tensor.data_type == dtype && tensor.shape == shape &&
+                          tensor.size_bytes() == bytes && tensor.bytes() != nullptr,
+                      "Invalid MXFP4 WEIGHT tensor type, shape or storage.");
 }
 
 float Nvfp4EffectiveScale(uint8_t local, float global, size_t group) {
@@ -1334,6 +1342,131 @@ uint8_t Nvfp4Code(float value, float effective) {
   float error = magnitude;
   for (uint8_t code = 1; code < kNvfp4Levels.size(); ++code) {
     const float next = std::abs(magnitude - kNvfp4Levels[code]);
+    if (next < error || (next == error && code % 2 == 0)) {
+      best = code;
+      error = next;
+    }
+  }
+  return best | (normalized < 0 ? 8 : 0);
+}
+
+struct Mxfp4Geometry {
+  int64_t rows, cols;
+  size_t count, packed_bytes, scale_bytes, total_bytes;
+
+  Mxfp4Geometry(int64_t r, int64_t c) : rows(r), cols(c) {
+    EXT_ENFORCE_INVALID(r > 0 && c > 0 && c % 32 == 0,
+                        "MXFP4 WEIGHT requires positive [rows,cols] with cols divisible by 32.");
+    count = Product(r, c);
+    EXT_ENFORCE_INVALID(count <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
+                        "MXFP4 WEIGHT element count exceeds INT64.");
+    Product(count, sizeof(float));
+    packed_bytes = count / 2;
+    scale_bytes = count / 32;
+    EXT_ENFORCE_INVALID(packed_bytes <= std::numeric_limits<size_t>::max() - scale_bytes,
+                        "MXFP4 WEIGHT payload size overflow.");
+    total_bytes = packed_bytes + scale_bytes;
+  }
+};
+
+StructTypeProto Mxfp4Schema(const Mxfp4Geometry &geometry) {
+  StructTypeProto root;
+  root.set_name(kMxfp4WeightsName);
+  auto constant = [&](const char *name, int64_t value) {
+    auto *tensor = AddField(root, name)->mutable_constant();
+    tensor->set_data_type(TensorProto::INT64);
+    tensor->add_int64_data(value);
+  };
+  constant("group_size", 32);
+  constant("axis", 1);
+  constant("reconstruction_dtype", TensorProto::FLOAT);
+  constant("e8m0_bias127_floor_log2_max_abs_div6", 1);
+  constant("e2m1_low_nibble_first_nearest_even_saturate6", 1);
+  constant("reject_incomplete_groups_and_nonfinite_inputs", 1);
+  Array(root, "weight_packed", TensorProto::UINT8, {geometry.rows, geometry.cols / 2});
+  Array(root, "weight_scale", TensorProto::UINT8, {geometry.rows, geometry.cols / 32});
+  return root;
+}
+
+EncodedValueProto MakeMxfp4Value(const Mxfp4Geometry &geometry) {
+  EncodedValueProto result;
+  result.mutable_raw_data()->resize(geometry.total_bytes);
+  *result.mutable_struct_type() = Mxfp4Schema(geometry);
+  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.rows);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.cols);
+  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  return result;
+}
+
+float Mxfp4Scale(uint8_t exponent, size_t group) {
+  EXT_ENFORCE_INVALID(exponent != 0xff, "MXFP4 WEIGHT E8M0 scale is NaN in group ", group, ".");
+  return std::ldexp(1.f, static_cast<int>(exponent) - 127);
+}
+
+float Mxfp4Reconstruct(uint8_t code, float scale, size_t group, size_t element) {
+  const float level = code & 8 ? -kMxfp4Levels[code & 7] : kMxfp4Levels[code & 7];
+  volatile float reconstructed = level * scale;
+  EXT_ENFORCE_INVALID(std::isfinite(reconstructed),
+                      "MXFP4 WEIGHT reconstruction overflow or nonfinite value in group ", group,
+                      ", element ", element, ".");
+  return reconstructed;
+}
+
+struct Mxfp4PackedValue {
+  Mxfp4Geometry geometry;
+  std::span<const uint8_t> packed, scales;
+};
+
+void ValidateMxfp4Reconstruction(const Mxfp4PackedValue &value) {
+  for (size_t group = 0; group < value.geometry.scale_bytes; ++group) {
+    const float scale = Mxfp4Scale(value.scales[group], group);
+    for (size_t j = 0; j < 16; ++j) {
+      const uint8_t byte = value.packed[group * 16 + j];
+      Mxfp4Reconstruct(byte & 15, scale, group, j * 2);
+      Mxfp4Reconstruct(byte >> 4, scale, group, j * 2 + 1);
+    }
+  }
+}
+
+Mxfp4PackedValue ParseMxfp4Value(const EncodedValueProto &encoded,
+                                 const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(!encoded.has_parameter_ref(),
+                      "MXFP4 WEIGHT does not support shared parameters.");
+  const auto layout = catalogue.ValidateEncodedValue(encoded);
+  EXT_ENFORCE_INVALID(!layout.external && layout.root && layout.record_count == 1,
+                      "Expected one loaded MXFP4 WEIGHT record.");
+  EXT_ENFORCE_INVALID(encoded.has_logical_type() && encoded.logical_type().has_tensor_type(),
+                      "MXFP4 WEIGHT requires a logical FLOAT matrix.");
+  const auto &logical = encoded.logical_type().tensor_type();
+  EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT && logical.has_shape() &&
+                          logical.shape().dim().size() == 2 &&
+                          logical.shape().dim(0).has_dim_value() &&
+                          logical.shape().dim(1).has_dim_value(),
+                      "MXFP4 WEIGHT requires a concrete logical FLOAT matrix.");
+  Mxfp4Geometry geometry(logical.shape().dim(0).dim_value(), logical.shape().dim(1).dim_value());
+  StructTypeProto actual = *layout.root;
+  actual.clear_type_id();
+  std::string difference;
+  EXT_ENFORCE_INVALID(actual.Equals(Mxfp4Schema(geometry), &difference),
+                      "MXFP4 WEIGHT descriptor does not match its versioned schema: ", difference);
+  EXT_ENFORCE_INVALID(encoded.raw_data().size() == geometry.total_bytes,
+                      "MXFP4 WEIGHT payload size mismatch.");
+  const std::span<const uint8_t> bytes{encoded.raw_data().data(), encoded.raw_data().size()};
+  Mxfp4PackedValue result{geometry, bytes.first(geometry.packed_bytes),
+                          bytes.subspan(geometry.packed_bytes, geometry.scale_bytes)};
+  ValidateMxfp4Reconstruction(result);
+  return result;
+}
+
+uint8_t Mxfp4Code(float value, float scale) {
+  volatile float normalized = value / scale;
+  const float magnitude = std::min(std::abs(normalized), 6.f);
+  uint8_t best = 0;
+  float error = magnitude;
+  for (uint8_t code = 1; code < kMxfp4Levels.size(); ++code) {
+    const float next = std::abs(magnitude - kMxfp4Levels[code]);
     if (next < error || (next == error && code % 2 == 0)) {
       best = code;
       error = next;
@@ -1540,6 +1673,20 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value() == kMxfp4WeightsName) {
+    const auto packed = ParseMxfp4Value(encoded, catalogue);
+    std::vector<float> values(packed.geometry.count);
+    for (size_t group = 0; group < packed.geometry.scale_bytes; ++group) {
+      const float scale = Mxfp4Scale(packed.scales[group], group);
+      for (size_t j = 0; j < 16; ++j) {
+        const uint8_t byte = packed.packed[group * 16 + j];
+        values[group * 32 + j * 2] = Mxfp4Reconstruct(byte & 15, scale, group, j * 2);
+        values[group * 32 + j * 2 + 1] = Mxfp4Reconstruct(byte >> 4, scale, group, j * 2 + 1);
+      }
+    }
+    return {{packed.geometry.rows, packed.geometry.cols}, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == kNvfp4WeightsName) {
     const auto packed = ParseNvfp4Value(encoded, catalogue);
     std::vector<float> values(packed.geometry.count);
@@ -1652,6 +1799,74 @@ EncodedValueProto QuantizeNvfp4Weights(const Tensor &tensor, const Tensor &local
         Nvfp4Reconstruct(high_code, effective, group, j * 2 + 1);
       }
       packed[group * 8 + j] = low_code | (high_code << 4);
+    }
+  }
+  result.set_name(tensor.name);
+  return result;
+}
+
+EncodedValueProto ImportMxfp4Weights(const Mxfp4Weights &weights) {
+  EXT_ENFORCE_INVALID(weights.weight_packed.shape.size() == 2,
+                      "MXFP4 WEIGHT packed weights must be a matrix.");
+  const int64_t packed_cols = weights.weight_packed.shape[1];
+  EXT_ENFORCE_INVALID(packed_cols > 0 && packed_cols <= std::numeric_limits<int64_t>::max() / 2,
+                      "MXFP4 WEIGHT packed columns overflow.");
+  const Mxfp4Geometry geometry(weights.weight_packed.shape[0], packed_cols * 2);
+  ValidateMxfp4Tensor(weights.weight_packed, TensorProto::UINT8, {geometry.rows, geometry.cols / 2},
+                      geometry.packed_bytes);
+  ValidateMxfp4Tensor(weights.weight_scale, TensorProto::UINT8, {geometry.rows, geometry.cols / 32},
+                      geometry.scale_bytes);
+  ValidateMxfp4Reconstruction({geometry,
+                               {weights.weight_packed.bytes(), geometry.packed_bytes},
+                               {weights.weight_scale.bytes(), geometry.scale_bytes}});
+  auto result = MakeMxfp4Value(geometry);
+  auto *bytes = result.mutable_raw_data()->data();
+  std::memcpy(bytes, weights.weight_packed.bytes(), geometry.packed_bytes);
+  std::memcpy(bytes + geometry.packed_bytes, weights.weight_scale.bytes(), geometry.scale_bytes);
+  return result;
+}
+
+Mxfp4Weights ExportMxfp4Weights(const EncodedValueProto &value,
+                                const StructTypeCatalogue &catalogue) {
+  const auto packed = ParseMxfp4Value(value, catalogue);
+  auto copy = [](const char *name, const Shape &shape, std::span<const uint8_t> bytes) {
+    Tensor tensor = MakeOutputTensor(TensorProto::UINT8, shape, bytes.size(), nullptr);
+    tensor.name = name;
+    std::memcpy(tensor.mutable_bytes(), bytes.data(), bytes.size());
+    return tensor;
+  };
+  return {copy("weight_packed", {packed.geometry.rows, packed.geometry.cols / 2}, packed.packed),
+          copy("weight_scale", {packed.geometry.rows, packed.geometry.cols / 32}, packed.scales)};
+}
+
+EncodedValueProto QuantizeMxfp4Weights(const Tensor &tensor) {
+  EXT_ENFORCE_INVALID(tensor.shape.size() == 2, "MXFP4 WEIGHT source must be a matrix.");
+  const Mxfp4Geometry geometry(tensor.shape[0], tensor.shape[1]);
+  ValidateMxfp4Tensor(tensor, TensorProto::FLOAT, tensor.shape,
+                      Product(geometry.count, sizeof(float)));
+  auto result = MakeMxfp4Value(geometry);
+  auto *packed = result.mutable_raw_data()->data();
+  auto *scales = packed + geometry.packed_bytes;
+  for (size_t group = 0; group < geometry.scale_bytes; ++group) {
+    float maximum = 0;
+    for (size_t j = 0; j < 32; ++j) {
+      const float value = Load<float>(tensor.bytes() + (group * 32 + j) * sizeof(float));
+      EXT_ENFORCE_INVALID(std::isfinite(value), "MXFP4 WEIGHT source must be finite.");
+      maximum = std::max(maximum, std::abs(value));
+    }
+    const float unrounded_scale = maximum / 6.f;
+    const int exponent =
+        maximum == 0 ? 0 : (unrounded_scale > 0 ? std::ilogb(unrounded_scale) : -127);
+    const int e8m0_exponent = std::clamp(exponent, -127, 127);
+    scales[group] = static_cast<uint8_t>(e8m0_exponent + 127);
+    const float scale = Mxfp4Scale(scales[group], group);
+    for (size_t j = 0; j < 16; ++j) {
+      const size_t index = group * 32 + j * 2;
+      const float low = Load<float>(tensor.bytes() + index * sizeof(float));
+      const float high = Load<float>(tensor.bytes() + (index + 1) * sizeof(float));
+      const uint8_t low_code = Mxfp4Code(low, scale);
+      const uint8_t high_code = Mxfp4Code(high, scale);
+      packed[group * 16 + j] = low_code | (high_code << 4);
     }
   }
   result.set_name(tensor.name);

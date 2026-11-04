@@ -534,10 +534,13 @@ EncodedValueProto ImportNvfp4Weights(const Nvfp4Weights &weights);
 /**
  * Quantizes a finite FLOAT [rows,cols] matrix using groups of 32 along axis 1.
  *
- * Requires positive dimensions and cols divisible by 32. Each group's scale is
- * floor-pow2(max(abs(group))/6), stored as a biased E8M0 exponent byte; zero groups
- * use scale one and underflowing scales use the minimum finite E8M0 scale. E2M1 quantization
- * saturates to [-6,6] and rounds midpoint ties to even. Nonfinite inputs and incomplete groups are
+ * Requires positive dimensions and cols divisible by 32. For each nonzero group maximum m,
+ * starts with e = floor(log2(m)) and increments e when m >= 1.75 * 2^e (the E2M1
+ * mantissa threshold). Divides the resulting power of two by four by subtracting 2 from e,
+ * then clamps the scale exponent to [-127,125] to keep FLOAT reconstruction finite.
+ * Stores the exponent with E8M0 bias 127; zero groups use scale one.
+ * E2M1 quantization saturates to [-6,6] and rounds midpoint ties to even.
+ * Nonfinite inputs and incomplete groups are
  * rejected. The versioned payload stores low-nibble-first values followed by row-major E8M0 scale
  * bytes; it does not emit a hardware-swizzled kernel layout.
  */

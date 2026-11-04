@@ -154,6 +154,40 @@ TEST(Quantization, Mxfp4WeightsPinnedPackingAndLosslessImport) {
             std::vector<uint8_t>(16, 0x66));
 }
 
+TEST(Quantization, Mxfp4WeightsPinnedScaleRoundingBoundary) {
+  // Source-derived from quantization/utils/mxfp_utils.py and compressors/mxfp4 at
+  // compressed-tensors revision eb058d630f7344099459b6795b1e3eeffdda4b40.
+  struct Fixture {
+    float maximum;
+    uint8_t scale;
+    std::vector<uint8_t> packed;
+    float reconstructed_maximum;
+  };
+  const Fixture fixtures[]{
+      {std::nextafter(7.f, 0.f), 127, {0xf7, 0xa2, 0xc4, 0xd5}, 6.f},
+      {7.f, 128, {0xe6, 0x91, 0xa2, 0xb3}, 8.f},
+      {std::nextafter(7.f, 8.f), 128, {0xe6, 0x91, 0xa2, 0xb3}, 8.f},
+  };
+  for (const auto &fixture : fixtures) {
+    SCOPED_TRACE(fixture.maximum);
+    std::vector<float> values{fixture.maximum, -fixture.maximum, 1, -1, 2, -2, 3, -3};
+    values.resize(32, 0.f);
+    const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+    const auto weights = ExportMxfp4Weights(encoded);
+    ASSERT_EQ(weights.weight_scale.size_bytes(), 1u);
+    EXPECT_EQ(weights.weight_scale.bytes()[0], fixture.scale);
+    auto expected_packed = fixture.packed;
+    expected_packed.resize(16, 0);
+    ASSERT_EQ(weights.weight_packed.size_bytes(), expected_packed.size());
+    EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                   weights.weight_packed.bytes() + expected_packed.size()),
+              expected_packed);
+    values[0] = fixture.reconstructed_maximum;
+    values[1] = -fixture.reconstructed_maximum;
+    ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), values);
+  }
+}
+
 TEST(Quantization, Mxfp4WeightsTiesSaturationAndZeroGroups) {
   std::vector<float> values{.25f, .75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.f, -.25f, -0.f, 6.f};
   values.resize(32, 0.f);

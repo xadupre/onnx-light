@@ -126,6 +126,200 @@ ModelProto SharedModel(const QuantizationPlan &plan, const EncodedValueProto &en
 
 } // namespace
 
+TEST(Quantization, Mxfp4WeightsPinnedPackingAndLosslessImport) {
+  // Source-derived from compressed-tensors at
+  // eb058d630f7344099459b6795b1e3eeffdda4b40.
+  const std::vector<float> values{0,    .5f,  1,    1.5f,  2,    3,    4,    6,
+                                  -0.f, -.5f, -1.f, -1.5f, -2.f, -3.f, -4.f, -6.f};
+  auto row = values;
+  row.insert(row.end(), values.begin(), values.end());
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("weight", {1, 32}, row));
+  EXPECT_EQ(encoded.struct_type().name().value(), "onnx_light.mxfp4_weights.v1");
+  const auto weights = ExportMxfp4Weights(encoded);
+  const std::vector<uint8_t> expected{0x10, 0x32, 0x54, 0x76, 0x90, 0xba, 0xdc, 0xfe,
+                                      0x10, 0x32, 0x54, 0x76, 0x90, 0xba, 0xdc, 0xfe};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + expected.size()),
+            expected);
+  ASSERT_EQ(weights.weight_scale.size_bytes(), 1u);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), row);
+  EXPECT_EQ(ImportMxfp4Weights(weights).raw_data(), encoded.raw_data());
+
+  const auto unit = ExportMxfp4Weights(
+      QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, 1.f))));
+  EXPECT_EQ(unit.weight_scale.bytes()[0], 125);
+  EXPECT_EQ(std::vector<uint8_t>(unit.weight_packed.bytes(),
+                                 unit.weight_packed.bytes() + unit.weight_packed.size_bytes()),
+            std::vector<uint8_t>(16, 0x66));
+}
+
+TEST(Quantization, Mxfp4WeightsPinnedScaleRoundingBoundary) {
+  // Source-derived from quantization/utils/mxfp_utils.py and compressors/mxfp4 at
+  // compressed-tensors revision eb058d630f7344099459b6795b1e3eeffdda4b40.
+  struct Fixture {
+    float maximum;
+    uint8_t scale;
+    std::vector<uint8_t> packed;
+    float reconstructed_maximum;
+  };
+  const Fixture fixtures[]{
+      {std::nextafter(7.f, 0.f), 127, {0xf7, 0xa2, 0xc4, 0xd5}, 6.f},
+      {7.f, 128, {0xe6, 0x91, 0xa2, 0xb3}, 8.f},
+      {std::nextafter(7.f, 8.f), 128, {0xe6, 0x91, 0xa2, 0xb3}, 8.f},
+  };
+  for (const auto &fixture : fixtures) {
+    SCOPED_TRACE(fixture.maximum);
+    std::vector<float> values{fixture.maximum, -fixture.maximum, 1, -1, 2, -2, 3, -3};
+    values.resize(32, 0.f);
+    const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+    const auto weights = ExportMxfp4Weights(encoded);
+    ASSERT_EQ(weights.weight_scale.size_bytes(), 1u);
+    EXPECT_EQ(weights.weight_scale.bytes()[0], fixture.scale);
+    auto expected_packed = fixture.packed;
+    expected_packed.resize(16, 0);
+    ASSERT_EQ(weights.weight_packed.size_bytes(), expected_packed.size());
+    EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                   weights.weight_packed.bytes() + expected_packed.size()),
+              expected_packed);
+    values[0] = fixture.reconstructed_maximum;
+    values[1] = -fixture.reconstructed_maximum;
+    ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), values);
+  }
+}
+
+TEST(Quantization, Mxfp4WeightsTiesSaturationAndZeroGroups) {
+  std::vector<float> values{.25f, .75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.f, -.25f, -0.f, 6.f};
+  values.resize(32, 0.f);
+  auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto weights = ExportMxfp4Weights(encoded);
+  const std::vector<uint8_t> expected{0x20, 0x42, 0x64, 0x86, 0x70};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + expected.size()),
+            expected);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  const auto decoded = DequantizeTensor(encoded);
+  EXPECT_FALSE(std::signbit(decoded.AsFloat()[8]));
+  EXPECT_TRUE(std::signbit(decoded.AsFloat()[7]));
+
+  values.assign(32, 0.f);
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto zero_weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(zero_weights.weight_scale.bytes()[0], 127);
+  EXPECT_EQ(std::vector<uint8_t>(zero_weights.weight_packed.bytes(),
+                                 zero_weights.weight_packed.bytes() +
+                                     zero_weights.weight_packed.size_bytes()),
+            std::vector<uint8_t>(16, 0));
+  ExpectValues(DequantizeTensor(encoded), values);
+
+  values[0] = 100.f;
+  values[1] = -100.f;
+  values[2] = -std::numeric_limits<float>::denorm_min();
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto saturated_weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(saturated_weights.weight_packed.bytes()[0], 0xf7);
+  EXPECT_EQ(saturated_weights.weight_packed.bytes()[1], 0x00);
+
+  values.assign(32, 0.f);
+  values[0] = 6.f * std::ldexp(1.f, -127);
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_scale.bytes()[0], 0);
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_packed.bytes()[0], 7);
+  ExpectValues(DequantizeTensor(encoded), values);
+
+  values.assign(32, 0.f);
+  values[0] = std::numeric_limits<float>::max();
+  encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, values));
+  EXPECT_EQ(ExportMxfp4Weights(encoded).weight_scale.bytes()[0], 252);
+  EXPECT_TRUE(std::isfinite(DequantizeTensor(encoded).AsFloat()[0]));
+}
+
+TEST(Quantization, Mxfp4WeightsPinnedRowMajorGroups) {
+  // Source-derived from compressed-tensors revision eb058d630f7344099459b6795b1e3eeffdda4b40.
+  std::vector<float> values, reconstructed;
+  for (float value : {1.f, -7.f, 2.f, 14.f})
+    values.insert(values.end(), 32, value);
+  for (float value : {1.f, -8.f, 2.f, 16.f})
+    reconstructed.insert(reconstructed.end(), 32, value);
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {2, 64}, values));
+  const auto weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(weights.weight_packed.shape, (Shape{2, 32}));
+  EXPECT_EQ(weights.weight_scale.shape, (Shape{2, 2}));
+  const std::vector<uint8_t> scales{125, 128, 126, 129};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_scale.bytes(),
+                                 weights.weight_scale.bytes() + scales.size()),
+            scales);
+  std::vector<uint8_t> packed;
+  for (uint8_t code : {0x66, 0xee, 0x66, 0x66})
+    packed.insert(packed.end(), 16, code);
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + packed.size()),
+            packed);
+  const auto imported = WireRoundTrip(RuntimeValue(ImportMxfp4Weights(weights))).Encoded();
+  EXPECT_EQ(imported.raw_data(), encoded.raw_data());
+  ExpectValues(DequantizeTensor(imported), reconstructed);
+  ExpectValues(TensorFromProto(DequantizeTensorProto(imported)), reconstructed);
+}
+
+TEST(Quantization, Mxfp4WeightsRejectsInvalidLayoutsAndScaleBytes) {
+  EXPECT_THROW(QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 31}, std::vector<float>(31))),
+               std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp4Weights(Tensor::FromFloat("", {0, 32}, {})), std::invalid_argument);
+  auto nonfinite = Tensor::FromFloat("", {1, 32}, std::vector<float>(32));
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  std::memcpy(nonfinite.mutable_bytes(), &nan, sizeof(nan));
+  EXPECT_THROW(QuantizeMxfp4Weights(nonfinite), std::invalid_argument);
+
+  auto weights = ExportMxfp4Weights(
+      QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32))));
+  weights.weight_scale.mutable_bytes()[0] = 0xff;
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+}
+
+TEST(Quantization, Mxfp4WeightsRejectsMalformedStorageAndOverflow) {
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32)));
+  auto rejects = [](const EncodedValueProto &value) {
+    EXPECT_THROW(ExportMxfp4Weights(value), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensor(value), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensorProto(value), std::invalid_argument);
+  };
+  auto malformed = encoded;
+  malformed.mutable_raw_data()->resize(16);
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_struct_type()->set_name("onnx_light.mxfp4_weights.v2");
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_logical_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(1)
+      ->set_dim_value(64);
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_raw_data()->data()[16] = 0xff;
+  rejects(malformed);
+  malformed.mutable_raw_data()->data()[16] = 254;
+  malformed.mutable_raw_data()->data()[0] = 0x77;
+  rejects(malformed);
+
+  auto weights = ExportMxfp4Weights(encoded);
+  weights.weight_scale = Tensor("weight_scale", TensorProto::UINT8, {1, 2}, {127, 127});
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  weights.weight_scale = Tensor("weight_scale", TensorProto::INT8, {1, 1}, {127});
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  weights.weight_packed.shape[1] = std::numeric_limits<int64_t>::max();
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp4Weights(
+                   Tensor("", TensorProto::FLOAT, {std::numeric_limits<int64_t>::max(), 32}, {})),
+               std::invalid_argument);
+  for (float value :
+       {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()})
+    EXPECT_THROW(
+        QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, value))),
+        std::invalid_argument);
+}
+
 TEST(Quantization, Nvfp4WeightsGoldenPackingAndLosslessImport) {
   const std::vector<float> values{0,    .5f,  1,  1.5f,  2,  3,  4,  6,
                                   -0.f, -.5f, -1, -1.5f, -2, -3, -4, -6};

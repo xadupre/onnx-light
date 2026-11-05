@@ -25,6 +25,63 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-mxfp4-weights:
+
+Complete MXFP4 weights
+----------------------
+
+``quantize_mxfp4_weights`` implements the complete fixed-weight codec
+``onnx_light.mxfp4_weights.v1``. It is separate from the existing
+``QuantizationFormat.MXFP4`` (``mxfp4``) portable numerical profile, whose
+parameters and serialized decoder are unchanged.
+
+The numerical contract follows the group-size-32 MXFP4 convention at
+`compressed-tensors revision eb058d630f7344099459b6795b1e3eeffdda4b40
+<https://github.com/vllm-project/compressed-tensors/tree/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors/mxfp4>`_,
+including its MX scale helpers and E2M1 rounding. The complete contract is:
+
+* Input is a finite FLOAT matrix ``[N,K]``. Groups are consecutive columns on
+  axis 1; ``K`` must be a positive multiple of 32. Incomplete groups, empty
+  matrices and nonfinite inputs are rejected, not padded.
+* For each nonzero group, ``round_to_power_2(max(abs(group)))`` is computed
+  using the pinned helper's E2M1 mantissa threshold, then divided by four
+  (the E2M1 exponent offset of 2) to obtain the scale. An all-zero group uses
+  scale one. The scale exponent is clamped to ``[-127, 125]`` to keep FLOAT
+  reconstruction finite. The stored UINT8 scale is the biased exponent (bias
+  127); ``0xff`` is invalid.
+* Values are divided by the selected scale in FLOAT32, saturated to ``[-6,6]``,
+  then rounded to E2M1 with midpoint ties to even. Negative normalized values
+  that round to zero retain the sign bit; input ``-0.0`` and normalized ``-0.0``
+  encode as positive zero.
+* E2M1 sign is bit 3 and magnitude is bits 0--2. The first column occupies the
+  low nibble. Payload bytes contain row-major packed values followed by row-major
+  scale bytes. This byte ordering is explicit and swizzle-free, but does not
+  claim compatibility with every vendor checkpoint packing ABI.
+
+The codec supplies numerical and portable storage compatibility for this
+contract. It does not provide an accelerated MXFP4 compute kernel.
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light import onnx
+    from onnx_light.onnx_core import quantization
+    from onnx_light.onnx_py._onnxpykernels import runtime
+
+    weights = runtime.tensor_from_numpy(
+        "W", onnx.TensorProto.FLOAT, [2, 64],
+        numpy.ones((2, 64), dtype=numpy.float32).view(numpy.uint8).reshape(-1),
+    )
+    encoded = quantization.quantize_mxfp4_weights(weights)
+    parameters = quantization.export_mxfp4_weights(encoded)
+    encoded_again = quantization.import_mxfp4_weights(parameters)
+
+``Mxfp4Weights`` owns UINT8 ``weight_packed`` (``[N,K/2]``) and
+``weight_scale`` (``[N,K/32]``). Export/import preserves the packed nibbles
+and E8M0 bytes exactly. The self-describing encoded value survives ordinary
+wire serialization and is decoded by both ``dequantize_tensor`` and
+``dequantize_tensor_proto``.
+
 .. _l-nvfp4-weights:
 
 Complete NVFP4 weights

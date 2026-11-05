@@ -24,6 +24,50 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Complete MXFP4 weights
+----------------------
+
+The complete MXFP4 weight codec is separate from the portable
+``QuantizationFormat::kMxfp4`` profile, whose existing parameters and serialized
+decoder remain unchanged. ``QuantizeMxfp4Weights`` selects each scale from the
+input, and the versioned ``onnx_light.mxfp4_weights.v1`` value is self-contained.
+Its numerical rules follow the MXFP4 group-size-32 convention in `compressed-tensors
+at eb058d630f7344099459b6795b1e3eeffdda4b40
+<https://github.com/vllm-project/compressed-tensors/blob/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors/mxfp4/base.py>`_.
+
+* Input is a finite FLOAT matrix ``[N,K]``. Groups are consecutive columns on
+  axis 1; ``K`` must be a positive multiple of 32. Incomplete groups, empty
+  matrices and nonfinite inputs are rejected, not padded.
+* For each nonzero group, ``round_to_power_2(max(abs(group)))`` is computed
+  using the pinned helper's E2M1 mantissa threshold, then divided by four
+  (the E2M1 exponent offset of 2) to obtain the scale. An all-zero group uses
+  scale one. The scale exponent is clamped to ``[-127, 125]`` to keep FLOAT
+  reconstruction finite. The stored UINT8 scale is the biased exponent (bias
+  127); ``0xff`` is invalid.
+* Values are divided by the selected scale in FLOAT32, saturated to ``[-6,6]``,
+  then rounded to E2M1 with midpoint ties to even. Negative normalized values
+  that round to zero retain the sign bit; input ``-0.0`` and normalized ``-0.0``
+  encode as positive zero.
+* E2M1 sign is bit 3 and magnitude is bits 0--2. The first column occupies the
+  low nibble. Payload bytes contain row-major packed values followed by row-major
+  scale bytes. This byte ordering is explicit and swizzle-free, but does not
+  claim compatibility with every vendor checkpoint packing ABI.
+
+The codec supplies numerical and portable storage compatibility for this
+contract. It does not provide an accelerated MXFP4 compute kernel.
+
+.. code-block:: cpp
+
+    Tensor weights = Tensor::FromFloat("W", {2, 64}, std::vector<float>(128, 1.f));
+    EncodedValueProto encoded = QuantizeMxfp4Weights(weights);
+    Mxfp4Weights parameters = ExportMxfp4Weights(encoded);
+    EncodedValueProto imported = ImportMxfp4Weights(parameters);
+
+``Mxfp4Weights`` owns UINT8 ``weight_packed`` (``[N,K/2]``) and
+``weight_scale`` (``[N,K/32]``). Export/import preserves the packed nibbles
+and E8M0 bytes exactly, and the encoded value survives ordinary wire
+serialization.
+
 Complete NVFP4 weights
 ----------------------
 

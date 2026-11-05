@@ -16,9 +16,10 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 namespace {
 
 constexpr auto kQuantizationFormats = QuantizationFormats();
-static_assert(kQuantizationFormats.size() == 44);
+static_assert(kQuantizationFormats.size() == 45);
 static_assert(kQuantizationFormats.front() == QuantizationFormat::kInt8);
-static_assert(kQuantizationFormats.back() == QuantizationFormat::kMxfp8);
+static_assert(kQuantizationFormats.back() == QuantizationFormat::kMxfp6E2m3);
+static_assert(static_cast<int>(QuantizationFormat::kMxfp8) == 43);
 static_assert(static_cast<int>(QuantizationFormat::kOrtMatmulnbitsInt8) == 42);
 static_assert([] {
   for (size_t i = 0; i < kQuantizationFormats.size(); ++i) {
@@ -320,6 +321,230 @@ TEST(Quantization, Mxfp4WeightsRejectsMalformedStorageAndOverflow) {
     EXPECT_THROW(
         QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, value))),
         std::invalid_argument);
+}
+
+TEST(Quantization, Mxfp6E2m3PinnedPackingAndVersionedRoundTrip) {
+  // compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40:
+  // tests/test_compressors/test_mxfp6_quant.py test_pack_fp6 supplies 48 f8 01.
+  std::vector<float> values;
+  std::vector<uint8_t> bytes;
+  for (int i = 0; i < 8; ++i) {
+    values.insert(values.end(), {1, -.125f, 7.5f, 0});
+    bytes.insert(bytes.end(), {0x48, 0xf8, 0x01});
+  }
+  const auto source = Tensor::FromFloat("weight", {1, 32}, values);
+  const auto encoded = QuantizeMxfp6E2m3Weights(source);
+  EXPECT_EQ(encoded.struct_type().name().value(), "onnx_light.mxfp6_e2m3_weights.v1");
+  const auto weights = ExportMxfp6E2m3Weights(encoded);
+  EXPECT_EQ(weights.weight_packed.shape, (Shape{1, 24}));
+  EXPECT_EQ(weights.weight_scale.shape, (Shape{1, 1}));
+  EXPECT_EQ(weights.weight_packed.data_type, TensorProto::UINT8);
+  EXPECT_EQ(weights.weight_scale.data_type, TensorProto::UINT8);
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(), weights.weight_packed.bytes() + 24),
+            bytes);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), values);
+  ExpectValues(TensorFromProto(DequantizeTensorProto(encoded)), values);
+  EXPECT_EQ(ImportMxfp6E2m3Weights(weights).raw_data(), encoded.raw_data());
+  const auto plan = MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, 32);
+  EXPECT_EQ(QuantizeTensor(source, plan).Encoded().raw_data(), encoded.raw_data());
+  TensorProto proto;
+  proto.set_data_type(TensorProto::FLOAT);
+  proto.add_dims(1);
+  proto.add_dims(32);
+  proto.set_raw_data(source.bytes(), source.size_bytes());
+  EXPECT_EQ(QuantizeTensorProto(proto, plan).raw_data(), encoded.raw_data());
+
+  ModelProto model;
+  *model.add_struct_types() = encoded.struct_type();
+  model.mutable_struct_types(0)->set_type_id(86);
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  auto referenced = encoded;
+  referenced.mutable_struct_type()->Clear();
+  referenced.mutable_struct_type()->set_type_ref(86);
+  ExpectValues(DequantizeTensor(referenced, catalogue), values);
+  EXPECT_EQ(ExportMxfp6E2m3Weights(referenced, catalogue).weight_scale.bytes()[0], 127);
+  EXPECT_THROW(ExportMxfp6E2m3Weights(referenced), std::invalid_argument);
+}
+
+TEST(Quantization, Mxfp6E2m3PinnedScaleThresholdRowsAndSaturation) {
+  // Source-derived generate_mx_scales(num_bits=6): add 2^19, mask, subtract 2.
+  const std::vector<float> maxima{1,     3.75f, std::nextafter(3.875f, 0.f),      3.875f, 7.5f,
+                                  7.75f, 0,     std::numeric_limits<float>::max()};
+  const std::vector<uint8_t> scales{125, 126, 126, 127, 127, 128, 0, 252};
+  const std::vector<uint8_t> codes{24, 31, 31, 24, 31, 24, 0, 31};
+  std::vector<float> values, expected;
+  const std::vector<float> reconstructed{1, 3.75f, 3.75f, 4, 7.5f, 8, 0, std::ldexp(7.5f, 125)};
+  for (size_t i = 0; i < maxima.size(); ++i) {
+    values.insert(values.end(), 32, maxima[i]);
+    expected.insert(expected.end(), 32, reconstructed[i]);
+  }
+  const auto encoded = QuantizeMxfp6E2m3Weights(Tensor::FromFloat("", {4, 64}, values));
+  const auto weights = ExportMxfp6E2m3Weights(encoded);
+  EXPECT_EQ(weights.weight_scale.shape, (Shape{4, 2}));
+  for (size_t i = 0; i < scales.size(); ++i) {
+    EXPECT_EQ(weights.weight_scale.bytes()[i], scales[i]) << i;
+    for (int j = 0; j < 32; ++j)
+      EXPECT_EQ(Read6BitElement(weights.weight_packed.bytes() + i * 24, j), codes[i]) << i;
+  }
+  ExpectValues(DequantizeTensor(encoded), expected);
+}
+
+TEST(Quantization, Mxfp6E2m3TiesSignedZerosAndScaleExtremes) {
+  std::vector<float> values(32, 0);
+  const std::vector<float> ties{.0625f,  .1875f,   1.9375f, 3.875f, -.0625f,
+                                -.1875f, -1.9375f, -3.875f, 7.5f,   -0.f};
+  std::copy(ties.begin(), ties.end(), values.begin());
+  const std::vector<uint8_t> codes{0, 2, 16, 24, 32, 34, 48, 56, 31, 32};
+  const auto encoded = QuantizeMxfp6E2m3Weights(Tensor::FromFloat("", {1, 32}, values));
+  const auto weights = ExportMxfp6E2m3Weights(encoded);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  for (size_t i = 0; i < codes.size(); ++i)
+    EXPECT_EQ(Read6BitElement(weights.weight_packed.bytes(), i), codes[i]);
+  const auto decoded = DequantizeTensor(encoded);
+  EXPECT_TRUE(std::signbit(decoded.AsFloat()[4]));
+  EXPECT_TRUE(std::signbit(decoded.AsFloat()[9]));
+  const auto negative_zero =
+      QuantizeMxfp6E2m3Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, -0.f)));
+  const auto zero_weights = ExportMxfp6E2m3Weights(negative_zero);
+  EXPECT_EQ(zero_weights.weight_scale.bytes()[0], 0);
+  for (int i = 0; i < 32; ++i)
+    EXPECT_EQ(Read6BitElement(zero_weights.weight_packed.bytes(), i), 32);
+  EXPECT_TRUE(std::signbit(DequantizeTensor(negative_zero).AsFloat()[0]));
+
+  // Every E2M3 code is valid; imports preserve signs and all finite scale bytes.
+  std::vector<uint8_t> packed(48, 0);
+  for (int i = 0; i < 64; ++i)
+    Write6BitElement(packed.data(), i, i);
+  Mxfp6E2m3Weights native{Tensor("", TensorProto::UINT8, {2, 24}, packed),
+                          Tensor("", TensorProto::UINT8, {2, 1}, std::vector<uint8_t>{127, 0})};
+  const auto imported = ImportMxfp6E2m3Weights(native);
+  const auto restored = ExportMxfp6E2m3Weights(imported);
+  EXPECT_EQ(std::memcmp(restored.weight_packed.bytes(), packed.data(), packed.size()), 0);
+  const auto actual = DequantizeTensor(imported);
+  for (int i = 0; i < 64; ++i)
+    EXPECT_FLOAT_EQ(actual.AsFloat()[i],
+                    Float6BitsToFloat(i, DataType::FLOAT6E2M3) * (i < 32 ? 1.f : 0x1p-127f));
+  native.weight_scale.mutable_bytes()[0] = 254;
+  std::memset(native.weight_packed.mutable_bytes(), 0, 48);
+  Write6BitElement(native.weight_packed.mutable_bytes(), 0, 8);
+  EXPECT_FLOAT_EQ(DequantizeTensor(ImportMxfp6E2m3Weights(native)).AsFloat()[0], 0x1p127f);
+  const auto tiny = QuantizeMxfp6E2m3Weights(Tensor::FromFloat(
+      "", {1, 32}, std::vector<float>(32, std::numeric_limits<float>::denorm_min())));
+  EXPECT_EQ(ExportMxfp6E2m3Weights(tiny).weight_scale.bytes()[0], 0);
+  ExpectValues(DequantizeTensor(tiny), std::vector<float>(32, 0));
+}
+
+TEST(Quantization, Mxfp6LegacyE3m2PayloadCompatibility) {
+  EXPECT_FLOAT_EQ(Float6BitsToFloat(9, DataType::FLOAT6E2M3), 1.125f);
+  EXPECT_FLOAT_EQ(Float6BitsToFloat(9, DataType::FLOAT6E3M2), .625f);
+  for (auto format : {QuantizationFormat::kMxfp6, QuantizationFormat::kFp6Llm}) {
+    const auto plan = MakeQuantizationPlan(format, 4);
+    auto encoded =
+        QuantizeTensor(Tensor::FromFloat("", {4}, {.125f, -.125f, 1.125f, 7.5f}), plan).Encoded();
+    EXPECT_EQ(encoded.struct_type().name().value(),
+              "onnx_light.quantization.v1/" + std::string(QuantizationFormatName(format)));
+    const std::array<uint8_t, 3> old_codes{0x82, 0xc8, 0x5c};
+    EXPECT_EQ(std::memcmp(encoded.raw_data().data() + encoded.raw_data().size() - 3,
+                          old_codes.data(), old_codes.size()),
+              0);
+    std::memcpy(encoded.mutable_raw_data()->data() + encoded.raw_data().size() - 3,
+                old_codes.data(), old_codes.size());
+    const auto restored = DequantizeTensor(WireRoundTrip(RuntimeValue(encoded)));
+    ExpectValues(restored, {.125f, -.125f, 1, 7});
+  }
+}
+
+TEST(Quantization, Mxfp6E2m3RejectsInvalidInputsPlansAndPayloads) {
+  for (uint64_t count : {0, 1, 31, 33})
+    EXPECT_THROW(MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, count),
+                 std::invalid_argument);
+  EXPECT_THROW(MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, 32, 64), std::invalid_argument);
+  const auto source = Tensor::FromFloat("", {1, 32}, std::vector<float>(32, 1));
+  const auto plan = MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, 32, 32);
+  EXPECT_THROW(MakeQuantizationType(plan), std::invalid_argument);
+  for (const Shape &shape : {Shape{}, Shape{32}, Shape{1, 31}, Shape{0, 32}, Shape{32, 1},
+                             Shape{1, 1, 32}, Shape{-1, 32}}) {
+    EXPECT_THROW(QuantizeMxfp6E2m3Weights(Tensor("", TensorProto::FLOAT, shape, {})),
+                 std::invalid_argument);
+  }
+  EXPECT_THROW(QuantizeMxfp6E2m3Weights(Tensor::FromDouble("", {1, 32}, std::vector<double>(32))),
+               std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp6E2m3Weights(Tensor("", TensorProto::FLOAT, {1, 32}, {})),
+               std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp6E2m3Weights(
+                   Tensor("", TensorProto::FLOAT, {std::numeric_limits<int64_t>::max(), 32}, {})),
+               std::invalid_argument);
+  for (float value : {INFINITY, -INFINITY, NAN}) {
+    auto bad = Tensor::FromFloat("", {1, 32}, std::vector<float>(32, value));
+    EXPECT_THROW(QuantizeTensor(bad, plan), std::invalid_argument);
+  }
+  auto bad_plan = plan;
+  bad_plan.runs[0].blocks[0].scale = 2;
+  EXPECT_THROW(QuantizeTensor(source, bad_plan), std::invalid_argument);
+  bad_plan = plan;
+  bad_plan.runs[0].layout.cast_type = TensorProto::FLOAT6E3M2;
+  EXPECT_THROW(QuantizeTensor(source, bad_plan), std::invalid_argument);
+  bad_plan = plan;
+  bad_plan.outliers = {0};
+  EXPECT_THROW(QuantizeTensor(source, bad_plan), std::invalid_argument);
+  EXPECT_THROW(QuantizeTensor(Tensor::FromFloat("", {2, 32}, std::vector<float>(64)), plan),
+               std::invalid_argument);
+  const auto encoded = QuantizeMxfp6E2m3Weights(source);
+  auto rejects = [](const EncodedValueProto &bad) {
+    EXPECT_THROW(ExportMxfp6E2m3Weights(bad), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensor(bad), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensorProto(bad), std::invalid_argument);
+  };
+  for (size_t size : {0, 24, 26}) {
+    auto bad = encoded;
+    bad.mutable_raw_data()->resize(size);
+    rejects(bad);
+  }
+  auto bad = encoded;
+  bad.mutable_raw_data()->data()[24] = 255;
+  rejects(bad);
+  bad = encoded;
+  bad.mutable_raw_data()->data()[24] = 254;
+  rejects(bad); // Normalized 4 times 2^127 overflows.
+  for (int field = 0; field < 8; ++field) {
+    bad = encoded;
+    bad.mutable_struct_type()
+        ->mutable_structure()
+        ->mutable_field(field)
+        ->mutable_constant()
+        ->ref_int64_data()[0] = -1;
+    rejects(bad);
+  }
+  bad = encoded;
+  bad.mutable_struct_type()->set_name("onnx_light.mxfp6_e2m3_weights.v2");
+  rejects(bad);
+  bad = encoded;
+  bad.mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+  rejects(bad);
+  bad = encoded;
+  bad.set_parameter_ref("shared");
+  rejects(bad);
+  auto native = ExportMxfp6E2m3Weights(encoded);
+  native.weight_scale.mutable_bytes()[0] = 255;
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
+  native = ExportMxfp6E2m3Weights(encoded);
+  native.weight_packed.shape = {1, 25};
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
+  native = ExportMxfp6E2m3Weights(encoded);
+  native.weight_packed.data_type = TensorProto::INT8;
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
+  native = ExportMxfp6E2m3Weights(encoded);
+  native.weight_scale.shape = {1, 2};
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
+  native = ExportMxfp6E2m3Weights(encoded);
+  native.weight_packed.shape = {1, std::numeric_limits<int64_t>::max() - 1};
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
+  native = ExportMxfp6E2m3Weights(
+      QuantizeMxfp6E2m3Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32))));
+  native.weight_scale.mutable_bytes()[0] = 255;
+  EXPECT_THROW(ImportMxfp6E2m3Weights(native), std::invalid_argument);
 }
 
 TEST(Quantization, Mxfp8WeightsPinnedRoundingBoundaryAndRows) {
@@ -1099,8 +1324,8 @@ TEST(Quantization, PagedCacheRetainsSharedParametersAcrossSerialization) {
 
 TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
   for (auto format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8)
-      continue; // MXFP8 intentionally does not support shared numerical parameters.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
+      continue; // Automatic MX profiles do not support shared numerical parameters.
     SCOPED_TRACE(std::string(QuantizationFormatName(format)));
     auto plan = WithTables(format, 16);
     auto source = Tensor::FromFloat(
@@ -1308,10 +1533,10 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   proto.add_dims(2);
   for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
     proto.add_float_data(value);
-  EXPECT_EQ(QuantizationFormats().size(), 44u);
+  EXPECT_EQ(QuantizationFormats().size(), 45u);
   for (const auto &format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8)
-      continue; // Covered with a complete rank-two group in the MXFP8-specific tests.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
+      continue; // Covered with complete rank-two groups in the profile-specific tests.
     SCOPED_TRACE(QuantizationFormatName(format));
     auto plan = WithTables(format, 8);
     if (format == QuantizationFormat::kIq4Nl)
@@ -1568,7 +1793,7 @@ TEST(Quantization, RejectsUnknownProfilesInMutablePlansAndEncodedLayouts) {
     EXPECT_THROW(DequantizeTensor(RuntimeValue(encoded)), std::invalid_argument);
   }
   auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 2);
-  plan.format = static_cast<QuantizationFormat>(44);
+  plan.format = static_cast<QuantizationFormat>(45);
   EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
   auto renamed = valid;
   renamed.mutable_struct_type()->set_name("onnx_light.quantization.v1/quarot");
@@ -1946,7 +2171,7 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
   for (const auto format : QuantizationFormats()) {
     const auto name = QuantizationFormatName(format);
     EXPECT_EQ(ParseQuantizationFormat(name), format);
-    if (format == QuantizationFormat::kMxfp8)
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
       EXPECT_EQ(MakeQuantizationPlan(format, 32).format, format);
     else if (format < QuantizationFormat::kOrtMatmulnbitsInt2)
       EXPECT_EQ(MakeQuantizationPlan(format, 0).format, format);
@@ -1954,7 +2179,7 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
       EXPECT_EQ(MakeMatMulNBitsPlan(format, 1, 1, 16).format, format);
   }
   EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(-1)), std::invalid_argument);
-  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(44)), std::invalid_argument);
+  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(45)), std::invalid_argument);
   EXPECT_THROW(ParseQuantizationFormat("INT4"), std::invalid_argument);
 }
 

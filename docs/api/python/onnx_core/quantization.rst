@@ -18,6 +18,11 @@ The separate ``quantize_nvfp4_weights``, ``export_nvfp4_weights`` and
 ``import_nvfp4_weights`` APIs preserve a complete fixed-weight NVFP4 hierarchy
 (FP8 local scales and a FLOAT32 global scale), unlike the portable ``nvfp4``
 profile. They do not implement activation-local dynamic scaling.
+The ``MXFP6_E2M3`` profile and ``quantize_mxfp6_e2m3_weights`` implement the
+:ref:`E2M3/group-32/E8M0 contract <l-mxfp6-e2m3-weights>`. The export/import
+functions preserve packed weight and scale bytes. Legacy ``MXFP6`` and
+``FP6_LLM`` remain E3M2 profiles.
+
 The ``MXFP8`` profile and ``quantize_mxfp8_weights`` implement the
 :ref:`complete E4M3FN/group-32/E8M0 contract <l-mxfp8-weights>` with automatic
 scales. ``export_mxfp8_weights`` and ``import_mxfp8_weights`` preserve the

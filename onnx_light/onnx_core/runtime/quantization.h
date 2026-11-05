@@ -60,6 +60,7 @@ enum class QuantizationFormat {
   kOrtMatmulnbitsInt4,
   kOrtMatmulnbitsInt8,
   kMxfp8,
+  kMxfp6E2m3,
 };
 
 /**
@@ -117,6 +118,8 @@ struct QuantizationRun {
  * kOrtMatmulnbitsInt* profiles, use MakeMatMulNBitsPlan and its matrix-specific contract.
  * kMxfp8 instead selects the complete fixed-32 QuantizeMxfp8Weights contract, with
  * automatic E8M0 scales, native E4M3FN bytes and fixed FLOAT reconstruction.
+ * kMxfp6E2m3 selects QuantizeMxfp6E2m3Weights, with packed E2M3 codes and automatic
+ * group-32 E8M0 scales; it does not change the portable E3M2 kMxfp6 profile.
  *
  * @par Construction and conversion
  * Calls MakeQuantizationPlan(format, count, block_size) to initialize profile defaults,
@@ -247,6 +250,9 @@ struct QuantizationRun {
  * logarithmic range/rule.</td></tr> <tr><td>fp6_llm,
  * mxfp6</td><td>MakeQuantizationPlan(QuantizationFormat::kFp6Llm, 16), or "mxfp6": scalar E3M2
  * finite levels with six-bit indices. Supply effective scale.</td></tr>
+ * <tr><td>mxfp6_e2m3</td><td>MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, 32):
+ * complete E2M3/group-32/E8M0 matrix codec with automatic scales and FLOAT reconstruction.
+ * See QuantizeMxfp6E2m3Weights; portable block customizations are rejected.</td></tr>
  * <tr><td>mxfp4, nvfp4</td><td>MakeQuantizationPlan(QuantizationFormat::kMxfp4, 16, 8), or "nvfp4":
  * scalar E2M1 finite levels with four-bit indices. Supply each block's effective scale; any
  * E8M0/FP8 scale rounding or multiplication of global and local scales is the caller's
@@ -422,8 +428,8 @@ struct QuantizationPlan {
 };
 
 /** Returns the portable profiles as a compile-time array without dynamic allocation. */
-constexpr std::array<QuantizationFormat, 44> QuantizationFormats() {
-  std::array<QuantizationFormat, 44> formats{};
+constexpr std::array<QuantizationFormat, 45> QuantizationFormats() {
+  std::array<QuantizationFormat, 45> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;
@@ -442,7 +448,7 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name);
  * required scales/codebooks/transforms, numerical rules, validation constraints,
  * and C++/Python usage examples. The returned plan may require additional parameters
  * before it can be passed to QuantizeTensor() or QuantizeTensorProto().
- * kMxfp8 requires a positive count divisible by 32 and block_size=32 or the default
+ * kMxfp8 and kMxfp6E2m3 require a positive count divisible by 32 and block_size=32 or the default
  * 128, both selecting fixed groups of 32. It selects automatic scales and FLOAT
  * reconstruction; modifying its block parameters, grouping, ordering or transforms
  * is rejected. MakeQuantizationType and shared parameters do not support this profile.
@@ -517,6 +523,42 @@ struct Mxfp8Weights {
   Tensor weight;
   Tensor weight_scale;
 };
+
+/** Stores owned compressed-tensors E2M3 bytes [rows,3*cols/4] and E8M0 [rows,cols/32]. */
+struct Mxfp6E2m3Weights {
+  Tensor weight_packed;
+  Tensor weight_scale;
+};
+
+/**
+ * Quantizes a finite FLOAT matrix using complete groups of 32 columns along axis 1.
+ *
+ * Implements compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40's E2M3
+ * contract, distinct from the unchanged portable kMxfp6/kFp6Llm E3M2 profiles.
+ * Each code uses sign bit 5, exponent bits 4:3 (bias 1), mantissa bits 2:0.
+ * Exponent zero decodes as mantissa/8; other magnitudes are (1+mantissa/8)*2^(exponent-1).
+ * Four codes form c0|(c1<<6)|(c2<<12)|(c3<<18), stored as three little-endian bytes.
+ * For group max_abs m, rounds its FP32 bits by adding 2^19 then masking with
+ * 0x7f800000; subtracts 127+2 from the resulting exponent and clamps to [-127,125].
+ * This rounds upward at mantissa 1.9375, not a generic nearest-power-of-two threshold.
+ * Zero blocks use scale byte 0 (2^-127); bytes 0--254 decode as 2^(byte-127).
+ * Byte 255 is rejected. The upper exponent clamp is an explicit finite-reconstruction
+ * extension to upstream; imports accept all finite E8M0 scales only when reconstruction
+ * stays finite. Divides in FP32, rounds E2M3 to nearest even and saturates to +/-7.5,
+ * preserving signed zero. Reconstruction multiplies decoded E2M3 by its scale in FP32.
+ * Rejects nonfinite sources, incomplete groups, empty shapes, other dtypes and malformed
+ * payloads/schemas. No padding, transforms, outliers or shared parameters are supported.
+ * Stores onnx_light.mxfp6_e2m3_weights.v1 with packed weights followed by E8M0 bytes.
+ * MakeQuantizationPlan(kMxfp6E2m3,count) selects the same automatic-scale codec.
+ */
+EncodedValueProto QuantizeMxfp6E2m3Weights(const Tensor &tensor);
+
+/** Extracts owned packed E2M3 weights and scales after validating the exact schema. */
+Mxfp6E2m3Weights ExportMxfp6E2m3Weights(const EncodedValueProto &value,
+                                        const StructTypeCatalogue &catalogue = {});
+
+/** Imports packed E2M3 weights losslessly, rejecting invalid scales and reconstruction. */
+EncodedValueProto ImportMxfp6E2m3Weights(const Mxfp6E2m3Weights &weights);
 
 /**
  * Quantizes a finite FLOAT matrix with positive dimensions and cols divisible by 32.

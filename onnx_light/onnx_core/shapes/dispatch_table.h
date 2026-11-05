@@ -115,6 +115,8 @@ using ComputePeakMemoryNodeFn =
  * dispatch table. Empty until libraries populate it via
  * :cpp:func:`RegisterComputePeakMemoryFn`; operators without an entry
  * report zero additional peak memory through :cpp:func:`ComputePeakMemory`.
+ * Entries may be empty functions recording explicitly zero-memory implementations;
+ * :cpp:func:`ComputePeakMemory` safely evaluates both callable and empty entries.
  */
 const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispatchTable();
 

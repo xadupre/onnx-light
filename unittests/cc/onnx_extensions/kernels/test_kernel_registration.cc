@@ -50,6 +50,7 @@ TEST(KernelRegistration, ReplacementRefusalAliasesAndDevices) {
   const std::string op = "Replacement";
   ASSERT_TRUE(RegisterKernelFn("", op, Device::kCPU, Implementation(11)));
   EXPECT_FALSE(RegisterKernelFn("ai.onnx", op, Device::kUndefined, Implementation(22), false));
+  EXPECT_FALSE(RegisterKernelFn("ai.onnx", op, Device::kCPU, KernelRegistration{}, false));
   EXPECT_EQ(GlobalMemory(op, Device::kUndefined, ""), 11);
   ASSERT_TRUE(RegisterKernelFn("ai.onnx", op, Device::kUndefined, Implementation(33)));
   EXPECT_EQ(GlobalMemory(op, Device::kCPU, ""), 33);
@@ -158,6 +159,8 @@ TEST(KernelRegistration, SessionsRetainResolvedFactoryAndEstimator) {
       local_rt.RegisterKernelFn("registration_test", op, Device::kCPU, Implementation(20, 2)));
   EXPECT_FALSE(local_rt.RegisterKernelFn("registration_test", op, Device::kCPU,
                                          Implementation(99, 9), false));
+  EXPECT_FALSE(local_rt.RegisterKernelFn("registration_test", op, Device::kCPU,
+                                         KernelRegistration{}, false));
   local_session.Run(local_rt);
   EXPECT_EQ(GlobalMemory(op), 10);
   EXPECT_EQ(old_session.ComputePeakMemory(0, {}).worst_case.AsInt(), 10);
@@ -190,6 +193,8 @@ TEST(KernelRegistration, SessionsRetainResolvedFactoryAndEstimator) {
   EXPECT_THROW(old_session.ComputePeakMemory(std::numeric_limits<size_t>::max(), {}),
                std::invalid_argument);
   local_rt.ClearCustomKernels();
+  local_session.Run(local_rt);
+  EXPECT_FLOAT_EQ(local_rt.Get("Y").AsFloat()[0], 2);
   EXPECT_EQ(local_session.ComputePeakMemory(0, {}).worst_case.AsInt(), 20);
 }
 

@@ -638,6 +638,10 @@ bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::stri
 bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::string &op_type,
                                       symbolic::Device device, KernelRegistration registration,
                                       bool overwrite) {
+  const std::string key =
+      NormaliseDomain(domain) + ":" + op_type + symbolic::DeviceKeySuffix(device);
+  if (!overwrite && custom_kernels_.contains(key))
+    return false;
   return RegisterKernelFn(domain, op_type, device, MakeKernelFactory(std::move(registration)),
                           overwrite);
 }

@@ -26,7 +26,12 @@ bool HasInput(const ModelProto &model, const std::string &name) {
 }
 
 void ValidateStorage(const Tensor &tensor) {
-  const int64_t count = tensor.shape.product();
+  const int64_t count = tensor.shape.product(0, tensor.shape.size(), "Generate: tensor storage");
+  if (tensor.data_type == DataType::STRING) {
+    EXT_ENFORCE_INVALID(tensor.AsStrings().size() == static_cast<uint64_t>(count),
+                        "Generate: invalid tensor storage.");
+    return;
+  }
   EXT_ENFORCE_INVALID(tensor.size_bytes() == PackedByteSize(tensor.data_type, count) &&
                           (tensor.size_bytes() == 0 || tensor.bytes() != nullptr),
                       "Generate: invalid tensor storage.");
@@ -560,6 +565,22 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     EXT_ENFORCE_INVALID(embedded && HasInput(*pipeline.embedding, name), "Generate: unknown feed '",
                         name, "' for the embedding model.");
   }
+  const bool persistent = !model.graph().persistent_bindings().empty();
+  for (const auto &name : options.prefill_only_inputs) {
+    EXT_ENFORCE_INVALID(embedded && persistent,
+                        "Generate: prefill_only_inputs requires an embedding model and cached "
+                        "decoding with persistent bindings.");
+    EXT_ENFORCE_INVALID(name != options.input_ids_name && name != options.attention_mask_name &&
+                            name != options.position_ids_name && !HasInput(model, name),
+                        "Generate: prefill-only input '", name,
+                        "' must be an embedding-only auxiliary input.");
+    const auto found = embedding_feeds.find(name);
+    EXT_ENFORCE_INVALID(
+        found != embedding_feeds.end() && found->second.kind == RuntimeValue::Kind::kTensor &&
+            !found->second.tensor.shape.empty(),
+        "Generate: prefill-only input '", name, "' requires an explicit nonscalar tensor feed.");
+    ValidateStorage(found->second.tensor);
+  }
   const RuntimeValueMap &prompt_feeds = embedded ? embedding_feeds : prefill_feeds;
   const Tensor &prompt = IntMatrix(prompt_feeds, options.input_ids_name);
   const int64_t batch = prompt.shape[0], prompt_length = prompt.shape[1];
@@ -680,7 +701,6 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   if (embedded) {
     embedding_session = std::make_unique<RuntimeSession>(*pipeline.embedding, session_options);
   }
-  const bool persistent = !model.graph().persistent_bindings().empty();
   RuntimeValueMap initial;
   if (persistent) {
     StructTypeCatalogue initial_types;
@@ -728,6 +748,15 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       AppendColumn(positions, next_positions);
     }
     const bool decode = persistent && step > 0;
+    if (step == 1) {
+      for (const auto &name : options.prefill_only_inputs) {
+        const auto &prefill = embedding_feeds.at(name).tensor;
+        Shape empty_shape = prefill.shape;
+        empty_shape[0] = 0;
+        embedding_current.insert_or_assign(
+            name, RuntimeValue(Tensor(name, prefill.data_type, std::move(empty_shape), {})));
+      }
+    }
     const Shape shape{batch, decode ? 1 : length};
     const auto put_control = [&](const std::string &name, RuntimeValue value) {
       if (HasInput(model, name))

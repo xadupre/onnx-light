@@ -198,6 +198,18 @@ The embedding evaluator supplies its model only; its local registrations and
 CPU execution policy are not used. Register pipeline-wide custom kernels on
 the language-model evaluator. Image/audio encoders can run before generation;
 their features are supplied as ordinary feeds.
+For cached split generation, pass
+``prefill_only_inputs=["image_features", "video_features"]`` to ``generate``
+to consume these features only during prompt prefill. List only feeds used by
+the embedding model, not the decoder. Each listed feed must be an explicitly
+supplied nonscalar tensor; token, mask and position inputs cannot be listed.
+Before the first cached text decode, the native loop replaces each listed feed
+with an empty tensor of the same dtype and trailing dimensions, for example
+``[N, hidden_size]`` becomes ``[0, hidden_size]``. The embedding graph must accept
+this empty shape. The caller's feeds remain unchanged, and both stages retain
+the shared executor and persistent decoder state. Without this option, auxiliary
+feeds remain fixed. The option requires decoder ``persistent_bindings``:
+full-prefix generation still needs the original features on every iteration.
 Each feed is supplied once and routed to every pipeline model that declares its
 name. Encoded values, including values nested in structures, sequences and
 paged-cache pages, resolve ``parameter_ref`` independently against each receiving

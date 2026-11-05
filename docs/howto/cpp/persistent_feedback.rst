@@ -160,6 +160,15 @@ at each step. Prompts must be unpadded or left-padded; the final logit position
 predicts the next token. Other supplied inputs remain fixed across iterations.
 Initial caches must represent an empty prefix.
 
+For cached split generation, set
+``options.prefill_only_inputs = {"image_features", "video_features"}`` to empty
+embedding-only auxiliary tensor feeds after prompt prefill. Each listed feed
+must be an explicitly supplied nonscalar tensor, not a token, mask, position or
+decoder input. The leading dimension becomes zero; dtype and trailing dimensions
+are preserved, and the embedding graph must accept the resulting shape.
+This option requires decoder ``persistent_bindings``. Caller feeds, the shared
+executor and persistent decoder state are preserved. Other feeds remain fixed.
+
 The lower-level ``runtime.generate(model, context, feeds, options,
 session_options)`` returns a runtime tensor. ``runtime.GenerationOptions``
 also allows configuring the token, logits, mask and position input/output names.

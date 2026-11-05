@@ -1506,6 +1506,11 @@ const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemor
 } // namespace
 } // namespace shapes
 
+const std::unordered_map<std::string, core::shapes::ComputePeakMemoryNodeFn> &
+PeakMemoryFunctions() {
+  return shapes::BuiltinPeakMemoryFunctions();
+}
+
 void RegisterShapeFunctions() {
   // `lib_onnx_shape` is a plain static archive: a translation unit with no
   // symbol referenced from elsewhere would simply be dropped by the linker,
@@ -1541,7 +1546,7 @@ void RegisterPeakMemoryFunctions() {
       const std::size_t sep = key.find(':');
       ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(
           key.substr(0, sep), key.substr(sep + 1), ::onnx_light::core::shapes::Device::kCPU,
-          entry.second);
+          entry.second, /*overwrite=*/false);
     }
     return true;
   }();

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+
 /**
  * @file kernel_dispatch_table.h
  * @brief Registers every ``onnx_kernels`` operator kernel (the built-in
@@ -47,5 +49,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
  * :cpp:class:`core::runtime::RuntimeSession`.
  */
 void RegisterKernelFunctions();
+
+/// Returns built-in factories with their matching estimators without registry side effects.
+const std::unordered_map<std::string, core::runtime::NodeKernelFn> &KernelFunctions();
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

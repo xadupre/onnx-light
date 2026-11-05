@@ -135,10 +135,18 @@ const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispat
  * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
  * @param device  The device the estimator applies to (e.g. :cpp:enumerator:`Device::kCPU`).
- * @param fn      The peak-memory function implementing the estimation rule.
+ * @param fn      The peak-memory function, or empty for zero additional memory.
+ *                An empty entry also prevents non-overwriting default registration.
+ * @param overwrite Whether to replace an existing entry.
  */
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 Device device, ComputePeakMemoryNodeFn fn);
+                                 Device device, ComputePeakMemoryNodeFn fn, bool overwrite = true);
+
+/// Evaluates and validates an implementation's estimator without consulting the registry.
+/// An empty estimator reports zero additional memory.
+PeakMemoryEstimate ComputePeakMemory(const ComputePeakMemoryNodeFn &fn, Device device,
+                                     const NodeProto &node,
+                                     const std::vector<SymShape> &input_shapes);
 
 /**
  * Returns the estimated peak memory (in bytes) for (@p domain, @p op_type)

@@ -149,6 +149,21 @@ bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
                       symbolic::Device device, NodeKernelFn fn, bool overwrite = true);
 
 /**
+ * Registers a factory and its matching estimator together. A refused registration
+ * changes neither registry. Success replaces global shape-only accounting and
+ * retains the estimator on each future resolved kernel. An empty estimator,
+ * including through a bare factory-only registration, selects zero additional memory.
+ * Factories produced by MakeKernelFactory retain their associated estimator,
+ * including when copied from KernelDispatchTable and registered again.
+ * Existing sessions retain their resolved implementation and accounting.
+ * Standalone shape-estimator registration is independent and should not be used
+ * to replace accounting for an implementation registered through this contract.
+ */
+bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, KernelRegistration registration,
+                      bool overwrite = true);
+
+/**
  * Returns the process-wide (global) custom-kernel registry consulted by
  * :cpp:func:`RunNode` / :cpp:class:`RuntimeSession` during kernel resolution.
  *

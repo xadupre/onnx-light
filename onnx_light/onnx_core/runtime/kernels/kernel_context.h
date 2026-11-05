@@ -12,6 +12,7 @@
 // silently truncates whichever of the two happens to be entered first
 // (relying on include order for correctness).
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/shapes/dispatch_table.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -24,9 +25,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-// Forward declaration: kernels only hold a ``const NodeProto *`` and never
-// dereference the proto's definition here, so the full ``onnx_proto`` header is
-// intentionally not pulled into this low-level runtime header.
+// Kernels retain non-owning node and function references.
 class NodeProto;
 class FunctionProto;
 
@@ -195,6 +194,14 @@ public:
   /// time; the node outlives the kernel.
   void set_node(const NodeProto &node) { node_ = &node; }
 
+  /// Retains implementation-specific accounting independently of subsequent registrations.
+  void set_peak_memory(shapes::ComputePeakMemoryNodeFn fn) { peak_memory_ = std::move(fn); }
+
+  /// Returns this implementation's additional memory, not the current global estimate.
+  shapes::PeakMemoryEstimate
+  ComputePeakMemory(symbolic::Device device,
+                    const std::vector<symbolic::SymShape> &input_shapes) const;
+
   /// Runs the kernel for its node (see :cpp:func:`set_node`) against the
   /// current state of ``rt``: reads the node's current inputs, computes and
   /// writes the outputs back. Safe to call repeatedly. The default throws;
@@ -247,6 +254,7 @@ protected:
   /// The node this kernel was built for, or ``nullptr`` when the kernel is used
   /// directly (e.g. in tests) without being resolved through the dispatch path.
   const NodeProto *node_ = nullptr;
+  shapes::ComputePeakMemoryNodeFn peak_memory_;
 };
 
 } // namespace core::runtime

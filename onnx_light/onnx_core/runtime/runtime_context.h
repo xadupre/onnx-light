@@ -109,6 +109,22 @@ using NodeKernelFn = std::function<std::unique_ptr<KernelBase>(
     const NodeProto &node, RuntimeContext &rt, const KernelContext &kernel_context)>;
 
 /**
+ * Associates an implementation's factory with its additional-memory estimator.
+ * Construction and collection have no registry side effects. An empty estimator
+ * explicitly means zero additional memory, never inheritance from another kernel.
+ * Shape-only estimators must bound all supported dtypes and executor configurations,
+ * or return an unknown symbolic bound; they cannot assume unavailable metadata.
+ */
+struct KernelRegistration {
+  NodeKernelFn factory;
+  shapes::ComputePeakMemoryNodeFn peak_memory;
+};
+
+/// Builds a factory retaining the matching estimator on each resolved kernel.
+/// Does not mutate either registry.
+NodeKernelFn MakeKernelFactory(KernelRegistration registration);
+
+/**
  * Signature of a user-provided custom kernel callback. Registration adapts
  * callbacks to :cpp:type:`NodeKernelFn` factories, using the same session-owned
  * lifecycle. Implementations read their inputs
@@ -804,6 +820,10 @@ public:
   /// Registry access must not race with registration or context copying.
   bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
                         symbolic::Device device, NodeKernelFn fn, bool overwrite = true);
+  /// Registers a local implementation and its accounting without changing global accounting.
+  bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                        symbolic::Device device, KernelRegistration registration,
+                        bool overwrite = true);
 
   /// Registers or replaces a custom kernel for ``(domain, op_type)``.
   /// Adapts the callback to a factory for this context's device.

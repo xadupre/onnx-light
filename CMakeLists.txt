@@ -574,7 +574,7 @@ target_include_directories(lib_onnx_kernels PUBLIC
 )
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core lib_onnx_shape)
 # Precompile the common test-case and runtime header stacks used by kernel
 # translation units, including ``runtime_context.h`` via ``node_helpers.h``.
 onnx_light_target_precompile_headers(lib_onnx_kernels PRIVATE
@@ -901,6 +901,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/test_*.cc"
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/*/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/kernels/test_*.cc")
+  set(ONNX_CPP_KERNEL_REGISTRATION_TEST
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/kernels/test_kernel_registration.cc")
+  list(REMOVE_ITEM ONNX_CPP_KERNELS_TEST_SOURCES "${ONNX_CPP_KERNEL_REGISTRATION_TEST}")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/backend_test/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/gradient/test_*.cc")
   set(ONNX_CPP_PATTERN_REGISTRY_CORE_TEST
@@ -971,6 +974,13 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # anything), which CMake then reports as a JSON parse error in
   # ParseTestList.cmake because the discovery output file is empty.
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
+
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    # Isolates first-time lazy registration from the main test binary's environments.
+    add_executable(test_kernel_registration ${ONNX_CPP_KERNEL_REGISTRATION_TEST})
+    target_link_libraries(test_kernel_registration PRIVATE lib_onnx_kernels GTest::gtest_main)
+    gtest_discover_tests(test_kernel_registration DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
+  endif()
 
   # This executable deliberately links only lib_onnx_core. It verifies that the
   # generic registry works without, and does not pull in, lib_onnx_patterns.

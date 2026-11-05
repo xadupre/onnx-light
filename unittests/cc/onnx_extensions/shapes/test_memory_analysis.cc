@@ -342,6 +342,10 @@ TEST(MemoryAnalysis, FunctionWorkspaceDoesNotTreatMaxOfAveragesAsAverageOfMax) {
     if (estimate.average_case) {
       EXPECT_EQ(estimate.average_case->AsInt(), 50);
     }
+    core::shapes::RegisterComputePeakMemoryFn("local.average", "Workspace", device, {});
+    core::compute::ComputeContext explicit_zero;
+    explicit_zero.Compute(model, device);
+    EXPECT_EQ(explicit_zero.NodePeakMemory(0), estimate);
   }
 }
 

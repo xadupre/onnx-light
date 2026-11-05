@@ -24,6 +24,7 @@
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
+#include "onnx_extensions/shapes/dispatch_table.h"
 
 #include <algorithm>
 #include <cmath>
@@ -301,10 +302,25 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx.ml:TreeEnsemble", MakeKernel<onnx_kernels::kernel::TreeEnsemble>()},
       {"ai.rt:QuantizePagedCache", MakeKernel<onnx_kernels::kernel::QuantizePagedCache>()},
   };
-  return table;
+  static const auto associated = [] {
+    auto result = table;
+    const auto &estimators = onnx_shapes::PeakMemoryFunctions();
+    for (auto &[key, factory] : result) {
+      const auto it = estimators.find(key);
+      factory = MakeKernelFactory({std::move(factory), it == estimators.end()
+                                                           ? core::shapes::ComputePeakMemoryNodeFn{}
+                                                           : it->second});
+    }
+    return result;
+  }();
+  return associated;
 }
 
 } // namespace
+
+const std::unordered_map<std::string, NodeKernelFn> &KernelFunctions() {
+  return BuiltinKernelFunctions();
+}
 
 void RegisterKernelFunctions() {
   // `lib_onnx_kernels` is a plain static archive: a translation unit with no

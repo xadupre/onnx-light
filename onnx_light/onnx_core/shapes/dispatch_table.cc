@@ -133,8 +133,11 @@ const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &PeakMemoryDispat
 }
 
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 Device device, ComputePeakMemoryNodeFn fn) {
-  MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
+                                 Device device, ComputePeakMemoryNodeFn fn, bool overwrite) {
+  auto &table = MutablePeakMemoryDispatchTable();
+  const auto key = DispatchKey(domain, op_type, device);
+  if (overwrite || table.find(key) == table.end())
+    table[key] = std::move(fn);
 }
 
 PeakMemoryEstimate UnknownPeakMemory(const std::string &domain, const std::string &op_type) {
@@ -162,7 +165,15 @@ PeakMemoryEstimate ComputePeakMemory(Device device, const NodeProto &node,
   auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
   if (it == table.end())
     return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
-  const PeakMemoryEstimate estimate = it->second(device, node, input_shapes);
+  return ComputePeakMemory(it->second, device, node, input_shapes);
+}
+
+PeakMemoryEstimate ComputePeakMemory(const ComputePeakMemoryNodeFn &fn, Device device,
+                                     const NodeProto &node,
+                                     const std::vector<SymShape> &input_shapes) {
+  if (!fn)
+    return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
+  const PeakMemoryEstimate estimate = fn(device, node, input_shapes);
   ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
   return estimate;
 }
@@ -171,7 +182,7 @@ PeakMemoryEstimate ComputePeakMemory(const ShapesContext &ctx, Device device,
                                      const NodeProto &node) {
   const auto &table = MutablePeakMemoryDispatchTable();
   const auto it = table.find(DispatchKey(node.domain(), node.op_type(), device));
-  if (it == table.end())
+  if (it == table.end() || !it->second)
     return PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{0}));
   std::vector<SymShape> input_shapes;
   input_shapes.reserve(node.input_size());
@@ -184,9 +195,7 @@ PeakMemoryEstimate ComputePeakMemory(const ShapesContext &ctx, Device device,
       input_shapes.push_back(ctx.Get(input).Shape());
     }
   }
-  const auto estimate = it->second(device, node, input_shapes);
-  ValidatePeakMemoryEstimate(estimate, node.domain(), node.op_type());
-  return estimate;
+  return ComputePeakMemory(it->second, device, node, input_shapes);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::shapes

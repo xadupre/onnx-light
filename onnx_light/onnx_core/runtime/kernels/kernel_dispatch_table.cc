@@ -28,6 +28,18 @@ private:
   ContextualCustomKernelFn fn_;
 };
 
+struct RegisteredKernelFactory {
+  KernelRegistration registration;
+
+  std::unique_ptr<KernelBase> operator()(const NodeProto &node, RuntimeContext &rt,
+                                         const KernelContext &ctx) const {
+    auto kernel = registration.factory(node, rt, ctx);
+    EXT_ENFORCE_INVALID(kernel != nullptr, "Kernel factory returned null.");
+    kernel->set_peak_memory(registration.peak_memory);
+    return kernel;
+  }
+};
+
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
 // domain to :cpp:var:`kDefaultOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
@@ -83,12 +95,28 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
 bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
                       symbolic::Device device, NodeKernelFn fn, bool overwrite) {
+  if (const auto *registered = fn.target<RegisteredKernelFactory>())
+    return RegisterKernelFn(domain, op_type, device, registered->registration, overwrite);
+  return RegisterKernelFn(domain, op_type, device, KernelRegistration{std::move(fn), {}},
+                          overwrite);
+}
+
+NodeKernelFn MakeKernelFactory(KernelRegistration registration) {
+  EXT_ENFORCE_INVALID(registration.factory, "Kernel registration requires a factory.");
+  return RegisteredKernelFactory{std::move(registration)};
+}
+
+bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, KernelRegistration registration, bool overwrite) {
   auto &table = MutableKernelDispatchTable();
   const std::string key = DispatchKey(domain, op_type, device);
   if (!overwrite && table.find(key) != table.end()) {
     return false;
   }
-  table[key] = std::move(fn);
+  auto estimator = registration.peak_memory;
+  auto factory = MakeKernelFactory(std::move(registration));
+  shapes::RegisterComputePeakMemoryFn(domain, op_type, device, std::move(estimator));
+  table[key] = std::move(factory);
   return true;
 }
 

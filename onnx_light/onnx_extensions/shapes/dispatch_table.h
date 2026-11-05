@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "onnx_core/shapes/dispatch_table.h"
+
 /**
  * @file dispatch_table.h
  * @brief Registers every ``onnx_shapes`` ``ComputeShape*`` shape function
@@ -49,7 +51,12 @@ void RegisterShapeFunctions();
  * idempotent, guarded by a function-local static, and must be called
  * explicitly before :cpp:func:`core::shapes::ComputePeakMemory` can resolve a
  * built-in operator (unregistered operators default to zero).
+ * Existing entries, including explicitly empty estimators selected by kernel
+ * registration, are never replaced.
  */
 void RegisterPeakMemoryFunctions();
+
+/// Returns built-in CPU estimators without modifying any registry.
+const std::unordered_map<std::string, core::shapes::ComputePeakMemoryNodeFn> &PeakMemoryFunctions();
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

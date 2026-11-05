@@ -27,6 +27,11 @@ bool HasInput(const ModelProto &model, const std::string &name) {
 
 void ValidateStorage(const Tensor &tensor) {
   const int64_t count = tensor.shape.product(0, tensor.shape.size(), "Generate: tensor storage");
+  if (tensor.data_type == DataType::STRING) {
+    EXT_ENFORCE_INVALID(tensor.AsStrings().size() == static_cast<uint64_t>(count),
+                        "Generate: invalid tensor storage.");
+    return;
+  }
   EXT_ENFORCE_INVALID(tensor.size_bytes() == PackedByteSize(tensor.data_type, count) &&
                           (tensor.size_bytes() == 0 || tensor.bytes() != nullptr),
                       "Generate: invalid tensor storage.");

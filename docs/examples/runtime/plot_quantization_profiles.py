@@ -4,13 +4,14 @@
 Uses every portable quantization profile from Python
 ===================================================
 
-This example quantizes and dequantizes all 43 profiles exposed by
+This example quantizes and dequantizes all 44 profiles exposed by
 :mod:`onnx_light.onnx_core.quantization`. It shows the parameters to supply
 for affine, scalar-codebook, vector-codebook, transformed and cast storage.
 The :ref:`profile catalogue <l-quantized-values>` describes their numerical
 contracts and limitations.
 
-The first 40 are **onnx-light representations, not vendor-compatible files**.
+The original 40 are **onnx-light representations, not vendor-compatible files**.
+``mxfp8`` adds the explicit E4M3FN/group-32/E8M0 weight contract.
 The three ``ORT_MATMULNBITS_INT*`` profiles produce compatible ONNX Runtime
 operator inputs, not execution-provider-specific prepacked buffers.
 In particular, selecting ``gptq`` or ``awq`` does not run calibration;
@@ -371,6 +372,18 @@ for profile in (
     assert inputs.zero_points is None
     print(f"ORT: K={inputs.k}, N={inputs.n}, bits={inputs.bits}, block_size={inputs.block_size}")
 
+
+# %%
+# Complete MXFP8
+# --------------
+#
+# MXFP8 selects its own E8M0 scales along the final matrix axis. It stores
+# native E4M3FN bytes, unlike the portable ``fp8_e4m3`` codebook profile.
+# Complete groups of 32 and FLOAT32 input are required.
+
+weights = numpy.linspace(-1, 1, 64, dtype=numpy.float32).reshape(2, 32)
+plan = make_quantization_plan(QuantizationFormat.MXFP8, weights.size)
+roundtrip(weights, plan)
 
 # %%
 # Coverage

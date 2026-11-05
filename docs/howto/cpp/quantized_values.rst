@@ -24,6 +24,35 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Complete MXFP8 profile
+---------------------
+
+``QuantizationFormat::kMxfp8`` (``mxfp8``) implements native E4M3FN values
+with automatically selected E8M0 scales, not the existing ``kFp8E4m3``
+codebook contract. It requires a nonempty finite FLOAT matrix ``[N,K]``,
+with groups of 32 columns along axis 1 and ``K`` divisible by 32.
+See :ref:`the complete MXFP8 contract <l-mxfp8-weights>` for the pinned
+compressed-tensors reference, precise scale selection, rounding, saturation,
+range extensions and rejection policies.
+
+.. code-block:: cpp
+
+    Tensor weights = Tensor::FromFloat("W", {2, 64}, std::vector<float>(128, 1.f));
+    auto plan = MakeQuantizationPlan(QuantizationFormat::kMxfp8, 128);
+    RuntimeValue encoded = QuantizeTensor(weights, plan);
+    // The dedicated entry point produces the same self-contained codec.
+    EncodedValueProto direct = QuantizeMxfp8Weights(weights);
+    Mxfp8Weights parameters = ExportMxfp8Weights(direct);
+    EncodedValueProto imported = ImportMxfp8Weights(parameters);
+    Tensor restored = DequantizeTensor(imported);
+
+``Mxfp8Weights`` owns E4M3FN ``weight`` (``[N,K]``) and UINT8
+``weight_scale`` (``[N,K/32]``). The versioned
+``onnx_light.mxfp8_weights.v1`` descriptor and payload preserve all bytes
+through ordinary wire serialization; decoding needs no quantization plan.
+This supplies a portable block-scale representation, not a general
+checkpoint importer or accelerated MXFP8 matrix multiplication.
+
 Complete MXFP4 weights
 ----------------------
 
@@ -341,7 +370,7 @@ and codebook search) is still allocated: these are reference codecs, not
 zero-allocation conversions. Outputs own their storage independently of inputs.
 
 ``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
-returning ``std::array<QuantizationFormat, 43>`` without dynamic allocation:
+returning ``std::array<QuantizationFormat, 44>`` without dynamic allocation:
 
 .. code-block:: cpp
 

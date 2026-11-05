@@ -49,7 +49,7 @@ template <typename T> T ReconstructionOperand(double value) {
     return value;
 }
 
-constexpr std::array<std::string_view, 43> kFormatNames = {"int8",
+constexpr std::array<std::string_view, 44> kFormatNames = {"int8",
                                                            "int8_per_channel",
                                                            "int4",
                                                            "gptq",
@@ -91,9 +91,9 @@ constexpr std::array<std::string_view, 43> kFormatNames = {"int8",
                                                            "column_major",
                                                            "ort_matmulnbits_int2",
                                                            "ort_matmulnbits_int4",
-                                                           "ort_matmulnbits_int8"};
-static_assert(static_cast<size_t>(QuantizationFormat::kOrtMatmulnbitsInt8) + 1 ==
-              kFormatNames.size());
+                                                           "ort_matmulnbits_int8",
+                                                           "mxfp8"};
+static_assert(static_cast<size_t>(QuantizationFormat::kMxfp8) + 1 == kFormatNames.size());
 
 constexpr uint32_t OrtBits(QuantizationFormat format) {
   switch (format) {
@@ -322,6 +322,8 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
 void ValidatePlan(const QuantizationPlan &plan, size_t count) {
   ValidatePrecision(plan);
   QuantizationFormatName(plan.format);
+  EXT_ENFORCE_INVALID(plan.format != QuantizationFormat::kMxfp8,
+                      "MXFP8 requires its dedicated versioned weight schema.");
   EXT_ENFORCE_INVALID(plan.matrix_shape.empty(),
                       "Only ORT MatMulNBits profiles accept a matrix_shape.");
   size_t consumed = 0;
@@ -818,6 +820,21 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   plan.format = format;
   QuantizationBlockLayout layout;
   QuantizationBlockParameters block;
+  if (format == QuantizationFormat::kMxfp8) {
+    EXT_ENFORCE_INVALID(count > 0 && count % 32 == 0 && (block_size == 128 || block_size == 32),
+                        "MXFP8 requires complete fixed-32 groups.");
+    EXT_ENFORCE_INVALID(count <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) &&
+                            count <= std::numeric_limits<size_t>::max() / sizeof(float),
+                        "MXFP8 element count overflow.");
+    plan.reconstruction_dtype = TensorProto::FLOAT;
+    layout.count = 32;
+    layout.method = QuantizationMethod::kCast;
+    layout.bits = 8;
+    layout.cast_type = TensorProto::FLOAT8E4M3FN;
+    plan.runs.push_back(
+        {layout, std::vector<QuantizationBlockParameters>(Product(count / 32, 1), block)});
+    return plan;
+  }
   if (format == QuantizationFormat::kInt8 || format == QuantizationFormat::kInt8PerChannel ||
       format == QuantizationFormat::kEetq || format == QuantizationFormat::kSmoothquant)
     layout.bits = 8;
@@ -1137,6 +1154,36 @@ void CheckReconstruction(ByteReader payload, const QuantizationPlan &plan,
 }
 
 EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
+  if (plan.format == QuantizationFormat::kMxfp8) {
+    EXT_ENFORCE_INVALID(tensor.shape.size() == 2, "MXFP8 source must be a matrix.");
+    EXT_ENFORCE_INVALID(tensor.shape[0] > 0 && tensor.shape[1] > 0 && tensor.shape[1] % 32 == 0,
+                        "MXFP8 requires positive dimensions and complete fixed-32 groups.");
+    const size_t count = Product(tensor.shape[0], tensor.shape[1]);
+    EXT_ENFORCE_INVALID(
+        plan.matrix_shape.empty() && plan.permutation.empty() && plan.transform_size == 0 &&
+            plan.forward.empty() && plan.inverse.empty() && plan.outliers.empty() &&
+            plan.reconstruction_dtype == TensorProto::FLOAT && plan.runs.size() == 1,
+        "MXFP8 requires an unaltered automatic-scale plan.");
+    const auto &run = plan.runs[0];
+    const auto &layout = run.layout;
+    QuantizationBlockLayout defaults;
+    defaults.count = 32;
+    defaults.method = QuantizationMethod::kCast;
+    defaults.bits = 8;
+    defaults.cast_type = TensorProto::FLOAT8E4M3FN;
+    EXT_ENFORCE_INVALID(
+        layout.count == defaults.count && layout.method == defaults.method &&
+            layout.bits == defaults.bits && layout.signed_codes == defaults.signed_codes &&
+            layout.books == defaults.books && layout.entries == defaults.entries &&
+            layout.vector_size == defaults.vector_size && layout.base3 == defaults.base3 &&
+            layout.cast_type == defaults.cast_type && run.blocks.size() == count / 32,
+        "MXFP8 requires an unaltered fixed-32 layout.");
+    for (const auto &block : run.blocks)
+      EXT_ENFORCE_INVALID(block.scale == 1 && block.zero_point == 0 && block.offset == 0 &&
+                              block.codebook.empty(),
+                          "MXFP8 does not accept supplied block parameters.");
+    return QuantizeMxfp8Weights(tensor);
+  }
   size_t count = 1;
   for (int64_t dim : tensor.shape) {
     EXT_ENFORCE_INVALID(dim >= 0, "Quantization input shape must be concrete.");
@@ -1475,6 +1522,119 @@ uint8_t Mxfp4Code(float value, float scale) {
   return best | (normalized < 0 ? 8 : 0);
 }
 
+constexpr const char *kMxfp8WeightsName = "onnx_light.mxfp8_weights.v1";
+
+struct Mxfp8Geometry {
+  int64_t rows, cols;
+  size_t count, scale_bytes, total_bytes;
+
+  Mxfp8Geometry(int64_t r, int64_t c) : rows(r), cols(c) {
+    EXT_ENFORCE_INVALID(r > 0 && c > 0 && c % 32 == 0,
+                        "MXFP8 requires positive [rows,cols] with cols divisible by 32.");
+    count = Product(r, c);
+    EXT_ENFORCE_INVALID(count <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
+                        "MXFP8 element count exceeds INT64.");
+    Product(count, sizeof(float));
+    scale_bytes = count / 32;
+    EXT_ENFORCE_INVALID(count <= std::numeric_limits<size_t>::max() - scale_bytes,
+                        "MXFP8 payload size overflow.");
+    total_bytes = count + scale_bytes;
+  }
+};
+
+StructTypeProto Mxfp8Schema(const Mxfp8Geometry &geometry) {
+  StructTypeProto root;
+  root.set_name(kMxfp8WeightsName);
+  auto constant = [&](const char *name, int64_t value) {
+    auto *tensor = AddField(root, name)->mutable_constant();
+    tensor->set_data_type(TensorProto::INT64);
+    tensor->add_int64_data(value);
+  };
+  constant("group_size", 32);
+  constant("axis", 1);
+  constant("reconstruction_dtype", TensorProto::FLOAT);
+  constant("e8m0_bias127_round_power2_max_abs_offset8_clamp_minus127_119", 1);
+  constant("zero_block_scale_one", 1);
+  constant("e4m3fn_nearest_even_saturate448_fp32_divide_multiply", 1);
+  constant("reject_incomplete_groups_nonfinite_inputs_nan_codes_scales_and_reconstruction", 1);
+  Array(root, "weight", TensorProto::FLOAT8E4M3FN, {geometry.rows, geometry.cols});
+  Array(root, "weight_scale", TensorProto::UINT8, {geometry.rows, geometry.cols / 32});
+  return root;
+}
+
+EncodedValueProto MakeMxfp8Value(const Mxfp8Geometry &geometry) {
+  EncodedValueProto result;
+  result.mutable_raw_data()->resize(geometry.total_bytes);
+  *result.mutable_struct_type() = Mxfp8Schema(geometry);
+  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.rows);
+  logical->mutable_shape()->add_dim()->set_dim_value(geometry.cols);
+  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  return result;
+}
+
+void ValidateMxfp8Tensor(const Tensor &tensor, int32_t dtype, const Shape &shape, size_t bytes) {
+  EXT_ENFORCE_INVALID(tensor.data_type == dtype && tensor.shape == shape &&
+                          tensor.size_bytes() == bytes && tensor.bytes() != nullptr,
+                      "Invalid MXFP8 tensor type, shape or storage.");
+}
+
+float Mxfp8Scale(uint8_t exponent) {
+  EXT_ENFORCE_INVALID(exponent != 255, "MXFP8 E8M0 scale must not be NaN.");
+  // E8M0 byte zero denotes 2^-127, not IEEE binary32 zero.
+  return exponent == 0 ? 0x1p-127f : Float8E8M0BitsToFloat(exponent);
+}
+
+float Mxfp8Reconstruct(uint8_t code, float scale) {
+  const float level = Float8E4M3FNBitsToFloat(code);
+  EXT_ENFORCE_INVALID(std::isfinite(level), "MXFP8 E4M3FN weight must not be NaN.");
+  return RoundFloat(level * scale);
+}
+
+struct Mxfp8PackedValue {
+  Mxfp8Geometry geometry;
+  std::span<const uint8_t> weights, scales;
+};
+
+void ValidateMxfp8Reconstruction(const Mxfp8PackedValue &value) {
+  for (size_t group = 0; group < value.geometry.scale_bytes; ++group) {
+    const float scale = Mxfp8Scale(value.scales[group]);
+    for (size_t j = 0; j < 32; ++j)
+      Mxfp8Reconstruct(value.weights[group * 32 + j], scale);
+  }
+}
+
+Mxfp8PackedValue ParseMxfp8Value(const EncodedValueProto &encoded,
+                                 const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(!encoded.has_parameter_ref(), "MXFP8 does not support shared parameters.");
+  const auto layout = catalogue.ValidateEncodedValue(encoded);
+  EXT_ENFORCE_INVALID(!layout.external && layout.root && layout.record_count == 1,
+                      "Expected one loaded MXFP8 record.");
+  EXT_ENFORCE_INVALID(encoded.has_logical_type() && encoded.logical_type().has_tensor_type(),
+                      "MXFP8 requires a logical FLOAT matrix.");
+  const auto &logical = encoded.logical_type().tensor_type();
+  EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT && logical.has_shape() &&
+                          logical.shape().dim().size() == 2 &&
+                          logical.shape().dim(0).has_dim_value() &&
+                          logical.shape().dim(1).has_dim_value(),
+                      "MXFP8 requires a concrete logical FLOAT matrix.");
+  const Mxfp8Geometry geometry(logical.shape().dim(0).dim_value(),
+                               logical.shape().dim(1).dim_value());
+  StructTypeProto actual = *layout.root;
+  actual.clear_type_id();
+  std::string difference;
+  EXT_ENFORCE_INVALID(actual.Equals(Mxfp8Schema(geometry), &difference),
+                      "MXFP8 descriptor does not match its versioned schema: ", difference);
+  EXT_ENFORCE_INVALID(encoded.raw_data().size() == geometry.total_bytes,
+                      "MXFP8 payload size mismatch.");
+  const std::span<const uint8_t> bytes{encoded.raw_data().data(), encoded.raw_data().size()};
+  Mxfp8PackedValue result{geometry, bytes.first(geometry.count),
+                          bytes.subspan(geometry.count, geometry.scale_bytes)};
+  ValidateMxfp8Reconstruction(result);
+  return result;
+}
+
 struct QuantizationHeader {
   const StructTypeProto *root;
   QuantizationFormat format;
@@ -1504,8 +1664,10 @@ QuantizationHeader ReadQuantizationHeader(const EncodedValueProto &encoded,
     shape.push_back(dim.dim_value());
     count = Product(count, dim.dim_value());
   }
-  return {&root, ParseQuantizationFormat(ProfileName(name)), std::move(shape), logical.elem_type(),
-          count};
+  const auto format = ParseQuantizationFormat(ProfileName(name));
+  EXT_ENFORCE_INVALID(format != QuantizationFormat::kMxfp8,
+                      "MXFP8 requires its dedicated versioned weight schema.");
+  return {&root, format, std::move(shape), logical.elem_type(), count};
 }
 
 struct OrtPackedValue {
@@ -1673,6 +1835,17 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value() == kMxfp8WeightsName) {
+    const auto packed = ParseMxfp8Value(encoded, catalogue);
+    std::vector<float> values(packed.geometry.count);
+    for (size_t group = 0; group < packed.geometry.scale_bytes; ++group) {
+      const float scale = Mxfp8Scale(packed.scales[group]);
+      for (size_t j = 0; j < 32; ++j)
+        values[group * 32 + j] = Mxfp8Reconstruct(packed.weights[group * 32 + j], scale);
+    }
+    return {{packed.geometry.rows, packed.geometry.cols}, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == kMxfp4WeightsName) {
     const auto packed = ParseMxfp4Value(encoded, catalogue);
     std::vector<float> values(packed.geometry.count);
@@ -1826,6 +1999,71 @@ EncodedValueProto ImportMxfp4Weights(const Mxfp4Weights &weights) {
   return result;
 }
 
+EncodedValueProto ImportMxfp8Weights(const Mxfp8Weights &weights) {
+  EXT_ENFORCE_INVALID(weights.weight.shape.size() == 2, "MXFP8 weights must be a matrix.");
+  const Mxfp8Geometry geometry(weights.weight.shape[0], weights.weight.shape[1]);
+  ValidateMxfp8Tensor(weights.weight, TensorProto::FLOAT8E4M3FN, {geometry.rows, geometry.cols},
+                      geometry.count);
+  ValidateMxfp8Tensor(weights.weight_scale, TensorProto::UINT8, {geometry.rows, geometry.cols / 32},
+                      geometry.scale_bytes);
+  ValidateMxfp8Reconstruction({geometry,
+                               {weights.weight.bytes(), geometry.count},
+                               {weights.weight_scale.bytes(), geometry.scale_bytes}});
+  auto result = MakeMxfp8Value(geometry);
+  std::memcpy(result.mutable_raw_data()->data(), weights.weight.bytes(), geometry.count);
+  std::memcpy(result.mutable_raw_data()->data() + geometry.count, weights.weight_scale.bytes(),
+              geometry.scale_bytes);
+  return result;
+}
+
+Mxfp8Weights ExportMxfp8Weights(const EncodedValueProto &value,
+                                const StructTypeCatalogue &catalogue) {
+  const auto packed = ParseMxfp8Value(value, catalogue);
+  auto copy = [](const char *name, int32_t dtype, const Shape &shape,
+                 std::span<const uint8_t> bytes) {
+    Tensor tensor = MakeOutputTensor(dtype, shape, bytes.size(), nullptr);
+    tensor.name = name;
+    std::memcpy(tensor.mutable_bytes(), bytes.data(), bytes.size());
+    return tensor;
+  };
+  return {copy("weight", TensorProto::FLOAT8E4M3FN, {packed.geometry.rows, packed.geometry.cols},
+               packed.weights),
+          copy("weight_scale", TensorProto::UINT8,
+               {packed.geometry.rows, packed.geometry.cols / 32}, packed.scales)};
+}
+
+EncodedValueProto QuantizeMxfp8Weights(const Tensor &tensor) {
+  EXT_ENFORCE_INVALID(tensor.shape.size() == 2, "MXFP8 source must be a matrix.");
+  const Mxfp8Geometry geometry(tensor.shape[0], tensor.shape[1]);
+  ValidateMxfp8Tensor(tensor, TensorProto::FLOAT, tensor.shape,
+                      Product(geometry.count, sizeof(float)));
+  auto result = MakeMxfp8Value(geometry);
+  auto *bytes = reinterpret_cast<uint8_t *>(result.mutable_raw_data()->data());
+  for (size_t group = 0; group < geometry.scale_bytes; ++group) {
+    float maximum = 0;
+    for (size_t j = 0; j < 32; ++j) {
+      const float value = Load<float>(tensor.bytes() + (group * 32 + j) * sizeof(float));
+      EXT_ENFORCE_INVALID(std::isfinite(value), "MXFP8 source must be finite.");
+      maximum = std::max(maximum, std::abs(value));
+    }
+    // Upstream num_bits=8 deliberately uses the FP4 mantissa-one rounding threshold.
+    const uint32_t rounded = (std::bit_cast<uint32_t>(maximum) + (1u << 21)) & 0x7f800000;
+    const int exponent =
+        maximum == 0 ? 0 : std::clamp(static_cast<int>(rounded >> 23) - 127 - 8, -127, 119);
+    const uint8_t encoded_scale = FloatToFloat8E8M0Bits(std::ldexp(1.f, exponent));
+    bytes[geometry.count + group] = encoded_scale;
+    const float scale = Mxfp8Scale(encoded_scale);
+    for (size_t j = 0; j < 32; ++j) {
+      const size_t index = group * 32 + j;
+      const float value = Load<float>(tensor.bytes() + index * sizeof(float));
+      volatile float normalized = value / scale;
+      bytes[index] = FloatToFloat8E4M3FNBits(normalized);
+    }
+  }
+  result.set_name(tensor.name);
+  return result;
+}
+
 Mxfp4Weights ExportMxfp4Weights(const EncodedValueProto &value,
                                 const StructTypeCatalogue &catalogue) {
   const auto packed = ParseMxfp4Value(value, catalogue);
@@ -1923,7 +2161,7 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
 }
 
 StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
-  EXT_ENFORCE_INVALID(OrtBits(plan.format) == 0,
+  EXT_ENFORCE_INVALID(OrtBits(plan.format) == 0 && plan.format != QuantizationFormat::kMxfp8,
                       "MakeQuantizationType requires a portable block plan.");
   return Schema(plan);
 }

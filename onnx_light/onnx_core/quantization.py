@@ -2,6 +2,7 @@
 
 Portable profiles describe onnx-light representations, not vendor binary layouts.
 Separate MXFP4 and NVFP4 weight codecs implement E8M0 and FP8 scale contracts.
+The MXFP8 profile implements E4M3FN values with automatic group-32 E8M0 scales.
 NVFP4 also preserves its FLOAT32 global scale.
 ORT_MATMULNBITS_INT2/INT4/INT8 produce ONNX Runtime operator inputs, not internal
 kernel prepacking. No profile performs calibration. See :doc:`/howto/python/quantized_values`.
@@ -19,12 +20,16 @@ QuantizationPlan = runtime.QuantizationPlan
 MatMulNBitsInputs = runtime.MatMulNBitsInputs
 Nvfp4Weights = runtime.Nvfp4Weights
 Mxfp4Weights = runtime.Mxfp4Weights
+Mxfp8Weights = runtime.Mxfp8Weights
 quantize_nvfp4_weights = runtime.quantize_nvfp4_weights
 export_nvfp4_weights = runtime.export_nvfp4_weights
 import_nvfp4_weights = runtime.import_nvfp4_weights
 quantize_mxfp4_weights = runtime.quantize_mxfp4_weights
 export_mxfp4_weights = runtime.export_mxfp4_weights
 import_mxfp4_weights = runtime.import_mxfp4_weights
+quantize_mxfp8_weights = runtime.quantize_mxfp8_weights
+export_mxfp8_weights = runtime.export_mxfp8_weights
+import_mxfp8_weights = runtime.import_mxfp8_weights
 quantization_formats = runtime.quantization_formats
 quantization_format_name = runtime.quantization_format_name
 parse_quantization_format = runtime.parse_quantization_format
@@ -119,6 +124,7 @@ def add_quantization_parameters(
 __all__ = [
     "MatMulNBitsInputs",
     "Mxfp4Weights",
+    "Mxfp8Weights",
     "Nvfp4Weights",
     "QuantizationBlockLayout",
     "QuantizationBlockParameters",
@@ -133,8 +139,10 @@ __all__ = [
     "dequantize_tensor_proto",
     "export_matmul_nbits_inputs",
     "export_mxfp4_weights",
+    "export_mxfp8_weights",
     "export_nvfp4_weights",
     "import_mxfp4_weights",
+    "import_mxfp8_weights",
     "import_nvfp4_weights",
     "make_matmul_nbits_plan",
     "make_quantization_plan",
@@ -145,6 +153,7 @@ __all__ = [
     "quantization_format_name",
     "quantization_formats",
     "quantize_mxfp4_weights",
+    "quantize_mxfp8_weights",
     "quantize_nvfp4_weights",
     "quantize_tensor",
     "quantize_tensor_proto",

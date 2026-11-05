@@ -462,6 +462,164 @@ class TestGeneration(ExtTestCase):
                 numpy.testing.assert_array_equal(result, expected)
         self.assertEqual(feeds["past"].shape, (1, 0, 3))
 
+    def test_split_embedding_prefill_only_image_features(self):
+        embedding_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "embedding (int64[B, S] input_ids, float[N, 3] image_features)"
+            " => (float[B, S, 3] inputs_embeds)"
+            "{ text = Gather(table, input_ids)"
+            " placeholders = Equal(input_ids, image_token)"
+            " locations = NonZero(placeholders)"
+            " indices = Transpose <perm: ints = [1, 0]> (locations)"
+            " inputs_embeds = ScatterND(text, indices, image_features) }"
+        )
+        embedding_model.graph.initializer.extend(
+            [
+                onh.from_array(
+                    numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [4, 0, 0]], numpy.float32),
+                    name="table",
+                ),
+                onh.from_array(numpy.array(3, numpy.int64), name="image_token"),
+            ]
+        )
+        decoder_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (float[B, S, 3] inputs_embeds, float[B, P, 3] past)"
+            " => (float[B, 3] logits, float[B, T, 3] present)"
+            "{ present = Concat <axis: int = 1> (past, inputs_embeds)"
+            " logits = ReduceSum <keepdims: int = 0> (present, sequence_axis) }"
+        )
+        decoder_model.graph.initializer.append(
+            onh.from_array(numpy.array([1], numpy.int64), name="sequence_axis")
+        )
+        binding = decoder_model.graph.persistent_bindings.add()
+        binding.input_name = "past"
+        binding.output_name = "present"
+        decoder = ReferenceEvaluator(decoder_model)
+        embedding = ReferenceEvaluator(embedding_model)
+
+        for prompt, features, expected in [
+            ([[0, 3]], [[0, 0, 4]], [[0, 3, 1, 2, 2]]),
+            ([[0, 3], [3, 0]], [[0, 0, 4], [4, 0, 0]], [[0, 3, 1, 2, 2], [3, 0, 0, 1, 1]]),
+            ([[0]], [], [[0, 1, 1, 2]]),
+        ]:
+            with self.subTest(prompt=prompt):
+                feeds = {
+                    "input_ids": numpy.array(prompt, dtype=numpy.int64),
+                    "image_features": numpy.array(features, dtype=numpy.float32).reshape(-1, 3),
+                    "past": numpy.empty((len(prompt), 0, 3), dtype=numpy.float32),
+                }
+                original = {name: value.copy() for name, value in feeds.items()}
+                # Compares with an explicit split loop, updating both features and cache.
+                tokens = feeds["input_ids"].copy()
+                past = feeds["past"]
+                for step in range(3):
+                    embeds = embedding.run(
+                        None,
+                        {
+                            "input_ids": tokens if step == 0 else tokens[:, -1:],
+                            "image_features": (
+                                feeds["image_features"]
+                                if step == 0
+                                else feeds["image_features"][:0]
+                            ),
+                        },
+                    )[0]
+                    logits, past = decoder.run(None, {"inputs_embeds": embeds, "past": past})
+                    tokens = numpy.concatenate(
+                        [tokens, numpy.argmax(logits, axis=-1).reshape(-1, 1)], axis=1
+                    )
+                numpy.testing.assert_array_equal(tokens, expected)
+                self.assertEqual(past.shape[1], len(prompt[0]) + 2)
+                for _ in range(2):
+                    numpy.testing.assert_array_equal(
+                        decoder.generate(
+                            feeds,
+                            embedding=embedding,
+                            max_new_tokens=3,
+                            prefill_only_inputs=["image_features"],
+                        ),
+                        tokens,
+                    )
+                for count in [0, 1]:
+                    numpy.testing.assert_array_equal(
+                        decoder.generate(
+                            feeds,
+                            embedding=embedding,
+                            max_new_tokens=count,
+                            prefill_only_inputs=["image_features"],
+                        ),
+                        tokens[:, : len(prompt[0]) + count],
+                    )
+                for name, value in original.items():
+                    numpy.testing.assert_array_equal(feeds[name], value)
+                if features:
+                    with self.assertRaisesRegex(ValueError, "ScatterND.*shape must be"):
+                        decoder.generate(feeds, embedding=embedding, max_new_tokens=3)
+                else:
+                    numpy.testing.assert_array_equal(
+                        decoder.generate(feeds, embedding=embedding, max_new_tokens=3), tokens
+                    )
+
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "image_features": numpy.empty((0, 3), dtype=numpy.float32),
+            "past": numpy.empty((1, 0, 3), dtype=numpy.float32),
+        }
+        for name in ["input_ids", "attention_mask", "position_ids", "past", "missing"]:
+            with (
+                self.subTest(invalid_name=name),
+                self.assertRaisesRegex(ValueError, "prefill-only input"),
+            ):
+                decoder.generate(
+                    feeds, embedding=embedding, max_new_tokens=0, prefill_only_inputs=[name]
+                )
+        for value in [numpy.array(0, numpy.float32), [numpy.empty((0, 3), numpy.float32)]]:
+            with (
+                self.subTest(invalid_value=value),
+                self.assertRaisesRegex(ValueError, "nonscalar tensor"),
+            ):
+                decoder.generate(
+                    {**feeds, "image_features": value},
+                    embedding=embedding,
+                    max_new_tokens=0,
+                    prefill_only_inputs=["image_features"],
+                )
+        with self.assertRaisesRegex(ValueError, "explicit nonscalar tensor"):
+            decoder.generate(
+                {name: value for name, value in feeds.items() if name != "image_features"},
+                embedding=embedding,
+                max_new_tokens=0,
+                prefill_only_inputs=["image_features"],
+            )
+        for shape in [[-1, 3], [2**62, 4], [1, 3]]:
+            invalid = runtime.tensor_from_numpy(
+                "image_features", TensorProto.FLOAT, shape, numpy.empty(0, numpy.uint8)
+            )
+            with (
+                self.subTest(invalid_shape=shape),
+                self.assertRaisesRegex(
+                    ValueError, "negative dimension|overflow INT64|invalid tensor storage"
+                ),
+            ):
+                decoder.generate(
+                    {**feeds, "image_features": invalid},
+                    embedding=embedding,
+                    max_new_tokens=0,
+                    prefill_only_inputs=["image_features"],
+                )
+        uncached_model = onnx.ModelProto()
+        uncached_model.CopyFrom(decoder_model)
+        del uncached_model.graph.persistent_bindings[:]
+        with self.assertRaisesRegex(ValueError, "persistent bindings"):
+            ReferenceEvaluator(uncached_model).generate(
+                feeds, embedding=embedding, prefill_only_inputs=["image_features"]
+            )
+        with self.assertRaisesRegex(ValueError, "embedding model"):
+            ReferenceEvaluator(transition_model()).generate(
+                {"input_ids": feeds["input_ids"]}, prefill_only_inputs=["image_features"]
+            )
+
     def test_greedy_batch_and_eos(self):
         evaluator = ReferenceEvaluator(transition_model())
         feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}

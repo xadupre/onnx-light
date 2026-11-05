@@ -72,6 +72,11 @@ struct GenerationOptions {
   /// token/timing notifications continue when the remaining budget cannot hold a snapshot.
   /// Requires on_step. Copies subsequently made by the callback are outside this budget.
   size_t max_logit_bytes = 0;
+  /// Embedding-only tensor feeds replaced after prefill by empty tensors with the
+  /// same dtype and trailing dimensions (leading dimension becomes zero).
+  /// Requires decoder persistent bindings and explicit, nonscalar tensor feeds.
+  /// Token, mask and position inputs cannot be listed. Other feeds remain fixed.
+  std::vector<std::string> prefill_only_inputs;
 };
 
 /**

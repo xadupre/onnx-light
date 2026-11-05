@@ -847,6 +847,7 @@ class ReferenceEvaluator:
         *,
         embedding: ReferenceEvaluator | None = None,
         position_axes: int = 0,
+        prefill_only_inputs: list[str] | None = None,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -879,6 +880,11 @@ class ReferenceEvaluator:
         configured from this evaluator: its custom kernels, CPU executor and
         execution settings apply to both models. The embedding evaluator
         supplies only its model, not its context or CPU policy.
+        With cached decoding, ``prefill_only_inputs`` lists embedding-only auxiliary
+        tensor feeds such as image/video features. After prefill, their leading
+        dimension becomes zero, preserving dtype and trailing dimensions. Each
+        listed input requires an explicit nonscalar tensor feed and cannot be a
+        token, mask or position input. Other feeds remain fixed.
 
         Returns:
             numpy.ndarray: INT64 token IDs containing the prompt and generated tokens.
@@ -894,6 +900,7 @@ class ReferenceEvaluator:
         options.pad_token_id = pad_token_id
         options.seed = seed
         options.position_axes = position_axes
+        options.prefill_only_inputs = [] if prefill_only_inputs is None else prefill_only_inputs
         if embedding is None:
             result = _runtime.generate(
                 self._model, self._ctx, feed_inputs, options, self._session_options

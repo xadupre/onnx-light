@@ -367,6 +367,64 @@ TEST(Quantization, Mxfp8WeightsPinnedRoundingBoundaryAndRows) {
   EXPECT_EQ(DequantizeTensorProto(encoded_proto).doc_string().value(), "native MXFP8");
 }
 
+TEST(Quantization, Mxfp8WeightsFullBlockSourceDerivedFixture) {
+  // Source-derived from compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40.
+  const std::vector<float> block{
+      432,     -432,    1.0625f,  1.1875f,   1.3125f,   1.4375f,   1.5625f,   1.6875f,
+      1.8125f, 1.9375f, 0x1p-10f, 0x1.8p-9f, 0x1.4p-8f, 0x1.cp-8f, 0x1.ep-7f, 0x1p-6f,
+      0,       -0.f,    -1.0625f, -1.1875f,  .5f,       -.5f,      2,         -2,
+      3,       -3,      6,        -6,        16,        -16,       240,       -240};
+  const std::vector<uint8_t> codes{0x7e, 0xfe, 0x38, 0x3a, 0x3a, 0x3c, 0x3c, 0x3e, 0x3e, 0x40, 0,
+                                   2,    2,    4,    8,    8,    0,    0x80, 0xb8, 0xba, 0x30, 0xb0,
+                                   0x40, 0xc0, 0x44, 0xc4, 0x4c, 0xcc, 0x58, 0xd8, 0x77, 0xf7};
+  const std::vector<float> reconstructed{
+      448,     -448,    1,       1.25f,   1.25f,   1.5f, 1.5f, 1.75f, 1.75f,  2,   0,
+      0x1p-8f, 0x1p-8f, 0x1p-7f, 0x1p-6f, 0x1p-6f, 0,    -0.f, -1,    -1.25f, .5f, -.5f,
+      2,       -2,      3,       -3,      6,       -6,   16,   -16,   240,    -240};
+  std::vector<float> values = block, expected = reconstructed;
+  for (float value : block)
+    values.push_back(value * 0x1p-8f);
+  for (float value : reconstructed)
+    expected.push_back(value * 0x1p-8f);
+  const auto encoded = QuantizeMxfp8Weights(Tensor::FromFloat("", {2, 32}, values));
+  const auto weights = ExportMxfp8Weights(encoded);
+  EXPECT_EQ(weights.weight_scale.bytes()[0], 127);
+  EXPECT_EQ(weights.weight_scale.bytes()[1], 119);
+  for (size_t group = 0; group < 2; ++group)
+    EXPECT_EQ(std::vector<uint8_t>(weights.weight.bytes() + group * 32,
+                                   weights.weight.bytes() + (group + 1) * 32),
+              codes);
+  ExpectValues(DequantizeTensor(WireRoundTrip(RuntimeValue(encoded))), expected);
+}
+
+TEST(Quantization, Mxfp8WeightsNativeScaleExtremesAndCatalogueReferences) {
+  std::vector<uint8_t> codes(64, 0);
+  codes[0] = 1;
+  codes[32] = 0x38;
+  const Mxfp8Weights native{Tensor("weight", TensorProto::FLOAT8E4M3FN, {2, 32}, codes),
+                            Tensor("weight_scale", TensorProto::UINT8, {2, 1}, {0, 254})};
+  auto encoded = ImportMxfp8Weights(native);
+  std::vector<float> expected(64, 0);
+  expected[0] = 0x1p-136f;
+  expected[32] = 0x1p127f;
+  ExpectValues(DequantizeTensor(encoded), expected);
+  ModelProto model;
+  *model.add_struct_types() = encoded.struct_type();
+  model.mutable_struct_types(0)->set_type_id(83);
+  encoded.mutable_struct_type()->Clear();
+  encoded.mutable_struct_type()->set_type_ref(83);
+  const auto parsed = WireRoundTrip(RuntimeValue(encoded)).Encoded();
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  ExpectValues(DequantizeTensor(parsed, catalogue), expected);
+  ExpectValues(TensorFromProto(DequantizeTensorProto(parsed, catalogue)), expected);
+  const auto exported = ExportMxfp8Weights(parsed, catalogue);
+  EXPECT_EQ(std::memcmp(exported.weight.bytes(), codes.data(), codes.size()), 0);
+  EXPECT_EQ(exported.weight_scale.bytes()[0], 0);
+  EXPECT_EQ(exported.weight_scale.bytes()[1], 254);
+  EXPECT_THROW(ExportMxfp8Weights(parsed), std::invalid_argument);
+}
+
 TEST(Quantization, Mxfp8WeightsNearestEvenAndSignedZero) {
   std::vector<float> values{256,      1.0625f,   1.1875f,   -1.0625f, -1.1875f,
                             0x1p-10f, 0x1.8p-9f, -0x1p-10f, -0.f,     0x1p-9f};

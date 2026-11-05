@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_extensions/backend_test/cases/generator/include_generator_cases.h"
+#include "onnx_helper.h"
 
 #include <gtest/gtest.h>
 
@@ -36,15 +37,6 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 }
 
 std::string ConvertUtilsString(const std::string &s) { return s; }
-
-const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
-  for (const auto &attr : node.ref_attribute()) {
-    if (ConvertUtilsString(attr.ref_name()) == name) {
-      return &attr;
-    }
-  }
-  return nullptr;
-}
 } // namespace
 
 TEST(BackendTestCase, ConstantCaseIsPresent) {

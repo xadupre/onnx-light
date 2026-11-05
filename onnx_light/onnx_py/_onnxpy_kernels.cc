@@ -1236,6 +1236,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("MXFP4", core::runtime::QuantizationFormat::kMxfp4)
       .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
       .value("MXFP8", core::runtime::QuantizationFormat::kMxfp8)
+      .value("MXFP6_E2M3", core::runtime::QuantizationFormat::kMxfp6E2m3)
       .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
       .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
       .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
@@ -1392,6 +1393,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "Exports owned E4M3FN weights and E8M0 scale bytes without numerical conversion.");
   rt_mod.def("import_mxfp8_weights", &core::runtime::ImportMxfp8Weights, nb::arg("weights"),
              "Serializes complete MXFP8 weight parameters without requantization.");
+  nb::class_<core::runtime::Mxfp6E2m3Weights>(rt_mod, "Mxfp6E2m3Weights")
+      .def(nb::init<>())
+      .def_rw("weight_packed", &core::runtime::Mxfp6E2m3Weights::weight_packed)
+      .def_rw("weight_scale", &core::runtime::Mxfp6E2m3Weights::weight_scale);
+  rt_mod.def("quantize_mxfp6_e2m3_weights", &core::runtime::QuantizeMxfp6E2m3Weights,
+             nb::arg("tensor"), "Encodes E2M3 weights with automatic group-32 E8M0 scales.");
+  rt_mod.def(
+      "export_mxfp6_e2m3_weights",
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::ExportMxfp6E2m3Weights);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Exports owned compressed-tensors packed E2M3 weights and E8M0 scale bytes.");
+  rt_mod.def("import_mxfp6_e2m3_weights", &core::runtime::ImportMxfp6E2m3Weights,
+             nb::arg("weights"), "Serializes E2M3 weight parameters without requantization.");
   rt_mod.def("quantize_nvfp4_weights", &core::runtime::QuantizeNvfp4Weights, nb::arg("tensor"),
              nb::arg("local_scales"), nb::arg("global_scale"),
              "Encodes FLOAT matrix weights with FP8 local scales and a FLOAT global scale.");

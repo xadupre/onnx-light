@@ -24,6 +24,29 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Complete MXFP6 E2M3 profile
+-------------------------
+
+``QuantizationFormat::kMxfp6E2m3`` (``mxfp6_e2m3``) implements packed E2M3
+values with automatic E8M0 scales in complete groups of 32 columns.
+The portable ``kMxfp6`` and ``kFp6Llm`` E3M2 payloads remain unchanged.
+See :ref:`the complete E2M3 contract <l-mxfp6-e2m3-weights>` for the pinned
+reference, exact codes/packing, scale rounding, reconstruction and validation.
+
+.. code-block:: cpp
+
+    using namespace onnx_light::core::runtime;
+    auto weights = Tensor::FromFloat("weight", {2, 64}, std::vector<float>(128, 1));
+    auto plan = MakeQuantizationPlan(QuantizationFormat::kMxfp6E2m3, 128);
+    auto encoded = QuantizeTensor(weights, plan);
+    auto native = ExportMxfp6E2m3Weights(encoded.Encoded());
+    auto imported = ImportMxfp6E2m3Weights(native);
+    auto restored = DequantizeTensor(imported);
+
+``QuantizeMxfp6E2m3Weights`` selects the same codec directly.
+``Mxfp6E2m3Weights`` owns UINT8 packed weights and E8M0 scales.
+The versioned descriptor is ``onnx_light.mxfp6_e2m3_weights.v1``.
+
 Complete MXFP8 profile
 ---------------------
 
@@ -370,7 +393,7 @@ and codebook search) is still allocated: these are reference codecs, not
 zero-allocation conversions. Outputs own their storage independently of inputs.
 
 ``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
-returning ``std::array<QuantizationFormat, 44>`` without dynamic allocation:
+returning ``std::array<QuantizationFormat, 45>`` without dynamic allocation:
 
 .. code-block:: cpp
 

@@ -25,6 +25,87 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-mxfp6-e2m3-weights:
+
+Complete MXFP6 E2M3 profile
+-------------------------
+
+``QuantizationFormat.MXFP6_E2M3`` (``mxfp6_e2m3``) implements the
+compressed-tensors E2M3/group-32/E8M0 weight contract. The existing ``mxfp6``
+and ``fp6_llm`` profiles remain **E3M2 codebooks with caller-supplied scales**:
+their names, schemas and payload decoding are unchanged.
+
+The reference is `compressed-tensors revision
+eb058d630f7344099459b6795b1e3eeffdda4b40
+<https://github.com/vllm-project/compressed-tensors/blob/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors/mxfp6/base.py>`_,
+including ``mxfp6/helpers.py``, ``quantization/utils/fp6_utils.py`` and
+``quantization/utils/mxfp_utils.py``:
+
+* Input is a finite FLOAT32 matrix ``[N,K]``, with positive dimensions and
+  ``K`` divisible by 32. Groups are consecutive columns on axis 1; they never
+  cross rows. Incomplete groups, empty matrices, other dtypes and nonfinite
+  inputs are rejected, without padding or replacement.
+* Each code uses sign bit 5, exponent bits 4:3 with bias 1 and mantissa bits
+  2:0. Exponent zero has magnitude ``mantissa/8``; otherwise magnitude is
+  ``(1+mantissa/8)*2**(exponent-1)``. All 64 codes are finite; both signed
+  zeros are preserved, and maximum magnitude is 7.5.
+* Four consecutive codes form
+  ``c0 | (c1 << 6) | (c2 << 12) | (c3 << 18)``, stored as three little-endian
+  bytes. For example, upstream's ``[1,-0.125,7.5,0]`` fixture has codes
+  ``[8,33,31,0]`` and bytes ``48 f8 01``.
+* Scale selection computes
+  ``rounded_bits = (float32_bits(max_abs) + (1 << 19)) & 0x7f800000``.
+  The scale exponent is the resulting exponent minus 127 minus 2, clamped
+  to ``[-127,125]``. For normal values this increments ``floor(log2(max_abs))``
+  at mantissa 1.9375, then subtracts 2; it is not generic nearest-power-of-two
+  rounding. Zero blocks use exponent -127.
+* E8M0 bytes encode ``scale = 2**(byte-127)``. Byte 0 is ``2**-127``, not
+  zero; byte 255 is rejected. Scale one is byte 127. The upper exponent
+  clamp is an explicit onnx-light extension ensuring finite reconstruction
+  even for maximum finite FLOAT32 inputs, not an upstream parity guarantee
+  at extreme ranges.
+* Normalization divides in FLOAT32, saturates to ``[-7.5,7.5]`` and converts
+  to E2M3 using nearest-even rounding, including subnormal and exponent-boundary
+  ties. Reconstruction multiplies the decoded E2M3 value by its scale in
+  FLOAT32. Upstream's decompressor returns BFLOAT16; the finite E2M3-times-E8M0
+  values agree numerically, while this API returns FLOAT32.
+
+``make_quantization_plan(QuantizationFormat.MXFP6_E2M3, count)`` selects
+automatic scales, fixed groups of 32 and FLOAT32 reconstruction.
+``count`` must be a positive multiple of 32; ``block_size`` accepts 32 or
+the default 128, both selecting 32. Modified layouts, supplied scales,
+transforms, permutations, outliers, shared parameters and
+``make_quantization_type`` are rejected.
+
+.. code-block:: python
+
+    import numpy
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx_core import quantization
+
+    weights = numpy.tile([1, -0.125, 7.5, 0], 8).astype(numpy.float32).reshape(1, 32)
+    plan = quantization.make_quantization_plan(
+        quantization.QuantizationFormat.MXFP6_E2M3, weights.size
+    )
+    encoded = quantization.quantize_tensor_proto(onh.from_array(weights), plan)
+    parameters = quantization.export_mxfp6_e2m3_weights(encoded)
+    encoded_again = quantization.import_mxfp6_e2m3_weights(parameters)
+    restored = onh.to_array(quantization.dequantize_tensor_proto(encoded_again))
+
+``quantize_mxfp6_e2m3_weights`` also accepts a runtime ``Tensor`` directly.
+``Mxfp6E2m3Weights`` owns UINT8 ``weight_packed`` shaped ``[N,3*K/4]`` and
+UINT8 ``weight_scale`` shaped ``[N,K/32]``. Export/import preserves these bytes
+without requantization. Imports accept scale bytes 0--254 only if every
+reconstruction remains finite. Incorrect dtypes, shapes, payload sizes and
+schema constants are rejected.
+
+The self-describing ``onnx_light.mxfp6_e2m3_weights.v1`` schema records the
+code layout, group size, axis, scale selection, rounding, saturation,
+reconstruction dtype and rejection policies. Its payload contains row-major
+packed weights followed by row-major scale bytes. It supports inline schemas
+and model catalogue references, without retaining a quantization plan.
+This is not a general checkpoint importer or accelerated matrix multiplication.
+
 .. _l-mxfp8-weights:
 
 Complete MXFP8 profile
@@ -594,7 +675,7 @@ Python
 ------
 
 The runnable :ref:`Python profile tutorial <l-example-quantization-profiles>`
-demonstrates **all 44 profiles**, including per-channel grouping, mixed
+demonstrates **all 45 profiles**, including per-channel grouping, mixed
 precision, supplied vector/additive codebooks, sparse outliers, rotations,
 tiling and serialization. The examples use small explicit parameters; they
 do not train or calibrate a model.

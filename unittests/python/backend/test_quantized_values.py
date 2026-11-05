@@ -713,10 +713,10 @@ class TestQuantizedValues(ExtTestCase):
 
         formats = quantization_formats()
         self.assertIsInstance(formats, list)
-        self.assertEqual(len(formats), 44)
+        self.assertEqual(len(formats), 45)
         self.assertTrue(all(isinstance(value, QuantizationFormat) for value in formats))
         self.assertEqual(formats[0], QuantizationFormat.INT8)
-        self.assertEqual(formats[-1], QuantizationFormat.MXFP8)
+        self.assertEqual(formats[-1], QuantizationFormat.MXFP6_E2M3)
         for value in formats:
             self.assertEqual(
                 runtime.parse_quantization_format(runtime.quantization_format_name(value)), value
@@ -741,7 +741,7 @@ class TestQuantizedValues(ExtTestCase):
         source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32).reshape(4, 2)
         for name in runtime.quantization_formats():
             with self.subTest(format=name):
-                if name == QuantizationFormat.MXFP8:
+                if name in {QuantizationFormat.MXFP8, QuantizationFormat.MXFP6_E2M3}:
                     grouped = numpy.tile(source.ravel(), 4).reshape(1, 32)
                     plan = runtime.make_quantization_plan(name, grouped.size)
                     numpy.testing.assert_array_equal(self.roundtrip(grouped, plan), grouped)
@@ -792,6 +792,94 @@ class TestQuantizedValues(ExtTestCase):
                 numpy.testing.assert_allclose(
                     self.roundtrip(source, plan), source, rtol=0, atol=tolerance
                 )
+
+    def test_mxfp6_e2m3_pinned_fixture_and_public_api(self):
+        from onnx_light.onnx_core import quantization
+
+        source = numpy.tile([1, -0.125, 7.5, 0], 8).astype(numpy.float32).reshape(1, 32)
+        plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, source.size)
+        encoded = quantization.quantize_tensor_proto(onh.from_array(source), plan)
+        tensor = runtime.tensor_from_numpy(
+            "", onnx.TensorProto.FLOAT, list(source.shape), source.view(numpy.uint8).reshape(-1)
+        )
+        direct = quantization.quantize_mxfp6_e2m3_weights(tensor)
+        self.assertEqual(encoded.raw_data, direct.raw_data)
+        self.assertEqual(encoded.struct_type.name, "onnx_light.mxfp6_e2m3_weights.v1")
+        # Upstream eb058d630f7344099459b6795b1e3eeffdda4b40 packing fixture.
+        self.assertEqual(encoded.raw_data, bytes([0x48, 0xF8, 0x01] * 8 + [127]))
+        restored = onnx.EncodedValueProto()
+        restored.ParseFromString(encoded.SerializeToString())
+        parameters = quantization.export_mxfp6_e2m3_weights(restored)
+        self.assertIsInstance(parameters, quantization.Mxfp6E2m3Weights)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(parameters.weight_packed),
+            numpy.tile([0x48, 0xF8, 0x01], 8).reshape(1, 24),
+        )
+        numpy.testing.assert_array_equal(numpy.from_dlpack(parameters.weight_scale), [[127]])
+        self.assertEqual(
+            quantization.import_mxfp6_e2m3_weights(parameters).raw_data, encoded.raw_data
+        )
+        numpy.testing.assert_array_equal(
+            onh.to_array(quantization.dequantize_tensor_proto(restored)), source
+        )
+        self.assertEqual(
+            quantization.parse_quantization_format("mxfp6_e2m3"), QuantizationFormat.MXFP6_E2M3
+        )
+        for name in ("mxfp6", "fp6_llm"):
+            legacy = quantization.make_quantization_plan(
+                quantization.parse_quantization_format(name), 4
+            )
+            legacy_source = numpy.array([0.125, -0.125, 1.125, 7.5], dtype=numpy.float32)
+            old = quantization.quantize_tensor_proto(onh.from_array(legacy_source), legacy)
+            self.assertEqual(old.raw_data[-3:], bytes([0x82, 0xC8, 0x5C]))
+            numpy.testing.assert_array_equal(
+                onh.to_array(quantization.dequantize_tensor_proto(old)), [0.125, -0.125, 1, 7]
+            )
+
+    def test_mxfp6_e2m3_scales_zeros_ties_and_rejections(self):
+        from onnx_light.onnx_core import quantization
+
+        maxima = numpy.array([3.75, 3.875, 7.5, 7.75, 0], dtype=numpy.float32)
+        source = numpy.repeat(maxima, 32).reshape(5, 32)
+        plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, source.size)
+        encoded = quantization.quantize_tensor_proto(onh.from_array(source), plan)
+        parameters = quantization.export_mxfp6_e2m3_weights(encoded)
+        scales = numpy.from_dlpack(parameters.weight_scale)
+        numpy.testing.assert_array_equal(scales.ravel(), [126, 127, 127, 128, 0])
+        numpy.testing.assert_array_equal(
+            onh.to_array(quantization.dequantize_tensor_proto(encoded)),
+            numpy.repeat([3.75, 4, 7.5, 8, 0], 32).reshape(5, 32),
+        )
+        values = numpy.zeros((1, 32), dtype=numpy.float32)
+        values[0, :5] = [0.0625, 0.1875, 1.9375, 3.875, 7.5]
+        plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, 32)
+        ties = quantization.quantize_tensor_proto(onh.from_array(values), plan)
+        self.assertEqual(ties.raw_data[:3], bytes([0x80, 0x00, 0x61]))
+        for nonfinite in (numpy.nan, numpy.inf, -numpy.inf):
+            values[0, 0] = nonfinite
+            with self.assertRaises(ValueError):
+                quantization.quantize_tensor_proto(onh.from_array(values), plan)
+        for shape in ((32,), (1, 31), (0, 32)):
+            with self.assertRaises(ValueError):
+                values = numpy.zeros(shape, dtype=numpy.float32)
+                tensor = runtime.tensor_from_numpy(
+                    "", onnx.TensorProto.FLOAT, list(shape), values.view(numpy.uint8).reshape(-1)
+                )
+                quantization.quantize_mxfp6_e2m3_weights(tensor)
+        with self.assertRaises(ValueError):
+            quantization.make_quantization_type(plan)
+        for payload in (
+            ties.raw_data[:-1],
+            ties.raw_data + b"\x00",
+            ties.raw_data[:-1] + b"\xff",
+        ):
+            malformed = onnx.EncodedValueProto()
+            malformed.ParseFromString(ties.SerializeToString())
+            malformed.raw_data = payload
+            with self.assertRaises(ValueError):
+                quantization.export_mxfp6_e2m3_weights(malformed)
+            with self.assertRaises(ValueError):
+                quantization.dequantize_tensor_proto(malformed)
 
     def test_mxfp8_public_profile_and_independent_serialization(self):
         from onnx_light.onnx_core import quantization

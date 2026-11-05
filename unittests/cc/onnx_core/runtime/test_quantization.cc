@@ -234,6 +234,33 @@ TEST(Quantization, Mxfp4WeightsTiesSaturationAndZeroGroups) {
   EXPECT_TRUE(std::isfinite(DequantizeTensor(encoded).AsFloat()[0]));
 }
 
+TEST(Quantization, Mxfp4WeightsPinnedRowMajorGroups) {
+  // Source-derived from compressed-tensors revision eb058d630f7344099459b6795b1e3eeffdda4b40.
+  std::vector<float> values, reconstructed;
+  for (float value : {1.f, -7.f, 2.f, 14.f})
+    values.insert(values.end(), 32, value);
+  for (float value : {1.f, -8.f, 2.f, 16.f})
+    reconstructed.insert(reconstructed.end(), 32, value);
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {2, 64}, values));
+  const auto weights = ExportMxfp4Weights(encoded);
+  EXPECT_EQ(weights.weight_packed.shape, (Shape{2, 32}));
+  EXPECT_EQ(weights.weight_scale.shape, (Shape{2, 2}));
+  const std::vector<uint8_t> scales{125, 128, 126, 129};
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_scale.bytes(),
+                                 weights.weight_scale.bytes() + scales.size()),
+            scales);
+  std::vector<uint8_t> packed;
+  for (uint8_t code : {0x66, 0xee, 0x66, 0x66})
+    packed.insert(packed.end(), 16, code);
+  EXPECT_EQ(std::vector<uint8_t>(weights.weight_packed.bytes(),
+                                 weights.weight_packed.bytes() + packed.size()),
+            packed);
+  const auto imported = WireRoundTrip(RuntimeValue(ImportMxfp4Weights(weights))).Encoded();
+  EXPECT_EQ(imported.raw_data(), encoded.raw_data());
+  ExpectValues(DequantizeTensor(imported), reconstructed);
+  ExpectValues(TensorFromProto(DequantizeTensorProto(imported)), reconstructed);
+}
+
 TEST(Quantization, Mxfp4WeightsRejectsInvalidLayoutsAndScaleBytes) {
   EXPECT_THROW(QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 31}, std::vector<float>(31))),
                std::invalid_argument);
@@ -247,6 +274,50 @@ TEST(Quantization, Mxfp4WeightsRejectsInvalidLayoutsAndScaleBytes) {
       QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32))));
   weights.weight_scale.mutable_bytes()[0] = 0xff;
   EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+}
+
+TEST(Quantization, Mxfp4WeightsRejectsMalformedStorageAndOverflow) {
+  const auto encoded = QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32)));
+  auto rejects = [](const EncodedValueProto &value) {
+    EXPECT_THROW(ExportMxfp4Weights(value), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensor(value), std::invalid_argument);
+    EXPECT_THROW(DequantizeTensorProto(value), std::invalid_argument);
+  };
+  auto malformed = encoded;
+  malformed.mutable_raw_data()->resize(16);
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_struct_type()->set_name("onnx_light.mxfp4_weights.v2");
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_logical_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(1)
+      ->set_dim_value(64);
+  rejects(malformed);
+  malformed = encoded;
+  malformed.mutable_raw_data()->data()[16] = 0xff;
+  rejects(malformed);
+  malformed.mutable_raw_data()->data()[16] = 254;
+  malformed.mutable_raw_data()->data()[0] = 0x77;
+  rejects(malformed);
+
+  auto weights = ExportMxfp4Weights(encoded);
+  weights.weight_scale = Tensor("weight_scale", TensorProto::UINT8, {1, 2}, {127, 127});
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  weights.weight_scale = Tensor("weight_scale", TensorProto::INT8, {1, 1}, {127});
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  weights.weight_packed.shape[1] = std::numeric_limits<int64_t>::max();
+  EXPECT_THROW(ImportMxfp4Weights(weights), std::invalid_argument);
+  EXPECT_THROW(QuantizeMxfp4Weights(
+                   Tensor("", TensorProto::FLOAT, {std::numeric_limits<int64_t>::max(), 32}, {})),
+               std::invalid_argument);
+  for (float value :
+       {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()})
+    EXPECT_THROW(
+        QuantizeMxfp4Weights(Tensor::FromFloat("", {1, 32}, std::vector<float>(32, value))),
+        std::invalid_argument);
 }
 
 TEST(Quantization, Nvfp4WeightsGoldenPackingAndLosslessImport) {

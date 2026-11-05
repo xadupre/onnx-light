@@ -1235,6 +1235,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("FP8_E4M3", core::runtime::QuantizationFormat::kFp8E4m3)
       .value("MXFP4", core::runtime::QuantizationFormat::kMxfp4)
       .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
+      .value("MXFP8", core::runtime::QuantizationFormat::kMxfp8)
       .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
       .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
       .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
@@ -1376,6 +1377,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "Exports owned packed weights and E8M0 scale bytes without numerical conversion.");
   rt_mod.def("import_mxfp4_weights", &core::runtime::ImportMxfp4Weights, nb::arg("weights"),
              "Serializes complete MXFP4 weight parameters without requantization.");
+  nb::class_<core::runtime::Mxfp8Weights>(rt_mod, "Mxfp8Weights")
+      .def(nb::init<>())
+      .def_rw("weight", &core::runtime::Mxfp8Weights::weight)
+      .def_rw("weight_scale", &core::runtime::Mxfp8Weights::weight_scale);
+  rt_mod.def("quantize_mxfp8_weights", &core::runtime::QuantizeMxfp8Weights, nb::arg("tensor"),
+             "Encodes FLOAT matrix weights as E4M3FN bytes with automatic E8M0 group scales.");
+  rt_mod.def(
+      "export_mxfp8_weights",
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::ExportMxfp8Weights);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Exports owned E4M3FN weights and E8M0 scale bytes without numerical conversion.");
+  rt_mod.def("import_mxfp8_weights", &core::runtime::ImportMxfp8Weights, nb::arg("weights"),
+             "Serializes complete MXFP8 weight parameters without requantization.");
   rt_mod.def("quantize_nvfp4_weights", &core::runtime::QuantizeNvfp4Weights, nb::arg("tensor"),
              nb::arg("local_scales"), nb::arg("global_scale"),
              "Encodes FLOAT matrix weights with FP8 local scales and a FLOAT global scale.");

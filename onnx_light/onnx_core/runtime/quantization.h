@@ -59,6 +59,7 @@ enum class QuantizationFormat {
   kOrtMatmulnbitsInt2,
   kOrtMatmulnbitsInt4,
   kOrtMatmulnbitsInt8,
+  kMxfp8,
 };
 
 /**
@@ -114,6 +115,8 @@ struct QuantizationRun {
  *
  * The coverage and numerical rules below describe portable profiles. For the three
  * kOrtMatmulnbitsInt* profiles, use MakeMatMulNBitsPlan and its matrix-specific contract.
+ * kMxfp8 instead selects the complete fixed-32 QuantizeMxfp8Weights contract, with
+ * automatic E8M0 scales, native E4M3FN bytes and fixed FLOAT reconstruction.
  *
  * @par Construction and conversion
  * Calls MakeQuantizationPlan(format, count, block_size) to initialize profile defaults,
@@ -419,8 +422,8 @@ struct QuantizationPlan {
 };
 
 /** Returns the portable profiles as a compile-time array without dynamic allocation. */
-constexpr std::array<QuantizationFormat, 43> QuantizationFormats() {
-  std::array<QuantizationFormat, 43> formats{};
+constexpr std::array<QuantizationFormat, 44> QuantizationFormats() {
+  std::array<QuantizationFormat, 44> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;
@@ -439,6 +442,10 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name);
  * required scales/codebooks/transforms, numerical rules, validation constraints,
  * and C++/Python usage examples. The returned plan may require additional parameters
  * before it can be passed to QuantizeTensor() or QuantizeTensorProto().
+ * kMxfp8 requires a positive count divisible by 32 and block_size=32 or the default
+ * 128, both selecting fixed groups of 32. It selects automatic scales and FLOAT
+ * reconstruction; modifying its block parameters, grouping, ordering or transforms
+ * is rejected. MakeQuantizationType and shared parameters do not support this profile.
  *
  * @param format Selects one of the enum values returned by QuantizationFormats().
  * @param count Counts the source tensor's scalar elements, not bytes or codebook vectors.
@@ -504,6 +511,33 @@ struct Mxfp4Weights {
   Tensor weight_packed;
   Tensor weight_scale;
 };
+
+/** Stores owned native E4M3FN weights [rows,cols] and E8M0 bytes [rows,cols/32]. */
+struct Mxfp8Weights {
+  Tensor weight;
+  Tensor weight_scale;
+};
+
+/**
+ * Quantizes a finite FLOAT matrix with positive dimensions and cols divisible by 32.
+ *
+ * Uses compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40's num_bits=8 rule:
+ * ((FP32 max_abs bits + 2^21) & 0x7f800000)'s exponent minus 127 minus 8.
+ * Zero blocks use scale one. Explicit extensions clamp exponents to [-127,119],
+ * guaranteeing finite FP32 reconstruction even at the saturated E4M3FN maximum 448.
+ * E4M3FN encoding rounds to nearest even and saturates; reconstruction multiplies in FP32.
+ * Stores an exact versioned schema, native FP8 bytes, then row-major E8M0 bytes.
+ * MakeQuantizationPlan(kMxfp8,count) selects this codec with automatic scales; only
+ * unaltered fixed-32 plans are accepted, without transforms, permutations or outliers.
+ */
+EncodedValueProto QuantizeMxfp8Weights(const Tensor &tensor);
+
+/** Extracts owned MXFP8 tensors after validating the exact schema and reconstruction. */
+Mxfp8Weights ExportMxfp8Weights(const EncodedValueProto &value,
+                                const StructTypeCatalogue &catalogue = {});
+
+/** Imports native MXFP8 tensors losslessly, rejecting NaNs and nonfinite reconstruction. */
+EncodedValueProto ImportMxfp8Weights(const Mxfp8Weights &weights);
 
 /**
  * Quantizes FLOAT [rows,cols] weights using groups of 16 along axis 1.

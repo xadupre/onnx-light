@@ -25,6 +25,91 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-mxfp8-weights:
+
+Complete MXFP8 profile
+---------------------
+
+``QuantizationFormat.MXFP8`` (``mxfp8``) implements E4M3FN values with
+automatically selected E8M0 scales for groups of 32. Unlike the existing
+``fp8_e4m3`` portable codebook profile, it stores native FP8 codes, not
+codebook indices, and does not require caller-prepared effective scales.
+The existing ``fp8_e4m3`` contract is unchanged.
+
+The reference is `compressed-tensors revision
+eb058d630f7344099459b6795b1e3eeffdda4b40
+<https://github.com/vllm-project/compressed-tensors/blob/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors/mxfp8/base.py>`_,
+together with its ``quantization/utils/mxfp_utils.py`` scale-selection and
+``compressors/mx_utils.py`` scale-storage helpers:
+
+* Input is a finite FLOAT32 matrix ``[N,K]`` with positive dimensions and
+  ``K`` divisible by 32. Groups are consecutive columns on axis 1, never
+  across rows. Incomplete groups, empty matrices, other dtypes and
+  nonfinite inputs are rejected rather than padded or replaced.
+* For a nonzero group maximum ``m``, the pinned FLOAT32 helper computes
+  ``rounded_bits = (float32_bits(m) + (1 << 21)) & 0x7f800000``.
+  The scale exponent is the resulting exponent minus 127 minus 8.
+  For normal inputs this increments ``floor(log2(m))`` at a mantissa
+  threshold of 1.75, then subtracts 8. This deliberately uses the pinned
+  helper's E2M1 threshold, not a generic nearest-power-of-two or ceiling rule.
+* This profile clamps scale exponents to ``[-127,119]`` and uses scale one
+  for all-zero groups. These are explicit onnx-light policies for zero
+  blocks and extreme ranges, not upstream parity guarantees there.
+  Scales are positive powers of two, encoded as UINT8 exponents with bias
+  127; byte zero denotes ``2**-127``, not zero. Byte ``0xff`` is invalid.
+* Normalization divides in FLOAT32, saturates to ``[-448,448]`` and converts
+  to native E4M3FN with round-to-nearest-even, including subnormal ties.
+  Signed zero is preserved. Reconstruction multiplies the decoded E4M3FN
+  value by the decoded E8M0 scale in FLOAT32.
+* Imported scale bytes 0--254 are accepted only when every reconstructed
+  value remains finite. FP8 NaN codes, E8M0 NaN, nonfinite reconstruction,
+  incorrect dtypes, shapes, payload sizes and schema constants are rejected.
+
+``make_quantization_plan(QuantizationFormat.MXFP8, count)`` selects this
+automatic contract; grouping and reconstruction are fixed, not customizable
+portable codebook parameters. ``count`` must be a positive multiple of 32;
+``block_size`` accepts 32 or the factory default 128, both selecting groups
+of 32. Reconstruction is always FLOAT32. Custom scales, transforms,
+permutations, outliers, shared parameters and ``make_quantization_type``
+are not supported for this profile.
+The dedicated ``quantize_mxfp8_weights`` entry
+point implements the same codec directly:
+
+.. code-block:: python
+
+    import numpy
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx_core import quantization
+
+    weights = numpy.ones((2, 64), dtype=numpy.float32)
+    plan = quantization.make_quantization_plan(
+        quantization.QuantizationFormat.MXFP8, weights.size
+    )
+    encoded = quantization.quantize_tensor_proto(onh.from_array(weights), plan)
+    parameters = quantization.export_mxfp8_weights(encoded)
+    encoded_again = quantization.import_mxfp8_weights(parameters)
+    restored = onh.to_array(quantization.dequantize_tensor_proto(encoded_again))
+
+``Mxfp8Weights`` owns ``weight`` (FLOAT8E4M3FN ``[N,K]``) and
+``weight_scale`` (UINT8 ``[N,K/32]``), matching the upstream parameter roles.
+Export/import preserves their bytes exactly without requantization.
+The self-describing ``onnx_light.mxfp8_weights.v1`` descriptor records
+the shape, axis, group size, dtypes, rounding, saturation and invalid-input
+policies. Its raw payload contains row-major FP8 bytes followed by row-major
+E8M0 bytes, with no padding or hardware swizzle. Serialize the complete
+``EncodedValueProto``, not just ``raw_data``; both dequantizers work without
+the original plan. Referenced types also require their model catalogue.
+
+Compatibility covers scale selection, codes, scale bytes and FLOAT32
+reconstruction for finite complete groups with a normal, nonzero maximum
+within the unclamped scale range.
+The upstream decompressor casts scales to BFLOAT16 and commonly reconstructs
+BFLOAT16 weights; this profile instead promises FLOAT32 reconstruction,
+not universal bitwise equality to upstream output dtypes. It is not a general
+checkpoint importer, a claim of every vendor's binary layout, activation
+calibration, or **accelerated native MXFP8 matrix multiplication**.
+The arithmetic assumes IEEE nearest-even, gradual underflow and no fast-math.
+
 .. _l-mxfp4-weights:
 
 Complete MXFP4 weights
@@ -509,7 +594,7 @@ Python
 ------
 
 The runnable :ref:`Python profile tutorial <l-example-quantization-profiles>`
-demonstrates **all 43 profiles**, including per-channel grouping, mixed
+demonstrates **all 44 profiles**, including per-channel grouping, mixed
 precision, supplied vector/additive codebooks, sparse outliers, rotations,
 tiling and serialization. The examples use small explicit parameters; they
 do not train or calibrate a model.

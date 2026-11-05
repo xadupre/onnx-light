@@ -22,7 +22,7 @@ namespace {
 
 KernelRegistration Implementation(int64_t bytes, float value = 1) {
   return {MakeCustomKernelFactory([value](const NodeProto &node, RuntimeContext &rt) {
-            rt.Set(node.output(0), Tensor::FromFloat(node.output(0), {1}, {value}, rt.allocator()));
+            rt.Put(node.output(0), Tensor::FromFloat(node.output(0), {1}, {value}, rt.allocator()));
           }),
           [bytes](Device, const NodeProto &, const std::vector<SymShape> &) {
             return PeakMemoryEstimate::Exact(SymDim(bytes));

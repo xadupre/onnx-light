@@ -102,6 +102,42 @@ the tensor and its views unchanged. Live-view updates are not supported.
 Borrowed storage with no owner token remains the caller's lifetime
 responsibility. Shape metadata is snapshotted at export.
 
+ONNX Runtime interoperability
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the public protocol API when available::
+
+    import onnxruntime
+
+    value = onnxruntime.OrtValue.from_dlpack(tensor)
+    imported = TensorProto.from_dlpack(value)
+    view = numpy.from_dlpack(value)
+
+The audit for microsoft/onnxruntime#33848 found no onnx-light calls to the
+removed native ``is_bool_tensor`` argument. Both TensorProto and runtime Tensor
+exports already distinguish BOOL (``kDLBool``, 8 bits) from UINT8 (``kDLUInt``,
+8 bits); no dtype override or conversion is needed. The reference evaluator
+uses NumPy's DLPack protocol, not ONNX Runtime's native importer.
+
+Compatibility depends on the runtime's actual DLPack contract, not its version
+string. Builds with the public protocol API but the old native bool override
+(including the observed 1.31.1 build) support zero-copy CPU float32 and uint8
+interchange. They reject native ``kDLBool`` imports with ``Unsupported code 6``
+and export bool storage with uint8 metadata. onnx-light preserves that export
+as UINT8; it cannot recover a bool dtype from uint8 metadata. Do not reinterpret
+uint8 as bool to bypass this limitation. Builds without the public API are not
+supported by this interoperability path; other optional runtime integration
+does not require DLPack.
+
+Builds containing #33848 use a one-argument native importer and preserve native
+bool metadata. They also accept byte offsets, explicit contiguous strides, and
+null producer deleters. With a null deleter, the caller must keep the allocation
+and managed descriptor alive until all consumers are released. Low-precision
+interchange remains limited to the exact dtypes implemented by both peers;
+packed sub-byte types are not supported by TensorProto's DLPack API.
+The runtime still exchanges legacy ``dltensor`` capsules, not versioned capsules.
+Each import must receive a fresh capsule; a consumed capsule must never be reused.
+
 Explicit destructive transfer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

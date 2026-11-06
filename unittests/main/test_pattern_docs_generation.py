@@ -4,6 +4,7 @@ import pathlib
 
 from onnx_light.doc import render_rst_pattern_catalog, render_rst_peak_memory_catalog
 from onnx_light.onnx_core.optimization import TreeEnsemblePattern, standard_patterns
+from onnx_light.onnx_core.shape_inference import peak_memory_dispatch_table_keys
 
 
 def test_render_rst_pattern_catalog_lists_registered_patterns():
@@ -41,10 +42,35 @@ def test_tree_ensemble_python_default_priority():
 
 def test_render_rst_peak_memory_catalog_lists_registered_functions():
     """Checks that the catalogue contains every registered peak-memory function."""
+    keys = peak_memory_dispatch_table_keys()
     catalogue = render_rst_peak_memory_catalog()
 
+    assert catalogue.count("    * - ") == len(keys) + 1
+    for key in keys:
+        domain, op_type, *_ = key.split(":")
+        assert f"**{op_type}**" in catalogue
+        assert f"``{domain}``" in catalogue
+
+
+def test_render_rst_peak_memory_catalog_formats_explicit_functions():
+    """Checks catalogue formatting independently of the installed kernels."""
+    catalogue = render_rst_peak_memory_catalog(["local.test:Scratch:2", "ai.onnx:Attention"])
+
     assert "**Attention**" in catalogue
+    assert "**Scratch**" in catalogue
     assert "``ai.onnx``" in catalogue
+    assert "``local.test``" in catalogue
     assert "CPU / default" in catalogue
+    assert "GPU2" in catalogue
     assert "onnx_light::core::shapes::ComputePeakMemory" in catalogue
     assert "onnx_light.onnx_core.shape_inference.compute_peak_memory" in catalogue
+
+
+def test_render_rst_peak_memory_catalog_accepts_empty_registry():
+    """Checks that a build without estimators still produces a table header."""
+    catalogue = render_rst_peak_memory_catalog([])
+
+    assert catalogue.count("    * - ") == 1
+    assert "    * - Operator" in catalogue
+    assert ":class: sphinx-datatable memory-peak-catalog" in catalogue
+    assert "**Attention**" not in catalogue

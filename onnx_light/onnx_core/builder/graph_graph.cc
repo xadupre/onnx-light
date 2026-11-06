@@ -2522,7 +2522,6 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
         positions.push_back(i);
   };
   const auto record_nodes = [&](const std::string &name, const auto &cleanup) {
-    const std::size_t node_count = builder_.nodes_.size();
     const auto original_initializers = initializer_names(builder_.initializers_);
     const auto original_extended = initializer_names(builder_.extended_initializers_);
     const std::size_t removed = cleanup();
@@ -2534,20 +2533,21 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     }
     LocalRewritingProto rewriting;
     rewriting.set_pattern_name(name);
-    rewriting.ref_matched_nodes().reserve(node_count);
-    for (std::size_t i = 0; i < node_count; ++i) {
-      rewriting.add_matched_nodes(i);
+    if (removed != 0) {
+      std::unordered_set<std::string> retained_outputs;
+      for (const auto &node : builder_.nodes_)
+        for (const auto &output : node.output())
+          if (!output.empty())
+            retained_outputs.insert(output.value());
+      // RemoveUnusedNodesImpl preserves the definitions and order of all surviving nodes.
+      for (std::size_t i = 0; i < original_nodes.size(); ++i)
+        if (std::none_of(original_nodes[i].output().begin(), original_nodes[i].output().end(),
+                         [&](const auto &output) {
+                           return !output.empty() && retained_outputs.count(output.value()) != 0;
+                         }))
+          rewriting.add_matched_nodes(i);
     }
-    rewriting.ref_added_nodes() = utils::CopyWithSharedTensorStorage(builder_.nodes_);
     UndoState::Edit inverse;
-    auto &snapshot = inverse.after;
-    snapshot.ref_node() = utils::CopyWithSharedTensorStorage(rewriting.added_nodes());
-    for (auto &node : snapshot.ref_node())
-      builder_.MaterializeGraphReferences(node);
-    rewriting.ref_added_nodes_positions().reserve(builder_.nodes_.size());
-    for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
-      rewriting.add_added_nodes_positions(i);
-    }
     if (removed_initializers != 0) {
       record_removed_initializers(original_initializers, builder_.initializers_,
                                   rewriting.ref_removed_initializers());

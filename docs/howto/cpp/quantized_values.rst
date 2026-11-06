@@ -24,6 +24,19 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Compressed-tensors checkpoint interoperability
+----------------------------------------------
+
+The dependency-light Python
+:ref:`checkpoint adapter <l-compressed-tensors-checkpoints>` defines the pinned
+compressed-tensors metadata/support matrix and maps already-loaded weight arrays
+to self-contained encoded values consumable by ``DequantizeTensor``. Integer
+offset-binary INT32 checkpoint packing is distinct from portable affine packing;
+MX/NV adapters reuse the dedicated native codecs below. No PyTorch dependency
+or checkpoint-container loader is added to the C++ core. Unsupported formats,
+activation configurations and lossy parameter mappings are not silently replaced
+by portable profiles.
+
 Complete MXFP6 E2M3 profile
 -------------------------
 

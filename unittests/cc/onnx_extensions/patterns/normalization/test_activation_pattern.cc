@@ -4,12 +4,17 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_extensions/patterns/collections/collections_utils.h"
+#include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -87,6 +92,365 @@ void SetValueType(core::builder::GraphBuilder &builder, const std::string &name,
                   core::symbolic::TensorType type, const core::symbolic::SymShape &shape) {
   auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
   shapes.Set(name, core::symbolic::SymTensor(nullptr, type, shape));
+}
+
+void MakeExactGelu(core::builder::GraphBuilder &builder,
+                   core::symbolic::TensorType type = core::symbolic::TensorType::kFloat,
+                   int half_placement = 0, bool reciprocal = false, bool divide_half = false,
+                   unsigned swapped = 0, const std::vector<int64_t> &scalar_shape = {1}) {
+  builder.MakeInput("x", type, Shape({2, 3}));
+  const auto dtype = static_cast<TensorProto::DataType>(core::symbolic::TensorTypeToDataType(type));
+  for (const auto &[name, value] : std::vector<std::pair<std::string, double>>{
+           {"sqrt_two", reciprocal ? 1.0 / std::sqrt(2.0) : std::sqrt(2.0)},
+           {"one", 1.0},
+           {"half", divide_half ? 2.0 : 0.5}})
+    builder.MakeInitializer(
+        onnx_patterns::collections::MakeScalarTensor(name, dtype, scalar_shape, value));
+  const auto binary = [&](const char *op, std::string left, std::string right,
+                          const std::string &output, unsigned flag) {
+    if ((swapped & flag) != 0 && std::string(op) != "Div")
+      std::swap(left, right);
+    builder.MakeNode(op, {left, right}, {output}, "", output + "_node");
+  };
+  binary(reciprocal ? "Mul" : "Div", "x", "sqrt_two", "scaled", 1);
+  builder.MakeNode("Erf", {"scaled"}, {"erf"});
+  binary("Add", "erf", "one", "term", 2);
+  if (half_placement == 2) {
+    binary("Mul", "x", "term", "product", 4);
+    binary(divide_half ? "Div" : "Mul", "product", "half", "y", 8);
+  } else {
+    binary(divide_half ? "Div" : "Mul", half_placement == 0 ? "x" : "term", "half", "halved", 8);
+    binary("Mul", half_placement == 0 ? "halved" : "x", half_placement == 0 ? "term" : "halved",
+           "y", 4);
+  }
+  builder.MakeOutput("y");
+}
+
+RewritingProto OptimizeGelu(core::builder::GraphBuilder &builder) {
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(onnx_patterns::CreatePattern("Gelu"));
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  return graph.Optimize(4, nullptr, folding);
+}
+
+TEST(GeluPattern, OptimizesExactFormsAndCommutativeInputsInSupportedTypes) {
+  for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
+                          core::symbolic::TensorType::kDouble}) {
+    for (int placement : {0, 1}) {
+      for (bool reciprocal : {false, true}) {
+        for (bool divide_half : {false, true}) {
+          for (unsigned swapped : {0u, 1u, 2u, 4u, 8u, 15u}) {
+            SCOPED_TRACE(testing::Message() << static_cast<int>(type) << ":" << placement << ":"
+                                            << reciprocal << ":" << divide_half << ":" << swapped);
+            core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+            MakeExactGelu(builder, type, placement, reciprocal, divide_half, swapped,
+                          swapped == 0 ? std::vector<int64_t>{} : std::vector<int64_t>{1});
+            const auto plan = OptimizeGelu(builder);
+            ASSERT_FALSE(plan.rewrites().empty());
+            EXPECT_EQ(plan.rewrites(0).pattern_name(), "Gelu");
+            ASSERT_EQ(builder.Nodes().size(), 1u);
+            const auto &gelu = builder.Nodes()[0];
+            EXPECT_EQ(gelu.op_type(), "Gelu");
+            EXPECT_TRUE(gelu.domain().empty());
+            EXPECT_EQ(gelu.input(0), "x");
+            EXPECT_EQ(gelu.output(0), "y");
+            EXPECT_EQ(GetAttributeOr<std::string>(gelu, "approximate", ""), "none");
+            EXPECT_EQ(builder.GetShape("y").Dtype(), type);
+            EXPECT_EQ(builder.GetShape("y").Shape(), Shape({2, 3}));
+            EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(GeluPattern, ExactRejectsFinalHalfScalingWithoutMutation) {
+  for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
+                          core::symbolic::TensorType::kDouble}) {
+    for (bool reciprocal : {false, true}) {
+      for (bool divide_half : {false, true}) {
+        for (unsigned swapped : {0u, 8u, 15u}) {
+          SCOPED_TRACE(testing::Message() << static_cast<int>(type) << ":" << reciprocal << ":"
+                                          << divide_half << ":" << swapped);
+          core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+          MakeExactGelu(builder, type, 2, reciprocal, divide_half, swapped);
+          const auto before = builder.ToModel();
+          EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+          EXPECT_TRUE(builder.ToModel().Equals(before));
+        }
+      }
+    }
+  }
+}
+
+TEST(GeluPattern, ExactRequiresKnownOpset20EvenWithLowerConfiguredMinimum) {
+  {
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder);
+    builder.SetOpsetVersion("", 19);
+    const auto before = builder.ToModel();
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GeluPattern pattern(0, 1);
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[4]).pattern, nullptr);
+    EXPECT_TRUE(builder.ToModel().Equals(before));
+  }
+  core::builder::GraphBuilder unknown("unknown", SchemaLookup(), {{"", 20}});
+  MakeExactGelu(unknown);
+  const_cast<std::unordered_map<std::string, int> &>(unknown.OpsetVersions()).clear();
+  EXPECT_EQ(unknown.OpsetVersion(""), core::shapes::kUnknownOpsetVersion);
+  core::builder::GraphGraph unknown_graph(unknown);
+  onnx_patterns::GeluPattern pattern(0, 1);
+  EXPECT_EQ(pattern.Match(unknown_graph, unknown.Nodes()[4]).pattern, nullptr);
+  core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+  MakeExactGelu(builder);
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GeluPattern contrib(0, 20, "com.microsoft");
+  EXPECT_EQ(contrib.Match(graph, builder.Nodes()[4]).pattern, nullptr);
+}
+
+TEST(GeluPattern, ExactRejectsIncorrectConstantsOperandsAndTypesWithoutMutation) {
+  for (const std::string variant :
+       {"sqrt", "one", "half", "reciprocal", "division_order", "half_division_order", "other_input",
+        "missing_type", "missing_shape", "wrong_type", "bfloat16"}) {
+    SCOPED_TRACE(variant);
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder,
+                  variant == "bfloat16" ? core::symbolic::TensorType::kBfloat16
+                                        : core::symbolic::TensorType::kFloat,
+                  0, variant == "reciprocal", variant == "half_division_order");
+    auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+    if (variant == "sqrt" || variant == "one" || variant == "half" || variant == "reciprocal") {
+      const std::string name = variant == "sqrt" || variant == "reciprocal" ? "sqrt_two" : variant;
+      auto &initializers =
+          const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+      for (auto &initializer : initializers)
+        if (initializer.name().value() == name)
+          initializer =
+              MakeInitializer<float>(name.c_str(), {1}, {variant == "half" ? 0.5001f : 1.001f});
+    } else if (variant == "division_order" || variant == "half_division_order") {
+      const int index = variant == "division_order" ? 0 : 3;
+      const std::string left = nodes[index].input(0).value();
+      *nodes[index].mutable_input(0) = nodes[index].input(1).value();
+      *nodes[index].mutable_input(1) = left;
+    } else if (variant == "other_input") {
+      builder.MakeInput("other", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+      *nodes[3].mutable_input(0) = "other";
+    } else if (variant == "wrong_type") {
+      SetValueType(builder, "one", core::symbolic::TensorType::kDouble, Shape({1}));
+    } else if (variant == "missing_type" || variant == "missing_shape") {
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      if (variant == "missing_shape")
+        shapes.Erase("x");
+      else
+        shapes.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUndefined,
+                                                  Shape({2, 3})));
+    }
+    const auto before = builder.ToModel();
+    EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+    EXPECT_TRUE(builder.ToModel().Equals(before));
+  }
+}
+
+TEST(GeluPattern, ExactRejectsRankExpandingScalarBroadcastWithoutMutation) {
+  core::builder::GraphBuilder builder("scalar", SchemaLookup(), {{"", 20}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({}));
+  AddFloatInitializer(builder, "sqrt_two", {1}, {std::sqrt(2.0f)});
+  AddFloatInitializer(builder, "one", {1}, {1.0f});
+  AddFloatInitializer(builder, "half", {1}, {0.5f});
+  builder.MakeNode("Div", {"x", "sqrt_two"}, {"scaled"});
+  builder.MakeNode("Erf", {"scaled"}, {"erf"});
+  builder.MakeNode("Add", {"erf", "one"}, {"term"});
+  builder.MakeNode("Mul", {"x", "half"}, {"halved"});
+  builder.MakeNode("Mul", {"halved", "term"}, {"y"});
+  builder.MakeOutput("y");
+  const auto before = builder.ToModel();
+  EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+  EXPECT_TRUE(builder.ToModel().Equals(before));
+}
+
+TEST(GeluPattern, ExactRejectsObservableIntermediatesAndUnsupportedNodeMetadata) {
+  for (int index = 0; index < 5; ++index) {
+    for (const std::string variant : {"domain", "overload", "attribute", "device", "graph_output",
+                                      "shared", "capture", "metadata"}) {
+      if (index == 4 && (variant == "graph_output" || variant == "shared" || variant == "capture" ||
+                         variant == "metadata"))
+        continue;
+      SCOPED_TRACE(std::to_string(index) + ":" + variant);
+      core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+      MakeExactGelu(builder);
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      const std::string output = nodes[index].output(0).value();
+      if (variant == "domain") {
+        nodes[index].set_domain("custom");
+      } else if (variant == "overload") {
+        nodes[index].set_overload("custom");
+      } else if (variant == "attribute") {
+        nodes[index].ref_attribute() = IntAttributes({{"unknown", 1}});
+      } else if (variant == "device") {
+        nodes[index].add_device_configurations();
+      } else if (variant == "metadata") {
+        nodes[index].add_metadata("annotation", "value");
+      } else if (variant == "graph_output") {
+        builder.MakeOutput(output);
+      } else if (variant == "shared") {
+        builder.MakeNode("Identity", {output}, {"other"});
+        builder.MakeOutput("other");
+      } else {
+        auto &body = builder.MakeSubgraph("body");
+        body.MakeNode("Identity", {output}, {"captured"});
+        body.MakeOutput("captured");
+        AddSubgraphReference(builder, "body", "carrier");
+      }
+      const auto before = builder.ToModel();
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::GeluPattern pattern;
+      EXPECT_EQ(pattern.Match(graph, nodes[4]).pattern, nullptr);
+      EXPECT_THROW(pattern.Apply(graph, {&nodes[0], &nodes[1], &nodes[2], &nodes[3], &nodes[4]}),
+                   core::builder::BuilderError);
+      EXPECT_TRUE(builder.ToModel().Equals(before));
+    }
+  }
+}
+
+TEST(GeluPattern, ExactRefusesOverridableConstantsAndInconsistentDirectCalls) {
+  for (const char *name : {"sqrt_two", "one", "half"}) {
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder);
+    ModelProto model = builder.ToModel();
+    auto &input = *model.mutable_graph()->add_input();
+    input.set_name(name);
+    auto &tensor = *input.mutable_type()->mutable_tensor_type();
+    tensor.set_elem_type(TensorProto::FLOAT);
+    tensor.mutable_shape()->add_dim()->set_dim_value(1);
+    core::builder::GraphBuilder overridable(model, SchemaLookup());
+    const auto before = overridable.ToModel();
+    EXPECT_TRUE(OptimizeGelu(overridable).rewrites().empty());
+    EXPECT_TRUE(overridable.ToModel().Equals(before));
+  }
+  core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+  MakeExactGelu(builder);
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GeluPattern pattern;
+  auto match = pattern.Match(graph, builder.Nodes()[4]);
+  ASSERT_EQ(match.pattern, &pattern);
+  std::swap(match.nodes[0], match.nodes[1]);
+  EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+  match.nodes[0] = nullptr;
+  EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+}
+
+TEST(GeluPattern, ExactRejectsMalformedScalarPayloadsWithoutMutation) {
+  for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
+                          core::symbolic::TensorType::kDouble}) {
+    for (bool truncated : {false, true}) {
+      core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+      MakeExactGelu(builder, type);
+      auto &initializers =
+          const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+      auto &bytes = initializers[0].ref_raw_data();
+      bytes.resize(truncated ? bytes.size() - 1 : bytes.size() + 1);
+      const auto before = builder.ToModel();
+      EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+      EXPECT_TRUE(builder.ToModel().Equals(before));
+    }
+  }
+  core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+  MakeExactGelu(builder);
+  auto &initializers = const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+  initializers[0] = MakeInitializer<float>("sqrt_two", {1}, {std::sqrt(2.0f), std::sqrt(2.0f)});
+  const auto before = builder.ToModel();
+  EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+  EXPECT_TRUE(builder.ToModel().Equals(before));
+}
+
+TEST(GeluPattern, ExactAcceptsTensorConstantsAndOrtHistoricalSqrtTwo) {
+  for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
+                          core::symbolic::TensorType::kDouble}) {
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder, type);
+    ModelProto model = builder.ToModel();
+    auto &graph = *model.mutable_graph();
+    const auto original_nodes = graph.node();
+    graph.clr_node();
+    for (const auto &initializer : graph.initializer()) {
+      auto &node = *graph.add_node();
+      node.set_op_type("Constant");
+      node.add_output(initializer.name());
+      auto &attribute = *node.add_attribute();
+      attribute.set_name("value");
+      attribute.set_type(AttributeProto::TENSOR);
+      *attribute.mutable_t() = initializer;
+    }
+    for (const auto &node : original_nodes) {
+      auto &added = *graph.add_node();
+      added = node;
+      added.ref_metadata_props().clear();
+    }
+    graph.clr_initializer();
+    core::builder::GraphBuilder constants(model, SchemaLookup());
+    EXPECT_FALSE(OptimizeGelu(constants).rewrites().empty());
+    ASSERT_EQ(constants.Nodes().size(), 1u);
+    EXPECT_EQ(constants.Nodes()[0].op_type(), "Gelu");
+    EXPECT_EQ(GetAttributeOr<std::string>(constants.Nodes()[0], "approximate", ""), "none");
+  }
+  for (float value : {std::sqrt(2.0f), 1.4142099618911743f}) {
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder);
+    auto &initializers =
+        const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+    initializers[0] = MakeInitializer<float>("sqrt_two", {1}, {value});
+    EXPECT_FALSE(OptimizeGelu(builder).rewrites().empty());
+    ASSERT_EQ(builder.Nodes().size(), 1u);
+    EXPECT_EQ(builder.Nodes()[0].op_type(), "Gelu");
+  }
+}
+
+TEST(GeluPattern, ExactRejectsPromotedFloatConstantsInDoubleGraphs) {
+  for (const double value : {static_cast<double>(std::sqrt(2.0f)), 1.4142099618911743,
+                             static_cast<double>(1.0f / std::sqrt(2.0f))}) {
+    SCOPED_TRACE(value);
+    const bool reciprocal = value < 1.0;
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder, core::symbolic::TensorType::kDouble, 0, reciprocal);
+    auto &initializers =
+        const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+    initializers[0] = MakeInitializer<double>("sqrt_two", {1}, {value});
+    const auto before = builder.ToModel();
+    EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+    EXPECT_TRUE(builder.ToModel().Equals(before));
+  }
+}
+
+TEST(GeluPattern, ExactPreservesFinalMetadataSharedOutputsAndSymbolicShapes) {
+  core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+  MakeExactGelu(builder);
+  auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  nodes[4].add_metadata("annotation", "value");
+  nodes[4].set_doc_string("exact activation");
+  core::symbolic::SymShape symbolic;
+  symbolic.PushBack(core::symbolic::SymDim("batch"));
+  symbolic.PushBack(core::symbolic::SymDim("features"));
+  for (const auto *name : {"x", "scaled", "erf", "term", "halved", "y"})
+    SetValueType(builder, name, core::symbolic::TensorType::kFloat, symbolic);
+  builder.MakeNode("Identity", {"y"}, {"other"});
+  builder.MakeOutput("other");
+  builder.MakeOutput("x");
+  const auto plan = OptimizeGelu(builder);
+  ASSERT_FALSE(plan.rewrites().empty());
+  EXPECT_EQ(plan.rewrites(0).pattern_name(), "Gelu");
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  const auto &gelu = builder.Nodes()[0];
+  EXPECT_EQ(gelu.op_type(), "Gelu");
+  EXPECT_EQ(gelu.name(), "GeluPattern--y_node");
+  EXPECT_EQ(gelu.doc_string(), "exact activation");
+  ASSERT_EQ(gelu.metadata_props().size(), 1u);
+  EXPECT_EQ(gelu.metadata_props()[0].key(), "annotation");
+  EXPECT_EQ(gelu.metadata_props()[0].value(), "value");
+  EXPECT_EQ(builder.GetShape("y").Shape(), symbolic);
+  EXPECT_EQ(builder.Nodes()[1].input(0), "y");
 }
 
 TEST(GeluPattern, FusesExactTanhDecomposition) {

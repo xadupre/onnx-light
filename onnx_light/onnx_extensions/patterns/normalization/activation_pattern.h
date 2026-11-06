@@ -12,7 +12,41 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
- * Fuses the tanh approximation of Gelu.
+ * Fuses exact Erf-based Gelu and its tanh approximation.
+ *
+ * @code
+ * Before (exact):
+ *              ┌─────┐      ┌─────┐      ┌─────┐
+ *    x ───────→│ Div │─────→│ Erf │─────→│ Add │←── one
+ *    │         └─────┘      └─────┘      └─────┘
+ *    │           ↑                         │
+ *    │         sqrt(2)                     │
+ *    │         ┌─────┐                  ┌─────┐
+ *    └────────→│ Mul │─────────────────→│ Mul │────→ y
+ *    half ────→└─────┘                  └─────┘
+ *
+ * After (exact):
+ *          ┌──────────────────────────┐
+ *   x ────→│ Gelu(approximate="none") │────→ y
+ *          └──────────────────────────┘
+ * @endcode
+ *
+ * The exact form requires a known default-domain opset of at least 20 and
+ * FLOAT, FLOAT16, or DOUBLE data. Commutative inputs may be swapped. Scaling
+ * by one half must precede the final multiplication on either branch;
+ * division by two on either branch is also supported. Final scaling by one
+ * half is refused because the preceding product can overflow before scaling.
+ * ``x / sqrt(2)`` may instead multiply
+ * by ``1 / sqrt(2)``. Constants must equal their dtype-rounded values; division
+ * also accepts ORT's historical sqrt(2) constants for FLOAT tensors only.
+ * DOUBLE tensors require the canonical double-precision constant. Unlike ORT's general
+ * relative tolerance, the one and one-half constants must be exact.
+ * Tensor constants must have exactly one inline element and must not be
+ * overridable graph inputs. Known intermediate shapes
+ * and types must agree with the input, and intermediates must be unshared.
+ * Overloads, attributes, device configurations, and intermediate metadata
+ * are refused. Final node metadata and output names are preserved. Exact
+ * fusion does not use a configured non-default replacement domain.
  *
  * @code
  * Before:

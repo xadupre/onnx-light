@@ -445,8 +445,9 @@ TEST(GraphGraph, CleanupRecordsOnlyRemovedNodesAndInitializers) {
                     unused_initializer ? std::vector<uint64_t>({0}) : std::vector<uint64_t>());
           EXPECT_TRUE(edit.removed_extended_initializers().empty());
           ASSERT_EQ(edit.graph_path().size(), nested ? 1u : 0u);
-          if (nested)
+          if (nested) {
             EXPECT_EQ(edit.graph_path(0), "then_branch");
+          }
         }
         const GraphProto optimized_scope = scope->BuildGraph();
         ASSERT_EQ(optimized_scope.node_size(), 2);

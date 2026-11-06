@@ -9,9 +9,39 @@
 #include <bit>
 #include <cmath>
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
+
+TEST(CompressedTensorPacking, RoundTripAndValidation) {
+  const std::string fixture("\xfc\xfd\xfe\xff\0\x01\x02\x03\xfc\xfd\x03", 11);
+  const std::string expected("\x88\xc6\xfa\xc8\x01\0\0\0", 8);
+  EXPECT_EQ(PackCompressedTensorInt32(fixture, 1, 11, 3, 1), expected);
+  EXPECT_EQ(UnpackCompressedTensorInt32(expected, 1, 11, 3, 1), fixture);
+  for (uint32_t bits = 1; bits <= 8; ++bits) {
+    std::string codes;
+    for (size_t i = 0; i < 77; ++i)
+      codes.push_back(static_cast<char>(static_cast<int>(i % (1u << bits)) - (1 << (bits - 1))));
+    for (uint32_t axis : {0u, 1u}) {
+      auto packed = PackCompressedTensorInt32(codes, 7, 11, bits, axis);
+      EXPECT_EQ(UnpackCompressedTensorInt32(packed, 7, 11, bits, axis), codes);
+      EXPECT_ANY_THROW(UnpackCompressedTensorInt32(packed.substr(1), 7, 11, bits, axis));
+    }
+    auto portable = PackQuantizationCodes(codes, bits);
+    EXPECT_EQ(UnpackQuantizationCodes(portable, codes.size(), bits), codes);
+  }
+  EXPECT_ANY_THROW(UnpackCompressedTensorInt32(std::string("\x80\0\0\0", 4), 1, 1, 1, 1));
+  EXPECT_ANY_THROW(UnpackQuantizationCodes(std::string("\x80", 1), 1, 1));
+  EXPECT_ANY_THROW(PackQuantizationCodes(std::string("\x02", 1), 2));
+  EXPECT_ANY_THROW(PackCompressedTensorInt32(std::string("\x02", 1), 1, 1, 2, 1));
+  EXPECT_ANY_THROW(PackCompressedTensorInt32("", std::numeric_limits<size_t>::max(), 2, 8, 1));
+  EXPECT_ANY_THROW(ValidateCompressedTensorAffine(std::string("\0", 1), 0, 0));
+  EXPECT_ANY_THROW(
+      ValidateCompressedTensorAffine(std::string("\x7f", 1), std::numeric_limits<float>::max(), 0));
+  EXPECT_NO_THROW(
+      ValidateCompressedTensorAffine(std::string("\0", 1), std::numeric_limits<float>::max(), 0));
+}
 
 namespace {
 

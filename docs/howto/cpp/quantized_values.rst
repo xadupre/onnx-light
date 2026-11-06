@@ -32,7 +32,11 @@ The dependency-light Python
 compressed-tensors metadata/support matrix and maps already-loaded weight arrays
 to self-contained encoded values consumable by ``DequantizeTensor``. Integer
 offset-binary INT32 checkpoint packing is distinct from portable affine packing;
-MX/NV adapters reuse the dedicated native codecs below. No PyTorch dependency
+the native ``PackCompressedTensorInt32`` and ``UnpackCompressedTensorInt32``
+functions convert both weight and zero-point packing axes without requantization.
+Portable code packing and affine overflow checks also run natively. The remaining
+checkpoint metadata, integer schema and import/export orchestration are still in
+Python; MX/NV adapters reuse the dedicated native codecs below. No PyTorch dependency
 or checkpoint-container loader is added to the C++ core. Unsupported formats,
 activation configurations and lossy parameter mappings are not silently replaced
 by portable profiles.

@@ -20,6 +20,33 @@ import_compressed_tensors_weights = compressed_tensors.import_compressed_tensors
 
 
 class TestCompressedTensors(ExtTestCase):
+    def test_native_integer_packing_validation(self):
+        runtime = quantization.runtime
+        for bits in range(1, 9):
+            codes = numpy.array(
+                [i % (1 << bits) - (1 << (bits - 1)) for i in range(77)], dtype=numpy.int8
+            ).reshape(7, 11)
+            for axis in (0, 1):
+                packed = runtime._pack_compressed_tensor_int32(codes.tobytes(), 7, 11, bits, axis)
+                self.assertEqual(
+                    runtime._unpack_compressed_tensor_int32(packed, 7, 11, bits, axis),
+                    codes.tobytes(),
+                )
+                with self.assertRaises(ValueError):
+                    runtime._unpack_compressed_tensor_int32(packed[:-1], 7, 11, bits, axis)
+            portable = runtime._pack_quantization_codes(codes.tobytes(), bits)
+            self.assertEqual(
+                runtime._unpack_quantization_codes(portable, codes.size, bits), codes.tobytes()
+            )
+        with self.assertRaisesRegex(ValueError, "padding"):
+            runtime._unpack_compressed_tensor_int32(b"\x80\0\0\0", 1, 1, 1, 1)
+        with self.assertRaisesRegex(ValueError, "padding"):
+            runtime._unpack_quantization_codes(b"\x80", 1, 1)
+        with self.assertRaisesRegex(ValueError, "range"):
+            runtime._pack_compressed_tensor_int32(b"\x02", 1, 1, 2, 1)
+        with self.assertRaisesRegex(ValueError, "overflow"):
+            runtime._validate_compressed_tensor_affine(b"\x7f", numpy.finfo(numpy.float32).max, 0)
+
     def integer_fixture(self):
         """Returns a source-derived cross-word asymmetric channel fixture."""
         return CompressedTensorsWeights(

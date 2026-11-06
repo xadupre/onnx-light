@@ -501,6 +501,28 @@ struct MatMulNBitsInputs {
   std::optional<TensorProto> zero_points;
 };
 
+/**
+ * Packs signed codes as portable little-endian bit streams, or unpacks them.
+ * The unpacker rejects nonzero padding and an incorrect byte extent.
+ * Callers must bound the input and logical code count before calling.
+ */
+std::string PackQuantizationCodes(std::string_view codes, uint32_t bits);
+std::string UnpackQuantizationCodes(std::string_view packed, size_t count, uint32_t bits);
+
+/**
+ * Converts signed codes to and from compressed-tensors offset-binary INT32
+ * words. The matrix is row-major and axis must be 0 or 1. Unpacking rejects
+ * incorrect extents and nonzero padding bits. Callers must bound the input
+ * and logical matrix size before calling.
+ */
+std::string PackCompressedTensorInt32(std::string_view codes, size_t rows, size_t columns,
+                                      uint32_t bits, uint32_t axis);
+std::string UnpackCompressedTensorInt32(std::string_view packed, size_t rows, size_t columns,
+                                        uint32_t bits, uint32_t axis);
+
+/** Rejects an affine block if its actual codes overflow FLOAT reconstruction. */
+void ValidateCompressedTensorAffine(std::string_view codes, float scale, int32_t zero_point);
+
 /** Extracts ORT input tensors without dequantizing, after validating the encoded layout. */
 MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
                                           const StructTypeCatalogue &catalogue = {});

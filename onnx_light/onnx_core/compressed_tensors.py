@@ -162,27 +162,13 @@ def _integer_plan(args, shape, profile=None, reconstruction_dtype=None):
 
 def _pack_codes(codes, bits):
     """Packs portable LSB-first codes without a floating-point conversion."""
-    data = bytearray((len(codes) * bits + 7) // 8)
-    mask = (1 << bits) - 1
-    for index, code in enumerate(codes):
-        value = (int(code) & mask) << ((index * bits) % 8)
-        byte = index * bits // 8
-        data[byte] |= value & 255
-        if value > 255:
-            data[byte + 1] |= value >> 8
-    return data
+    return quantization.runtime._pack_quantization_codes(codes.tobytes(), bits)
 
 
 def _unpack_codes(data, count, bits):
-    values = numpy.empty(count, dtype=numpy.int8)
-    for index in range(count):
-        byte, shift = divmod(index * bits, 8)
-        value = data[byte] >> shift
-        if shift + bits > 8:
-            value |= data[byte + 1] << (8 - shift)
-        value &= (1 << bits) - 1
-        values[index] = value - (1 << bits) if value >= (1 << (bits - 1)) else value
-    return values
+    return numpy.frombuffer(
+        quantization.runtime._unpack_quantization_codes(data, count, bits), dtype=numpy.int8
+    )
 
 
 def _dtype_metadata(args, scale, zero):
@@ -196,44 +182,28 @@ def _dtype_metadata(args, scale, zero):
 
 def _unpack_int32(packed, count, bits, axis=1):
     """Unpacks upstream offset-binary words, including cross-word codes."""
-    words = packed.T if axis == 0 else packed
-    result = numpy.empty((words.shape[0], count), dtype=numpy.int8)
-    remainder = count * bits % 32
-    for row_index, row in enumerate(words):
-        if remainder:
-            _require(
-                (int(row[-1]) & 0xFFFFFFFF) >> remainder == 0,
-                "nonzero int32 padding bits are unsupported.",
-            )
-        for index in range(count):
-            word, shift = divmod(index * bits, 32)
-            code = (int(row[word]) & 0xFFFFFFFF) >> shift
-            if shift + bits > 32:
-                code |= (int(row[word + 1]) & 0xFFFFFFFF) << (32 - shift)
-            result[row_index, index] = (code & ((1 << bits) - 1)) - (1 << (bits - 1))
-    return result.T if axis == 0 else result
+    shape = (count, packed.shape[1]) if axis == 0 else (packed.shape[0], count)
+    result = quantization.runtime._unpack_compressed_tensor_int32(
+        packed.astype(numpy.dtype("<i4"), copy=False).tobytes(), *shape, bits, axis
+    )
+    return numpy.frombuffer(result, dtype=numpy.int8).reshape(shape)
 
 
 def _pack_int32(codes, bits, axis=1):
-    values = codes.T if axis == 0 else codes
-    rows, columns = values.shape
-    result = numpy.zeros((rows, (columns * bits + 31) // 32), dtype=numpy.uint32)
-    for row_index, row in enumerate(values):
-        for index, code in enumerate(row):
-            word, shift = divmod(index * bits, 32)
-            value = int(code) + (1 << (bits - 1))
-            result[row_index, word] |= numpy.uint32((value << shift) & 0xFFFFFFFF)
-            if shift + bits > 32:
-                result[row_index, word + 1] |= numpy.uint32(value >> (32 - shift))
-    result = result.view(numpy.int32)
-    return numpy.ascontiguousarray(result.T if axis == 0 else result)
+    rows, columns = codes.shape
+    packed = quantization.runtime._pack_compressed_tensor_int32(
+        codes.tobytes(), rows, columns, bits, axis
+    )
+    shape = (
+        ((rows * bits + 31) // 32, columns) if axis == 0 else (rows, (columns * bits + 31) // 32)
+    )
+    return numpy.frombuffer(packed, dtype=numpy.dtype("<i4")).reshape(shape).astype(numpy.int32)
 
 
 def _finite_affine(codes, scale, zero):
-    distance = max(abs(int(codes.min()) - int(zero)), abs(int(codes.max()) - int(zero)))
-    with numpy.errstate(over="ignore"):
-        bound = numpy.float32(distance) * numpy.float32(scale)
-    _require(numpy.isfinite(bound), "affine codes/scales overflow FLOAT32 reconstruction.")
+    quantization.runtime._validate_compressed_tensor_affine(
+        codes.tobytes(), float(scale), int(zero)
+    )
 
 
 def _integer_import(args, tensors, max_bytes):

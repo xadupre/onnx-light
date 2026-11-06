@@ -1340,6 +1340,33 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              "Creates block defaults; requires supplied learned codebooks and transforms.");
   rt_mod.def("make_quantization_type", &core::runtime::MakeQuantizationType, nb::arg("plan"),
              "Returns a portable plan's StructTypeProto without requiring trained parameters.");
+  rt_mod.def("_pack_quantization_codes", [](nb::bytes codes, uint32_t bits) {
+    auto result = core::runtime::PackQuantizationCodes(
+        {static_cast<const char *>(codes.data()), codes.size()}, bits);
+    return nb::bytes(result.data(), result.size());
+  });
+  rt_mod.def("_unpack_quantization_codes", [](nb::bytes packed, size_t count, uint32_t bits) {
+    auto result = core::runtime::UnpackQuantizationCodes(
+        {static_cast<const char *>(packed.data()), packed.size()}, count, bits);
+    return nb::bytes(result.data(), result.size());
+  });
+  rt_mod.def("_pack_compressed_tensor_int32", [](nb::bytes codes, size_t rows, size_t columns,
+                                                 uint32_t bits, uint32_t axis) {
+    auto result = core::runtime::PackCompressedTensorInt32(
+        {static_cast<const char *>(codes.data()), codes.size()}, rows, columns, bits, axis);
+    return nb::bytes(result.data(), result.size());
+  });
+  rt_mod.def("_unpack_compressed_tensor_int32", [](nb::bytes packed, size_t rows, size_t columns,
+                                                   uint32_t bits, uint32_t axis) {
+    auto result = core::runtime::UnpackCompressedTensorInt32(
+        {static_cast<const char *>(packed.data()), packed.size()}, rows, columns, bits, axis);
+    return nb::bytes(result.data(), result.size());
+  });
+  rt_mod.def("_validate_compressed_tensor_affine",
+             [](nb::bytes codes, float scale, int32_t zero_point) {
+               core::runtime::ValidateCompressedTensorAffine(
+                   {static_cast<const char *>(codes.data()), codes.size()}, scale, zero_point);
+             });
   rt_mod.def("make_matmul_nbits_plan", &core::runtime::MakeMatMulNBitsPlan,
              nb::arg("format").noconvert(), nb::arg("k"), nb::arg("n"), nb::arg("block_size") = 128,
              "Creates an ORT-compatible MatMulNBits input-packing plan for [K,N] weights.");

@@ -5,6 +5,8 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
@@ -104,14 +106,155 @@ bool HasIntAttribute(const NodeProto &node, const char *name, int64_t expected) 
          attribute->i() == expected;
 }
 
+bool IsGeluScalar(core::builder::GraphGraph &graph, const std::string &name, double expected) {
+  if (!graph.HasType(name))
+    return false;
+  const auto *scope = graph.GetConstantScope(name);
+  if (scope == nullptr ||
+      std::any_of(scope->Builder().Inputs().begin(), scope->Builder().Inputs().end(),
+                  [&](const ValueInfoProto &input) { return input.name().value() == name; }))
+    return false;
+  const auto type = graph.GetType(name);
+  if (type == TensorType::kFloat) {
+    expected = static_cast<float>(expected);
+  } else if (type == TensorType::kFloat16) {
+    expected = core::runtime::Float16BitsToFloat(
+        core::runtime::FloatToFloat16Bits(static_cast<float>(expected)));
+  } else if (type != TensorType::kDouble) {
+    return false;
+  }
+  const TensorProto *tensor = graph.GetComputedConstant(name);
+  if (tensor == nullptr || !tensor->external_data().empty() ||
+      tensor->data_type() != core::symbolic::TensorTypeToDataType(type))
+    return false;
+  const size_t typed_count = type == TensorType::kFloat
+                                 ? tensor->float_data().size()
+                                 : (type == TensorType::kDouble ? tensor->double_data().size()
+                                                                : tensor->int32_data().size());
+  const size_t width = type == TensorType::kFloat ? 4 : (type == TensorType::kDouble ? 8 : 2);
+  if (tensor->is_raw_data() ? tensor->ref_raw_data().size() != width || typed_count != 0
+                            : typed_count != 1)
+    return false;
+  const NodeProto *constant = scope->NodeBefore(name);
+  if (constant != nullptr &&
+      (!IsNode(constant, "Constant", 0) || !constant->overload().empty() ||
+       !constant->device_configurations().empty() || constant->attribute_size() != 1 ||
+       !constant->attribute()[0].ref_attr_name().empty()))
+    return false;
+  return IsScalar(graph, name, expected);
+}
+
+const std::string *HalfScaledInput(core::builder::GraphGraph &graph, const NodeProto *node) {
+  if (IsNode(node, "Div", 2) && IsGeluScalar(graph, node->input()[1].value(), 2.0))
+    return &node->input()[0].value();
+  if (IsNode(node, "Mul", 2)) {
+    for (int index = 0; index < 2; ++index)
+      if (IsGeluScalar(graph, node->input()[1 - index].value(), 0.5))
+        return &node->input()[index].value();
+  }
+  return nullptr;
+}
+
+const std::string *ErfScaledInput(core::builder::GraphGraph &graph, const NodeProto *node) {
+  if (IsNode(node, "Div", 2) && (IsGeluScalar(graph, node->input()[1].value(), std::sqrt(2.0)) ||
+                                 IsGeluScalar(graph, node->input()[1].value(), std::sqrt(2.0f)) ||
+                                 IsGeluScalar(graph, node->input()[1].value(), 1.4142099618911743)))
+    return &node->input()[0].value();
+  if (IsNode(node, "Mul", 2)) {
+    for (int index = 0; index < 2; ++index)
+      if (IsGeluScalar(graph, node->input()[1 - index].value(), 1.0 / std::sqrt(2.0)))
+        return &node->input()[index].value();
+  }
+  return nullptr;
+}
+
+std::vector<const NodeProto *> ExactGeluNodes(core::builder::GraphGraph &graph,
+                                              const NodeProto &candidate, const NodeProto *add,
+                                              const NodeProto *first_mul, const std::string &x) {
+  if (!IsNode(add, "Add", 2) || !graph.HasType(x) || !graph.HasShape(x))
+    return {};
+  const auto type = graph.GetType(x);
+  if (type != TensorType::kFloat && type != TensorType::kFloat16 && type != TensorType::kDouble)
+    return {};
+  for (int index = 0; index < 2; ++index) {
+    const NodeProto *erf = graph.NodeBefore(add->input()[index].value());
+    if (!IsNode(erf, "Erf", 1) || !IsGeluScalar(graph, add->input()[1 - index].value(), 1.0))
+      continue;
+    const NodeProto *scaled = graph.NodeBefore(erf->input()[0].value());
+    const std::string *scaled_input = ErfScaledInput(graph, scaled);
+    if (scaled_input == nullptr || *scaled_input != x)
+      continue;
+    const std::vector<const NodeProto *> nodes{scaled, erf, add, first_mul, &candidate};
+    bool safe = true;
+    for (const auto *node : nodes) {
+      if (!node->overload().empty() || !node->attribute().empty() ||
+          !node->device_configurations().empty() ||
+          (node != &candidate && !node->metadata_props().empty()))
+        safe = false;
+      for (const auto &input : node->input())
+        safe &= graph.HasType(input.value()) && graph.GetType(input.value()) == type;
+      const auto &output = node->output()[0].value();
+      safe &= graph.HasType(output) && graph.GetType(output) == type && graph.HasShape(output) &&
+              graph.GetShape(output).Shape() == graph.GetShape(x).Shape();
+    }
+    const bool add_to_first =
+        std::any_of(first_mul->input().begin(), first_mul->input().end(),
+                    [&](const auto &input) { return input.value() == add->output()[0].value(); });
+    if (safe && HasOnlyConsumers(graph, *scaled, {erf}) && HasOnlyConsumers(graph, *erf, {add}) &&
+        HasOnlyConsumers(graph, *add, {add_to_first ? first_mul : &candidate}) &&
+        HasOnlyConsumers(graph, *first_mul, {&candidate}))
+      return nodes;
+  }
+  return {};
+}
+
+std::vector<const NodeProto *> MatchExactGelu(core::builder::GraphGraph &graph,
+                                              const NodeProto &candidate) {
+  if (!IsNode(&candidate, "Mul", 2) && !IsNode(&candidate, "Div", 2))
+    return {};
+  if (const auto *input = HalfScaledInput(graph, &candidate)) {
+    const NodeProto *mul = graph.NodeBefore(*input);
+    if (IsNode(mul, "Mul", 2)) {
+      for (int index = 0; index < 2; ++index) {
+        auto nodes = ExactGeluNodes(graph, candidate, graph.NodeBefore(mul->input()[index].value()),
+                                    mul, mul->input()[1 - index].value());
+        if (!nodes.empty())
+          return nodes;
+      }
+    }
+  }
+  if (IsNode(&candidate, "Mul", 2)) {
+    for (int index = 0; index < 2; ++index) {
+      const NodeProto *half = graph.NodeBefore(candidate.input()[index].value());
+      const std::string *input = HalfScaledInput(graph, half);
+      if (input == nullptr)
+        continue;
+      auto nodes = ExactGeluNodes(
+          graph, candidate, graph.NodeBefore(candidate.input()[1 - index].value()), half, *input);
+      if (!nodes.empty())
+        return nodes;
+      nodes = ExactGeluNodes(graph, candidate, graph.NodeBefore(*input), half,
+                             candidate.input()[1 - index].value());
+      if (!nodes.empty())
+        return nodes;
+    }
+  }
+  return {};
+}
+
 } // namespace
 
-std::set<std::string> GeluPattern::FastOpType() const { return {"Mul"}; }
+std::set<std::string> GeluPattern::FastOpType() const { return {"Mul", "Div"}; }
 
 core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
   if (!MainOpsetAtLeast(graph, min_opset_)) {
     return NoMatch(candidate, "the default-domain opset is below the configured minimum");
+  }
+  if (domain_.empty() && graph.Builder().OpsetVersion("") >= 20) {
+    auto exact = MatchExactGelu(graph, candidate);
+    if (!exact.empty())
+      return core::builder::MatchResult{this, std::move(exact), &candidate};
   }
   if (!IsDefaultOp(candidate, "Mul") || candidate.input_size() != 2 ||
       candidate.output_size() != 1) {
@@ -159,15 +302,29 @@ core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
 utils::RepeatedProtoField<NodeProto>
 GeluPattern::Apply(core::builder::GraphGraph &graph,
                    const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 8 || nodes[0] == nullptr || nodes[7] == nullptr) {
-    throw BuilderError("GeluPattern::Apply expects the eight-node tanh Gelu decomposition.");
+  if ((nodes.size() != 5 && nodes.size() != 8) ||
+      std::any_of(nodes.begin(), nodes.end(), [](const auto *node) { return node == nullptr; })) {
+    throw BuilderError("GeluPattern::Apply expects an exact or tanh Gelu decomposition.");
   }
-  const core::builder::MatchResult verified = Match(graph, *nodes[7]);
+  const core::builder::MatchResult verified = Match(graph, *nodes.back());
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError("GeluPattern::Apply received an unsafe or inconsistent match.");
   }
+  const NodeProto &root = *nodes.back();
+  if (nodes.size() == 5) {
+    NodeProto replacement = root;
+    replacement.set_op_type("Gelu");
+    replacement.set_domain("");
+    if (!root.name().empty())
+      replacement.set_name("GeluPattern--" + root.name().value());
+    replacement.clr_input();
+    replacement.add_input(*ErfScaledInput(graph, nodes[0]));
+    AddAttribute<std::string>(replacement, "approximate", "none");
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(std::move(replacement));
+    return replacements;
+  }
   const NodeProto &power = *nodes[0];
-  const NodeProto &root = *nodes[7];
   NodeProto replacement =
       MakeNode("Gelu", {power.input()[0].value()}, {root.output()[0].value()}, domain_.c_str(),
                ("GeluPattern--" + root.name().value()).c_str());

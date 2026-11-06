@@ -342,6 +342,11 @@ ComputePeakMemoryAttention(Device, const NodeProto &node,
   if (input_shapes.size() < 3) {
     return core::shapes::UnknownPeakMemory("", "Attention");
   }
+  for (int slot = 3; slot < std::min(node.input_size(), 6); ++slot) {
+    if (!node.input(slot).empty() &&
+        (static_cast<size_t>(slot) >= input_shapes.size() || input_shapes[slot].Empty()))
+      return core::shapes::UnknownPeakMemory("", "Attention");
+  }
   const SymShape &q_shape = input_shapes[0];
   const SymShape &k_shape = input_shapes[1];
   const bool packed = q_shape.Rank() == 3;

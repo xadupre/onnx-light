@@ -22,27 +22,37 @@ class TestPeakMemoryBindings(ExtTestCase):
         q = si.SymShape([2, 4, 8, 16])
         k = si.SymShape([2, 4, 32, 16])
         v = si.SymShape([2, 4, 32, 16])
-        # batch * q_num_heads * q_seq * kv_seq * 4 bytes.
+        # Shape-only calls conservatively include all optional output staging.
         estimate = si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k, v])
         self.assertIsInstance(estimate, si.PeakMemoryEstimate)
         self.assertIsInstance(estimate.worst_case, si.SymDim)
-        self.assertEqual(estimate.worst_case.value(), 2 * 4 * 8 * 32 * 4)
-        self.assertEqual(estimate.average_case.value(), estimate.worst_case.value())
+        self.assertEqual(estimate.worst_case.value(), 82944)
+        self.assertIsNone(estimate.average_case)
 
     def test_compute_peak_memory_preserves_symbolic_dimensions(self):
         q = si.SymShape(["N", 4, 8, 16])
-        k = si.SymShape([2, 4, 32, 16])
-        estimate = si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k])
-        self.assertEqual(estimate.worst_case.value(), "4096*N")
-        self.assertEqual(estimate.average_case.value(), estimate.worst_case.value())
+        k = si.SymShape(["N", 4, 32, 16])
+        v = si.SymShape(["N", 4, 32, 16])
+        estimate = si.compute_peak_memory("ai.onnx", "Attention", si.Device.kCPU, [q, k, v])
+        self.assertEqual(estimate.worst_case.value(), "41472*N")
+        self.assertIsNone(estimate.average_case)
 
     def test_compute_peak_memory_empty_domain(self):
         q = si.SymShape([1, 2, 4, 8])
         k = si.SymShape([1, 2, 16, 8])
+        v = si.SymShape([1, 2, 16, 8])
         self.assertEqual(
-            si.compute_peak_memory("", "Attention", si.Device.kCPU, [q, k]).worst_case.value(),
-            1 * 2 * 4 * 16 * 4,
+            si.compute_peak_memory("", "Attention", si.Device.kCPU, [q, k, v]).worst_case.value(),
+            5248,
         )
+
+    def test_compute_peak_memory_missing_value_shape_is_unknown(self):
+        q = si.SymShape([1, 2, 4, 8])
+        k = si.SymShape([1, 2, 16, 8])
+        estimate = si.compute_peak_memory("", "Attention", si.Device.kCPU, [q, k])
+        self.assertIsInstance(estimate.worst_case.value(), str)
+        self.assertIn("peak_memory_max_", estimate.worst_case.value())
+        self.assertIsNone(estimate.average_case)
 
     def test_compute_peak_memory_unregistered_defaults_to_zero(self):
         q = si.SymShape([2, 4, 8, 16])
@@ -104,11 +114,11 @@ class TestPeakMemoryBindings(ExtTestCase):
 
         meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
         self.assertIn(si.NODE_PEAK_MEMORY_KEY, meta)
-        # batch=2, heads=4, q_seq=8, kv_seq=32, float32=4 bytes
-        expected = 2 * 4 * 8 * 32 * 4
+        # Only Y is declared: no optional cache or qk staging.
+        expected = 41984
         self.assertEqual(int(meta[si.NODE_PEAK_MEMORY_KEY]), expected)
         self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], str(expected))
-        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], str(expected))
+        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
 
     def test_write_peak_memory_refreshes_symbolic_estimates_and_concrete_hint(self):
         """Preserves symbolic bounds and removes stale hints and averages."""
@@ -132,8 +142,8 @@ class TestPeakMemoryBindings(ExtTestCase):
         ctx.set("Q", si.SymTensor(onnxl.TensorProto.FLOAT, ["N", 4, 8, 16]))
         si.write_peak_memory_to_metadata(ctx, graph)
         meta = {kv.key: kv.value for kv in graph.node[0].metadata_props}
-        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "4096*N")
-        self.assertEqual(meta[si.NODE_PEAK_MEMORY_AVERAGE_KEY], "4096*N")
+        self.assertEqual(meta[si.NODE_PEAK_MEMORY_MAX_KEY], "4608*N+32768")
+        self.assertNotIn(si.NODE_PEAK_MEMORY_AVERAGE_KEY, meta)
         self.assertNotIn(si.NODE_PEAK_MEMORY_KEY, meta)
         graph.node[0].op_type = "UnregisteredPeakMemory"
         si.write_peak_memory_to_metadata(ctx, graph)

@@ -29,6 +29,112 @@ constexpr std::array<int32_t, 3> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
     static_cast<int32_t>(DataType::BFLOAT16)};
 
+// Retains FLOAT32 precision with a separate exponent for overflowing finite-input rows.
+struct ExtendedFloat {
+  float mantissa = 0.0f;
+  int exponent = 0;
+
+  static ExtendedFloat Normalize(float value, int exponent = 0) {
+    if (value == 0.0f)
+      return {};
+    int adjustment = 0;
+    const float mantissa = std::frexp(value, &adjustment);
+    return {mantissa, exponent + adjustment};
+  }
+
+  ExtendedFloat Add(ExtendedFloat other) const {
+    if (mantissa == 0.0f)
+      return other;
+    if (other.mantissa == 0.0f)
+      return *this;
+    if (exponent < other.exponent)
+      return other.Add(*this);
+    return Normalize(mantissa + std::scalbn(other.mantissa, other.exponent - exponent), exponent);
+  }
+
+  ExtendedFloat Subtract(ExtendedFloat other) const {
+    return Add({-other.mantissa, other.exponent});
+  }
+
+  ExtendedFloat Multiply(ExtendedFloat other) const {
+    return Normalize(mantissa * other.mantissa, exponent + other.exponent);
+  }
+
+  ExtendedFloat Divide(ExtendedFloat other) const {
+    return Normalize(mantissa / other.mantissa, exponent - other.exponent);
+  }
+
+  float ToFloat() const { return std::scalbn(mantissa, exponent); }
+};
+
+ExtendedFloat ExtendedDotProduct(const float *q, const float *k, int64_t width) {
+  ExtendedFloat sum;
+  for (int64_t d = 0; d < width; ++d)
+    sum = sum.Add(ExtendedFloat::Normalize(q[d]).Multiply(ExtendedFloat::Normalize(k[d])));
+  return sum;
+}
+
+template <typename Mask>
+bool RecomputeCenteredAttentionScores(const float *q, const float *k, int64_t width, int64_t length,
+                                      float scale, float softcap, float *scores, float *qk,
+                                      int output_mode, const Mask &mask) {
+  // Genuine non-finite inputs keep the ordinary IEEE propagation path.
+  if (!std::isfinite(scale) || !std::isfinite(softcap))
+    return false;
+  for (int64_t d = 0; d < width; ++d)
+    if (!std::isfinite(q[d]))
+      return false;
+  for (int64_t j = 0; j < length; ++j) {
+    const float bias = mask(j);
+    if (!std::isfinite(bias) && bias != -std::numeric_limits<float>::infinity())
+      return false;
+    for (int64_t d = 0; d < width; ++d)
+      if (!std::isfinite(k[j * width + d]))
+        return false;
+  }
+
+  const auto scaled_score = [&](int64_t j, float *output) {
+    auto score =
+        ExtendedDotProduct(q, k + j * width, width).Multiply(ExtendedFloat::Normalize(scale));
+    if (output != nullptr && output_mode == 0)
+      output[j] = score.ToFloat();
+    if (softcap > 0.0f)
+      score = ExtendedFloat::Normalize(
+          softcap * std::tanh(score.Divide(ExtendedFloat::Normalize(softcap)).ToFloat()));
+    if (output != nullptr && output_mode == 1)
+      output[j] = score.ToFloat();
+    return score;
+  };
+
+  ExtendedFloat maximum;
+  bool has_maximum = false;
+  for (int64_t j = 0; j < length; ++j) {
+    auto score = scaled_score(j, qk);
+    const float bias = mask(j);
+    if (std::isfinite(bias)) {
+      score = score.Add(ExtendedFloat::Normalize(bias));
+      scores[j] = score.ToFloat();
+      if (!has_maximum || score.Subtract(maximum).mantissa > 0.0f) {
+        maximum = score;
+        has_maximum = true;
+      }
+    } else {
+      scores[j] = -std::numeric_limits<float>::infinity();
+    }
+    if (qk != nullptr && output_mode == 2)
+      qk[j] = scores[j];
+  }
+
+  // Recomputes instead of allocating extended scores, and centers before narrowing.
+  for (int64_t j = 0; j < length; ++j) {
+    const float bias = mask(j);
+    if (std::isfinite(bias))
+      scores[j] =
+          scaled_score(j, nullptr).Add(ExtendedFloat::Normalize(bias)).Subtract(maximum).ToFloat();
+  }
+  return true;
+}
+
 // Validates that ``t`` is a rank-4 tensor whose element type is supported
 // by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
 // identified by ``label`` for clearer error messages.
@@ -470,13 +576,27 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
 
             for (int64_t i = 0; i < q_seq_len; ++i) {
               bool row_fully_masked = true;
+              bool needs_stable_row = false;
               float max_score = -std::numeric_limits<float>::infinity();
+              const auto mask_value = [&](int64_t j) {
+                float bias = MaskValuePadded(attn_mask, b, h, i, j);
+                if (attrs.is_causal && j > i + causal_offset)
+                  bias = -std::numeric_limits<float>::infinity();
+                const int64_t window_diff = i + causal_offset - j;
+                if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
+                    (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size))
+                  bias = -std::numeric_limits<float>::infinity();
+                if (nonpad_lengths != nullptr && j >= nonpad_lengths[b])
+                  bias = -std::numeric_limits<float>::infinity();
+                return bias;
+              };
               for (int64_t j = 0; j < total_kv_seq_len; ++j) {
                 float s = 0.0f;
                 for (int64_t d = 0; d < head_size; ++d) {
                   s += Qbh[i * head_size + d] * Kbh[j * head_size + d];
                 }
                 s *= scale;
+                needs_stable_row |= !std::isfinite(s);
                 if (QKbh != nullptr && attrs.qk_matmul_output_mode == 0)
                   QKbh[i * total_kv_seq_len + j] = s;
                 // Softcap precedes the additive mask so masked positions remain -inf.
@@ -485,25 +605,10 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                 if (QKbh != nullptr && attrs.qk_matmul_output_mode == 1)
                   QKbh[i * total_kv_seq_len + j] = s;
 
-                float b_val = MaskValuePadded(attn_mask, b, h, i, j);
-                if (attrs.is_causal) {
-                  // Bottom-right / offset-aware causal mask: key ``j`` is masked for
-                  // query ``i`` iff ``j > i + causal_offset``.
-                  if (j > i + causal_offset) {
-                    b_val = -std::numeric_limits<float>::infinity();
-                  }
-                }
-                const int64_t window_diff = i + causal_offset - j;
-                if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
-                    (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size)) {
-                  b_val = -std::numeric_limits<float>::infinity();
-                }
-                if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
-                  // Padding position: suppressed regardless of the supplied mask.
-                  b_val = -std::numeric_limits<float>::infinity();
-                }
+                const float b_val = mask_value(j);
                 row_fully_masked &= std::isinf(b_val) && b_val < 0.0f;
                 s += b_val;
+                needs_stable_row |= std::isfinite(b_val) && !std::isfinite(s);
                 scores[static_cast<size_t>(j)] = s;
                 if (QKbh != nullptr && attrs.qk_matmul_output_mode == 2)
                   QKbh[i * total_kv_seq_len + j] = s;
@@ -511,11 +616,20 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                   max_score = s;
                 }
               }
+              const bool centered =
+                  needs_stable_row && RecomputeCenteredAttentionScores(
+                                          head_size != 0 ? Qbh + i * head_size : Qbh, Kbh,
+                                          head_size, total_kv_seq_len, scale, attrs.softcap, scores,
+                                          QKbh != nullptr ? QKbh + i * total_kv_seq_len : nullptr,
+                                          attrs.qk_matmul_output_mode, mask_value);
               // Softmax over last axis.
               float denom = 0.0f;
               for (int64_t j = 0; j < total_kv_seq_len; ++j) {
                 const float e =
-                    row_fully_masked ? 0.0f : std::exp(scores[static_cast<size_t>(j)] - max_score);
+                    row_fully_masked
+                        ? 0.0f
+                        : std::exp(centered ? scores[static_cast<size_t>(j)]
+                                            : scores[static_cast<size_t>(j)] - max_score);
                 scores[static_cast<size_t>(j)] = e;
                 denom += e;
               }

@@ -1359,13 +1359,17 @@ namespace {
 
 KernelContext AttentionKernelContext() { return KernelContext(DefaultOpset(23)); }
 
-Tensor AttentionTensor(const Shape &shape, float value, int32_t dtype) {
-  const std::vector<float> values(static_cast<size_t>(shape.product()), value);
+Tensor AttentionTensor(const Shape &shape, const std::vector<float> &values, int32_t dtype) {
   if (dtype == DataType::FLOAT16)
     return core::runtime::MakeFloat16Tensor("", shape, values);
   if (dtype == DataType::BFLOAT16)
     return core::runtime::MakeBfloat16Tensor("", shape, values);
   return Tensor::FromFloat("", shape, values);
+}
+
+Tensor AttentionTensor(const Shape &shape, float value, int32_t dtype) {
+  return AttentionTensor(shape, std::vector<float>(static_cast<size_t>(shape.product()), value),
+                         dtype);
 }
 
 core::symbolic::SymShape AttentionShape(const Tensor &tensor) {
@@ -1452,6 +1456,165 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   const double p1 = e1 / (e0 + e1);
   EXPECT_NEAR(r.Y.AsFloat()[0], static_cast<float>(p0 * 1.0 + p1 * 3.0), 1e-6);
   EXPECT_NEAR(r.Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
+}
+
+TEST(KernelClass, AttentionRetriesFiniteOverflowWithoutAdditionalScratch) {
+  for (int32_t dtype : {DataType::FLOAT, DataType::FLOAT16, DataType::BFLOAT16}) {
+    const float magnitude = dtype == DataType::FLOAT16 ? 65504.0f : 1e20f;
+    const Tensor q = AttentionTensor({1, 1, 1, 2}, {magnitude, magnitude}, dtype);
+    const Tensor k = AttentionTensor({1, 1, 2, 2}, {magnitude, -magnitude, 0.0f, 0.0f}, dtype);
+    const Tensor v = AttentionTensor({1, 1, 2, 1}, {2.0f, 4.0f}, dtype);
+    for (float softcap : {0.0f, 1.0f}) {
+      for (int mode = 0; mode < 4; ++mode) {
+        SCOPED_TRACE(testing::Message() << dtype << "," << softcap << "," << mode);
+        NodeProto node;
+        node.set_op_type("Attention");
+        for (const auto *name : {"q", "k", "v"})
+          node.add_input(name);
+        for (const auto *name : {"y", "", "", "qk"})
+          node.add_output(name);
+        SimpleRawBufferAllocator execution_alloc(32), io_alloc(8);
+        RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                               .io_allocator = &io_alloc});
+        rt.set_output_slot_io_roles({true, true, true, true});
+        Attention attention{AttentionKernelContext()};
+        attention.set_node(node);
+        Attention::Attributes attrs;
+        attrs.has_scale = true;
+        attrs.scale = 1.0f;
+        attrs.softcap = softcap;
+        attrs.qk_matmul_output_mode = mode;
+        const auto result = attention(q, k, v, attrs, nullptr, nullptr, nullptr, nullptr, &rt);
+        const auto y = core::runtime::PromoteToFloat32(result.Y);
+        const auto qk = core::runtime::PromoteToFloat32(result.qk_matmul_output);
+        EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.0f);
+        EXPECT_FLOAT_EQ(qk.AsFloat()[0], mode == 3 ? 0.5f : 0.0f);
+        EXPECT_FLOAT_EQ(qk.AsFloat()[1], mode == 3 ? 0.5f : 0.0f);
+        const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryAttention(
+            core::symbolic::Device::kCPU, node,
+            {AttentionShape(q), AttentionShape(k), AttentionShape(v)});
+        EXPECT_LE(execution_alloc.PeakAllocatedSize(),
+                  static_cast<size_t>(estimate.worst_case.AsInt()));
+        if (dtype == DataType::FLOAT) {
+          EXPECT_EQ(execution_alloc.PeakAllocatedSize(), 2 * sizeof(float));
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelClass, AttentionCentersExtendedScoresBeforeNarrowing) {
+  struct Case {
+    std::vector<float> q, k, mask;
+    float scale, probability;
+  };
+  const std::vector<Case> cases = {{{1e20f}, {1e20f, 5e19f}, {}, 1.0f, 1.0f},
+                                   {{1e20f}, {-5e19f, -1e20f}, {}, 1.0f, 1.0f},
+                                   {{1e20f}, {1e20f, 1e20f}, {}, 1.0f, 0.5f},
+                                   {{1e20f}, {1e20f, 5e19f}, {}, 0.0f, 0.5f},
+                                   {{3e38f}, {1.0f, 1.0f}, {3e38f, 0.0f}, 1.0f, 1.0f},
+                                   {{3e38f}, {-1.0f, -1.0f}, {-3e38f, 0.0f}, 1.0f, 0.0f},
+                                   {{3e38f, 3e38f}, {1.0f, 1.0f, 0.0f, 1.0f}, {}, 1.0f, 1.0f},
+                                   {{3e38f}, {1.0f, 0.5f}, {}, 2.0f, 1.0f}};
+  const Attention attention{AttentionKernelContext()};
+  for (size_t index = 0; index < cases.size(); ++index) {
+    SCOPED_TRACE(index);
+    const auto &test = cases[index];
+    const int64_t width = static_cast<int64_t>(test.q.size());
+    const Tensor q = Tensor::FromFloat("", {1, 1, 1, width}, test.q);
+    const Tensor k = Tensor::FromFloat("", {1, 1, 2, width}, test.k);
+    const Tensor v = Tensor::FromFloat("", {1, 1, 2, 1}, {2.0f, 4.0f});
+    Tensor mask;
+    if (!test.mask.empty())
+      mask = Tensor::FromFloat("", {1, 1, 1, 2}, test.mask);
+    Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = test.scale;
+    attrs.qk_matmul_output_mode = 3;
+    const auto result = attention(q, k, v, attrs, test.mask.empty() ? nullptr : &mask);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[0], test.probability);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[1], 1.0f - test.probability);
+    EXPECT_FLOAT_EQ(result.Y.AsFloat()[0], 4.0f - 2.0f * test.probability);
+  }
+}
+
+TEST(KernelClass, AttentionOverflowRetryKeepsResidualAfterCancellation) {
+  const Tensor q = Tensor::FromFloat("", {1, 1, 1, 3}, {1e20f, 1e20f, 1e-20f});
+  const Tensor k = Tensor::FromFloat("", {1, 1, 2, 3}, {1e20f, -1e20f, 1e20f, 0.0f, 0.0f, 0.0f});
+  const Tensor v = Tensor::FromFloat("", {1, 1, 2, 1}, {2.0f, 4.0f});
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  attrs.softcap = 1.0f;
+  for (int mode = 0; mode < 4; ++mode) {
+    attrs.qk_matmul_output_mode = mode;
+    const auto result = attention(q, k, v, attrs);
+    const float capped = std::tanh(1.0f);
+    const float probability = std::exp(capped) / (std::exp(capped) + 1.0f);
+    EXPECT_NEAR(result.Y.AsFloat()[0], 4.0f - 2.0f * probability, 1e-6f);
+    EXPECT_NEAR(result.qk_matmul_output.AsFloat()[0],
+                mode == 0 ? 1.0f : (mode == 3 ? probability : capped), 1e-6f);
+  }
+}
+
+TEST(KernelClass, AttentionOverflowRetryAppliesSoftcapBeforeNarrowing) {
+  const Tensor q = Tensor::FromFloat("", {1, 1, 1, 1}, {1e20f});
+  const Tensor k = Tensor::FromFloat("", {1, 1, 2, 1}, {1e20f, -1e20f});
+  const Tensor v = Tensor::FromFloat("", {1, 1, 2, 1}, {2.0f, 4.0f});
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  for (float softcap : {1e-30f, 1.0f, 3e38f}) {
+    SCOPED_TRACE(softcap);
+    attrs.softcap = softcap;
+    attrs.qk_matmul_output_mode = 1;
+    const auto result = attention(q, k, v, attrs);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[0], softcap);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[1], -softcap);
+    const float probability = 1.0f / (1.0f + std::exp(-2.0f * softcap));
+    EXPECT_NEAR(result.Y.AsFloat()[0], 4.0f - 2.0f * probability, 1e-6f);
+  }
+}
+
+TEST(KernelClass, AttentionOverflowRetryPreservesMasksAndNonFiniteInputs) {
+  const float infinity = std::numeric_limits<float>::infinity();
+  const Tensor q = Tensor::FromFloat("", {1, 1, 1, 1}, {1e20f});
+  const Tensor k = Tensor::FromFloat("", {1, 1, 2, 1}, {1e20f, 1e20f});
+  const Tensor v = Tensor::FromFloat("", {1, 1, 2, 1}, {2.0f, 4.0f});
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  attrs.qk_matmul_output_mode = 3;
+  for (bool fully_masked : {false, true}) {
+    const Tensor mask =
+        Tensor::FromFloat("", {1, 1, 1, 2}, {-infinity, fully_masked ? -infinity : 0.0f});
+    const auto result = attention(q, k, v, attrs, &mask);
+    EXPECT_FLOAT_EQ(result.Y.AsFloat()[0], fully_masked ? 0.0f : 4.0f);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[0], 0.0f);
+    EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[1], fully_masked ? 0.0f : 1.0f);
+  }
+  attrs.is_causal = true;
+  EXPECT_FLOAT_EQ(attention(q, k, v, attrs).Y.AsFloat()[0], 2.0f);
+  attrs.is_causal = false;
+  attrs.right_window_size = 0;
+  EXPECT_FLOAT_EQ(attention(q, k, v, attrs).Y.AsFloat()[0], 2.0f);
+  attrs.right_window_size = -1;
+  const Tensor nonpad = Tensor::FromInt64("", {1}, {1});
+  EXPECT_FLOAT_EQ(attention(q, k, v, attrs, nullptr, nullptr, nullptr, &nonpad).Y.AsFloat()[0],
+                  2.0f);
+  attrs.softcap = 1.0f;
+  for (float bad : {std::numeric_limits<float>::quiet_NaN(), infinity, -infinity}) {
+    const Tensor nonfinite_q = Tensor::FromFloat("", {1, 1, 1, 1}, {bad});
+    const Tensor zero_k = Tensor::FromFloat("", {1, 1, 2, 1}, {1.0f, 0.0f});
+    EXPECT_TRUE(std::isnan(attention(nonfinite_q, zero_k, v, attrs).Y.AsFloat()[0]));
+    const Tensor mask = Tensor::FromFloat("", {1, 1, 1, 2}, {bad, 0.0f});
+    if (bad != -infinity) {
+      EXPECT_TRUE(std::isnan(attention(q, k, v, attrs, &mask).Y.AsFloat()[0]));
+    }
+  }
 }
 
 TEST(KernelClass, AttentionHalfPrecisionKeepsOmittedOutputsOutOfIOArena) {

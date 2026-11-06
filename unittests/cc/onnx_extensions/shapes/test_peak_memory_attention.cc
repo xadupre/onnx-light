@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <limits>
 #include <stdexcept>
 
@@ -161,6 +162,27 @@ TEST(ComputePeakMemoryAttention, MissingShapesAndInvalidPackedHeads) {
   node.mutable_attribute(0)->set_i(0);
   EXPECT_THROW(Estimate(node, std::vector<SymShape>(3, SymShape({1, 1, 1}))),
                std::invalid_argument);
+}
+
+TEST(ComputePeakMemoryAttention, NamedOptionalInputsRequireNonemptyShapes) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  const std::array<const char *, 3> names = {"mask", "past_key", "past_value"};
+  for (int slot = 3; slot < 6; ++slot) {
+    SCOPED_TRACE(slot);
+    auto node = AttentionNode();
+    while (node.input_size() <= slot)
+      node.add_input("");
+    *node.mutable_input(slot) = names[slot - 3];
+    std::vector<SymShape> inputs(3, SymShape({1, 1, 1, 1}));
+    const auto unknown = core::shapes::UnknownPeakMemory("", "Attention");
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs), unknown);
+    inputs.resize(slot + 1);
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs), unknown);
+    *node.mutable_input(slot) = "";
+    EXPECT_EQ(Estimate(node, inputs).worst_case.AsInt(), 20);
+  }
 }
 
 TEST(ComputePeakMemoryAttention, ShapeAnalysisAccountsForFinalOutputsSeparately) {

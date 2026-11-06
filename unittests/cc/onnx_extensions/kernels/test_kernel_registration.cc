@@ -221,3 +221,38 @@ TEST(KernelRegistration, ValidationAppliesToResolvedEstimatesAndFactories) {
   auto factory = MakeKernelFactory(registration);
   EXPECT_THROW(factory(graph.node(0), rt, KernelContext{}), std::invalid_argument);
 }
+
+TEST(KernelRegistration, AttentionSessionsRejectIncompleteNamedOptionalShapes) {
+  for (const auto *op : {"Attention", "LinearAttention"}) {
+    for (int slot = 3; slot < 6; ++slot) {
+      SCOPED_TRACE(testing::Message() << op << "," << slot);
+      ModelProto model;
+      model.add_opset("", std::string(op) == "Attention" ? 23 : 27);
+      auto &graph = *model.mutable_graph();
+      auto &node = *graph.add_node();
+      node.set_op_type(op);
+      node.add_output("Y");
+      graph.add_output()->set_name("Y");
+      for (const auto *name : {"q", "k", "v"}) {
+        node.add_input(name);
+        graph.add_input()->set_name(name);
+      }
+      while (node.input_size() <= slot)
+        node.add_input("");
+      *node.mutable_input(slot) = "optional";
+      graph.add_input()->set_name("optional");
+      RuntimeContext rt;
+      ASSERT_TRUE(rt.RegisterKernelFn(
+          "", op, Device::kCPU, onnx_kernels::KernelFunctions().at(std::string("ai.onnx:") + op)));
+      RuntimeSession session(model);
+      session.DeclarePreparations(rt);
+      const SymShape shape =
+          std::string(op) == "Attention" ? SymShape({1, 1, 1, 1}) : SymShape({1, 1, 1});
+      std::vector<SymShape> inputs(3, shape);
+      const auto unknown = core::shapes::UnknownPeakMemory("", op);
+      EXPECT_EQ(session.ComputePeakMemory(0, inputs), unknown);
+      inputs.resize(slot + 1);
+      EXPECT_EQ(session.ComputePeakMemory(0, inputs), unknown);
+    }
+  }
+}

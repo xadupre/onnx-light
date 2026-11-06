@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -135,6 +136,27 @@ TEST(ComputePeakMemoryLinearAttention, RegistrationPassesNodeMetadata) {
       onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(Device::kCPU, inputs);
   EXPECT_GE(shapes_only.worst_case.AsInt(), Estimate(node, inputs).worst_case.AsInt());
   EXPECT_FALSE(shapes_only.average_case);
+}
+
+TEST(ComputePeakMemoryLinearAttention, NamedOptionalInputsRequireNonemptyShapes) {
+  onnx_shapes::RegisterPeakMemoryFunctions();
+  const std::array<const char *, 3> names = {"past_state", "decay", "beta"};
+  for (int slot = 3; slot < 6; ++slot) {
+    SCOPED_TRACE(slot);
+    auto node = LinearAttentionNode();
+    while (node.input_size() <= slot)
+      node.add_input("");
+    *node.mutable_input(slot) = names[slot - 3];
+    std::vector<SymShape> inputs(3, SymShape({1, 1, 1}));
+    const auto unknown = core::shapes::UnknownPeakMemory("", "LinearAttention");
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs), unknown);
+    inputs.resize(slot + 1);
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs), unknown);
+    *node.mutable_input(slot) = "";
+    EXPECT_EQ(Estimate(node, inputs).worst_case.AsInt(), 28);
+  }
 }
 
 } // namespace Test

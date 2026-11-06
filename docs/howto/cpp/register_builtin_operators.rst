@@ -302,6 +302,12 @@ inline shape/stride storage, allocator bookkeeping or shared thread-pool overhea
   ``qk_matmul_output`` is allocated only when requested. Declared final outputs
   are counted by shape analysis, not again as workspace; FLOAT32 staging for
   half-precision outputs is additional workspace.
+  Rows whose finite-input score computation overflows are recomputed with
+  FLOAT32 mantissas and separate integer exponents. Softcap and centering
+  precede narrowing back to FLOAT32; the same score buffer is reused, without
+  DOUBLE arithmetic or additional heap storage. This extends the exponent
+  range, not the precision. Genuine non-finite inputs retain IEEE propagation,
+  and requested pre-softmax scores can still exceed the output dtype's range.
 * ``LinearAttention``: delta rules reuse one FLOAT32 auxiliary vector per
   concurrent batch/KV-head pair, bounded by ``4 * batch * value_hidden``.
   Linear and gated rules need no auxiliary buffer, and there is no separate
@@ -313,6 +319,8 @@ The Attention bounds cover every supported dtype and executor configuration.
 They conservatively sum some allocations with disjoint lifetimes, and do not
 claim an average. Missing head attributes in the LinearAttention shape-only
 convenience overload use conservative packed-hidden-dimension bounds.
+Named optional inputs contributing to the bound require nonempty shapes;
+missing shape slots or unknown ranks produce an unresolved estimate.
 
 The following operators use the zero default:
 

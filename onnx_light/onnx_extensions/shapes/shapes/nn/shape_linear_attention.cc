@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -199,6 +200,11 @@ ComputePeakMemoryLinearAttention(Device, const NodeProto &node,
     return core::shapes::UnknownPeakMemory("", "LinearAttention");
   }
 
+  for (int slot = 3; slot < std::min(node.input_size(), 6); ++slot) {
+    if (!node.input(slot).empty() &&
+        (static_cast<size_t>(slot) >= input_shapes.size() || input_shapes[slot].Empty()))
+      return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  }
   const auto present_input = [&](size_t slot) {
     return slot < input_shapes.size() &&
            (slot < 3 || (node.input_size() == 0 ? !input_shapes[slot].Empty()

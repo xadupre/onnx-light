@@ -636,6 +636,191 @@ class TestTensorProtoDLPack(ExtTestCase):
                 gc.collect()
                 self.assertEqual(len(released), 1)
 
+    @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
+    def test_bool_uint8_metadata_roundtrip(self):
+        for dtype, onnx_type, dlpack_code in (
+            (numpy.float32, TensorProto.FLOAT, 2),
+            (numpy.bool_, TensorProto.BOOL, 6),
+            (numpy.uint8, TensorProto.UINT8, 1),
+        ):
+            with self.subTest(dtype=dtype):
+                array = numpy.array([0, 1, 0, 1], dtype=dtype)
+                if dtype == numpy.uint8:
+                    array[2:] = [2, 255]
+                tensor = TensorProto.from_dlpack(array)
+                capsule = tensor.__dlpack__()
+                descriptor = capsule_tensor(capsule)
+                self.assertEqual(descriptor.dtype.code, dlpack_code)
+                self.assertEqual(descriptor.dtype.bits, array.itemsize * 8)
+                self.assertEqual(descriptor.dtype.lanes, 1)
+                descriptor.shape[0] = 3
+                strides = (ctypes.c_int64 * 1)(1)
+                descriptor.strides = strides
+                descriptor.byte_offset = array.itemsize
+                imported = TensorProto.from_dlpack(CapsuleProducer(capsule))
+                view = numpy.from_dlpack(imported)
+                self.assertEqual(imported.data_type, onnx_type)
+                self.assertEqual(view.dtype, array.dtype)
+                numpy.testing.assert_array_equal(view, array[1:])
+                self.assertEqual(view.ctypes.data, array.ctypes.data + array.itemsize)
+                self.assertTrue(numpy.shares_memory(view, array))
+                array[1] = 0
+                numpy.testing.assert_array_equal(view, array[1:])
+                del tensor, imported, capsule, descriptor
+                gc.collect()
+                numpy.testing.assert_array_equal(view, array[1:])
+
+    def test_import_null_deleter(self):
+        array = numpy.array([0, 1, 2, 255], dtype=numpy.uint8)
+        shape = (ctypes.c_int64 * 1)(array.size)
+        managed = DLManagedTensor()
+        managed.dl_tensor = DLTensor(
+            array.ctypes.data, DLDevice(1, 0), 1, DLDataType(1, 8, 1), shape, None, 0
+        )
+        new_capsule = ctypes.pythonapi.PyCapsule_New
+        new_capsule.restype = ctypes.py_object
+        new_capsule.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        capsule = new_capsule(ctypes.addressof(managed), b"dltensor", None)
+        tensor = TensorProto.from_dlpack(CapsuleProducer(capsule))
+        view = numpy.from_dlpack(tensor)
+        self.assertEqual(tensor.data_type, TensorProto.UINT8)
+        self.assertEqual(view.dtype, array.dtype)
+        self.assertTrue(numpy.shares_memory(view, array))
+        del tensor, view, capsule
+        gc.collect()
+        numpy.testing.assert_array_equal(array, [0, 1, 2, 255])
+
+    def ort_dlpack_runtime(self):
+        """Returns the optional runtime and its native bool-override contract."""
+        if not importlib.util.find_spec("onnxruntime"):
+            self.skipTest("Requires ONNX Runtime.")
+        import onnxruntime
+        from onnxruntime.capi import _pybind_state
+
+        if not hasattr(onnxruntime.OrtValue, "from_dlpack"):
+            self.skipTest("Requires the public ONNX Runtime DLPack protocol API.")
+        # The version string does not identify builds containing the DLPack 1.3 change.
+        legacy = "is_bool_tensor" in _pybind_state.OrtValue.from_dlpack.__doc__
+        return onnxruntime, legacy
+
+    @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
+    def test_ort_roundtrip(self):
+        ort, _ = self.ort_dlpack_runtime()
+        for dtype in (numpy.float32, numpy.uint8):
+            for shape in ((), (2, 3)):
+                with self.subTest(dtype=dtype, shape=shape):
+                    array = (
+                        numpy.array(255, dtype=dtype)
+                        if not shape
+                        else numpy.array([[0, 1, 2], [3, 127, 255]], dtype=dtype)
+                    )
+                    tensor = TensorProto.from_dlpack(array)
+                    for producer in (array, tensor):
+                        value = ort.OrtValue.from_dlpack(producer)
+                        view = numpy.from_dlpack(value)
+                        imported = TensorProto.from_dlpack(value)
+                        other = numpy.from_dlpack(imported)
+                        self.assertEqual(value.__dlpack_device__(), (1, 0))
+                        self.assertEqual(imported.data_type, tensor.data_type)
+                        for result in (view, other):
+                            self.assertEqual(result.dtype, array.dtype)
+                            numpy.testing.assert_array_equal(result, array)
+                            self.assertTrue(numpy.shares_memory(result, array))
+                        array[...] = 1
+                        numpy.testing.assert_array_equal(other, array)
+
+    def test_ort_bool_contract(self):
+        ort, legacy = self.ort_dlpack_runtime()
+        array = numpy.array([True, False, True, False], dtype=numpy.bool_)
+        tensor = TensorProto.from_dlpack(array)
+        for producer in (array, tensor):
+            if legacy:
+                with self.assertRaisesRegex(RuntimeError, "Unsupported code 6"):
+                    ort.OrtValue.from_dlpack(producer)
+            else:
+                value = ort.OrtValue.from_dlpack(producer)
+                imported = TensorProto.from_dlpack(value)
+                view = numpy.from_dlpack(imported)
+                self.assertEqual(imported.data_type, TensorProto.BOOL)
+                self.assertEqual(view.dtype, array.dtype)
+                numpy.testing.assert_array_equal(view, array)
+                self.assertTrue(numpy.shares_memory(view, array))
+
+        value = ort.OrtValue.ortvalue_from_numpy(array)
+        imported = TensorProto.from_dlpack(value)
+        view = numpy.from_dlpack(imported)
+        # Old exporters label bool storage as uint8; consumers must honor that metadata.
+        self.assertEqual(imported.data_type, TensorProto.UINT8 if legacy else TensorProto.BOOL)
+        self.assertEqual(view.dtype, numpy.dtype(numpy.uint8 if legacy else numpy.bool_))
+        numpy.testing.assert_array_equal(view, array)
+        self.assertTrue(numpy.shares_memory(view, array))
+
+    def test_ort_capsule_lifetime(self):
+        ort, _ = self.ort_dlpack_runtime()
+        for consume in (False, True):
+            with self.subTest(consume=consume):
+                original, address, released = self.make_borrowed()
+                capsule = original.__dlpack__()
+                if consume:
+                    value = ort.OrtValue.from_dlpack(capsule)
+                    tensor = TensorProto.from_dlpack(value)
+                    view = numpy.from_dlpack(tensor)
+                    self.assertEqual(view.ctypes.data, address)
+                    del value, tensor
+                del original
+                gc.collect()
+                self.assertEqual(released, [])
+                del capsule
+                if consume:
+                    gc.collect()
+                    self.assertEqual(released, [])
+                    numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
+                    del view
+                gc.collect()
+                self.assertEqual(len(released), 1)
+
+    @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
+    def test_ort_offset_strides_and_null_deleter(self):
+        ort, legacy = self.ort_dlpack_runtime()
+        if legacy:
+            self.skipTest("Offset/stride/null-deleter import requires the DLPack 1.3 contract.")
+        noncontiguous = numpy.arange(8, dtype=numpy.float32).reshape(2, 4)[:, ::2]
+        with self.assertRaisesRegex(RuntimeError, "contiguous"):
+            ort.OrtValue.from_dlpack(noncontiguous)
+        for dtype in (numpy.float32, numpy.bool_, numpy.uint8):
+            for null_deleter in (False, True):
+                with self.subTest(dtype=dtype, null_deleter=null_deleter):
+                    array = numpy.array([0, 1, 0, 1, 1, 0, 1, 0], dtype=dtype)
+                    tensor = TensorProto.from_dlpack(array)
+                    capsule = tensor.__dlpack__()
+                    descriptor = capsule_tensor(capsule)
+                    shape = (ctypes.c_int64 * 2)(2, 3)
+                    strides = (ctypes.c_int64 * 2)(3, 1)
+                    descriptor.ndim = 2
+                    descriptor.shape = shape
+                    descriptor.strides = strides
+                    descriptor.byte_offset = array.itemsize
+                    if null_deleter:
+                        # A separate caller-owned descriptor avoids leaking an export owner.
+                        managed = DLManagedTensor()
+                        managed.dl_tensor = descriptor
+                        del descriptor, capsule
+                        new_capsule = ctypes.pythonapi.PyCapsule_New
+                        new_capsule.restype = ctypes.py_object
+                        new_capsule.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+                        capsule = new_capsule(ctypes.addressof(managed), b"dltensor", None)
+                    value = ort.OrtValue.from_dlpack(capsule)
+                    view = numpy.from_dlpack(value)
+                    self.assertEqual(view.dtype, array.dtype)
+                    self.assertEqual(view.ctypes.data, array.ctypes.data + array.itemsize)
+                    numpy.testing.assert_array_equal(view, array[1:7].reshape(2, 3))
+                    del view, value, capsule
+                    if null_deleter:
+                        del managed
+                    else:
+                        del descriptor
+                    gc.collect()
+
     def test_import_versioned_capsules(self):
         for major, flags in ((1, 0), (1, 1), (2, 0), (1, 2), (1, 4), (1, 8)):
             with self.subTest(major=major, flags=flags):

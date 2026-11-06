@@ -2,11 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
+#include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
 
@@ -21,13 +24,37 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 namespace {
 
+void MemoryInput(GraphProto &graph, const std::string &name, const std::vector<int64_t> &shape,
+                 TensorProto::DataType dtype = TensorProto::FLOAT) {
+  auto *input = graph.add_input();
+  input->set_name(name);
+  auto *tensor = input->add_type()->add_tensor_type();
+  tensor->set_elem_type(dtype);
+  auto *dims = tensor->add_shape();
+  for (int64_t dim : shape)
+    dims->add_dim()->set_dim_value(dim);
+}
+
+template <typename GraphOrFunction>
+NodeProto &MemoryNode(GraphOrFunction &graph, const std::string &op,
+                      const std::vector<std::string> &inputs, const std::string &output) {
+  auto &node = *graph.add_node();
+  node.set_op_type(op);
+  for (const std::string &input : inputs)
+    node.add_input(input);
+  node.add_output(output);
+  return node;
+}
+
+constexpr int64_t kLarge = int64_t{1} << 31;
+
 using core::shapes::PeakMemoryEstimate;
 using core::symbolic::Device;
 using core::symbolic::SymDim;
 using core::symbolic::SymShape;
 
 PeakMemoryEstimate DecoderPeakMemory(const std::string &op, const std::vector<SymShape> &inputs) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   return core::shapes::ComputePeakMemory("", op, Device::kCPU, inputs);
 }
 
@@ -142,7 +169,7 @@ TEST(ComputePeakMemoryDecoder, UnsupportedQueriesRetainUnresolvedBounds) {
 }
 
 TEST(ComputePeakMemoryDecoder, PartialContextsDoNotTurnMissingInputsIntoScalars) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   for (const auto *op : {"Gather", "RMSNormalization", "UnregisteredDecoderOp"}) {
     SCOPED_TRACE(op);
     GraphProto graph;
@@ -187,7 +214,7 @@ TEST(ComputePeakMemoryDecoder, PartialContextsDoNotTurnMissingInputsIntoScalars)
 }
 
 TEST(ComputePeakMemoryDecoder, ContextQueriesPreserveOmittedOptionalInputSlots) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   GraphProto graph;
   auto &node = *graph.add_node();
   node.set_op_type("Slice");
@@ -226,7 +253,7 @@ TEST(ComputePeakMemoryDecoder, RejectsInvalidDimensionsAndOverflow) {
 
 TEST(ComputePeakMemoryDecoder, PublicAnalysisIncludesPeakMemoryAndDefaultsMissingEstimatesToZero) {
   onnx_shapes::RegisterShapeFunctions();
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   GraphProto graph;
   for (const auto *name : {"X", "W"}) {
     auto *input = graph.add_input();
@@ -276,13 +303,13 @@ TEST(ComputePeakMemoryDecoder, PublicAnalysisIncludesPeakMemoryAndDefaultsMissin
 }
 
 TEST(ComputePeakMemoryDecoder, RuntimeReplacementSurvivesRepeatedBuiltinRegistration) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   const auto portable = core::shapes::PeakMemoryDispatchTable().at("ai.onnx:MatMul");
   core::shapes::RegisterComputePeakMemoryFn(
       "", "MatMul", Device::kCPU, [](Device, const NodeProto &, const std::vector<SymShape> &) {
         return PeakMemoryEstimate(int64_t{123});
       });
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).worst_case.AsInt(), 123);
   EXPECT_EQ(
       core::shapes::ComputePeakMemory("ai.onnx", "MatMul", Device::kUndefined, {{2, 3}, {3, 5}})
@@ -291,6 +318,104 @@ TEST(ComputePeakMemoryDecoder, RuntimeReplacementSurvivesRepeatedBuiltinRegistra
   core::shapes::RegisterComputePeakMemoryFn("", "MatMul", Device::kCPU, portable);
   EXPECT_EQ(DecoderPeakMemory("MatMul", {{2, 3}, {3, 5}}).worst_case.AsInt(),
             4 * (6 + 15) + 6 * 10);
+}
+
+TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
+  GraphProto first;
+  MemoryInput(first, "X", {int64_t{1} << 59});
+  MemoryNode(first, "Identity", {"X"}, "Y");
+  core::compute::ComputeContext ctx;
+  ctx.Compute(first);
+  const auto original_profile = ctx.NodeMemory(0);
+
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  GraphProto second;
+  for (const auto &name : {"Q", "K", "V"})
+    MemoryInput(second, name, {1, 1, int64_t{1} << 30, 1});
+  MemoryNode(second, "Attention", {"Q", "K", "V"}, "Y");
+  ctx.ComputeShapes(second);
+  ASSERT_NO_THROW(ctx.ComputePeakMemory(second));
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 20 * (int64_t{1} << 30));
+  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
+  ModelProto model;
+  *model.mutable_graph() = second;
+  ctx.Compute(first);
+  ctx.ComputeShapes(model);
+  EXPECT_NO_THROW(ctx.ComputePeakMemory(model.graph()));
+  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
+  EXPECT_NO_THROW(ctx.Compute(second));
+}
+
+TEST(MemoryAnalysis, AttentionWithoutQkAvoidsQuadraticWorkspaceOverflow) {
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  GraphProto graph;
+  for (const auto &name : {"Q", "K", "V"})
+    MemoryInput(graph, name, {1, 1, kLarge, 1});
+  auto &node = MemoryNode(graph, "Attention", {"Q", "K", "V"}, "Y");
+  core::compute::ComputeContext ctx;
+  ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+  ASSERT_NO_THROW(ctx.Compute(graph));
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 20 * kLarge);
+  for (const auto *name : {"", "", "qk"})
+    node.add_output(name);
+  ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+  EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
+}
+
+TEST(MemoryAnalysis, RejectsLinearAttentionScratchWithInferredAndExplicitState) {
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  for (bool explicit_state : {false, true}) {
+    GraphProto graph;
+    for (const auto &name : {"Q", "K", "V"})
+      MemoryInput(graph, name, {1, 1, kLarge});
+    std::vector<std::string> inputs{"Q", "K", "V"};
+    if (explicit_state) {
+      MemoryInput(graph, "state", {1, 1, kLarge, kLarge});
+      inputs.push_back("state");
+    }
+    auto &node = MemoryNode(graph, "LinearAttention", inputs, "Y");
+    for (const auto &name : {"q_num_heads", "kv_num_heads"}) {
+      auto *attr = node.add_attribute();
+      attr->set_name(name);
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(1);
+    }
+    core::compute::ComputeContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+    EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
+  }
+}
+
+TEST(ComputeContext, IncludesLocalFunctionWorkspaceInIncrementalAndFullPeakMemory) {
+  onnx_shapes::RegisterShapeFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  core::builder::GraphBuilder builder(
+      "g", [](const std::string &op) { return onnx_op::GetAllOnnxOpSchemasWithHistory(op, false); },
+      {{"", 24}, {"ai.rt", 1}});
+  auto &function = builder.MakeLocalFunction("AttentionFunction", "ai.rt", builder.OpsetVersions());
+  const auto shape = core::symbolic::SymShape({1, 2, 4, 8});
+  const auto key_value_shape = core::symbolic::SymShape({1, 2, 16, 8});
+  function.MakeInput("q", core::symbolic::TensorType::kFloat, shape);
+  function.MakeInput("k", core::symbolic::TensorType::kFloat, key_value_shape);
+  function.MakeInput("v", core::symbolic::TensorType::kFloat, key_value_shape);
+  function.MakeNode("Attention", {"q", "k", "v"}, {"attention_result"});
+  function.MakeOutput("attention_result");
+  builder.MakeInput("caller_q", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInput("caller_k", core::symbolic::TensorType::kFloat, key_value_shape);
+  builder.MakeInput("caller_v", core::symbolic::TensorType::kFloat, key_value_shape);
+  builder.MakeNode("AttentionFunction", {"caller_q", "caller_k", "caller_v"}, {"result"}, "ai.rt");
+  builder.MakeOutput("result");
+
+  const ModelProto model = builder.ToModel();
+  core::compute::ComputeContext context;
+  context.ComputeShapes(model);
+  context.AppendNodePeakMemory(model.graph().node(0), 0, core::symbolic::Device::kCPU);
+  // Promotions and FLOAT32 Y staging, plus one score row per batch/head.
+  const core::shapes::PeakMemoryEstimate expected{
+      core::symbolic::SymDim(int64_t{4 * (64 + 256 + 256 + 64) + 4 * 2 * 16}), std::nullopt};
+  EXPECT_EQ(context.NodePeakMemory(0), expected);
+  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU),
+            (std::vector<core::shapes::PeakMemoryEstimate>{expected}));
 }
 
 } // namespace Test

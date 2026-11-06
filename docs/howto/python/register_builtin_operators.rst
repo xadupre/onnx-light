@@ -136,7 +136,8 @@ peak of ``0``. The registry mirrors shape inference. The signature is
 
 Query the estimate through
 :func:`onnx_light.onnx_core.shape_inference.compute_peak_memory`, backed by
-``RegisterPeakMemoryFunctions``:
+the selected kernel implementation's estimator. The facade loads the optional
+kernels extension when available; reduced builds use zero for absent estimators:
 
 .. code-block:: python
 
@@ -144,7 +145,7 @@ Query the estimate through
 
     peak = compute_peak_memory(
         "ai.onnx", "Attention", Device.kCPU,
-        [SymShape([2, 4, 8, 16]), SymShape([2, 4, 8, 16])],
+        [SymShape([2, 4, 8, 16]), SymShape([2, 4, 8, 16]), SymShape([2, 4, 8, 16])],
     )
 
 See also

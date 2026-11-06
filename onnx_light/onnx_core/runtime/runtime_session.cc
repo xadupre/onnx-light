@@ -521,8 +521,18 @@ void RuntimeSession::ResolveDeferredTuning(size_t node_index, RuntimeContext &rt
   --pending_tuning_count_;
 }
 
+shapes::PeakMemoryEstimate
+RuntimeSession::ComputePeakMemory(size_t node_index,
+                                  const std::vector<symbolic::SymShape> &input_shapes) const {
+  EXT_ENFORCE_INVALID(kernels_initialized_, "Peak-memory accounting requires resolved kernels.");
+  EXT_ENFORCE_INVALID(node_index < kernels_.size() && kernels_[node_index].instance != nullptr,
+                      "Peak-memory accounting requires a resolved node index: ", node_index);
+  return kernels_[node_index].instance->ComputePeakMemory(kernel_device_, input_shapes);
+}
+
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
                                        const std::unordered_set<std::string> &preparable_inputs) {
+  kernel_device_ = rt.device();
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
   // kExecuteNode actions so nodes the plan never runs (if any) are not

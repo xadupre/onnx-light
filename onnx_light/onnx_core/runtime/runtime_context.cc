@@ -630,8 +630,20 @@ bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::stri
   if (!overwrite && custom_kernels_.find(key) != custom_kernels_.end()) {
     return false;
   }
+  EXT_ENFORCE_INVALID(fn, "Kernel registration requires a factory.");
   custom_kernels_[key] = std::move(fn);
   return true;
+}
+
+bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                                      symbolic::Device device, KernelRegistration registration,
+                                      bool overwrite) {
+  const std::string key =
+      NormaliseDomain(domain) + ":" + op_type + symbolic::DeviceKeySuffix(device);
+  if (!overwrite && custom_kernels_.contains(key))
+    return false;
+  return RegisterKernelFn(domain, op_type, device, MakeKernelFactory(std::move(registration)),
+                          overwrite);
 }
 
 void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::string &op_type,

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "onnx_core/shapes/dispatch_table.h"
+
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -27,6 +29,12 @@ using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
+
+/// Bounds the portable MatMul kernel's additional workspace, excluding declared outputs.
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryMatMul(core::symbolic::Device device, const NodeProto &node,
+                        const std::vector<core::symbolic::SymShape> &inputs);
+
 using ::onnx_light::core::runtime::ValueStore;
 
 class PreparedGemmB {

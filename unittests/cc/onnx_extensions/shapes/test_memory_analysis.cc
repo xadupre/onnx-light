@@ -194,32 +194,6 @@ TEST(MemoryAnalysis, AppendingScratchLeavesUncomputedGapsAtZero) {
   EXPECT_EQ(ctx.NodePeakMemory(2).worst_case.AsInt(), 37);
 }
 
-TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
-  GraphProto first;
-  MemoryInput(first, "X", {int64_t{1} << 59});
-  MemoryNode(first, "Identity", {"X"}, "Y");
-  core::compute::ComputeContext ctx;
-  ctx.Compute(first);
-  const auto original_profile = ctx.NodeMemory(0);
-
-  onnx_shapes::RegisterPeakMemoryFunctions();
-  GraphProto second;
-  for (const auto &name : {"Q", "K", "V"})
-    MemoryInput(second, name, {1, 1, int64_t{1} << 30, 1});
-  MemoryNode(second, "Attention", {"Q", "K", "V"}, "Y");
-  ctx.ComputeShapes(second);
-  ASSERT_NO_THROW(ctx.ComputePeakMemory(second));
-  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), int64_t{1} << 62);
-  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
-  ModelProto model;
-  *model.mutable_graph() = second;
-  ctx.Compute(first);
-  ctx.ComputeShapes(model);
-  EXPECT_NO_THROW(ctx.ComputePeakMemory(model.graph()));
-  EXPECT_EQ(ctx.NodeMemory(0), original_profile);
-  EXPECT_NO_THROW(ctx.Compute(second));
-}
-
 TEST(MemoryAnalysis, RejectsUnsupportedAllocations) {
   for (auto dtype : {TensorProto::STRING, TensorProto::UNDEFINED, TensorProto::FLOAT6E2M3}) {
     GraphProto graph;
@@ -342,6 +316,10 @@ TEST(MemoryAnalysis, FunctionWorkspaceDoesNotTreatMaxOfAveragesAsAverageOfMax) {
     if (estimate.average_case) {
       EXPECT_EQ(estimate.average_case->AsInt(), 50);
     }
+    core::shapes::RegisterComputePeakMemoryFn("local.average", "Workspace", device, {});
+    core::compute::ComputeContext explicit_zero;
+    explicit_zero.Compute(model, device);
+    EXPECT_EQ(explicit_zero.NodePeakMemory(0), estimate);
   }
 }
 
@@ -641,41 +619,6 @@ TEST(MemoryAnalysis, PreservesPackedRoundingAtInt64Boundary) {
   MemoryInitializer(initializer, "W", {std::numeric_limits<int64_t>::max()});
   initializer.mutable_initializer(0)->set_data_type(TensorProto::UINT8);
   EXPECT_NO_THROW(ctx.Compute(initializer));
-}
-
-TEST(MemoryAnalysis, RejectsAttentionScratchOverflowThroughPublicAnalysis) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
-  GraphProto graph;
-  for (const auto &name : {"Q", "K", "V"})
-    MemoryInput(graph, name, {1, 1, kLarge, 1});
-  MemoryNode(graph, "Attention", {"Q", "K", "V"}, "Y");
-  core::compute::ComputeContext ctx;
-  ASSERT_NO_THROW(ctx.ComputeShapes(graph));
-  EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
-}
-
-TEST(MemoryAnalysis, RejectsLinearAttentionScratchWithInferredAndExplicitState) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
-  for (bool explicit_state : {false, true}) {
-    GraphProto graph;
-    for (const auto &name : {"Q", "K", "V"})
-      MemoryInput(graph, name, {1, 1, kLarge});
-    std::vector<std::string> inputs{"Q", "K", "V"};
-    if (explicit_state) {
-      MemoryInput(graph, "state", {1, 1, kLarge, kLarge});
-      inputs.push_back("state");
-    }
-    auto &node = MemoryNode(graph, "LinearAttention", inputs, "Y");
-    for (const auto &name : {"q_num_heads", "kv_num_heads"}) {
-      auto *attr = node.add_attribute();
-      attr->set_name(name);
-      attr->set_type(AttributeProto::INT);
-      attr->set_i(1);
-    }
-    core::compute::ComputeContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapes(graph));
-    EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
-  }
 }
 
 } // namespace Test

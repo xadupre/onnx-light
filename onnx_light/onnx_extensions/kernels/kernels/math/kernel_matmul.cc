@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_extensions/kernels/kernels/math/matmul_shape_utils.h"
 
@@ -10,6 +11,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/shapes/shape_broadcast.h"
 #include <array>
 #include <cstring>
 #include <stdexcept>
@@ -262,6 +264,40 @@ void MatMul::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt);
   const Tensor &y = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+PeakMemoryEstimate ComputePeakMemoryMatMul(Device, const NodeProto &node,
+                                           const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty() ||
+      inputs[1].Empty())
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  const auto &a = inputs[0];
+  const auto &b = inputs[1];
+  const SymDim &ka = a[a.Rank() - 1];
+  const SymDim &kb = b[b.Rank() == 1 ? 0 : b.Rank() - 2];
+  EXT_ENFORCE_INVALID(!ka.IsInt() || !kb.IsInt() || ka.AsInt() == kb.AsInt(),
+                      "MatMul peak memory: incompatible inner dimensions.");
+  SymShape ap, bp;
+  for (size_t i = 0; i + 2 < a.Rank(); ++i)
+    ap.PushBack(a[i]);
+  for (size_t i = 0; i + 2 < b.Rank(); ++i)
+    bp.PushBack(b[i]);
+  SymShape output = core::shapes::BroadcastShapes(ap, bp);
+  if (a.Rank() != 1)
+    output.PushBack(a[a.Rank() - 2]);
+  if (b.Rank() != 1)
+    output.PushBack(b[b.Rank() - 1]);
+  // The preallocated-output path also holds a temporary demoted Y while
+  // promoted A, B and Y are alive, before copying into the declared output.
+  // Other supported dtypes compute directly into the declared output.
+  return {peak_memory_detail::PeakMemoryAdd(
+              peak_memory_detail::PeakMemoryMultiply(
+                  SymDim(int64_t{4}),
+                  peak_memory_detail::PeakMemoryAdd(peak_memory_detail::PeakMemoryElements(a),
+                                                    peak_memory_detail::PeakMemoryElements(b))),
+              peak_memory_detail::PeakMemoryMultiply(
+                  SymDim(int64_t{6}), peak_memory_detail::PeakMemoryElements(output))),
+          std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

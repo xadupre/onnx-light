@@ -341,7 +341,9 @@ PeakMemoryEstimate NodeWorkspace(const NodeProto &node, const ShapesContext &ctx
   if (body.has_body) {
     const std::string key =
         NormaliseDomain(node.domain()) + ":" + node.op_type() + symbolic::DeviceKeySuffix(device);
-    if (!shapes::PeakMemoryDispatchTable().contains(key))
+    const auto &table = shapes::PeakMemoryDispatchTable();
+    const auto it = table.find(key);
+    if (it == table.end() || !it->second)
       return body.workspace_peak;
   }
   const auto estimate = shapes::ComputePeakMemory(ctx, device, node);

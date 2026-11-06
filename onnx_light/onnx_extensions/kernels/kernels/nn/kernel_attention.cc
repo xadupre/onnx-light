@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
@@ -28,6 +29,133 @@ constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSiz
 constexpr std::array<int32_t, 3> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
     static_cast<int32_t>(DataType::BFLOAT16)};
+
+// Retains FLOAT32 precision with a separate exponent for overflowing finite-input rows.
+struct ExtendedFloat {
+  float mantissa = 0.0f;
+  int exponent = 0;
+
+  static ExtendedFloat Normalize(float value, int exponent = 0) {
+    if (value == 0.0f)
+      return {};
+    int adjustment = 0;
+    const float mantissa = std::frexp(value, &adjustment);
+    return {mantissa, exponent + adjustment};
+  }
+
+  ExtendedFloat Add(ExtendedFloat other) const {
+    if (mantissa == 0.0f)
+      return other;
+    if (other.mantissa == 0.0f)
+      return *this;
+    if (exponent < other.exponent)
+      return other.Add(*this);
+    return Normalize(mantissa + std::scalbn(other.mantissa, other.exponent - exponent), exponent);
+  }
+
+  ExtendedFloat Subtract(ExtendedFloat other) const {
+    return Add({-other.mantissa, other.exponent});
+  }
+
+  ExtendedFloat Multiply(ExtendedFloat other) const {
+    return Normalize(mantissa * other.mantissa, exponent + other.exponent);
+  }
+
+  ExtendedFloat Divide(ExtendedFloat other) const {
+    return Normalize(mantissa / other.mantissa, exponent - other.exponent);
+  }
+
+  float ToFloat() const { return std::scalbn(mantissa, exponent); }
+};
+
+ExtendedFloat ExtendedDotProduct(const float *q, const float *k, int64_t width) {
+  ExtendedFloat sum;
+  for (int64_t d = 0; d < width; ++d)
+    sum = sum.Add(ExtendedFloat::Normalize(q[d]).Multiply(ExtendedFloat::Normalize(k[d])));
+  return sum;
+}
+
+float RecomputeAttentionValue(const float *probabilities, const float *values, int64_t length,
+                              int64_t stride, float ordinary_result) {
+  float magnitude = 0.0f;
+  float weight = 0.0f;
+  for (int64_t j = 0; j < length; ++j) {
+    const float value = values[j * stride];
+    if (!std::isfinite(value) || !std::isfinite(probabilities[j]))
+      return ordinary_result;
+    magnitude = std::max(magnitude, std::abs(value));
+    weight += probabilities[j];
+  }
+  if (magnitude == 0.0f || weight == 0.0f)
+    return ordinary_result;
+  float scaled = 0.0f;
+  for (int64_t j = 0; j < length; ++j)
+    scaled += probabilities[j] * (values[j * stride] / magnitude);
+  // Rounded probabilities can sum above one. Renormalization and the convex
+  // bound keep a finite weighted mean finite when restoring its magnitude.
+  return magnitude * std::clamp(scaled / weight, -1.0f, 1.0f);
+}
+
+template <typename Mask>
+bool RecomputeCenteredAttentionScores(const float *q, const float *k, int64_t width, int64_t length,
+                                      float scale, float softcap, float *scores, float *qk,
+                                      int output_mode, const Mask &mask) {
+  // Genuine non-finite inputs keep the ordinary IEEE propagation path.
+  if (!std::isfinite(scale) || !std::isfinite(softcap))
+    return false;
+  for (int64_t d = 0; d < width; ++d)
+    if (!std::isfinite(q[d]))
+      return false;
+  for (int64_t j = 0; j < length; ++j) {
+    const float bias = mask(j);
+    if (!std::isfinite(bias) && bias != -std::numeric_limits<float>::infinity())
+      return false;
+    for (int64_t d = 0; d < width; ++d)
+      if (!std::isfinite(k[j * width + d]))
+        return false;
+  }
+
+  const auto scaled_score = [&](int64_t j, float *output) {
+    auto score =
+        ExtendedDotProduct(q, k + j * width, width).Multiply(ExtendedFloat::Normalize(scale));
+    if (output != nullptr && output_mode == 0)
+      output[j] = score.ToFloat();
+    if (softcap > 0.0f)
+      score = ExtendedFloat::Normalize(
+          softcap * std::tanh(score.Divide(ExtendedFloat::Normalize(softcap)).ToFloat()));
+    if (output != nullptr && output_mode == 1)
+      output[j] = score.ToFloat();
+    return score;
+  };
+
+  ExtendedFloat maximum;
+  bool has_maximum = false;
+  for (int64_t j = 0; j < length; ++j) {
+    auto score = scaled_score(j, qk);
+    const float bias = mask(j);
+    if (std::isfinite(bias)) {
+      score = score.Add(ExtendedFloat::Normalize(bias));
+      scores[j] = score.ToFloat();
+      if (!has_maximum || score.Subtract(maximum).mantissa > 0.0f) {
+        maximum = score;
+        has_maximum = true;
+      }
+    } else {
+      scores[j] = -std::numeric_limits<float>::infinity();
+    }
+    if (qk != nullptr && output_mode == 2)
+      qk[j] = scores[j];
+  }
+
+  // Recomputes instead of allocating extended scores, and centers before narrowing.
+  for (int64_t j = 0; j < length; ++j) {
+    const float bias = mask(j);
+    if (std::isfinite(bias))
+      scores[j] =
+          scaled_score(j, nullptr).Add(ExtendedFloat::Normalize(bias)).Subtract(maximum).ToFloat();
+  }
+  return true;
+}
 
 // Validates that ``t`` is a rank-4 tensor whose element type is supported
 // by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
@@ -143,7 +271,7 @@ size_t FloatCacheBytes(const Shape &shape) {
 }
 
 Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeContext *rt = nullptr,
-                   bool allow_capacity = true) {
+                   bool allow_capacity = true, bool declared_output = true) {
   EXT_ENFORCE_INVALID(a.shape.size() == 4 && b.shape.size() == 4,
                       "kernel::Attention: concat inputs must be rank-4.");
   EXT_ENFORCE_INVALID(a.shape[0] == b.shape[0] && a.shape[1] == b.shape[1] &&
@@ -182,7 +310,10 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
   }
   // Multiple dense batch/head slices change stride when the sequence grows.
   // They must be repacked rather than treated as a contiguous append buffer.
-  Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
+  Tensor out =
+      rt != nullptr && !declared_output
+          ? rt->MakeTemporaryTensor(DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes)
+          : AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
   if (rt != nullptr && rt->events_enabled())
     rt->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
                      .storage_allocations = 1,
@@ -248,7 +379,7 @@ void ValidateAttentionMask(const Tensor *mask, int64_t batch_size, int64_t q_num
 
 // Returns the value of a validated FLOAT or BOOL ``attn_mask`` at the
 // broadcasted index ``(b, h, i, j)``.
-double BroadcastedMaskValue(const Tensor &mask, int64_t b, int64_t h, int64_t i, int64_t j) {
+float BroadcastedMaskValue(const Tensor &mask, int64_t b, int64_t h, int64_t i, int64_t j) {
   const int rank = static_cast<int>(mask.shape.size());
   int64_t shape4[4] = {1, 1, 1, 1};
   for (int k = 0; k < rank; ++k) {
@@ -263,12 +394,12 @@ double BroadcastedMaskValue(const Tensor &mask, int64_t b, int64_t h, int64_t i,
     stride *= shape4[k];
   }
   if (mask.data_type == DataType::FLOAT) {
-    return static_cast<double>(mask.AsFloat()[linear]);
+    return mask.AsFloat()[linear];
   }
   if (mask.data_type == DataType::BOOL) {
-    return mask.AsBool()[linear] != 0 ? 0.0 : -std::numeric_limits<double>::infinity();
+    return mask.AsBool()[linear] != 0 ? 0.0f : -std::numeric_limits<float>::infinity();
   }
-  return 0.0;
+  return 0.0f;
 }
 
 // Returns the mask value at ``(b, h, i, j)`` allowing the mask to be
@@ -276,14 +407,14 @@ double BroadcastedMaskValue(const Tensor &mask, int64_t b, int64_t h, int64_t i,
 // are treated as ``-inf`` (FLOAT) / ``false`` (BOOL), matching the upstream
 // ``np.pad(..., constant_values=-inf)`` behaviour. Returns ``0.0`` when
 // ``mask == nullptr``.
-double MaskValuePadded(const Tensor *mask, int64_t b, int64_t h, int64_t i, int64_t j) {
+float MaskValuePadded(const Tensor *mask, int64_t b, int64_t h, int64_t i, int64_t j) {
   if (mask == nullptr) {
-    return 0.0;
+    return 0.0f;
   }
   const int rank = static_cast<int>(mask->shape.size());
   const int64_t mask_kv = mask->shape[static_cast<size_t>(rank - 1)];
   if (j >= mask_kv) {
-    return -std::numeric_limits<double>::infinity();
+    return -std::numeric_limits<float>::infinity();
   }
   return BroadcastedMaskValue(*mask, b, h, i, j);
 }
@@ -298,7 +429,8 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
                                         bool temporary_y, bool allow_capacity,
-                                        int64_t parallel_minimum_elements) {
+                                        int64_t parallel_minimum_elements,
+                                        const std::array<bool, 4> &outputs) {
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -332,15 +464,22 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // ----- Build present_key / present_value -------------------------------
   // The upstream operator concatenates past_key/past_value with K/V along
   // the sequence axis. When neither is supplied, present == K/V.
-  Tensor present_key = past_key != nullptr
-                           ? ConcatAxis2(*past_key, K4, 1, rt, allow_capacity)
-                           : (HasRecordedOutputSlot(rt, 1) ? CopyOutput(K4, 1, rt) : K4);
-  Tensor present_value = past_value != nullptr
-                             ? ConcatAxis2(*past_value, V4, 2, rt, allow_capacity)
-                             : (HasRecordedOutputSlot(rt, 2) ? CopyOutput(V4, 2, rt) : V4);
-  const int64_t total_kv_seq_len = present_key.shape[2];
+  Tensor present_key;
+  Tensor present_value;
+  if (past_key != nullptr) {
+    present_key = ConcatAxis2(*past_key, K4, 1, rt, allow_capacity && outputs[1], outputs[1]);
+    present_value = ConcatAxis2(*past_value, V4, 2, rt, allow_capacity && outputs[2], outputs[2]);
+  } else {
+    if (outputs[1])
+      present_key = HasRecordedOutputSlot(rt, 1) ? CopyOutput(K4, 1, rt) : K4;
+    if (outputs[2])
+      present_value = HasRecordedOutputSlot(rt, 2) ? CopyOutput(V4, 2, rt) : V4;
+  }
+  const Tensor &effective_key = past_key != nullptr || outputs[1] ? present_key : K4;
+  const Tensor &effective_value = past_value != nullptr || outputs[2] ? present_value : V4;
+  const int64_t total_kv_seq_len = effective_key.shape[2];
   const int64_t past_kv_seq_len = past_key != nullptr ? past_key->shape[2] : 0;
-  const int64_t v_head_size = present_value.shape[3];
+  const int64_t v_head_size = effective_value.shape[3];
 
   // ----- Resolve nonpad_kv_seqlen ----------------------------------------
   // Optional 1-D INT64 tensor of length ``batch_size``. Positions
@@ -367,19 +506,19 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   const Shape y_shape{batch_size, q_num_heads, q_seq_len, v_head_size};
   Tensor Y = temporary_y && rt ? rt->MakeTemporaryTensor(DataType::FLOAT, y_shape, Y_n_bytes)
                                : AllocateResult(rt, 0, DataType::FLOAT, y_shape, Y_n_bytes);
-  const int64_t qk_count = batch_size * q_num_heads * q_seq_len * total_kv_seq_len;
-  const size_t qk_out_n_bytes = static_cast<size_t>(qk_count) * sizeof(float);
-  Tensor qk_out =
-      AllocateResult(rt, 3, DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
-                     qk_out_n_bytes);
+  Tensor qk_out;
+  if (outputs[3]) {
+    const Shape qk_shape{batch_size, q_num_heads, q_seq_len, total_kv_seq_len};
+    qk_out = AllocateResult(rt, 3, DataType::FLOAT, qk_shape, FloatCacheBytes(qk_shape));
+  }
 
   // ----- Compute ---------------------------------------------------------
   const int64_t group_size = q_num_heads / kv_num_heads;
   const float *pQ = Q4.AsFloat();
-  const float *pK = present_key.AsFloat();
-  const float *pV = present_value.AsFloat();
+  const float *pK = effective_key.AsFloat();
+  const float *pV = effective_value.AsFloat();
   float *pY = Y.AsFloat();
-  float *pQK = qk_out.AsFloat();
+  float *pQK = outputs[3] ? qk_out.AsFloat() : nullptr;
 
   const int64_t q_head_stride = q_seq_len * head_size;
   const int64_t q_batch_stride = q_num_heads * q_head_stride;
@@ -407,22 +546,17 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   ValidateAttentionMask(attn_mask, batch_size, q_num_heads, q_seq_len);
   const int64_t participants = std::max<int64_t>(1, ParallelForThreadCount());
   const bool parallel_tasks = participants > 1 && task_count > 1 && task_count >= task_grain;
-  const int64_t scratch_slots = parallel_tasks ? std::min<int64_t>(task_count, participants) : 1;
-  const size_t scratch_count = static_cast<size_t>(scratch_slots * total_kv_seq_len);
-  const size_t scratch_n_bytes = scratch_count * sizeof(double);
-  Tensor scores_buf = rt ? rt->MakeTemporaryTensor(
-                               DataType::DOUBLE, {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
-                         : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
-                                            scratch_n_bytes, nullptr);
-  Tensor bias_buf = rt ? rt->MakeTemporaryTensor(DataType::DOUBLE,
-                                                 {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
-                       : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
-                                          scratch_n_bytes, nullptr);
-  Tensor qkraw_buf = rt ? rt->MakeTemporaryTensor(
-                              DataType::DOUBLE, {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
-                        : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
-                                           scratch_n_bytes, nullptr);
-  const int64_t wave_size = parallel_tasks ? scratch_slots : task_count;
+  const int64_t scratch_slots =
+      task_count == 0 || q_seq_len == 0
+          ? 0
+          : (parallel_tasks ? std::min<int64_t>(task_count, participants) : 1);
+  const Shape scratch_shape{scratch_slots, total_kv_seq_len};
+  const size_t scratch_n_bytes = FloatCacheBytes(scratch_shape);
+  Tensor scores_buf =
+      rt ? rt->MakeTemporaryTensor(DataType::FLOAT, scratch_shape, scratch_n_bytes)
+         : MakeOutputTensor(DataType::FLOAT, scratch_shape, scratch_n_bytes, nullptr);
+  const int64_t wave_size =
+      parallel_tasks ? std::min<int64_t>(task_count, participants) : task_count;
   for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += wave_size) {
     const int64_t wave_count = std::min<int64_t>(wave_size, task_count - wave_begin);
     ParallelFor(
@@ -431,9 +565,9 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
           for (int64_t slot = begin; slot < end; ++slot) {
             const int64_t task = wave_begin + slot;
             const int64_t scratch_slot = parallel_tasks ? slot : 0;
-            double *scores = scores_buf.AsDouble() + scratch_slot * total_kv_seq_len;
-            double *bias = bias_buf.AsDouble() + scratch_slot * total_kv_seq_len;
-            double *qkraw = qkraw_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            float *scores = scratch_n_bytes != 0
+                                ? scores_buf.AsFloat() + scratch_slot * total_kv_seq_len
+                                : scores_buf.AsFloat();
             const int64_t b = task / q_num_heads;
             const int64_t h = task % q_num_heads;
             // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):
@@ -458,130 +592,89 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
             const float *Vbh =
                 v_head_stride != 0 ? pV + b * v_batch_stride + kv_h * v_head_stride : pV;
             float *Ybh = y_head_stride != 0 ? pY + b * y_batch_stride + h * y_head_stride : pY;
-            float *QKbh =
-                qk_head_stride != 0 ? pQK + b * qk_batch_stride + h * qk_head_stride : pQK;
+            float *QKbh = pQK != nullptr && qk_head_stride != 0
+                              ? pQK + b * qk_batch_stride + h * qk_head_stride
+                              : pQK;
 
             for (int64_t i = 0; i < q_seq_len; ++i) {
-              // Compute raw scaled QK scores and assemble bias.
-              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                double s = 0.0;
-                for (int64_t d = 0; d < head_size; ++d) {
-                  s += static_cast<double>(Qbh[i * head_size + d]) *
-                       static_cast<double>(Kbh[j * head_size + d]);
-                }
-                s *= static_cast<double>(scale);
-                qkraw[static_cast<size_t>(j)] = s;
-
-                double b_val = MaskValuePadded(attn_mask, b, h, i, j);
-                if (attrs.is_causal) {
-                  // Bottom-right / offset-aware causal mask: key ``j`` is masked for
-                  // query ``i`` iff ``j > i + causal_offset``.
-                  if (j > i + causal_offset) {
-                    b_val = -std::numeric_limits<double>::infinity();
-                  }
-                }
+              bool row_fully_masked = true;
+              bool needs_stable_row = false;
+              float max_score = -std::numeric_limits<float>::infinity();
+              const auto mask_value = [&](int64_t j) {
+                float bias = MaskValuePadded(attn_mask, b, h, i, j);
+                if (attrs.is_causal && j > i + causal_offset)
+                  bias = -std::numeric_limits<float>::infinity();
                 const int64_t window_diff = i + causal_offset - j;
                 if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
-                    (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size)) {
-                  b_val = -std::numeric_limits<double>::infinity();
-                }
-                if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
-                  // Padding position: suppressed regardless of the supplied mask.
-                  b_val = -std::numeric_limits<double>::infinity();
-                }
-                bias[static_cast<size_t>(j)] = b_val;
-              }
-              // qk_matmul_output_mode 0: raw QK^T * scale (no softcap, no bias).
-              if (attrs.qk_matmul_output_mode == 0) {
-                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  QKbh[i * total_kv_seq_len + j] =
-                      static_cast<float>(qkraw[static_cast<size_t>(j)]);
-                }
-              }
-              // Apply softcap to raw QK BEFORE adding mask/bias. This matches
-              // upstream's ordering so that ``-inf`` mask values survive into
-              // softmax (yielding zero probability on masked positions). If
-              // softcap were applied after the mask, ``sc * tanh(-inf / sc)``
-              // would saturate to ``-sc`` (finite) and leak probability.
-              if (attrs.softcap > 0.0f) {
-                const double sc = static_cast<double>(attrs.softcap);
-                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  scores[static_cast<size_t>(j)] =
-                      sc * std::tanh(qkraw[static_cast<size_t>(j)] / sc);
-                }
-              } else {
-                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  scores[static_cast<size_t>(j)] = qkraw[static_cast<size_t>(j)];
-                }
-              }
-              // qk_matmul_output_mode 1: softcap output (before mask), or raw
-              // when no softcap is requested.
-              if (attrs.qk_matmul_output_mode == 1) {
-                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  QKbh[i * total_kv_seq_len + j] =
-                      static_cast<float>(scores[static_cast<size_t>(j)]);
-                }
-              }
-              // Add mask/bias to the (possibly softcapped) scores.
-              double max_score = -std::numeric_limits<double>::infinity();
+                    (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size))
+                  bias = -std::numeric_limits<float>::infinity();
+                if (nonpad_lengths != nullptr && j >= nonpad_lengths[b])
+                  bias = -std::numeric_limits<float>::infinity();
+                return bias;
+              };
               for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                const double s = scores[static_cast<size_t>(j)] + bias[static_cast<size_t>(j)];
+                float s = 0.0f;
+                for (int64_t d = 0; d < head_size; ++d) {
+                  s += Qbh[i * head_size + d] * Kbh[j * head_size + d];
+                }
+                s *= scale;
+                needs_stable_row |= !std::isfinite(s);
+                if (QKbh != nullptr && attrs.qk_matmul_output_mode == 0)
+                  QKbh[i * total_kv_seq_len + j] = s;
+                // Softcap precedes the additive mask so masked positions remain -inf.
+                if (attrs.softcap > 0.0f)
+                  s = attrs.softcap * std::tanh(s / attrs.softcap);
+                if (QKbh != nullptr && attrs.qk_matmul_output_mode == 1)
+                  QKbh[i * total_kv_seq_len + j] = s;
+
+                const float b_val = mask_value(j);
+                row_fully_masked &= std::isinf(b_val) && b_val < 0.0f;
+                s += b_val;
+                needs_stable_row |= std::isfinite(b_val) && !std::isfinite(s);
                 scores[static_cast<size_t>(j)] = s;
+                if (QKbh != nullptr && attrs.qk_matmul_output_mode == 2)
+                  QKbh[i * total_kv_seq_len + j] = s;
                 if (s > max_score) {
                   max_score = s;
                 }
               }
-              // qk_matmul_output_mode 2: includes attention mask and softcap.
-              if (attrs.qk_matmul_output_mode == 2) {
-                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  QKbh[i * total_kv_seq_len + j] =
-                      static_cast<float>(scores[static_cast<size_t>(j)]);
-                }
-              }
+              const bool centered =
+                  needs_stable_row && RecomputeCenteredAttentionScores(
+                                          head_size != 0 ? Qbh + i * head_size : Qbh, Kbh,
+                                          head_size, total_kv_seq_len, scale, attrs.softcap, scores,
+                                          QKbh != nullptr ? QKbh + i * total_kv_seq_len : nullptr,
+                                          attrs.qk_matmul_output_mode, mask_value);
               // Softmax over last axis.
-              double denom = 0.0;
+              float denom = 0.0f;
               for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                const double e = std::exp(scores[static_cast<size_t>(j)] - max_score);
+                const float e =
+                    row_fully_masked
+                        ? 0.0f
+                        : std::exp(centered ? scores[static_cast<size_t>(j)]
+                                            : scores[static_cast<size_t>(j)] - max_score);
                 scores[static_cast<size_t>(j)] = e;
                 denom += e;
               }
-              const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
+              const float inv_denom = denom != 0.0f ? 1.0f / denom : 0.0f;
               for (int64_t j = 0; j < total_kv_seq_len; ++j) {
                 scores[static_cast<size_t>(j)] *= inv_denom;
               }
-              // A fully-masked row (every key masked out) has no attendable key: by
-              // convention it softmaxes to all-zero probabilities. Detect it on the
-              // additive bias (not the possibly-NaN logits) and zero the row BEFORE
-              // capturing the mode-3 output so the exposed ``qk_matmul_output`` row is
-              // also zeroed, consistent with the primary output ``Y`` (both 0). This
-              // mirrors upstream's guard, which runs before the mode-3 capture.
-              bool row_fully_masked = true;
-              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                const double b = bias[static_cast<size_t>(j)];
-                if (!(std::isinf(b) && b < 0.0)) {
-                  row_fully_masked = false;
-                  break;
-                }
-              }
-              if (row_fully_masked && total_kv_seq_len != 0) {
-                std::fill(scores, scores + total_kv_seq_len, 0.0);
-              }
               // qk_matmul_output_mode 3: after softmax (with the fully-masked-row
               // guard applied above).
-              if (attrs.qk_matmul_output_mode == 3) {
+              if (QKbh != nullptr && attrs.qk_matmul_output_mode == 3) {
                 for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  QKbh[i * total_kv_seq_len + j] =
-                      static_cast<float>(scores[static_cast<size_t>(j)]);
+                  QKbh[i * total_kv_seq_len + j] = scores[static_cast<size_t>(j)];
                 }
               }
               // Y[i, dv] = sum_j probs[j] * V[j, dv]
               for (int64_t dv = 0; dv < v_head_size; ++dv) {
-                double y = 0.0;
+                float y = 0.0f;
                 for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-                  y += scores[static_cast<size_t>(j)] *
-                       static_cast<double>(Vbh[j * v_head_size + dv]);
+                  y += scores[static_cast<size_t>(j)] * Vbh[j * v_head_size + dv];
                 }
-                Ybh[i * v_head_size + dv] = static_cast<float>(y);
+                if (!std::isfinite(y))
+                  y = RecomputeAttentionValue(scores, Vbh + dv, total_kv_seq_len, v_head_size, y);
+                Ybh[i * v_head_size + dv] = y;
               }
             }
           }
@@ -606,13 +699,15 @@ Attention::Result ComputeAttentionRank3(const Tensor &Q, const Tensor &K, const 
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
-                                        int64_t parallel_minimum_elements) {
+                                        int64_t parallel_minimum_elements,
+                                        const std::array<bool, 4> &outputs) {
   Tensor Q4 = PromoteRank3(Q, attrs.q_num_heads, "Q", rt);
   Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", rt);
   Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", rt);
-  Attention::Result r = ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value,
-                                              nonpad_kv_seqlen, rt, /*temporary_y=*/true,
-                                              /*allow_capacity=*/false, parallel_minimum_elements);
+  Attention::Result r =
+      ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
+                            rt, /*temporary_y=*/true,
+                            /*allow_capacity=*/false, parallel_minimum_elements, outputs);
   r.Y = CollapseToRank3(r.Y, rt);
   return r;
 }
@@ -673,6 +768,13 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                                         const Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
+  std::array<bool, 4> outputs{true, true, true, true};
+  for (int slot = 1; slot < 4; ++slot) {
+    if (node_ != nullptr)
+      outputs[slot] = slot < node_->output_size() && !node_->output(slot).empty();
+    else if (rt != nullptr && !rt->output_slot_io_roles().empty())
+      outputs[slot] = HasRecordedOutputSlot(rt, slot);
+  }
   // ----- Half-precision fast path ----------------------------------------
   // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
   // implementation runs in float32, and the result tensors are demoted
@@ -683,6 +785,9 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                         "kernel::Attention: Q, K, V must share the same dtype.");
     const int32_t target_dtype = Q.data_type;
     RuntimeContext scratch_rt = rt ? rt->MakeFunctionContext() : RuntimeContext(ctx_);
+    if (rt != nullptr)
+      scratch_rt.set_output_slot_io_roles(
+          std::vector<bool>(rt->output_slot_io_roles().size(), false));
     if (rt && rt->events_enabled())
       scratch_rt.set_current_node_index(rt->current_node_index());
     RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
@@ -720,9 +825,12 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                                destination_slot);
     };
     r.Y = demote_result(r_f.Y, 0);
-    r.present_key = demote_result(r_f.present_key, 1);
-    r.present_value = demote_result(r_f.present_value, 2);
-    r.qk_matmul_output = demote_result(r_f.qk_matmul_output, 3);
+    if (outputs[1])
+      r.present_key = demote_result(r_f.present_key, 1);
+    if (outputs[2])
+      r.present_value = demote_result(r_f.present_value, 2);
+    if (outputs[3])
+      r.qk_matmul_output = demote_result(r_f.qk_matmul_output, 3);
     return r;
   }
 
@@ -737,10 +845,10 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                       "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
   if (Q.shape.size() == 3) {
     return ComputeAttentionRank3(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                                 rt, tuning().parallel_minimum_elements);
+                                 rt, tuning().parallel_minimum_elements, outputs);
   }
   return ComputeAttentionRank4(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                               rt, false, true, tuning().parallel_minimum_elements);
+                               rt, false, true, tuning().parallel_minimum_elements, outputs);
 }
 
 void Attention::Run(RuntimeContext &rt) {
@@ -791,6 +899,184 @@ void Attention::Run(RuntimeContext &rt) {
   set_optional_output(1, std::move(result.present_key));
   set_optional_output(2, std::move(result.present_value));
   set_optional_output(3, std::move(result.qk_matmul_output));
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  return ComputePeakMemoryAttention(device, NodeProto{}, input_shapes);
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryAttention(Device, const NodeProto &node,
+                           const std::vector<SymShape> &input_shapes) {
+  if (input_shapes.size() < 3) {
+    return core::shapes::UnknownPeakMemory("", "Attention");
+  }
+  for (int slot = 3; slot < std::min(node.input_size(), 6); ++slot) {
+    if (!node.input(slot).empty() &&
+        (static_cast<size_t>(slot) >= input_shapes.size() || input_shapes[slot].Empty()))
+      return core::shapes::UnknownPeakMemory("", "Attention");
+  }
+  const SymShape &q_shape = input_shapes[0];
+  const SymShape &k_shape = input_shapes[1];
+  const bool packed = q_shape.Rank() == 3;
+  if ((!packed && q_shape.Rank() != 4) || k_shape.Rank() != q_shape.Rank() ||
+      input_shapes[2].Rank() != q_shape.Rank()) {
+    return core::shapes::UnknownPeakMemory("", "Attention");
+  }
+
+  SymDim q_num_heads = packed ? SymDim(int64_t{0}) : q_shape[1];
+  int64_t packed_kv_heads = 1;
+  if (packed) {
+    int64_t heads = 0, kv_heads = 0;
+    bool has_q = false, has_kv = false;
+    for (const auto &attr : node.attribute()) {
+      if (attr.name() == "q_num_heads") {
+        heads = attr.i();
+        has_q = true;
+      } else if (attr.name() == "kv_num_heads") {
+        kv_heads = attr.i();
+        has_kv = true;
+      }
+    }
+    if (!has_q || !has_kv)
+      return core::shapes::UnknownPeakMemory("", "Attention");
+    EXT_ENFORCE_INVALID(heads > 0 && kv_heads > 0,
+                        "Attention scratch: q_num_heads and kv_num_heads must be positive.");
+    EXT_ENFORCE_INVALID(heads % kv_heads == 0,
+                        "Attention scratch: q_num_heads must be a multiple of kv_num_heads.");
+    q_num_heads = SymDim(heads);
+    packed_kv_heads = kv_heads;
+  }
+
+  const SymDim &batch = q_shape[0];
+  const SymDim &q_seq_len = q_shape[packed ? 1 : 2];
+  const SymDim &kv_seq_len = k_shape[packed ? 1 : 2];
+  const auto unresolved_dimension = [](const SymDim &dim) {
+    return dim.IsExpr() && (dim.AsExpr().empty() || dim.AsExpr() == "?");
+  };
+  const auto validate_dimension = [](const char *name, const SymDim &dim) {
+    if (dim.IsInt()) {
+      const int64_t value = dim.AsInt();
+      EXT_ENFORCE_INVALID(value >= 0, "Negative Attention scratch dimension '", name, "': ", value,
+                          ".");
+    }
+  };
+  validate_dimension("batch", batch);
+  validate_dimension("q_num_heads", q_num_heads);
+  validate_dimension("q_seq_len", q_seq_len);
+  validate_dimension("kv_seq_len", kv_seq_len);
+  SymDim past_seq_len(int64_t{0});
+  bool has_past = false;
+  for (std::size_t i : {std::size_t{4}, std::size_t{5}}) {
+    // Shape-only callers have no input names; empty shapes denote omitted inputs.
+    const bool present =
+        node.input_size() == 0
+            ? i < input_shapes.size() && input_shapes[i].Rank() != 0
+            : i < static_cast<std::size_t>(node.input_size()) && !node.input(i).empty();
+    if (!present)
+      continue;
+    if (i >= input_shapes.size() || input_shapes[i].Rank() != 4)
+      return core::shapes::UnknownPeakMemory("", "Attention");
+    const SymDim &length = input_shapes[i][2];
+    validate_dimension("past_seq_len", length);
+    if (has_past && past_seq_len.IsInt() && length.IsInt())
+      EXT_ENFORCE_INVALID(past_seq_len.AsInt() == length.AsInt(),
+                          "Attention scratch: past key/value sequence lengths must match.");
+    if (!has_past) {
+      past_seq_len = length;
+    } else if (unresolved_dimension(past_seq_len) || unresolved_dimension(length)) {
+      past_seq_len = SymDim("?");
+    } else if (past_seq_len != length) {
+      // Keeps both symbolic bounds until their equality is known.
+      past_seq_len = core::symbolic::FromDimType(core::expressions::dim_max(
+          core::symbolic::ToDimType(past_seq_len), core::symbolic::ToDimType(length)));
+    }
+    has_past = true;
+  }
+  SymDim total_seq_len("?");
+  if (!unresolved_dimension(kv_seq_len) && !unresolved_dimension(past_seq_len)) {
+    if (kv_seq_len.IsInt() && past_seq_len.IsInt()) {
+      total_seq_len =
+          SymDim(core::shapes::CheckedDimensionAdd(kv_seq_len.AsInt(), past_seq_len.AsInt()));
+    } else {
+      total_seq_len = core::symbolic::FromDimType(core::expressions::dim_add(
+          core::symbolic::ToDimType(kv_seq_len), core::symbolic::ToDimType(past_seq_len)));
+    }
+  }
+  const SymDim *dimensions[] = {&batch, &q_num_heads, &q_seq_len, &total_seq_len};
+  bool unresolved = false;
+  for (const SymDim *dimension : dimensions) {
+    const SymDim &dim = *dimension;
+    unresolved |= unresolved_dimension(dim);
+  }
+  const auto present_input = [&](size_t slot) {
+    return slot < input_shapes.size() &&
+           (slot < 3 || (node.input_size() == 0 ? !input_shapes[slot].Empty()
+                                                : slot < static_cast<size_t>(node.input_size()) &&
+                                                      !node.input(static_cast<int>(slot)).empty()));
+  };
+  for (size_t slot = 0; slot < input_shapes.size(); ++slot) {
+    if (!present_input(slot))
+      continue;
+    for (const auto &dim : input_shapes[slot].Dims()) {
+      validate_dimension("input", dim);
+      unresolved |= unresolved_dimension(dim);
+    }
+  }
+  if (unresolved)
+    return core::shapes::UnknownPeakMemory("", "Attention");
+
+  using namespace core::expressions;
+  using core::symbolic::ToDimType;
+  const auto elements = [&](size_t slot) -> DimType {
+    if (!present_input(slot))
+      return int64_t{0};
+    std::vector<DimType> factors;
+    for (const auto &dim : input_shapes[slot].Dims())
+      factors.push_back(ToDimType(dim));
+    return dim_multi_mul(factors);
+  };
+  const auto has_output = [&](int slot) {
+    return node.output_size() == 0 || (slot < node.output_size() && !node.output(slot).empty());
+  };
+  const DimType b = ToDimType(batch);
+  const DimType h = ToDimType(q_num_heads);
+  const DimType tq = ToDimType(q_seq_len);
+  const DimType length = ToDimType(total_seq_len);
+  const auto &v_shape = input_shapes[2];
+  const DimType kv_heads = packed ? DimType{int64_t{1}} : ToDimType(k_shape[1]);
+  const DimType value_width = packed
+                                  ? dim_exact_div(ToDimType(v_shape[2]), DimType{packed_kv_heads})
+                                  : ToDimType(v_shape[3]);
+  DimType input_elements = int64_t{0};
+  for (size_t slot = 0; slot < std::min(size_t{6}, input_shapes.size()); ++slot)
+    input_elements = dim_add(input_elements, elements(slot));
+  const DimType qkv = dim_add(dim_add(elements(0), elements(1)), elements(2));
+  const DimType y = dim_multi_mul({b, h, tq, value_width});
+
+  // Shapes alone cannot select a dtype. Bound FLOAT16/BFLOAT16 promotions
+  // and FLOAT32 intermediate results; declared final outputs are excluded.
+  DimType bytes = dim_mul(int64_t{4}, dim_add(input_elements, y));
+  if (packed)
+    bytes = dim_add(bytes, dim_mul(int64_t{4}, dim_add(qkv, y)));
+  for (int slot : {1, 2}) {
+    if (has_past || has_output(slot)) {
+      const DimType width = packed ? ToDimType(input_shapes[slot][2])
+                                   : dim_mul(kv_heads, ToDimType(input_shapes[slot][3]));
+      bytes = dim_add(bytes, dim_multi_mul({int64_t{4}, b, length, width}));
+    }
+  }
+  if (has_output(3))
+    bytes = dim_add(bytes, dim_multi_mul({int64_t{4}, b, h, tq, length}));
+  if ((!batch.IsInt() || batch.AsInt() != 0) &&
+      (!q_num_heads.IsInt() || q_num_heads.AsInt() != 0) &&
+      (!q_seq_len.IsInt() || q_seq_len.AsInt() != 0))
+    bytes = dim_add(bytes, dim_multi_mul({int64_t{4}, b, h, length}));
+  const SymDim maximum = core::symbolic::FromDimType(bytes);
+  if (maximum.IsInt() && maximum.AsInt() == 0)
+    return core::shapes::PeakMemoryEstimate::Exact(maximum);
+  return {maximum, std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -25,12 +25,13 @@ void RecordKernelConstruction() {
 
 KernelBase::KernelBase(const KernelContext &ctx) : ctx_(ctx) { RecordKernelConstruction(); }
 
-KernelBase::KernelBase(const KernelBase &other) : ctx_(other.ctx_), node_(other.node_) {
+KernelBase::KernelBase(const KernelBase &other)
+    : ctx_(other.ctx_), node_(other.node_), peak_memory_(other.peak_memory_) {
   RecordKernelConstruction();
 }
 
 KernelBase::KernelBase(KernelBase &&other) noexcept
-    : ctx_(std::move(other.ctx_)), node_(other.node_) {
+    : ctx_(std::move(other.ctx_)), node_(other.node_), peak_memory_(std::move(other.peak_memory_)) {
   RecordKernelConstruction();
 }
 
@@ -49,6 +50,13 @@ int64_t KernelBase::LiveInstanceCountForTesting() {
 // dispatch-registered kernel overrides this.
 void KernelBase::Run(RuntimeContext & /*rt*/) {
   EXT_THROW_INVALID("KernelBase::Run: this kernel does not implement Run().");
+}
+
+shapes::PeakMemoryEstimate
+KernelBase::ComputePeakMemory(symbolic::Device device,
+                              const std::vector<symbolic::SymShape> &input_shapes) const {
+  EXT_ENFORCE_INVALID(node_ != nullptr, "Peak-memory accounting requires an attached node.");
+  return shapes::ComputePeakMemory(peak_memory_, device, *node_, input_shapes);
 }
 
 KernelTuningKey KernelBase::TuningKey(int32_t) const { return {}; }

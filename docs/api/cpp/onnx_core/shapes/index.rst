@@ -33,16 +33,19 @@ Both represent scratch bytes and preserve symbolic dimensions.
 Functions are registered with
 :cpp:func:`RegisterComputePeakMemoryFn` and looked up through
 :cpp:func:`ComputePeakMemory`; operators without a registered function report
-an explicit unresolved worst-case symbol, not zero. That symbol denotes an
+zero additional workspace. Registered estimators may return an explicit
+unresolved worst-case symbol. That symbol denotes an
 operator-wide upper bound covering every invocation and device, which the caller
 must supply before checking a memory budget. An average is absent unless justified;
 deterministic workspace
 requirements have equal worst and average estimates.
-``onnx_shapes`` populates the built-in estimators (for
-example ``Attention``) via
-:cpp:func:`onnx_light::onnx_shapes::RegisterPeakMemoryFunctions`, and the
+``onnx_kernels`` owns the built-in estimators (for example ``Attention``),
+registering them alongside their factories via
+:cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions`, or separately via
+:cpp:func:`onnx_light::onnx_kernels::RegisterPeakMemoryFunctions`. The
 Python bindings expose :func:`compute_peak_memory` together with the
-``Device`` enum.
+``Device`` enum and load the optional kernels extension when available.
+Reduced builds retain the zero default for absent estimators.
 
 Every estimator uses the same callback signature,
 ``PeakMemoryEstimate(Device, const NodeProto &, const std::vector<SymShape> &)``.

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
@@ -219,6 +220,45 @@ void RMSNormalization::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt);
   const Tensor &scale = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
+}
+
+PeakMemoryEstimate ComputePeakMemoryRMSNormalization(Device, const NodeProto &node,
+                                                     const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  const auto &x = inputs[0];
+  const auto &scale = inputs[1];
+  int64_t axis = -1;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "axis") {
+      if (attr.type() != AttributeProto::INT)
+        return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+      axis = attr.i();
+    }
+  }
+  const int64_t rank = static_cast<int64_t>(x.Rank());
+  EXT_ENFORCE_INVALID(axis >= -rank && axis < rank,
+                      "RMSNormalization peak memory: axis out of range.");
+  if (axis < 0)
+    axis += rank;
+  const auto normalized_rank = x.Rank() - static_cast<size_t>(axis);
+  EXT_ENFORCE_INVALID(scale.Rank() <= normalized_rank,
+                      "RMSNormalization peak memory: scale rank exceeds normalized rank.");
+  const SymDim norm = peak_memory_detail::PeakMemoryElements(x, static_cast<size_t>(axis));
+  const SymDim index_count = core::symbolic::FromDimType(
+      core::expressions::dim_max(core::symbolic::ToDimType(norm), int64_t{1}));
+  // scale_index is at least one INT64. Coordinate/stride buffers and the
+  // half-precision promotions have disjoint lifetimes; summing bounds is safe
+  // without claiming an average for this dtype-independent estimate.
+  const SymDim indexing = peak_memory_detail::PeakMemoryMultiply(
+      SymDim(int64_t{8}),
+      peak_memory_detail::PeakMemoryAdd(
+          index_count, SymDim(static_cast<int64_t>(scale.Rank() + normalized_rank))));
+  const SymDim promotion = peak_memory_detail::PeakMemoryMultiply(
+      SymDim(int64_t{4}),
+      peak_memory_detail::PeakMemoryAdd(peak_memory_detail::PeakMemoryElements(x),
+                                        peak_memory_detail::PeakMemoryElements(scale)));
+  return {peak_memory_detail::PeakMemoryAdd(indexing, promotion), std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

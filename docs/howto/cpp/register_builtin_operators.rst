@@ -239,8 +239,8 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
 ``SymDim average_case``. All values are bytes excluding inputs and outputs.
 
 
-1. **Implement it** next to the shape function, e.g.
-   ``shapes/nn/shape_attention.cc`` (declared in ``shapes/nn/shape_nn.h``):
+1. **Implement it** next to the corresponding kernel, e.g.
+   ``kernels/nn/kernel_attention.cc`` (declared in ``kernels/nn/include_nn_kernels.h``):
 
    Preserve symbolic dimensions with the checked helpers in
    ``onnx_core/expressions/expressions.h`` and the conversions in
@@ -255,23 +255,27 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
    maximum is a valid symbolic upper-bound identifier which must be resolved
    for every invocation and device before checking a memory budget.
    Do not invent a finite bound or substitute
-   zero. See :cpp:func:`ComputePeakMemoryAttention` for symbolic score-buffer
+   zero. See :cpp:func:`ComputePeakMemoryAttention` for symbolic workspace
    arithmetic and negative-dimension/overflow validation.
 
 2. **Register it** by adding an entry to the ``BuiltinPeakMemoryFunctions``
-   table in ``onnx_light/onnx_extensions/shapes/dispatch_table.cc``:
+   table in ``onnx_light/onnx_extensions/kernels/kernel_dispatch_table.cc``:
 
    .. code-block:: cpp
 
        {"ai.onnx:Attention",
         [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
-          return nn::ComputePeakMemoryAttention(device, node, inputs);
+          return kernel::ComputePeakMemoryAttention(device, node, inputs);
         }},
 
-As with shape functions, :cpp:func:`RegisterPeakMemoryFunctions` (same
-file) copies these builtins into the shared ``core::shapes`` peak-memory
-dispatch table via
-:cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`.
+:cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions` pairs these
+estimators with their concrete kernel factories and registers both together.
+For standalone shape analysis,
+:cpp:func:`onnx_light::onnx_kernels::RegisterPeakMemoryFunctions` selects the
+same estimates without registering factories. Neither path replaces explicit
+custom registrations. ``onnx_shapes`` registers only shape inference; builds
+without ``lib_onnx_kernels`` have no portable-kernel estimates and use the
+zero default for absent estimators.
 
 Decoder peak-memory coverage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -294,6 +298,36 @@ inline shape/stride storage, allocator bookkeeping or shared thread-pool overhea
   normalized_rank) + 4 * (elements(X) + elements(scale))``. This conservatively
   sums the index/coordinate buffers and half-precision promotions even though
   some have disjoint lifetimes.
+* ``Attention``: one reusable FLOAT32 score row per concurrently processed
+  batch/query-head pair, bounded by ``4 * batch * q_num_heads *
+  (kv_seq + past_seq)``. There is no score scratch for an empty batch or query.
+  The bound also includes half-precision promotions, intermediate FLOAT32
+  results, rank-3 layout conversions and temporary KV concatenations.
+  ``qk_matmul_output`` is allocated only when requested. Declared final outputs
+  are counted by shape analysis, not again as workspace; FLOAT32 staging for
+  half-precision outputs is additional workspace.
+  Rows whose finite-input score computation overflows are recomputed with
+  FLOAT32 mantissas and separate integer exponents. Softcap and centering
+  precede narrowing back to FLOAT32; the same score buffer is reused, without
+  DOUBLE arithmetic or additional heap storage. This extends the exponent
+  range, not the precision. Genuine non-finite inputs retain IEEE propagation,
+  and requested pre-softmax scores can still exceed the output dtype's range.
+* ``LinearAttention``: delta rules reuse one FLOAT32 auxiliary vector per
+  concurrent batch/KV-head pair, bounded by ``4 * batch * value_hidden``.
+  Linear and gated rules need no auxiliary buffer, and there is no separate
+  decay buffer. The estimate uses head attributes and optional state shapes,
+  includes half-precision promotions and staging, and counts the final state
+  as workspace only when it is not a declared output.
+
+The Attention bounds cover every supported dtype and executor configuration.
+They conservatively sum some allocations with disjoint lifetimes, and do not
+claim an average. Missing head attributes in the LinearAttention shape-only
+convenience overload use conservative packed-hidden-dimension bounds.
+Named optional inputs contributing to the bound require nonempty shapes;
+missing shape slots or unknown ranks produce an unresolved estimate.
+
+The following operators use the zero default:
+
 * ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
   ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
   no per-operator registration is needed. Binary broadcast strides use inline

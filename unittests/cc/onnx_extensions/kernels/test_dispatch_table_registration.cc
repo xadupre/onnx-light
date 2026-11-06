@@ -318,9 +318,9 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement)
   const bool stored_first = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
       [](const NodeProto &, core::runtime::RuntimeContext &,
-         const core::runtime::KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+         const core::runtime::KernelContext &kernel_ctx) {
         which = 1;
-        return nullptr;
+        return std::make_unique<core::runtime::KernelBase>(kernel_ctx);
       });
   EXPECT_TRUE(stored_first);
 
@@ -332,27 +332,27 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement)
   const bool stored_if_absent = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
       [](const NodeProto &, core::runtime::RuntimeContext &,
-         const core::runtime::KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+         const core::runtime::KernelContext &kernel_ctx) {
         which = 2;
-        return nullptr;
+        return std::make_unique<core::runtime::KernelBase>(kernel_ctx);
       },
       /*overwrite=*/false);
   EXPECT_FALSE(stored_if_absent);
   which = 0;
-  table.find(key)->second(node, ctx, ctx.kernel_ctx());
+  EXPECT_NE(table.find(key)->second(node, ctx, ctx.kernel_ctx()), nullptr);
   EXPECT_EQ(which, 1) << "overwrite=false must keep the first factory.";
 
   // overwrite=true (default): the entry is replaced and the call reports true.
   const bool stored_overwrite = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
       [](const NodeProto &, core::runtime::RuntimeContext &,
-         const core::runtime::KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+         const core::runtime::KernelContext &kernel_ctx) {
         which = 3;
-        return nullptr;
+        return std::make_unique<core::runtime::KernelBase>(kernel_ctx);
       });
   EXPECT_TRUE(stored_overwrite);
   which = 0;
-  table.find(key)->second(node, ctx, ctx.kernel_ctx());
+  EXPECT_NE(table.find(key)->second(node, ctx, ctx.kernel_ctx()), nullptr);
   EXPECT_EQ(which, 3) << "overwrite=true must replace the factory.";
 }
 

@@ -26,10 +26,7 @@ namespace {
 // individually.
 class RegisterShapeFunctionsEnvironment : public ::testing::Environment {
 public:
-  void SetUp() override {
-    ::onnx_light::onnx_shapes::RegisterShapeFunctions();
-    ::onnx_light::onnx_shapes::RegisterPeakMemoryFunctions();
-  }
+  void SetUp() override { ::onnx_light::onnx_shapes::RegisterShapeFunctions(); }
 };
 
 const ::testing::Environment *const kRegisterShapeFunctionsEnvironment =

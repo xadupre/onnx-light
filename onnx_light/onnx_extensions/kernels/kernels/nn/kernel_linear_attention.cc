@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -112,8 +114,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                                               output_demoted.size_bytes())
                        : MakeOutputTensor(output_demoted.data_type, output_demoted.shape,
                                           output_demoted.size_bytes(), nullptr);
-    const bool has_state_output = rt == nullptr || rt->output_slot_io_roles().empty() ||
-                                  rt->output_slot_io_roles().size() > 1;
+    const bool has_state_output = node_ != nullptr
+                                      ? node_->output_size() > 1 && !node_->output(1).empty()
+                                      : rt == nullptr || rt->output_slot_io_roles().empty() ||
+                                            rt->output_slot_io_roles().size() > 1;
     result.present_state =
         rt ? (!has_state_output
                   ? rt->MakeTemporaryTensor(state_demoted.data_type, state_demoted.shape,
@@ -228,8 +232,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   const int64_t state_size = B * kv_num_heads * d_k * d_v;
   const Shape state_shape{B, kv_num_heads, d_k, d_v};
   const size_t state_n_bytes = static_cast<size_t>(state_size) * sizeof(float);
-  const bool has_state_output =
-      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  const bool has_state_output = node_ != nullptr
+                                    ? node_->output_size() > 1 && !node_->output(1).empty()
+                                    : rt == nullptr || rt->output_slot_io_roles().empty() ||
+                                          rt->output_slot_io_roles().size() > 1;
   Tensor state_tensor =
       rt ? (!has_state_output ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
                                                         state_shape, state_n_bytes)
@@ -276,14 +282,20 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
              static_cast<int64_t>(tuning().parallel_minimum_elements % task_work != 0));
   const int64_t participants = std::max<int64_t>(1, ParallelForThreadCount());
   const bool parallel_tasks = participants > 1 && task_count > 1 && task_count >= task_grain;
-  const int64_t scratch_slots = parallel_tasks ? std::min<int64_t>(task_count, participants) : 1;
-  detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(scratch_slots * d_k),
-                                                rt ? rt->execution_allocator() : nullptr,
-                                                "kernel::LinearAttention g_exp");
-  detail::TemporaryTypedBuffer<float> auxiliary_buf(static_cast<std::size_t>(scratch_slots * d_v),
+  const int64_t scratch_slots =
+      task_count == 0 || T == 0 || !use_beta
+          ? 0
+          : (parallel_tasks ? std::min<int64_t>(task_count, participants) : 1);
+  const Shape scratch_shape{scratch_slots, d_v};
+  const int64_t scratch_count = scratch_shape.product(0, 2, "LinearAttention scratch");
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(scratch_count) <=
+                          std::numeric_limits<size_t>::max() / sizeof(float),
+                      "kernel::LinearAttention: scratch byte size overflow.");
+  detail::TemporaryTypedBuffer<float> auxiliary_buf(static_cast<std::size_t>(scratch_count),
                                                     rt ? rt->execution_allocator() : nullptr,
                                                     "kernel::LinearAttention auxiliary");
-  const int64_t wave_size = parallel_tasks ? scratch_slots : task_count;
+  const int64_t wave_size =
+      parallel_tasks ? std::min<int64_t>(task_count, participants) : task_count;
   for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += wave_size) {
     const int64_t wave_count = std::min<int64_t>(wave_size, task_count - wave_begin);
     ParallelFor(
@@ -294,8 +306,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
             const int64_t scratch_slot = parallel_tasks ? slot : 0;
             const int64_t b = task / kv_num_heads;
             const int64_t h_kv = task % kv_num_heads;
-            float *g_exp = g_exp_buf.data() + scratch_slot * d_k;
-            float *auxiliary = auxiliary_buf.data() + scratch_slot * d_v;
+            float *auxiliary = scratch_count != 0 ? auxiliary_buf.data() + scratch_slot * d_v
+                                                  : auxiliary_buf.data();
             for (int64_t t = 0; t < T; ++t) {
               // State offset: state[b, h_kv, :, :] is at b*H_kv*d_k*d_v + h_kv*d_k*d_v
               float *S = state + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
@@ -306,26 +318,20 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
               // Value vector for this head
               const float *v_t = v_ptr + static_cast<size_t>((b * T + t) * hidden_v + h_kv * d_v);
 
-              // Get decay for this head/timestep
-              // decay_last == kv_num_heads*d_k: per-key-dim
-              // decay_last == kv_num_heads: per-head scalar
-              std::fill(g_exp, g_exp + d_k, 1.0f);
+              const float *decay_row = nullptr;
+              float head_decay = 1.0f;
               if (use_decay) {
                 if (decay_last == kv_num_heads * d_k) {
-                  const float *g_ptr =
+                  decay_row =
                       decay_ptr + static_cast<size_t>((b * T + t) * decay_last + h_kv * d_k);
-                  for (int64_t i = 0; i < d_k; ++i) {
-                    g_exp[static_cast<size_t>(i)] = std::exp(g_ptr[i]);
-                  }
                 } else {
-                  // Per-head scalar: broadcast over d_k
-                  float g_val = decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)];
-                  float eg = std::exp(g_val);
-                  for (int64_t i = 0; i < d_k; ++i) {
-                    g_exp[static_cast<size_t>(i)] = eg;
-                  }
+                  head_decay =
+                      std::exp(decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)]);
                 }
               }
+              const auto decay_factor = [&](int64_t i) {
+                return decay_row != nullptr ? std::exp(decay_row[i]) : head_decay;
+              };
 
               // Get beta for this head/timestep
               float beta_val = 1.0f;
@@ -349,10 +355,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
               } else if (rule == "gated") {
                 // S_t = exp(g_t) * S_{t-1} + k_t ⊗ v_t
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
                     S[static_cast<size_t>(i * d_v + j)] =
-                        g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] +
-                        k_t[i] * v_t[j];
+                        factor * S[static_cast<size_t>(i * d_v + j)] + k_t[i] * v_t[j];
                   }
                 }
               } else if (rule == "delta") {
@@ -377,16 +383,17 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                 float *gSk = auxiliary;
                 std::fill(gSk, gSk + d_v, 0.0f);
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
-                    gSk[static_cast<size_t>(j)] += g_exp[static_cast<size_t>(i)] *
-                                                   S[static_cast<size_t>(i * d_v + j)] * k_t[i];
+                    gSk[static_cast<size_t>(j)] +=
+                        factor * S[static_cast<size_t>(i * d_v + j)] * k_t[i];
                   }
                 }
                 // Apply decay to state and add delta
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
-                    float decayed =
-                        g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)];
+                    float decayed = factor * S[static_cast<size_t>(i * d_v + j)];
                     float diff = v_t[j] - gSk[static_cast<size_t>(j)];
                     S[static_cast<size_t>(i * d_v + j)] = decayed + beta_val * k_t[i] * diff;
                   }
@@ -458,6 +465,112 @@ void LinearAttention::Run(RuntimeContext &rt) {
       rt.Put(present_name, std::move(result.present_state));
     }
   }
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  return ComputePeakMemoryLinearAttention(device, NodeProto{}, input_shapes);
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device, const NodeProto &node,
+                                 const std::vector<SymShape> &input_shapes) {
+  if (input_shapes.size() < 3 || input_shapes[0].Rank() != 3 || input_shapes[1].Rank() != 3 ||
+      input_shapes[2].Rank() != 3) {
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  }
+
+  for (int slot = 3; slot < std::min(node.input_size(), 6); ++slot) {
+    if (!node.input(slot).empty() &&
+        (static_cast<size_t>(slot) >= input_shapes.size() || input_shapes[slot].Empty()))
+      return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  }
+  const auto present_input = [&](size_t slot) {
+    return slot < input_shapes.size() &&
+           (slot < 3 || (node.input_size() == 0 ? !input_shapes[slot].Empty()
+                                                : slot < static_cast<size_t>(node.input_size()) &&
+                                                      !node.input(static_cast<int>(slot)).empty()));
+  };
+  bool unresolved = false;
+  for (size_t slot = 0; slot < input_shapes.size(); ++slot) {
+    if (!present_input(slot))
+      continue;
+    for (const auto &dim : input_shapes[slot].Dims()) {
+      EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0,
+                          "Negative LinearAttention scratch dimension.");
+      unresolved |= dim.IsExpr() && (dim.AsExpr().empty() || dim.AsExpr() == "?");
+    }
+  }
+  if (unresolved)
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+
+  int64_t q_heads = 0, kv_heads = 0;
+  bool use_beta = true;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "q_num_heads" || attr.name() == "kv_num_heads") {
+      EXT_ENFORCE_INVALID(attr.type() == AttributeProto::INT && attr.i() > 0,
+                          "LinearAttention scratch: head counts must be positive integers.");
+      (attr.name() == "q_num_heads" ? q_heads : kv_heads) = attr.i();
+    } else if (attr.name() == "update_rule") {
+      const auto &rule = attr.s();
+      EXT_ENFORCE_INVALID(
+          attr.type() == AttributeProto::STRING &&
+              (rule == "linear" || rule == "gated" || rule == "delta" || rule == "gated_delta"),
+          "LinearAttention scratch: invalid update_rule.");
+      use_beta = rule == "delta" || rule == "gated_delta";
+    }
+  }
+  if (q_heads != 0 && kv_heads != 0)
+    EXT_ENFORCE_INVALID(q_heads % kv_heads == 0,
+                        "LinearAttention scratch: incompatible head counts.");
+  // A zero-width head permits arbitrarily many query heads. Symbolic widths
+  // may also resolve to zero, so they cannot bound missing query-head metadata.
+  if (q_heads == 0 && (!input_shapes[0][2].IsInt() || input_shapes[0][2].AsInt() == 0))
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  using namespace core::expressions;
+  using core::symbolic::ToDimType;
+  const auto elements = [&](size_t slot) -> DimType {
+    if (!present_input(slot))
+      return int64_t{0};
+    std::vector<core::expressions::DimType> factors;
+    for (const auto &dim : input_shapes[slot].Dims())
+      factors.push_back(ToDimType(dim));
+    return dim_multi_mul(factors);
+  };
+  const DimType batch = ToDimType(input_shapes[0][0]);
+  const DimType sequence = ToDimType(input_shapes[0][1]);
+  const DimType hidden_k = ToDimType(input_shapes[1][2]);
+  const DimType hidden_v = ToDimType(input_shapes[2][2]);
+  const bool has_state = present_input(3);
+  if (has_state && input_shapes[3].Rank() != 4)
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  const DimType state =
+      has_state
+          ? elements(3)
+          : dim_multi_mul(
+                {batch, dim_exact_div(hidden_k, int64_t{kv_heads > 0 ? kv_heads : 1}), hidden_v});
+  const DimType output =
+      q_heads > 0 && kv_heads > 0
+          ? dim_multi_mul(
+                {batch, sequence, int64_t{q_heads}, dim_exact_div(hidden_v, int64_t{kv_heads})})
+          : dim_multi_mul({batch, sequence,
+                           q_heads > 0 ? DimType{q_heads} : ToDimType(input_shapes[0][2]),
+                           hidden_v});
+  DimType input_elements = int64_t{0};
+  for (size_t slot = 0; slot < input_shapes.size(); ++slot)
+    input_elements = dim_add(input_elements, elements(slot));
+  // Covers promotions, FLOAT32 results and temporary half-precision demotions.
+  // The final declared output/state buffers are accounted for by shape analysis.
+  DimType bytes =
+      dim_add(dim_mul(int64_t{4}, input_elements), dim_mul(int64_t{6}, dim_add(output, state)));
+  if (node.output_size() != 0 && (node.output_size() < 2 || node.output(1).empty()))
+    bytes = dim_add(bytes, dim_mul(int64_t{4}, state));
+  if (use_beta && (!input_shapes[0][1].IsInt() || input_shapes[0][1].AsInt() != 0))
+    bytes = dim_add(bytes, dim_multi_mul({int64_t{4}, batch, hidden_v}));
+  const SymDim maximum = core::symbolic::FromDimType(bytes);
+  if (maximum.IsInt() && maximum.AsInt() == 0)
+    return core::shapes::PeakMemoryEstimate::Exact(maximum);
+  return {maximum, std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -253,6 +253,14 @@ public:
    */
   void Run(RuntimeContext &rt);
 
+  /// Returns additional memory for a resolved node's implementation.
+  /// Requires Prepare, DeclarePreparations or Run first. Later global or local
+  /// registration changes do not affect this estimate. Uses the resolution device.
+  /// This per-node estimate does not include nested graphs, persistent preparations,
+  /// declared inputs/outputs, or runtime overhead, and is not a session admission bound.
+  shapes::PeakMemoryEstimate
+  ComputePeakMemory(size_t node_index, const std::vector<symbolic::SymShape> &input_shapes) const;
+
   /// Resolves and tunes kernels and declares work without seeding or reading payloads.
   void DeclarePreparations(RuntimeContext &rt);
   /// Seeds available initializers and completes ready work without running inference.
@@ -630,6 +638,7 @@ private:
   /// :cpp:func:`VerifyOutputAllocators`.
   std::unordered_set<std::string> output_names_set_;
   bool kernels_initialized_ = false;
+  symbolic::Device kernel_device_ = symbolic::Device::kUndefined;
   /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
   /// the declarations in :cpp:member:`declared_shapes_`.
   bool check_shapes_ = false;

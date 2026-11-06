@@ -246,6 +246,69 @@ kernel *before* running the evaluators that should use it.
 
     UnregisterGlobalCustomKernel("my.domain", "Scale");  // remove global
 
+Associate implementation-specific peak memory
+--------------------------------------------
+
+Pass a ``KernelRegistration`` to global or context-local ``RegisterKernelFn``
+to select a factory and its additional-memory estimator together:
+
+.. code-block:: cpp
+
+    using namespace onnx_light::core;
+    runtime::KernelRegistration implementation{
+        factory,
+        [](symbolic::Device, const NodeProto &,
+           const std::vector<symbolic::SymShape> &) {
+          return shapes::PeakMemoryEstimate::Exact(symbolic::SymDim(int64_t{4096}));
+        }};
+    runtime::RegisterKernelFn("my.domain", "Scale", symbolic::Device::kCPU,
+                              implementation);
+    ctx.RegisterKernelFn("my.domain", "Scale", symbolic::Device::kCPU,
+                          implementation);
+
+Successful global registration replaces both the factory and global shape-only
+accounting. A refused ``overwrite=false`` registration changes neither.
+An empty estimator explicitly selects **zero additional memory**; it never
+inherits a previous implementation's estimator. A bare factory-only registration
+has the same zero-memory policy. Use an estimator returning
+``shapes::UnknownPeakMemory`` when no justified bound is available.
+Lazy built-in kernel and estimator registration preserves explicit selections,
+including explicit zero-memory selections.
+
+.. warning::
+
+    Migrating an existing backend's bare factory registration selects zero
+    workspace even if an independent built-in estimate was previously present.
+    Backend implementations that allocate temporary memory must supply their
+    own estimator (or an explicit unknown bound); omitting it is a zero-memory
+    claim, not a request to keep the built-in estimate.
+
+``MakeKernelFactory(implementation)`` produces a factory carrying its estimator
+without changing either registry. Such factories retain their accounting when
+collected, copied, registered globally or locally, or restored from
+``KernelDispatchTable``. ``onnx_kernels::KernelFunctions()`` and
+``onnx_kernels::PeakMemoryFunctions()`` collect built-in metadata without
+registration side effects.
+
+Local registration never changes global shape-only accounting. After
+``RuntimeSession::DeclarePreparations``, ``Prepare`` or ``Run`` resolves kernels,
+``session.ComputePeakMemory(node_index, input_shapes)`` queries the estimator
+retained with that node's actual implementation and resolution device.
+Later registry replacement or removal affects future resolutions only.
+This per-node query excludes declared inputs/outputs, nested graphs, persistent
+preparations and runtime overhead; it is not a whole-session admission bound.
+Standalone ``shapes::ComputePeakMemory`` queries describe the current global
+per-device registry, not local/custom overrides or previously resolved sessions.
+``RegisterComputePeakMemoryFn`` remains available for standalone shape analysis;
+do not use it to independently replace accounting for a registered implementation.
+
+The estimator receives device, node attributes and input shapes, **not dtype,
+executor configuration or resolved tuning metadata**. Its bound must cover every
+dtype and execution configuration supported by that implementation, or return an
+unknown symbolic bound. Registration does not make unavailable metadata available
+or implicitly consult a session/executor. A closure may capture immutable
+implementation constraints only when they apply to every invocation it estimates.
+
 Unregister a kernel and restore the original
 --------------------------------------------
 

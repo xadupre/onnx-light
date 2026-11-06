@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -184,55 +185,6 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
     }
     ctx.Set(node.output(1), SymTensor(nullptr, state_dtype, std::move(ps_shape)));
   }
-}
-
-core::shapes::PeakMemoryEstimate
-ComputePeakMemoryLinearAttention(Device, const std::vector<SymShape> &input_shapes) {
-  constexpr int64_t kStateElementBytes = 4;
-  if (input_shapes.size() < 3 || input_shapes[0].Rank() != 3 || input_shapes[1].Rank() != 3 ||
-      input_shapes[2].Rank() != 3) {
-    return core::shapes::UnknownPeakMemory("", "LinearAttention");
-  }
-
-  const bool has_state = input_shapes.size() > 3 && input_shapes[3].Rank() == 4;
-  const SymDim *dimensions[4] = {&input_shapes[0][0], &input_shapes[1][2], &input_shapes[2][2],
-                                 nullptr};
-  const size_t count = has_state ? 4 : 3;
-  if (has_state)
-    for (size_t i = 0; i < count; ++i)
-      dimensions[i] = &input_shapes[3][i];
-  bool empty = false;
-  bool unresolved = false;
-  bool concrete = true;
-  for (size_t i = 0; i < count; ++i) {
-    const SymDim &dim = *dimensions[i];
-    EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0,
-                        "Negative LinearAttention scratch dimension.");
-    empty |= dim.IsInt() && dim.AsInt() == 0;
-    concrete &= dim.IsInt();
-    unresolved |= dim.IsExpr() && (dim.AsExpr().empty() || dim.AsExpr() == "?");
-  }
-  if (empty)
-    return core::shapes::PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
-  if (unresolved)
-    return core::shapes::UnknownPeakMemory("", "LinearAttention");
-  SymDim bytes;
-  if (concrete) {
-    int64_t size = kStateElementBytes;
-    for (size_t i = 0; i < count; ++i)
-      size = core::shapes::CheckedDimensionMultiply(size, dimensions[i]->AsInt());
-    bytes = SymDim(size);
-  } else {
-    std::vector<core::expressions::DimType> factors;
-    factors.reserve(count + 1);
-    factors.emplace_back(kStateElementBytes);
-    for (size_t i = 0; i < count; ++i)
-      factors.push_back(core::symbolic::ToDimType(*dimensions[i]));
-    bytes = core::symbolic::FromDimType(core::expressions::dim_multi_mul(factors));
-  }
-  if (has_state)
-    return core::shapes::PeakMemoryEstimate::Exact(bytes);
-  return {bytes, std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

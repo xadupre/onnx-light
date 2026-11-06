@@ -44,7 +44,10 @@ and optional integer min/max bounds.
 
 The per-operator built-in shape and peak-memory functions live in
 process-wide dispatch tables populated explicitly by
-``RegisterShapeFunctions`` and ``RegisterPeakMemoryFunctions``. A
+``onnx_shapes::RegisterShapeFunctions`` and
+``onnx_kernels::RegisterKernelFunctions`` (or the shape-only
+``onnx_kernels::RegisterPeakMemoryFunctions``). Workspace estimator
+implementations belong to the kernels, not to shape inference. A
 ``ShapesContext`` never mutates those tables while analyzing a model:
 model-local functions, custom callbacks, inferred values, nested contexts, and
 peak-memory results remain local to that analysis. Writing inferred

@@ -138,7 +138,7 @@ RewritingProto OptimizeGelu(core::builder::GraphBuilder &builder) {
 TEST(GeluPattern, OptimizesExactFormsAndCommutativeInputsInSupportedTypes) {
   for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
                           core::symbolic::TensorType::kDouble}) {
-    for (int placement : {0, 1, 2}) {
+    for (int placement : {0, 1}) {
       for (bool reciprocal : {false, true}) {
         for (bool divide_half : {false, true}) {
           for (unsigned swapped : {0u, 1u, 2u, 4u, 8u, 15u}) {
@@ -161,6 +161,25 @@ TEST(GeluPattern, OptimizesExactFormsAndCommutativeInputsInSupportedTypes) {
             EXPECT_EQ(builder.GetShape("y").Shape(), Shape({2, 3}));
             EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
           }
+        }
+      }
+    }
+  }
+}
+
+TEST(GeluPattern, ExactRejectsFinalHalfScalingWithoutMutation) {
+  for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
+                          core::symbolic::TensorType::kDouble}) {
+    for (bool reciprocal : {false, true}) {
+      for (bool divide_half : {false, true}) {
+        for (unsigned swapped : {0u, 8u, 15u}) {
+          SCOPED_TRACE(testing::Message() << static_cast<int>(type) << ":" << reciprocal << ":"
+                                          << divide_half << ":" << swapped);
+          core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+          MakeExactGelu(builder, type, 2, reciprocal, divide_half, swapped);
+          const auto before = builder.ToModel();
+          EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+          EXPECT_TRUE(builder.ToModel().Equals(before));
         }
       }
     }
@@ -386,6 +405,22 @@ TEST(GeluPattern, ExactAcceptsTensorConstantsAndOrtHistoricalSqrtTwo) {
     EXPECT_FALSE(OptimizeGelu(builder).rewrites().empty());
     ASSERT_EQ(builder.Nodes().size(), 1u);
     EXPECT_EQ(builder.Nodes()[0].op_type(), "Gelu");
+  }
+}
+
+TEST(GeluPattern, ExactRejectsPromotedFloatConstantsInDoubleGraphs) {
+  for (const double value : {static_cast<double>(std::sqrt(2.0f)), 1.4142099618911743,
+                             static_cast<double>(1.0f / std::sqrt(2.0f))}) {
+    SCOPED_TRACE(value);
+    const bool reciprocal = value < 1.0;
+    core::builder::GraphBuilder builder("exact", SchemaLookup(), {{"", 20}});
+    MakeExactGelu(builder, core::symbolic::TensorType::kDouble, 0, reciprocal);
+    auto &initializers =
+        const_cast<utils::RepeatedProtoField<TensorProto> &>(builder.Initializers());
+    initializers[0] = MakeInitializer<double>("sqrt_two", {1}, {value});
+    const auto before = builder.ToModel();
+    EXPECT_TRUE(OptimizeGelu(builder).rewrites().empty());
+    EXPECT_TRUE(builder.ToModel().Equals(before));
   }
 }
 

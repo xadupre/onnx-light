@@ -33,10 +33,13 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * The exact form requires a known default-domain opset of at least 20 and
  * FLOAT, FLOAT16, or DOUBLE data. Commutative inputs may be swapped. Scaling
- * by one half may precede the final multiplication on either branch or follow
- * it; division by two is also supported. ``x / sqrt(2)`` may instead multiply
+ * by one half must precede the final multiplication on either branch;
+ * division by two on either branch is also supported. Final scaling by one
+ * half is refused because the preceding product can overflow before scaling.
+ * ``x / sqrt(2)`` may instead multiply
  * by ``1 / sqrt(2)``. Constants must equal their dtype-rounded values; division
- * also accepts ORT's historical FLOAT sqrt(2) constants. Unlike ORT's general
+ * also accepts ORT's historical sqrt(2) constants for FLOAT tensors only.
+ * DOUBLE tensors require the canonical double-precision constant. Unlike ORT's general
  * relative tolerance, the one and one-half constants must be exact.
  * Tensor constants must have exactly one inline element and must not be
  * overridable graph inputs. Known intermediate shapes

@@ -156,10 +156,13 @@ const std::string *HalfScaledInput(core::builder::GraphGraph &graph, const NodeP
 }
 
 const std::string *ErfScaledInput(core::builder::GraphGraph &graph, const NodeProto *node) {
-  if (IsNode(node, "Div", 2) && (IsGeluScalar(graph, node->input()[1].value(), std::sqrt(2.0)) ||
-                                 IsGeluScalar(graph, node->input()[1].value(), std::sqrt(2.0f)) ||
-                                 IsGeluScalar(graph, node->input()[1].value(), 1.4142099618911743)))
-    return &node->input()[0].value();
+  if (IsNode(node, "Div", 2)) {
+    const auto &denominator = node->input()[1].value();
+    if (IsGeluScalar(graph, denominator, std::sqrt(2.0)) ||
+        (graph.HasType(denominator) && graph.GetType(denominator) == TensorType::kFloat &&
+         IsGeluScalar(graph, denominator, 1.4142099618911743)))
+      return &node->input()[0].value();
+  }
   if (IsNode(node, "Mul", 2)) {
     for (int index = 0; index < 2; ++index)
       if (IsGeluScalar(graph, node->input()[1 - index].value(), 1.0 / std::sqrt(2.0)))
@@ -210,41 +213,28 @@ std::vector<const NodeProto *> ExactGeluNodes(core::builder::GraphGraph &graph,
 
 std::vector<const NodeProto *> MatchExactGelu(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) {
-  if (!IsNode(&candidate, "Mul", 2) && !IsNode(&candidate, "Div", 2))
+  if (!IsNode(&candidate, "Mul", 2))
     return {};
-  if (const auto *input = HalfScaledInput(graph, &candidate)) {
-    const NodeProto *mul = graph.NodeBefore(*input);
-    if (IsNode(mul, "Mul", 2)) {
-      for (int index = 0; index < 2; ++index) {
-        auto nodes = ExactGeluNodes(graph, candidate, graph.NodeBefore(mul->input()[index].value()),
-                                    mul, mul->input()[1 - index].value());
-        if (!nodes.empty())
-          return nodes;
-      }
-    }
-  }
-  if (IsNode(&candidate, "Mul", 2)) {
-    for (int index = 0; index < 2; ++index) {
-      const NodeProto *half = graph.NodeBefore(candidate.input()[index].value());
-      const std::string *input = HalfScaledInput(graph, half);
-      if (input == nullptr)
-        continue;
-      auto nodes = ExactGeluNodes(
-          graph, candidate, graph.NodeBefore(candidate.input()[1 - index].value()), half, *input);
-      if (!nodes.empty())
-        return nodes;
-      nodes = ExactGeluNodes(graph, candidate, graph.NodeBefore(*input), half,
-                             candidate.input()[1 - index].value());
-      if (!nodes.empty())
-        return nodes;
-    }
+  for (int index = 0; index < 2; ++index) {
+    const NodeProto *half = graph.NodeBefore(candidate.input()[index].value());
+    const std::string *input = HalfScaledInput(graph, half);
+    if (input == nullptr)
+      continue;
+    auto nodes = ExactGeluNodes(
+        graph, candidate, graph.NodeBefore(candidate.input()[1 - index].value()), half, *input);
+    if (!nodes.empty())
+      return nodes;
+    nodes = ExactGeluNodes(graph, candidate, graph.NodeBefore(*input), half,
+                           candidate.input()[1 - index].value());
+    if (!nodes.empty())
+      return nodes;
   }
   return {};
 }
 
 } // namespace
 
-std::set<std::string> GeluPattern::FastOpType() const { return {"Mul", "Div"}; }
+std::set<std::string> GeluPattern::FastOpType() const { return {"Mul"}; }
 
 core::builder::MatchResult GeluPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {

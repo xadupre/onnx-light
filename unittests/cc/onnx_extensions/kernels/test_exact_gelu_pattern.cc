@@ -27,47 +27,56 @@ TEST(GeluPattern, ExactNumericallyMatchesOriginalGraphsAcrossDtypesAndArrangemen
   const auto schemas = [](const std::string &op) {
     return onnx_op::GetAllOnnxOpSchemasWithHistory(op, false);
   };
-  const std::vector<double> values{-std::numeric_limits<double>::infinity(),
-                                   -8,
-                                   -4,
-                                   -3,
-                                   -2,
-                                   -1,
-                                   -0.5,
-                                   -0.1,
-                                   -0.0,
-                                   0.0,
-                                   1e-8,
-                                   1e-4,
-                                   0.1,
-                                   0.5,
-                                   1,
-                                   2,
-                                   3,
-                                   4,
-                                   8,
-                                   20,
-                                   std::numeric_limits<double>::infinity(),
-                                   std::numeric_limits<double>::quiet_NaN(),
-                                   -1e-4,
-                                   -1e-8};
+  const std::vector<double> ordinary_values{-std::numeric_limits<double>::infinity(),
+                                            -8,
+                                            -4,
+                                            -3,
+                                            -2,
+                                            -1,
+                                            -0.5,
+                                            -0.1,
+                                            -0.0,
+                                            0.0,
+                                            1e-8,
+                                            1e-4,
+                                            0.1,
+                                            0.5,
+                                            1,
+                                            2,
+                                            3,
+                                            4,
+                                            8,
+                                            20,
+                                            std::numeric_limits<double>::infinity(),
+                                            std::numeric_limits<double>::quiet_NaN(),
+                                            -1e-4,
+                                            -1e-8};
   for (const auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16,
                           core::symbolic::TensorType::kDouble}) {
+    std::vector<double> values = ordinary_values;
+    const double large = type == core::symbolic::TensorType::kDouble
+                             ? 1e308
+                             : (type == core::symbolic::TensorType::kFloat ? 2e38 : 65000.0);
+    values.push_back(large);
+    values.push_back(-large);
     const auto dtype =
         static_cast<TensorProto::DataType>(core::symbolic::TensorTypeToDataType(type));
     core::runtime::Tensor input;
     if (type == core::symbolic::TensorType::kDouble) {
-      input = core::runtime::Tensor::FromDouble("x", {2, 12}, values);
+      input = core::runtime::Tensor::FromDouble("x", {2, 13}, values);
     } else if (type == core::symbolic::TensorType::kFloat) {
-      input = core::runtime::Tensor::FromFloat("x", {2, 12},
-                                               std::vector<float>(values.begin(), values.end()));
+      std::vector<float> float_values;
+      float_values.reserve(values.size());
+      for (double value : values)
+        float_values.push_back(static_cast<float>(value));
+      input = core::runtime::Tensor::FromFloat("x", {2, 13}, float_values);
     } else {
       core::runtime::RawByteBuffer bytes(values.size() * sizeof(uint16_t));
       for (size_t index = 0; index < values.size(); ++index) {
         const uint16_t bits = core::runtime::FloatToFloat16Bits(static_cast<float>(values[index]));
         std::memcpy(bytes.data() + index * sizeof(bits), &bits, sizeof(bits));
       }
-      input = core::runtime::Tensor::FromRawBytes("x", dtype, {2, 12}, std::move(bytes));
+      input = core::runtime::Tensor::FromRawBytes("x", dtype, {2, 13}, std::move(bytes));
     }
     const auto element = [type](const core::runtime::Tensor &tensor, size_t index) {
       if (type == core::symbolic::TensorType::kDouble)
@@ -86,7 +95,7 @@ TEST(GeluPattern, ExactNumericallyMatchesOriginalGraphsAcrossDtypesAndArrangemen
                                             << reciprocal << ":" << divide_half << ":" << swapped);
             core::builder::GraphBuilder builder("exact", schemas, {{"", 20}});
             core::symbolic::SymShape shape;
-            for (int64_t dim : {2, 12})
+            for (int64_t dim : {2, 13})
               shape.PushBack(core::symbolic::SymDim(dim));
             builder.MakeInput("x", type, shape);
             for (const auto &[name, value] : std::vector<std::pair<std::string, double>>{
@@ -120,11 +129,18 @@ TEST(GeluPattern, ExactNumericallyMatchesOriginalGraphsAcrossDtypesAndArrangemen
             core::builder::ConstantFoldingOptions folding;
             folding.enabled = false;
             const auto plan = graph.Optimize(4, nullptr, folding);
-            ASSERT_FALSE(plan.rewrites().empty());
-            EXPECT_EQ(plan.rewrites(0).pattern_name(), "Gelu");
-            ASSERT_EQ(builder.Nodes().size(), 1u);
-            EXPECT_EQ(builder.Nodes()[0].op_type(), "Gelu");
-            EXPECT_EQ(GetAttributeOr<std::string>(builder.Nodes()[0], "approximate", ""), "none");
+            if (placement == 2) {
+              EXPECT_TRUE(plan.rewrites().empty());
+              ASSERT_EQ(builder.Nodes().size(), 5u);
+              EXPECT_TRUE(std::isinf(element(expected[0], values.size() - 2)));
+            } else {
+              ASSERT_FALSE(plan.rewrites().empty());
+              EXPECT_EQ(plan.rewrites(0).pattern_name(), "Gelu");
+              ASSERT_EQ(builder.Nodes().size(), 1u);
+              EXPECT_EQ(builder.Nodes()[0].op_type(), "Gelu");
+              EXPECT_EQ(GetAttributeOr<std::string>(builder.Nodes()[0], "approximate", ""), "none");
+              EXPECT_EQ(element(expected[0], values.size() - 2), element(input, values.size() - 2));
+            }
             const auto actual = core::runtime::RunModel(builder.ToModel(), {input});
             ASSERT_EQ(actual.size(), 1u);
             ASSERT_EQ(expected.size(), 1u);

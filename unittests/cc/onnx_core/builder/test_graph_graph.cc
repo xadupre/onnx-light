@@ -454,15 +454,15 @@ TEST(GraphGraph, CleanupRecordsOnlyRemovedNodesAndInitializers) {
         EXPECT_TRUE(optimized_scope.node(0).Equals(original_scope.node(dead_nodes ? 1 : 0)));
         EXPECT_TRUE(optimized_scope.node(1).Equals(original_scope.node(dead_nodes ? 3 : 1)));
         EXPECT_EQ(optimized_scope.initializer_size(), 0);
-        const GraphProto optimized = builder.BuildGraph();
+        const GraphProto optimized = builder.ToGraph();
         RewritingProto loaded;
         ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
         auto replayed =
             core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
-        EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
+        EXPECT_EQ(replayed.ToGraph().SerializeAsString(), optimized.SerializeAsString());
         auto restored = builder.UndoRewritings(loaded);
         EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original_graph.SerializeAsString());
-        EXPECT_EQ(restored.ApplyRewritings(loaded).BuildGraph().SerializeAsString(),
+        EXPECT_EQ(restored.ApplyRewritings(loaded).ToGraph().SerializeAsString(),
                   optimized.SerializeAsString());
       }
     }

@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -112,8 +113,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                                               output_demoted.size_bytes())
                        : MakeOutputTensor(output_demoted.data_type, output_demoted.shape,
                                           output_demoted.size_bytes(), nullptr);
-    const bool has_state_output = rt == nullptr || rt->output_slot_io_roles().empty() ||
-                                  rt->output_slot_io_roles().size() > 1;
+    const bool has_state_output = node_ != nullptr
+                                      ? node_->output_size() > 1 && !node_->output(1).empty()
+                                      : rt == nullptr || rt->output_slot_io_roles().empty() ||
+                                            rt->output_slot_io_roles().size() > 1;
     result.present_state =
         rt ? (!has_state_output
                   ? rt->MakeTemporaryTensor(state_demoted.data_type, state_demoted.shape,
@@ -228,8 +231,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   const int64_t state_size = B * kv_num_heads * d_k * d_v;
   const Shape state_shape{B, kv_num_heads, d_k, d_v};
   const size_t state_n_bytes = static_cast<size_t>(state_size) * sizeof(float);
-  const bool has_state_output =
-      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  const bool has_state_output = node_ != nullptr
+                                    ? node_->output_size() > 1 && !node_->output(1).empty()
+                                    : rt == nullptr || rt->output_slot_io_roles().empty() ||
+                                          rt->output_slot_io_roles().size() > 1;
   Tensor state_tensor =
       rt ? (!has_state_output ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
                                                         state_shape, state_n_bytes)
@@ -276,14 +281,20 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
              static_cast<int64_t>(tuning().parallel_minimum_elements % task_work != 0));
   const int64_t participants = std::max<int64_t>(1, ParallelForThreadCount());
   const bool parallel_tasks = participants > 1 && task_count > 1 && task_count >= task_grain;
-  const int64_t scratch_slots = parallel_tasks ? std::min<int64_t>(task_count, participants) : 1;
-  detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(scratch_slots * d_k),
-                                                rt ? rt->execution_allocator() : nullptr,
-                                                "kernel::LinearAttention g_exp");
-  detail::TemporaryTypedBuffer<float> auxiliary_buf(static_cast<std::size_t>(scratch_slots * d_v),
+  const int64_t scratch_slots =
+      task_count == 0 || T == 0 || !use_beta
+          ? 0
+          : (parallel_tasks ? std::min<int64_t>(task_count, participants) : 1);
+  const Shape scratch_shape{scratch_slots, d_v};
+  const int64_t scratch_count = scratch_shape.product(0, 2, "LinearAttention scratch");
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(scratch_count) <=
+                          std::numeric_limits<size_t>::max() / sizeof(float),
+                      "kernel::LinearAttention: scratch byte size overflow.");
+  detail::TemporaryTypedBuffer<float> auxiliary_buf(static_cast<std::size_t>(scratch_count),
                                                     rt ? rt->execution_allocator() : nullptr,
                                                     "kernel::LinearAttention auxiliary");
-  const int64_t wave_size = parallel_tasks ? scratch_slots : task_count;
+  const int64_t wave_size =
+      parallel_tasks ? std::min<int64_t>(task_count, participants) : task_count;
   for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += wave_size) {
     const int64_t wave_count = std::min<int64_t>(wave_size, task_count - wave_begin);
     ParallelFor(
@@ -294,8 +305,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
             const int64_t scratch_slot = parallel_tasks ? slot : 0;
             const int64_t b = task / kv_num_heads;
             const int64_t h_kv = task % kv_num_heads;
-            float *g_exp = g_exp_buf.data() + scratch_slot * d_k;
-            float *auxiliary = auxiliary_buf.data() + scratch_slot * d_v;
+            float *auxiliary = scratch_count != 0 ? auxiliary_buf.data() + scratch_slot * d_v
+                                                  : auxiliary_buf.data();
             for (int64_t t = 0; t < T; ++t) {
               // State offset: state[b, h_kv, :, :] is at b*H_kv*d_k*d_v + h_kv*d_k*d_v
               float *S = state + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
@@ -306,26 +317,20 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
               // Value vector for this head
               const float *v_t = v_ptr + static_cast<size_t>((b * T + t) * hidden_v + h_kv * d_v);
 
-              // Get decay for this head/timestep
-              // decay_last == kv_num_heads*d_k: per-key-dim
-              // decay_last == kv_num_heads: per-head scalar
-              std::fill(g_exp, g_exp + d_k, 1.0f);
+              const float *decay_row = nullptr;
+              float head_decay = 1.0f;
               if (use_decay) {
                 if (decay_last == kv_num_heads * d_k) {
-                  const float *g_ptr =
+                  decay_row =
                       decay_ptr + static_cast<size_t>((b * T + t) * decay_last + h_kv * d_k);
-                  for (int64_t i = 0; i < d_k; ++i) {
-                    g_exp[static_cast<size_t>(i)] = std::exp(g_ptr[i]);
-                  }
                 } else {
-                  // Per-head scalar: broadcast over d_k
-                  float g_val = decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)];
-                  float eg = std::exp(g_val);
-                  for (int64_t i = 0; i < d_k; ++i) {
-                    g_exp[static_cast<size_t>(i)] = eg;
-                  }
+                  head_decay =
+                      std::exp(decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)]);
                 }
               }
+              const auto decay_factor = [&](int64_t i) {
+                return decay_row != nullptr ? std::exp(decay_row[i]) : head_decay;
+              };
 
               // Get beta for this head/timestep
               float beta_val = 1.0f;
@@ -349,10 +354,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
               } else if (rule == "gated") {
                 // S_t = exp(g_t) * S_{t-1} + k_t ⊗ v_t
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
                     S[static_cast<size_t>(i * d_v + j)] =
-                        g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] +
-                        k_t[i] * v_t[j];
+                        factor * S[static_cast<size_t>(i * d_v + j)] + k_t[i] * v_t[j];
                   }
                 }
               } else if (rule == "delta") {
@@ -377,16 +382,17 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                 float *gSk = auxiliary;
                 std::fill(gSk, gSk + d_v, 0.0f);
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
-                    gSk[static_cast<size_t>(j)] += g_exp[static_cast<size_t>(i)] *
-                                                   S[static_cast<size_t>(i * d_v + j)] * k_t[i];
+                    gSk[static_cast<size_t>(j)] +=
+                        factor * S[static_cast<size_t>(i * d_v + j)] * k_t[i];
                   }
                 }
                 // Apply decay to state and add delta
                 for (int64_t i = 0; i < d_k; ++i) {
+                  const float factor = decay_factor(i);
                   for (int64_t j = 0; j < d_v; ++j) {
-                    float decayed =
-                        g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)];
+                    float decayed = factor * S[static_cast<size_t>(i * d_v + j)];
                     float diff = v_t[j] - gSk[static_cast<size_t>(j)];
                     S[static_cast<size_t>(i * d_v + j)] = decayed + beta_val * k_t[i] * diff;
                   }

@@ -167,11 +167,10 @@ UniformWindowReference MakeUniformWindowReference4(
         for (int64_t d = 0; d < value_head_size; ++d) {
           float sum = 0.0f;
           for (int64_t j : allowed) {
-            sum += static_cast<float>(100 * kv_head + 10 * d + j);
+            sum += probability * static_cast<float>(100 * kv_head + 10 * d + j);
           }
           y_values[static_cast<size_t>(
-              ((b * query_heads + h) * query_length + i) * value_head_size + d)] =
-              sum / static_cast<float>(allowed.size());
+              ((b * query_heads + h) * query_length + i) * value_head_size + d)] = sum;
         }
       }
     }

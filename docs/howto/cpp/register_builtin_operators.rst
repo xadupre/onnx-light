@@ -255,7 +255,7 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
    maximum is a valid symbolic upper-bound identifier which must be resolved
    for every invocation and device before checking a memory budget.
    Do not invent a finite bound or substitute
-   zero. See :cpp:func:`ComputePeakMemoryAttention` for symbolic score-buffer
+   zero. See :cpp:func:`ComputePeakMemoryAttention` for symbolic workspace
    arithmetic and negative-dimension/overflow validation.
 
 2. **Register it** by adding an entry to the ``BuiltinPeakMemoryFunctions``
@@ -294,6 +294,28 @@ inline shape/stride storage, allocator bookkeeping or shared thread-pool overhea
   normalized_rank) + 4 * (elements(X) + elements(scale))``. This conservatively
   sums the index/coordinate buffers and half-precision promotions even though
   some have disjoint lifetimes.
+* ``Attention``: one reusable FLOAT32 score row per concurrently processed
+  batch/query-head pair, bounded by ``4 * batch * q_num_heads *
+  (kv_seq + past_seq)``. There is no score scratch for an empty batch or query.
+  The bound also includes half-precision promotions, intermediate FLOAT32
+  results, rank-3 layout conversions and temporary KV concatenations.
+  ``qk_matmul_output`` is allocated only when requested. Declared final outputs
+  are counted by shape analysis, not again as workspace; FLOAT32 staging for
+  half-precision outputs is additional workspace.
+* ``LinearAttention``: delta rules reuse one FLOAT32 auxiliary vector per
+  concurrent batch/KV-head pair, bounded by ``4 * batch * value_hidden``.
+  Linear and gated rules need no auxiliary buffer, and there is no separate
+  decay buffer. The estimate uses head attributes and optional state shapes,
+  includes half-precision promotions and staging, and counts the final state
+  as workspace only when it is not a declared output.
+
+The Attention bounds cover every supported dtype and executor configuration.
+They conservatively sum some allocations with disjoint lifetimes, and do not
+claim an average. Missing head attributes in the LinearAttention shape-only
+convenience overload use conservative packed-hidden-dimension bounds.
+
+The following operators use the zero default:
+
 * ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
   ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
   no per-operator registration is needed. Binary broadcast strides use inline

@@ -209,7 +209,7 @@ TEST(MemoryAnalysis, StandaloneScratchIgnoresUnrelatedTensorProfiles) {
   MemoryNode(second, "Attention", {"Q", "K", "V"}, "Y");
   ctx.ComputeShapes(second);
   ASSERT_NO_THROW(ctx.ComputePeakMemory(second));
-  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), int64_t{1} << 62);
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 20 * (int64_t{1} << 30));
   EXPECT_EQ(ctx.NodeMemory(0), original_profile);
   ModelProto model;
   *model.mutable_graph() = second;
@@ -647,13 +647,18 @@ TEST(MemoryAnalysis, PreservesPackedRoundingAtInt64Boundary) {
   EXPECT_NO_THROW(ctx.Compute(initializer));
 }
 
-TEST(MemoryAnalysis, RejectsAttentionScratchOverflowThroughPublicAnalysis) {
+TEST(MemoryAnalysis, AttentionWithoutQkAvoidsQuadraticWorkspaceOverflow) {
   onnx_shapes::RegisterPeakMemoryFunctions();
   GraphProto graph;
   for (const auto &name : {"Q", "K", "V"})
     MemoryInput(graph, name, {1, 1, kLarge, 1});
-  MemoryNode(graph, "Attention", {"Q", "K", "V"}, "Y");
+  auto &node = MemoryNode(graph, "Attention", {"Q", "K", "V"}, "Y");
   core::compute::ComputeContext ctx;
+  ASSERT_NO_THROW(ctx.ComputeShapes(graph));
+  ASSERT_NO_THROW(ctx.Compute(graph));
+  EXPECT_EQ(ctx.NodePeakMemory(0).worst_case.AsInt(), 20 * kLarge);
+  for (const auto *name : {"", "", "qk"})
+    node.add_output(name);
   ASSERT_NO_THROW(ctx.ComputeShapes(graph));
   EXPECT_THROW(ctx.Compute(graph), std::invalid_argument);
 }

@@ -1496,8 +1496,8 @@ const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemor
          return nn::ComputePeakMemoryAttention(device, node, inputs);
        }},
       {"ai.onnx:LinearAttention",
-       [](Device device, const NodeProto &, const std::vector<SymShape> &inputs) {
-         return nn::ComputePeakMemoryLinearAttention(device, inputs);
+       [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
+         return nn::ComputePeakMemoryLinearAttention(device, node, inputs);
        }},
   };
   return table;

@@ -559,21 +559,18 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
  * :cpp:enum:`Device` the operator runs on followed by the shapes of the
  * node's inputs.
  *
- * The estimate is dominated by the ``QK^T`` attention-score buffer, whose
- * logical shape is ``(batch, q_num_heads, q_sequence_length,
- * total_sequence_length)``. The number of elements in that buffer is
- * multiplied by 4 bytes (the ``float32`` accumulation type used for the
- * scores). Optional rank-4 past key/value inputs at positions 4/5 contribute
- * their sequence length to the total. Only the rank-4
- * ``(batch, num_heads, sequence, head_size)`` form of ``Q``/``K`` is handled
- * by this shape-only overload. Symbolic dimensions remain in the byte expression.
- * Missing inputs or unsupported ranks produce an unresolved worst-case bound.
+ * Bounds all supported dtypes and executors: one FLOAT32 score row per
+ * possible concurrent batch/head task, half-precision promotions and
+ * intermediate results, and temporary caches. Declared final outputs are
+ * excluded. This overload assumes all four outputs are returned and supports
+ * rank-4 Q/K/V; packed inputs require the node-aware overload. Symbolic
+ * dimensions remain in the byte expression. Missing shapes yield an unresolved bound.
  *
  * @param device       Device on which the operator executes (currently does
  *                     not affect the estimate).
  * @param input_shapes Shapes of the node's inputs, in order; ``input_shapes[0]``
- *                     is ``Q`` and ``input_shapes[1]`` is ``K``.
- * @returns The worst-case bytes, with an average only when the formula is exact.
+ *                     is ``Q``, followed by ``K``, ``V`` and optional inputs.
+ * @returns A conservative worst-case bound without an inferred average.
  * @throws std::invalid_argument if a contributing dimension is negative or
  *         the scratch allocation exceeds ``int64_t``.
  */
@@ -581,11 +578,14 @@ core::shapes::PeakMemoryEstimate
 ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
 
 /**
- * Estimates Attention score-buffer scratch for rank-3 or rank-4 inputs.
+ * Bounds portable Attention workspace for rank-3 or rank-4 inputs.
  * The packed rank-3 layout uses the node's positive ``q_num_heads`` and
  * ``kv_num_heads`` attributes; without them the worst-case bound is unresolved.
- * The estimate is ``batch * q_num_heads * q_seq * (kv_seq + past_seq) * 4``
- * bytes, independently of tensor dtype and structural output-buffer reuse.
+ * Score scratch is bounded by ``4 * batch * q_num_heads *
+ * (kv_seq + past_seq)`` bytes, with no scratch for empty batches or queries.
+ * Also includes half-precision promotions, intermediate FLOAT32 results,
+ * packed-layout reordering and temporary caches. Declared final outputs
+ * are excluded; an omitted qk output is neither allocated nor estimated.
  * Symbolic dimensions remain in the byte expression. Missing estimation
  * information produces an unresolved worst-case bound without an average.
  * Negative dimensions, invalid head counts and arithmetic overflow raise
@@ -594,7 +594,7 @@ ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_sha
  * @param device Device on which the operator executes.
  * @param node Attention node, including head attributes and optional cache input names.
  * @param input_shapes Input shapes in node input order, including empty optional slots.
- * @returns The worst-case bytes, with an average only when the formula is exact.
+ * @returns A conservative worst-case bound without an inferred average.
  */
 core::shapes::PeakMemoryEstimate
 ComputePeakMemoryAttention(Device device, const NodeProto &node,
@@ -603,20 +603,25 @@ ComputePeakMemoryAttention(Device device, const NodeProto &node,
 /**
  * Estimates peak scratch memory for a ``LinearAttention`` node.
  *
- * The estimate uses the exact optional past-state shape when available, and
- * otherwise uses the conservative full packed key/value hidden dimensions for
- * the recurrent state. Symbolic dimensions are preserved. Missing shapes
- * produce an unresolved worst-case bound. Without the exact state shape, no
- * average is inferred from the conservative upper bound.
+ * Includes half-precision promotions and intermediate results, plus one
+ * reusable FLOAT32 auxiliary vector for delta update rules. Without node
+ * attributes this overload conservatively bounds head geometry using packed
+ * hidden dimensions. Returned final outputs are excluded. Symbolic dimensions
+ * are preserved; missing shapes produce an unresolved bound.
  *
  * @param device       Device on which the operator executes.
  * @param input_shapes Shapes of query, key, value, and optional inputs.
- * @returns The worst-case and optional average state-buffer byte expressions.
+ * @returns A conservative worst-case bound without an inferred average.
  * @throws std::invalid_argument if a contributing dimension is negative or
  *         the scratch allocation exceeds ``int64_t``.
  */
 core::shapes::PeakMemoryEstimate
 ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes);
+
+/// Estimates portable LinearAttention workspace using head attributes and declared outputs.
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device device, const NodeProto &node,
+                                 const std::vector<SymShape> &input_shapes);
 
 /**
  * Computes the output :cpp:class:`SymTensor`(s) of a ``LinearAttention``

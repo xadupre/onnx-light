@@ -16,7 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 constexpr int64_t kDefaultIrVersion = 10;
-constexpr int64_t kStaticAttentionPeakMemoryBytes = 2 * 4 * 8 * 32 * 4;
+constexpr int64_t kStaticAttentionPeakMemoryBytes =
+    4 * (2 * 4 * 8 * 16 + 2 * 2 * 4 * 32 * 16 + 2 * 4 * 8 * 16) + 4 * 2 * 4 * 32;
 
 } // namespace
 
@@ -51,8 +52,6 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
                       std::to_string(kStaticAttentionPeakMemoryBytes));
     node.add_metadata(core::compute::kNodePeakMemoryMaxMetadataKey,
                       std::to_string(kStaticAttentionPeakMemoryBytes));
-    node.add_metadata(core::compute::kNodePeakMemoryAverageMetadataKey,
-                      std::to_string(kStaticAttentionPeakMemoryBytes));
     registry.emplace_back(std::move(tc));
   }
 
@@ -69,8 +68,7 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
     graph->set_name(name);
 
     NodeProto &node = AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
-    node.add_metadata(core::compute::kNodePeakMemoryMaxMetadataKey, "4096*batch");
-    node.add_metadata(core::compute::kNodePeakMemoryAverageMetadataKey, "4096*batch");
+    node.add_metadata(core::compute::kNodePeakMemoryMaxMetadataKey, "20992*batch");
 
     AppendValueInfo(*graph->add_input(), "Q", DataType::FLOAT,
                     {DimSpec("batch"), DimSpec(4), DimSpec(8), DimSpec(16)});

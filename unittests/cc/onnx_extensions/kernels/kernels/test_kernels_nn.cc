@@ -13,6 +13,7 @@
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
+#include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/inliner/inliner.h"
@@ -1358,6 +1359,22 @@ namespace {
 
 KernelContext AttentionKernelContext() { return KernelContext(DefaultOpset(23)); }
 
+Tensor AttentionTensor(const Shape &shape, float value, int32_t dtype) {
+  const std::vector<float> values(static_cast<size_t>(shape.product()), value);
+  if (dtype == DataType::FLOAT16)
+    return core::runtime::MakeFloat16Tensor("", shape, values);
+  if (dtype == DataType::BFLOAT16)
+    return core::runtime::MakeBfloat16Tensor("", shape, values);
+  return Tensor::FromFloat("", shape, values);
+}
+
+core::symbolic::SymShape AttentionShape(const Tensor &tensor) {
+  core::symbolic::SymShape shape;
+  for (int64_t dim : tensor.shape)
+    shape.PushBack(core::symbolic::SymDim(dim));
+  return shape;
+}
+
 } // namespace
 
 TEST(KernelClass, AttentionMatchesHandComputedSingleHead) {
@@ -1384,7 +1401,7 @@ TEST(KernelClass, AttentionMatchesHandComputedSingleHead) {
 TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   // A peak-tracking allocator wraps the pool so the test can observe the
   // maximum number of buffers alive at once during the call. The scratch
-  // buffers (scores/bias/qkraw) must be acquired from the allocator, so the
+  // score buffer must be acquired from the allocator, so the
   // peak count exceeds the number of allocator-backed result tensors alone.
   class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
   public:
@@ -1412,8 +1429,7 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-  // Capacity for the peak: 2 result tensors (Y + qk_matmul_output) plus 3
-  // scratch buffers (scores/bias/qkraw), with a little headroom.
+  // Two result tensors and one reusable FLOAT32 score buffer.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
@@ -1425,8 +1441,7 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
 
   ASSERT_TRUE(r.Y.has_allocation());
   ASSERT_TRUE(r.qk_matmul_output.has_allocation());
-  // Peak includes the 2 allocator-backed results plus the 3 scratch buffers.
-  EXPECT_GE(alloc.peak(), 5u);
+  EXPECT_EQ(alloc.peak(), 3u);
   // All scratch buffers are released; only the returned results remain alive.
   EXPECT_EQ(alloc.allocated_count(), 2u);
 
@@ -1466,9 +1481,9 @@ TEST(KernelClass, AttentionHalfPrecisionKeepsOmittedOutputsOutOfIOArena) {
   Attention::Result r = attention(Q, K, V, attrs, nullptr, nullptr, nullptr, nullptr, &rt);
 
   EXPECT_EQ(r.Y.allocation_owner(), &io_alloc);
-  EXPECT_EQ(r.present_key.allocation_owner(), &execution_alloc);
-  EXPECT_EQ(r.present_value.allocation_owner(), &execution_alloc);
-  EXPECT_EQ(r.qk_matmul_output.allocation_owner(), &execution_alloc);
+  EXPECT_EQ(r.present_key.data_type, DataType::UNDEFINED);
+  EXPECT_EQ(r.present_value.data_type, DataType::UNDEFINED);
+  EXPECT_EQ(r.qk_matmul_output.data_type, DataType::UNDEFINED);
   EXPECT_EQ(io_alloc.PeakAllocatedSize(), 2 * sizeof(uint16_t));
 }
 
@@ -1484,6 +1499,142 @@ TEST(KernelClass, AttentionExplicitScaleMatchesDefault) {
   ASSERT_EQ(Y_default.shape, Y_explicit.shape);
   for (int64_t i = 0; i < Y_default.element_count(); ++i) {
     EXPECT_NEAR(Y_default.AsFloat()[i], Y_explicit.AsFloat()[i], 1e-6);
+  }
+}
+
+TEST(KernelClass, AttentionWorkspaceBoundCoversLayoutsCachesDtypesAndOptionalOutputs) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  for (int32_t dtype : {DataType::FLOAT, DataType::FLOAT16, DataType::BFLOAT16}) {
+    for (bool packed : {false, true}) {
+      for (bool cache : {false, true}) {
+        for (bool optional_outputs : {false, true}) {
+          SCOPED_TRACE(testing::Message()
+                       << dtype << "," << packed << "," << cache << "," << optional_outputs);
+          const auto shape = [packed](int64_t heads, int64_t length, int64_t width) {
+            return packed ? Shape{2, length, heads * width} : Shape{2, heads, length, width};
+          };
+          const Tensor q = AttentionTensor(shape(2, 3, 2), 0.5f, dtype);
+          const Tensor k = AttentionTensor(shape(1, 4, 2), 0.25f, dtype);
+          const Tensor v = AttentionTensor(shape(1, 4, 3), 1.0f, dtype);
+          const Tensor mask = AttentionTensor({1, 1, 3, cache ? 6 : 4}, 0.0f, dtype);
+          const Tensor past_key = AttentionTensor({2, 1, 2, 2}, 0.25f, dtype);
+          const Tensor past_value = AttentionTensor({2, 1, 2, 3}, 1.0f, dtype);
+          NodeProto node;
+          node.set_op_type("Attention");
+          for (const auto *name : {"q", "k", "v", "mask"})
+            node.add_input(name);
+          node.add_output("y");
+          for (const auto *name : {"present_key", "present_value", "qk"})
+            node.add_output(optional_outputs ? name : "");
+          for (const auto *name : {"q_num_heads", "kv_num_heads"}) {
+            auto *attr = node.add_attribute();
+            attr->set_name(name);
+            attr->set_type(AttributeProto::INT);
+            attr->set_i(std::string(name) == "q_num_heads" ? 2 : 1);
+          }
+          std::vector<core::symbolic::SymShape> inputs = {AttentionShape(q), AttentionShape(k),
+                                                          AttentionShape(v), AttentionShape(mask)};
+          if (cache) {
+            node.add_input("past_key");
+            node.add_input("past_value");
+            inputs.push_back(AttentionShape(past_key));
+            inputs.push_back(AttentionShape(past_value));
+          }
+          SimpleRawBufferAllocator execution_alloc(64), io_alloc(16);
+          RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                                 .io_allocator = &io_alloc});
+          rt.set_output_slot_io_roles({true, true, true, true});
+          Attention attention{AttentionKernelContext()};
+          attention.set_node(node);
+          attention.Configure(
+              {attention.TuningKey(dtype), {{"parallel.minimum_elements", int64_t{1}}}});
+          Attention::Attributes attrs;
+          attrs.q_num_heads = 2;
+          attrs.kv_num_heads = 1;
+          const auto result = attention(q, k, v, attrs, &mask, cache ? &past_key : nullptr,
+                                        cache ? &past_value : nullptr, nullptr, &rt);
+          EXPECT_EQ(result.Y.allocation_owner(), &io_alloc);
+          EXPECT_EQ(result.qk_matmul_output.data_type,
+                    optional_outputs ? dtype : DataType::UNDEFINED);
+          const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryAttention(
+              core::symbolic::Device::kCPU, node, inputs);
+          EXPECT_LE(execution_alloc.PeakAllocatedSize(),
+                    static_cast<size_t>(estimate.worst_case.AsInt()));
+          if (dtype == DataType::FLOAT && !packed && !cache) {
+            EXPECT_EQ(execution_alloc.PeakAllocatedSize(), 2 * 4 * sizeof(float));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelClass, LinearAttentionWorkspaceBoundCoversRulesDtypesAndOmittedState) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  for (int32_t dtype : {DataType::FLOAT, DataType::FLOAT16, DataType::BFLOAT16}) {
+    for (const auto *rule : {"linear", "gated", "delta", "gated_delta"}) {
+      for (bool state_output : {false, true}) {
+        SCOPED_TRACE(testing::Message() << dtype << "," << rule << "," << state_output);
+        const Tensor q = AttentionTensor({2, 3, 4}, 0.5f, dtype);
+        const Tensor k = AttentionTensor({2, 3, 2}, 0.25f, dtype);
+        const Tensor v = AttentionTensor({2, 3, 3}, 1.0f, dtype);
+        const Tensor state = AttentionTensor({2, 1, 2, 3}, 0.25f, DataType::FLOAT);
+        const Tensor decay = AttentionTensor({2, 3, 2}, -0.5f, dtype);
+        const Tensor beta = AttentionTensor({2, 3, 1}, 0.25f, dtype);
+        NodeProto node;
+        node.set_op_type("LinearAttention");
+        for (const auto *name : {"q", "k", "v", "past", "decay", "beta"})
+          node.add_input(name);
+        node.add_output("y");
+        node.add_output(state_output ? "state" : "");
+        for (const auto *name : {"q_num_heads", "kv_num_heads"}) {
+          auto *attr = node.add_attribute();
+          attr->set_name(name);
+          attr->set_type(AttributeProto::INT);
+          attr->set_i(std::string(name) == "q_num_heads" ? 2 : 1);
+        }
+        auto *attr = node.add_attribute();
+        attr->set_name("update_rule");
+        attr->set_type(AttributeProto::STRING);
+        attr->set_s(rule);
+        const std::vector<core::symbolic::SymShape> inputs = {
+            AttentionShape(q),     AttentionShape(k),     AttentionShape(v),
+            AttentionShape(state), AttentionShape(decay), AttentionShape(beta)};
+        SimpleRawBufferAllocator execution_alloc(64), io_alloc(16);
+        RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                               .io_allocator = &io_alloc});
+        rt.set_output_slot_io_roles({true, true});
+        LinearAttention kernel{KernelContext(DefaultOpset(27))};
+        kernel.set_node(node);
+        kernel.Configure({kernel.TuningKey(dtype), {{"parallel.minimum_elements", int64_t{1}}}});
+        LinearAttention::Attributes attrs;
+        attrs.q_num_heads = 2;
+        attrs.kv_num_heads = 1;
+        attrs.update_rule = rule;
+        const auto result = kernel(q, k, v, attrs, &state, &decay, &beta, &rt);
+        EXPECT_EQ(result.output.allocation_owner(), &io_alloc);
+        EXPECT_EQ(result.present_state.allocation_owner(),
+                  state_output ? &io_alloc : &execution_alloc);
+        const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(
+            core::symbolic::Device::kCPU, node, inputs);
+        EXPECT_LE(execution_alloc.PeakAllocatedSize(),
+                  static_cast<size_t>(estimate.worst_case.AsInt()));
+        if (dtype == DataType::FLOAT) {
+          const bool use_beta = std::string(rule) == "delta" || std::string(rule) == "gated_delta";
+          EXPECT_EQ(execution_alloc.PeakAllocatedSize(),
+                    (state_output ? 0 : state.size_bytes()) +
+                        (use_beta ? 2 * 3 * sizeof(float) : 0));
+        }
+      }
+    }
   }
 }
 
@@ -1587,6 +1738,7 @@ TEST(KernelClass, AttentionScratchIsBoundedByAvailableParticipants) {
       Tensor::FromFloat("", {1, 1, kv_seq_len, 1}, std::vector<float>(kv_seq_len, 1.0f));
   RecordingAllocator allocator;
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &allocator});
+  rt.set_output_slot_io_roles({true});
   Attention attention{AttentionKernelContext()};
   attention.Configure(
       {attention.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
@@ -1594,10 +1746,11 @@ TEST(KernelClass, AttentionScratchIsBoundedByAvailableParticipants) {
   const Attention::Result result =
       attention(Q, K, V, Attention::Attributes{}, nullptr, nullptr, nullptr, nullptr, &rt);
   EXPECT_EQ(result.Y.shape, (Shape{1, task_count, 1, 1}));
-  const size_t unbounded_scratch = static_cast<size_t>(task_count * kv_seq_len) * sizeof(double);
-  const size_t bounded_scratch = static_cast<size_t>(participants * kv_seq_len) * sizeof(double);
+  const size_t unbounded_scratch = static_cast<size_t>(task_count * kv_seq_len) * sizeof(float);
+  const size_t bounded_scratch = static_cast<size_t>(participants * kv_seq_len) * sizeof(float);
   EXPECT_EQ(std::count(allocator.requests.begin(), allocator.requests.end(), unbounded_scratch), 0);
-  EXPECT_EQ(std::count(allocator.requests.begin(), allocator.requests.end(), bounded_scratch), 3);
+  EXPECT_EQ(std::count(allocator.requests.begin(), allocator.requests.end(), bounded_scratch), 1);
+  EXPECT_EQ(result.qk_matmul_output.data_type, DataType::UNDEFINED);
 }
 
 TEST(KernelClass, AttentionCausalMasksFuturePositions) {

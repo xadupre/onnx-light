@@ -376,6 +376,16 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     builder.MakeOutput("y");
     const ModelProto original = builder.ToModel();
     const GraphProto canonical = builder.BuildGraph();
+    std::vector<uint64_t> expected_removed_nodes;
+    std::map<std::string, const NodeProto *> surviving_nodes;
+    for (std::size_t i = 0; i < canonical.node().size(); ++i) {
+      const auto &node = canonical.node(i);
+      const auto &output = node.output(0).value();
+      if (output == "dead" || output == "also_dead")
+        expected_removed_nodes.push_back(i);
+      else
+        surviving_nodes.emplace(output, &node);
+    }
     core::builder::GraphGraph graph(builder);
     const auto rewrites = graph.Optimize();
     ASSERT_EQ(rewrites.rewrites().size(), 1u);
@@ -383,14 +393,19 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     ASSERT_EQ(rewrites.rewrites(0).removed_initializers().size(), 1u);
     EXPECT_EQ(rewrites.rewrites(0).removed_initializers(0), 0u);
     EXPECT_TRUE(rewrites.rewrites(0).removed_extended_initializers().empty());
-    EXPECT_EQ(rewrites.rewrites(0).matched_nodes().values(),
-              add_dead_node ? std::vector<uint64_t>({1, 3}) : std::vector<uint64_t>());
+    EXPECT_EQ(rewrites.rewrites(0).matched_nodes().values(), expected_removed_nodes);
     EXPECT_TRUE(rewrites.rewrites(0).added_nodes().empty());
     EXPECT_TRUE(rewrites.rewrites(0).added_nodes_positions().empty());
     ASSERT_EQ(builder.Nodes().size(), 2u);
-    EXPECT_EQ(builder.Nodes()[0].SerializeAsString(), canonical.node(0).SerializeAsString());
-    EXPECT_EQ(builder.Nodes()[1].SerializeAsString(),
-              canonical.node(add_dead_node ? 2 : 1).SerializeAsString());
+    for (const auto &node : builder.Nodes()) {
+      const auto original_node = surviving_nodes.find(node.output(0).value());
+      ASSERT_NE(original_node, surviving_nodes.end());
+      EXPECT_EQ(node.op_type(), original_node->second->op_type());
+      EXPECT_EQ(node.input().values(), original_node->second->input().values());
+      EXPECT_EQ(node.output().values(), original_node->second->output().values());
+      surviving_nodes.erase(original_node);
+    }
+    EXPECT_TRUE(surviving_nodes.empty());
     const GraphProto optimized = builder.ToGraph();
     EXPECT_EQ(optimized.initializer_size(), 0);
     RewritingProto loaded;

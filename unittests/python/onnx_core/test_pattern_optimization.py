@@ -1703,6 +1703,7 @@ class TestPatternOptimization(ExtTestCase):
             "GemmSumFusion",
             "GemmTranspose",
             "GemmOutputTranspose",
+            "PadPool",
             "GroupedMatMul",
             "MatMulAdd",
             "MatMulBatchNormalizationFusion",

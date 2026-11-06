@@ -388,6 +388,86 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
   }
 }
 
+TEST(GraphGraph, CleanupRecordsOnlyRemovedNodesAndInitializers) {
+  for (const bool nested : {false, true}) {
+    for (const bool unused_initializer : {false, true}) {
+      for (const bool dead_nodes : {false, true}) {
+        SCOPED_TRACE(nested);
+        SCOPED_TRACE(unused_initializer);
+        SCOPED_TRACE(dead_nodes);
+        core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+        builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({1}));
+        auto *scope = &builder;
+        if (nested) {
+          builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+          scope = &builder.MakeSubgraph("then_branch");
+        }
+        if (unused_initializer)
+          scope->MakeInitializer(MakeInitializer<float>("unused", {1}, {1.f}));
+        if (dead_nodes)
+          scope->MakeNode("Abs", {"X"}, {"dead0"});
+        scope->MakeNode("Relu", {"X"}, {"H"});
+        if (dead_nodes)
+          scope->MakeNode("Neg", {"dead0"}, {"dead1"});
+        scope->MakeNode("Sigmoid", {"H"}, {"Y"});
+        if (dead_nodes)
+          scope->MakeNode("Abs", {"Y"}, {"dead2"});
+        scope->MakeOutput("Y");
+        if (nested) {
+          auto &other = builder.MakeSubgraph("else_branch");
+          other.MakeNode("Sigmoid", {"X"}, {"other_result"});
+          other.MakeOutput("other_result");
+          utils::RepeatedProtoField<AttributeProto> attributes;
+          for (const auto &name : {"then_branch", "else_branch"}) {
+            auto &reference = attributes.add();
+            reference.set_name(std::string(name) + "_ref");
+            reference.set_type(AttributeProto::STRING);
+            reference.set_s(name);
+          }
+          builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+          builder.MakeOutput("selected");
+        }
+        const ModelProto original = builder.ToModel();
+        const GraphProto original_graph = builder.BuildGraph();
+        const GraphProto original_scope = scope->BuildGraph();
+        core::builder::GraphGraph optimizer(
+            builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+        const auto plan = optimizer.Optimize();
+        ASSERT_EQ(plan.rewrites().size(), unused_initializer || dead_nodes ? 1u : 0u);
+        if (!plan.rewrites().empty()) {
+          const auto &edit = plan.rewrites(0);
+          EXPECT_EQ(edit.pattern_name(), "RemoveUnusedNodes");
+          EXPECT_EQ(edit.matched_nodes().values(),
+                    dead_nodes ? std::vector<uint64_t>({0, 2, 4}) : std::vector<uint64_t>());
+          EXPECT_TRUE(edit.added_nodes().empty());
+          EXPECT_TRUE(edit.added_nodes_positions().empty());
+          EXPECT_EQ(edit.removed_initializers().values(),
+                    unused_initializer ? std::vector<uint64_t>({0}) : std::vector<uint64_t>());
+          EXPECT_TRUE(edit.removed_extended_initializers().empty());
+          ASSERT_EQ(edit.graph_path().size(), nested ? 1u : 0u);
+          if (nested)
+            EXPECT_EQ(edit.graph_path(0), "then_branch");
+        }
+        const GraphProto optimized_scope = scope->BuildGraph();
+        ASSERT_EQ(optimized_scope.node_size(), 2);
+        EXPECT_TRUE(optimized_scope.node(0).Equals(original_scope.node(dead_nodes ? 1 : 0)));
+        EXPECT_TRUE(optimized_scope.node(1).Equals(original_scope.node(dead_nodes ? 3 : 1)));
+        EXPECT_EQ(optimized_scope.initializer_size(), 0);
+        const GraphProto optimized = builder.BuildGraph();
+        RewritingProto loaded;
+        ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+        auto replayed =
+            core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded);
+        EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), optimized.SerializeAsString());
+        auto restored = builder.UndoRewritings(loaded);
+        EXPECT_EQ(restored.BuildGraph().SerializeAsString(), original_graph.SerializeAsString());
+        EXPECT_EQ(restored.ApplyRewritings(loaded).BuildGraph().SerializeAsString(),
+                  optimized.SerializeAsString());
+      }
+    }
+  }
+}
+
 TEST(GraphGraph, UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndReplay) {
   constexpr int64_t elements = 1024 * 1024;
   TensorProto weight =

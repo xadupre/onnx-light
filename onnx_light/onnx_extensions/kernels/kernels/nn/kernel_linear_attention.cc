@@ -523,6 +523,10 @@ ComputePeakMemoryLinearAttention(Device, const NodeProto &node,
   if (q_heads != 0 && kv_heads != 0)
     EXT_ENFORCE_INVALID(q_heads % kv_heads == 0,
                         "LinearAttention scratch: incompatible head counts.");
+  // A zero-width head permits arbitrarily many query heads. Symbolic widths
+  // may also resolve to zero, so they cannot bound missing query-head metadata.
+  if (q_heads == 0 && (!input_shapes[0][2].IsInt() || input_shapes[0][2].AsInt() == 0))
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
   using namespace core::expressions;
   using core::symbolic::ToDimType;
   const auto elements = [&](size_t slot) -> DimType {
@@ -549,7 +553,9 @@ ComputePeakMemoryLinearAttention(Device, const NodeProto &node,
       q_heads > 0 && kv_heads > 0
           ? dim_multi_mul(
                 {batch, sequence, int64_t{q_heads}, dim_exact_div(hidden_v, int64_t{kv_heads})})
-          : dim_multi_mul({batch, sequence, ToDimType(input_shapes[0][2]), hidden_v});
+          : dim_multi_mul({batch, sequence,
+                           q_heads > 0 ? DimType{q_heads} : ToDimType(input_shapes[0][2]),
+                           hidden_v});
   DimType input_elements = int64_t{0};
   for (size_t slot = 0; slot < input_shapes.size(); ++slot)
     input_elements = dim_add(input_elements, elements(slot));

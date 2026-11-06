@@ -75,6 +75,27 @@ ExtendedFloat ExtendedDotProduct(const float *q, const float *k, int64_t width) 
   return sum;
 }
 
+float RecomputeAttentionValue(const float *probabilities, const float *values, int64_t length,
+                              int64_t stride, float ordinary_result) {
+  float magnitude = 0.0f;
+  float weight = 0.0f;
+  for (int64_t j = 0; j < length; ++j) {
+    const float value = values[j * stride];
+    if (!std::isfinite(value) || !std::isfinite(probabilities[j]))
+      return ordinary_result;
+    magnitude = std::max(magnitude, std::abs(value));
+    weight += probabilities[j];
+  }
+  if (magnitude == 0.0f || weight == 0.0f)
+    return ordinary_result;
+  float scaled = 0.0f;
+  for (int64_t j = 0; j < length; ++j)
+    scaled += probabilities[j] * (values[j * stride] / magnitude);
+  // Rounded probabilities can sum above one. Renormalization and the convex
+  // bound keep a finite weighted mean finite when restoring its magnitude.
+  return magnitude * std::clamp(scaled / weight, -1.0f, 1.0f);
+}
+
 template <typename Mask>
 bool RecomputeCenteredAttentionScores(const float *q, const float *k, int64_t width, int64_t length,
                                       float scale, float softcap, float *scores, float *qk,
@@ -651,6 +672,8 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                 for (int64_t j = 0; j < total_kv_seq_len; ++j) {
                   y += scores[static_cast<size_t>(j)] * Vbh[j * v_head_size + dv];
                 }
+                if (!std::isfinite(y))
+                  y = RecomputeAttentionValue(scores, Vbh + dv, total_kv_seq_len, v_head_size, y);
                 Ybh[i * v_head_size + dv] = y;
               }
             }

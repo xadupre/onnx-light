@@ -138,6 +138,47 @@ TEST(ComputePeakMemoryLinearAttention, RegistrationPassesNodeMetadata) {
   EXPECT_FALSE(shapes_only.average_case);
 }
 
+TEST(ComputePeakMemoryLinearAttention, MissingHeadsNeedAProvenPositiveQueryWidth) {
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  for (const auto &width : {SymDim(int64_t{0}), SymDim("query_hidden")}) {
+    const std::vector<SymShape> inputs = {{1, 1, width}, {1, 1, width}, {1, 1, 1}};
+    const auto unknown = core::shapes::UnknownPeakMemory("", "LinearAttention");
+    EXPECT_EQ(onnx_kernels::kernel::ComputePeakMemoryLinearAttention(Device::kCPU, inputs),
+              unknown);
+    NodeProto node;
+    node.set_op_type("LinearAttention");
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs), unknown);
+    auto *attr = node.add_attribute();
+    attr->set_name("kv_num_heads");
+    attr->set_type(AttributeProto::INT);
+    attr->set_i(1);
+    EXPECT_EQ(Estimate(node, inputs), unknown);
+  }
+  const std::vector<SymShape> positive = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+  EXPECT_TRUE(onnx_kernels::kernel::ComputePeakMemoryLinearAttention(Device::kCPU, positive)
+                  .worst_case.IsInt());
+}
+
+TEST(ComputePeakMemoryLinearAttention, ExplicitQueryHeadsBoundZeroWidthWithMissingKvHeads) {
+  const std::vector<SymShape> inputs = {{1, 1, int64_t{0}}, {1, 1, int64_t{0}}, {1, 1, 1}};
+  auto node = LinearAttentionNode("linear");
+  node.mutable_attribute(0)->set_i(100);
+  const auto explicit_heads = Estimate(node, inputs);
+  node.clr_attribute();
+  auto *attr = node.add_attribute();
+  attr->set_name("q_num_heads");
+  attr->set_type(AttributeProto::INT);
+  attr->set_i(100);
+  attr = node.add_attribute();
+  attr->set_name("update_rule");
+  attr->set_type(AttributeProto::STRING);
+  attr->set_s("linear");
+  const auto missing_kv_heads = Estimate(node, inputs);
+  EXPECT_GE(missing_kv_heads.worst_case.AsInt(), explicit_heads.worst_case.AsInt());
+  EXPECT_GE(missing_kv_heads.worst_case.AsInt(), 100 * 4);
+}
+
 TEST(ComputePeakMemoryLinearAttention, NamedOptionalInputsRequireNonemptyShapes) {
   onnx_kernels::RegisterPeakMemoryFunctions();
   const std::array<const char *, 3> names = {"past_state", "decay", "beta"};

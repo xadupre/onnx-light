@@ -84,8 +84,9 @@ ComputePeakMemoryAttention(core::symbolic::Device device, const NodeProto &node,
  * Includes half-precision promotions and intermediate results, plus one
  * reusable FLOAT32 auxiliary vector for delta update rules. Without node
  * attributes this overload conservatively bounds head geometry using packed
- * hidden dimensions. Returned final outputs are excluded. Symbolic dimensions
- * are preserved; missing shapes produce an unresolved bound.
+ * hidden dimensions. A zero or symbolic query width cannot bound missing query
+ * heads and produces an unresolved bound. Returned final outputs are excluded.
+ * Other symbolic dimensions are preserved; missing shapes produce an unresolved bound.
  *
  * @param device       Device on which the operator executes.
  * @param input_shapes Shapes of query, key, value, and optional inputs.

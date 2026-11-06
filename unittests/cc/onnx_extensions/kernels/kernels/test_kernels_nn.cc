@@ -17,6 +17,7 @@
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/inliner/inliner.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
 
@@ -1538,6 +1539,58 @@ TEST(KernelClass, AttentionCentersExtendedScoresBeforeNarrowing) {
   }
 }
 
+TEST(KernelClass, AttentionKeepsMaximumFiniteValuesWithoutAdditionalScratch) {
+  for (bool packed : {false, true}) {
+    const Tensor q = Tensor::FromFloat("", packed ? Shape{1, 1, 1} : Shape{1, 1, 1, 1}, {0.0f});
+    const Shape kv_shape = packed ? Shape{1, 10, 1} : Shape{1, 1, 10, 1};
+    const Tensor k = Tensor::FromFloat("", kv_shape, std::vector<float>(10, 0.0f));
+    for (float sign : {-1.0f, 1.0f}) {
+      size_t ordinary_peak = 0;
+      for (float magnitude : {1.0f, std::numeric_limits<float>::max()}) {
+        SCOPED_TRACE(testing::Message() << packed << "," << sign << "," << magnitude);
+        const Tensor v = Tensor::FromFloat("", kv_shape, std::vector<float>(10, sign * magnitude));
+        SimpleRawBufferAllocator execution_alloc(32), io_alloc(8);
+        RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                               .io_allocator = &io_alloc});
+        rt.set_output_slot_io_roles({true, true, true, true});
+        Attention attention{AttentionKernelContext()};
+        Attention::Attributes attrs;
+        attrs.has_scale = true;
+        attrs.scale = 1.0f;
+        attrs.q_num_heads = 1;
+        attrs.kv_num_heads = 1;
+        attrs.qk_matmul_output_mode = 3;
+        const auto result = attention(q, k, v, attrs, nullptr, nullptr, nullptr, nullptr, &rt);
+        EXPECT_TRUE(std::isfinite(result.Y.AsFloat()[0]));
+        EXPECT_FLOAT_EQ(result.Y.AsFloat()[0], sign * magnitude);
+        for (int index = 0; index < 10; ++index)
+          EXPECT_FLOAT_EQ(result.qk_matmul_output.AsFloat()[index], 0.1f);
+        if (magnitude == 1.0f) {
+          ordinary_peak = execution_alloc.PeakAllocatedSize();
+        } else {
+          EXPECT_EQ(execution_alloc.PeakAllocatedSize(), ordinary_peak);
+        }
+      }
+    }
+  }
+}
+
+TEST(KernelClass, AttentionValueOverflowRetryPreservesNonFiniteInputs) {
+  const Tensor q = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor k = Tensor::FromFloat("", {1, 1, 10, 1}, std::vector<float>(10, 0.0f));
+  const Attention attention{AttentionKernelContext()};
+  for (float bad : {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                    std::numeric_limits<float>::quiet_NaN()}) {
+    const Tensor v = Tensor::FromFloat("", {1, 1, 10, 1}, std::vector<float>(10, bad));
+    const float output = attention(q, k, v).AsFloat()[0];
+    if (std::isnan(bad)) {
+      EXPECT_TRUE(std::isnan(output));
+    } else {
+      EXPECT_EQ(output, bad);
+    }
+  }
+}
+
 TEST(KernelClass, AttentionOverflowRetryKeepsResidualAfterCancellation) {
   const Tensor q = Tensor::FromFloat("", {1, 1, 1, 3}, {1e20f, 1e20f, 1e-20f});
   const Tensor k = Tensor::FromFloat("", {1, 1, 2, 3}, {1e20f, -1e20f, 1e20f, 0.0f, 0.0f, 0.0f});
@@ -1799,6 +1852,44 @@ TEST(KernelClass, LinearAttentionWorkspaceBoundCoversRulesDtypesAndOmittedState)
       }
     }
   }
+}
+
+TEST(KernelClass, LinearAttentionZeroWidthHeadsNeedExplicitGeometryForWorkspaceBound) {
+  const Tensor q = AttentionTensor({1, 1, 0}, 0.0f, DataType::FLOAT16);
+  const Tensor k = AttentionTensor({1, 1, 0}, 0.0f, DataType::FLOAT16);
+  const Tensor v = AttentionTensor({1, 1, 1}, 1.0f, DataType::FLOAT16);
+  const std::vector<core::symbolic::SymShape> inputs = {AttentionShape(q), AttentionShape(k),
+                                                        AttentionShape(v)};
+  const auto shapes_only =
+      onnx_kernels::kernel::ComputePeakMemoryLinearAttention(core::symbolic::Device::kCPU, inputs);
+  EXPECT_EQ(shapes_only, core::shapes::UnknownPeakMemory("", "LinearAttention"));
+  NodeProto node;
+  node.set_op_type("LinearAttention");
+  for (const auto *name : {"q", "k", "v"})
+    node.add_input(name);
+  node.add_output("y");
+  node.add_output("state");
+  AddAttribute<int64_t>(node, "q_num_heads", 100);
+  AddAttribute<int64_t>(node, "kv_num_heads", 1);
+  AddAttribute<std::string>(node, "update_rule", "linear");
+  SimpleRawBufferAllocator execution_alloc(32), io_alloc(8);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.set_output_slot_io_roles({true, true});
+  LinearAttention kernel{KernelContext(DefaultOpset(27))};
+  kernel.set_node(node);
+  LinearAttention::Attributes attrs;
+  attrs.q_num_heads = 100;
+  attrs.kv_num_heads = 1;
+  attrs.update_rule = "linear";
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  const auto result = kernel(q, k, v, attrs, nullptr, nullptr, nullptr, &rt);
+  EXPECT_EQ(result.output.shape, (Shape{1, 1, 100}));
+  EXPECT_GE(execution_alloc.PeakAllocatedSize(), 100 * sizeof(float));
+  const auto estimate = onnx_kernels::kernel::ComputePeakMemoryLinearAttention(
+      core::symbolic::Device::kCPU, node, inputs);
+  EXPECT_LE(execution_alloc.PeakAllocatedSize(), static_cast<size_t>(estimate.worst_case.AsInt()));
 }
 
 TEST(KernelClass, AttentionSupportsGQAHeadSharing) {

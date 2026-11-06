@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
@@ -268,6 +269,57 @@ std::string OptionalInput(const NodeProto &node, int index) {
   return node.input()[index].value();
 }
 
+bool HasSingleInlinePayload(const TensorProto &tensor) {
+  const int payloads = static_cast<int>(tensor.is_raw_data()) +
+                       static_cast<int>(!tensor.float_data().empty()) +
+                       static_cast<int>(!tensor.int32_data().empty()) +
+                       static_cast<int>(!tensor.string_data().empty()) +
+                       static_cast<int>(!tensor.int64_data().empty()) +
+                       static_cast<int>(!tensor.double_data().empty()) +
+                       static_cast<int>(!tensor.uint64_data().empty());
+  return payloads == 1 && tensor.external_data().empty() &&
+         tensor.data_location() != TensorProto::EXTERNAL;
+}
+
+bool ReadPadIntegerVector(const TensorProto &tensor, std::vector<int64_t> &values) {
+  return HasSingleInlinePayload(tensor) && tensor.data_type() == TensorProto::INT64 &&
+         tensor.dims_size() == 1 && tensor.dims(0) >= 0 && ReadIntegerValues(tensor, values) &&
+         static_cast<uint64_t>(tensor.dims(0)) == values.size();
+}
+
+bool IsZeroPadValue(const TensorProto &tensor) {
+  std::size_t count = 0;
+  if (!HasSingleInlinePayload(tensor) || !TensorElementCount(tensor, count) || count != 1) {
+    return false;
+  }
+  if (tensor.is_raw_data()) {
+    const auto width = FixedBitWidth(tensor.data_type());
+    if (width < 8 || width % 8 != 0 || tensor.ref_raw_data().size() != width / 8) {
+      return false;
+    }
+  } else if (std::max({tensor.float_data().size(), tensor.int32_data().size(),
+                       tensor.string_data().size(), tensor.int64_data().size(),
+                       tensor.double_data().size(), tensor.uint64_data().size()}) != 1) {
+    return false;
+  }
+  if (tensor.data_type() == TensorProto::FLOAT16 || tensor.data_type() == TensorProto::BFLOAT16) {
+    uint16_t bits = 0;
+    if (tensor.is_raw_data()) {
+      const auto &raw = tensor.ref_raw_data();
+      bits = static_cast<uint16_t>(raw[0]) | (static_cast<uint16_t>(raw[1]) << 8);
+    } else {
+      if (tensor.int32_data().size() != 1 || tensor.int32_data()[0] < 0 ||
+          tensor.int32_data()[0] > std::numeric_limits<uint16_t>::max()) {
+        return false;
+      }
+      bits = static_cast<uint16_t>(tensor.int32_data()[0]);
+    }
+    return bits == 0;
+  }
+  double scalar = 0.0;
+  return ReadScalarAsDouble(tensor, scalar) && scalar == 0.0 && !std::signbit(scalar);
+}
+
 // Reconstructs the full ``[begin_0, ..., begin_{ndim-1}, end_0, ...]`` padding
 // array of the Pad node ``pad_node`` into ``full_pads`` and returns ``true`` on
 // success. ``ndim`` receives the tensor rank. Fails when the pads or axes
@@ -283,13 +335,10 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
     return false;
   }
   std::vector<int64_t> pads_values;
-  if (!ReadIntegerValues(*pads_cst, pads_values) || pads_values.size() % 2 != 0) {
+  if (!ReadPadIntegerVector(*pads_cst, pads_values) || pads_values.size() % 2 != 0) {
     return false;
   }
   ndim = pads_values.size() / 2;
-  if (ndim < 2) {
-    return false;
-  }
 
   const std::string constant_value = OptionalInput(pad_node, 2);
   if (!constant_value.empty()) {
@@ -297,14 +346,16 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
       return false;
     }
     const TensorProto *cv = graph.GetComputedConstant(constant_value);
-    double scalar = 0.0;
-    if (cv == nullptr || !ReadScalarAsDouble(*cv, scalar) || scalar != 0.0) {
+    if (cv == nullptr || !IsZeroPadValue(*cv)) {
       return false;
     }
   }
 
   const std::string axes_name = OptionalInput(pad_node, 3);
   if (axes_name.empty()) {
+    if (ndim < 2) {
+      return false;
+    }
     full_pads = std::move(pads_values);
     return true;
   }
@@ -313,21 +364,56 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
   }
   const TensorProto *axes_cst = graph.GetComputedConstant(axes_name);
   std::vector<int64_t> axes;
-  if (axes_cst == nullptr || !ReadIntegerValues(*axes_cst, axes)) {
+  if (axes_cst == nullptr || !ReadPadIntegerVector(*axes_cst, axes) ||
+      axes.size() != pads_values.size() / 2 || !graph.HasShape(pad_node.input()[0].value())) {
+    return false;
+  }
+  ndim = graph.GetShape(pad_node.input()[0].value()).Shape().Rank();
+  if (ndim < 2) {
     return false;
   }
   full_pads.assign(2 * ndim, 0);
+  std::vector<bool> seen(ndim, false);
   for (std::size_t idx = 0; idx < axes.size(); ++idx) {
     int64_t axis = axes[idx];
     if (axis < 0) {
       axis += static_cast<int64_t>(ndim);
     }
     if (axis < 0 || static_cast<std::size_t>(axis) >= ndim ||
-        idx + axes.size() >= pads_values.size()) {
+        seen[static_cast<std::size_t>(axis)]) {
       return false;
     }
+    seen[static_cast<std::size_t>(axis)] = true;
     full_pads[static_cast<std::size_t>(axis)] = pads_values[idx];
     full_pads[static_cast<std::size_t>(axis) + ndim] = pads_values[idx + axes.size()];
+  }
+  return true;
+}
+
+bool HasPoolFusionAttributes(const NodeProto &node, bool pad, int opset) {
+  std::unordered_set<std::string> seen;
+  for (const auto &attribute : node.attribute()) {
+    const auto &name = attribute.name().value();
+    AttributeProto::AttributeType type;
+    if ((pad && name == "mode") || (!pad && name == "auto_pad")) {
+      type = AttributeProto::STRING;
+    } else if (!pad && (name == "kernel_shape" || name == "pads" || name == "strides" ||
+                        (name == "dilations" && (node.op_type() == "MaxPool" || opset >= 19)))) {
+      type = AttributeProto::INTS;
+    } else if (!pad &&
+               (name == "ceil_mode" || (name == "storage_order" && node.op_type() == "MaxPool") ||
+                (name == "count_include_pad" && node.op_type() == "AveragePool"))) {
+      type = AttributeProto::INT;
+      if (attribute.i() != 0 && attribute.i() != 1) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    if (attribute.type() != type || !attribute.ref_attr_name().empty() ||
+        !seen.insert(name).second) {
+      return false;
+    }
   }
   return true;
 }
@@ -474,6 +560,165 @@ PadConvPattern::Apply(core::builder::GraphGraph &graph,
   AddAttribute<std::vector<int64_t>>(replacement, "pads", new_pads);
   if (conv_node.has_doc_string()) {
     replacement.set_doc_string(conv_node.doc_string().value());
+  }
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
+
+std::set<std::string> PadPoolPattern::FastOpType() const { return {"MaxPool", "AveragePool"}; }
+
+core::builder::MatchResult PadPoolPattern::Match(core::builder::GraphGraph &graph,
+                                                 const NodeProto &candidate) const {
+  const int opset = graph.Builder().OpsetVersion("");
+  const bool average = IsDefaultOp(candidate, "AveragePool");
+  if ((!average && !IsDefaultOp(candidate, "MaxPool")) || opset < 11 ||
+      candidate.input_size() != 1 || candidate.input(0).empty() || candidate.output_size() != 1 ||
+      candidate.output(0).empty() || !candidate.overload().empty() ||
+      !candidate.device_configurations().empty() ||
+      !HasPoolFusionAttributes(candidate, false, opset) ||
+      GetAttributeOr<std::string>(candidate, "auto_pad", "NOTSET") != "NOTSET") {
+    return NoMatch(candidate, "candidate is not supported explicit-pad pooling");
+  }
+  const NodeProto *pad = graph.NodeBefore(candidate.input(0).value());
+  if (pad == nullptr || !IsDefaultPad(*pad) || pad->input_size() < 2 ||
+      pad->input_size() > (opset >= 18 ? 4 : 3) || pad->input(0).empty() ||
+      pad->output_size() != 1 || !pad->overload().empty() ||
+      !pad->device_configurations().empty() || !HasPoolFusionAttributes(*pad, true, opset) ||
+      GetAttributeOr<std::string>(*pad, "mode", "constant") != "constant" ||
+      graph.IsUsedMoreThanOnce(candidate.input(0).value())) {
+    return NoMatch(candidate, "pooling needs an unshared constant-mode Pad");
+  }
+  const std::string &input = pad->input(0).value();
+  if (!graph.HasShape(input) || !graph.HasType(input) ||
+      !graph.HasType(candidate.input(0).value()) ||
+      graph.GetType(input) != graph.GetType(candidate.input(0).value())) {
+    return NoMatch(candidate, "the Pad input rank and matching types must be known");
+  }
+  using core::symbolic::TensorType;
+  const auto type = graph.GetType(input);
+  if (average ? (type != TensorType::kFloat && type != TensorType::kFloat16 &&
+                 type != TensorType::kDouble && !(opset >= 22 && type == TensorType::kBfloat16))
+              : (opset < 12 || type != TensorType::kUint8)) {
+    return NoMatch(candidate, "zero padding is not equivalent for this pooling type");
+  }
+  for (int index : {1, 3}) {
+    const std::string name = OptionalInput(*pad, index);
+    if (name.empty() && index == 3) {
+      continue;
+    }
+    const TensorProto *tensor = graph.GetComputedConstant(name);
+    std::vector<int64_t> values;
+    if (!graph.IsConstant(name) || tensor == nullptr || !ReadPadIntegerVector(*tensor, values)) {
+      return NoMatch(candidate, "pads and axes must be constant INT64 vectors");
+    }
+  }
+  const std::string value = OptionalInput(*pad, 2);
+  if (!value.empty()) {
+    const TensorProto *tensor = graph.GetComputedConstant(value);
+    if (!graph.IsConstant(value) || tensor == nullptr || tensor->dims_size() != 0 ||
+        tensor->data_type() != core::symbolic::TensorTypeToDataType(type)) {
+      return NoMatch(candidate, "the Pad value must be a scalar of the input type");
+    }
+  }
+  std::vector<int64_t> pads;
+  std::size_t rank = 0;
+  if (!ReadPadPads(graph, *pad, pads, rank) || rank <= 2 ||
+      rank != graph.GetShape(input).Shape().Rank() || pads[0] != 0 || pads[1] != 0 ||
+      pads[rank] != 0 || pads[rank + 1] != 0) {
+    return NoMatch(candidate, "pooling needs zero-valued spatial padding of the input rank");
+  }
+  const std::size_t spatial = rank - 2;
+  std::vector<int64_t> kernel, existing;
+  if (!GetAttributeInts(candidate, "kernel_shape", kernel) || kernel.size() != spatial) {
+    return NoMatch(candidate, "kernel_shape must describe all spatial dimensions");
+  }
+  if (!GetAttributeInts(candidate, "pads", existing) || existing.empty()) {
+    existing.assign(2 * spatial, 0);
+  }
+  if (existing.size() != 2 * spatial) {
+    return NoMatch(candidate, "pooling pads have an incorrect rank");
+  }
+  for (const auto *name : {"strides", "dilations"}) {
+    std::vector<int64_t> values;
+    if (GetAttributeInts(candidate, name, values) &&
+        (values.size() != spatial ||
+         std::any_of(values.begin(), values.end(), [](int64_t v) { return v <= 0; }))) {
+      return NoMatch(candidate, "strides and dilations must be positive spatial vectors");
+    }
+  }
+  const bool ceil = GetAttributeOr<int64_t>(candidate, "ceil_mode", 0) != 0;
+  const bool include = GetAttributeOr<int64_t>(candidate, "count_include_pad", 0) != 0;
+  if (average && !include &&
+      (ceil || std::any_of(existing.begin(), existing.end(), [](int64_t v) { return v != 0; }))) {
+    return NoMatch(candidate, "fusion would change the AveragePool divisor");
+  }
+  for (std::size_t i = 0; i < spatial; ++i) {
+    const int64_t head = pads[i + 2], tail = pads[rank + i + 2];
+    if (kernel[i] <= 0 || head < 0 || tail < 0 || existing[i] < 0 || existing[spatial + i] < 0 ||
+        existing[i] >= kernel[i] || existing[spatial + i] >= kernel[i] ||
+        head >= kernel[i] - existing[i] || tail >= kernel[i] - existing[spatial + i] ||
+        (ceil && tail != 0)) {
+      return NoMatch(candidate, "fused pads exceed kernel bounds or change ceil-mode windows");
+    }
+  }
+  for (const auto &entry : pad->metadata_props()) {
+    for (const auto &other : candidate.metadata_props()) {
+      if (entry.key() == other.key() && entry.value() != other.value()) {
+        return NoMatch(candidate, "the Pad and pooling metadata conflict");
+      }
+    }
+  }
+  return core::builder::MatchResult{this, {pad, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+PadPoolPattern::Apply(core::builder::GraphGraph &graph,
+                      const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("PadPoolPattern::Apply expects a Pad and a pooling node.");
+  }
+  const auto verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("PadPoolPattern::Apply received an unsafe or inconsistent match.");
+  }
+  std::vector<int64_t> pads;
+  std::size_t rank = 0;
+  if (!ReadPadPads(graph, *nodes[0], pads, rank)) {
+    throw BuilderError("PadPoolPattern::Apply could not read the Pad padding.");
+  }
+  const std::size_t spatial = rank - 2;
+  std::vector<int64_t> summed;
+  if (!GetAttributeInts(*nodes[1], "pads", summed) || summed.empty()) {
+    summed.assign(2 * spatial, 0);
+  }
+  for (std::size_t i = 0; i < spatial; ++i) {
+    summed[i] += pads[i + 2];
+    summed[spatial + i] += pads[rank + i + 2];
+  }
+  NodeProto replacement = *nodes[1];
+  if (!replacement.name().empty()) {
+    replacement.set_name("PadPoolPattern--" + replacement.name().value());
+  }
+  replacement.clr_input();
+  replacement.add_input(nodes[0]->input(0).value());
+  replacement.clr_attribute();
+  const bool average = replacement.op_type().value() == "AveragePool";
+  for (const auto &attribute : nodes[1]->attribute()) {
+    if (attribute.name().value() != "pads" &&
+        !(average && attribute.name().value() == "count_include_pad")) {
+      *replacement.add_attribute() = attribute;
+    }
+  }
+  AddAttribute<std::vector<int64_t>>(replacement, "pads", summed);
+  if (average) {
+    AddAttribute<int64_t>(replacement, "count_include_pad", 1);
+  }
+  for (const auto &entry : nodes[0]->metadata_props()) {
+    if (std::none_of(replacement.metadata_props().begin(), replacement.metadata_props().end(),
+                     [&](const auto &other) { return entry.key() == other.key(); })) {
+      *replacement.add_metadata_props() = entry;
+    }
   }
   utils::RepeatedProtoField<NodeProto> replacements;
   replacements.push_back(std::move(replacement));

@@ -180,6 +180,9 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "PadPadFusionPattern",
       "Merges adjacent constant-mode Pad nodes with equal values by summing their pads.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::PadPoolPattern, core::builder::PatternOptimization>(
+      m, "PadPoolPattern", "Folds zero-valued spatial Pad into safe AveragePool or UINT8 MaxPool.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::SplitConcatPattern, core::builder::PatternOptimization>(
       m, "SplitConcatPattern",
       "Replaces a Split immediately followed by a Concat that restores the "

@@ -92,6 +92,50 @@ public:
 };
 
 /**
+ * Fuses zero-valued spatial Pad into AveragePool or UINT8 MaxPool.
+ *
+ * Requires opset >= 11 (>= 12 for UINT8 MaxPool), constant non-negative padding, known input rank
+ * and type, explicit pooling pads, and no other use of the Pad output. Constant axes are supported
+ * from opset 18. MaxPool indices are not supported: their offsets refer to the padded input rather
+ * than the original tensor.
+ *
+ * AveragePool sets count_include_pad=1. Existing nonzero pooling pads require
+ * that flag to already be set. With ceil_mode, explicit trailing padding is
+ * rejected; AveragePool additionally requires count_include_pad=1 to preserve
+ * the divisor of partial windows. Each summed pad must be smaller than its
+ * kernel dimension. Strides and supported dilations are retained.
+ *
+ * @code
+ * Before:
+ *                       ┌─────┐   ┌──────┐
+ *   X, pads, value=0 ───→│ Pad │──→│ Pool │──→ Y
+ *                       └─────┘   └──────┘
+ *
+ * After:
+ *       ┌────────────────────┐
+ *   X ─→│ Pool with new pads │──→ Y
+ *       └────────────────────┘
+ * @endcode
+ */
+class PadPoolPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit PadPoolPattern(int priority = 0) : PatternOptimization(priority, "PadPool") {}
+
+  /// Returns the supported pooling root operators.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a Pad feeding a pooling node with equivalent implicit padding.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Replaces the Pad-pooling pair with one pooling node.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Fuses a channel-wise Add following a Conv into the Conv bias.
  *
  * The Conv output must have no other consumer or graph use. The Conv weights,

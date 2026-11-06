@@ -41,6 +41,7 @@ IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
 PadConvPattern: TypeAlias = _patterns.PadConvPattern
 PadPadFusionPattern: TypeAlias = _patterns.PadPadFusionPattern
+PadPoolPattern: TypeAlias = _patterns.PadPoolPattern
 SplitConcatPattern: TypeAlias = _patterns.SplitConcatPattern
 GathersSplitPattern: TypeAlias = _patterns.GathersSplitPattern
 SlicesSplitPattern: TypeAlias = _patterns.SlicesSplitPattern
@@ -547,6 +548,7 @@ __all__ = [
     "OptimizationReport",
     "PadConvPattern",
     "PadPadFusionPattern",
+    "PadPoolPattern",
     "PartitionGroupPattern",
     "PatternOptimization",
     "PreShapeNodeEliminationPattern",

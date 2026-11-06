@@ -119,6 +119,7 @@ void RegisterPatterns() {
                                    });
     core::builder::RegisterPattern("PadPadFusion",
                                    [] { return std::make_unique<PadPadFusionPattern>(); });
+    core::builder::RegisterPattern("PadPool", [] { return std::make_unique<PadPoolPattern>(); });
     core::builder::RegisterPattern("ConcatEmpty",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatEmptyPattern>();
@@ -441,6 +442,7 @@ void RegisterPatterns() {
                                             "MatMulBatchNormalizationFusion",
                                             "MatMulScaleFusion",
                                             "PadConv",
+                                            "PadPool",
                                             "ReluClipFusion",
                                             "RMSNormalization"};
     core::builder::RegisterPatternSet("L1", l1_names);

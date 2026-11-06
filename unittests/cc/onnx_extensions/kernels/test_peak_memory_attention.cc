@@ -4,8 +4,9 @@
 
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
-#include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 
 #include <gtest/gtest.h>
 
@@ -41,7 +42,7 @@ NodeProto AttentionNode(bool packed = false) {
 
 core::shapes::PeakMemoryEstimate Estimate(const NodeProto &node,
                                           const std::vector<SymShape> &inputs) {
-  return onnx_shapes::shapes::nn::ComputePeakMemoryAttention(Device::kCPU, node, inputs);
+  return onnx_kernels::kernel::ComputePeakMemoryAttention(Device::kCPU, node, inputs);
 }
 
 } // namespace
@@ -70,7 +71,7 @@ TEST(ComputePeakMemoryAttention, PackedLayoutIncludesReorderingAndIntermediateY)
       Estimate(AttentionNode(true), std::vector<SymShape>(3, SymShape({1, 1, 1})));
   EXPECT_EQ(estimate.worst_case.AsInt(), 36);
   EXPECT_FALSE(estimate.average_case);
-  EXPECT_EQ(onnx_shapes::shapes::nn::ComputePeakMemoryAttention(
+  EXPECT_EQ(onnx_kernels::kernel::ComputePeakMemoryAttention(
                 Device::kCPU, std::vector<SymShape>(3, SymShape({1, 1, 1}))),
             core::shapes::UnknownPeakMemory("", "Attention"));
 }
@@ -165,7 +166,7 @@ TEST(ComputePeakMemoryAttention, MissingShapesAndInvalidPackedHeads) {
 }
 
 TEST(ComputePeakMemoryAttention, NamedOptionalInputsRequireNonemptyShapes) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   const std::array<const char *, 3> names = {"mask", "past_key", "past_value"};
   for (int slot = 3; slot < 6; ++slot) {
     SCOPED_TRACE(slot);
@@ -187,7 +188,7 @@ TEST(ComputePeakMemoryAttention, NamedOptionalInputsRequireNonemptyShapes) {
 
 TEST(ComputePeakMemoryAttention, ShapeAnalysisAccountsForFinalOutputsSeparately) {
   onnx_shapes::RegisterShapeFunctions();
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   ModelProto model;
   model.add_opset("", 24);
   auto &graph = *model.mutable_graph();

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -137,6 +138,15 @@ void Gather::Run(RuntimeContext &rt) {
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
   onnx_kernels::kernel::Gather k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, indices, axis, &rt), rt);
+}
+
+PeakMemoryEstimate ComputePeakMemoryGather(Device, const NodeProto &node,
+                                           const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 2, 2) || inputs[0].Empty())
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  // ReadIndicesAsInt64 copies both INT32 and INT64 indices, including scalars.
+  return PeakMemoryEstimate::Exact(peak_memory_detail::PeakMemoryMultiply(
+      SymDim(int64_t{8}), peak_memory_detail::PeakMemoryElements(inputs[1])));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

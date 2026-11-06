@@ -4,8 +4,8 @@
 
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
-#include "onnx_extensions/shapes/dispatch_table.h"
-#include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
 
@@ -44,7 +44,7 @@ NodeProto LinearAttentionNode(const char *rule = "gated_delta", bool state_outpu
 
 core::shapes::PeakMemoryEstimate Estimate(const NodeProto &node,
                                           const std::vector<SymShape> &inputs) {
-  return onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(Device::kCPU, node, inputs);
+  return onnx_kernels::kernel::ComputePeakMemoryLinearAttention(Device::kCPU, node, inputs);
 }
 
 } // namespace
@@ -128,18 +128,18 @@ TEST(ComputePeakMemoryLinearAttention, MissingShapesAndInvalidAttributes) {
 }
 
 TEST(ComputePeakMemoryLinearAttention, RegistrationPassesNodeMetadata) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   const auto node = LinearAttentionNode("linear", false);
   const std::vector<SymShape> inputs(3, SymShape({1, 1, 1}));
   EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, inputs).worst_case.AsInt(), 28);
   const auto shapes_only =
-      onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(Device::kCPU, inputs);
+      onnx_kernels::kernel::ComputePeakMemoryLinearAttention(Device::kCPU, inputs);
   EXPECT_GE(shapes_only.worst_case.AsInt(), Estimate(node, inputs).worst_case.AsInt());
   EXPECT_FALSE(shapes_only.average_case);
 }
 
 TEST(ComputePeakMemoryLinearAttention, NamedOptionalInputsRequireNonemptyShapes) {
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   const std::array<const char *, 3> names = {"past_state", "decay", "beta"};
   for (int slot = 3; slot < 6; ++slot) {
     SCOPED_TRACE(slot);

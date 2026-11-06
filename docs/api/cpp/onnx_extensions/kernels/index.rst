@@ -44,5 +44,6 @@ This module also documents:
 
     kernel_dispatch_table
     kernel_run_helpers
+    kernel_peak_memory_helpers
     kernels/index
     tuning/index

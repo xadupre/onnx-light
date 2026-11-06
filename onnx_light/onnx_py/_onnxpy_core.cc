@@ -438,7 +438,6 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // resolve an operator. Idempotent and cheap if this module init function
   // ever ran more than once.
   ::onnx_light::onnx_shapes::RegisterShapeFunctions();
-  ::onnx_light::onnx_shapes::RegisterPeakMemoryFunctions();
 
   namespace onnx_compute = ::onnx_light::core::compute;
   namespace expr = ::onnx_light::core::expressions;
@@ -1344,8 +1343,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "Returns the estimated additional peak memory (in bytes) for ``(domain, op_type)`` executed "
       "on ``device`` with inputs of shape ``input_shapes``, as a ``PeakMemoryEstimate``. "
       "Unregistered operators default to zero. "
-      "Built-in ``onnx_shapes`` operators (e.g. "
-      "``Attention``) are registered from C++ via ``RegisterPeakMemoryFunctions``.");
+      "Built-in CPU kernels (e.g. "
+      "``Attention``) are registered with their kernels by ``onnx_kernels``.");
 
   shape_mod.def(
       "peak_memory_dispatch_table_keys",

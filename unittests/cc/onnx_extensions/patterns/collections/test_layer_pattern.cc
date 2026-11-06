@@ -1139,36 +1139,6 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
   EXPECT_EQ(internal_bytes(context), 8192);
 }
 
-TEST(ComputeContext, IncludesLocalFunctionWorkspaceInIncrementalAndFullPeakMemory) {
-  onnx_shapes::RegisterShapeFunctions();
-  onnx_shapes::RegisterPeakMemoryFunctions();
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 24}, {"ai.rt", 1}});
-  auto &function = builder.MakeLocalFunction("AttentionFunction", "ai.rt", builder.OpsetVersions());
-  const auto shape = LayerShape({1, 2, 4, 8});
-  const auto key_value_shape = LayerShape({1, 2, 16, 8});
-  function.MakeInput("q", core::symbolic::TensorType::kFloat, shape);
-  function.MakeInput("k", core::symbolic::TensorType::kFloat, key_value_shape);
-  function.MakeInput("v", core::symbolic::TensorType::kFloat, key_value_shape);
-  function.MakeNode("Attention", {"q", "k", "v"}, {"attention_result"});
-  function.MakeOutput("attention_result");
-  builder.MakeInput("caller_q", core::symbolic::TensorType::kFloat, shape);
-  builder.MakeInput("caller_k", core::symbolic::TensorType::kFloat, key_value_shape);
-  builder.MakeInput("caller_v", core::symbolic::TensorType::kFloat, key_value_shape);
-  builder.MakeNode("AttentionFunction", {"caller_q", "caller_k", "caller_v"}, {"result"}, "ai.rt");
-  builder.MakeOutput("result");
-
-  const ModelProto model = builder.ToModel();
-  core::compute::ComputeContext context;
-  context.ComputeShapes(model);
-  context.AppendNodePeakMemory(model.graph().node(0), 0, core::symbolic::Device::kCPU);
-  // Promotions and FLOAT32 Y staging, plus one score row per batch/head.
-  const core::shapes::PeakMemoryEstimate expected{
-      core::symbolic::SymDim(int64_t{4 * (64 + 256 + 256 + 64) + 4 * 2 * 16}), std::nullopt};
-  EXPECT_EQ(context.NodePeakMemory(0), expected);
-  EXPECT_EQ(context.ComputePeakMemory(model.graph(), core::symbolic::Device::kCPU),
-            (std::vector<core::shapes::PeakMemoryEstimate>{expected}));
-}
-
 TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   constexpr int count = 128;

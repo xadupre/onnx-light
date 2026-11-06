@@ -70,9 +70,14 @@ implementations. Applications select extensions explicitly:
 .. code-block:: cpp
 
     onnx_light::onnx_shapes::RegisterShapeFunctions();
-    onnx_light::onnx_shapes::RegisterPeakMemoryFunctions();
     onnx_light::onnx_kernels::RegisterKernelFunctions();
     onnx_light::onnx_patterns::RegisterPatterns();
+
+Kernel registration also registers the corresponding workspace estimators.
+Shape-only consumers can instead call
+``onnx_light::onnx_kernels::RegisterPeakMemoryFunctions()`` when the kernel
+library is available. Estimator implementations live beside their kernels;
+neither ``lib_onnx_shape`` nor ``lib_onnx_core`` depends on ``lib_onnx_kernels``.
 
 This keeps linking predictable: an application that does not evaluate models,
 infer shapes, estimate peak memory, or optimize graphs does not pull in those

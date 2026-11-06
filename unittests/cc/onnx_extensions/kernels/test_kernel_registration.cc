@@ -87,7 +87,7 @@ TEST(KernelRegistration, CollectionAndFactoryConstructionArePure) {
   const auto kernels = KernelDispatchTable();
   const auto estimators = core::shapes::PeakMemoryDispatchTable();
   const auto &builtins = onnx_kernels::KernelFunctions();
-  const auto &builtin_estimators = onnx_shapes::PeakMemoryFunctions();
+  const auto &builtin_estimators = onnx_kernels::PeakMemoryFunctions();
   ASSERT_NE(builtins.find("ai.onnx:MatMul"), builtins.end());
   ASSERT_NE(builtin_estimators.find("ai.onnx:MatMul"), builtin_estimators.end());
   auto factory = MakeKernelFactory(Implementation(72));
@@ -122,9 +122,9 @@ TEST_P(KernelRegistrationOrder, LazyBuiltinsPreserveExplicitImplementationsAndAc
   ASSERT_TRUE(RegisterKernelFn("", "MatMul", Device::kCPU, Implementation(123)));
   ASSERT_TRUE(RegisterKernelFn("", "Gather", Device::kCPU, Implementation(1).factory));
   if (GetParam())
-    onnx_shapes::RegisterPeakMemoryFunctions();
+    onnx_kernels::RegisterPeakMemoryFunctions();
   onnx_kernels::RegisterKernelFunctions();
-  onnx_shapes::RegisterPeakMemoryFunctions();
+  onnx_kernels::RegisterPeakMemoryFunctions();
   EXPECT_EQ(GlobalMemory("MatMul", Device::kCPU, ""), 123);
   EXPECT_EQ(GlobalMemory("Gather", Device::kCPU, ""), 0);
   NodeProto node;

@@ -574,7 +574,7 @@ target_include_directories(lib_onnx_kernels PUBLIC
 )
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core lib_onnx_shape)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
 # Precompile the common test-case and runtime header stacks used by kernel
 # translation units, including ``runtime_context.h`` via ``node_helpers.h``.
 onnx_light_target_precompile_headers(lib_onnx_kernels PRIVATE

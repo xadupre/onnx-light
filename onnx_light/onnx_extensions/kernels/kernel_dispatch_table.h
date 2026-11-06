@@ -53,4 +53,16 @@ void RegisterKernelFunctions();
 /// Returns built-in factories with their matching estimators without registry side effects.
 const std::unordered_map<std::string, core::runtime::NodeKernelFn> &KernelFunctions();
 
+/// Returns built-in CPU workspace estimators without modifying any registry.
+const std::unordered_map<std::string, core::shapes::ComputePeakMemoryNodeFn> &PeakMemoryFunctions();
+
+/**
+ * Registers the portable kernels' workspace estimators for shape-only analysis,
+ * without registering kernel factories. Idempotent; existing entries, including
+ * explicitly empty estimators selected by other kernels, are never replaced.
+ * RegisterKernelFunctions associates these same estimators with their factories.
+ * Builds without lib_onnx_kernels have no portable-kernel estimators.
+ */
+void RegisterPeakMemoryFunctions();
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

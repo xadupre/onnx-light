@@ -18,9 +18,15 @@ The module is exposed as ``onnx_light.onnx_core.shape_inference``.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from typing import TypeAlias
 
 from ..onnx_py._onnxpycore import shape_inference as _C  # type: ignore[attr-defined]
+
+# The optional kernel library owns its workspace estimates, as in graph_builder.
+if importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None:
+    importlib.import_module("onnx_light.onnx_py._onnxpykernels")
 
 apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
 check_inputs_available = _C.check_inputs_available

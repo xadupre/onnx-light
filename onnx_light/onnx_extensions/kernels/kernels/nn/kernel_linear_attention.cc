@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
@@ -464,6 +465,106 @@ void LinearAttention::Run(RuntimeContext &rt) {
       rt.Put(present_name, std::move(result.present_state));
     }
   }
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  return ComputePeakMemoryLinearAttention(device, NodeProto{}, input_shapes);
+}
+
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryLinearAttention(Device, const NodeProto &node,
+                                 const std::vector<SymShape> &input_shapes) {
+  if (input_shapes.size() < 3 || input_shapes[0].Rank() != 3 || input_shapes[1].Rank() != 3 ||
+      input_shapes[2].Rank() != 3) {
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  }
+
+  for (int slot = 3; slot < std::min(node.input_size(), 6); ++slot) {
+    if (!node.input(slot).empty() &&
+        (static_cast<size_t>(slot) >= input_shapes.size() || input_shapes[slot].Empty()))
+      return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  }
+  const auto present_input = [&](size_t slot) {
+    return slot < input_shapes.size() &&
+           (slot < 3 || (node.input_size() == 0 ? !input_shapes[slot].Empty()
+                                                : slot < static_cast<size_t>(node.input_size()) &&
+                                                      !node.input(static_cast<int>(slot)).empty()));
+  };
+  bool unresolved = false;
+  for (size_t slot = 0; slot < input_shapes.size(); ++slot) {
+    if (!present_input(slot))
+      continue;
+    for (const auto &dim : input_shapes[slot].Dims()) {
+      EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0,
+                          "Negative LinearAttention scratch dimension.");
+      unresolved |= dim.IsExpr() && (dim.AsExpr().empty() || dim.AsExpr() == "?");
+    }
+  }
+  if (unresolved)
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+
+  int64_t q_heads = 0, kv_heads = 0;
+  bool use_beta = true;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "q_num_heads" || attr.name() == "kv_num_heads") {
+      EXT_ENFORCE_INVALID(attr.type() == AttributeProto::INT && attr.i() > 0,
+                          "LinearAttention scratch: head counts must be positive integers.");
+      (attr.name() == "q_num_heads" ? q_heads : kv_heads) = attr.i();
+    } else if (attr.name() == "update_rule") {
+      const auto &rule = attr.s();
+      EXT_ENFORCE_INVALID(
+          attr.type() == AttributeProto::STRING &&
+              (rule == "linear" || rule == "gated" || rule == "delta" || rule == "gated_delta"),
+          "LinearAttention scratch: invalid update_rule.");
+      use_beta = rule == "delta" || rule == "gated_delta";
+    }
+  }
+  if (q_heads != 0 && kv_heads != 0)
+    EXT_ENFORCE_INVALID(q_heads % kv_heads == 0,
+                        "LinearAttention scratch: incompatible head counts.");
+  using namespace core::expressions;
+  using core::symbolic::ToDimType;
+  const auto elements = [&](size_t slot) -> DimType {
+    if (!present_input(slot))
+      return int64_t{0};
+    std::vector<core::expressions::DimType> factors;
+    for (const auto &dim : input_shapes[slot].Dims())
+      factors.push_back(ToDimType(dim));
+    return dim_multi_mul(factors);
+  };
+  const DimType batch = ToDimType(input_shapes[0][0]);
+  const DimType sequence = ToDimType(input_shapes[0][1]);
+  const DimType hidden_k = ToDimType(input_shapes[1][2]);
+  const DimType hidden_v = ToDimType(input_shapes[2][2]);
+  const bool has_state = present_input(3);
+  if (has_state && input_shapes[3].Rank() != 4)
+    return core::shapes::UnknownPeakMemory("", "LinearAttention");
+  const DimType state =
+      has_state
+          ? elements(3)
+          : dim_multi_mul(
+                {batch, dim_exact_div(hidden_k, int64_t{kv_heads > 0 ? kv_heads : 1}), hidden_v});
+  const DimType output =
+      q_heads > 0 && kv_heads > 0
+          ? dim_multi_mul(
+                {batch, sequence, int64_t{q_heads}, dim_exact_div(hidden_v, int64_t{kv_heads})})
+          : dim_multi_mul({batch, sequence, ToDimType(input_shapes[0][2]), hidden_v});
+  DimType input_elements = int64_t{0};
+  for (size_t slot = 0; slot < input_shapes.size(); ++slot)
+    input_elements = dim_add(input_elements, elements(slot));
+  // Covers promotions, FLOAT32 results and temporary half-precision demotions.
+  // The final declared output/state buffers are accounted for by shape analysis.
+  DimType bytes =
+      dim_add(dim_mul(int64_t{4}, input_elements), dim_mul(int64_t{6}, dim_add(output, state)));
+  if (node.output_size() != 0 && (node.output_size() < 2 || node.output(1).empty()))
+    bytes = dim_add(bytes, dim_mul(int64_t{4}, state));
+  if (use_beta && (!input_shapes[0][1].IsInt() || input_shapes[0][1].AsInt() != 0))
+    bytes = dim_add(bytes, dim_multi_mul({int64_t{4}, batch, hidden_v}));
+  const SymDim maximum = core::symbolic::FromDimType(bytes);
+  if (maximum.IsInt() && maximum.AsInt() == 0)
+    return core::shapes::PeakMemoryEstimate::Exact(maximum);
+  return {maximum, std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

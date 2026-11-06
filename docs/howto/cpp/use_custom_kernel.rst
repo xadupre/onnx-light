@@ -287,7 +287,7 @@ including explicit zero-memory selections.
 without changing either registry. Such factories retain their accounting when
 collected, copied, registered globally or locally, or restored from
 ``KernelDispatchTable``. ``onnx_kernels::KernelFunctions()`` and
-``onnx_shapes::PeakMemoryFunctions()`` collect built-in metadata without
+``onnx_kernels::PeakMemoryFunctions()`` collect built-in metadata without
 registration side effects.
 
 Local registration never changes global shape-only accounting. After

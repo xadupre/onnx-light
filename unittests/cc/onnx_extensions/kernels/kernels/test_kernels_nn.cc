@@ -1490,7 +1490,7 @@ TEST(KernelClass, AttentionRetriesFiniteOverflowWithoutAdditionalScratch) {
         EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.0f);
         EXPECT_FLOAT_EQ(qk.AsFloat()[0], mode == 3 ? 0.5f : 0.0f);
         EXPECT_FLOAT_EQ(qk.AsFloat()[1], mode == 3 ? 0.5f : 0.0f);
-        const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryAttention(
+        const auto estimate = onnx_kernels::kernel::ComputePeakMemoryAttention(
             core::symbolic::Device::kCPU, node,
             {AttentionShape(q), AttentionShape(k), AttentionShape(v)});
         EXPECT_LE(execution_alloc.PeakAllocatedSize(),
@@ -1723,7 +1723,7 @@ TEST(KernelClass, AttentionWorkspaceBoundCoversLayoutsCachesDtypesAndOptionalOut
           EXPECT_EQ(result.Y.allocation_owner(), &io_alloc);
           EXPECT_EQ(result.qk_matmul_output.data_type,
                     optional_outputs ? dtype : DataType::UNDEFINED);
-          const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryAttention(
+          const auto estimate = onnx_kernels::kernel::ComputePeakMemoryAttention(
               core::symbolic::Device::kCPU, node, inputs);
           EXPECT_LE(execution_alloc.PeakAllocatedSize(),
                     static_cast<size_t>(estimate.worst_case.AsInt()));
@@ -1786,7 +1786,7 @@ TEST(KernelClass, LinearAttentionWorkspaceBoundCoversRulesDtypesAndOmittedState)
         EXPECT_EQ(result.output.allocation_owner(), &io_alloc);
         EXPECT_EQ(result.present_state.allocation_owner(),
                   state_output ? &io_alloc : &execution_alloc);
-        const auto estimate = onnx_shapes::shapes::nn::ComputePeakMemoryLinearAttention(
+        const auto estimate = onnx_kernels::kernel::ComputePeakMemoryLinearAttention(
             core::symbolic::Device::kCPU, node, inputs);
         EXPECT_LE(execution_alloc.PeakAllocatedSize(),
                   static_cast<size_t>(estimate.worst_case.AsInt()));

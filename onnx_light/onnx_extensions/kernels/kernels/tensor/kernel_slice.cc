@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -230,6 +231,22 @@ void Slice::Run(RuntimeContext &rt) {
   const Tensor *steps = GetOptionalInput(node, 4, rt);
   onnx_kernels::kernel::Slice k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
+}
+
+PeakMemoryEstimate ComputePeakMemorySlice(Device, const NodeProto &node,
+                                          const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 3, 5) || inputs[1].Rank() != 1 ||
+      inputs[2].Rank() != 1)
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  for (size_t i = 2; i < inputs.size(); ++i) {
+    if (inputs[i].Rank() > 1 ||
+        (inputs[i].Rank() == 1 && inputs[1][0].IsInt() && inputs[i][0].IsInt() &&
+         inputs[1][0].AsInt() != inputs[i][0].AsInt()))
+      return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  }
+  // ComputeSliceLayout simultaneously holds four INT64 arrays of length n:
+  // starts, ends, axes and steps. Missing optional arrays are synthesized.
+  return {peak_memory_detail::PeakMemoryMultiply(SymDim(int64_t{32}), inputs[1][0]), std::nullopt};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

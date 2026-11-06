@@ -239,8 +239,8 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
 ``SymDim average_case``. All values are bytes excluding inputs and outputs.
 
 
-1. **Implement it** next to the shape function, e.g.
-   ``shapes/nn/shape_attention.cc`` (declared in ``shapes/nn/shape_nn.h``):
+1. **Implement it** next to the corresponding kernel, e.g.
+   ``kernels/nn/kernel_attention.cc`` (declared in ``kernels/nn/include_nn_kernels.h``):
 
    Preserve symbolic dimensions with the checked helpers in
    ``onnx_core/expressions/expressions.h`` and the conversions in
@@ -259,19 +259,23 @@ The result contains a mandatory ``SymDim worst_case`` and an optional
    arithmetic and negative-dimension/overflow validation.
 
 2. **Register it** by adding an entry to the ``BuiltinPeakMemoryFunctions``
-   table in ``onnx_light/onnx_extensions/shapes/dispatch_table.cc``:
+   table in ``onnx_light/onnx_extensions/kernels/kernel_dispatch_table.cc``:
 
    .. code-block:: cpp
 
        {"ai.onnx:Attention",
         [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
-          return nn::ComputePeakMemoryAttention(device, node, inputs);
+          return kernel::ComputePeakMemoryAttention(device, node, inputs);
         }},
 
-As with shape functions, :cpp:func:`RegisterPeakMemoryFunctions` (same
-file) copies these builtins into the shared ``core::shapes`` peak-memory
-dispatch table via
-:cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`.
+:cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions` pairs these
+estimators with their concrete kernel factories and registers both together.
+For standalone shape analysis,
+:cpp:func:`onnx_light::onnx_kernels::RegisterPeakMemoryFunctions` selects the
+same estimates without registering factories. Neither path replaces explicit
+custom registrations. ``onnx_shapes`` registers only shape inference; builds
+without ``lib_onnx_kernels`` have no portable-kernel estimates and use the
+zero default for absent estimators.
 
 Decoder peak-memory coverage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

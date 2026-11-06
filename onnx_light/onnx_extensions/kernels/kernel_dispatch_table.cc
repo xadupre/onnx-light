@@ -24,7 +24,6 @@
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
-#include "onnx_extensions/shapes/dispatch_table.h"
 
 #include <algorithm>
 #include <cmath>
@@ -49,6 +48,27 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 using namespace ::onnx_light::core::runtime;
 
 namespace {
+
+using core::shapes::ComputePeakMemoryNodeFn;
+using core::symbolic::SymShape;
+
+const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemoryFunctions() {
+  static const std::unordered_map<std::string, ComputePeakMemoryNodeFn> table = {
+      {"ai.onnx:MatMul", kernel::ComputePeakMemoryMatMul},
+      {"ai.onnx:Gather", kernel::ComputePeakMemoryGather},
+      {"ai.onnx:Slice", kernel::ComputePeakMemorySlice},
+      {"ai.onnx:RMSNormalization", kernel::ComputePeakMemoryRMSNormalization},
+      {"ai.onnx:Attention",
+       [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
+         return kernel::ComputePeakMemoryAttention(device, node, inputs);
+       }},
+      {"ai.onnx:LinearAttention",
+       [](Device device, const NodeProto &node, const std::vector<SymShape> &inputs) {
+         return kernel::ComputePeakMemoryLinearAttention(device, node, inputs);
+       }},
+  };
+  return table;
+}
 
 // Built-in table of every ``onnx_kernels`` operator kernel, keyed by
 // ``"<domain>:<op_type>"``. Only used to populate the shared
@@ -304,7 +324,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
   };
   static const auto associated = [] {
     auto result = table;
-    const auto &estimators = onnx_shapes::PeakMemoryFunctions();
+    const auto &estimators = PeakMemoryFunctions();
     for (auto &[key, factory] : result) {
       const auto it = estimators.find(key);
       factory = MakeKernelFactory({std::move(factory), it == estimators.end()
@@ -320,6 +340,27 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
 
 const std::unordered_map<std::string, NodeKernelFn> &KernelFunctions() {
   return BuiltinKernelFunctions();
+}
+
+const std::unordered_map<std::string, core::shapes::ComputePeakMemoryNodeFn> &
+PeakMemoryFunctions() {
+  return BuiltinPeakMemoryFunctions();
+}
+
+void RegisterPeakMemoryFunctions() {
+  // Shape-only consumers can select the portable implementation's accounting
+  // without registering its factories. Explicit selections are preserved.
+  static const bool kRegistered = [] {
+    for (const auto &entry : BuiltinPeakMemoryFunctions()) {
+      const std::string &key = entry.first;
+      const std::size_t sep = key.find(':');
+      ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(
+          key.substr(0, sep), key.substr(sep + 1), ::onnx_light::core::shapes::Device::kCPU,
+          entry.second, /*overwrite=*/false);
+    }
+    return true;
+  }();
+  (void)kRegistered;
 }
 
 void RegisterKernelFunctions() {

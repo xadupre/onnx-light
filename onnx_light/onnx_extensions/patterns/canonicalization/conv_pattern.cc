@@ -269,6 +269,58 @@ std::string OptionalInput(const NodeProto &node, int index) {
   return node.input()[index].value();
 }
 
+bool HasSingleInlinePayload(const TensorProto &tensor) {
+  const int payloads = static_cast<int>(tensor.is_raw_data()) +
+                       static_cast<int>(!tensor.float_data().empty()) +
+                       static_cast<int>(!tensor.int32_data().empty()) +
+                       static_cast<int>(!tensor.string_data().empty()) +
+                       static_cast<int>(!tensor.int64_data().empty()) +
+                       static_cast<int>(!tensor.double_data().empty()) +
+                       static_cast<int>(!tensor.uint64_data().empty());
+  return payloads == 1 && tensor.external_data().empty() &&
+         tensor.data_location() != TensorProto::EXTERNAL;
+}
+
+bool ReadPadIntegerVector(const TensorProto &tensor, std::vector<int64_t> &values) {
+  return HasSingleInlinePayload(tensor) && tensor.data_type() == TensorProto::INT64 &&
+         tensor.dims_size() == 1 && tensor.dims(0) >= 0 && ReadIntegerValues(tensor, values) &&
+         static_cast<uint64_t>(tensor.dims(0)) == values.size();
+}
+
+bool IsZeroPadValue(const TensorProto &tensor) {
+  std::size_t count = 0;
+  if (!HasSingleInlinePayload(tensor) || !TensorElementCount(tensor, count) || count != 1) {
+    return false;
+  }
+  if (tensor.is_raw_data()) {
+    const auto width = FixedBitWidth(tensor.data_type());
+    if (width < 8 || width % 8 != 0 || tensor.ref_raw_data().size() != width / 8) {
+      return false;
+    }
+  } else if (std::max({tensor.float_data().size(), tensor.int32_data().size(),
+                       tensor.string_data().size(), tensor.int64_data().size(),
+                       tensor.double_data().size(), tensor.uint64_data().size()}) != 1) {
+    return false;
+  }
+  if (tensor.data_type() == TensorProto::FLOAT16 || tensor.data_type() == TensorProto::BFLOAT16) {
+    uint16_t bits = 0;
+    if (tensor.is_raw_data()) {
+      const auto &raw = tensor.ref_raw_data();
+      bits = static_cast<uint16_t>(raw[0]) | (static_cast<uint16_t>(raw[1]) << 8);
+    } else {
+      if (tensor.int32_data().size() != 1 || tensor.int32_data()[0] < 0 ||
+          tensor.int32_data()[0] > std::numeric_limits<uint16_t>::max()) {
+        return false;
+      }
+      bits = static_cast<uint16_t>(tensor.int32_data()[0]);
+    }
+    // Both 16-bit floating formats encode signed zero with all non-sign bits clear.
+    return (bits & 0x7fff) == 0;
+  }
+  double scalar = 0.0;
+  return ReadScalarAsDouble(tensor, scalar) && scalar == 0.0;
+}
+
 // Reconstructs the full ``[begin_0, ..., begin_{ndim-1}, end_0, ...]`` padding
 // array of the Pad node ``pad_node`` into ``full_pads`` and returns ``true`` on
 // success. ``ndim`` receives the tensor rank. Fails when the pads or axes
@@ -284,7 +336,7 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
     return false;
   }
   std::vector<int64_t> pads_values;
-  if (!ReadIntegerValues(*pads_cst, pads_values) || pads_values.size() % 2 != 0) {
+  if (!ReadPadIntegerVector(*pads_cst, pads_values) || pads_values.size() % 2 != 0) {
     return false;
   }
   ndim = pads_values.size() / 2;
@@ -295,8 +347,7 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
       return false;
     }
     const TensorProto *cv = graph.GetComputedConstant(constant_value);
-    double scalar = 0.0;
-    if (cv == nullptr || !ReadScalarAsDouble(*cv, scalar) || scalar != 0.0) {
+    if (cv == nullptr || !IsZeroPadValue(*cv)) {
       return false;
     }
   }
@@ -314,7 +365,7 @@ bool ReadPadPads(core::builder::GraphGraph &graph, const NodeProto &pad_node,
   }
   const TensorProto *axes_cst = graph.GetComputedConstant(axes_name);
   std::vector<int64_t> axes;
-  if (axes_cst == nullptr || !ReadIntegerValues(*axes_cst, axes) ||
+  if (axes_cst == nullptr || !ReadPadIntegerVector(*axes_cst, axes) ||
       axes.size() != pads_values.size() / 2 || !graph.HasShape(pad_node.input()[0].value())) {
     return false;
   }
@@ -559,9 +610,7 @@ core::builder::MatchResult PadPoolPattern::Match(core::builder::GraphGraph &grap
     }
     const TensorProto *tensor = graph.GetComputedConstant(name);
     std::vector<int64_t> values;
-    if (!graph.IsConstant(name) || tensor == nullptr || tensor->data_type() != TensorProto::INT64 ||
-        tensor->dims_size() != 1 || !ReadIntegerValues(*tensor, values) || tensor->dims(0) < 0 ||
-        static_cast<uint64_t>(tensor->dims(0)) != values.size()) {
+    if (!graph.IsConstant(name) || tensor == nullptr || !ReadPadIntegerVector(*tensor, values)) {
       return NoMatch(candidate, "pads and axes must be constant INT64 vectors");
     }
   }

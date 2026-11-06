@@ -26,7 +26,7 @@ style = [
     "ruff==0.17.3",
 ]
 typing = [
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "pyrefly==1.4.0",
 ]
 dev = [

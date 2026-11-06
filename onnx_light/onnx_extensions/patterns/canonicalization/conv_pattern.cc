@@ -314,11 +314,10 @@ bool IsZeroPadValue(const TensorProto &tensor) {
       }
       bits = static_cast<uint16_t>(tensor.int32_data()[0]);
     }
-    // Both 16-bit floating formats encode signed zero with all non-sign bits clear.
-    return (bits & 0x7fff) == 0;
+    return bits == 0;
   }
   double scalar = 0.0;
-  return ReadScalarAsDouble(tensor, scalar) && scalar == 0.0;
+  return ReadScalarAsDouble(tensor, scalar) && scalar == 0.0 && !std::signbit(scalar);
 }
 
 // Reconstructs the full ``[begin_0, ..., begin_{ndim-1}, end_0, ...]`` padding
@@ -704,9 +703,10 @@ PadPoolPattern::Apply(core::builder::GraphGraph &graph,
   replacement.clr_input();
   replacement.add_input(nodes[0]->input(0).value());
   replacement.clr_attribute();
-  const bool average = replacement.op_type() == "AveragePool";
+  const bool average = replacement.op_type().value() == "AveragePool";
   for (const auto &attribute : nodes[1]->attribute()) {
-    if (attribute.name() != "pads" && !(average && attribute.name() == "count_include_pad")) {
+    if (attribute.name().value() != "pads" &&
+        !(average && attribute.name().value() == "count_include_pad")) {
       *replacement.add_attribute() = attribute;
     }
   }

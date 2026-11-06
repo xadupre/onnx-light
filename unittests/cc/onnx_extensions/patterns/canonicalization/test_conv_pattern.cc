@@ -354,7 +354,7 @@ TEST(PadPoolPattern, SupportsExplicit16BitZeroScalarsOnly) {
         core::builder::GraphGraph graph(builder);
         onnx_patterns::PadPoolPattern pattern;
         const auto match = pattern.Match(graph, builder.Nodes()[1]);
-        if (bits == 0 || bits == 0x8000) {
+        if (bits == 0) {
           ASSERT_EQ(match.pattern, &pattern);
           const auto replacements = pattern.Apply(graph, match.nodes);
           ASSERT_EQ(replacements.size(), 1u);
@@ -369,6 +369,68 @@ TEST(PadPoolPattern, SupportsExplicit16BitZeroScalarsOnly) {
                        core::builder::BuilderError);
         }
         EXPECT_TRUE(builder.ToModel().Equals(before));
+      }
+    }
+  }
+}
+
+TEST(PadPoolPattern, RejectsNegativeZeroInSharedPadReader) {
+  using core::symbolic::TensorType;
+  for (const auto type : {TensorType::kFloat, TensorType::kDouble}) {
+    for (bool convolution : {false, true}) {
+      for (bool raw : {false, true}) {
+        for (bool negative : {false, true}) {
+          SCOPED_TRACE(testing::Message() << static_cast<int>(type) << ":" << convolution << ":"
+                                          << raw << ":" << negative);
+          core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 22}});
+          builder.MakeInput("x", type, Shape4D(1, 1, 4, 5));
+          builder.MakeInitializer(MakeInitializer<int64_t>("pads", {8}, {0, 0, 1, 0, 0, 0, 0, 1}));
+          const double zero = negative ? -0.0 : 0.0;
+          TensorProto value = type == TensorType::kFloat
+                                  ? MakeInitializer<float>("value", {}, {static_cast<float>(zero)})
+                                  : MakeInitializer<double>("value", {}, {zero});
+          if (raw) {
+            value.clr_float_data();
+            value.clr_double_data();
+            const std::size_t width = type == TensorType::kFloat ? 4 : 8;
+            uint8_t bytes[8] = {};
+            bytes[width - 1] = negative ? 0x80 : 0;
+            value.set_raw_data(bytes, width);
+          }
+          builder.MakeInitializer(value);
+          builder.MakeNode("Pad", {"x", "pads", "value"}, {"padded"});
+          if (convolution) {
+            builder.MakeInitializer(type == TensorType::kFloat
+                                        ? MakeInitializer<float>("w", {1, 1, 1, 3}, {1, 1, 1})
+                                        : MakeInitializer<double>("w", {1, 1, 1, 3}, {1, 1, 1}));
+            builder.MakeNode("Conv", {"padded", "w"}, {"y"});
+          } else {
+            NodeProto attributes;
+            AddAttribute<std::vector<int64_t>>(attributes, "kernel_shape", {3, 3});
+            builder.MakeNode("AveragePool", {"padded"}, {"y"}, "", "", attributes.attribute());
+          }
+          builder.MakeOutput("y");
+          const auto before = builder.ToModel();
+          core::builder::GraphGraph graph(builder);
+          onnx_patterns::PadPoolPattern pool;
+          onnx_patterns::PadConvPattern conv;
+          const core::builder::PatternOptimization &pattern =
+              convolution ? static_cast<const core::builder::PatternOptimization &>(conv)
+                          : static_cast<const core::builder::PatternOptimization &>(pool);
+          const auto match = pattern.Match(graph, builder.Nodes()[1]);
+          if (negative) {
+            EXPECT_EQ(match.pattern, nullptr);
+            EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}),
+                         core::builder::BuilderError);
+          } else {
+            ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+            const auto replacements = pattern.Apply(graph, match.nodes);
+            ASSERT_EQ(replacements.size(), 1u);
+            EXPECT_EQ(replacements[0].input(0), "x");
+            EXPECT_EQ(replacements[0].output(0), "y");
+          }
+          EXPECT_TRUE(builder.ToModel().Equals(before));
+        }
       }
     }
   }

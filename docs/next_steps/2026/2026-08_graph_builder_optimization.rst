@@ -108,8 +108,8 @@ requests:
    * - `Issue #4477 <https://github.com/xadupre/onnx-light/issues/4477>`_
      - Expand/Where/Equal batch start
      - Starts the next batch with ``NotWherePattern``,
-      ``UnsqueezeEqualPattern``, and ``WhereAddPattern``, including
-      rewrite/rejection tests, registration, and Python bindings.
+       ``UnsqueezeEqualPattern``, and ``WhereAddPattern``, including
+       rewrite/rejection tests, registration, and Python bindings.
    * - `PR #4491 <https://github.com/xadupre/onnx-light/pull/4491>`_
      - Redundant and broadcasting Expand
      - Ports ``ExpandPattern``, ``ExpandBroadcastPattern``, and

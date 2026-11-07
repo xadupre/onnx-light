@@ -672,7 +672,7 @@ def render_rst_table_for_domain(
         body_lines.extend(
             [
                 f"    * - {s.op_type}",
-                f"      - {s.name}",
+                f"      - ``{s.name}``",
                 f"      - {_format_discrepancy(s)}",
                 f"      - {_format_bool(s.static_shape)}",
                 f"      - {_format_bool(s.dynamic_shapes)}",

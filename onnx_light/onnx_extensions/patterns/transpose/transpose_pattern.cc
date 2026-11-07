@@ -79,43 +79,61 @@ core::builder::MatchResult TransposeTransposePattern::Match(core::builder::Graph
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
   }
-  const NodeProto *next_node = nullptr;
-  for (const NodeProto *consumer : graph.NextNodes(candidate.output()[0].value())) {
-    if (consumer != nullptr && IsDefaultOp(*consumer, "Transpose") && consumer->input_size() == 1 &&
-        consumer->output_size() == 1) {
-      next_node = consumer;
-      break;
+  std::vector<int64_t> first_perm;
+  if (!GetAttributeInts(candidate, "perm", first_perm) || !IsValidPerm(first_perm)) {
+    return NoMatch(candidate, "the first Transpose must define a valid perm attribute");
+  }
+
+  struct PendingNode {
+    const NodeProto *node;
+    bool shared_prefix;
+  };
+  std::vector<PendingNode> pending{{&candidate, false}};
+  for (std::size_t i = 0; i < pending.size(); ++i) {
+    const std::string &output = pending[i].node->output()[0].value();
+    const bool shared_prefix = pending[i].shared_prefix || graph.IsUsedMoreThanOnce(output);
+    for (const NodeProto *consumer : graph.NextNodes(output)) {
+      if (consumer == nullptr || consumer->input_size() != 1 || consumer->output_size() != 1) {
+        continue;
+      }
+      if (IsDefaultOp(*consumer, "Identity")) {
+        pending.push_back({consumer, shared_prefix});
+        continue;
+      }
+      if (!IsDefaultOp(*consumer, "Transpose")) {
+        continue;
+      }
+      std::vector<int64_t> second_perm;
+      if (!GetAttributeInts(*consumer, "perm", second_perm) ||
+          first_perm.size() != second_perm.size() || !IsValidPerm(second_perm)) {
+        continue;
+      }
+      if (shared_prefix && !IsIdentityPerm(ComposePerms(first_perm, second_perm))) {
+        continue;
+      }
+
+      std::vector<const NodeProto *> nodes{consumer};
+      while (nodes.back() != &candidate) {
+        const NodeProto *previous = graph.NodeBefore(nodes.back()->input()[0].value());
+        if (previous == nullptr ||
+            (previous != &candidate && !IsDefaultOp(*previous, "Identity"))) {
+          return NoMatch(candidate, "the Transpose chain is not connected to the candidate");
+        }
+        nodes.push_back(previous);
+      }
+      std::reverse(nodes.begin(), nodes.end());
+      return core::builder::MatchResult{this, std::move(nodes), &candidate};
     }
   }
-  if (next_node == nullptr) {
-    return NoMatch(candidate, "the Transpose output is not consumed by another Transpose");
-  }
-
-  std::vector<int64_t> first_perm;
-  std::vector<int64_t> second_perm;
-  if (!GetAttributeInts(candidate, "perm", first_perm) ||
-      !GetAttributeInts(*next_node, "perm", second_perm)) {
-    return NoMatch(candidate, "both Transpose nodes must define a perm attribute");
-  }
-  if (first_perm.size() != second_perm.size() || !IsValidPerm(first_perm) ||
-      !IsValidPerm(second_perm)) {
-    return NoMatch(candidate, "the perms are not compatible permutations");
-  }
-
-  const std::vector<int64_t> composed = ComposePerms(first_perm, second_perm);
-  if (!IsIdentityPerm(composed) && graph.IsUsedMoreThanOnce(candidate.output()[0].value())) {
-    return NoMatch(candidate,
-                   "the intermediate Transpose is shared and the perms do not cancel out");
-  }
-
-  return core::builder::MatchResult{this, {&candidate, next_node}, &candidate};
+  return NoMatch(candidate, "no reachable Transpose can be safely composed with the candidate");
 }
 
 utils::RepeatedProtoField<NodeProto>
 TransposeTransposePattern::Apply(core::builder::GraphGraph &graph,
                                  const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
-    throw BuilderError("TransposeTransposePattern::Apply expects two consecutive Transpose nodes.");
+  if (nodes.size() < 2 ||
+      std::any_of(nodes.begin(), nodes.end(), [](const auto *node) { return node == nullptr; })) {
+    throw BuilderError("TransposeTransposePattern::Apply expects a Transpose chain.");
   }
   const core::builder::MatchResult verified = Match(graph, *nodes[0]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
@@ -123,7 +141,7 @@ TransposeTransposePattern::Apply(core::builder::GraphGraph &graph,
         "TransposeTransposePattern::Apply received an unsafe or inconsistent match.");
   }
   const NodeProto &first = *nodes[0];
-  const NodeProto &second = *nodes[1];
+  const NodeProto &second = *nodes.back();
 
   std::vector<int64_t> first_perm;
   std::vector<int64_t> second_perm;
@@ -133,8 +151,14 @@ TransposeTransposePattern::Apply(core::builder::GraphGraph &graph,
 
   const std::string name = "TransposeTransposePattern--" + first.name().value();
   utils::RepeatedProtoField<NodeProto> replacements;
-  if (graph.IsUsedMoreThanOnce(first.output()[0].value())) {
-    replacements.add() = first;
+  std::size_t retained = 0;
+  for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
+    if (graph.IsUsedMoreThanOnce(nodes[i]->output()[0].value())) {
+      retained = i + 1;
+    }
+  }
+  for (std::size_t i = 0; i < retained; ++i) {
+    replacements.add() = *nodes[i];
   }
   if (IsIdentityPerm(composed)) {
     replacements.push_back(MakeNode("Identity", {first.input()[0].value()},

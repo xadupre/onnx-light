@@ -9,13 +9,18 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
- * Merges two consecutive ``Transpose`` nodes into a single one.
+ * Merges two ``Transpose`` nodes, optionally separated by ``Identity`` nodes.
  *
  * @code
  * Before:
  *          ┌───────────────────┐
  *   x ────→│ Transpose [1,0,2] │────→ t
  *          └───────────────────┘
+ *                     │
+ *                     ↓
+ *              ┌───────────────────┐
+ *              │ Identity (0 or N) │
+ *              └───────────────────┘
  *                     │
  *                     ↓
  *              ┌───────────────────┐
@@ -33,10 +38,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *          └──────────┘
  * @endcode
  *
- * When the composed permutation is the identity the pair is replaced by an
- * ``Identity`` node. The first ``Transpose`` is preserved when its output is
- * consumed elsewhere; in that case the rewrite only applies when the composed
- * permutation is the identity, so no additional ``Transpose`` is introduced.
+ * Intervening default-domain ``Identity`` nodes are transparent to matching.
+ * When the composed permutation is the identity the chain is replaced by an
+ * ``Identity`` node. A prefix is preserved when an intermediate value is
+ * consumed elsewhere or exported; in that case the rewrite only applies when
+ * the composed permutation is the identity, so no additional ``Transpose`` is
+ * introduced.
  */
 class TransposeTransposePattern final : public core::builder::PatternOptimization {
 public:
@@ -50,7 +57,7 @@ public:
   /// Enables reentrant matching using immutable nodes and structural index queries.
   bool CanMatchInParallel() const noexcept override { return true; }
 
-  /// Finds a ``Transpose`` followed by another default-domain ``Transpose``.
+  /// Finds default-domain ``Transpose`` nodes through optional ``Identity`` nodes.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 

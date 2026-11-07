@@ -913,6 +913,119 @@ class TestExpandLayoutPatterns(ExtTestCase):
         self.assertPatternNotRewritten(rewrites, "TransposeTranspose")
         self.assertEqual(["Transpose", "Transpose"], _ops(optimized))
 
+    def test_transpose_identity_transpose_post_fusion_cleanup(self):
+        for inverse, canonicalize in itertools.product((True, False), (False, True)):
+            with self.subTest(inverse=inverse, canonicalize=canonicalize):
+                weight = np.arange(64, dtype=np.float32).reshape(8, 8)
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node("Transpose", ["x"], ["xt"], name="first", perm=[1, 0]),
+                            oh.make_node(
+                                "Identity", ["x"], ["a"], name="TransposeTransposePattern--first"
+                            ),
+                            oh.make_node(
+                                "Identity", ["xt"], ["yt"], name="SameChildrenPattern--third"
+                            ),
+                            oh.make_node(
+                                "Transpose",
+                                ["yt"],
+                                ["b"],
+                                name="fourth",
+                                perm=[1, 0] if inverse else [0, 1],
+                            ),
+                            oh.make_node("MatMul", ["x", "weight"], ["z"], name="projection"),
+                        ],
+                        "Selective fusion",
+                        [oh.make_tensor_value_info("x", TensorProto.FLOAT, [2, 8])],
+                        [
+                            oh.make_tensor_value_info("a", TensorProto.FLOAT, [2, 8]),
+                            oh.make_tensor_value_info(
+                                "b", TensorProto.FLOAT, [2, 8] if inverse else [8, 2]
+                            ),
+                            oh.make_tensor_value_info("z", TensorProto.FLOAT, [2, 8]),
+                        ],
+                        [onh.from_array(weight, name="weight")],
+                        value_info=[
+                            oh.make_tensor_value_info(name, TensorProto.FLOAT, [8, 2])
+                            for name in ("xt", "yt")
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("ai.onnx", 13)],
+                    producer_name="onnx-light",
+                    ir_version=9,
+                )
+                for value in itertools.chain(
+                    model.graph.input,
+                    model.graph.output,
+                    model.graph.value_info,
+                    model.graph.initializer,
+                ):
+                    oh.set_metadata_props(value, {"onnx_light.value_tag": "weight"})
+                oh.set_metadata_props(
+                    model.graph.initializer[0],
+                    {"onnx_light.value_tag": "weight", "onnx_light.constant": "1"},
+                )
+                for node in model.graph.node:
+                    metadata = {
+                        "onnx_light.node_tag": "weight",
+                        "onnx_light.value_tag": "weight",
+                        "onnx_light.peak_memory_max": "416" if node.op_type == "MatMul" else "0",
+                    }
+                    if node.op_type == "MatMul":
+                        metadata["onnx_light.peak_memory"] = "416"
+                        metadata["onnx_light.not_used_after"] = "x;weight"
+                    else:
+                        metadata["onnx_light.peak_memory_average"] = "0"
+                    if node.name in ("SameChildrenPattern--third", "fourth"):
+                        metadata["onnx_light.inplace_reuse"] = "0:0:equal"
+                        metadata["onnx_light.release_after"] = str(node.input[0])
+                    oh.set_metadata_props(node, metadata)
+                builder = optimization.GraphBuilder(model)
+                graph = optimization.GraphGraph(builder)
+                graph.optimize(canonicalize=canonicalize)
+                optimized = builder.to_onnx()
+
+                if inverse:
+                    self.assertEqual(0, _ops(optimized).count("Transpose"))
+                    self.assertEqual(2, _ops(optimized).count("Identity"))
+                    for node in optimized.graph.node:
+                        if node.op_type == "Identity":
+                            self.assertEqual(["x"], list(node.input))
+                else:
+                    self.assertGreater(_ops(optimized).count("Transpose"), 0)
+                self.assertEqual(
+                    ["a", "b", "z"], [output.name for output in optimized.graph.output]
+                )
+                for field in ("input", "output", "initializer"):
+                    self.assertEqual(
+                        [value.SerializeToString() for value in getattr(model.graph, field)],
+                        [value.SerializeToString() for value in getattr(optimized.graph, field)],
+                    )
+                self.assertEqual(model.ir_version, optimized.ir_version)
+                self.assertEqual(
+                    [(op.domain, op.version) for op in model.opset_import],
+                    [(op.domain, op.version) for op in optimized.opset_import],
+                )
+                projection = [node for node in optimized.graph.node if node.op_type == "MatMul"]
+                self.assertEqual(1, len(projection))
+                self.assertEqual("projection", projection[0].name)
+                self.assertEqual(["x", "weight"], list(projection[0].input))
+                self.assertEqual(["z"], list(projection[0].output))
+                x = np.arange(16, dtype=np.float32).reshape(2, 8)
+                self.assertEquivalent(model, optimized, {"x": x})
+                actual = ReferenceEvaluator(optimized).run(None, {"x": x})
+                for expected, result in zip((x, x if inverse else x.T, x @ weight), actual):
+                    self.assertEqual(expected.dtype, result.dtype)
+                    self.assertEqual(expected.shape, result.shape)
+                    np.testing.assert_array_equal(expected, result)
+
+                again = optimization.GraphBuilder(optimized)
+                optimization.GraphGraph(again).optimize(canonicalize=canonicalize)
+                self.assertEqual(
+                    optimized.graph.SerializeToString(), again.to_onnx().graph.SerializeToString()
+                )
+
     def test_transpose_gather_drop_and_swap_variants(self):
         cases = (
             ("drop", [1, 0, 2, 3], 0, ["Gather"]),

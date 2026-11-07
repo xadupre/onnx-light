@@ -979,7 +979,7 @@ class TestExpandLayoutPatterns(ExtTestCase):
                         metadata["onnx_light.peak_memory_average"] = "0"
                     if node.name in ("SameChildrenPattern--third", "fourth"):
                         metadata["onnx_light.inplace_reuse"] = "0:0:equal"
-                        metadata["onnx_light.release_after"] = node.input[0]
+                        metadata["onnx_light.release_after"] = str(node.input[0])
                     oh.set_metadata_props(node, metadata)
                 builder = optimization.GraphBuilder(model)
                 graph = optimization.GraphGraph(builder)

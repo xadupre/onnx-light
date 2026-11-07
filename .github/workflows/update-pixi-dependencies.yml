@@ -47,8 +47,9 @@ jobs:
           git commit -m "Update OpenSSL and CMake in pixi.lock"
           git push --force origin "HEAD:$PR_BRANCH"
 
-          if gh pr view "$PR_BRANCH" >/dev/null 2>&1; then
-            gh pr edit "$PR_BRANCH" \
+          pr_number="$(gh pr list --state open --base "$BASE_BRANCH" --head "$PR_BRANCH" --json number --jq '.[0].number // empty')"
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" \
               --title "Update OpenSSL and CMake in pixi.lock" \
               --body "Updates the Pixi lockfile entries for OpenSSL and CMake."
           else

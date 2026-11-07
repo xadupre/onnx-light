@@ -471,6 +471,100 @@ TEST(TransposeTransposePattern, MergesIntoSingleTranspose) {
   EXPECT_EQ(AttributeInts(replacements[0], "perm"), (std::vector<int64_t>{1, 2, 0}));
 }
 
+TEST(TransposeTransposePattern, MatchesThroughIdentityChain) {
+  for (bool inverse : {false, true}) {
+    SCOPED_TRACE(inverse);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+    builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0, 2}));
+    builder.MakeNode("Identity", {"t0"}, {"t1"});
+    builder.MakeNode("Identity", {"t1"}, {"t2"});
+    builder.MakeNode(
+        "Transpose", {"t2"}, {"out"}, "", "",
+        PermAttr(inverse ? std::vector<int64_t>{1, 0, 2} : std::vector<int64_t>{0, 2, 1}));
+    builder.MakeOutput("out");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::TransposeTransposePattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[0]);
+    ASSERT_EQ(match.pattern, &pattern);
+    ASSERT_EQ(match.nodes.size(), 4u);
+    const auto replacements = pattern.Apply(graph, match.nodes);
+    ASSERT_EQ(replacements.size(), 1u);
+    EXPECT_EQ(replacements[0].op_type(), inverse ? "Identity" : "Transpose");
+    EXPECT_EQ(replacements[0].input(0), "x");
+    EXPECT_EQ(replacements[0].output(0), "out");
+    if (!inverse) {
+      EXPECT_EQ(AttributeInts(replacements[0], "perm"), (std::vector<int64_t>{1, 2, 0}));
+    }
+    EXPECT_THROW(pattern.Apply(graph, {match.nodes.front(), match.nodes.back()}),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(TransposeTransposePattern, PreservesSharedIdentityPrefix) {
+  for (bool inverse : {false, true}) {
+    for (int usage : {0, 1, 2}) {
+      SCOPED_TRACE(inverse);
+      SCOPED_TRACE(usage);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+      builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0, 2}));
+      builder.MakeNode("Identity", {"t0"}, {"t1"});
+      builder.MakeNode("Identity", {"t1"}, {"t2"});
+      builder.MakeNode(
+          "Transpose", {"t2"}, {"out"}, "", "",
+          PermAttr(inverse ? std::vector<int64_t>{1, 0, 2} : std::vector<int64_t>{0, 2, 1}));
+      builder.MakeOutput("out");
+      if (usage == 0) {
+        builder.MakeOutput("t1");
+      } else if (usage == 1) {
+        builder.MakeNode("Identity", {"t1"}, {"other"});
+        builder.MakeOutput("other");
+      } else {
+        auto &branch = builder.MakeSubgraph("branch");
+        branch.MakeNode("Identity", {"t1"}, {"other"});
+        branch.MakeOutput("other");
+        utils::RepeatedProtoField<AttributeProto> references;
+        auto &reference = references.add();
+        reference.set_name("body_ref");
+        reference.set_type(AttributeProto::STRING);
+        reference.set_s("branch");
+        builder.MakeNode("SubgraphCarrier", {}, {"result"}, "", "", references);
+        builder.MakeOutput("result");
+      }
+
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::TransposeTransposePattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[0]);
+      if (!inverse) {
+        EXPECT_EQ(match.pattern, nullptr);
+        continue;
+      }
+      ASSERT_EQ(match.pattern, &pattern);
+      const auto replacements = pattern.Apply(graph, match.nodes);
+      ASSERT_EQ(replacements.size(), 3u);
+      EXPECT_EQ(replacements[0].SerializeAsString(), builder.Nodes()[0].SerializeAsString());
+      EXPECT_EQ(replacements[1].SerializeAsString(), builder.Nodes()[1].SerializeAsString());
+      EXPECT_EQ(replacements[2].op_type(), "Identity");
+      EXPECT_EQ(replacements[2].input(0), "x");
+      EXPECT_EQ(replacements[2].output(0), "out");
+    }
+  }
+}
+
+TEST(TransposeTransposePattern, RejectsCustomDomainIdentity) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}, {"custom", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0}));
+  builder.MakeNode("Identity", {"t0"}, {"t1"}, "custom");
+  builder.MakeNode("Transpose", {"t1"}, {"out"}, "", "", PermAttr({1, 0}));
+  builder.MakeOutput("out");
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::TransposeTransposePattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
 TEST(TransposeTransposePattern, KeepsSharedTransposeWhenCancelling) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));

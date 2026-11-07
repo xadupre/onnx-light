@@ -30,7 +30,8 @@ GptqModelGgufWeights ToNative(const PythonGptqModelGgufWeights &weights, size_t 
   nb::module_ numpy = nb::module_::import_("numpy");
   EXT_ENFORCE_INVALID(nb::isinstance(weights.qweight, numpy.attr("ndarray")),
                       "GGUF: qweight must be a NumPy array.");
-  EXT_ENFORCE_INVALID(nb::cast<std::string>(nb::str(weights.qweight.attr("dtype"))) == "uint8",
+  const nb::object dtype = weights.qweight.attr("dtype");
+  EXT_ENFORCE_INVALID(nb::cast<std::string>(nb::str(dtype)) == "uint8",
                       "GGUF: qweight must have UINT8 dtype.");
   const size_t nbytes = nb::cast<size_t>(weights.qweight.attr("nbytes"));
   EXT_ENFORCE_INVALID(max_bytes > 0 && nbytes <= max_bytes, "GGUF: qweight exceeds max_bytes.");

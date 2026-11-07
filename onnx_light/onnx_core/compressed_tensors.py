@@ -210,7 +210,7 @@ def _integer_import(args, tensors, max_bytes):
     required = {"weight_packed", "weight_shape", "weight_scale"}
     _keys(tensors, required if args["symmetric"] else required | {"weight_zero_point"})
     shape_tensor = _array(tensors, "weight_shape", numpy.int64, (2,))
-    shape = _shape(*(int(dim) for dim in shape_tensor), max_bytes)
+    shape = _shape(int(shape_tensor[0]), int(shape_tensor[1]), max_bytes)
     bits, _, parameter_shape = _integer_geometry(args, shape)
     _dtype_metadata(args, "float32", "int8")
     packed = _array(
@@ -237,7 +237,10 @@ def _integer_import(args, tensors, max_bytes):
             tensors,
             "weight_zero_point",
             numpy.int32,
-            ((shape[0] * bits + 31) // 32, parameter_shape[1]),
+            (
+                (shape[0] * bits + 31) // 32,
+                1 if args["strategy"] == "channel" else shape[1] // args["group_size"],
+            ),
         )
         zeros = _unpack_int32(zeros_packed, shape[0], bits, axis=0)
     _require(
@@ -319,6 +322,7 @@ def _mx_import(compression_format, args, tensors, max_bytes):
     nvfp4 = codec == "nvfp4"
     scale_dtype = ml_dtypes.float8_e4m3fn if nvfp4 else numpy.uint8
     scales = _array(tensors, "weight_scale", scale_dtype, (shape[0], shape[1] // group))
+    global_scale_value = 1.0
     if nvfp4:
         global_scale = _array(tensors, "weight_global_scale", numpy.float32, (1,))
         _require(
@@ -329,6 +333,7 @@ def _mx_import(compression_format, args, tensors, max_bytes):
             numpy.all(numpy.isfinite(scales)) and numpy.all(scales > 0),
             "NVFP4 local scales must be finite and positive.",
         )
+        global_scale_value = float(global_scale[0])
     else:
         _require(numpy.all(scales != 255), "E8M0 scale byte 255 is unsupported.")
     if bits == 8:
@@ -347,7 +352,7 @@ def _mx_import(compression_format, args, tensors, max_bytes):
         "weight_scale", scales, onnx.TensorProto.FLOAT8E4M3FN if nvfp4 else onnx.TensorProto.UINT8
     )
     if nvfp4:
-        weights.weight_global_scale = float(global_scale[0])
+        weights.weight_global_scale = global_scale_value
     return getattr(quantization, f"import_{codec}_weights")(weights)
 
 
@@ -384,7 +389,7 @@ def _encoded_shape(value, max_bytes):
         len(dims) == 2 and all(dim.has_dim_value() for dim in dims),
         "export requires a concrete matrix shape.",
     )
-    return _shape(*(int(dim.dim_value) for dim in dims), max_bytes)
+    return _shape(int(dims[0].dim_value), int(dims[1].dim_value), max_bytes)
 
 
 def _integer_export(value, args, shape, max_bytes):

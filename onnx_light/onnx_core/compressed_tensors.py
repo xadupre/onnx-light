@@ -1,6 +1,6 @@
 """Exposes the native compressed-tensors checkpoint adapter."""
 
-from ..onnx_py._onnxpykernels import runtime
+from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
 UPSTREAM_REVISION = runtime.compressed_tensors_upstream_revision
 DEFAULT_MAX_BYTES = 1 << 30

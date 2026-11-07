@@ -70,6 +70,11 @@ TEST(CompressedTensorsAdapter, ImportsAndExportsIntegerWeightsInNativeCode) {
                                                          {1, 1}, raw(zero_points)));
 
   const auto encoded = ImportCompressedTensorsWeights(checkpoint);
+  const std::string parameters("\0\0\0\0\0\0\xe0\x3f"
+                               "\0\0\0\0\0\0\xf0\xbf"
+                               "\0\0\0\0\0\0\0\0",
+                               24);
+  EXPECT_EQ(std::string(encoded.raw_data()).substr(1, 24), parameters);
   const auto exported = ExportCompressedTensorsWeights(encoded, checkpoint.compression_format,
                                                        checkpoint.quantization_args);
   ASSERT_EQ(exported.tensors.size(), checkpoint.tensors.size());
@@ -109,10 +114,31 @@ TEST(CompressedTensorsAdapter, RejectsTransformProfilesBeforeSchemaComparison) {
   checkpoint.tensors.emplace("weight_zero_point", Tensor("weight_zero_point", TensorProto::INT32,
                                                          {1, 1}, raw(zero_points)));
   auto encoded = ImportCompressedTensorsWeights(checkpoint);
-  encoded.mutable_struct_type()->set_name("onnx_light.quantization.v1/quarot");
-  EXPECT_THROW(ExportCompressedTensorsWeights(encoded, checkpoint.compression_format,
-                                              checkpoint.quantization_args),
-               std::invalid_argument);
+  for (const std::string prefix : {"onnx_light.quantization.v1/", "onnx_light.quantization.v2/"}) {
+    for (const std::string profile : {"quarot", "quip_sharp", "smoothquant"}) {
+      SCOPED_TRACE(prefix + profile);
+      encoded.mutable_struct_type()->set_name(prefix + profile);
+      EXPECT_THROW(ExportCompressedTensorsWeights(encoded, checkpoint.compression_format,
+                                                  checkpoint.quantization_args),
+                   std::invalid_argument);
+    }
+  }
+}
+
+TEST(CompressedTensorsAdapter, RejectsUnsignedAffineSourcesWithoutChangingCodes) {
+  CompressedTensorsQuantizationArgs args;
+  args.num_bits = 4;
+  args.type = "int";
+  args.strategy = "tensor";
+  for (auto format : {QuantizationFormat::kGptq, QuantizationFormat::kAwq}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    auto plan = MakeQuantizationPlan(format, 1, 1);
+    plan.runs[0].blocks[0].zero_point = 0;
+    const auto encoded = QuantizeTensor(Tensor::FromFloat("weights", {1, 1}, {15}), plan);
+    EXPECT_EQ(DequantizeTensor(encoded).AsFloat()[0], 15);
+    EXPECT_THROW(ExportCompressedTensorsWeights(encoded.Encoded(), "pack-quantized", args),
+                 std::invalid_argument);
+  }
 }
 
 namespace {

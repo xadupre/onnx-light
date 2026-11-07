@@ -4,6 +4,9 @@
 """Exercises layouts pinned to compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40."""
 
 import unittest
+import subprocess
+import sys
+import textwrap
 
 import ml_dtypes
 import numpy
@@ -445,6 +448,42 @@ class TestCompressedTensors(ExtTestCase):
                 compression_format=fixture.compression_format,
                 quantization_args=fixture.quantization_args,
             )
+
+    @unittest.skipUnless(sys.platform == "linux", "Requires Linux address-space accounting.")
+    def test_invalid_extent_does_not_allocate_from_declared_shape(self):
+        code = textwrap.dedent("""
+            import os
+            import resource
+            from onnx_light import onnx
+            from onnx_light.onnx_core.compressed_tensors import export_compressed_tensors_weights
+
+            value = onnx.EncodedValueProto()
+            value.raw_data = b"\\0"
+            logical = value.logical_type.tensor_type
+            logical.elem_type = onnx.TensorProto.FLOAT
+            logical.shape.dim.add().dim_value = 1
+            logical.shape.dim.add().dim_value = 1 << 28
+            with open("/proc/self/statm") as stream:
+                virtual_size = int(stream.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            resource.setrlimit(resource.RLIMIT_AS, (virtual_size + 16 * 2**20, hard))
+            try:
+                export_compressed_tensors_weights(
+                    value,
+                    compression_format="pack-quantized",
+                    quantization_args=dict(
+                        num_bits=1, type="int", symmetric=True, strategy="group", group_size=1
+                    ),
+                )
+            except ValueError as error:
+                assert "extent/header" in str(error), str(error)
+            else:
+                raise AssertionError("Malformed affine payload was accepted")
+            """)
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_rejects_invalid_nvfp4_scales(self):
         for local, global_scale in ((0, 4), (-1, 4), (numpy.nan, 4), (2, 0), (2, numpy.inf)):

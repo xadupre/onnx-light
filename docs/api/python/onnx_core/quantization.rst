@@ -37,9 +37,6 @@ declaring model will not accompany the encoded value.
 For explicitly pinned compressed-tensors checkpoint interoperability, see
 :ref:`the support matrix and adapter boundary <l-compressed-tensors-checkpoints>`.
 
-.. automodule:: onnx_light.onnx_core.compressed_tensors
-    :members:
-
 .. automodule:: onnx_light.onnx_core.quantization
     :members:
     :imported-members:

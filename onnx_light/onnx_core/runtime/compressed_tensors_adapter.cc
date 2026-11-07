@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/quantization.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -21,6 +22,21 @@ size_t Product(size_t a, size_t b) {
   EXT_ENFORCE_INVALID(b == 0 || a <= std::numeric_limits<size_t>::max() / b,
                       "compressed-tensors: size overflow.");
   return a * b;
+}
+
+void AppendLittleEndianDouble(std::string &data, double value) {
+  const uint64_t bits = std::bit_cast<uint64_t>(value);
+  char bytes[sizeof(bits)];
+  for (size_t i = 0; i < sizeof(bits); ++i)
+    bytes[i] = static_cast<char>((bits >> (8 * i)) & 255);
+  data.append(bytes, sizeof(bytes));
+}
+
+double ReadLittleEndianDouble(const char *data) {
+  uint64_t bits = 0;
+  for (size_t i = 0; i < sizeof(bits); ++i)
+    bits |= uint64_t(static_cast<uint8_t>(data[i])) << (8 * i);
+  return std::bit_cast<double>(bits);
 }
 
 void CheckMetadata(const CompressedTensorsWeights &checkpoint, size_t max_bytes) {
@@ -172,12 +188,6 @@ QuantizationPlan IntegerPlan(const CompressedTensorsQuantizationArgs &args, cons
   return plan;
 }
 
-std::vector<size_t> IntegerBlockCounts(const IntegerGeometry &geometry, const Shape &shape) {
-  const size_t count = Product(static_cast<size_t>(shape[0]), static_cast<size_t>(shape[1]));
-  const size_t blocks = count / geometry.block_size;
-  return std::vector<size_t>(blocks, geometry.block_size);
-}
-
 EncodedValueProto ImportInteger(const CompressedTensorsWeights &checkpoint, size_t max_bytes) {
   const auto &args = checkpoint.quantization_args;
   RequireTensorNames(
@@ -216,7 +226,6 @@ EncodedValueProto ImportInteger(const CompressedTensorsWeights &checkpoint, size
     EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0,
                         "compressed-tensors: weight_scale must be finite and positive.");
   }
-  const auto counts = IntegerBlockCounts(geometry, shape);
   const size_t code_bytes = (Product(geometry.block_size, geometry.bits) + 7) / 8;
   const size_t encoded_bytes = 1 + Product(parameter_count, 24 + code_bytes);
   EXT_ENFORCE_INVALID(encoded_bytes <= max_bytes,
@@ -256,19 +265,18 @@ EncodedValueProto ImportInteger(const CompressedTensorsWeights &checkpoint, size
     logical->mutable_shape()->add_dim()->set_dim_value(dim);
   std::string payload(1, '\0');
   size_t start = 0;
-  for (size_t i = 0; i < counts.size(); ++i) {
+  for (size_t i = 0; i < parameter_count; ++i) {
     float scale_value;
     std::memcpy(&scale_value, scales.bytes() + i * sizeof(float), sizeof(float));
     const double scale = scale_value;
     const int32_t zero = zeros[i];
-    const std::string_view block(codes.data() + start, counts[i]);
+    const std::string_view block(codes.data() + start, geometry.block_size);
     ValidateCompressedTensorAffine(block, static_cast<float>(scale), zero);
-    const size_t pos = payload.size();
-    payload.resize(pos + 24);
-    const double values[3]{scale, static_cast<double>(zero), 0};
-    std::memcpy(payload.data() + pos, values, sizeof(values));
+    AppendLittleEndianDouble(payload, scale);
+    AppendLittleEndianDouble(payload, static_cast<double>(zero));
+    AppendLittleEndianDouble(payload, 0);
     payload.append(PackQuantizationCodes(block, geometry.bits));
-    start += counts[i];
+    start += geometry.block_size;
   }
   auto *raw_data = result.mutable_raw_data();
   raw_data->resize(payload.size());
@@ -291,11 +299,11 @@ Shape EncodedShape(const EncodedValueProto &value, size_t max_bytes) {
   EXT_ENFORCE_INVALID(dims.size() == 2 && dims[0].has_dim_value() && dims[1].has_dim_value(),
                       "compressed-tensors: export requires a concrete matrix shape.");
   Shape shape{dims[0].dim_value(), dims[1].dim_value()};
-  EXT_ENFORCE_INVALID(
-      shape[0] > 0 && shape[1] > 0 &&
-          Product(Product(static_cast<size_t>(shape[0]), static_cast<size_t>(shape[1])),
-                  sizeof(float)) <= max_bytes,
-      "compressed-tensors: invalid matrix or logical FLOAT32 size.");
+  EXT_ENFORCE_INVALID(shape[0] > 0 && shape[1] > 0,
+                      "compressed-tensors: weights must be a nonempty matrix [N,K].");
+  EXT_ENFORCE_INVALID(Product(static_cast<size_t>(shape[0]), static_cast<size_t>(shape[1])) <=
+                          max_bytes / sizeof(float),
+                      "compressed-tensors: logical FLOAT32 weights exceed max_bytes.");
   return shape;
 }
 
@@ -307,7 +315,6 @@ std::unordered_map<std::string, Tensor> ExportInteger(const EncodedValueProto &v
   const size_t parameter_count = TensorBytes(geometry.parameters, 1);
   const size_t count =
       Product(static_cast<size_t>(shape[0]), static_cast<size_t>(shape[1])) / parameter_count;
-  const auto counts = IntegerBlockCounts(geometry, shape);
   const size_t expected_bytes =
       1 + Product(parameter_count, 24 + (Product(count, geometry.bits) + 7) / 8);
   const std::string &data = value.raw_data();
@@ -329,6 +336,9 @@ std::unordered_map<std::string, Tensor> ExportInteger(const EncodedValueProto &v
                       "compressed-tensors: transform-based profiles are unsupported.");
   QuantizationPlan expected = IntegerPlan(
       args, shape, format, float_reconstruction ? TensorProto::FLOAT : TensorProto::DOUBLE);
+  EXT_ENFORCE_INVALID(expected.runs[0].layout.method == QuantizationMethod::kAffine &&
+                          expected.runs[0].layout.signed_codes,
+                      "compressed-tensors: export requires signed affine codes.");
   EXT_ENFORCE_INVALID(type.SerializeAsString() ==
                           MakeQuantizationType(expected).SerializeAsString(),
                       "compressed-tensors: affine schema does not match bits/grouping or includes "
@@ -339,10 +349,10 @@ std::unordered_map<std::string, Tensor> ExportInteger(const EncodedValueProto &v
   std::string zeros(parameter_count, '\0');
   std::string codes(total, '\0');
   size_t position = 1, start = 0;
-  for (size_t i = 0; i < counts.size(); ++i) {
-    double values[3];
-    std::memcpy(values, data.data() + position, sizeof(values));
-    const double scale = values[0], zero = values[1], offset = values[2];
+  for (size_t i = 0; i < parameter_count; ++i) {
+    const double scale = ReadLittleEndianDouble(data.data() + position);
+    const double zero = ReadLittleEndianDouble(data.data() + position + sizeof(double));
+    const double offset = ReadLittleEndianDouble(data.data() + position + 2 * sizeof(double));
     EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0 &&
                             scale <= std::numeric_limits<float>::max() &&
                             static_cast<double>(static_cast<float>(scale)) == scale,
@@ -356,17 +366,17 @@ std::unordered_map<std::string, Tensor> ExportInteger(const EncodedValueProto &v
     std::memcpy(scales.data() + i * sizeof(float), &float_scale, sizeof(float));
     const int8_t signed_zero = static_cast<int8_t>(zero);
     zeros[i] = static_cast<char>(signed_zero);
-    position += sizeof(values);
-    const size_t packed_size = (counts[i] * geometry.bits + 7) / 8;
+    position += 3 * sizeof(double);
+    const size_t packed_size = (geometry.block_size * geometry.bits + 7) / 8;
     const std::string_view packed(data.data() + position, packed_size);
-    const size_t remainder = counts[i] * geometry.bits % 8;
+    const size_t remainder = geometry.block_size * geometry.bits % 8;
     EXT_ENFORCE_INVALID(!remainder || (static_cast<uint8_t>(packed.back()) >> remainder) == 0,
                         "compressed-tensors: nonzero portable padding bits.");
-    const std::string block = UnpackQuantizationCodes(packed, counts[i], geometry.bits);
+    const std::string block = UnpackQuantizationCodes(packed, geometry.block_size, geometry.bits);
     ValidateCompressedTensorAffine(block, float_scale, signed_zero);
     std::memcpy(codes.data() + start, block.data(), block.size());
     position += packed_size;
-    start += counts[i];
+    start += geometry.block_size;
   }
   const size_t packed_columns = (columns * geometry.bits + 31) / 32;
   std::unordered_map<std::string, Tensor> tensors;

@@ -34,6 +34,9 @@ For :ref:`model-level shared parameters <l-shared-quantization-parameters>`,
 ``materialize_quantized_value`` exports a self-contained message when the
 declaring model will not accompany the encoded value.
 
+For explicitly pinned compressed-tensors checkpoint interoperability, see
+:ref:`the support matrix and adapter boundary <l-compressed-tensors-checkpoints>`.
+
 .. automodule:: onnx_light.onnx_core.quantization
     :members:
     :imported-members:

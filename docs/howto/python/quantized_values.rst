@@ -25,6 +25,147 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-compressed-tensors-checkpoints:
+
+Explicit compressed-tensors checkpoint adapters
+-----------------------------------------------
+
+``onnx_light.onnx_core.compressed_tensors`` exposes the C++ adapter through
+nanobind and adapts **one resolved module's weight checkpoint**, independently
+of preset names. The Python module is an interface only. The initial contract is
+pinned to upstream revision
+``eb058d630f7344099459b6795b1e3eeffdda4b40``; other revisions are rejected.
+The reference implementations are the upstream
+`compressors <https://github.com/vllm-project/compressed-tensors/tree/eb058d630f7344099459b6795b1e3eeffdda4b40/src/compressed_tensors/compressors>`_.
+No PyTorch or compressed-tensors dependency is added to the native core or
+required by these adapters. The usual runtime Python bindings, NumPy and
+ml-dtypes are required.
+
+.. list-table:: Initial support matrix (static, nonempty rank-two weights)
+   :header-rows: 1
+   :widths: 23 38 39
+
+   * - Compression format
+     - Required weight QuantizationArgs
+     - Checkpoint tensors
+   * - ``pack-quantized``
+     - ``type="int"``, 1--8 bits; symmetric or asymmetric;
+       ``tensor``, ``channel`` or ``group`` strategy
+     - INT32 ``weight_packed[N,ceil(K*bits/32)]``;
+       INT64 ``weight_shape[2]``; FLOAT32 scales;
+       asymmetric zero points as described below
+   * - ``mxfp4-pack-quantized``
+     - Symmetric ``float``, 4 bits, ``group``, group size 32
+     - UINT8 ``weight_packed[N,K/2]``;
+       UINT8 E8M0 ``weight_scale[N,K/32]``
+   * - ``mxfp6-pack-quantized``
+     - Symmetric ``float``, 6 bits, ``group``, group size 32;
+       specifically **E2M3**, never portable E3M2
+     - UINT8 ``weight_packed[N,3*K/4]``;
+       UINT8 E8M0 ``weight_scale[N,K/32]``
+   * - ``mxfp8-quantized``
+     - Symmetric ``float``, 8 bits, ``group``, group size 32
+     - E4M3FN ``weight[N,K]``;
+       UINT8 E8M0 ``weight_scale[N,K/32]``
+   * - ``nvfp4-pack-quantized``
+     - Symmetric ``float``, 4 bits, ``tensor_group``, group size 16
+     - UINT8 ``weight_packed[N,K/2]``;
+       E4M3FN ``weight_scale[N,K/16]``;
+       FLOAT32 ``weight_global_scale[1]``
+   * - Ordinary ``float-quantized`` FP8, ``int-quantized``,
+       ``naive-quantized``, aggregate ``mixed-precision``, other formats
+     - Not supported by this staged adapter
+     - Rejected explicitly; ordinary FP8 schema adaptation is separate
+       from MXFP8 (issue #5787)
+
+``N`` denotes output rows, ``K`` input columns; groups run along axis 1 and
+never cross rows. Group size must divide ``K`` exactly. Integer scale shapes
+are ``[1]`` for tensor, ``[N,1]`` for channel, ``[N,K/group_size]`` for group.
+Asymmetric tensor zero points are INT8 ``[1]``. Asymmetric group/channel
+zero points are **row-axis packed** INT32
+``[ceil(N*bits/32),number_of_groups]``. Symmetric checkpoints omit zero points.
+Upstream integer packing stores ``signed_code + 2**(bits-1)``, LSB-first,
+crossing INT32 word boundaries when needed. It is not two's-complement packing.
+Nonzero unused padding bits are rejected.
+
+MX and NV codes and scales use the complete native contracts documented below,
+not the similarly named portable profiles. E8M0 byte 0 means ``2**-127``;
+255 and nonfinite reconstructions are rejected. NVFP4 reconstruction divides
+the FP8 local scale by the positive FLOAT32 global scale; it does not multiply
+both scales. The FP6 layout is E2M3 and will not accept an E3M2 encoded value.
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light.onnx_core.compressed_tensors import (
+        CompressedTensorsWeights,
+        import_compressed_tensors_weights,
+        export_compressed_tensors_weights,
+    )
+
+    args = dict(num_bits=4, type="int", symmetric=True, strategy="channel")
+    checkpoint = CompressedTensorsWeights(
+        compression_format="pack-quantized",
+        quantization_args=args,
+        tensors={
+            "weight_shape": numpy.array([1, 4], dtype=numpy.int64),
+            "weight_packed": numpy.array([[0xF870]], dtype=numpy.int32),
+            "weight_scale": numpy.array([[0.5]], dtype=numpy.float32),
+        },
+    )
+    encoded = import_compressed_tensors_weights(checkpoint)
+    # Native decode gives [[-4, -0.5, 0, 3.5]]; no quantizer was run.
+    exported = export_compressed_tensors_weights(
+        encoded, compression_format="pack-quantized", quantization_args=args
+    )
+    assert exported.tensors["weight_packed"].tobytes() == checkpoint.tensors[
+        "weight_packed"
+    ].tobytes()
+
+The arguments are resolved **weight QuantizationArgs**, not a preset, complete
+model config, or config group. ``num_bits``, ``type``, ``symmetric`` and
+``strategy`` must be explicit. ``group_size`` must be explicit for grouped
+formats. Optional ``scale_dtype``/``zp_dtype`` declarations must agree with the
+matrix (strings such as ``"float32"`` or ``"torch.float32"`` are accepted).
+Observer fields are retained as calibration metadata only. Unsupported
+dynamic weights, activation ordering, blocks, extra tensors/fields,
+hierarchical integer scales and dtype combinations are rejected.
+
+Accepted mappings preserve codes, signed zeros and numerical parameters
+without dequantization/requantization. Integer offset-binary words are repacked
+into onnx-light's portable affine schema; MX/NV use their existing dedicated
+native codecs. The result is a self-contained ``EncodedValueProto`` with logical
+FLOAT32 output. Upstream output dtype is **not** part of the checkpoint mapping:
+for example its MXFP6 decompressor returns BFLOAT16, whereas onnx-light returns
+FLOAT32. Extreme-range output rounding need not agree across those dtypes.
+Export requires an inline, self-contained schema and exactly matching grouping;
+materialize shared parameters first. Export rejects lossy parameter conversions
+(including DOUBLE scales not exactly representable in FLOAT32), offsets,
+transforms, codebooks and unsigned integer layouts instead of rounding them.
+
+This is deliberately an **in-memory boundary**, not a filesystem loader.
+Tensor mappings contain already-loaded NumPy arrays under local tensor suffixes;
+paths, pickle objects and external tensor references are not accepted or opened.
+Load containers through a trusted loader first; use onnx-light's existing safe
+external-data loaders for ONNX references. Resolve module names, target matching,
+ignore lists and shard selection outside this API. Dtypes, logical dimensions,
+packed extents and parameter shapes are checked before unpacking. ``max_bytes``
+(default 1 GiB) bounds checkpoint tensor bytes, encoded payload and logical
+FLOAT32 size, not the aggregate peak memory of Python objects and temporaries.
+
+There is **no activation-configuration import or execution support claim**.
+Importing the weights from MXFP6A8, NVFP4, W4AFP8 or another preset does not
+enable its activation quantizers, KV-cache behavior or accelerated kernels.
+No graph conversion, calibration or training algorithms run.
+
+The checkpoint fixtures run with
+``python -m unittest unittests.python.backend.test_compressed_tensors``.
+They check native decode and exact exported code/parameter bytes without
+requiring upstream packages. ``test_optional_upstream_decoders`` additionally
+feeds exports to upstream's integer unpacker and MX/NV decompressors when
+PyTorch and compressed-tensors are available; use the pinned upstream revision
+for this optional interoperability check.
+
 .. _l-mxfp6-e2m3-weights:
 
 Complete MXFP6 E2M3 profile

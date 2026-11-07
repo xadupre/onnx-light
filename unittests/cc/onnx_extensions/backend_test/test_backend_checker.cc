@@ -32,6 +32,20 @@ TEST(BackendTestCase, AllCollectedCaseNamesAreUnique) {
   }
 }
 
+TEST(BackendTestCase, GroupedMatMulTypedCaseNames) {
+  const auto cases = CollectTestCases("GroupedMatMul");
+  std::unordered_set<std::string> names;
+  for (const auto &tc : cases) {
+    if (tc.name.find("test_cc_groupedmatmul_float") == 0) {
+      EXPECT_TRUE(names.insert(tc.name).second) << tc.name;
+    }
+  }
+  const std::unordered_set<std::string> expected{
+      "test_cc_groupedmatmul_float16_int32", "test_cc_groupedmatmul_float16_int64",
+      "test_cc_groupedmatmul_float64_int32", "test_cc_groupedmatmul_float64_int64"};
+  EXPECT_EQ(names, expected);
+}
+
 TEST(BackendTestCaseShapeInference, GeneratedModelsUseInteroperableIrVersion) {
   NodeProto node;
   node.set_op_type("Constant");

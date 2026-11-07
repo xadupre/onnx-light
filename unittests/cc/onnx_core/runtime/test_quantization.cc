@@ -6,12 +6,114 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstring>
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
+
+TEST(CompressedTensorPacking, RoundTripAndValidation) {
+  const std::string fixture("\xfc\xfd\xfe\xff\0\x01\x02\x03\xfc\xfd\x03", 11);
+  const std::string expected("\x88\xc6\xfa\xc8\x01\0\0\0", 8);
+  EXPECT_EQ(PackCompressedTensorInt32(fixture, 1, 11, 3, 1), expected);
+  EXPECT_EQ(UnpackCompressedTensorInt32(expected, 1, 11, 3, 1), fixture);
+  for (uint32_t bits = 1; bits <= 8; ++bits) {
+    std::string codes;
+    for (size_t i = 0; i < 77; ++i)
+      codes.push_back(static_cast<char>(static_cast<int>(i % (1u << bits)) - (1 << (bits - 1))));
+    for (uint32_t axis : {0u, 1u}) {
+      auto packed = PackCompressedTensorInt32(codes, 7, 11, bits, axis);
+      EXPECT_EQ(UnpackCompressedTensorInt32(packed, 7, 11, bits, axis), codes);
+      EXPECT_ANY_THROW(UnpackCompressedTensorInt32(packed.substr(1), 7, 11, bits, axis));
+    }
+    auto portable = PackQuantizationCodes(codes, bits);
+    EXPECT_EQ(UnpackQuantizationCodes(portable, codes.size(), bits), codes);
+  }
+  EXPECT_ANY_THROW(UnpackCompressedTensorInt32(std::string("\x80\0\0\0", 4), 1, 1, 1, 1));
+  EXPECT_ANY_THROW(UnpackQuantizationCodes(std::string("\x80", 1), 1, 1));
+  EXPECT_ANY_THROW(PackQuantizationCodes(std::string("\x02", 1), 2));
+  EXPECT_ANY_THROW(PackCompressedTensorInt32(std::string("\x02", 1), 1, 1, 2, 1));
+  EXPECT_ANY_THROW(PackCompressedTensorInt32("", std::numeric_limits<size_t>::max(), 2, 8, 1));
+  EXPECT_ANY_THROW(ValidateCompressedTensorAffine(std::string("\0", 1), 0, 0));
+  EXPECT_ANY_THROW(
+      ValidateCompressedTensorAffine(std::string("\x7f", 1), std::numeric_limits<float>::max(), 0));
+  EXPECT_NO_THROW(
+      ValidateCompressedTensorAffine(std::string("\0", 1), std::numeric_limits<float>::max(), 0));
+}
+
+TEST(CompressedTensorsAdapter, ImportsAndExportsIntegerWeightsInNativeCode) {
+  CompressedTensorsWeights checkpoint;
+  checkpoint.compression_format = "pack-quantized";
+  checkpoint.quantization_args.num_bits = 3;
+  checkpoint.quantization_args.type = "int";
+  checkpoint.quantization_args.strategy = "channel";
+  const std::vector<int32_t> packed{-923089272, 1, 923089271, 0};
+  const std::vector<int64_t> shape{2, 11};
+  const std::vector<float> scales{0.5f, 2.0f};
+  const std::vector<int32_t> zero_points{51};
+  auto raw = [](const auto &values) {
+    std::vector<uint8_t> bytes(values.size() * sizeof(values[0]));
+    std::memcpy(bytes.data(), values.data(), bytes.size());
+    return bytes;
+  };
+  checkpoint.tensors.emplace("weight_packed",
+                             Tensor("weight_packed", TensorProto::INT32, {2, 2}, raw(packed)));
+  checkpoint.tensors.emplace("weight_shape",
+                             Tensor("weight_shape", TensorProto::INT64, {2}, raw(shape)));
+  checkpoint.tensors.emplace("weight_scale",
+                             Tensor("weight_scale", TensorProto::FLOAT, {2, 1}, raw(scales)));
+  checkpoint.tensors.emplace("weight_zero_point", Tensor("weight_zero_point", TensorProto::INT32,
+                                                         {1, 1}, raw(zero_points)));
+
+  const auto encoded = ImportCompressedTensorsWeights(checkpoint);
+  const auto exported = ExportCompressedTensorsWeights(encoded, checkpoint.compression_format,
+                                                       checkpoint.quantization_args);
+  ASSERT_EQ(exported.tensors.size(), checkpoint.tensors.size());
+  for (const auto &[name, tensor] : checkpoint.tensors) {
+    const auto &actual = exported.tensors.at(name);
+    ASSERT_EQ(actual.data_type, tensor.data_type) << name;
+    ASSERT_EQ(actual.shape, tensor.shape) << name;
+    ASSERT_EQ(actual.size_bytes(), tensor.size_bytes()) << name;
+    EXPECT_TRUE(std::equal(tensor.bytes(), tensor.bytes() + tensor.size_bytes(), actual.bytes()))
+        << name;
+  }
+  EXPECT_EQ(ImportCompressedTensorsWeights(exported).SerializeAsString(),
+            encoded.SerializeAsString());
+}
+
+TEST(CompressedTensorsAdapter, RejectsTransformProfilesBeforeSchemaComparison) {
+  CompressedTensorsWeights checkpoint;
+  checkpoint.compression_format = "pack-quantized";
+  checkpoint.quantization_args.num_bits = 3;
+  checkpoint.quantization_args.type = "int";
+  checkpoint.quantization_args.strategy = "channel";
+  const std::vector<int32_t> packed{-923089272, 1, 923089271, 0};
+  const std::vector<int64_t> shape{2, 11};
+  const std::vector<float> scales{0.5f, 2.0f};
+  const std::vector<int32_t> zero_points{51};
+  auto raw = [](const auto &values) {
+    std::vector<uint8_t> bytes(values.size() * sizeof(values[0]));
+    std::memcpy(bytes.data(), values.data(), bytes.size());
+    return bytes;
+  };
+  checkpoint.tensors.emplace("weight_packed",
+                             Tensor("weight_packed", TensorProto::INT32, {2, 2}, raw(packed)));
+  checkpoint.tensors.emplace("weight_shape",
+                             Tensor("weight_shape", TensorProto::INT64, {2}, raw(shape)));
+  checkpoint.tensors.emplace("weight_scale",
+                             Tensor("weight_scale", TensorProto::FLOAT, {2, 1}, raw(scales)));
+  checkpoint.tensors.emplace("weight_zero_point", Tensor("weight_zero_point", TensorProto::INT32,
+                                                         {1, 1}, raw(zero_points)));
+  auto encoded = ImportCompressedTensorsWeights(checkpoint);
+  encoded.mutable_struct_type()->set_name("onnx_light.quantization.v1/quarot");
+  EXPECT_THROW(ExportCompressedTensorsWeights(encoded, checkpoint.compression_format,
+                                              checkpoint.quantization_args),
+               std::invalid_argument);
+}
 
 namespace {
 

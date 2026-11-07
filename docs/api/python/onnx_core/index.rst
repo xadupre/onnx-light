@@ -4,6 +4,7 @@ onnx_light.onnx_core
 .. toctree::
     :maxdepth: 1
 
+    compressed_tensors
     expressions
     gradient
     graph_builder

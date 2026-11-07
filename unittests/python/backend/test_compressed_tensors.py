@@ -219,6 +219,11 @@ class TestCompressedTensors(ExtTestCase):
                         fixture, expected * numpy.float32(2.0 ** (exponent - 127))
                     )
 
+    def test_mx_formats_enforce_logical_max_bytes(self):
+        fixture, _ = self.mx_fixture(4)
+        with self.assertRaisesRegex(ValueError, "logical FLOAT32 weights exceed max_bytes"):
+            import_compressed_tensors_weights(fixture, max_bytes=127)
+
     def test_nvfp4_global_division_and_signed_zero(self):
         fixture = self.nv_fixture()
         expected = numpy.array([[0, -0.0] + [0.5, -0.5] * 7], dtype=numpy.float32)

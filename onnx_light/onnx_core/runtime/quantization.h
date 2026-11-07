@@ -552,6 +552,39 @@ struct Mxfp6E2m3Weights {
   Tensor weight_scale;
 };
 
+/** Describes the resolved weight-only metadata accepted by the compressed-tensors adapter. */
+struct CompressedTensorsQuantizationArgs {
+  uint32_t num_bits = 0;
+  std::string type;
+  bool symmetric = false;
+  std::string strategy;
+  std::optional<int64_t> group_size;
+  std::optional<std::string> scale_dtype;
+  std::optional<std::string> zp_dtype;
+  bool dynamic = false;
+  bool actorder = false;
+  bool block_structure = false;
+};
+
+/** Carries one module's loaded tensors for the pinned compressed-tensors adapter. */
+struct CompressedTensorsWeights {
+  std::string compression_format;
+  CompressedTensorsQuantizationArgs quantization_args;
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "eb058d630f7344099459b6795b1e3eeffdda4b40";
+};
+
+/** Imports one pinned compressed-tensors checkpoint without dequantizing its weights. */
+EncodedValueProto ImportCompressedTensorsWeights(const CompressedTensorsWeights &checkpoint,
+                                                 size_t max_bytes = size_t{1} << 30);
+
+/** Exports codes and parameters to one explicitly requested compressed-tensors layout. */
+CompressedTensorsWeights ExportCompressedTensorsWeights(
+    const EncodedValueProto &value, std::string compression_format,
+    CompressedTensorsQuantizationArgs quantization_args,
+    std::string upstream_revision = "eb058d630f7344099459b6795b1e3eeffdda4b40",
+    size_t max_bytes = size_t{1} << 30);
+
 /**
  * Quantizes a finite FLOAT matrix using complete groups of 32 columns along axis 1.
  *

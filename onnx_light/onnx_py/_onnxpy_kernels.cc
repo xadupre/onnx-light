@@ -83,6 +83,7 @@ using core::runtime::Tensors;
 
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
+void AddOnnxPyCompressedTensors(nb::module_ &m);
 void AddOnnxPyTuning(nb::module_ &m);
 
 namespace {
@@ -3171,4 +3172,5 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def("clear_custom_kernels", &core::runtime::ClearGlobalCustomKernels,
              "Removes every process-wide custom kernel registration.");
   nb::module_::import_("atexit").attr("register")(rt_mod.attr("clear_custom_kernels"));
+  AddOnnxPyCompressedTensors(rt_mod);
 }

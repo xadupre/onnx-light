@@ -27,19 +27,14 @@ bindings, as do other Python reference-runtime utilities.
 Compressed-tensors checkpoint interoperability
 ----------------------------------------------
 
-The dependency-light Python
-:ref:`checkpoint adapter <l-compressed-tensors-checkpoints>` defines the pinned
-compressed-tensors metadata/support matrix and maps already-loaded weight arrays
-to self-contained encoded values consumable by ``DequantizeTensor``. Integer
-offset-binary INT32 checkpoint packing is distinct from portable affine packing;
-the native ``PackCompressedTensorInt32`` and ``UnpackCompressedTensorInt32``
-functions convert both weight and zero-point packing axes without requantization.
-Portable code packing and affine overflow checks also run natively. The remaining
-checkpoint metadata, integer schema and import/export orchestration are still in
-Python; MX/NV adapters reuse the dedicated native codecs below. No PyTorch dependency
-or checkpoint-container loader is added to the C++ core. Unsupported formats,
-activation configurations and lossy parameter mappings are not silently replaced
-by portable profiles.
+The native ``ImportCompressedTensorsWeights`` and
+``ExportCompressedTensorsWeights`` functions implement the pinned
+:ref:`checkpoint adapter <l-compressed-tensors-checkpoints>` metadata, validation,
+and import/export paths. They accept owned runtime ``Tensor`` objects and never
+dequantize or requantize checkpoint codes. Python exposes these functions through
+nanobind; the Python module contains only aliases to that interface. No PyTorch
+dependency or checkpoint-container loader is added. Unsupported formats,
+activation configurations and lossy parameter mappings are rejected.
 
 Complete MXFP6 E2M3 profile
 -------------------------

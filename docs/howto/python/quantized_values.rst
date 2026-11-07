@@ -30,8 +30,9 @@ bindings, as do other Python reference-runtime utilities.
 Explicit compressed-tensors checkpoint adapters
 -----------------------------------------------
 
-``onnx_light.onnx_core.compressed_tensors`` adapts **one resolved module's
-weight checkpoint**, independently of preset names. The initial contract is
+``onnx_light.onnx_core.compressed_tensors`` exposes the C++ adapter through
+nanobind and adapts **one resolved module's weight checkpoint**, independently
+of preset names. The Python module is an interface only. The initial contract is
 pinned to upstream revision
 ``eb058d630f7344099459b6795b1e3eeffdda4b40``; other revisions are rejected.
 The reference implementations are the upstream

@@ -13,6 +13,8 @@ The converters implement **portable onnx-light representations** of the
 The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their profile
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
+Exact GGUF-family payloads use :ref:`a separate versioned API <l-gguf-blocks>`;
+that API does not implement a standalone ``.gguf`` model loader.
 
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native

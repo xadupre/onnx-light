@@ -5,6 +5,7 @@ onnx_light.onnx_core
     :maxdepth: 1
 
     compressed_tensors
+    gguf
     expressions
     gradient
     graph_builder

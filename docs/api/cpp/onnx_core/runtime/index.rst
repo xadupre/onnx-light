@@ -45,6 +45,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     persistent_value
     runtime_value
     quantization
+    gguf
     kernel_dispatch_table
     cpu_executor
     cpu_execution_policy

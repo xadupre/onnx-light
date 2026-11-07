@@ -2521,10 +2521,11 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       if (retained.count(original[i]) == 0)
         positions.push_back(i);
   };
-  const auto record_nodes = [&](const std::string &name, const auto &cleanup) {
+  const auto record_unused_nodes = [&]() {
+    std::vector<std::size_t> removed_nodes;
     const auto original_initializers = initializer_names(builder_.initializers_);
     const auto original_extended = initializer_names(builder_.extended_initializers_);
-    const std::size_t removed = cleanup();
+    const std::size_t removed = builder_.RemoveUnusedNodesImpl(false, &removed_nodes);
     const std::size_t removed_initializers =
         original_initializers.size() - builder_.initializers_.size() + original_extended.size() -
         builder_.extended_initializers_.size();
@@ -2532,20 +2533,10 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       return std::size_t{0};
     }
     LocalRewritingProto rewriting;
-    rewriting.set_pattern_name(name);
-    if (removed != 0) {
-      std::unordered_set<std::string> retained_outputs;
-      for (const auto &node : builder_.nodes_)
-        for (const auto &output : node.output())
-          if (!output.empty())
-            retained_outputs.insert(output.value());
-      // RemoveUnusedNodesImpl preserves the definitions and order of all surviving nodes.
-      for (std::size_t i = 0; i < original_nodes.size(); ++i)
-        if (std::none_of(original_nodes[i].output().begin(), original_nodes[i].output().end(),
-                         [&](const auto &output) {
-                           return !output.empty() && retained_outputs.count(output.value()) != 0;
-                         }))
-          rewriting.add_matched_nodes(i);
+    rewriting.set_pattern_name("RemoveUnusedNodes");
+    rewriting.ref_matched_nodes().reserve(removed_nodes.size());
+    for (const auto position : removed_nodes) {
+      rewriting.add_matched_nodes(position);
     }
     UndoState::Edit inverse;
     if (removed_initializers != 0) {
@@ -2561,8 +2552,7 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
 
   std::size_t cleaned = 0;
   if (remove_unused) {
-    cleaned +=
-        record_nodes("RemoveUnusedNodes", [&]() { return builder_.RemoveUnusedNodesImpl(false); });
+    cleaned += record_unused_nodes();
   }
   const auto remaining_initializers = all_initializer_names();
   if (cleaned != 0 || initializers_before != remaining_initializers) {

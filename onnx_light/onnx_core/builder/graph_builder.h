@@ -842,7 +842,9 @@ private:
     bool ancestor_refresh_suppressed_;
   };
 
-  std::size_t RemoveUnusedNodesImpl(bool recursive);
+  // Clears removed_nodes and records local pre-pruning indices in ascending order.
+  std::size_t RemoveUnusedNodesImpl(bool recursive,
+                                    std::vector<std::size_t> *removed_nodes = nullptr);
   void PruneValueInfos();
   std::size_t
   RemoveIdentityNodesImpl(bool recursive,

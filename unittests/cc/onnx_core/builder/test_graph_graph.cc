@@ -365,25 +365,55 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
     builder.MakeInitializer(MakeInitializer<float>("unused", {2}, {1.0f, 2.0f}));
+    builder.MakeNode("Relu", {"x"}, {"h"});
     if (add_dead_node) {
       builder.MakeNode("Add", {"x", "unused"}, {"dead"});
     }
-    builder.MakeOutput("x");
+    builder.MakeNode("Sigmoid", {"h"}, {"y"});
+    if (add_dead_node) {
+      builder.MakeNode("Neg", {"x"}, {"also_dead"});
+    }
+    builder.MakeOutput("y");
     const ModelProto original = builder.ToModel();
     const GraphProto canonical = builder.BuildGraph();
+    std::vector<uint64_t> expected_removed_nodes;
+    std::map<std::string, const NodeProto *> surviving_nodes;
+    for (std::size_t i = 0; i < canonical.node().size(); ++i) {
+      const auto &node = canonical.node(i);
+      const auto &output = node.output(0).value();
+      if (output == "dead" || output == "also_dead")
+        expected_removed_nodes.push_back(i);
+      else
+        surviving_nodes.emplace(output, &node);
+    }
     core::builder::GraphGraph graph(builder);
     const auto rewrites = graph.Optimize();
     ASSERT_EQ(rewrites.rewrites().size(), 1u);
     EXPECT_EQ(rewrites.rewrites(0).pattern_name(), "RemoveUnusedNodes");
     ASSERT_EQ(rewrites.rewrites(0).removed_initializers().size(), 1u);
+    EXPECT_EQ(rewrites.rewrites(0).removed_initializers(0), 0u);
+    EXPECT_TRUE(rewrites.rewrites(0).removed_extended_initializers().empty());
+    EXPECT_EQ(rewrites.rewrites(0).matched_nodes().values(), expected_removed_nodes);
+    EXPECT_TRUE(rewrites.rewrites(0).added_nodes().empty());
+    EXPECT_TRUE(rewrites.rewrites(0).added_nodes_positions().empty());
+    ASSERT_EQ(builder.Nodes().size(), 2u);
+    for (const auto &node : builder.Nodes()) {
+      const auto original_node = surviving_nodes.find(node.output(0).value());
+      ASSERT_NE(original_node, surviving_nodes.end());
+      EXPECT_EQ(node.op_type(), original_node->second->op_type());
+      EXPECT_EQ(node.input().values(), original_node->second->input().values());
+      EXPECT_EQ(node.output().values(), original_node->second->output().values());
+      surviving_nodes.erase(original_node);
+    }
+    EXPECT_TRUE(surviving_nodes.empty());
     const GraphProto optimized = builder.ToGraph();
-    EXPECT_EQ(optimized.node_size(), 0);
     EXPECT_EQ(optimized.initializer_size(), 0);
-    const GraphProto replayed = core::builder::GraphBuilder(original, SchemaLookup())
-                                    .ApplyRewritings(rewrites)
-                                    .BuildGraph();
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(rewrites.SerializeAsString()));
+    const GraphProto replayed =
+        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToGraph();
     EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
-    EXPECT_EQ(builder.UndoRewritings(rewrites).BuildGraph().SerializeAsString(),
+    EXPECT_EQ(builder.UndoRewritings(loaded).BuildGraph().SerializeAsString(),
               canonical.SerializeAsString());
   }
 }
@@ -497,6 +527,8 @@ TEST(GraphGraph, UnchangedLargePayloadsShareAllocationsThroughCaptureUndoAndRepl
   const auto plan = graph.Optimize();
   ASSERT_EQ(plan.rewrites().size(), 1u);
   ASSERT_EQ(plan.rewrites(0).removed_initializers().size(), 1u);
+  EXPECT_TRUE(plan.rewrites(0).matched_nodes().empty());
+  EXPECT_TRUE(plan.rewrites(0).added_nodes().empty());
   auto restored_builder = working.UndoRewritings(plan);
   const ModelProto restored = restored_builder.ToModel();
   const ModelProto optimized = working.ToModel();
@@ -1494,9 +1526,9 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
       }
       if (add_dead_node) {
         builder.MakeNode("Abs", {"X"}, {"dead"});
-        builder.MakeNode("Neg", {"X"}, {"Y"});
-        builder.MakeOutput("Y");
       }
+      builder.MakeNode("Neg", {"X"}, {"Y"});
+      builder.MakeOutput("Y");
       core::builder::GraphGraph optimizer(builder);
       optimizer.Canonicalize();
       const ModelProto original = builder.ToModel();
@@ -1504,6 +1536,10 @@ TEST(GraphGraph, CleanupReplaysEachInitializerKindAndPreservesLiveValues) {
       ASSERT_EQ(plan.rewrites().size(), (kinds == 2 && !add_dead_node) ? 0u : 1u);
       if (!plan.rewrites().empty()) {
         const auto &edit = plan.rewrites(0);
+        EXPECT_EQ(edit.matched_nodes().values(),
+                  add_dead_node ? std::vector<uint64_t>({0}) : std::vector<uint64_t>());
+        EXPECT_TRUE(edit.added_nodes().empty());
+        EXPECT_TRUE(edit.added_nodes_positions().empty());
         EXPECT_EQ(edit.removed_initializers().values(),
                   (kinds & 1) ? std::vector<uint64_t>({1}) : std::vector<uint64_t>());
         std::vector<uint64_t> removed_extended;
@@ -3073,6 +3109,27 @@ TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
                 result.Shapes().GetSubgraphContext(position, name).Get("branch_result"));
     }
   }
+  core::builder::GraphGraph optimizer(source);
+  optimizer.Canonicalize();
+  const ModelProto original = source.ToModel();
+  const GraphProto canonical = source.BuildGraph();
+  const auto cleanup = optimizer.Optimize();
+  ASSERT_EQ(cleanup.rewrites().size(), 1u);
+  EXPECT_EQ(cleanup.rewrites(0).matched_nodes().values(), std::vector<uint64_t>({1}));
+  EXPECT_TRUE(cleanup.rewrites(0).added_nodes().empty());
+  ASSERT_EQ(source.Nodes().size(), 2u);
+  EXPECT_EQ(source.Nodes()[1].op_type(), "If");
+  auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(cleanup);
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    EXPECT_FALSE(source.Shapes().HasSubgraphContext(2, name));
+    ASSERT_TRUE(source.Shapes().HasSubgraphContext(1, name));
+    ASSERT_TRUE(replayed.Shapes().HasSubgraphContext(1, name));
+    EXPECT_EQ(replayed.Shapes().GetSubgraphContext(1, name).Get("branch_result"),
+              source.Shapes().GetSubgraphContext(1, name).Get("branch_result"));
+  }
+  EXPECT_EQ(replayed.ToGraph().SerializeAsString(), source.ToGraph().SerializeAsString());
+  EXPECT_EQ(source.UndoRewritings(cleanup).BuildGraph().SerializeAsString(),
+            canonical.SerializeAsString());
 }
 
 TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {

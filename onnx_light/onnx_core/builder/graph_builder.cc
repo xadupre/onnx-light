@@ -2434,7 +2434,10 @@ std::size_t GraphBuilder::RemoveUnusedNodes() {
   return removed;
 }
 
-std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
+std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive,
+                                                std::vector<std::size_t> *removed_nodes) {
+  if (removed_nodes != nullptr)
+    removed_nodes->clear();
   // Prune nested builders first: a leaner subgraph or local function may stop
   // referencing outer values, which can in turn make an owning node unused.
   std::size_t removed = 0;
@@ -2492,6 +2495,8 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
       kept.push_back(std::move(nodes_[i]));
     } else {
       ++local_removed;
+      if (removed_nodes != nullptr)
+        removed_nodes->push_back(i);
     }
   }
   nodes_ = std::move(kept);

@@ -553,6 +553,73 @@ TEST(TransposeTransposePattern, PreservesSharedIdentityPrefix) {
   }
 }
 
+TEST(TransposeTransposePattern, ContinuesAfterRejectedBranch) {
+  for (bool inverse_first : {false, true}) {
+    for (int identity_count : {0, 1, 2}) {
+      SCOPED_TRACE(inverse_first);
+      SCOPED_TRACE(identity_count);
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+      builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0, 2}));
+      std::string shared = "t0";
+      for (int i = 0; i < identity_count; ++i) {
+        const std::string next = "t" + std::to_string(i + 1);
+        builder.MakeNode("Identity", {shared}, {next});
+        shared = next;
+      }
+      for (bool inverse : {inverse_first, !inverse_first}) {
+        builder.MakeNode(
+            "Transpose", {shared}, {inverse ? "cancelled" : "noninverse"}, "", "",
+            PermAttr(inverse ? std::vector<int64_t>{1, 0, 2} : std::vector<int64_t>{0, 2, 1}));
+      }
+      builder.MakeOutput(shared);
+      builder.MakeOutput("noninverse");
+      builder.MakeOutput("cancelled");
+
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::TransposeTransposePattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      onnx_patterns::TransposeTransposePattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[0]);
+      ASSERT_EQ(match.pattern, &pattern);
+      ASSERT_EQ(match.nodes.size(), static_cast<std::size_t>(identity_count + 2));
+      EXPECT_EQ(match.nodes.back()->output(0), "cancelled");
+      const auto replacements = pattern.Apply(graph, match.nodes);
+      ASSERT_EQ(replacements.size(), static_cast<std::size_t>(identity_count + 2));
+      for (std::size_t i = 0; i + 1 < replacements.size(); ++i) {
+        EXPECT_EQ(replacements[i].SerializeAsString(), builder.Nodes()[i].SerializeAsString());
+      }
+      const auto &replacement = replacements[replacements.size() - 1];
+      EXPECT_EQ(replacement.op_type(), "Identity");
+      EXPECT_EQ(replacement.input(0), "x");
+      EXPECT_EQ(replacement.output(0), "cancelled");
+
+      const auto plan = graph.Optimize();
+      ASSERT_FALSE(plan.rewrites().empty());
+      EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+      std::size_t transposes = 0;
+      bool cancelled = false;
+      bool noninverse = false;
+      for (const auto &node : builder.Nodes()) {
+        transposes += node.op_type() == "Transpose";
+        if (node.output(0) == "cancelled") {
+          cancelled = true;
+          EXPECT_EQ(node.op_type(), "Identity");
+          EXPECT_EQ(node.input(0), "x");
+        } else if (node.output(0) == "noninverse") {
+          noninverse = true;
+          EXPECT_EQ(node.op_type(), "Transpose");
+          EXPECT_EQ(AttributeInts(node, "perm"), (std::vector<int64_t>{0, 2, 1}));
+        }
+      }
+      EXPECT_TRUE(cancelled);
+      EXPECT_TRUE(noninverse);
+      EXPECT_EQ(transposes, 2u);
+      EXPECT_TRUE(graph.Optimize().rewrites().empty());
+    }
+  }
+}
+
 TEST(TransposeTransposePattern, RejectsCustomDomainIdentity) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 13}, {"custom", 1}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));

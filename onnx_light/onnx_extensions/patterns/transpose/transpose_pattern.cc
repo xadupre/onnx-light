@@ -79,57 +79,53 @@ core::builder::MatchResult TransposeTransposePattern::Match(core::builder::Graph
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Transpose");
   }
-  const NodeProto *next_node = nullptr;
-  std::vector<const NodeProto *> pending{&candidate};
-  for (std::size_t i = 0; i < pending.size() && next_node == nullptr; ++i) {
-    for (const NodeProto *consumer : graph.NextNodes(pending[i]->output()[0].value())) {
+  std::vector<int64_t> first_perm;
+  if (!GetAttributeInts(candidate, "perm", first_perm) || !IsValidPerm(first_perm)) {
+    return NoMatch(candidate, "the first Transpose must define a valid perm attribute");
+  }
+
+  struct PendingNode {
+    const NodeProto *node;
+    bool shared_prefix;
+  };
+  std::vector<PendingNode> pending{{&candidate, false}};
+  for (std::size_t i = 0; i < pending.size(); ++i) {
+    const std::string &output = pending[i].node->output()[0].value();
+    const bool shared_prefix = pending[i].shared_prefix || graph.IsUsedMoreThanOnce(output);
+    for (const NodeProto *consumer : graph.NextNodes(output)) {
       if (consumer == nullptr || consumer->input_size() != 1 || consumer->output_size() != 1) {
         continue;
       }
-      if (IsDefaultOp(*consumer, "Transpose")) {
-        next_node = consumer;
-        break;
-      }
       if (IsDefaultOp(*consumer, "Identity")) {
-        pending.push_back(consumer);
+        pending.push_back({consumer, shared_prefix});
+        continue;
       }
-    }
-  }
-  if (next_node == nullptr) {
-    return NoMatch(candidate, "the Transpose output is not consumed by another Transpose");
-  }
-
-  std::vector<int64_t> first_perm;
-  std::vector<int64_t> second_perm;
-  if (!GetAttributeInts(candidate, "perm", first_perm) ||
-      !GetAttributeInts(*next_node, "perm", second_perm)) {
-    return NoMatch(candidate, "both Transpose nodes must define a perm attribute");
-  }
-  if (first_perm.size() != second_perm.size() || !IsValidPerm(first_perm) ||
-      !IsValidPerm(second_perm)) {
-    return NoMatch(candidate, "the perms are not compatible permutations");
-  }
-
-  std::vector<const NodeProto *> nodes{next_node};
-  while (nodes.back() != &candidate) {
-    const NodeProto *previous = graph.NodeBefore(nodes.back()->input()[0].value());
-    if (previous == nullptr || (previous != &candidate && !IsDefaultOp(*previous, "Identity"))) {
-      return NoMatch(candidate, "the Transpose chain is not connected to the candidate");
-    }
-    nodes.push_back(previous);
-  }
-  std::reverse(nodes.begin(), nodes.end());
-  const std::vector<int64_t> composed = ComposePerms(first_perm, second_perm);
-  if (!IsIdentityPerm(composed)) {
-    for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
-      if (graph.IsUsedMoreThanOnce(nodes[i]->output()[0].value())) {
-        return NoMatch(candidate,
-                       "an intermediate value is shared and the perms do not cancel out");
+      if (!IsDefaultOp(*consumer, "Transpose")) {
+        continue;
       }
+      std::vector<int64_t> second_perm;
+      if (!GetAttributeInts(*consumer, "perm", second_perm) ||
+          first_perm.size() != second_perm.size() || !IsValidPerm(second_perm)) {
+        continue;
+      }
+      if (shared_prefix && !IsIdentityPerm(ComposePerms(first_perm, second_perm))) {
+        continue;
+      }
+
+      std::vector<const NodeProto *> nodes{consumer};
+      while (nodes.back() != &candidate) {
+        const NodeProto *previous = graph.NodeBefore(nodes.back()->input()[0].value());
+        if (previous == nullptr ||
+            (previous != &candidate && !IsDefaultOp(*previous, "Identity"))) {
+          return NoMatch(candidate, "the Transpose chain is not connected to the candidate");
+        }
+        nodes.push_back(previous);
+      }
+      std::reverse(nodes.begin(), nodes.end());
+      return core::builder::MatchResult{this, std::move(nodes), &candidate};
     }
   }
-
-  return core::builder::MatchResult{this, std::move(nodes), &candidate};
+  return NoMatch(candidate, "no reachable Transpose can be safely composed with the candidate");
 }
 
 utils::RepeatedProtoField<NodeProto>

@@ -24,14 +24,14 @@ class TestParser(ExtTestCase):
             "  T = MatMul[X, W]\n"
             "  y = Identity(T)\n}"
         )
-        with self.assertRaisesRegex(parser.ParseError, r"Error context: +T = MatMul\[X, W\]"):
+        with self.assertRaisesRegex(ValueError, r"Error context: +T = MatMul\[X, W\]"):
             parser.parse_graph(text)
 
     def test_incomplete_string_literal(self):
         for literal in ['"unterminated', '"trailing\\', '"escaped\\"']:
             with self.subTest(literal=literal):
                 text = f"agraph (float[{literal}] x) => (float[N] y) {{ y = Identity(x) }}"
-                with self.assertRaisesRegex(parser.ParseError, "Incomplete string literal"):
+                with self.assertRaisesRegex(ValueError, "Incomplete string literal"):
                     parser.parse_graph(text)
 
     def test_parse_float6_types(self):

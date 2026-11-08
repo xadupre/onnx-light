@@ -139,6 +139,9 @@ public:
     map_["float6e2m3"] = static_cast<int32_t>(TensorProto::DataType::FLOAT6E2M3);
     map_["float6e3m2"] = static_cast<int32_t>(TensorProto::DataType::FLOAT6E3M2);
   }
+
+  /// Returns true if the given string is a recognized ONNX primitive type name.
+  static bool IsTypeName(const std::string &dtype) { return Lookup(dtype) != 0; }
 };
 
 /**

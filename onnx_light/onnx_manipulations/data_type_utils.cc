@@ -163,9 +163,11 @@ void DataTypeUtils::FromString(std::string_view type_str, TypeProto &type_proto)
   if (s.substr(0, 3) == "map") {
     s = StripParens(s.substr(3));
     const auto key_size = s.find(',');
+    if (key_size == std::string_view::npos) {
+      ONNX_THROW_EX(std::invalid_argument("Invalid map data type: missing key/value separator."));
+    }
     const auto key = StripWhitespace(s.substr(0, key_size));
-    if (key_size != std::string_view::npos)
-      s.remove_prefix(key_size + 1);
+    s.remove_prefix(key_size + 1);
     int32_t key_type = FromDataTypeString(std::string(key));
     type_proto.ref_map_type().set_key_type(key_type);
     TypeProto val_type;

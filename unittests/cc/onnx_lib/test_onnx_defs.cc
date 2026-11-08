@@ -25,7 +25,7 @@ TEST(onnx_defs, DataTypeUtils_WhitespaceAndEmptyBoundaries) {
   EXPECT_EQ(*Utils::DataTypeUtils::ToType(" \v sparse_tensor ( float ) \f"),
             "sparse_tensor(float)");
   for (const auto *invalid : {"", " \t\r\n", "tensor()", "seq()", "map()", "map(,float)",
-                              "map(int64,)", "tensor(float!)"}) {
+                              "map(int64)", "map(int64,)", "tensor(float!)"}) {
     SCOPED_TRACE(invalid);
     EXPECT_THROW(Utils::DataTypeUtils::ToType(invalid), std::invalid_argument);
   }
@@ -285,6 +285,8 @@ TEST(onnx_defs, DataTypeAndParserMaps) {
             static_cast<int32_t>(AttributeProto::AttributeType::TENSOR));
   EXPECT_NE(PrimitiveTypeNameMap::Lookup("int64"), 0);
   EXPECT_EQ(PrimitiveTypeNameMap::Lookup("not_a_type"), 0);
+  EXPECT_TRUE(PrimitiveTypeNameMap::IsTypeName("int64"));
+  EXPECT_FALSE(PrimitiveTypeNameMap::IsTypeName("not_a_type"));
 }
 
 TEST(onnx_defs, DataTypeUtils_ToDataTypeString) {

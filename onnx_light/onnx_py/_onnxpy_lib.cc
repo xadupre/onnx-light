@@ -66,7 +66,7 @@ void AddOnnxPyLib(nb::module_ &m) {
   // Returns (ok: bool, error_message: str, proto_object)
   parser_mod.def("parse_model", [](const std::string &text) -> nb::tuple {
     ModelProto proto{};
-    OnnxParser parser(text.c_str());
+    OnnxParser parser(text);
     auto status = parser.Parse(proto);
     const std::string &error_msg = status.ErrorMessage();
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
@@ -74,7 +74,7 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   parser_mod.def("parse_graph", [](const std::string &text) -> nb::tuple {
     GraphProto proto{};
-    OnnxParser parser(text.c_str());
+    OnnxParser parser(text);
     auto status = parser.Parse(proto);
     const std::string &error_msg = status.ErrorMessage();
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
@@ -82,7 +82,7 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   parser_mod.def("parse_function", [](const std::string &text) -> nb::tuple {
     FunctionProto proto{};
-    OnnxParser parser(text.c_str());
+    OnnxParser parser(text);
     auto status = parser.Parse(proto);
     const std::string &error_msg = status.ErrorMessage();
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
@@ -90,7 +90,7 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   parser_mod.def("parse_node", [](const std::string &text) -> nb::tuple {
     NodeProto proto{};
-    OnnxParser parser(text.c_str());
+    OnnxParser parser(text);
     auto status = parser.Parse(proto);
     const std::string &error_msg = status.ErrorMessage();
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));

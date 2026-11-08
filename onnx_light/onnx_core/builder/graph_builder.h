@@ -735,7 +735,9 @@ public:
   /// Checks both structural hashes and applies simultaneous node moves last.
   /// Reuses identical function definitions after builder normalization.
   /// Ignores conflicting local definitions whose normalized domain and name resolve
-  /// to a registered operator at the merged opset, regardless of function overload.
+  /// to a registered operator in the model and every caller scope at the merged
+  /// opsets, regardless of function overload. Explicit replacements are applied
+  /// even if later imports make the local function body unused.
   /// Retains new declarations so nonempty node overloads still identify a local function.
   /// Throws on other conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.

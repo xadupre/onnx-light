@@ -7,8 +7,11 @@ metadata, shared function definitions and new opset imports. Existing imports
 cannot be changed; identical function definitions are reused and conflicting
 definitions with the same domain/name/overload are rejected unless a registered
 operator takes precedence. Registration uses normalized domain/name identity
-at the merged opset, independently of function overload. Existing colliding
-definitions are retained unchanged; new declarations remain available for
+at the merged model opset and each local-function caller's own imports,
+independently of function overload. Existing colliding
+definitions are retained unchanged unless explicitly replaced; captured body
+replacements remain replayable when a rewrite introduces a colliding domain.
+New declarations remain available for
 matching nonempty node overloads, but do not override the operator.
 Imported functions use a namespace independent of graph values and subgraphs;
 different domains and overloads may share a function name. Shape inference

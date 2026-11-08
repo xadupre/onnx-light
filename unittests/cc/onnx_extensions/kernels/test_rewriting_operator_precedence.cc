@@ -91,10 +91,79 @@ RewritingProto CollisionPlan(const ModelProto &model, bool duplicate) {
   plan.ref_added_functions().push_back(std::move(replacement));
   if (duplicate) {
     plan.ref_added_functions().push_back(model.functions(0));
-    plan.add_replaced_function_ids(core::shapes::ShapesContext::LocalFunctionKey(
-        model.functions(0).domain(), model.functions(0).name(), model.functions(0).overload()));
   }
   return plan;
+}
+
+class IntroduceFastGeluPattern : public core::builder::PatternOptimization {
+public:
+  IntroduceFastGeluPattern() : PatternOptimization(0, "IntroduceFastGelu") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    if (candidate.op_type() == "Relu" && NormaliseDomain(candidate.domain()) == kDefaultOnnxDomain)
+      return {this, {&candidate}};
+    return {};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override {
+    graph.Builder().SetOpsetVersion("com.microsoft", 1);
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(MakeNode("FastGelu", {nodes[0]->input(0).value()},
+                                    {nodes[0]->output(0).value()}, "com.microsoft"));
+    return replacements;
+  }
+};
+
+void SetOptimizableBody(ModelProto &model) {
+  auto transpose = MakeNode("Transpose", {"a"}, {"b"});
+  auto &perm = *transpose.add_attribute();
+  perm.set_name("perm");
+  perm.set_type(AttributeProto::INTS);
+  perm.add_ints(0);
+  perm.add_ints(1);
+  model.ref_functions()[0].ref_node()[0] = std::move(transpose);
+  auto info = model.graph().input(0);
+  info.set_name("a");
+  model.ref_functions()[0].ref_value_info().push_back(std::move(info));
+}
+
+ModelProto VersionedCallerModel(bool nested, bool default_attribute) {
+  auto model = CollisionModel("custom", "F", "variant");
+  model.ref_opset_import()[1].set_version(2);
+  model.ref_functions()[0].ref_attribute().clear();
+  auto &wrapper = *model.add_functions();
+  wrapper.set_domain("local.control");
+  wrapper.set_name("Wrapper");
+  wrapper.add_opset("", 18);
+  wrapper.add_opset("custom", 1);
+  wrapper.add_input("a");
+  wrapper.add_output("b");
+  auto call = MakeNode("F", {"a"}, {"b"}, "custom");
+  call.set_overload("variant");
+  if (nested || default_attribute) {
+    auto identity = MakeNode("Identity", {"a"}, {"b"});
+    auto &attribute =
+        default_attribute ? *wrapper.add_attribute_proto() : *identity.add_attribute();
+    attribute.set_name("body");
+    attribute.set_type(AttributeProto::GRAPH);
+    attribute.mutable_g()->set_name("nested");
+    attribute.mutable_g()->add_node(std::move(call));
+    wrapper.add_node(std::move(identity));
+  } else {
+    wrapper.add_node(std::move(call));
+  }
+  // The root selects the registered operator; only the wrapper selects local F.
+  return model;
+}
+
+core::builder::OperatorRegistry VersionedRegistry() {
+  core::builder::OperatorRegistry registry;
+  registry.RegisterSchema(core::schema::LightOpSchema(
+      "F", "custom", 2, "", {{"x", "", "tensor(float)"}}, {{"y", "", "tensor(float)"}}, {}));
+  return registry;
 }
 
 } // namespace
@@ -279,4 +348,101 @@ TEST(RewritingOperatorPrecedence, OptimizedPlansKeepIgnoredBodiesReplayable) {
   EXPECT_EQ(replayed.RewritingHash(), optimized.RewritingHash());
   EXPECT_EQ(replayed.ToModel().functions(0).node(0).op_type(), "Transpose");
   EXPECT_EQ(source.ToModel().SerializeAsString(), before);
+}
+
+TEST(RewritingOperatorPrecedence, OptimizedPlansIntroduceCollidingImports) {
+  auto model = CollisionModel("com.microsoft", "FastGelu", "");
+  model.ref_opset_import().erase(model.ref_opset_import().begin() + 1);
+  model.ref_functions()[0].ref_attribute().clear();
+  SetOptimizableBody(model);
+  model.mutable_graph()->ref_node()[0] = MakeNode("Relu", {"x"}, {"y"});
+  core::builder::GraphBuilder optimized(model, CollisionSchemaLookup(), CollisionRegistry());
+  core::builder::GraphBuilder source(model, CollisionSchemaLookup(), CollisionRegistry());
+  const auto before = source.ToModel().SerializeAsString();
+  const auto plan =
+      core::builder::GraphGraph(optimized, {std::make_shared<IntroduceFastGeluPattern>(),
+                                            std::make_shared<onnx_patterns::IdentityPattern>()})
+          .Optimize(1, nullptr, {}, false);
+  ASSERT_EQ(plan.replaced_function_ids().size(), 1u);
+  ASSERT_FALSE(plan.required_opset_imports().empty());
+  RewritingProto saved;
+  ASSERT_TRUE(saved.ParseFromString(plan.SerializeAsString()));
+  auto replayed = source.ApplyRewritings(saved);
+  EXPECT_EQ(replayed.RewritingHash(), optimized.RewritingHash());
+  EXPECT_EQ(replayed.OpsetVersion("com.microsoft"), 1);
+  EXPECT_TRUE(replayed.IsRegisteredOperator(replayed.Nodes()[0]));
+  EXPECT_EQ(source.ToModel().SerializeAsString(), before);
+}
+
+TEST(RewritingOperatorPrecedence, ExplicitRegisteredReplacementsAreValidated) {
+  const auto model = CollisionModel("", "Identity", "variant");
+  core::builder::GraphBuilder source(model, CollisionSchemaLookup());
+  const auto identity = core::shapes::ShapesContext::LocalFunctionKey("", "Identity", "variant");
+  auto replacement = CollisionPlan(model, false);
+  replacement.add_replaced_function_ids(identity);
+  auto result = source.ApplyRewritings(source.CaptureRewritings(replacement));
+  EXPECT_EQ(result.LocalFunction("Identity").Nodes()[0].op_type(), "Abs");
+  EXPECT_TRUE(result.IsRegisteredOperator(result.Nodes()[0]));
+  auto conflicting = CollisionPlan(model, true);
+  conflicting.add_replaced_function_ids(identity);
+  EXPECT_THROW(source.CaptureRewritings(conflicting), core::builder::BuilderError);
+}
+
+TEST(RewritingOperatorPrecedence, LocalCallerImportsPreserveConflictsAndReplacements) {
+  for (const auto mode : {0, 1, 2}) {
+    SCOPED_TRACE(mode);
+    const auto model = VersionedCallerModel(mode == 1, mode == 2);
+    core::builder::GraphBuilder source(model, CollisionSchemaLookup(), VersionedRegistry());
+    const auto before = source.ToModel().SerializeAsString();
+    EXPECT_TRUE(source.IsRegisteredOperator(source.Nodes()[0]));
+    for (bool duplicate : {false, true}) {
+      auto edits = CollisionPlan(model, false);
+      if (duplicate)
+        edits.ref_added_functions().push_back(model.functions(0));
+      EXPECT_THROW(source.CaptureRewritings(edits), core::builder::BuilderError);
+    }
+    auto replacement = CollisionPlan(model, false);
+    replacement.add_replaced_function_ids(
+        core::shapes::ShapesContext::LocalFunctionKey("custom", "F", "variant"));
+    auto result = source.ApplyRewritings(source.CaptureRewritings(replacement));
+    EXPECT_EQ(result.LocalFunction("F").Nodes()[0].op_type(), "Abs");
+    if (mode == 0) {
+      auto runtime_model = result.ToModel();
+      runtime_model.add_opset("local.control", 1);
+      runtime_model.mutable_graph()->ref_node()[0] =
+          MakeNode("Wrapper", {"x"}, {"y"}, "local.control");
+      core::runtime::RuntimeContext context(
+          core::runtime::KernelContext(core::backend_test::DefaultOpset(18)));
+      context.Set("x", core::runtime::Tensor::FromFloat("x", {1, 2}, {-2, -2}));
+      core::runtime::RuntimeSession session(runtime_model);
+      session.Run(context);
+      EXPECT_FLOAT_EQ(context.Get("y").AsFloat()[0], 2);
+    }
+    EXPECT_EQ(source.ToModel().SerializeAsString(), before);
+  }
+}
+
+TEST(RewritingOperatorPrecedence, AddedCallerImportsPreserveConflicts) {
+  auto model = VersionedCallerModel(false, false);
+  const auto wrapper = model.functions(1);
+  model.ref_functions().erase(model.ref_functions().begin() + 1);
+  core::builder::GraphBuilder source(model, CollisionSchemaLookup(), VersionedRegistry());
+  auto edits = CollisionPlan(model, false);
+  edits.ref_added_functions().push_back(wrapper);
+  EXPECT_THROW(source.CaptureRewritings(edits), core::builder::BuilderError);
+}
+
+TEST(RewritingOperatorPrecedence, OptimizesBodiesSelectedByLocalCallerImports) {
+  auto model = VersionedCallerModel(false, false);
+  SetOptimizableBody(model);
+  core::builder::GraphBuilder optimized(model, CollisionSchemaLookup(), VersionedRegistry());
+  core::builder::GraphBuilder source(model, CollisionSchemaLookup(), VersionedRegistry());
+  const auto plan =
+      core::builder::GraphGraph(optimized, {std::make_shared<onnx_patterns::IdentityPattern>()})
+          .Optimize(1, nullptr, {}, false);
+  ASSERT_FALSE(plan.replaced_function_ids().empty());
+  auto replayed = source.ApplyRewritings(plan);
+  EXPECT_EQ(replayed.RewritingHash(), optimized.RewritingHash());
+  ASSERT_EQ(replayed.LocalFunction("F").Nodes().size(), 1u);
+  EXPECT_EQ(replayed.LocalFunction("F").Nodes()[0].op_type(), "Identity");
 }

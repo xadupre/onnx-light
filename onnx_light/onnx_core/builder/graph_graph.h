@@ -253,7 +253,8 @@ private:
                               const std::vector<std::string> &graph_path,
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
                               RewritingProto &collection, detail::RewritingUndoState &undo,
-                              const OptimizationCallback &callback, bool parallel);
+                              const OptimizationCallback &callback, bool parallel,
+                              const std::unordered_set<std::string> &function_only_callers);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

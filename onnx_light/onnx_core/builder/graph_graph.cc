@@ -121,6 +121,48 @@ bool IsRegisteredFunctionIdentity(
   return builder.IsRegisteredOperator(call, imports);
 }
 
+std::unordered_set<std::string>
+FunctionOnlyCallers(const GraphBuilder &builder,
+                    const utils::RepeatedProtoField<FunctionProto> &functions,
+                    const utils::RepeatedProtoField<FunctionProto> &added_functions =
+                        utils::RepeatedProtoField<FunctionProto>()) {
+  std::set<FunctionKey> identities;
+  for (const auto *definitions : {&functions, &added_functions})
+    for (const auto &function : *definitions)
+      identities.insert(Identity(function));
+  std::unordered_set<std::string> result;
+  const auto visit = [&](const auto &self, const NodeProto &node,
+                         const utils::RepeatedProtoField<OperatorSetIdProto> &imports) -> void {
+    if (identities.count(Identity(node)) != 0 &&
+        !IsRegisteredFunctionIdentity(builder, node.domain(), node.op_type(), node.overload(),
+                                      &imports))
+      result.insert(
+          ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g())
+        for (const auto &child : attribute.g().node())
+          self(self, child, imports);
+      for (const auto &graph : attribute.graphs())
+        for (const auto &child : graph.node())
+          self(self, child, imports);
+    }
+  };
+  for (const auto *definitions : {&functions, &added_functions})
+    for (const auto &function : *definitions) {
+      for (const auto &node : function.node())
+        visit(visit, node, function.opset_import());
+      for (const auto &attribute : function.attribute_proto()) {
+        if (attribute.has_g())
+          for (const auto &node : attribute.g().node())
+            visit(visit, node, function.opset_import());
+        for (const auto &graph : attribute.graphs())
+          for (const auto &node : graph.node())
+            visit(visit, node, function.opset_import());
+      }
+    }
+  return result;
+}
+
 bool HasUnresolvedAttributeReferences(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (!attribute.ref_attr_name().empty())
@@ -1754,8 +1796,9 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
     ~OriginalFunctionsScope() { slot = previous; }
   } original_functions_scope{original_functions_, original_functions_};
   original_functions_ = &original_functions_by_key;
+  const auto function_only_callers = FunctionOnlyCallers(*root, original_definitions);
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
-                             *undo, callback, parallel);
+                             *undo, callback, parallel, function_only_callers);
   if (report != nullptr)
     report->cleanup_time_ns += canonicalization_time_ns;
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
@@ -1933,12 +1976,11 @@ bool GraphGraph::IsInsideOperatorBody(const std::string &domain, const std::stri
   return false;
 }
 
-RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
-                                        const std::vector<std::string> &graph_path,
-                                        const ConstantFoldingOptions &folding_options,
-                                        bool remove_unused, RewritingProto &collection,
-                                        detail::RewritingUndoState &undo,
-                                        const OptimizationCallback &callback, bool parallel) {
+RewritingProto GraphGraph::OptimizeImpl(
+    int max_iter, OptimizationReport *report, const std::vector<std::string> &graph_path,
+    const ConstantFoldingOptions &folding_options, bool remove_unused, RewritingProto &collection,
+    detail::RewritingUndoState &undo, const OptimizationCallback &callback, bool parallel,
+    const std::unordered_set<std::string> &function_only_callers) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -1958,7 +2000,10 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   std::vector<GraphBuilder *> functions;
   functions.reserve(builder_.local_functions_.size());
   for (const auto &function : builder_.local_functions_)
-    if (!IsRegisteredFunctionIdentity(builder_, function->function_domain_, function->name_,
+    if (function_only_callers.count(
+            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload())) != 0 ||
+        !IsRegisteredFunctionIdentity(builder_, function->function_domain_, function->name_,
                                       function->function_template_.overload()))
       functions.push_back(function.get());
 
@@ -1978,7 +2023,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
                            original_functions_);
     RewritingProto child_rewrites = child_graph.OptimizeImpl(
         max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options,
-        remove_unused, collection, undo, callback, parallel);
+        remove_unused, collection, undo, callback, parallel, function_only_callers);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -2033,7 +2078,7 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
                              folding_options, remove_unused, collection, child_undo, callback,
-                             parallel);
+                             parallel, function_only_callers);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
@@ -3237,6 +3282,11 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
       self(self, *subgraph);
   };
   merge_source_functions(merge_source_functions, *this);
+  const auto function_only_callers =
+      FunctionOnlyCallers(*this, model.functions(), rewrites.added_functions());
+  std::set<std::string> requested_replacements;
+  for (const auto &identity : rewrites.replaced_function_ids())
+    requested_replacements.insert(identity.value());
   FunctionIndex planned_functions;
   std::set<FunctionKey> new_functions;
   std::set<std::string> replaceable_functions;
@@ -3246,8 +3296,12 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
     if (existing)
       replaceable_functions.insert(
           ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()));
-    const bool registered = IsRegisteredFunctionIdentity(
-        *this, function.domain(), function.name(), function.overload(), &model.opset_import());
+    const auto identity =
+        ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload());
+    const bool registered =
+        requested_replacements.count(identity) == 0 && function_only_callers.count(identity) == 0 &&
+        IsRegisteredFunctionIdentity(*this, function.domain(), function.name(), function.overload(),
+                                     &model.opset_import());
     if (registered && existing)
       continue;
     const auto [previous, inserted] = planned_functions.emplace(key, &function);

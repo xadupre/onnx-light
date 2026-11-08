@@ -2382,6 +2382,13 @@ std::vector<LightOpSchema> BuildLogSchemas() {
 
 std::vector<LightOpSchema> BuildGemmSchemas() {
   std::vector<LightOpSchema> schemas;
+  schemas.push_back(LightOpSchema(
+      "Gemm", kOnnxDomain, 29, MakeGemmDoc(29),
+      {{"A", "Rank >= 1 tensor. After applying transA, its shape is (..., K).", "T"},
+       {"B", "Rank 2 tensor of shape (K, N), or (N, K) when transB is non-zero.", "T"},
+       {"C", "Optional bias, unidirectionally broadcastable to output shape (..., N).", "T"}},
+      {{"Y", "Output tensor of shape (..., N).", "T"}},
+      {{"T", MatMulGemmTypes(29), MatMulGemmTypeDescription(29)}}));
   // Gemm v13: optional C, bfloat16 added.
   // Gemm v11: optional C.
   for (int version : {13, 11}) {

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the mixed native/NumPy reference evaluator."""
 
+import ml_dtypes
 import numpy as np
 
 import onnx_light.onnx.helper as oh
@@ -83,6 +84,63 @@ class TestMixedReferenceEvaluator(ExtTestCase):
             None, {"a": a, "b": b}
         )[0]
         np.testing.assert_array_equal(result, a @ b)
+
+    def test_gemm29_linear_ranks_transpose_and_empty_dimensions(self):
+        for shape in ((5,), (2, 3, 5), (2, 3, 4, 5), (0, 3, 5), (2, 3, 0)):
+            for trans_a in (0, 1):
+                for dtype in (np.float32, np.float64, np.float16, ml_dtypes.bfloat16):
+                    a_effective = (np.arange(np.prod(shape)) % 4).astype(dtype).reshape(shape)
+                    a = (
+                        a_effective.swapaxes(-1, -2)
+                        if trans_a and len(shape) > 1
+                        else a_effective
+                    )
+                    b = (np.arange(7 * shape[-1]) % 3).astype(dtype).reshape(7, shape[-1])
+                    c = np.arange(7, dtype=dtype)
+                    expected = (0.25 * (a_effective @ b.T) + 0.5 * c).astype(dtype)
+                    model = _model(
+                        "Gemm",
+                        ["a", "b", "c"],
+                        ["y"],
+                        transA=trans_a,
+                        transB=1,
+                        alpha=0.25,
+                        beta=0.5,
+                    )
+                    model.opset_import[0].version = 29
+                    for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+                        with self.subTest(
+                            shape=shape, trans_a=trans_a, dtype=dtype, evaluator=evaluator_class
+                        ):
+                            actual = evaluator_class(model).run(None, {"a": a, "b": b, "c": c})[0]
+                            self.assertEqual(actual.shape, expected.shape)
+                            self.assertEqual(actual.dtype, dtype)
+                            np.testing.assert_array_equal(actual, expected)
+
+    def test_gemm29_bias_validation_and_zero_beta(self):
+        a = np.arange(12, dtype=np.float32).reshape(2, 3, 2)
+        b = np.array([[2, 3], [1, 4]], dtype=np.float32)
+        model = _model("Gemm", ["a", "b", "c"], ["y"], beta=0.0)
+        model.opset_import[0].version = 29
+        for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+            evaluator = evaluator_class(model)
+            np.testing.assert_array_equal(
+                evaluator.run(None, {"a": a, "b": b, "c": np.full((2,), np.nan, np.float32)})[0],
+                a @ b,
+            )
+            for bias_shape in ((2, 2), (1, 2, 3, 2)):
+                with (
+                    self.subTest(evaluator=evaluator_class, bias_shape=bias_shape),
+                    self.assertRaises((ValueError, RuntimeError)),
+                ):
+                    evaluator.run(
+                        None, {"a": a, "b": b, "c": np.ones(bias_shape, dtype=np.float32)}
+                    )
+        model.opset_import[0].version = 28
+        with self.assertRaisesRegex(ValueError, "rank"):
+            MixedReferenceEvaluator(model).run(
+                None, {"a": a, "b": b, "c": np.ones((2,), dtype=np.float32)}
+            )
 
     def test_conv_grouped_dilated_and_bias(self):
         x = np.arange(14, dtype=np.float32).reshape(1, 2, 7)

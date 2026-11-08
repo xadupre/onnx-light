@@ -34,7 +34,7 @@ def _gemm(node, a, b, c=None, *, opset=13):
             raise ValueError(f"Gemm input C shape {c.shape} cannot broadcast to {y.shape}.")
         if beta != 0:
             y += beta * c
-    return y.astype(a.dtype)
+    return y.astype(a.dtype, copy=False)
 
 
 def _matmul(node, a, b):

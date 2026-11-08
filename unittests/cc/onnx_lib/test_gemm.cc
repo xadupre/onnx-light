@@ -63,6 +63,25 @@ std::vector<int64_t> InferGemmShape(ModelProto &model) {
 
 } // namespace
 
+TEST(onnx_shape_inference, Gemm29LightSchemaVerifiesAttributes) {
+  const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("Gemm");
+  ASSERT_FALSE(schemas.empty());
+  const auto &schema = schemas.front();
+  ASSERT_EQ(schema.since_version(), 29);
+  auto model = MakeGemmModel({2, 3, 5}, {7, 5}, nullptr, 0, 1);
+  auto node = model.graph().node(0);
+  AddAttribute<float>(node, "alpha", 0.25f);
+  AddAttribute<float>(node, "beta", 0.0f);
+  EXPECT_NO_THROW(schema.Verify(node));
+  auto invalid = node;
+  invalid.mutable_attribute(0)->set_type(AttributeProto::FLOAT);
+  invalid.mutable_attribute(0)->clear_i();
+  invalid.mutable_attribute(0)->set_f(1.0f);
+  EXPECT_THROW(schema.Verify(invalid), core::schema::SchemaError);
+  AddAttribute<int64_t>(node, "unknown", 1);
+  EXPECT_THROW(schema.Verify(node), core::schema::SchemaError);
+}
+
 TEST(onnx_shape_inference, Gemm29RanksAndTranspose) {
   RegisterAllOnnxOperatorSchemas();
   for (const std::vector<int64_t> &a :

@@ -253,7 +253,9 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
     return _runtime.tensor_from_proto(tp)
 
 
-def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
+def _make_numpy_custom_kernel(
+    domain: str, op_type: str, fn: Any, *, with_opset: bool = False
+) -> Any:
     """Wraps a numpy-friendly custom kernel ``fn`` as a low-level callback.
 
     The returned callable follows the ``fn(node, ctx)`` contract expected by
@@ -262,9 +264,11 @@ def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
     the returned array(s) back into ``ctx``. Shared by
     :meth:`ReferenceEvaluator.register_custom_kernel` (per-session) and
     :meth:`ReferenceEvaluator.register_custom_kernel_global` (process-wide).
+    When ``with_opset`` is true, forwards the resolved per-node opset to ``fn``
+    as a keyword argument.
     """
 
-    def _wrapper(node: Any, ctx: Any) -> None:
+    def _wrapper(node: Any, ctx: Any, opset: int | None = None) -> None:
         inputs: list[Any] = []
         for raw_name in node.input:
             name = str(raw_name)
@@ -272,7 +276,7 @@ def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
                 inputs.append(None)
             else:
                 inputs.append(_cpp_tensor_to_numpy(ctx.get(name)))
-        result = fn(node, *inputs)
+        result = fn(node, *inputs, opset=opset) if with_opset else fn(node, *inputs)
         if isinstance(result, (list, tuple)):
             outputs = list(result)
         else:
@@ -558,7 +562,9 @@ class ReferenceEvaluator:
 
     # -- custom kernels -----------------------------------------------------
 
-    def register_custom_kernel(self, domain: str, op_type: str, fn: Any) -> None:
+    def register_custom_kernel(
+        self, domain: str, op_type: str, fn: Any, *, with_opset: bool = False
+    ) -> None:
         """Registers a Python custom kernel for ``(domain, op_type)``.
 
         Future node resolutions use this registration. Already-resolved
@@ -584,6 +590,9 @@ class ReferenceEvaluator:
             :class:`numpy.ndarray` (for single-output kernels) or a
             tuple / list of arrays (for multi-output kernels), in the
             same order as the node's declared outputs.
+        with_opset:
+            If true, passes the node's effective opset as an ``opset`` keyword
+            argument, using the enclosing model or function's imports.
 
         Examples
         --------
@@ -594,13 +603,13 @@ class ReferenceEvaluator:
 
             sess.register_custom_kernel("my.domain", "Square", square)
         """
-        _wrapper = _make_numpy_custom_kernel(domain, op_type, fn)
+        _wrapper = _make_numpy_custom_kernel(domain, op_type, fn, with_opset=with_opset)
 
         self._custom_kernels[f"{domain or 'ai.onnx'}:{op_type}"] = (domain, op_type, _wrapper)
         # Register the wrapper directly on the persistent RuntimeContext. A
         # later registration for the same (domain, op_type) overwrites the
         # previous one, matching the dict-based bookkeeping above.
-        self._ctx.register_custom_kernel(domain, op_type, _wrapper)
+        self._ctx.register_custom_kernel(domain, op_type, _wrapper, with_opset=with_opset)
 
     def unregister_custom_kernel(self, domain: str, op_type: str) -> bool:
         """Removes a custom kernel previously registered for ``(domain, op_type)``.

@@ -2388,7 +2388,13 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
        {"B", "Rank 2 tensor of shape (K, N), or (N, K) when transB is non-zero.", "T"},
        {"C", "Optional bias, unidirectionally broadcastable to output shape (..., N).", "T"}},
       {{"Y", "Output tensor of shape (..., N).", "T"}},
-      {{"T", MatMulGemmTypes(29), MatMulGemmTypeDescription(29)}}));
+      {{"T", MatMulGemmTypes(29), MatMulGemmTypeDescription(29)}},
+      {AttributeParam{"transA", "Transposes the final two axes of A.", AttributeType::INT, false,
+                      int64_t{0}},
+       AttributeParam{"transB", "Transposes B.", AttributeType::INT, false, int64_t{0}},
+       AttributeParam{"alpha", "Scales the matrix product.", AttributeType::FLOAT, false,
+                      double{1}},
+       AttributeParam{"beta", "Scales the bias.", AttributeType::FLOAT, false, double{1}}}));
   // Gemm v13: optional C, bfloat16 added.
   // Gemm v11: optional C.
   for (int version : {13, 11}) {

@@ -13,6 +13,7 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 MixedReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "MixedReferenceEvaluator")
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 _attention = import_or_skip("onnx_light._reference.ops", "_attention")
+_gemm = import_or_skip("onnx_light._reference.ops", "_gemm")
 
 
 def _model(op_type, inputs, outputs, **attributes):
@@ -141,6 +142,67 @@ class TestMixedReferenceEvaluator(ExtTestCase):
             MixedReferenceEvaluator(model).run(
                 None, {"a": a, "b": b, "c": np.ones((2,), dtype=np.float32)}
             )
+
+    def test_gemm_function_uses_its_own_opset(self):
+        a = np.arange(12, dtype=np.float32).reshape(2, 3, 2)
+        b = np.array([[2, 3], [1, 4]], dtype=np.float32)
+        for model_opset, function_opset in ((28, 29), (29, 28)):
+            function = oh.make_function(
+                "local",
+                "Linear",
+                ["a", "b"],
+                ["y"],
+                [oh.make_node("Gemm", ["a", "b"], ["y"])],
+                [oh.make_operatorsetid("", function_opset)],
+            )
+            graph = oh.make_graph(
+                [oh.make_node("Linear", ["a", "b"], ["y"], domain="local")],
+                "local_gemm",
+                [
+                    oh.make_tensor_value_info("a", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("b", TensorProto.FLOAT, None),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, None)],
+            )
+            model = oh.make_model(
+                graph,
+                functions=[function],
+                opset_imports=[
+                    oh.make_operatorsetid("", model_opset),
+                    oh.make_operatorsetid("local", 1),
+                ],
+            )
+            evaluator = MixedReferenceEvaluator(model)
+            with self.subTest(model_opset=model_opset, function_opset=function_opset):
+                if function_opset == 29:
+                    for inputs in (a, a[:, :1], a):
+                        np.testing.assert_array_equal(
+                            evaluator.run(None, {"a": inputs, "b": b})[0], inputs @ b
+                        )
+                else:
+                    with self.assertRaisesRegex(ValueError, "rank"):
+                        evaluator.run(None, {"a": a, "b": b})
+                    np.testing.assert_array_equal(
+                        evaluator.run(None, {"a": a[0], "b": b})[0], a[0] @ b
+                    )
+
+    def test_gemm_does_not_copy_an_already_correct_output_dtype(self):
+        class NoCopyArray(np.ndarray):
+            """Rejects a redundant dtype-preserving copy."""
+
+            def astype(self, dtype, *args, **kwargs):
+                if np.dtype(dtype) == self.dtype and kwargs.get("copy", True):
+                    raise AssertionError("Gemm copied an output with the correct dtype.")
+                return super().astype(dtype, *args, **kwargs)
+
+        node = oh.make_node("Gemm", ["a", "b"], ["y"])
+        for dtype in (np.float32, np.float64):
+            a = np.arange(6, dtype=dtype).reshape(2, 3).view(NoCopyArray)
+            b = np.ones((3, 4), dtype=dtype)
+            with self.subTest(dtype=dtype):
+                result = _gemm(node, a, b, opset=29)
+                np.testing.assert_array_equal(result, a @ b)
+                self.assertEqual(result.dtype, dtype)
 
     def test_conv_grouped_dilated_and_bias(self):
         x = np.arange(14, dtype=np.float32).reshape(1, 2, 7)

@@ -3,8 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Mixed native and NumPy reference evaluator."""
 
-from functools import partial
-
 from ._evaluator import ReferenceEvaluator
 from .ops import _attention, _conv, _gemm, _matmul
 
@@ -22,9 +20,9 @@ class MixedReferenceEvaluator(ReferenceEvaluator):
         """Initializes the evaluator and registers NumPy implementations."""
         super().__init__(proto, **kwargs)
         for op_type, kernel in (
-            ("Gemm", partial(_gemm, opset=self._opsets.get("", self._opsets.get("ai.onnx", 13)))),
+            ("Gemm", _gemm),
             ("MatMul", _matmul),
             ("Conv", _conv),
             ("Attention", _attention),
         ):
-            self.register_custom_kernel("", op_type, kernel)
+            self.register_custom_kernel("", op_type, kernel, with_opset=op_type == "Gemm")

@@ -175,11 +175,11 @@ TEST(onnx_shape_inference, Gemm29FunctionDecomposition) {
   auto model = MakeGemmModel({2, 5, 3}, {7, 5}, nullptr, 1, 1);
   auto type = model.graph().input(0).type();
   type.mutable_tensor_type()->clear_shape();
-  FunctionBodyBuildContextImpl unknown_rank(model.graph().node(0), {type});
+  FunctionBodyBuildContextImpl unknown_rank(model.graph().node(0), std::vector<TypeProto>{type});
   FunctionProto function;
   EXPECT_FALSE(schema->BuildContextDependentFunction(unknown_rank, function, 29));
   type.mutable_tensor_type()->set_elem_type(TensorProto::INT32);
-  FunctionBodyBuildContextImpl integer_context(model.graph().node(0), {type});
+  FunctionBodyBuildContextImpl integer_context(model.graph().node(0), std::vector<TypeProto>{type});
   EXPECT_FALSE(schema->BuildContextDependentFunction(integer_context, function, 29));
 }
 

@@ -102,6 +102,25 @@ FunctionKey Identity(const NodeProto &call) {
   return {RewriteDomain(call.domain().value()), call.op_type().value(), call.overload().value()};
 }
 
+bool IsRegisteredFunctionIdentity(
+    const GraphBuilder &builder, const std::string &domain, const std::string &name,
+    const std::string &overload,
+    const utils::RepeatedProtoField<OperatorSetIdProto> *imports = nullptr) {
+  if (imports != nullptr) {
+    if (std::none_of(imports->begin(), imports->end(), [&](const auto &entry) {
+          return RewriteDomain(entry.domain()) == RewriteDomain(domain);
+        }))
+      return false;
+  } else if (builder.OpsetVersion(domain) <= 0) {
+    return false;
+  }
+  NodeProto call;
+  call.set_domain(domain);
+  call.set_op_type(name);
+  call.set_overload(overload);
+  return builder.IsRegisteredOperator(call, imports);
+}
+
 bool HasUnresolvedAttributeReferences(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (!attribute.ref_attr_name().empty())
@@ -1939,7 +1958,9 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
   std::vector<GraphBuilder *> functions;
   functions.reserve(builder_.local_functions_.size());
   for (const auto &function : builder_.local_functions_)
-    functions.push_back(function.get());
+    if (!IsRegisteredFunctionIdentity(builder_, function->function_domain_, function->name_,
+                                      function->function_template_.overload()))
+      functions.push_back(function.get());
 
   RewritingProto result;
   auto &applied = result.ref_rewrites();
@@ -3192,6 +3213,8 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
   model.ref_struct_types() = Shapes().StructTypes();
   for (const auto &[domain, version] : opsets_)
     model.add_opset(domain, version);
+  for (const auto &opset : rewrites.required_opset_imports())
+    MergeImport(model.ref_opset_import(), opset);
   std::map<FunctionKey, const GraphBuilder *> source_function_builders;
   const auto collect_source_functions = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &function : scope.local_functions_) {
@@ -3219,17 +3242,22 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
   std::set<std::string> replaceable_functions;
   for (const auto &function : rewrites.added_functions()) {
     const auto key = Identity(function);
+    const bool existing = source_function_builders.count(key) != 0;
+    if (existing)
+      replaceable_functions.insert(
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()));
+    const bool registered = IsRegisteredFunctionIdentity(
+        *this, function.domain(), function.name(), function.overload(), &model.opset_import());
+    if (registered && existing)
+      continue;
     const auto [previous, inserted] = planned_functions.emplace(key, &function);
-    if (!inserted && !previous->second->Equals(function))
+    if (!inserted && !registered && !previous->second->Equals(function))
       throw BuilderError(
           "ApplyRewritings: conflicting added function definitions for '" +
           ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()) +
           "'.");
-    if (source_function_builders.count(key) == 0)
+    if (!existing)
       new_functions.insert(key);
-    else
-      replaceable_functions.insert(
-          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()));
   }
   std::set<std::string> replaced_functions;
   for (const auto &identity : rewrites.replaced_function_ids()) {
@@ -3268,21 +3296,21 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
     }
   }
   for (const auto &function : rewrites.added_functions()) {
-    if (source_function_builders.count(Identity(function)) == 0) {
+    const auto key = Identity(function);
+    if (planned_functions.count(key) == 0 || planned_functions.at(key) != &function)
+      continue;
+    if (source_function_builders.count(key) == 0) {
       MergeFunction(model.ref_functions(), function);
     }
   }
   model.ref_functions() = GraphBuilder::DependencyOrderFunctions(std::move(model.ref_functions()));
-  for (const auto &opset : rewrites.required_opset_imports())
-    MergeImport(model.ref_opset_import(), opset);
   std::map<FunctionKey, std::size_t> function_positions;
   for (std::size_t index = 0; index < model.functions().size(); ++index)
     function_positions.emplace(Identity(model.functions(index)), index);
   std::set<FunctionKey> changed_definitions;
-  for (const auto &function : rewrites.added_functions()) {
-    const auto key = Identity(function);
+  for (const auto &[key, function] : planned_functions) {
     const auto position = function_positions.at(key);
-    if (!model.functions(position).Equals(function))
+    if (!model.functions(position).Equals(*function))
       changed_definitions.insert(key);
   }
   std::set<FunctionKey> conflicting_definitions;

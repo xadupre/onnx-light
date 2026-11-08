@@ -141,6 +141,15 @@ requests that touch ``fuzz/**``, ``.github/workflows/cq_fuzz.yml``, or
 themselves and obvious shallow bugs; long-running coverage-guided
 campaigns are still expected to be driven by OSS-Fuzz.
 
+Following `onnx/onnx#8751 <https://github.com/onnx/onnx/pull/8751>`_, CI
+instruments both the libraries and harnesses with AddressSanitizer and
+UndefinedBehaviorSanitizer, using ``RelWithDebInfo`` and frame pointers for
+native stack traces. Sanitizer reports abort the process so libFuzzer records
+the input. Crashing inputs are saved under ``crashes/<harness>/``, replayed
+on failure with a 25-second timeout to print native backtraces, and uploaded
+as the ``fuzz-crashes`` artifact. The standalone C++ executables need neither
+Python ``faulthandler`` nor sanitizer ``LD_PRELOAD``; leak detection stays enabled.
+
 Design notes
 ++++++++++++
 

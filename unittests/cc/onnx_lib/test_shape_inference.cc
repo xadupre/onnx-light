@@ -6,6 +6,7 @@
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
+#include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <filesystem>
@@ -1237,14 +1238,14 @@ namespace {
 
 // Ports the historical schema coverage from onnx/onnx#8711.
 std::vector<int> HistoricalShapeInferenceVersions(const char *op_type) {
-  RegisterAllOnnxOperatorSchemas();
   std::vector<int> versions;
   if (std::string(op_type) == "Conv" || std::string(op_type) == "ConvTranspose") {
     versions.push_back(10); // Exercises schema version 1.
   }
-  for (const auto &schema : OpSchemaRegistry::get_all_schemas_with_history()) {
-    if (schema.Name() == op_type && schema.domain().empty() && schema.SinceVersion() > 5) {
-      versions.push_back(schema.SinceVersion());
+  // Parameter discovery must not initialize the global registry before test fixtures run.
+  for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false)) {
+    if (schema.domain() == core::schema::kOnnxDomain && schema.since_version() > 5) {
+      versions.push_back(schema.since_version());
     }
   }
   std::sort(versions.begin(), versions.end());
@@ -1260,6 +1261,8 @@ struct HistoricalShapeCase {
 
 class HistoricalShapeInferenceTest : public ::testing::TestWithParam<int> {
 protected:
+  void SetUp() override { RegisterAllOnnxOperatorSchemas(); }
+
   void Parse(const char *graph, ModelProto &model) {
     const std::string text = std::string("<ir_version: 10, opset_import: [\"\" : 10]> ") + graph;
     OnnxParser parser(text);

@@ -4,7 +4,7 @@
 Uses every quantization format from Python
 =========================================
 
-This example exercises all 41 formats in the unified catalogue exposed by
+This example exercises all 47 formats in the unified catalogue exposed by
 :mod:`onnx_light.onnx_core.quantization`: it quantizes numerical profiles
 and imports already-quantized native GGML blocks. It shows the parameters to supply
 for affine, scalar-codebook, vector-codebook, transformed and cast storage.

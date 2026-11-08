@@ -14,13 +14,15 @@ The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their pr
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
 The single ``QuantizationFormat`` catalogue also includes ``Q4_0``, ``Q8_0``,
-``Q4_K``, ``Q5_K`` and ``Q6_K``. These use
+``Q2_K``, ``Q3_K``, ``Q4_K``, ``Q5_K``, ``Q6_K``, ``IQ4_NL``, ``IQ1_S``,
+``TQ1_0`` and ``TQ2_0``. These use
 :ref:`native GGUF blocks <l-gguf-blocks>` in ``EncodedValueProto``,
 not portable packing. Their former generic profiles and old v1/v2 encoded
 values are no longer accepted. Native imports preserve checkpoint bytes;
 they do not implement floating-point-to-GGML quantization or a standalone
 ``.gguf`` model loader. ``quantization_formats()`` lists all formats;
 ``is_gguf_quantization_format()`` identifies those requiring native block imports.
+Codecs without a GGUF counterpart retain their existing representations.
 
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native

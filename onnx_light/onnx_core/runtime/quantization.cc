@@ -91,8 +91,14 @@ constexpr std::array<std::string_view, QuantizationFormats().size()> kFormatName
     "Q8_0",
     "Q4_K",
     "Q5_K",
-    "Q6_K"};
-static_assert(static_cast<size_t>(QuantizationFormat::kQ6K) + 1 == kFormatNames.size());
+    "Q6_K",
+    "Q2_K",
+    "Q3_K",
+    "IQ4_NL",
+    "IQ1_S",
+    "TQ1_0",
+    "TQ2_0"};
+static_assert(static_cast<size_t>(QuantizationFormat::kTq20) + 1 == kFormatNames.size());
 
 constexpr uint32_t OrtBits(QuantizationFormat format) {
   switch (format) {

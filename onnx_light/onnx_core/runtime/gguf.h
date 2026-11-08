@@ -22,8 +22,9 @@ struct GgufBlockLayout {
 };
 
 /** Stores effective FLOAT32 subgroup multipliers and subtractive minima in logical order.
- * Q4_0 and Q8_0 have one scale; Q4_K and Q5_K have eight scales and minima;
- * Q6_K has sixteen signed scales. Symmetric formats have no minima.
+ * Q4_0, Q8_0, IQ4_NL and TQ formats have one scale; Q2_K has sixteen scales/minima;
+ * Q4_K and Q5_K have eight scales/minima; Q3_K and Q6_K have sixteen signed scales.
+ * IQ1_S has eight scales; its dimensionless +/-0.125 offsets remain in its block metadata.
  */
 struct GgufBlockParameters {
   std::vector<float> scales;

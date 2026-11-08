@@ -713,10 +713,10 @@ class TestQuantizedValues(ExtTestCase):
 
         formats = quantization_formats()
         self.assertIsInstance(formats, list)
-        self.assertEqual(len(formats), 41)
+        self.assertEqual(len(formats), 47)
         self.assertTrue(all(isinstance(value, QuantizationFormat) for value in formats))
         self.assertEqual(formats[0], QuantizationFormat.INT8)
-        self.assertEqual(formats[-1], QuantizationFormat.Q6_K)
+        self.assertEqual(formats[-1], QuantizationFormat.TQ2_0)
         for value in formats:
             self.assertEqual(
                 runtime.parse_quantization_format(runtime.quantization_format_name(value)), value

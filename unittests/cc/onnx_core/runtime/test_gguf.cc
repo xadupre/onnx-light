@@ -20,6 +20,22 @@ void PutHalf(std::string &bytes, size_t offset, uint16_t bits) {
   bytes[offset + 1] = static_cast<char>(bits >> 8);
 }
 
+std::vector<size_t> HalfOffsets(std::string_view subtype) {
+  if (subtype == "Q2_K")
+    return {80, 82};
+  if (subtype == "Q3_K")
+    return {108};
+  if (subtype == "Q6_K")
+    return {208};
+  if (subtype == "TQ1_0")
+    return {52};
+  if (subtype == "TQ2_0")
+    return {64};
+  if (subtype == "Q4_K" || subtype == "Q5_K")
+    return {0, 2};
+  return {0};
+}
+
 std::vector<float> Values(const EncodedValueProto &payload) {
   const auto tensor = DequantizeGgufTensorPayload(payload);
   EXPECT_EQ(tensor.data_type, TensorProto::FLOAT);
@@ -32,23 +48,19 @@ std::vector<float> Values(const EncodedValueProto &payload) {
 } // namespace
 
 TEST(GgufTensorPayload, CanonicalLayoutsAndExactBytes) {
-  const std::array<std::string, 5> names{"Q4_0", "Q8_0", "Q4_K", "Q5_K", "Q6_K"};
-  const std::array<size_t, 5> sizes{18, 34, 144, 176, 210};
+  const std::array<std::string, 11> names{"Q4_0", "Q8_0",   "Q4_K",  "Q5_K",  "Q6_K", "Q2_K",
+                                          "Q3_K", "IQ4_NL", "IQ1_S", "TQ1_0", "TQ2_0"};
+  const std::array<size_t, 11> sizes{18, 34, 144, 176, 210, 84, 110, 18, 50, 54, 66};
   ASSERT_EQ(GgufBlockLayouts().size(), names.size());
   for (size_t i = 0; i < names.size(); ++i) {
     const auto &layout = GgufLayout(names[i]);
     EXPECT_EQ(layout.type_size, sizes[i]);
-    EXPECT_EQ(layout.block_size, i < 2 ? size_t{32} : size_t{256});
+    EXPECT_EQ(layout.block_size, i < 2 || names[i] == "IQ4_NL" ? size_t{32} : size_t{256});
     std::string bytes(layout.type_size * 2, '\xff');
     for (size_t block = 0; block < 2; ++block) {
       const size_t offset = block * layout.type_size;
-      if (names[i] == "Q6_K")
-        PutHalf(bytes, offset + 208, 0x8000);
-      else {
-        PutHalf(bytes, offset, 0x8000);
-        if (i >= 2)
-          PutHalf(bytes, offset + 2, 0);
-      }
+      for (const auto field : HalfOffsets(names[i]))
+        PutHalf(bytes, offset + field, 0x8000);
     }
     auto payload =
         ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)}, names[i]);
@@ -58,7 +70,7 @@ TEST(GgufTensorPayload, CanonicalLayoutsAndExactBytes) {
     EXPECT_NE(payload.raw_data(), bytes);
     EXPECT_EQ(Values(payload).size(), layout.block_size * 2);
   }
-  for (const auto *name : {"q4_0", "q4_k", "Q4", "Q4_K_M", "Q4_K_S", "Q2_K", "Q3_K", "IQ4_NL",
+  for (const auto *name : {"q4_0", "q4_k", "Q4", "Q4_K_M", "Q4_K_S", "Q8_K", "IQ1_M", "IQ4_XS",
                            "F32", "", " Q4_0", "Q8_0 "})
     EXPECT_THROW(GgufLayout(name), std::invalid_argument) << name;
 }
@@ -218,11 +230,7 @@ TEST(GgufTensorPayload, NonfiniteParametersAreRejectedEvenBehindZeroScales) {
   for (const auto &layout : GgufBlockLayouts()) {
     std::string bytes(layout.type_size * 2, '\0');
     for (const uint16_t bits : {uint16_t{0x7c00}, uint16_t{0xfc00}, uint16_t{0x7e01}}) {
-      for (const size_t offset :
-           layout.subtype == "Q6_K"
-               ? std::vector<size_t>{208}
-               : (layout.subtype == "Q4_K" || layout.subtype == "Q5_K" ? std::vector<size_t>{0, 2}
-                                                                       : std::vector<size_t>{0})) {
+      for (const size_t offset : HalfOffsets(layout.subtype)) {
         bytes.assign(layout.type_size * 2, '\0');
         PutHalf(bytes, layout.type_size + offset, bits);
         EXPECT_THROW(ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)},
@@ -239,14 +247,13 @@ TEST(GgufTensorPayload, NonfiniteParametersAreRejectedEvenBehindZeroScales) {
     }
 
     bytes.assign(layout.type_size * 2, '\0');
-    PutHalf(bytes, layout.subtype == "Q6_K" ? 208 : 0, 0x0001);
+    PutHalf(bytes, HalfOffsets(layout.subtype).front(), 0x0001);
     EXPECT_NO_THROW(ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)},
                                             layout.subtype));
     bytes.assign(layout.type_size * 2, '\xff');
     for (size_t block = 0; block < 2; ++block) {
-      PutHalf(bytes, block * layout.type_size + (layout.subtype == "Q6_K" ? 208 : 0), 0x7bff);
-      if (layout.subtype == "Q4_K" || layout.subtype == "Q5_K")
-        PutHalf(bytes, block * layout.type_size + 2, 0x7bff);
+      for (const auto field : HalfOffsets(layout.subtype))
+        PutHalf(bytes, block * layout.type_size + field, 0x7bff);
     }
     const auto largest = ImportGgufTensorPayload(
         bytes, {2, static_cast<int64_t>(layout.block_size)}, layout.subtype);
@@ -260,9 +267,8 @@ TEST(GptqModelGgufWeights, ImportsBorrowedMatrixAndExportsExactOwningBytes) {
     std::string bytes(layout.type_size * 4, '\xff');
     for (size_t block = 0; block < 4; ++block) {
       const size_t offset = block * layout.type_size;
-      PutHalf(bytes, offset + (layout.subtype == "Q6_K" ? 208 : 0), 0x3800);
-      if (layout.subtype == "Q4_K" || layout.subtype == "Q5_K")
-        PutHalf(bytes, offset + 2, 0x3c00);
+      for (const auto field : HalfOffsets(layout.subtype))
+        PutHalf(bytes, offset + field, 0x3800);
     }
     GptqModelGgufWeights checkpoint;
     checkpoint.shape = {2, static_cast<int64_t>(layout.block_size * 2)};

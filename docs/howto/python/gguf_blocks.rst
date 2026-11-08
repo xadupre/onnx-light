@@ -12,7 +12,8 @@ The usual ``dequantize_tensor`` and ``dequantize_tensor_proto`` APIs decode
 these values using the native GGML codec.
 
 All supported formats belong to the single ``QuantizationFormat`` catalogue:
-``Q4_0``, ``Q8_0``, ``Q4_K``, ``Q5_K`` and ``Q6_K`` appear in
+``Q4_0``, ``Q8_0``, ``Q2_K``, ``Q3_K``, ``Q4_K``, ``Q5_K``, ``Q6_K``,
+``IQ4_NL``, ``IQ1_S``, ``TQ1_0`` and ``TQ2_0`` appear in
 ``quantization_formats()`` and use their canonical uppercase names in
 ``quantization_format_name()`` and ``parse_quantization_format()``.
 ``gguf_block_layouts()`` provides their physical block sizes, not a separate
@@ -20,9 +21,11 @@ format catalogue. Native formats accept existing blocks; ``make_quantization_pla
 rejects them because floating-point-to-GGML quantization is not implemented.
 
 The former generic ``q2_k``/``q3_k``/``q4_k``/``q5_k``/``q6_k``,
-``iq4_nl``, ``iq1_s``, ``tq1_0`` and ``tq2_0`` profiles have been removed
-from the portable catalogue. Their old v1/v2 encoded values are rejected,
-not migrated or reinterpreted. Unsupported GGML subtypes are rejected rather
+``iq4_nl``, ``iq1_s``, ``tq1_0`` and ``tq2_0`` codecs are replaced by their
+native GGML implementations in that same catalogue, not removed as formats.
+Their old v1/v2 encoded values are rejected, not migrated or reinterpreted.
+Codecs without a GGUF counterpart retain their existing representations.
+Unsupported GGML subtypes are rejected rather
 than replaced with generic affine or codebook packing. Generic numerical
 experiments can still customize an ``int4`` or ``ternary`` layout, without
 claiming a GGML format name.
@@ -93,13 +96,21 @@ including the sign-only compatibility alias.
      - 32
      - 20 / 22 / 24 / 36
      - Deferred; rejected
-   * - Q2_K / Q3_K / Q8_K
+   * - Q2_K / Q3_K
      - 256
-     - 84 / 110 / 292
+     - 84 / 110
+     - Supported
+   * - Q8_K
+     - 256
+     - 292
      - Deferred; rejected
-   * - IQ1_S / IQ1_M
+   * - IQ1_S
      - 256
-     - 50 / 56
+     - 50
+     - Supported
+   * - IQ1_M
+     - 256
+     - 56
      - Deferred; rejected
    * - IQ2_XXS / IQ2_XS / IQ2_S
      - 256
@@ -109,14 +120,18 @@ including the sign-only compatibility alias.
      - 256
      - 98 / 110
      - Deferred; rejected
-   * - IQ4_NL / IQ4_XS
-     - 32 / 256
-     - 18 / 136
+   * - IQ4_NL
+     - 32
+     - 18
+     - Supported
+   * - IQ4_XS
+     - 256
+     - 136
      - Deferred; rejected
    * - TQ1_0 / TQ2_0
      - 256
      - 54 / 66
-     - Deferred; rejected
+     - Supported
    * - MXFP4 / NVFP4
      - 32 / 64
      - 17 / 36
@@ -145,7 +160,7 @@ Support boundaries
      - This stage
    * - Block codec
      - Exact validation, FLOAT32 reconstruction, field inspection and
-       byte-preserving import/export for the five supported subtypes.
+       byte-preserving import/export for all eleven supported subtypes.
    * - GPTQModel SafeTensors adaptation
      - Extracted UINT8 ``qweight`` matrices with explicit canonical subtype,
        logical shape and pinned metadata. No whole-checkpoint/shard discovery,
@@ -184,6 +199,28 @@ GPTQModel's direct lower-precision GPU reconstruction is not the oracle.
   from the nibble code, then multiply by ``d``. Negative scales are valid.
 * **Q8_0:** binary16 ``d`` at 0; thirty-two signed two's-complement
   int8 codes at 2. Reconstruction is ``d * code``.
+* **Q2_K:** sixteen scale/minimum bytes at 0, sixty-four code bytes at 16,
+  and binary16 ``d``/``dmin`` at 80/82. Each 16-value subgroup uses the
+  low/high scale nibble. Two-bit code planes reconstruct
+  ``(d * scale) * code - dmin * minimum`` with separate FLOAT32 rounding.
+* **Q3_K:** thirty-two high-mask bytes at 0, sixty-four low-code bytes at 32,
+  twelve packed six-bit scale bytes at 96, and binary16 ``d`` at 108.
+  Scales are centered at 32; the high mask selects whether to subtract four
+  from the low two-bit code.
+* **IQ4_NL:** binary16 ``d`` at 0 and sixteen paired nibble bytes at 2.
+  Low nibbles reconstruct the first sixteen values, high nibbles the next
+  sixteen, through GGML's fixed signed integer table.
+* **IQ1_S:** binary16 ``d`` at 0, thirty-two low grid-index bytes at 2,
+  and eight little-endian subgroup words at 34. Each word contains four
+  three-bit index extensions, a three-bit odd scale multiplier and the sign
+  of a dimensionless 0.125 offset. The exact 2048-by-eight ternary grid
+  comes from the pinned upstream reference.
+* **TQ1_0:** forty-eight scaled base-three bytes, four high bytes, and
+  binary16 ``d`` at 52. Byte multiplication wraps modulo 256 before
+  multiplying by three and extracting its high byte; 32/16/4-lane planes
+  preserve native ordering.
+* **TQ2_0:** sixty-four two-bit code bytes and binary16 ``d`` at 64.
+  Four 32-lane planes per 128 values reconstruct ``d * (code - 1)``.
 * **Q4_K/Q5_K:** binary16 ``d`` and ``dmin`` at 0 and 2; twelve packed
   scale/minimum bytes at 4. These reconstruct eight unsigned 6-bit scale
   and minimum pairs. The first four pairs use low six bits; high two bits
@@ -257,12 +294,16 @@ Native fixture provenance
 -------------------------
 
 ``unittests/python/backend/data/gguf_native_v1.json`` contains little-endian
-native ``quantize_row_*_ref`` block bytes and FLOAT32 reconstruction
-goldens for every supported subtype, plus effective scale/minimum fields.
-Each fixture contains two rows with two blocks per row. The deterministic
-input recipe and both source revisions are recorded in the file.
-Expected reconstruction was bitwise cross-checked between native
-``dequantize_row_*`` and the pinned gguf-py decoder; subgroup fields were
-unpacked through gguf-py, not this implementation. Zlib/base64 is solely
+native blocks and independent FLOAT32 reconstruction goldens for every
+supported subtype, plus effective scale/minimum fields.
+The original five fixtures use ``quantize_row_*_ref`` bytes, bitwise
+cross-checked between native ``dequantize_row_*`` and pinned gguf-py.
+The six additional fixtures use deterministic packed blocks decoded through
+the pinned gguf-py implementation, including extreme finite parameters.
+Each regular fixture contains two rows with two blocks per row. An additional
+IQ1_S fixture exercises all 2048 grid entries and subgroup scale/offset fields.
+Both source revisions and producer identities are recorded in the file.
+Subgroup fields were unpacked independently, not through this implementation.
+Zlib/base64 is solely
 lossless fixture storage, not a weight block format or runtime dependency.
 Tests require neither GPTQModel nor GGML to be installed.

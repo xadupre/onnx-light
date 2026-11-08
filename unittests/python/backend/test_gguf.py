@@ -123,6 +123,17 @@ class TestGguf(ExtTestCase):
                             malformed, fixture["shape"], fixture["subtype"]
                         )
 
+    def test_iq1s_entire_native_codebook_and_subgroup_fields(self):
+        fixture = self.fixtures()["iq1s_exhaustive"]
+        raw = self.raw(fixture, "data")
+        payload = gguf.import_gguf_tensor_payload(raw, fixture["shape"], "IQ1_S")
+        restored = quantization.dequantize_tensor_proto(payload)
+        numpy.testing.assert_array_equal(
+            numpy.frombuffer(restored.raw_data, dtype=numpy.uint32),
+            numpy.frombuffer(self.raw(fixture, "float32"), dtype=numpy.uint32),
+        )
+        self.assertEqual(gguf.export_gguf_tensor_payload(payload), raw)
+
     def test_staged_support_rejects_every_other_subtype(self):
         unsupported = [
             "Q1_0",
@@ -132,20 +143,14 @@ class TestGguf(ExtTestCase):
             "Q5_0",
             "Q5_1",
             "Q8_1",
-            "Q2_K",
-            "Q3_K",
             "Q8_K",
-            "IQ1_S",
             "IQ1_M",
             "IQ2_XXS",
             "IQ2_XS",
             "IQ2_S",
             "IQ3_XXS",
             "IQ3_S",
-            "IQ4_NL",
             "IQ4_XS",
-            "TQ1_0",
-            "TQ2_0",
             "MXFP4",
             "NVFP4",
             "F32",
@@ -190,9 +195,15 @@ class TestGguf(ExtTestCase):
                 consumer(payload)
             payload.struct_type.name = name
         for layout in gguf.gguf_block_layouts():
-            offsets = [208] if layout.subtype == "Q6_K" else [0]
-            if layout.subtype in ("Q4_K", "Q5_K"):
-                offsets.append(2)
+            offsets = {
+                "Q2_K": [80, 82],
+                "Q3_K": [108],
+                "Q4_K": [0, 2],
+                "Q5_K": [0, 2],
+                "Q6_K": [208],
+                "TQ1_0": [52],
+                "TQ2_0": [64],
+            }.get(layout.subtype, [0])
             for offset in offsets:
                 for bits in (0x7C00, 0xFC00, 0x7E00):
                     bad = bytearray(layout.type_size)

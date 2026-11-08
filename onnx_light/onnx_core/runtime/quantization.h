@@ -57,11 +57,17 @@ enum class QuantizationFormat {
   kQ4K,
   kQ5K,
   kQ6K,
+  kQ2K,
+  kQ3K,
+  kIq4Nl,
+  kIq1S,
+  kTq10,
+  kTq20,
 };
 
 /** Returns whether the format uses exact native GGML block storage. */
 constexpr bool IsGgufQuantizationFormat(QuantizationFormat format) {
-  return format >= QuantizationFormat::kQ40 && format <= QuantizationFormat::kQ6K;
+  return format >= QuantizationFormat::kQ40 && format <= QuantizationFormat::kTq20;
 }
 
 /**
@@ -211,7 +217,8 @@ struct QuantizationRun {
  * <tr><td>gptq, awq, matmulnbits</td><td>MakeQuantizationPlan(QuantizationFormat::kGptq, 16, 4), or
  * "awq"/"matmulnbits": unsigned 4-bit blocks, zero_point=8. Supply each group's scale and integer
  * zero_point; optionally supply a real offset. No Hessian calculation or activation calibration
- * runs.</td></tr> <tr><td>hqq, exl2,
+ * runs.</td></tr>
+ * <tr><td>hqq, exl2,
  * exl3</td><td>MakeQuantizationPlan(QuantizationFormat::kExl2, 16, 8), or "hqq"/"exl3": signed
  * 4-bit defaults. Split the two blocks into separate runs and set runs[0].layout.bits=3 and
  * runs[1].layout.bits=5, then supply each block's scale/zero point/offset.
@@ -393,8 +400,8 @@ struct QuantizationRun {
  * Output conversion follows reconstruction; FLOAT16/BFLOAT16 convert via FLOAT as in v1.
  * v2 uses float-valued reconstruction/permutation/transform workspaces, even for DOUBLE
  * outputs. Parameter serialization and encoding/calibration arithmetic remain unchanged.
- * GGML formats instead use the exact native block schema in gguf.h. Their former
- * generic v1/v2 profile names are rejected; no legacy decoder is retained.
+ * GGML formats use the exact native block schema in gguf.h. Their former generic
+ * v1/v2 profile names are rejected; codecs without a GGUF counterpart are unchanged.
  *
  * @see MakeQuantizationPlan, QuantizationRun, QuantizationBlockLayout,
  * QuantizationBlockParameters, QuantizationFormats, QuantizeTensor,
@@ -424,7 +431,7 @@ struct QuantizationPlan {
 
 /** Returns all supported formats, including native GGML block storage. */
 constexpr auto QuantizationFormats() {
-  std::array<QuantizationFormat, static_cast<size_t>(QuantizationFormat::kQ6K) + 1> formats{};
+  std::array<QuantizationFormat, static_cast<size_t>(QuantizationFormat::kTq20) + 1> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;

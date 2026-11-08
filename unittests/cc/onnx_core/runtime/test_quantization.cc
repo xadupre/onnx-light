@@ -144,9 +144,9 @@ TEST(CompressedTensorsAdapter, RejectsUnsignedAffineSourcesWithoutChangingCodes)
 namespace {
 
 constexpr auto kQuantizationFormats = QuantizationFormats();
-static_assert(kQuantizationFormats.size() == 41);
+static_assert(kQuantizationFormats.size() == 47);
 static_assert(kQuantizationFormats.front() == QuantizationFormat::kInt8);
-static_assert(kQuantizationFormats.back() == QuantizationFormat::kQ6K);
+static_assert(kQuantizationFormats.back() == QuantizationFormat::kTq20);
 static_assert(static_cast<int>(QuantizationFormat::kMxfp8) == 34);
 static_assert(static_cast<int>(QuantizationFormat::kOrtMatmulnbitsInt8) == 33);
 static_assert([] {
@@ -1662,7 +1662,7 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   proto.add_dims(2);
   for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
     proto.add_float_data(value);
-  EXPECT_EQ(QuantizationFormats().size(), 41u);
+  EXPECT_EQ(QuantizationFormats().size(), 47u);
   for (const auto &format : QuantizationFormats()) {
     if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
         IsGgufQuantizationFormat(format))
@@ -2307,7 +2307,9 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
       EXPECT_EQ(MakeMatMulNBitsPlan(format, 1, 1, 16).format, format);
   }
   EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(-1)), std::invalid_argument);
-  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(45)), std::invalid_argument);
+  EXPECT_THROW(
+      QuantizationFormatName(static_cast<QuantizationFormat>(QuantizationFormats().size())),
+      std::invalid_argument);
   EXPECT_THROW(ParseQuantizationFormat("INT4"), std::invalid_argument);
 }
 

@@ -14,12 +14,14 @@ names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
 
 The single ``QuantizationFormat`` catalogue also includes ``kQ40``, ``kQ80``,
-``kQ4K``, ``kQ5K`` and ``kQ6K``, named ``Q4_0``, ``Q8_0``, ``Q4_K``,
-``Q5_K`` and ``Q6_K`` by ``QuantizationFormatName``. They use
+``kQ2K``, ``kQ3K``, ``kQ4K``, ``kQ5K``, ``kQ6K``, ``kIq4Nl``, ``kIq1S``,
+``kTq10`` and ``kTq20``, with canonical uppercase names returned by
+``QuantizationFormatName``. They use
 :ref:`native GGUF blocks <l-gguf-blocks>` rather than portable packing.
 ``QuantizationFormats()`` lists all formats; ``IsGgufQuantizationFormat``
 identifies those requiring native block imports. ``MakeQuantizationPlan`` rejects
 these formats because floating-point-to-GGML quantization is not implemented.
+Codecs without a GGUF counterpart retain their existing representations.
 
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native

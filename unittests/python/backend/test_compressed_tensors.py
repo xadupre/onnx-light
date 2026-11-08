@@ -9,7 +9,7 @@ import sys
 import textwrap
 
 import ml_dtypes
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -26,8 +26,8 @@ class TestCompressedTensors(ExtTestCase):
     def test_native_integer_packing_validation(self):
         runtime = quantization.runtime
         for bits in range(1, 9):
-            codes = numpy.array(
-                [i % (1 << bits) - (1 << (bits - 1)) for i in range(77)], dtype=numpy.int8
+            codes = np.array(
+                [i % (1 << bits) - (1 << (bits - 1)) for i in range(77)], dtype=np.int8
             ).reshape(7, 11)
             for axis in (0, 1):
                 packed = runtime._pack_compressed_tensor_int32(codes.tobytes(), 7, 11, bits, axis)
@@ -48,7 +48,7 @@ class TestCompressedTensors(ExtTestCase):
         with self.assertRaisesRegex(ValueError, "range"):
             runtime._pack_compressed_tensor_int32(b"\x02", 1, 1, 2, 1)
         with self.assertRaisesRegex(ValueError, "overflow"):
-            runtime._validate_compressed_tensor_affine(b"\x7f", numpy.finfo(numpy.float32).max, 0)
+            runtime._validate_compressed_tensor_affine(b"\x7f", np.finfo(np.float32).max, 0)
 
     def integer_fixture(self):
         """Returns a source-derived cross-word asymmetric channel fixture."""
@@ -56,12 +56,10 @@ class TestCompressedTensors(ExtTestCase):
             "pack-quantized",
             dict(num_bits=3, type="int", symmetric=False, strategy="channel"),
             {
-                "weight_packed": numpy.array(
-                    [[-923089272, 1], [923089271, 0]], dtype=numpy.int32
-                ),
-                "weight_shape": numpy.array([2, 11], dtype=numpy.int64),
-                "weight_scale": numpy.array([[0.5], [2]], dtype=numpy.float32),
-                "weight_zero_point": numpy.array([[51]], dtype=numpy.int32),
+                "weight_packed": np.array([[-923089272, 1], [923089271, 0]], dtype=np.int32),
+                "weight_shape": np.array([2, 11], dtype=np.int64),
+                "weight_scale": np.array([[0.5], [2]], dtype=np.float32),
+                "weight_zero_point": np.array([[51]], dtype=np.int32),
             },
         )
 
@@ -70,7 +68,7 @@ class TestCompressedTensors(ExtTestCase):
         encoded = import_compressed_tensors_weights(checkpoint)
         wire = onnx.EncodedValueProto()
         wire.ParseFromString(encoded.SerializeToString())
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(quantization.dequantize_tensor_proto(wire)), expected
         )
         exported = export_compressed_tensors_weights(
@@ -92,12 +90,12 @@ class TestCompressedTensors(ExtTestCase):
     def test_integer_cross_word_asymmetric_channel(self):
         self.check_roundtrip(
             self.integer_fixture(),
-            numpy.array(
+            np.array(
                 [
                     [-1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, -1.5, -1, 2],
                     [2, 0, -2, -4, -6, -8, -10, -12, 2, 0, -12],
                 ],
-                dtype=numpy.float32,
+                dtype=np.float32,
             ),
         )
 
@@ -127,30 +125,30 @@ class TestCompressedTensors(ExtTestCase):
                         parameter_shape = (
                             (1,) if strategy == "tensor" else (2, 4 if strategy == "group" else 1)
                         )
-                        scales = numpy.arange(
-                            1, 1 + numpy.prod(parameter_shape), dtype=numpy.float32
+                        scales = np.arange(
+                            1, 1 + np.prod(parameter_shape), dtype=np.float32
                         ).reshape(parameter_shape)
                         tensors = {
-                            "weight_packed": numpy.full((2, bits), 0x55555555, dtype=numpy.int32),
-                            "weight_shape": numpy.array([2, 32], dtype=numpy.int64),
+                            "weight_packed": np.full((2, bits), 0x55555555, dtype=np.int32),
+                            "weight_shape": np.array([2, 32], dtype=np.int64),
                             "weight_scale": scales,
                         }
                         if not symmetric:
                             # Stored zero words of zero decode to the minimum signed code.
                             tensors["weight_zero_point"] = (
-                                numpy.array([-(1 << (bits - 1))], dtype=numpy.int8)
+                                np.array([-(1 << (bits - 1))], dtype=np.int8)
                                 if strategy == "tensor"
-                                else numpy.zeros(
-                                    ((2 * bits + 31) // 32, parameter_shape[1]), dtype=numpy.int32
+                                else np.zeros(
+                                    ((2 * bits + 31) // 32, parameter_shape[1]), dtype=np.int32
                                 )
                             )
-                        centered = numpy.tile(codes, (2, 1)).astype(numpy.float32)
+                        centered = np.tile(codes, (2, 1)).astype(np.float32)
                         if not symmetric:
                             centered += 1 << (bits - 1)
                         expanded = (
                             scales
                             if strategy == "tensor"
-                            else numpy.repeat(scales, 8 if strategy == "group" else 32, axis=1)
+                            else np.repeat(scales, 8 if strategy == "group" else 32, axis=1)
                         )
                         self.check_roundtrip(
                             CompressedTensorsWeights("pack-quantized", args, tensors),
@@ -161,16 +159,14 @@ class TestCompressedTensors(ExtTestCase):
         fixture = self.integer_fixture()
         fixture.quantization_args.update(strategy="group", group_size=1)
         fixture.tensors = {
-            "weight_shape": numpy.array([11, 2], dtype=numpy.int64),
-            "weight_packed": numpy.full((11, 1), 36, dtype=numpy.int32),
-            "weight_scale": numpy.ones((11, 2), dtype=numpy.float32),
-            "weight_zero_point": numpy.array(
-                [[-923089272, 923089271], [1, 0]], dtype=numpy.int32
-            ),
+            "weight_shape": np.array([11, 2], dtype=np.int64),
+            "weight_packed": np.full((11, 1), 36, dtype=np.int32),
+            "weight_scale": np.ones((11, 2), dtype=np.float32),
+            "weight_zero_point": np.array([[-923089272, 923089271], [1, 0]], dtype=np.int32),
         }
-        zeros = numpy.array(
+        zeros = np.array(
             [[-4, -3, -2, -1, 0, 1, 2, 3, -4, -3, 3], [3, 2, 1, 0, -1, -2, -3, -4, 3, 2, -4]],
-            dtype=numpy.float32,
+            dtype=np.float32,
         ).T
         encoded = self.check_roundtrip(fixture, -zeros)
         self.assertEqual(
@@ -181,23 +177,21 @@ class TestCompressedTensors(ExtTestCase):
     def mx_fixture(self, bits):
         """Returns source-derived MX weight codes with E8M0 scale one."""
         if bits == 4:
-            tensors = {"weight_packed": numpy.full((1, 16), 0xA2, dtype=numpy.uint8)}
-            expected = numpy.tile([1, -1], 16).reshape(1, 32)
+            tensors = {"weight_packed": np.full((1, 16), 0xA2, dtype=np.uint8)}
+            expected = np.tile([1, -1], 16).reshape(1, 32)
         elif bits == 6:
             tensors = {
-                "weight_packed": numpy.tile(
-                    numpy.array([0x48, 0xF8, 0x01], dtype=numpy.uint8), 8
-                ).reshape(1, 24)
-            }
-            expected = numpy.tile([1, -0.125, 7.5, 0], 8).reshape(1, 32)
-        else:
-            tensors = {
-                "weight": numpy.full((1, 32), 0x38, dtype=numpy.uint8).view(
-                    ml_dtypes.float8_e4m3fn
+                "weight_packed": np.tile(np.array([0x48, 0xF8, 0x01], dtype=np.uint8), 8).reshape(
+                    1, 24
                 )
             }
-            expected = numpy.ones((1, 32))
-        tensors["weight_scale"] = numpy.array([[127]], dtype=numpy.uint8)
+            expected = np.tile([1, -0.125, 7.5, 0], 8).reshape(1, 32)
+        else:
+            tensors = {
+                "weight": np.full((1, 32), 0x38, dtype=np.uint8).view(ml_dtypes.float8_e4m3fn)
+            }
+            expected = np.ones((1, 32))
+        tensors["weight_scale"] = np.array([[127]], dtype=np.uint8)
         return CompressedTensorsWeights(
             f"mxfp{bits}-{'quantized' if bits == 8 else 'pack-quantized'}",
             dict(
@@ -210,7 +204,7 @@ class TestCompressedTensors(ExtTestCase):
                 zp_dtype="torch.uint8",
             ),
             tensors,
-        ), expected.astype(numpy.float32)
+        ), expected.astype(np.float32)
 
     def test_mx_formats_and_e8m0(self):
         for bits in (4, 6, 8):
@@ -218,9 +212,7 @@ class TestCompressedTensors(ExtTestCase):
             for exponent in (0, 126, 127, 128):
                 with self.subTest(bits=bits, exponent=exponent):
                     fixture.tensors["weight_scale"][0, 0] = exponent
-                    self.check_roundtrip(
-                        fixture, expected * numpy.float32(2.0 ** (exponent - 127))
-                    )
+                    self.check_roundtrip(fixture, expected * np.float32(2.0 ** (exponent - 127)))
 
     def test_mx_formats_enforce_logical_max_bytes(self):
         fixture, _ = self.mx_fixture(4)
@@ -229,10 +221,10 @@ class TestCompressedTensors(ExtTestCase):
 
     def test_nvfp4_global_division_and_signed_zero(self):
         fixture = self.nv_fixture()
-        expected = numpy.array([[0, -0.0] + [0.5, -0.5] * 7], dtype=numpy.float32)
+        expected = np.array([[0, -0.0] + [0.5, -0.5] * 7], dtype=np.float32)
         encoded = self.check_roundtrip(fixture, expected)
         actual = onh.to_array(quantization.dequantize_tensor_proto(encoded))
-        numpy.testing.assert_array_equal(numpy.signbit(actual), numpy.signbit(expected))
+        np.testing.assert_array_equal(np.signbit(actual), np.signbit(expected))
 
     def nv_fixture(self):
         """Returns an NVFP4 fixture whose global scale is not one."""
@@ -242,9 +234,9 @@ class TestCompressedTensors(ExtTestCase):
                 num_bits=4, type="float", symmetric=True, strategy="tensor_group", group_size=16
             ),
             {
-                "weight_packed": numpy.array([[0x80] + [0xA2] * 7], dtype=numpy.uint8),
-                "weight_scale": numpy.array([[2]], dtype=ml_dtypes.float8_e4m3fn),
-                "weight_global_scale": numpy.array([4], dtype=numpy.float32),
+                "weight_packed": np.array([[0x80] + [0xA2] * 7], dtype=np.uint8),
+                "weight_scale": np.array([[2]], dtype=ml_dtypes.float8_e4m3fn),
+                "weight_global_scale": np.array([4], dtype=np.float32),
             },
         )
 
@@ -265,7 +257,7 @@ class TestCompressedTensors(ExtTestCase):
         zeros = helpers.unpack_from_int32(
             tensors["weight_zero_point"], 3, torch.Size([2, 1]), packed_dim=0
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             ((codes.float() - zeros) * tensors["weight_scale"]).numpy(),
             onh.to_array(quantization.dequantize_tensor_proto(encoded)),
         )
@@ -286,8 +278,8 @@ class TestCompressedTensors(ExtTestCase):
                 )
                 tensors = {}
                 for key, value in exported.tensors.items():
-                    if value.dtype == numpy.dtype(ml_dtypes.float8_e4m3fn):
-                        tensors[key] = torch.from_numpy(value.view(numpy.uint8)).view(
+                    if value.dtype == np.dtype(ml_dtypes.float8_e4m3fn):
+                        tensors[key] = torch.from_numpy(value.view(np.uint8)).view(
                             torch.float8_e4m3fn
                         )
                     else:
@@ -302,7 +294,7 @@ class TestCompressedTensors(ExtTestCase):
                     weights=upstream_quantization.QuantizationArgs(**args),
                 )
                 actual = classes[fixture.compression_format].decompress(tensors, scheme)["weight"]
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     actual.float().numpy(),
                     onh.to_array(quantization.dequantize_tensor_proto(encoded)),
                 )
@@ -310,12 +302,12 @@ class TestCompressedTensors(ExtTestCase):
     def test_export_native_affine_and_reject_lossy_parameters(self):
         args = dict(num_bits=4, type="int", symmetric=True, strategy="group", group_size=4)
         plan = quantization.make_quantization_plan(quantization.QuantizationFormat.INT4, 8, 4)
-        source = numpy.array([[-8, -1, 0, 7], [7, 0, -1, -8]], dtype=numpy.float32)
+        source = np.array([[-8, -1, 0, 7], [7, 0, -1, -8]], dtype=np.float32)
         encoded = quantization.quantize_tensor_proto(onh.from_array(source), plan)
         exported = export_compressed_tensors_weights(
             encoded, compression_format="pack-quantized", quantization_args=args
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(
                 quantization.dequantize_tensor_proto(import_compressed_tensors_weights(exported))
             ),
@@ -354,13 +346,13 @@ class TestCompressedTensors(ExtTestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 import_compressed_tensors_weights(fixture)
         for name, value in (
-            ("weight_shape", numpy.array([2, 10**12], dtype=numpy.int64)),
-            ("weight_shape", numpy.array([-1, 11], dtype=numpy.int64)),
-            ("weight_packed", numpy.zeros((2, 1), dtype=numpy.int32)),
-            ("weight_packed", numpy.zeros((2, 2), dtype=numpy.uint32)),
-            ("weight_scale", numpy.array([[0], [1]], dtype=numpy.float32)),
-            ("weight_scale", numpy.array([[numpy.nan], [1]], dtype=numpy.float32)),
-            ("weight_zero_point", numpy.array([[51], [0]], dtype=numpy.int32)),
+            ("weight_shape", np.array([2, 10**12], dtype=np.int64)),
+            ("weight_shape", np.array([-1, 11], dtype=np.int64)),
+            ("weight_packed", np.zeros((2, 1), dtype=np.int32)),
+            ("weight_packed", np.zeros((2, 2), dtype=np.uint32)),
+            ("weight_scale", np.array([[0], [1]], dtype=np.float32)),
+            ("weight_scale", np.array([[np.nan], [1]], dtype=np.float32)),
+            ("weight_zero_point", np.array([[51], [0]], dtype=np.int32)),
             ("weight_packed", "../../weights.bin"),
         ):
             fixture = self.integer_fixture()
@@ -400,7 +392,7 @@ class TestCompressedTensors(ExtTestCase):
             import_compressed_tensors_weights(fixture)
         legacy = quantization.make_quantization_plan(quantization.QuantizationFormat.MXFP6, 32)
         encoded = quantization.quantize_tensor_proto(
-            onh.from_array(numpy.ones((1, 32), dtype=numpy.float32)), legacy
+            onh.from_array(np.ones((1, 32), dtype=np.float32)), legacy
         )
         fixture, _ = self.mx_fixture(6)
         with self.assertRaises(ValueError):
@@ -486,7 +478,7 @@ class TestCompressedTensors(ExtTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_rejects_invalid_nvfp4_scales(self):
-        for local, global_scale in ((0, 4), (-1, 4), (numpy.nan, 4), (2, 0), (2, numpy.inf)):
+        for local, global_scale in ((0, 4), (-1, 4), (np.nan, 4), (2, 0), (2, np.inf)):
             fixture = self.nv_fixture()
             fixture.tensors["weight_scale"][0, 0] = local
             fixture.tensors["weight_global_scale"][0] = global_scale
@@ -502,20 +494,19 @@ class TestCompressedTensors(ExtTestCase):
             "pack-quantized",
             args,
             {
-                "weight_shape": numpy.array([1, 2], dtype=numpy.int64),
-                "weight_packed": numpy.array([[0xFF00]], dtype=numpy.int32),
-                "weight_scale": numpy.array([2e36], dtype=numpy.float32),
+                "weight_shape": np.array([1, 2], dtype=np.int64),
+                "weight_packed": np.array([[0xFF00]], dtype=np.int32),
+                "weight_scale": np.array([2e36], dtype=np.float32),
             },
         )
         self.check_roundtrip(
-            fixture,
-            numpy.array([[-128, 127]], dtype=numpy.float32) * fixture.tensors["weight_scale"],
+            fixture, np.array([[-128, 127]], dtype=np.float32) * fixture.tensors["weight_scale"]
         )
         # A zero code must not bypass scale validation or wrongly require that all
         # possible (unused) codes reconstruct finitely.
         fixture.tensors["weight_packed"][0, 0] = 0x8080
-        fixture.tensors["weight_scale"][0] = numpy.finfo(numpy.float32).max
-        encoded = self.check_roundtrip(fixture, numpy.zeros((1, 2), dtype=numpy.float32))
+        fixture.tensors["weight_scale"][0] = np.finfo(np.float32).max
+        encoded = self.check_roundtrip(fixture, np.zeros((1, 2), dtype=np.float32))
         fixture.tensors["weight_packed"][0, 0] = 0xFF00
         with self.assertRaisesRegex(ValueError, "overflow"):
             import_compressed_tensors_weights(fixture)

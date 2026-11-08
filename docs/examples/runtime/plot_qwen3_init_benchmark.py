@@ -31,7 +31,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import onnxruntime
-import pandas
+import pandas as pd
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx import inliner, load as ol_load, save as ol_save
 from onnx_light.onnx.backend import collect_test_cases_by_name
@@ -223,7 +223,7 @@ def main() -> None:
     print("-- benchmark onnxruntime initialization")
     ort_stats = measure("onnxruntime", init_onnxruntime)
 
-    results = pandas.DataFrame([onnxl_stats, ort_stats])
+    results = pd.DataFrame([onnxl_stats, ort_stats])
     for column in ("median", "avg", "min", "max", "std"):
         results[f"{column} (ms)"] = results[column] * 1e3
     print(results.to_string(index=False))

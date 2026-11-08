@@ -26,7 +26,7 @@ import time
 from types import ModuleType
 from typing import Any
 
-import numpy
+import numpy as np
 
 from . import kernel_inventory
 
@@ -245,50 +245,50 @@ def _make_model(case: dict[str, Any], size: int):
     return model
 
 
-def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.ndarray]:
+def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, np.ndarray]:
     """Builds deterministic NumPy inputs for the given benchmark ``case``."""
-    generator = numpy.random.default_rng(seed)
+    generator = np.random.default_rng(seed)
 
-    def make_array(shape: tuple[int, ...]) -> numpy.ndarray:
+    def make_array(shape: tuple[int, ...]) -> np.ndarray:
         if case["element_type"] == "BOOL":
-            return generator.integers(0, 2, size=shape).astype(numpy.bool_)
-        return generator.uniform(-10.0, 10.0, size=shape).astype(numpy.float32)
+            return generator.integers(0, 2, size=shape).astype(np.bool_)
+        return generator.uniform(-10.0, 10.0, size=shape).astype(np.float32)
 
     if case["arity"] == "unary":
         return {"X": make_array((size,))}
     if case["arity"] == "where":
-        condition = generator.integers(0, 2, size=(size,)).astype(numpy.bool_)
+        condition = generator.integers(0, 2, size=(size,)).astype(np.bool_)
         return {"C": condition, "X": make_array((size,)), "Z": make_array((size,))}
     if case["arity"] == "gemm":
         return {"A": make_array((size, size)), "B": make_array((size, size))}
     if case["arity"] == "global_pool":
         return {"X": make_array((1, size, 256))}
     if case["arity"] == "reduce_sum":
-        return {"X": make_array((size, 256)), "axes": numpy.array([1], dtype=numpy.int64)}
+        return {"X": make_array((size, 256)), "axes": np.array([1], dtype=np.int64)}
     if case["arity"] == "normalization":
         op_type = case["op_type"]
         if op_type in {"BatchNormalization", "InstanceNormalization", "GroupNormalization"}:
             inputs = {
                 "X": make_array((size, 8, 32)),
-                "scale": numpy.ones((8,), dtype=numpy.float32),
-                "bias": numpy.zeros((8,), dtype=numpy.float32),
+                "scale": np.ones((8,), dtype=np.float32),
+                "bias": np.zeros((8,), dtype=np.float32),
             }
             if op_type == "BatchNormalization":
-                inputs["mean"] = numpy.zeros((8,), dtype=numpy.float32)
-                inputs["variance"] = numpy.ones((8,), dtype=numpy.float32)
+                inputs["mean"] = np.zeros((8,), dtype=np.float32)
+                inputs["variance"] = np.ones((8,), dtype=np.float32)
             return inputs
         inputs = {"X": make_array((size, 256))}
         if op_type in {"LayerNormalization", "RMSNormalization"}:
-            inputs["scale"] = numpy.ones((256,), dtype=numpy.float32)
+            inputs["scale"] = np.ones((256,), dtype=np.float32)
         if op_type == "LayerNormalization":
-            inputs["bias"] = numpy.zeros((256,), dtype=numpy.float32)
+            inputs["bias"] = np.zeros((256,), dtype=np.float32)
         return inputs
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
 
 
 def _run_policy_case(
     model: Any,
-    inputs: dict[str, numpy.ndarray],
+    inputs: dict[str, np.ndarray],
     *,
     num_threads: int,
     repeat: int,
@@ -316,7 +316,7 @@ def _run_policy_case(
             runtime.KernelContext(runtime.default_opset(default_opsets[0]))
         )
         for name, array in inputs.items():
-            raw = numpy.ascontiguousarray(array).view(numpy.uint8).ravel()
+            raw = np.ascontiguousarray(array).view(np.uint8).ravel()
             tensor = runtime.tensor_from_numpy(
                 name,
                 int(oh.np_dtype_to_tensor_dtype(array.dtype)),

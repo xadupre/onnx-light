@@ -651,7 +651,7 @@ def _layout_umap(
         return _layout(boxes, horizontal)
 
     try:
-        import numpy
+        import numpy as np
         import umap
     except ImportError as exc:  # pragma: no cover - depends on optional package
         raise ImportError(
@@ -659,14 +659,14 @@ def _layout_umap(
             "install it with 'pip install umap-learn'."
         ) from exc
 
-    distances = numpy.asarray(_graph_distances(len(boxes), edges), dtype=numpy.float64)
+    distances = np.asarray(_graph_distances(len(boxes), edges), dtype=np.float64)
     reducer = umap.UMAP(
         n_components=2,
         metric="precomputed",
         n_neighbors=min(_UMAP_DEFAULT_NEIGHBORS, len(boxes) - 1),
         random_state=_UMAP_RANDOM_STATE,
     )
-    embedding = numpy.asarray(reducer.fit_transform(distances), dtype=numpy.float64)
+    embedding = np.asarray(reducer.fit_transform(distances), dtype=np.float64)
 
     # Orient the embedding so its most spread-out axis runs along the layer
     # (depth) direction requested by the caller.
@@ -677,7 +677,7 @@ def _layout_umap(
 
     lo = embedding.min(axis=0)
     hi = embedding.max(axis=0)
-    span = numpy.where(hi - lo > 0.0, hi - lo, 1.0)
+    span = np.where(hi - lo > 0.0, hi - lo, 1.0)
     normalized = (embedding - lo) / span
 
     # Size the canvas so the boxes have room to spread without heavy overlap.

@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 import onnx_light.onnx.checker as checker
@@ -54,7 +54,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
             graph, opset_imports=[oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)]
         )
         compact = add_quantization_parameters(
-            model, "common", storage, logical, scales=numpy.array([1, 2], dtype=numpy.float64)
+            model, "common", storage, logical, scales=np.array([1, 2], dtype=np.float64)
         )
         model.graph.output.append(oh.make_value_info("I", onnx.TypeProto(struct_type=compact)))
         return model, plan
@@ -67,11 +67,11 @@ class TestSharedQuantizationParameters(ExtTestCase):
             ("X", [-8, -4, 0, 7, -16, -4, 8, 14]),
             ("Z", [1, 2, 3, 4, 2, 4, 6, 8]),
         ):
-            values = numpy.array(value, dtype=numpy.float32)
+            values = np.array(value, dtype=np.float32)
             context.set(
                 name,
                 runtime.tensor_from_numpy(
-                    name, onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)
+                    name, onnx.TensorProto.FLOAT, [8], values.view(np.uint8)
                 ),
             )
         session = runtime.RuntimeSession(model)
@@ -84,7 +84,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
                 model, _ = self.make_model()
                 source_context, source_session = self.run_model(model)
                 encoded = source_context.get_value("I").encoded
-                expected = numpy.from_dlpack(source_context.get("Y")).copy()
+                expected = np.from_dlpack(source_context.get("Y")).copy()
                 value_type = encoded.logical_type
                 if nested:
                     value_type = onnx.TypeProto(
@@ -129,8 +129,8 @@ class TestSharedQuantizationParameters(ExtTestCase):
                 gc.collect()
                 for name in ("present", "forwarded"):
                     value = output[name]["payload"] if nested else output[name]
-                    numpy.testing.assert_array_equal(
-                        numpy.from_dlpack(runtime.dequantize_tensor(value)), expected
+                    np.testing.assert_array_equal(
+                        np.from_dlpack(runtime.dequantize_tensor(value)), expected
                     )
 
     def test_graph_roundtrip_identity_and_lifetime(self):
@@ -150,39 +150,37 @@ class TestSharedQuantizationParameters(ExtTestCase):
         snapshot.parameter_ref = "missing"
         self.assertEqual(shared.parameter_ref, "common")
         self.assertEqual(len(shared.raw_data), 5)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
-        )
+        np.testing.assert_array_equal(np.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8])
         wire = onnx.EncodedValueProto()
         wire.ParseFromString(shared.encoded.SerializeToString())
         self.assertEqual(wire.parameter_ref, "common")
         self.assertIn("parameter_ref", str(wire))
         with self.assertRaises(ValueError):
             runtime.dequantize_tensor(wire)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(runtime.dequantize_tensor(wire, restored)),
-            numpy.from_dlpack(context.get("Y")),
+        np.testing.assert_array_equal(
+            np.from_dlpack(runtime.dequantize_tensor(wire, restored)),
+            np.from_dlpack(context.get("Y")),
         )
         standalone = materialize_quantized_value(shared)
         self.assertFalse(standalone.has_parameter_ref())
         self.assertEqual(len(standalone.raw_data), 53)
         del context, session, model, restored
         gc.collect()
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(runtime.dequantize_tensor(shared)),
-            numpy.from_dlpack(runtime.dequantize_tensor(standalone)),
+        np.testing.assert_array_equal(
+            np.from_dlpack(runtime.dequantize_tensor(shared)),
+            np.from_dlpack(runtime.dequantize_tensor(standalone)),
         )
         exported = runtime.dequantize_tensor_proto(shared)
-        numpy.testing.assert_array_equal(onh.to_array(exported), [-8, -4, 0, 7, -16, -4, 8, 14])
+        np.testing.assert_array_equal(onh.to_array(exported), [-8, -4, 0, 7, -16, -4, 8, 14])
 
     def test_initializer_and_python_helper(self):
         model, _ = self.make_model()
-        values = numpy.array([-8, -4, 0, 7, -16, -4, 8, 14], dtype=numpy.float32)
+        values = np.array([-8, -4, 0, 7, -16, -4, 8, 14], dtype=np.float32)
         tensor = runtime.tensor_from_numpy(
-            "Q", onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)
+            "Q", onnx.TensorProto.FLOAT, [8], values.view(np.uint8)
         )
         shared = runtime.quantize_tensor_shared(tensor, model, "common")
         encoded = onnx.EncodedValueProto()
@@ -215,9 +213,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
         retained = context.get_value("I")
         del session, context, shared, model
         gc.collect()
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(runtime.dequantize_tensor(retained)), values
-        )
+        np.testing.assert_array_equal(np.from_dlpack(runtime.dequantize_tensor(retained)), values)
 
     def test_subgraph_and_function(self):
         model, _ = self.make_model()
@@ -234,13 +230,13 @@ class TestSharedQuantizationParameters(ExtTestCase):
         model.graph.node.append(
             oh.make_node("If", ["condition"], ["Y", "W"], then_branch=branch, else_branch=branch)
         )
-        model.graph.initializer.append(onh.from_array(numpy.array(True), "condition"))
+        model.graph.initializer.append(onh.from_array(np.array(True), "condition"))
         model.graph.output.clear()
         model.graph.output.extend(oh.make_value_info(name, logical) for name in ("Y", "W"))
         checker.check_model(model)
         context, _ = self.run_model(model)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
         model.graph.node.clear()
         function = oh.make_function(
@@ -256,9 +252,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
         model.graph.node.append(oh.make_node("Shared", ["X", "Z"], ["Y", "W"], domain="local"))
         checker.check_model(model)
         context, _ = self.run_model(model)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
-        )
+        np.testing.assert_array_equal(np.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8])
 
         model.functions[0].attribute.append("parameters")
         for node in model.functions[0].node:
@@ -281,9 +275,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
         model.graph.node[0].attribute.append(oh.make_attribute("parameters", "common"))
         checker.check_model(model)
         context, _ = self.run_model(model)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
-        )
+        np.testing.assert_array_equal(np.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8])
 
     def test_invalid_references_and_ambiguity(self):
         for failure in (
@@ -333,12 +325,11 @@ class TestSharedQuantizationParameters(ExtTestCase):
         model, _ = self.make_model()
         for shape, dtype in (([4, 2], onnx.TensorProto.FLOAT), ([8], onnx.TensorProto.DOUBLE)):
             with self.subTest(shape=shape, dtype=dtype):
-                values = numpy.ones(
-                    shape,
-                    dtype=numpy.float32 if dtype == onnx.TensorProto.FLOAT else numpy.float64,
+                values = np.ones(
+                    shape, dtype=np.float32 if dtype == onnx.TensorProto.FLOAT else np.float64
                 )
                 tensor = runtime.tensor_from_numpy(
-                    "X", dtype, shape, values.view(numpy.uint8).reshape(-1)
+                    "X", dtype, shape, values.view(np.uint8).reshape(-1)
                 )
                 with self.assertRaises(ValueError):
                     runtime.quantize_tensor_shared(tensor, model, "common")
@@ -359,7 +350,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
                     runtime.make_quantization_plan(QuantizationFormat.INT4, 8, 4)
                 ),
                 oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
-                scales=numpy.array([1, 2, 3], dtype=numpy.float64),
+                scales=np.array([1, 2, 3], dtype=np.float64),
             )
         self.assertEqual(model.SerializeToString(), original)
 
@@ -382,9 +373,9 @@ class TestSharedQuantizationParameters(ExtTestCase):
     def test_shared_ort_export(self):
         from onnx_light.onnx_core.quantization import add_quantization_parameters
 
-        values = numpy.arange(6, dtype=numpy.float32).reshape(3, 2)
+        values = np.arange(6, dtype=np.float32).reshape(3, 2)
         tensor = runtime.tensor_from_numpy(
-            "Q", onnx.TensorProto.FLOAT, [3, 2], values.view(numpy.uint8).reshape(-1)
+            "Q", onnx.TensorProto.FLOAT, [3, 2], values.view(np.uint8).reshape(-1)
         )
         for fmt in (
             QuantizationFormat.ORT_MATMULNBITS_INT2,
@@ -400,15 +391,15 @@ class TestSharedQuantizationParameters(ExtTestCase):
                     "common",
                     full.struct_type,
                     full.logical_type,
-                    scales=numpy.array(1, dtype=numpy.float64),
+                    scales=np.array(1, dtype=np.float64),
                 )
                 shared = runtime.quantize_tensor_shared(tensor, model, "common")
                 exported = runtime.export_matmul_nbits_inputs(shared)
                 expected = runtime.export_matmul_nbits_inputs(full)
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(exported.weights), onh.to_array(expected.weights)
                 )
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(exported.scales), onh.to_array(expected.scales)
                 )
                 self.assertEqual(
@@ -428,7 +419,7 @@ class TestSharedQuantizationParameters(ExtTestCase):
             "second",
             reference,
             oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
-            scales=numpy.array(2, dtype=numpy.float64),
+            scales=np.array(2, dtype=np.float64),
         )
         for node in (model.graph.node[0], model.graph.node[1]):
             for attribute in node.attribute:
@@ -438,12 +429,10 @@ class TestSharedQuantizationParameters(ExtTestCase):
                     attribute.s = "second"
         checker.check_model(model)
         context, _ = self.run_model(model)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("W")), [0, 2, 4, 4, 2, 4, 6, 8]
-        )
+        np.testing.assert_array_equal(np.from_dlpack(context.get("W")), [0, 2, 4, 4, 2, 4, 6, 8])
 
     def test_reused_context_replaces_and_resets_catalogue(self):
         model, _ = self.make_model()
@@ -451,43 +440,39 @@ class TestSharedQuantizationParameters(ExtTestCase):
         retained = context.get_value("I")
         replacement, _ = self.make_model()
         scales = replacement.graph.initializer[-1]
-        scales.CopyFrom(
-            onh.from_array(numpy.array([2, 4], dtype=numpy.float64), name=scales.name)
-        )
+        scales.CopyFrom(onh.from_array(np.array([2, 4], dtype=np.float64), name=scales.name))
         runtime.RuntimeSession(replacement).run(context)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, -4, 8, 16]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, -4, 8, 16]
         )
         replacement.graph.quantization_annotation.clear()
         with self.assertRaisesRegex(ValueError, "Missing quantization parameter_ref"):
             runtime.RuntimeSession(replacement).run(context)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(runtime.dequantize_tensor(retained)), [-8, -4, 0, 7, -16, -4, 8, 14]
+        np.testing.assert_array_equal(
+            np.from_dlpack(runtime.dequantize_tensor(retained)), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
 
     def test_session_snapshot_ignores_model_mutation_and_tensor_shadowing(self):
         model, _ = self.make_model()
         context, session = self.run_model(model)
         scales = model.graph.initializer[-1]
-        scales.CopyFrom(
-            onh.from_array(numpy.array([100, 100], dtype=numpy.float64), name=scales.name)
-        )
-        shadow = numpy.array([999, 999], dtype=numpy.float64)
+        scales.CopyFrom(onh.from_array(np.array([100, 100], dtype=np.float64), name=scales.name))
+        shadow = np.array([999, 999], dtype=np.float64)
         context.put_value(
             scales.name,
             runtime.tensor_from_numpy(
-                scales.name, onnx.TensorProto.DOUBLE, [2], shadow.view(numpy.uint8)
+                scales.name, onnx.TensorProto.DOUBLE, [2], shadow.view(np.uint8)
             ),
         )
         session.run(context)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
 
 
 class TestQuantizedValues(ExtTestCase):
     def test_context_category_replacement_and_identity(self):
-        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        values = np.array([-1, 0, 1], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size)
         destination = onnx.TypeProto()
         destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
@@ -498,8 +483,8 @@ class TestQuantizedValues(ExtTestCase):
         copy_encoded = oh.make_node("Identity", ["Q"], ["encoded_copy"])
         copy_tensor = oh.make_node("Identity", ["Y"], ["tensor_copy"])
         context = runtime.RuntimeContext()
-        context.put_value("Q", numpy.array([999], dtype=numpy.float32))
-        context.put_value("encoded_copy", numpy.array([999], dtype=numpy.float32))
+        context.put_value("Q", np.array([999], dtype=np.float32))
+        context.put_value("encoded_copy", np.array([999], dtype=np.float32))
         for multiplier in (1, 2):
             with self.subTest(multiplier=multiplier):
                 context.put_value("X", values * multiplier)
@@ -518,12 +503,12 @@ class TestQuantizedValues(ExtTestCase):
                     context.put_value("Y", encoded)
                     context.put_value("tensor_copy", encoded)
                 runtime.run_node(decode, context)
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(context.get_value("Y")), values * multiplier
+                np.testing.assert_array_equal(
+                    np.from_dlpack(context.get_value("Y")), values * multiplier
                 )
                 runtime.run_node(copy_tensor, context)
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(context.get_value("tensor_copy")), values * multiplier
+                np.testing.assert_array_equal(
+                    np.from_dlpack(context.get_value("tensor_copy")), values * multiplier
                 )
         self.assertTrue(context.remove("Q"))
         with self.assertRaises(IndexError):
@@ -533,7 +518,7 @@ class TestQuantizedValues(ExtTestCase):
             context.get_value("encoded_copy")
 
     def test_graph_quantize_dequantize(self):
-        values = numpy.array([-8, -4, 0, 7, -16, 0, 8, 14], dtype=numpy.float32)
+        values = np.array([-8, -4, 0, 7, -16, 0, 8, 14], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size, 4)
         destination = onnx.TypeProto()
         destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
@@ -559,31 +544,31 @@ class TestQuantizedValues(ExtTestCase):
         context = runtime.RuntimeContext()
         context.set(
             "X",
-            runtime.tensor_from_numpy("X", onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)),
+            runtime.tensor_from_numpy("X", onnx.TensorProto.FLOAT, [8], values.view(np.uint8)),
         )
         runtime.RuntimeSession(model).run(context)
-        actual = numpy.from_dlpack(context.get("Y"))
-        self.assertEqual(actual.dtype, numpy.float64)
-        numpy.testing.assert_array_equal(actual, values)
+        actual = np.from_dlpack(context.get("Y"))
+        self.assertEqual(actual.dtype, np.float64)
+        np.testing.assert_array_equal(actual, values)
         model.graph.node[0].input.append("scales")
         model.graph.input.append(
             oh.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
         )
-        scales = numpy.array([2, 4], dtype=numpy.float64)
+        scales = np.array([2, 4], dtype=np.float64)
         context.set(
             "scales",
             runtime.tensor_from_numpy(
-                "scales", onnx.TensorProto.DOUBLE, [2], scales.view(numpy.uint8)
+                "scales", onnx.TensorProto.DOUBLE, [2], scales.view(np.uint8)
             ),
         )
         runtime.RuntimeSession(model).run(context)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, 0, 8, 16]
+        np.testing.assert_array_equal(
+            np.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, 0, 8, 16]
         )
 
     def make_encoded_initializer_model(self):
         """Returns a model with a referenced encoded initializer and its source values."""
-        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        values = np.array([-1, 0, 1], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 3)
         encoded = runtime.quantize_tensor_proto(onh.from_array(values, name="Q"), plan)
         declaration = onnx.StructTypeProto()
@@ -609,7 +594,7 @@ class TestQuantizedValues(ExtTestCase):
         checker.check_model(model)
         context = runtime.RuntimeContext()
         runtime.RuntimeSession(model).run(context)
-        numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y")), values)
+        np.testing.assert_array_equal(np.from_dlpack(context.get("Y")), values)
 
     def test_checker_encoded_initializer_failures(self):
         for failure in (
@@ -732,19 +717,19 @@ class TestQuantizedValues(ExtTestCase):
         second.blocks = [block]
         second.layout.bits = 5
         plan.runs = [first, second]
-        source = numpy.array([[-4, 0, 3.5], [-32, 0, 30]], dtype=numpy.float32)
-        numpy.testing.assert_array_equal(self.roundtrip(source, plan), source)
+        source = np.array([[-4, 0, 3.5], [-32, 0, 30]], dtype=np.float32)
+        np.testing.assert_array_equal(self.roundtrip(source, plan), source)
         with self.assertRaisesRegex(ValueError, "index"):
             plan.run(2)
 
     def test_all_catalogue_profiles(self):
-        source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32).reshape(4, 2)
+        source = np.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=np.float32).reshape(4, 2)
         for name in runtime.quantization_formats():
             with self.subTest(format=name):
                 if name in {QuantizationFormat.MXFP8, QuantizationFormat.MXFP6_E2M3}:
-                    grouped = numpy.tile(source.ravel(), 4).reshape(1, 32)
+                    grouped = np.tile(source.ravel(), 4).reshape(1, 32)
                     plan = runtime.make_quantization_plan(name, grouped.size)
-                    numpy.testing.assert_array_equal(self.roundtrip(grouped, plan), grouped)
+                    np.testing.assert_array_equal(self.roundtrip(grouped, plan), grouped)
                     continue
                 plan = (
                     runtime.make_matmul_nbits_plan(name, 4, 2, 16)
@@ -789,18 +774,18 @@ class TestQuantizedValues(ExtTestCase):
                     if name == QuantizationFormat.BINARY
                     else 0.14 if name == QuantizationFormat.IQ4_NL else 1e-6
                 )
-                numpy.testing.assert_allclose(
+                np.testing.assert_allclose(
                     self.roundtrip(source, plan), source, rtol=0, atol=tolerance
                 )
 
     def test_mxfp6_e2m3_pinned_fixture_and_public_api(self):
         from onnx_light.onnx_core import quantization
 
-        source = numpy.tile([1, -0.125, 7.5, 0], 8).astype(numpy.float32).reshape(1, 32)
+        source = np.tile([1, -0.125, 7.5, 0], 8).astype(np.float32).reshape(1, 32)
         plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, source.size)
         encoded = quantization.quantize_tensor_proto(onh.from_array(source), plan)
         tensor = runtime.tensor_from_numpy(
-            "", onnx.TensorProto.FLOAT, list(source.shape), source.view(numpy.uint8).reshape(-1)
+            "", onnx.TensorProto.FLOAT, list(source.shape), source.view(np.uint8).reshape(-1)
         )
         direct = quantization.quantize_mxfp6_e2m3_weights(tensor)
         self.assertEqual(encoded.raw_data, direct.raw_data)
@@ -811,15 +796,15 @@ class TestQuantizedValues(ExtTestCase):
         restored.ParseFromString(encoded.SerializeToString())
         parameters = quantization.export_mxfp6_e2m3_weights(restored)
         self.assertIsInstance(parameters, quantization.Mxfp6E2m3Weights)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(parameters.weight_packed),
-            numpy.tile([0x48, 0xF8, 0x01], 8).reshape(1, 24),
+        np.testing.assert_array_equal(
+            np.from_dlpack(parameters.weight_packed),
+            np.tile([0x48, 0xF8, 0x01], 8).reshape(1, 24),
         )
-        numpy.testing.assert_array_equal(numpy.from_dlpack(parameters.weight_scale), [[127]])
+        np.testing.assert_array_equal(np.from_dlpack(parameters.weight_scale), [[127]])
         self.assertEqual(
             quantization.import_mxfp6_e2m3_weights(parameters).raw_data, encoded.raw_data
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(quantization.dequantize_tensor_proto(restored)), source
         )
         self.assertEqual(
@@ -829,41 +814,41 @@ class TestQuantizedValues(ExtTestCase):
             legacy = quantization.make_quantization_plan(
                 quantization.parse_quantization_format(name), 4
             )
-            legacy_source = numpy.array([0.125, -0.125, 1.125, 7.5], dtype=numpy.float32)
+            legacy_source = np.array([0.125, -0.125, 1.125, 7.5], dtype=np.float32)
             old = quantization.quantize_tensor_proto(onh.from_array(legacy_source), legacy)
             self.assertEqual(old.raw_data[-3:], bytes([0x82, 0xC8, 0x5C]))
-            numpy.testing.assert_array_equal(
+            np.testing.assert_array_equal(
                 onh.to_array(quantization.dequantize_tensor_proto(old)), [0.125, -0.125, 1, 7]
             )
 
     def test_mxfp6_e2m3_scales_zeros_ties_and_rejections(self):
         from onnx_light.onnx_core import quantization
 
-        maxima = numpy.array([3.75, 3.875, 7.5, 7.75, 0], dtype=numpy.float32)
-        source = numpy.repeat(maxima, 32).reshape(5, 32)
+        maxima = np.array([3.75, 3.875, 7.5, 7.75, 0], dtype=np.float32)
+        source = np.repeat(maxima, 32).reshape(5, 32)
         plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, source.size)
         encoded = quantization.quantize_tensor_proto(onh.from_array(source), plan)
         parameters = quantization.export_mxfp6_e2m3_weights(encoded)
-        scales = numpy.from_dlpack(parameters.weight_scale)
-        numpy.testing.assert_array_equal(scales.ravel(), [126, 127, 127, 128, 0])
-        numpy.testing.assert_array_equal(
+        scales = np.from_dlpack(parameters.weight_scale)
+        np.testing.assert_array_equal(scales.ravel(), [126, 127, 127, 128, 0])
+        np.testing.assert_array_equal(
             onh.to_array(quantization.dequantize_tensor_proto(encoded)),
-            numpy.repeat([3.75, 4, 7.5, 8, 0], 32).reshape(5, 32),
+            np.repeat([3.75, 4, 7.5, 8, 0], 32).reshape(5, 32),
         )
-        values = numpy.zeros((1, 32), dtype=numpy.float32)
+        values = np.zeros((1, 32), dtype=np.float32)
         values[0, :5] = [0.0625, 0.1875, 1.9375, 3.875, 7.5]
         plan = quantization.make_quantization_plan(QuantizationFormat.MXFP6_E2M3, 32)
         ties = quantization.quantize_tensor_proto(onh.from_array(values), plan)
         self.assertEqual(ties.raw_data[:3], bytes([0x80, 0x00, 0x61]))
-        for nonfinite in (numpy.nan, numpy.inf, -numpy.inf):
+        for nonfinite in (np.nan, np.inf, -np.inf):
             values[0, 0] = nonfinite
             with self.assertRaises(ValueError):
                 quantization.quantize_tensor_proto(onh.from_array(values), plan)
         for shape in ((32,), (1, 31), (0, 32)):
             with self.assertRaises(ValueError):
-                values = numpy.zeros(shape, dtype=numpy.float32)
+                values = np.zeros(shape, dtype=np.float32)
                 tensor = runtime.tensor_from_numpy(
-                    "", onnx.TensorProto.FLOAT, list(shape), values.view(numpy.uint8).reshape(-1)
+                    "", onnx.TensorProto.FLOAT, list(shape), values.view(np.uint8).reshape(-1)
                 )
                 quantization.quantize_mxfp6_e2m3_weights(tensor)
         with self.assertRaises(ValueError):
@@ -884,10 +869,10 @@ class TestQuantizedValues(ExtTestCase):
     def test_mxfp8_public_profile_and_independent_serialization(self):
         from onnx_light.onnx_core import quantization
 
-        values = numpy.repeat(numpy.array([1, 2, 4, 8], dtype=numpy.float32), 32).reshape(2, 64)
+        values = np.repeat(np.array([1, 2, 4, 8], dtype=np.float32), 32).reshape(2, 64)
         plan = quantization.make_quantization_plan(quantization.QuantizationFormat.MXFP8, 128)
         source = runtime.tensor_from_numpy(
-            "weight", onnx.TensorProto.FLOAT, [2, 64], values.view(numpy.uint8).reshape(-1)
+            "weight", onnx.TensorProto.FLOAT, [2, 64], values.view(np.uint8).reshape(-1)
         )
         direct = quantization.quantize_mxfp8_weights(source)
         encoded = quantization.quantize_tensor_proto(onh.from_array(values, name="weight"), plan)
@@ -900,11 +885,11 @@ class TestQuantizedValues(ExtTestCase):
         gc.collect()
         restored = onnx.EncodedValueProto()
         restored.ParseFromString(serialized)
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(quantization.dequantize_tensor_proto(restored)), values
         )
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(quantization.dequantize_tensor(restored)), values
+        np.testing.assert_array_equal(
+            np.from_dlpack(quantization.dequantize_tensor(restored)), values
         )
         parameters = quantization.export_mxfp8_weights(restored)
         self.assertIsInstance(parameters, quantization.Mxfp8Weights)
@@ -919,22 +904,22 @@ class TestQuantizedValues(ExtTestCase):
     def test_mxfp8_pinned_ties_and_invalid_inputs(self):
         # Source-derived FLOAT32 fixture from compressed-tensors revision
         # eb058d630f7344099459b6795b1e3eeffdda4b40, using generated MX scales.
-        values = numpy.array(
+        values = np.array(
             [432, -432, 1.0625, 1.1875, 2**-10, 3 * 2**-10, -0.0, -(2**-10)] + [0] * 24,
-            dtype=numpy.float32,
+            dtype=np.float32,
         ).reshape(1, 32)
         plan = runtime.make_quantization_plan(QuantizationFormat.MXFP8, 32)
         encoded = runtime.quantize_tensor_proto(onh.from_array(values), plan)
         self.assertEqual(
             encoded.raw_data, bytes([0x7E, 0xFE, 0x38, 0x3A, 0, 2, 0x80, 0x80] + [0] * 24 + [127])
         )
-        expected = numpy.array(
-            [448, -448, 1, 1.25, 0, 2**-8, -0.0, -0.0] + [0] * 24, dtype=numpy.float32
+        expected = np.array(
+            [448, -448, 1, 1.25, 0, 2**-8, -0.0, -0.0] + [0] * 24, dtype=np.float32
         ).reshape(1, 32)
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(runtime.dequantize_tensor_proto(encoded)), expected
         )
-        for invalid in (numpy.nan, numpy.inf, -numpy.inf):
+        for invalid in (np.nan, np.inf, -np.inf):
             with self.subTest(invalid=invalid):
                 malformed = values.copy()
                 malformed[0, 0] = invalid
@@ -943,7 +928,7 @@ class TestQuantizedValues(ExtTestCase):
         for shape in ((32,), (2, 16), (0, 32)):
             with self.subTest(shape=shape), self.assertRaises(ValueError):
                 runtime.quantize_tensor_proto(
-                    onh.from_array(numpy.zeros(shape, dtype=numpy.float32)), plan
+                    onh.from_array(np.zeros(shape, dtype=np.float32)), plan
                 )
         for raw in (
             encoded.raw_data[:-1],
@@ -961,21 +946,21 @@ class TestQuantizedValues(ExtTestCase):
                     runtime.dequantize_tensor_proto(malformed)
 
     def test_proto_dtypes_scalar_and_empty(self):
-        for dtype in (numpy.float16, numpy.float32, numpy.float64):
+        for dtype in (np.float16, np.float32, np.float64):
             for shape in ((), (0,), (2, 0), (2, 3)):
                 with self.subTest(dtype=dtype, shape=shape):
-                    source = numpy.full(shape, 2, dtype=dtype)
+                    source = np.full(shape, 2, dtype=dtype)
                     plan = runtime.make_quantization_plan(QuantizationFormat.INT8, source.size)
                     result = self.roundtrip(source, plan)
                     self.assertEqual(result.dtype, source.dtype)
                     self.assertEqual(result.shape, source.shape)
-                    numpy.testing.assert_array_equal(result, source)
+                    np.testing.assert_array_equal(result, source)
 
     def test_encoding_rejects_affine_reconstruction_overflow(self):
-        for dtype, exponent in ((numpy.float16, 15), (numpy.float32, 127), (numpy.float64, 1023)):
+        for dtype, exponent in ((np.float16, 15), (np.float32, 127), (np.float64, 1023)):
             scale = float(2**exponent)
             formats = [QuantizationFormat.INT4]
-            if dtype != numpy.float64:
+            if dtype != np.float64:
                 formats += [
                     QuantizationFormat.ORT_MATMULNBITS_INT2,
                     QuantizationFormat.ORT_MATMULNBITS_INT4,
@@ -983,7 +968,7 @@ class TestQuantizedValues(ExtTestCase):
                 ]
             for format_value in formats:
                 with self.subTest(dtype=dtype, format=format_value):
-                    values = numpy.array([[1.5 * scale]], dtype=dtype)
+                    values = np.array([[1.5 * scale]], dtype=dtype)
                     source = onh.from_array(values)
                     original = source.SerializeToString()
                     plan = (
@@ -1005,10 +990,10 @@ class TestQuantizedValues(ExtTestCase):
                     plan.set_run(0, run)
                     encoded = runtime.quantize_tensor_proto(source, plan)
                     decoded = runtime.dequantize_tensor_proto(encoded)
-                    numpy.testing.assert_array_equal(onh.to_array(decoded), values)
+                    np.testing.assert_array_equal(onh.to_array(decoded), values)
 
     def test_proto_metadata_presence(self):
-        values = numpy.array([[1], [2]], dtype=numpy.float32)
+        values = np.array([[1], [2]], dtype=np.float32)
         plans = [
             runtime.make_quantization_plan(QuantizationFormat.INT4, values.size),
             runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16),
@@ -1035,10 +1020,10 @@ class TestQuantizedValues(ExtTestCase):
                         self.assertEqual(decoded.has_doc_string(), doc is not None)
                         self.assertEqual(decoded.name, name if name is not None else "")
                         self.assertEqual(decoded.doc_string, doc if doc is not None else "")
-                        numpy.testing.assert_array_equal(onh.to_array(decoded), values)
+                        np.testing.assert_array_equal(onh.to_array(decoded), values)
 
     def test_explicit_none_model(self):
-        values = numpy.array([[1], [2]], dtype=numpy.float32)
+        values = np.array([[1], [2]], dtype=np.float32)
         plans = [
             runtime.make_quantization_plan(QuantizationFormat.INT4, values.size),
             runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16),
@@ -1046,11 +1031,11 @@ class TestQuantizedValues(ExtTestCase):
         for plan in plans:
             with self.subTest(format=plan.format):
                 encoded = runtime.quantize_tensor_proto(onh.from_array(values), plan)
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(runtime.dequantize_tensor_proto(encoded, model=None)), values
                 )
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(runtime.dequantize_tensor(encoded, model=None)), values
+                np.testing.assert_array_equal(
+                    np.from_dlpack(runtime.dequantize_tensor(encoded, model=None)), values
                 )
                 if plan.format == QuantizationFormat.ORT_MATMULNBITS_INT4:
                     inputs = runtime.export_matmul_nbits_inputs(encoded, model=None)
@@ -1087,14 +1072,12 @@ class TestQuantizedValues(ExtTestCase):
             encoded = runtime.quantize_tensor_proto(source, plan)
             self.assertEqual(source.SerializeToString(), original)
         decoded = runtime.dequantize_tensor_proto(encoded)
-        numpy.testing.assert_array_equal(
-            onh.to_array(decoded), numpy.empty((0,), dtype=numpy.float32)
-        )
+        np.testing.assert_array_equal(onh.to_array(decoded), np.empty((0,), dtype=np.float32))
 
     def test_tensor_runtime_value_bridge(self):
-        source = numpy.array([1, 2, 3], dtype=numpy.float32)
+        source = np.array([1, 2, 3], dtype=np.float32)
         tensor = runtime.tensor_from_numpy(
-            "x", onnx.TensorProto.FLOAT, list(source.shape), source.view(numpy.uint8)
+            "x", onnx.TensorProto.FLOAT, list(source.shape), source.view(np.uint8)
         )
         plan = runtime.make_quantization_plan(QuantizationFormat.INT8, source.size)
         encoded = runtime.quantize_tensor(tensor, plan)
@@ -1102,29 +1085,29 @@ class TestQuantizedValues(ExtTestCase):
         decoded = runtime.dequantize_tensor(encoded)
         del tensor, encoded
         gc.collect()
-        numpy.testing.assert_array_equal(numpy.from_dlpack(decoded), source)
+        np.testing.assert_array_equal(np.from_dlpack(decoded), source)
 
     def test_rotation_permutation_sparse_and_serialization(self):
-        source = numpy.array([[1, 1000], [2, 3]], dtype=numpy.float32)
+        source = np.array([[1, 1000], [2, 3]], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.QUAROT, source.size)
         plan.transform_size = 2
         plan.forward = [1, 1, 1, -1]
         plan.inverse = [0.5, 0.5, 0.5, -0.5]
         plan.permutation = [2, 3, 0, 1]
         plan.outliers = [1]
-        numpy.testing.assert_array_equal(self.roundtrip(source, plan), source)
+        np.testing.assert_array_equal(self.roundtrip(source, plan), source)
 
     def test_exact_affine_bytes(self):
-        source = numpy.array([-9, -7.5, -0.5, 0.5, 1.5, 6.5, 8], dtype=numpy.float32)
+        source = np.array([-9, -7.5, -0.5, 0.5, 1.5, 6.5, 8], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, source.size)
         encoded = runtime.quantize_tensor_proto(onh.from_array(source), plan)
         self.assertEqual(bytes(encoded.raw_data)[-4:], b"\x88\x00\x62\x07")
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(runtime.dequantize_tensor_proto(encoded)), [-8, -8, 0, 0, 2, 6, 7]
         )
 
     def test_missing_parameters_are_not_invented(self):
-        source = onh.from_array(numpy.ones(8, dtype=numpy.float32))
+        source = onh.from_array(np.ones(8, dtype=np.float32))
         for format_name, message in [
             (QuantizationFormat.AQLM, "codebook"),
             (QuantizationFormat.STQ1_0, "codebook"),
@@ -1139,21 +1122,21 @@ class TestQuantizedValues(ExtTestCase):
 
     def test_invalid_inputs_and_payload(self):
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 1)
-        for value in (numpy.nan, numpy.inf, -numpy.inf):
-            source = onh.from_array(numpy.array([value], dtype=numpy.float32))
+        for value in (np.nan, np.inf, -np.inf):
+            source = onh.from_array(np.array([value], dtype=np.float32))
             with self.assertRaisesRegex(ValueError, "finite"):
                 runtime.quantize_tensor_proto(source, plan)
-        source = onh.from_array(numpy.array([1], dtype=numpy.int32))
+        source = onh.from_array(np.array([1], dtype=np.int32))
         with self.assertRaisesRegex(ValueError, "FLOAT"):
             runtime.quantize_tensor_proto(source, plan)
-        source = onh.from_array(numpy.array([1], dtype=numpy.float32))
+        source = onh.from_array(np.array([1], dtype=np.float32))
         encoded = runtime.quantize_tensor_proto(source, plan)
         encoded.raw_data = bytes(encoded.raw_data)[:-1]
         with self.assertRaises(ValueError):
             runtime.dequantize_tensor_proto(encoded)
 
     def test_mutated_profile_names(self):
-        source = onh.from_array(numpy.array([1, 2], dtype=numpy.float32))
+        source = onh.from_array(np.array([1, 2], dtype=np.float32))
         valid = runtime.quantize_tensor_proto(
             source, runtime.make_quantization_plan(QuantizationFormat.INT4, 2)
         )
@@ -1190,8 +1173,8 @@ class TestQuantizedValues(ExtTestCase):
         runs[0].blocks = blocks
         self.assertEqual(plan.run(0).layout.bits, 4)
         plan.runs = runs
-        source = numpy.array([-8, 0, 7.5, 1, -32, 0, 30, 2, 0, 1], dtype=numpy.float32)
-        numpy.testing.assert_array_equal(self.roundtrip(source, plan), source)
+        source = np.array([-8, 0, 7.5, 1, -32, 0, 30, 2, 0, 1], dtype=np.float32)
+        np.testing.assert_array_equal(self.roundtrip(source, plan), source)
         self.assertEqual(runtime.make_quantization_plan(QuantizationFormat.INT4, 0).runs, [])
 
         runs[1].blocks = []
@@ -1200,7 +1183,7 @@ class TestQuantizedValues(ExtTestCase):
             runtime.quantize_tensor_proto(onh.from_array(source), plan)
 
     def test_loaded_external_tensor(self):
-        values = numpy.array([1, 2], dtype=numpy.float32)
+        values = np.array([1, 2], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size)
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "weights.bin").write_bytes(values.astype("<f4").tobytes())
@@ -1219,10 +1202,10 @@ class TestQuantizedValues(ExtTestCase):
             encoded = runtime.quantize_tensor_proto(source, plan)
             self.assertEqual(source.SerializeToString(), original)
         restored = onh.to_array(runtime.dequantize_tensor_proto(encoded))
-        numpy.testing.assert_array_equal(restored, values)
+        np.testing.assert_array_equal(restored, values)
 
     def test_catalogue_reference(self):
-        source = numpy.array([1, 2, 3], dtype=numpy.float32)
+        source = np.array([1, 2, 3], dtype=np.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT8, source.size)
         encoded = runtime.quantize_tensor_proto(onh.from_array(source), plan)
         model = onnx.ModelProto()
@@ -1231,7 +1214,7 @@ class TestQuantizedValues(ExtTestCase):
         declaration.type_id = 91
         encoded.struct_type = onnx.StructTypeProto(type_ref=91)
         result = runtime.dequantize_tensor_proto(encoded, model=model)
-        numpy.testing.assert_array_equal(onh.to_array(result), source)
+        np.testing.assert_array_equal(onh.to_array(result), source)
         with self.assertRaises(ValueError):
             runtime.dequantize_tensor_proto(encoded)
 
@@ -1259,7 +1242,7 @@ class TestQuantizedValues(ExtTestCase):
             run.block(0)
 
     def test_codebook_levels_against_numpy_reference(self):
-        source = numpy.linspace(-2, 2, 129, dtype=numpy.float64)
+        source = np.linspace(-2, 2, 129, dtype=np.float64)
         for name in (
             QuantizationFormat.NF4,
             QuantizationFormat.IQ4_NL,
@@ -1275,25 +1258,25 @@ class TestQuantizedValues(ExtTestCase):
                 block.scale = 0.02 if name == QuantizationFormat.IQ4_NL else 2
                 run.set_block(0, block)
                 plan.set_run(0, run)
-                table = numpy.array(block.codebook) * block.scale
-                indices = numpy.abs(source[:, None] - table[None, :]).argmin(axis=1)
+                table = np.array(block.codebook) * block.scale
+                indices = np.abs(source[:, None] - table[None, :]).argmin(axis=1)
                 expected = table[indices]
-                numpy.testing.assert_allclose(
+                np.testing.assert_allclose(
                     self.roundtrip(source, plan), expected, rtol=0, atol=1e-14
                 )
 
     def test_explicit_column_major_order(self):
-        source = numpy.arange(6, dtype=numpy.float32).reshape(2, 3)
+        source = np.arange(6, dtype=np.float32).reshape(2, 3)
         plan = runtime.make_quantization_plan(QuantizationFormat.COLUMN_MAJOR, source.size)
         plan.permutation = [0, 3, 1, 4, 2, 5]
         encoded = runtime.quantize_tensor_proto(onh.from_array(source), plan)
         self.assertEqual(
             bytes(encoded.raw_data)[-source.nbytes :], source.T.copy().astype("<f4").tobytes()
         )
-        numpy.testing.assert_array_equal(self.roundtrip(source, plan), source)
+        np.testing.assert_array_equal(self.roundtrip(source, plan), source)
 
     def test_affine_against_numpy_reference(self):
-        source = numpy.linspace(-2, 8, 201, dtype=numpy.float64)
+        source = np.linspace(-2, 8, 201, dtype=np.float64)
         plan = runtime.make_quantization_plan(QuantizationFormat.GPTQ, source.size, source.size)
         run = plan.run(0)
         block = run.block(0)
@@ -1302,14 +1285,12 @@ class TestQuantizedValues(ExtTestCase):
         block.offset = 3.141
         run.set_block(0, block)
         plan.set_run(0, run)
-        codes = numpy.clip(
-            numpy.rint((source - block.offset) / block.scale + block.zero_point), 0, 15
-        )
+        codes = np.clip(np.rint((source - block.offset) / block.scale + block.zero_point), 0, 15)
         expected = (codes - block.zero_point) * block.scale + block.offset
-        numpy.testing.assert_allclose(self.roundtrip(source, plan), expected, rtol=0, atol=1e-15)
+        np.testing.assert_allclose(self.roundtrip(source, plan), expected, rtol=0, atol=1e-15)
 
     def test_cast_type_is_validated_for_every_method(self):
-        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        values = np.array([-1, 0, 1], dtype=np.float32)
         source = onh.from_array(values)
         for format_value in (
             QuantizationFormat.INT4,
@@ -1334,18 +1315,18 @@ class TestQuantizedValues(ExtTestCase):
                     run = plan.run(0)
                     run.layout.cast_type = cast_type
                     plan.set_run(0, run)
-                    numpy.testing.assert_array_equal(self.roundtrip(values, plan), values)
+                    np.testing.assert_array_equal(self.roundtrip(values, plan), values)
 
     def test_cast_precision_against_numpy_reference(self):
-        source = numpy.linspace(-3, 3, 201, dtype=numpy.float32)
+        source = np.linspace(-3, 3, 201, dtype=np.float32)
         plan = runtime.make_quantization_plan(
             QuantizationFormat.TILED_FLOAT, source.size, source.size
         )
         run = plan.run(0)
         run.layout.cast_type = onnx.TensorProto.FLOAT16
         plan.set_run(0, run)
-        expected = source.astype(numpy.float16).astype(numpy.float32)
-        numpy.testing.assert_array_equal(self.roundtrip(source, plan), expected)
+        expected = source.astype(np.float16).astype(np.float32)
+        np.testing.assert_array_equal(self.roundtrip(source, plan), expected)
 
     def make_ort_inputs(self, bits, mode, dtype, k=35, n=3, block_size=16):
         """Returns weights and encoded ORT inputs with independent column/block parameters."""
@@ -1367,7 +1348,7 @@ class TestQuantizedValues(ExtTestCase):
                 block.zero_point = index % (1 << bits) + (0.25 if mode == "floating" else 0)
         run.blocks = blocks
         plan.set_run(0, run)
-        source = numpy.empty((k, n), dtype=dtype)
+        source = np.empty((k, n), dtype=dtype)
         for row in range(k):
             for column in range(n):
                 block = blocks[column * groups + row // block_size]
@@ -1379,7 +1360,7 @@ class TestQuantizedValues(ExtTestCase):
     def test_ort_input_shapes_modes_serialization_and_ownership(self):
         for bits in (2, 4, 8):
             for mode in ("implicit", "packed", "floating"):
-                for dtype in (numpy.float32, numpy.float16):
+                for dtype in (np.float32, np.float16):
                     with self.subTest(bits=bits, mode=mode, dtype=dtype):
                         source, encoded, inputs = self.make_ort_inputs(bits, mode, dtype)
                         self.assertEqual(
@@ -1396,11 +1377,11 @@ class TestQuantizedValues(ExtTestCase):
                             self.assertEqual(tuple(inputs.zero_points.dims), shape)
                             self.assertEqual(
                                 onh.to_array(inputs.zero_points).dtype,
-                                numpy.uint8 if mode == "packed" else dtype,
+                                np.uint8 if mode == "packed" else dtype,
                             )
                         loaded = onnx.EncodedValueProto()
                         loaded.ParseFromString(encoded.SerializeToString())
-                        numpy.testing.assert_array_equal(
+                        np.testing.assert_array_equal(
                             onh.to_array(runtime.dequantize_tensor_proto(loaded)), source
                         )
                         original = bytes(inputs.weights.raw_data)
@@ -1422,7 +1403,7 @@ class TestQuantizedValues(ExtTestCase):
         plan = runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16)
         self.assertIsInstance(plan.matrix_shape, Shape)
         self.assertEqual(list(plan.matrix_shape), [2, 1])
-        source = onh.from_array(numpy.array([[1], [2]], dtype=numpy.float32))
+        source = onh.from_array(np.array([[1], [2]], dtype=np.float32))
         for dims in ([2, 1], (2, 1), Shape([2, 1])):
             plan.matrix_shape = dims
             self.assertEqual(plan.matrix_shape, Shape([2, 1]))
@@ -1451,7 +1432,7 @@ class TestQuantizedValues(ExtTestCase):
     def test_ort_rejects_nonzero_padding(self):
         for bits in (2, 4, 8):
             for mode in ("implicit", "packed", "floating"):
-                source, encoded, inputs = self.make_ort_inputs(bits, mode, numpy.float32)
+                source, encoded, inputs = self.make_ort_inputs(bits, mode, np.float32)
                 weights_per_column = len(inputs.weights.raw_data) // inputs.n
                 zero_offset = len(inputs.weights.raw_data) + len(inputs.scales.raw_data)
                 for column in range(inputs.n):
@@ -1482,7 +1463,7 @@ class TestQuantizedValues(ExtTestCase):
                             ):
                                 with self.assertRaisesRegex(ValueError, message):
                                     decode(corrupt)
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(runtime.dequantize_tensor_proto(encoded)), source
                 )
 
@@ -1495,7 +1476,7 @@ class TestQuantizedValues(ExtTestCase):
             # ORT CPU supports floating zero points only for 4-bit weights,
             # and 2-bit weights only with float32 inputs.
             modes = ("implicit", "packed", "floating") if bits == 4 else ("implicit", "packed")
-            dtypes = (numpy.float32,) if bits == 2 else (numpy.float32, numpy.float16)
+            dtypes = (np.float32,) if bits == 2 else (np.float32, np.float16)
             for mode in modes:
                 for dtype in dtypes:
                     for k, block_size in ((35, 16), (65, 32), (64, 64)):
@@ -1542,16 +1523,16 @@ class TestQuantizedValues(ExtTestCase):
                                 options,
                                 providers=["CPUExecutionProvider"],
                             )
-                            a = ((numpy.arange(2 * k).reshape(2, k) % 7 - 3) / 4).astype(dtype)
-                            expected = (
-                                a.astype(numpy.float32) @ source.astype(numpy.float32)
-                            ).astype(dtype)
+                            a = ((np.arange(2 * k).reshape(2, k) % 7 - 3) / 4).astype(dtype)
+                            expected = (a.astype(np.float32) @ source.astype(np.float32)).astype(
+                                dtype
+                            )
                             actual = session.run(None, {"A": a})[0]
-                            numpy.testing.assert_allclose(
+                            np.testing.assert_allclose(
                                 actual,
                                 expected,
-                                rtol=1e-3 if dtype == numpy.float16 else 1e-5,
-                                atol=1e-3 if dtype == numpy.float16 else 1e-5,
+                                rtol=1e-3 if dtype == np.float16 else 1e-5,
+                                atol=1e-3 if dtype == np.float16 else 1e-5,
                             )
 
 

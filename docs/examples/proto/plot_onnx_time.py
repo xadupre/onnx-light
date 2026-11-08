@@ -112,7 +112,7 @@ import urllib.error
 import urllib.request
 
 import numpy as np
-import pandas
+import pandas as pd
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -1288,7 +1288,7 @@ if _run_scenario("load"):
 # Results
 # --------
 
-df = pandas.DataFrame(data).set_index("name").sort_index()
+df = pd.DataFrame(data).set_index("name").sort_index()
 print(df)
 df = df.sort_index(ascending=False)
 

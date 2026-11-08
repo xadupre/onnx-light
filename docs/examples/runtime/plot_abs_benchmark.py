@@ -29,9 +29,9 @@ import argparse
 import os
 import time
 
-import matplotlib.pyplot
+import matplotlib.pyplot as plt
 import ml_dtypes
-import numpy
+import numpy as np
 import onnxruntime
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto, checker
@@ -64,9 +64,9 @@ if args.max_repeat_time <= 0:
 # excluded from that comparison.
 
 DTYPES = [
-    ("float32", TensorProto.FLOAT, numpy.dtype(numpy.float32), True),
-    ("float16", TensorProto.FLOAT16, numpy.dtype(numpy.float16), True),
-    ("bfloat16", TensorProto.BFLOAT16, numpy.dtype(ml_dtypes.bfloat16), False),
+    ("float32", TensorProto.FLOAT, np.dtype(np.float32), True),
+    ("float16", TensorProto.FLOAT16, np.dtype(np.float16), True),
+    ("bfloat16", TensorProto.BFLOAT16, np.dtype(ml_dtypes.bfloat16), False),
 ]
 
 
@@ -106,7 +106,7 @@ def measure(function, repeat: int, warmup: int, number: int, max_duration: float
         total_duration += duration
         if total_duration >= max_duration:
             break
-    return float(numpy.median(timings))
+    return float(np.median(timings))
 
 
 # %%
@@ -156,18 +156,18 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         """Creates a zero-copy runtime Tensor over a NumPy input."""
 
         return runtime.tensor_from_numpy(
-            "X", int(elem_type), list(values.shape), values.view(numpy.uint8), copy=False
+            "X", int(elem_type), list(values.shape), values.view(np.uint8), copy=False
         )
 
-    random_generator = numpy.random.default_rng(0)
+    random_generator = np.random.default_rng(0)
     rows_by_size = {}
     for size in size_grid:
         values = random_generator.uniform(-100.0, 100.0, size=size).astype(np_dtype)
-        expected = numpy.abs(values)
+        expected = np.abs(values)
         number = max(1, min(20, 10_000_000 // size))
 
         numpy_time = measure(
-            lambda values=values: numpy.abs(values),
+            lambda values=values: np.abs(values),
             args.repeat,
             args.warmup,
             number,
@@ -188,8 +188,8 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
             number,
             args.max_repeat_time,
         )
-        numpy.testing.assert_array_equal(run_onnx_light(values), expected)
-        numpy.testing.assert_array_equal(run_onnx_light_tensor(input_tensor), expected)
+        np.testing.assert_array_equal(run_onnx_light(values), expected)
+        np.testing.assert_array_equal(run_onnx_light_tensor(input_tensor), expected)
         rows_by_size[size] = [size, numpy_time, onnx_light_time, onnx_light_tensor_time, None]
 
     rows = [tuple(rows_by_size[size]) for size in size_grid]
@@ -197,10 +197,10 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         "label": label,
         "ort_supported": ort_supported,
         "model_bytes": model_bytes,
-        "sizes": numpy.array([row[0] for row in rows]),
-        "numpy_times": numpy.array([row[1] for row in rows]),
-        "onnx_light_times": numpy.array([row[2] for row in rows]),
-        "onnx_light_tensor_times": numpy.array([row[3] for row in rows]),
+        "sizes": np.array([row[0] for row in rows]),
+        "numpy_times": np.array([row[1] for row in rows]),
+        "onnx_light_times": np.array([row[2] for row in rows]),
+        "onnx_light_tensor_times": np.array([row[3] for row in rows]),
         "ort_times": None,
     }
 
@@ -212,19 +212,19 @@ def benchmark_onnxruntime(result: dict, np_dtype) -> None:
     session = onnxruntime.InferenceSession(
         result["model_bytes"], providers=["CPUExecutionProvider"]
     )
-    random_generator = numpy.random.default_rng(0)
+    random_generator = np.random.default_rng(0)
     ort_times = []
     for size in result["sizes"]:
         values = random_generator.uniform(-100.0, 100.0, size=int(size)).astype(np_dtype)
-        expected = numpy.abs(values)
+        expected = np.abs(values)
         number = max(1, min(20, 10_000_000 // int(size)))
 
         def run(values=values):
             return session.run(None, {"X": values})[0]
 
         ort_times.append(measure(run, args.repeat, args.warmup, number, args.max_repeat_time))
-        numpy.testing.assert_array_equal(run(), expected)
-    result["ort_times"] = numpy.array(ort_times)
+        np.testing.assert_array_equal(run(), expected)
+    result["ort_times"] = np.array(ort_times)
 
 
 def print_result(result: dict) -> None:
@@ -267,9 +267,7 @@ for result, (_, _, np_dtype, _) in zip(results, DTYPES, strict=True):
 # for ``bfloat16`` because changing the baseline to NumPy would make that row
 # incomparable.
 
-figure, axes = matplotlib.pyplot.subplots(
-    len(results), 2, figsize=(12, 4.5 * len(results)), squeeze=False
-)
+figure, axes = plt.subplots(len(results), 2, figsize=(12, 4.5 * len(results)), squeeze=False)
 
 for row_index, result in enumerate(results):
     label = result["label"]

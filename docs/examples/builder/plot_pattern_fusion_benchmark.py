@@ -31,8 +31,8 @@ import gc
 import statistics
 import time
 
-import matplotlib.pyplot
-import numpy
+import matplotlib.pyplot as plt
+import numpy as np
 import onnx_ir
 import onnxscript
 from onnxscript import rewriter
@@ -71,9 +71,9 @@ def build_light(block_count: int):
     builder = GraphBuilder("fusion")
     builder.set_opset_version("", OPSET)
     value = builder.inp("X", TensorProto.FLOAT, ["N", 16])
-    bias = builder.init(numpy.ones((1, 16), dtype=numpy.float32), name="bias")
-    scale = builder.init(numpy.array(0.5, dtype=numpy.float32), name="scale")
-    weight = builder.init(numpy.eye(16, dtype=numpy.float32), name="weight")
+    bias = builder.init(np.ones((1, 16), dtype=np.float32), name="bias")
+    scale = builder.init(np.array(0.5, dtype=np.float32), name="scale")
+    weight = builder.init(np.eye(16, dtype=np.float32), name="weight")
     value = fusion_blocks(builder.op, value, bias, scale, weight, block_count)
     builder.out(value, TensorProto.FLOAT, ["N", 16])
     return builder.to_onnx()
@@ -86,15 +86,9 @@ def build_onnxscript(block_count: int):
     )
     builder = onnxscript.GraphBuilder(graph)
     value = builder.input("X", dtype=onnx_ir.DataType.FLOAT, shape=["N", 16])
-    bias = builder.initializer(
-        onnx_ir.tensor(numpy.ones((1, 16), dtype=numpy.float32)), name="bias"
-    )
-    scale = builder.initializer(
-        onnx_ir.tensor(numpy.array(0.5, dtype=numpy.float32)), name="scale"
-    )
-    weight = builder.initializer(
-        onnx_ir.tensor(numpy.eye(16, dtype=numpy.float32)), name="weight"
-    )
+    bias = builder.initializer(onnx_ir.tensor(np.ones((1, 16), dtype=np.float32)), name="bias")
+    scale = builder.initializer(onnx_ir.tensor(np.array(0.5, dtype=np.float32)), name="scale")
+    weight = builder.initializer(onnx_ir.tensor(np.eye(16, dtype=np.float32)), name="weight")
     value = fusion_blocks(builder.op, value, bias, scale, weight, block_count)
     value.type = onnx_ir.TensorType(onnx_ir.DataType.FLOAT)
     value.shape = onnx_ir.Shape(["N", 16])
@@ -316,7 +310,7 @@ def measure_onnxscript_fusion(model, repeats: int = 3, *, native: bool = False) 
 
 def plot_benchmark(results):
     """Plots construction, Python-pattern fusion, and native-pattern fusion."""
-    figure, axes = matplotlib.pyplot.subplots(1, 3, figsize=(16, 4))
+    figure, axes = plt.subplots(1, 3, figsize=(16, 4))
     for axis, metric, x_key, title in (
         (axes[0], "construction", "patterns", "Model construction and export"),
         (axes[1], "fusion", "patterns", "Python-defined pattern fusion"),
@@ -390,4 +384,4 @@ if __name__ == "__main__":
                 f"{construction:17.2f}  {fusion:11.2f}  {native_fusion:18.2f}"
             )
     plot_benchmark(results)
-    matplotlib.pyplot.show()
+    plt.show()

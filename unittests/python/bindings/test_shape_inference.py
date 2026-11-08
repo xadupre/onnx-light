@@ -390,6 +390,60 @@ class TestShapeInference(TestShapeInferenceHelper):
         with self.assertRaises(shape_inference.InferenceError):
             shape_inference.infer_shapes(model, strict_mode=True)
 
+    def test_issue_layer_normalization_6187(self):
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 17]>
+            graph (float in0, float[2,7,8,1,3] in1, float[3,7] in2) => () {
+                out0, out1, out2 = LayerNormalization <
+                    epsilon: float = -841.058, stash_type: int = -940
+                > (in0, in1, in2)
+            }
+            """)
+        with self.assertRaises(shape_inference.InferenceError):
+            checker.check_model(model, full_check=True)
+        with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_issue_conv_6180(self):
+        model = parser.parse_model("""
+            <ir_version: 9, opset_import: ["" : 11]>
+            graph (float[7,6,1,5] in0, float in1, float[7,2,3,2,1] in2) => () {
+                out0 = Conv <auto_pad = "NOTSET", group = 1> (in0, in1, in2)
+            }
+            """)
+        with self.assertRaises(shape_inference.InferenceError):
+            checker.check_model(model, full_check=True)
+        with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_issue_gemm_6185(self):
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 6]>
+            graph (double[2,1] in0, double in1, double[2] in2) => () {
+                out0 = Gemm <
+                    alpha: float = 1, beta: float = -693.752,
+                    broadcast: int = -436, transB: int = 823
+                > (in0, in1, in2)
+            }
+            """)
+        with self.assertRaises(shape_inference.InferenceError):
+            checker.check_model(model, full_check=True)
+        with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_issue_stft_6186(self):
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 17]>
+            graph (float16[3] in0, int32[2] in1, float16[7,8,8,8] in2,
+                   int32[8,1,7,2] in3) => () {
+                out0 = STFT (in0, in1, in2, in3)
+            }
+            """)
+        with self.assertRaises(shape_inference.InferenceError):
+            checker.check_model(model, full_check=True)
+        with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
     # ── Helpers for higher-order op (subgraph) shape inference tests ─────────
 
     # ── Scan ─────────────────────────────────────────────────────────────────

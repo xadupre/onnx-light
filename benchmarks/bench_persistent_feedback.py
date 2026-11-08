@@ -12,7 +12,7 @@ import platform
 import subprocess
 import time
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
@@ -64,7 +64,7 @@ def main():
     bindings = {
         binding.input_name: binding.output_name for binding in model.graph.persistent_bindings
     }
-    initial = {name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32) for name in bindings}
+    initial = {name: np.empty((1, 1, 0, 2), dtype=np.float32) for name in bindings}
     options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=args.tokens)
     started = time.perf_counter_ns()
     stateful = runtime.RuntimeSession(model, initial, options)
@@ -79,7 +79,7 @@ def main():
     manual = initial.copy()
     records = []
     for index in range(args.tokens):
-        token = numpy.array([index / 8, index / 4], dtype=numpy.float32).reshape(1, 1, 1, 2)
+        token = np.array([index / 8, index / 4], dtype=np.float32).reshape(1, 1, 1, 2)
         feeds = {"Q": token, "K": token, "V": -token}
         manual_context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
         for name, value in {**manual, **feeds}.items():
@@ -98,13 +98,13 @@ def main():
         ]
         for name, source in bindings.items():
             expected = manual_context.get_value(source)
-            actual = numpy.from_dlpack(outputs[source])
-            numpy.testing.assert_array_equal(actual, numpy.from_dlpack(expected))
-            assert actual.ctypes.data == numpy.from_dlpack(state.values[name]).ctypes.data
+            actual = np.from_dlpack(outputs[source])
+            np.testing.assert_array_equal(actual, np.from_dlpack(expected))
+            assert actual.ctypes.data == np.from_dlpack(state.values[name]).ctypes.data
             manual[name] = expected
-        numpy.testing.assert_allclose(
-            numpy.from_dlpack(outputs["Y"]),
-            numpy.from_dlpack(manual_context.get_value("Y")),
+        np.testing.assert_allclose(
+            np.from_dlpack(outputs["Y"]),
+            np.from_dlpack(manual_context.get_value("Y")),
             rtol=1e-6,
             atol=1e-6,
         )
@@ -114,7 +114,7 @@ def main():
                 "stateful_ns": stateful_ns,
                 "stateless_ns": stateless_ns,
                 "retained_logical_bytes": sum(
-                    numpy.from_dlpack(value).nbytes for value in state.values.values()
+                    np.from_dlpack(value).nbytes for value in state.values.values()
                 ),
                 "event_workspace_peak_bytes": max(
                     (event.peak_bytes for event in context.events()), default=0

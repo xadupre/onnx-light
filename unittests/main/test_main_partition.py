@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -24,7 +24,7 @@ from onnx_light.onnx_proto.verify import verify_model
 def _repeated_model(layers=3):
     """Builds distinct weighted layers following a shape-driven reshape."""
     nodes = [oh.make_node("Reshape", ["X", "shape"], ["flat"])]
-    initializers = [onh.from_array(numpy.array([1, 16], dtype=numpy.int64), name="shape")]
+    initializers = [onh.from_array(np.array([1, 16], dtype=np.int64), name="shape")]
     previous = "flat"
     for index in range(layers):
         weight = f"W{index}"
@@ -33,7 +33,7 @@ def _repeated_model(layers=3):
         nodes.append(oh.make_node("MatMul", [previous, weight], [product]))
         nodes.append(oh.make_node("Relu", [product], [output]))
         initializers.append(
-            onh.from_array((numpy.eye(16) + (index + 1) / 100).astype(numpy.float32), name=weight)
+            onh.from_array((np.eye(16) + (index + 1) / 100).astype(np.float32), name=weight)
         )
         previous = output
     return oh.make_model(
@@ -64,7 +64,7 @@ class TestMainPartition(ExtTestCase):
                 )
                 save(model, source)
                 (directory / "shape.bin").write_bytes(
-                    numpy.array([-1, 16], dtype=numpy.int64).tobytes()
+                    np.array([-1, 16], dtype=np.int64).tobytes()
                 )
                 (directory / "weights.bin").unlink()
                 text = StringIO()
@@ -120,7 +120,7 @@ class TestMainPartition(ExtTestCase):
             entry = shape.external_data.add()
             entry.key = key
             entry.value = value
-        (directory / "shape.bin").write_bytes(numpy.array([1, 16], dtype=numpy.int64).tobytes())
+        (directory / "shape.bin").write_bytes(np.array([1, 16], dtype=np.int64).tobytes())
         model.graph.initializer[0].CopyFrom(shape)
         save(model, source)
         return source
@@ -146,10 +146,10 @@ class TestMainPartition(ExtTestCase):
             self.assertIn("1 layer function(s)", text.getvalue())
             self.assertIn("3 call site(s)", text.getvalue())
             self.assertIn("ai.rt::Layer_MatMul_0", text.getvalue())
-            feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
+            feeds = {"X": np.arange(16, dtype=np.float32).reshape(2, 8) / 8 - 1}
             expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
             actual = ReferenceEvaluator(load(output, load_external_data=True)).run(None, feeds)
-            numpy.testing.assert_allclose(actual[0], expected[0], rtol=1e-6, atol=1e-6)
+            np.testing.assert_allclose(actual[0], expected[0], rtol=1e-6, atol=1e-6)
             self.assertEqual(source.read_bytes(), original_bytes)
             self.assertEqual((directory / "weights.bin").read_bytes(), weights_before)
             self.assertEqual((directory / "shape.bin").read_bytes(), shape_before)
@@ -181,7 +181,7 @@ class TestMainPartition(ExtTestCase):
                 self.assertEqual(weight.data_location, TensorProto.EXTERNAL)
                 self.assertFalse(weight.raw_data)
             shape = next(tensor for tensor in result.graph.initializer if tensor.name == "shape")
-            numpy.testing.assert_array_equal(onh.to_array(shape), [1, 16])
+            np.testing.assert_array_equal(onh.to_array(shape), [1, 16])
             self.assertEqual(
                 [
                     dimension.dim_value
@@ -219,10 +219,10 @@ class TestMainPartition(ExtTestCase):
                 self.assertEqual(sum(name.startswith("W") for name in node.input), 1)
             self.assertIn("20 call site(s)", text.getvalue())
             self.assertIn("ai.rt::PartitionGroup_MatMul_0", text.getvalue())
-            feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
+            feeds = {"X": np.arange(16, dtype=np.float32).reshape(2, 8) / 8 - 1}
             expected = ReferenceEvaluator(load(source, load_external_data=True)).run(None, feeds)
             actual = ReferenceEvaluator(load(output, load_external_data=True)).run(None, feeds)
-            numpy.testing.assert_allclose(actual[0], expected[0], rtol=1e-6, atol=1e-6)
+            np.testing.assert_allclose(actual[0], expected[0], rtol=1e-6, atol=1e-6)
             self.assertEqual(source.read_bytes(), original_bytes)
             self.assertEqual((directory / "weights.bin").read_bytes(), weights_before)
 
@@ -254,7 +254,7 @@ class TestMainPartition(ExtTestCase):
                 )
                 save(model, source)
                 (directory / "shape.bin").write_bytes(
-                    numpy.array([-1, 16], dtype=numpy.int64).tobytes()
+                    np.array([-1, 16], dtype=np.int64).tobytes()
                 )
                 original = source.read_bytes()
                 weights = (directory / "weights.bin").read_bytes()
@@ -267,7 +267,7 @@ class TestMainPartition(ExtTestCase):
                 self.assertEqual(len(result.graph.node), 21)
                 self.assertTrue(result.graph.node[1].op_type.startswith("PartitionGroup_"))
                 for batch in ((2, 4) if symbolic else (4096,)):
-                    feeds = {"X": numpy.arange(batch * 8, dtype=numpy.float32).reshape(batch, 8)}
+                    feeds = {"X": np.arange(batch * 8, dtype=np.float32).reshape(batch, 8)}
                     expected = ReferenceEvaluator(load(source, load_external_data=True)).run(
                         None, feeds
                     )
@@ -385,7 +385,7 @@ class TestMainPartition(ExtTestCase):
                         if tensor.name.startswith("W")
                     }
                     self.assertEqual(actual_weights, expected_weights)
-                    feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(2, 8) / 8 - 1}
+                    feeds = {"X": np.arange(16, dtype=np.float32).reshape(2, 8) / 8 - 1}
                     expected = ReferenceEvaluator(model).run(None, feeds)
                     actual = ReferenceEvaluator(result).run(None, feeds)
                     self.assertEqualArray(actual[0], expected[0])
@@ -469,7 +469,7 @@ class TestMainPartition(ExtTestCase):
                 self.assertEqual(len(calls), 3)
                 self.assertEqual(len(result.graph.initializer), 0 if constants else 3)
                 self.assertEqual({str(node.input[1]) for node in calls}, {"W0", "W1", "W2"})
-                feeds = {"X": numpy.arange(16, dtype=numpy.float32).reshape(1, 16)}
+                feeds = {"X": np.arange(16, dtype=np.float32).reshape(1, 16)}
                 expected = ReferenceEvaluator(model).run(None, feeds)
                 actual = ReferenceEvaluator(result).run(None, feeds)
                 for expected_output, actual_output in zip(expected, actual):

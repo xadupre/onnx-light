@@ -25,8 +25,8 @@ import argparse
 import os
 import time
 
-import matplotlib.pyplot
-import numpy
+import matplotlib.pyplot as plt
+import numpy as np
 import onnxruntime
 
 from onnx_light.onnx.backend import TestMode, collect_test_cases_by_name
@@ -91,13 +91,13 @@ def measure(function, warmup: int, repeat: int, max_duration: float) -> float:
         total_duration += duration
         if total_duration >= max_duration:
             break
-    return float(numpy.median(timings))
+    return float(np.median(timings))
 
 
-_DTYPE_MAP = {1: numpy.float32, 10: numpy.float16}
+_DTYPE_MAP = {1: np.float32, 10: np.float16}
 
 
-def tensor_to_numpy(tensor) -> numpy.ndarray:
+def tensor_to_numpy(tensor) -> np.ndarray:
     """Converts a C++ backend-test ``Tensor`` to a :class:`numpy.ndarray`.
 
     Returns:
@@ -115,7 +115,7 @@ def tensor_to_numpy(tensor) -> numpy.ndarray:
             f"tensor_to_numpy does not support data_type={tensor.data_type!r}; "
             f"expected one of {sorted(_DTYPE_MAP)}."
         )
-    return numpy.frombuffer(tensor.raw_data(), dtype=dtype).reshape(
+    return np.frombuffer(tensor.raw_data(), dtype=dtype).reshape(
         tuple(int(d) for d in tensor.shape)
     )
 
@@ -149,7 +149,7 @@ def prepare_case(op_name: str) -> dict:
         "expected": expected,
         "rtol": tc.rtol,
         "atol": tc.atol,
-        "n_elements": int(numpy.prod(next(iter(feeds.values())).shape)),
+        "n_elements": int(np.prod(next(iter(feeds.values())).shape)),
     }
 
 
@@ -167,7 +167,7 @@ def benchmark_case(case: dict, backend: str) -> float:
     def run():
         return session.run(None, case["feeds"])[0]
 
-    numpy.testing.assert_allclose(run(), case["expected"], rtol=case["rtol"], atol=case["atol"])
+    np.testing.assert_allclose(run(), case["expected"], rtol=case["rtol"], atol=case["atol"])
     return measure(run, args.warmup, args.repeat, args.max_repeat_time)
 
 
@@ -209,12 +209,12 @@ for case, onnx_light_time, ort_time in zip(cases, onnx_light_results, ort_result
 # ``onnxruntime`` (values above 1.0 mean ``onnx-light`` is slower).
 
 labels = [r["op_name"] for r in results]
-onnx_light_times = numpy.array([r["onnx_light_time"] for r in results])
-ort_times = numpy.array([r["ort_time"] for r in results])
-x = numpy.arange(len(labels))
+onnx_light_times = np.array([r["onnx_light_time"] for r in results])
+ort_times = np.array([r["ort_time"] for r in results])
+x = np.arange(len(labels))
 width = 0.35
 
-figure, (time_axis, speedup_axis) = matplotlib.pyplot.subplots(1, 2, figsize=(12, 4.5))
+figure, (time_axis, speedup_axis) = plt.subplots(1, 2, figsize=(12, 4.5))
 
 time_axis.bar(x - width / 2, onnx_light_times * 1e6, width, label="onnx-light", color="#5cb85c")
 time_axis.bar(x + width / 2, ort_times * 1e6, width, label="onnxruntime", color="#f4a259")

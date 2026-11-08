@@ -45,7 +45,7 @@ import time
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas
+import pandas as pd
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
@@ -290,7 +290,7 @@ print("Both approaches produced byte-equivalent aligned tensor payloads.")
 # Results
 # -------
 
-df = pandas.DataFrame(results).set_index("name").sort_index()
+df = pd.DataFrame(results).set_index("name").sort_index()
 print(df)
 
 # %%

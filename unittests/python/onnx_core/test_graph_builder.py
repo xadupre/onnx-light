@@ -14,7 +14,7 @@ from __future__ import annotations
 import gc
 import unittest
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
@@ -36,7 +36,7 @@ class TestGraphBuilder(ExtTestCase):
         builder = GraphBuilder("g", opsets={"ai.onnx.ml": 4})
         with self.assertRaisesRegex(ValueError, "unavailable at opset 4"):
             builder.op.TreeEnsemble(
-                numpy.ones((2, 3), dtype=numpy.float32), domain="ai.onnx.ml", outputs="y"
+                np.ones((2, 3), dtype=np.float32), domain="ai.onnx.ml", outputs="y"
             )
         self.assertEqual(len(builder.build_graph().node), 0)
         self.assertEqual(len(builder.build_graph().initializer), 0)
@@ -256,7 +256,7 @@ class TestGraphBuilder(ExtTestCase):
             with self.assertRaisesRegex(ValueError, "opset"):
                 builder.make_node("Relu", [x], ["y"])
             with self.assertRaisesRegex(ValueError, "opset"):
-                builder.op.Add(x, numpy.array([1, 2], dtype=numpy.float32), outputs="y")
+                builder.op.Add(x, np.array([1, 2], dtype=np.float32), outputs="y")
             self.assertEqual(len(builder.build_graph().node), 0)
             self.assertEqual(len(builder.build_graph().initializer), 0)
             self.assertFalse(builder.has_name("y"))
@@ -344,7 +344,7 @@ class TestGraphBuilder(ExtTestCase):
         builder = GraphBuilder("g", opsets=28)
         self.assertIs(builder.op, builder.op)
         x = builder.inp("x", FLOAT, [None, 3])
-        bias = builder.init(numpy.array([1, 2, 3], dtype=numpy.float32), name="bias")
+        bias = builder.init(np.array([1, 2, 3], dtype=np.float32), name="bias")
         added = builder.op.Add(x, bias)
         output = builder.op.Relu(added, outputs="y", name="relu")
         self.assertEqual(builder.out(output, FLOAT, [None, 3]), "y")
@@ -378,7 +378,7 @@ class TestGraphBuilder(ExtTestCase):
     def test_compact_optional_variadic_and_numpy_inputs(self):
         builder = GraphBuilder("g", opsets=28)
         x = builder.inp("x", FLOAT, [3])
-        clipped = builder.op.Clip(x, None, numpy.array([1], dtype=numpy.float32))
+        clipped = builder.op.Clip(x, None, np.array([1], dtype=np.float32))
         summed = builder.op.Sum(clipped, x, x)
         builder.out(summed)
         graph = builder.to_onnx(ProtoKind.kGraph)
@@ -389,7 +389,7 @@ class TestGraphBuilder(ExtTestCase):
     def test_compact_multi_output(self):
         builder = GraphBuilder("g", opsets=28)
         x = builder.inp("x", FLOAT, [4])
-        k = builder.init(numpy.array([2], dtype=numpy.int64))
+        k = builder.init(np.array([2], dtype=np.int64))
         values, indices = builder.op.TopK(x, k, outputs=["values", "indices"], axis=0)
         self.assertEqual((values, indices), ("values", "indices"))
         generated = builder.op.TopK(x, k, outputs=2)
@@ -484,7 +484,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertRaise(lambda: builder.op.Relu(x, outputs=0), ValueError)
         self.assertRaise(lambda: builder.init([1, 2]), TypeError)
         self.assertRaise(lambda: builder.inp("x", FLOAT, [2]), ValueError)
-        self.assertRaise(lambda: builder.init(numpy.array([1]), name="x"), ValueError)
+        self.assertRaise(lambda: builder.init(np.array([1]), name="x"), ValueError)
         self.assertRaise(lambda: builder.out(x, shape=[2]), ValueError)
 
     def test_starts_empty(self):
@@ -544,7 +544,7 @@ class TestGraphBuilder(ExtTestCase):
     def test_make_initializer_move(self):
         for raw in (False, True):
             with self.subTest(raw=raw):
-                values = numpy.arange(1024, dtype=numpy.float32)
+                values = np.arange(1024, dtype=np.float32)
                 tensor = oh.make_tensor(
                     "weight", FLOAT, [1024], values.tobytes() if raw else values, raw=raw
                 )
@@ -603,7 +603,7 @@ class TestGraphBuilder(ExtTestCase):
 
     def test_make_initializer_move_borrowed_owner(self):
         serialized = oh.make_tensor(
-            "weight", FLOAT, [32], numpy.zeros(32, dtype=numpy.float32).tobytes(), raw=True
+            "weight", FLOAT, [32], np.zeros(32, dtype=np.float32).tobytes(), raw=True
         ).SerializeToString()
         released = []
 

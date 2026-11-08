@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import TypeAlias
 
-import numpy
+import numpy as np
 
 from ..onnx import EncodedValueProto, ModelProto, TensorProto
 from ..onnx_py._onnxpybackend import backend_test  # type: ignore[missing-import]
@@ -17,11 +17,7 @@ TensorStatistics: TypeAlias = runtime.TensorStatistics
 
 def compute_tensor_statistics(
     value: (
-        numpy.ndarray
-        | backend_test.Tensor
-        | TensorProto
-        | EncodedValueProto
-        | runtime.RuntimeValue
+        np.ndarray | backend_test.Tensor | TensorProto | EncodedValueProto | runtime.RuntimeValue
     ),
     *,
     bins: int = 0,

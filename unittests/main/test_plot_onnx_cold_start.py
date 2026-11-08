@@ -33,9 +33,9 @@ def _load_example_helpers():
 class TestPlotOnnxColdStart(ExtTestCase):
     def test_plot_results_creates_timing_graph(self):
         """Verifies collected cold-start timings produce a graph."""
-        import matplotlib
+        import matplotlib as mpl
 
-        matplotlib.use("Agg")
+        mpl.use("Agg")
         results = [
             {"implementation": "onnx", "end_to_end_ms": 20.0, "first_load_after_imports_ms": 8.0},
             {

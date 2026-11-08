@@ -39,8 +39,8 @@ import gc
 import statistics
 import time
 
-import matplotlib.pyplot
-import numpy
+import matplotlib.pyplot as plt
+import numpy as np
 import onnx
 import onnx_ir
 import onnxscript
@@ -91,11 +91,11 @@ def attention_blocks(op, value, constants, node_count: int):
 def constants():
     """Returns the shared shape indices, head count, and residual scale."""
     return (
-        numpy.array([0], dtype=numpy.int64),
-        numpy.array([1], dtype=numpy.int64),
-        numpy.array([2], dtype=numpy.int64),
-        numpy.array([2], dtype=numpy.int64),
-        numpy.array(0.5, dtype=numpy.float32),
+        np.array([0], dtype=np.int64),
+        np.array([1], dtype=np.int64),
+        np.array([2], dtype=np.int64),
+        np.array([2], dtype=np.int64),
+        np.array(0.5, dtype=np.float32),
     )
 
 
@@ -103,7 +103,7 @@ def large_initializer():
     """Returns the shared array used to produce an approximately 1.5 GB model."""
     global _LARGE_INITIALIZER
     if _LARGE_INITIALIZER is None:
-        _LARGE_INITIALIZER = numpy.zeros(LARGE_INITIALIZER_BYTES, dtype=numpy.uint8)
+        _LARGE_INITIALIZER = np.zeros(LARGE_INITIALIZER_BYTES, dtype=np.uint8)
     return _LARGE_INITIALIZER
 
 
@@ -163,14 +163,14 @@ def check_models(node_count: int) -> None:
         assert len(model.graph.node) == node_count
     light_session = ReferenceEvaluator(light)
     scripted_session = ReferenceEvaluator(scripted)
-    rng = numpy.random.default_rng(0)
+    rng = np.random.default_rng(0)
     for shape in INPUT_SHAPES:
-        feeds = {"X": rng.standard_normal(shape).astype(numpy.float32)}
+        feeds = {"X": rng.standard_normal(shape).astype(np.float32)}
         light_outputs = light_session.run(None, feeds)
         scripted_outputs = scripted_session.run(None, feeds)
         assert len(light_outputs) == len(scripted_outputs) == 1
         assert light_outputs[0].shape == scripted_outputs[0].shape == shape
-        numpy.testing.assert_allclose(light_outputs[0], scripted_outputs[0], rtol=0, atol=0)
+        np.testing.assert_allclose(light_outputs[0], scripted_outputs[0], rtol=0, atol=0)
 
 
 def measure(build, node_count: int, serialize: bool, repeats: int = 3) -> float:
@@ -235,7 +235,7 @@ def format_node_type_table(distributions: dict[int, Counter]) -> str:
 
 def plot_benchmark(results: list[dict]):
     """Plots graph construction and large-model serialization times."""
-    figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(11, 4), sharex=True)
+    figure, axes = plt.subplots(1, 2, figsize=(11, 4), sharex=True)
     for axis, key, title in (
         (axes[0], "model", "Graph construction without large initializers"),
         (axes[1], "serialized", "1.5 GB model construction and serialization"),
@@ -288,4 +288,4 @@ if __name__ == "__main__":
     print("\nNode-type distribution (identical for both builders):")
     print(format_node_type_table(distributions))
     plot_benchmark(results)
-    matplotlib.pyplot.show()
+    plt.show()

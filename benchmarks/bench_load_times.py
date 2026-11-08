@@ -36,7 +36,7 @@ import argparse
 import statistics
 import time
 
-import pandas
+import pandas as pd
 
 import onnx_light.onnx as onnxl
 from onnx_light.doc import get_processor_name
@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> None:
             }
         )
 
-    df = pandas.DataFrame(rows)
+    df = pd.DataFrame(rows)
     df.to_excel(args.output, index=False)
     print(f"\nResults written to {args.output}")
 

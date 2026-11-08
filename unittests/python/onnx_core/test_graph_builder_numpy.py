@@ -13,7 +13,7 @@ import unittest
 import weakref
 
 import ml_dtypes
-import numpy
+import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.numpy_helper as onh
@@ -24,31 +24,31 @@ from onnx_light.onnx_core.graph_builder import GraphBuilder
 @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
 class TestGraphBuilderNumpy(ExtTestCase):
     def assertPointer(self, tensor, array):
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         self.assertEqual(view.ctypes.data, array.ctypes.data)
-        numpy.testing.assert_array_equal(view, array)
+        np.testing.assert_array_equal(view, array)
 
     def test_dtypes_shapes_and_readonly(self):
         for dtype in (
-            numpy.bool_,
-            numpy.int8,
-            numpy.int16,
-            numpy.int32,
-            numpy.int64,
-            numpy.uint8,
-            numpy.uint16,
-            numpy.uint32,
-            numpy.uint64,
-            numpy.float16,
-            numpy.float32,
-            numpy.float64,
-            numpy.complex64,
-            numpy.complex128,
+            np.bool_,
+            np.int8,
+            np.int16,
+            np.int32,
+            np.int64,
+            np.uint8,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+            np.float16,
+            np.float32,
+            np.float64,
+            np.complex64,
+            np.complex128,
         ):
             for shape in ((), (2, 3), (0,), (2, 0, 3)):
                 for readonly in (False, True):
                     with self.subTest(dtype=dtype, shape=shape, readonly=readonly):
-                        array = numpy.ones(shape, dtype=dtype)
+                        array = np.ones(shape, dtype=dtype)
                         array.setflags(write=not readonly)
                         references = sys.getrefcount(array)
                         builder = GraphBuilder("numpy")
@@ -69,7 +69,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
 
     def test_lifetime_copies_and_execution(self):
         ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
-        array = numpy.arange(6, dtype=numpy.float32)
+        array = np.arange(6, dtype=np.float32)
         expected = array + 1
         source = weakref.ref(array)
         released = []
@@ -100,7 +100,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
         independent = ModelProto()
         independent.CopyFrom(first)
         self.assertNotEqual(
-            numpy.from_dlpack(independent.graph.initializer[0]).ctypes.data, array.ctypes.data
+            np.from_dlpack(independent.graph.initializer[0]).ctypes.data, array.ctypes.data
         )
         del array
         gc.collect()
@@ -114,8 +114,8 @@ class TestGraphBuilderNumpy(ExtTestCase):
         restored.ParseFromString(serialized)
         for model in (rebuilt, restored, independent):
             evaluator = ReferenceEvaluator(model)
-            numpy.testing.assert_array_equal(
-                evaluator.run(None, {"x": numpy.ones(6, dtype=numpy.float32)})[0], expected
+            np.testing.assert_array_equal(
+                evaluator.run(None, {"x": np.ones(6, dtype=np.float32)})[0], expected
             )
         del model, evaluator, rebuilt
         gc.collect()
@@ -131,7 +131,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
     def test_replacing_payload_releases_last_reference(self):
         for replacement in ("raw_data", "Clear", "CopyFrom", "ParseFromString"):
             with self.subTest(replacement=replacement):
-                array = numpy.ones(4, dtype=numpy.float32)
+                array = np.ones(4, dtype=np.float32)
                 references = sys.getrefcount(array)
                 builder = GraphBuilder()
                 builder.init(array, copy=False)
@@ -148,7 +148,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
                     tensor.CopyFrom(TensorProto())
                 else:
                     tensor.ParseFromString(
-                        onh.from_array(numpy.zeros(4, dtype=numpy.float32)).SerializeToString()
+                        onh.from_array(np.zeros(4, dtype=np.float32)).SerializeToString()
                     )
                 gc.collect()
                 self.assertEqual(sys.getrefcount(array), references)
@@ -158,7 +158,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
 
     def test_model_import_preserves_metadata(self):
         builder = GraphBuilder()
-        array = numpy.ones(2, dtype=numpy.float32)
+        array = np.ones(2, dtype=np.float32)
         builder.init(array, copy=False)
         model = builder.to_onnx()
         metadata = {
@@ -186,7 +186,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
         self.assertPointer(rebuilt.graph.initializer[0], array)
 
     def test_contiguous_view_and_visible_mutations(self):
-        base = numpy.arange(12, dtype=numpy.float32)
+        base = np.arange(12, dtype=np.float32)
         array = base[3:9].reshape(2, 3)
         base_ref = weakref.ref(base)
         array_ref = weakref.ref(array)
@@ -196,8 +196,8 @@ class TestGraphBuilderNumpy(ExtTestCase):
         self.assertPointer(model.graph.initializer[0], array)
         self.assertTrue(array.flags.writeable)
         base[3:9] = 7
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(model.graph.initializer[0]), numpy.full((2, 3), 7)
+        np.testing.assert_array_equal(
+            np.from_dlpack(model.graph.initializer[0]), np.full((2, 3), 7)
         )
         del array, base, builder
         gc.collect()
@@ -211,7 +211,7 @@ class TestGraphBuilderNumpy(ExtTestCase):
     def test_default_still_copies(self):
         for options in ({}, {"copy": True}):
             with self.subTest(options=options):
-                array = numpy.arange(6, dtype=numpy.float32)
+                array = np.arange(6, dtype=np.float32)
                 expected = array.copy()
                 references = sys.getrefcount(array)
                 builder = GraphBuilder()
@@ -219,18 +219,18 @@ class TestGraphBuilderNumpy(ExtTestCase):
                 model = builder.to_onnx()
                 self.assertEqual(sys.getrefcount(array), references)
                 self.assertNotEqual(
-                    numpy.from_dlpack(model.graph.initializer[0]).ctypes.data, array.ctypes.data
+                    np.from_dlpack(model.graph.initializer[0]).ctypes.data, array.ctypes.data
                 )
                 array[:] = -1
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(model.graph.initializer[0]), expected
+                np.testing.assert_array_equal(
+                    np.from_dlpack(model.graph.initializer[0]), expected
                 )
 
     def test_borrowed_values_are_not_cached_by_shape_analysis(self):
-        for dtype in (numpy.int64, numpy.float32):
+        for dtype in (np.int64, np.float32):
             for do_copy in (False, True):
                 with self.subTest(dtype=dtype, copy=do_copy):
-                    array = numpy.array([2, 3], dtype=dtype)
+                    array = np.array([2, 3], dtype=dtype)
                     builder = GraphBuilder()
                     name = builder.init(array, copy=do_copy)
                     descriptor = builder.shapes.get(name)
@@ -238,27 +238,27 @@ class TestGraphBuilderNumpy(ExtTestCase):
                     self.assertEqual(descriptor.has_min(), do_copy)
                     self.assertEqual(descriptor.has_max(), do_copy)
                     self.assertEqual(
-                        descriptor.has_value_as_shape(), do_copy and dtype == numpy.int64
+                        descriptor.has_value_as_shape(), do_copy and dtype == np.int64
                     )
 
     def test_rejections_do_not_retain_or_insert(self):
-        matrix = numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
+        matrix = np.arange(12, dtype=np.float32).reshape(3, 4)
         invalid_arrays = (
             matrix.T,
             matrix[:, ::2],
             matrix[::-1],
-            numpy.broadcast_to(matrix, (2, 3, 4)),
+            np.broadcast_to(matrix, (2, 3, 4)),
             matrix.astype(">f4"),
-            numpy.array(["abc"]),
-            numpy.array([b"abc"]),
-            numpy.array([object()]),
-            numpy.zeros(2, dtype=[("value", "f4")]),
-            numpy.zeros(2, dtype="datetime64[ns]"),
-            numpy.zeros(2, dtype="V4"),
-            numpy.zeros(2, dtype=ml_dtypes.bfloat16),
+            np.array(["abc"]),
+            np.array([b"abc"]),
+            np.array([object()]),
+            np.zeros(2, dtype=[("value", "f4")]),
+            np.zeros(2, dtype="datetime64[ns]"),
+            np.zeros(2, dtype="V4"),
+            np.zeros(2, dtype=ml_dtypes.bfloat16),
         )
-        if numpy.dtype(numpy.longdouble).itemsize > 8:
-            invalid_arrays += (numpy.zeros(2, dtype=numpy.longdouble),)
+        if np.dtype(np.longdouble).itemsize > 8:
+            invalid_arrays += (np.zeros(2, dtype=np.longdouble),)
         for array in invalid_arrays:
             with self.subTest(dtype=array.dtype, strides=array.strides):
                 references = sys.getrefcount(array)
@@ -273,9 +273,9 @@ class TestGraphBuilderNumpy(ExtTestCase):
             GraphBuilder().init([1, 2], copy=False)
 
     def test_buffer_acquisition_failure_preserves_tensor(self):
-        tensor = onh.from_array(numpy.ones(2, dtype=numpy.float32))
+        tensor = onh.from_array(np.ones(2, dtype=np.float32))
         expected = tensor.SerializeToString()
-        array = numpy.arange(6, dtype=numpy.float32)[::2]
+        array = np.arange(6, dtype=np.float32)[::2]
         references = sys.getrefcount(array)
         with self.assertRaises((ValueError, BufferError)):
             tensor._set_raw_data_from_buffer(array)
@@ -284,12 +284,12 @@ class TestGraphBuilderNumpy(ExtTestCase):
         self.assertEqual(tensor.SerializeToString(), expected)
 
     def test_misaligned_contiguous_arrays_require_copy(self):
-        for dtype in (numpy.int16, numpy.int32, numpy.int64, numpy.float32, numpy.float64):
+        for dtype in (np.int16, np.int32, np.int64, np.float32, np.float64):
             with self.subTest(dtype=dtype):
-                array = numpy.ndarray(
+                array = np.ndarray(
                     (3,),
                     dtype=dtype,
-                    buffer=bytearray(3 * numpy.dtype(dtype).itemsize + 1),
+                    buffer=bytearray(3 * np.dtype(dtype).itemsize + 1),
                     offset=1,
                 )
                 array[:] = [1, 2, 3]
@@ -304,12 +304,12 @@ class TestGraphBuilderNumpy(ExtTestCase):
                 self.assertEqual(len(builder.to_onnx().graph.initializer), 0)
                 self.assertEqual(builder.init(array, copy=True), "init")
                 tensor = builder.to_onnx().graph.initializer[0]
-                numpy.testing.assert_array_equal(onh.to_array(tensor), array)
+                np.testing.assert_array_equal(onh.to_array(tensor), array)
 
     def test_name_collision_releases_buffer(self):
         builder = GraphBuilder()
-        builder.init(numpy.ones(2, dtype=numpy.float32), name="weight")
-        array = numpy.zeros(3, dtype=numpy.float32)
+        builder.init(np.ones(2, dtype=np.float32), name="weight")
+        array = np.zeros(3, dtype=np.float32)
         references = sys.getrefcount(array)
         with self.assertRaisesRegex(ValueError, "already"):
             builder.init(array, name="weight", copy=False)
@@ -319,11 +319,11 @@ class TestGraphBuilderNumpy(ExtTestCase):
         self.assertEqual(builder.init(array, copy=False), "init_1")
 
     def test_no_payload_materialization(self):
-        class NoBytesArray(numpy.ndarray):
+        class NoBytesArray(np.ndarray):
             def tobytes(self, *args, **kwargs):
                 raise AssertionError("The zero-copy path must not materialize bytes.")
 
-        array = numpy.ones(2**22, dtype=numpy.float32).view(NoBytesArray)
+        array = np.ones(2**22, dtype=np.float32).view(NoBytesArray)
         builder = GraphBuilder()
         tracemalloc.start()
         try:

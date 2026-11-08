@@ -1,6 +1,6 @@
 import unittest
 
-import numpy
+import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -330,7 +330,7 @@ class TestInPlaceReuse(ExtTestCase):
         nodes = [oh.make_node("Add", ["X", "W"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 2])
-        w = onh.from_array(numpy.ones((2, 2), dtype=numpy.float32), name="W")
+        w = onh.from_array(np.ones((2, 2), dtype=np.float32), name="W")
         model = self._build_model(nodes, [x], [y])
         model.graph.initializer.extend([w])
 

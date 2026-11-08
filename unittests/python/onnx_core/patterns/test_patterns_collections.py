@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -30,14 +30,14 @@ def make_value_info(name, data_type, shape):
     return oh.make_tensor_value_info(name, data_type, shape)
 
 
-def make_initializer(name, value, dtype=numpy.int64):
+def make_initializer(name, value, dtype=np.int64):
     """Builds an initializer from a NumPy value."""
-    return onh.from_array(numpy.asarray(value, dtype=dtype), name=name)
+    return onh.from_array(np.asarray(value, dtype=dtype), name=name)
 
 
-def make_range(*shape, dtype=numpy.float32):
+def make_range(*shape, dtype=np.float32):
     """Builds a deterministic tensor with the requested shape."""
-    return numpy.arange(numpy.prod(shape), dtype=dtype).reshape(shape)
+    return np.arange(np.prod(shape), dtype=dtype).reshape(shape)
 
 
 def node_types(model):
@@ -74,7 +74,7 @@ class TestCollectionPatterns(ExtTestCase):
         for expected_value, got_value in zip(expected, got):
             self.assertEqual(expected_value.dtype, got_value.dtype)
             self.assertEqual(expected_value.shape, got_value.shape)
-            numpy.testing.assert_allclose(expected_value, got_value, rtol=1e-6, atol=1e-6)
+            np.testing.assert_allclose(expected_value, got_value, rtol=1e-6, atol=1e-6)
 
     def test_slices_split(self):
         model = make_model(
@@ -102,7 +102,7 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(list(split.output), ["x1", "x2"])
         values = initializer_values(optimized)
         self.assertIn(split.input[1], values)
-        numpy.testing.assert_array_equal(values[split.input[1]], numpy.array([7, 1]))
+        np.testing.assert_array_equal(values[split.input[1]], np.array([7, 1]))
         self.assert_equivalent(model, optimized, feeds)
 
     def test_gathers_split_rank1(self):
@@ -183,11 +183,11 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(slice_node.input[0], "X")
         self.assertEqual(len(slice_node.input), 5 if first_step or second_step else 4)
         values = initializer_values(optimized)
-        numpy.testing.assert_array_equal(values[slice_node.input[1]], numpy.array([0, 0]))
-        numpy.testing.assert_array_equal(values[slice_node.input[2]], numpy.array([1, 1]))
-        numpy.testing.assert_array_equal(values[slice_node.input[3]], numpy.array([0, 1]))
+        np.testing.assert_array_equal(values[slice_node.input[1]], np.array([0, 0]))
+        np.testing.assert_array_equal(values[slice_node.input[2]], np.array([1, 1]))
+        np.testing.assert_array_equal(values[slice_node.input[3]], np.array([0, 1]))
         if first_step or second_step:
-            numpy.testing.assert_array_equal(values[slice_node.input[4]], numpy.array([1, 1]))
+            np.testing.assert_array_equal(values[slice_node.input[4]], np.array([1, 1]))
         self.assertEqual(set(values), set(list(slice_node.input)[1:]))
         self.assert_equivalent(model, optimized, feeds)
 
@@ -281,9 +281,9 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(node_types(optimized), ["Split"])
         split = optimized.graph.node[0]
         self.assertEqual(list(split.output), ["Y0", "Y1"])
-        numpy.testing.assert_array_equal(initializer_values(optimized)[split.input[1]], [5, 3])
+        np.testing.assert_array_equal(initializer_values(optimized)[split.input[1]], [5, 3])
         self.assert_equivalent(model, optimized, feeds)
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             ReferenceEvaluator(optimized).run(None, feeds)[0], feeds["X"][:, 5:]
         )
 
@@ -322,10 +322,7 @@ class TestCollectionPatterns(ExtTestCase):
 
     def test_concat_gather(self):
         model = self.make_concat_gather_model([1], [1], 1)
-        feeds = {
-            "D1": numpy.array([5], dtype=numpy.int64),
-            "D2": numpy.array([7], dtype=numpy.int64),
-        }
+        feeds = {"D1": np.array([5], dtype=np.int64), "D2": np.array([7], dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "ConcatGather")
 
@@ -336,10 +333,7 @@ class TestCollectionPatterns(ExtTestCase):
 
     def test_concat_gather_multi_element_identity(self):
         model = self.make_concat_gather_model([2], [1], 2)
-        feeds = {
-            "D1": numpy.array([5, 6], dtype=numpy.int64),
-            "D2": numpy.array([7], dtype=numpy.int64),
-        }
+        feeds = {"D1": np.array([5, 6], dtype=np.int64), "D2": np.array([7], dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "ConcatGather")
 
@@ -350,10 +344,7 @@ class TestCollectionPatterns(ExtTestCase):
 
     def test_concat_gather_multi_element_gather(self):
         model = self.make_concat_gather_model([2], [1], 1)
-        feeds = {
-            "D1": numpy.array([10, 20], dtype=numpy.int64),
-            "D2": numpy.array([30], dtype=numpy.int64),
-        }
+        feeds = {"D1": np.array([10, 20], dtype=np.int64), "D2": np.array([30], dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "ConcatGather")
 
@@ -362,7 +353,7 @@ class TestCollectionPatterns(ExtTestCase):
         gather = optimized.graph.node[0]
         self.assertEqual(gather.input[0], "D1")
         values = initializer_values(optimized)
-        numpy.testing.assert_array_equal(values[gather.input[1]], numpy.array([1]))
+        np.testing.assert_array_equal(values[gather.input[1]], np.array([1]))
         self.assert_equivalent(model, optimized, feeds)
 
     def make_concat_reshape_model(self, use_abs):
@@ -402,7 +393,7 @@ class TestCollectionPatterns(ExtTestCase):
         replacement_names = [
             name
             for name in concat.input
-            if name in values and numpy.array_equal(values[name], numpy.array([-1]))
+            if name in values and np.array_equal(values[name], np.array([-1]))
         ]
         self.assertEqual(len(replacement_names), 1)
         self.assert_equivalent(model, optimized, feeds)
@@ -423,7 +414,7 @@ class TestCollectionPatterns(ExtTestCase):
             [make_value_info("Z", TensorProto.INT64, ["c"])],
             [make_initializer("empty", [])],
         )
-        feeds = {"X": numpy.arange(2, dtype=numpy.int64), "Y": numpy.arange(2, dtype=numpy.int64)}
+        feeds = {"X": np.arange(2, dtype=np.int64), "Y": np.arange(2, dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "ConcatEmpty")
 
@@ -444,7 +435,7 @@ class TestCollectionPatterns(ExtTestCase):
             [make_value_info("X", TensorProto.FLOAT, ["b", "c"])],
             [make_value_info("Y", TensorProto.FLOAT, ["d", "c"])],
         )
-        feeds = {"X": (make_range(3, 4) % 3).astype(numpy.float32)}
+        feeds = {"X": (make_range(3, 4) % 3).astype(np.float32)}
 
         optimized, rewrites = self.optimize(model, "ConcatTwiceUnary")
 
@@ -482,9 +473,7 @@ class TestCollectionPatterns(ExtTestCase):
     def test_gather_shape_basic(self):
         for gather_start, gather_length in [(0, 3), (1, 2), (0, 4), (2, 2)]:
             with self.subTest(gather_start=gather_start, gather_length=gather_length):
-                indices = numpy.arange(
-                    gather_start, gather_start + gather_length, dtype=numpy.int64
-                )
+                indices = np.arange(gather_start, gather_start + gather_length, dtype=np.int64)
                 model = self.make_gather_shape_model(indices, [gather_length])
                 feeds = {"X": make_range(2, 3, 5, 7)}
 
@@ -559,7 +548,7 @@ class TestCollectionPatterns(ExtTestCase):
                 self.assertEqual(node_types(optimized), ["Shape", "Squeeze"])
                 squeeze = optimized.graph.node[1]
                 values = initializer_values(optimized)
-                numpy.testing.assert_array_equal(values[squeeze.input[1]], numpy.array([0]))
+                np.testing.assert_array_equal(values[squeeze.input[1]], np.array([0]))
                 self.assert_equivalent(model, optimized, feeds)
 
     def make_gather_gather_model(self, outer_indices, output_shape, shared=False):
@@ -606,7 +595,7 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(node_types(optimized), ["Gather"])
         gather = optimized.graph.node[0]
         values = initializer_values(optimized)
-        numpy.testing.assert_array_equal(values[gather.input[1]], numpy.array([0, 1, 3]))
+        np.testing.assert_array_equal(values[gather.input[1]], np.array([0, 1, 3]))
         self.assert_equivalent(model, optimized, feeds)
 
     def test_gather_gather_inner_used_twice(self):
@@ -656,7 +645,7 @@ class TestCollectionPatterns(ExtTestCase):
                 make_value_info("B", TensorProto.FLOAT, [1, 3, 4]),
             ],
             [make_value_info("Y", TensorProto.FLOAT, [3, 4])],
-            [make_initializer("indices", numpy.array(0, dtype=numpy.int64))],
+            [make_initializer("indices", np.array(0, dtype=np.int64))],
         )
 
         optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
@@ -704,7 +693,7 @@ class TestCollectionPatterns(ExtTestCase):
         reshape = optimized.graph.node[1]
         self.assertNotEqual(reshape.input[1], "shape")
         values = initializer_values(optimized)
-        numpy.testing.assert_array_equal(values[reshape.input[1]], numpy.array([2, 2, 4]))
+        np.testing.assert_array_equal(values[reshape.input[1]], np.array([2, 2, 4]))
         self.assert_equivalent(model, optimized, feeds)
 
     def test_gather_upstream_propagation_matmul_batch_dim(self):
@@ -798,7 +787,7 @@ class TestCollectionPatterns(ExtTestCase):
     ):
         """Checks a successful GatherConcat rewrite."""
         model = self.make_gather_concat_model(concat_inputs, constants, indices, output_shape)
-        feeds = {"X": numpy.arange(5, dtype=numpy.int64)}
+        feeds = {"X": np.arange(5, dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "GatherConcat")
 
@@ -807,8 +796,8 @@ class TestCollectionPatterns(ExtTestCase):
         gather = optimized.graph.node[0]
         self.assertEqual(gather.input[0], "X")
         values = initializer_values(optimized)
-        numpy.testing.assert_array_equal(
-            values[gather.input[1]], numpy.asarray(expected_indices, dtype=numpy.int64)
+        np.testing.assert_array_equal(
+            values[gather.input[1]], np.asarray(expected_indices, dtype=np.int64)
         )
         self.assert_equivalent(model, optimized, feeds)
 
@@ -830,7 +819,7 @@ class TestCollectionPatterns(ExtTestCase):
         model = self.make_gather_concat_model(
             ["C1", "X", "C2"], {"C1": [10, 20], "C2": [30, 40, 50]}, 8, []
         )
-        feeds = {"X": numpy.arange(5, dtype=numpy.int64)}
+        feeds = {"X": np.arange(5, dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "GatherConcat")
 
@@ -840,7 +829,7 @@ class TestCollectionPatterns(ExtTestCase):
 
     def test_gather_concat_concat_used_twice(self):
         model = self.make_gather_concat_model(["C", "X"], {"C": [10, 20, 30]}, 4, [], shared=True)
-        feeds = {"X": numpy.arange(5, dtype=numpy.int64)}
+        feeds = {"X": np.arange(5, dtype=np.int64)}
 
         optimized, rewrites = self.optimize(model, "GatherConcat")
 

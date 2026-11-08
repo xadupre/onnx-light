@@ -6,7 +6,7 @@
 import gc
 import unittest
 
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 import onnx_light.onnx.checker as checker
@@ -28,7 +28,7 @@ def make_cache():
     block = cache.blocks.add()
     block.start = 0
     block.length = 1
-    data = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
+    data = np.arange(4, dtype=np.float32).reshape(1, 1, 2, 2)
     block.key.CopyFrom(onh.from_array(data))
     block.value.CopyFrom(onh.from_array(-data))
     return cache
@@ -67,10 +67,10 @@ class TestPagedCacheProto(ExtTestCase):
             checker.check_model(model)
 
     def test_dictionary_cache_with_layoutless_declaration(self):
-        payload = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
+        payload = np.arange(4, dtype=np.float32).reshape(1, 1, 2, 2)
         block = {
-            "start": numpy.array(0, dtype=numpy.int64),
-            "length": numpy.array(1, dtype=numpy.int64),
+            "start": np.array(0, dtype=np.int64),
+            "length": np.array(1, dtype=np.int64),
             "key": payload,
             "value": -payload,
         }
@@ -79,11 +79,11 @@ class TestPagedCacheProto(ExtTestCase):
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
         output = state_session.run(context, {})["present"]
         self.assertIsInstance(output, onnx.PagedCacheProto)
-        numpy.testing.assert_array_equal(onh.to_array(output.blocks[0].key), payload)
+        np.testing.assert_array_equal(onh.to_array(output.blocks[0].key), payload)
         for invalid_block in (
-            {**block, "length": numpy.array(3, dtype=numpy.int64)},
-            {**block, "start": numpy.array(1, dtype=numpy.int64)},
-            {**block, "key": numpy.ones(2, dtype=numpy.float32)},
+            {**block, "length": np.array(3, dtype=np.int64)},
+            {**block, "start": np.array(1, dtype=np.int64)},
+            {**block, "key": np.ones(2, dtype=np.float32)},
             {**block, "extra": payload},
         ):
             with self.subTest(fields=list(invalid_block)), self.assertRaises(ValueError):
@@ -129,9 +129,8 @@ class TestPagedCacheProto(ExtTestCase):
         state.reset({"past": cache})
         del outputs, state, state_session, context, model
         gc.collect()
-        numpy.testing.assert_array_equal(
-            onh.to_array(cache.blocks[0].key),
-            numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2),
+        np.testing.assert_array_equal(
+            onh.to_array(cache.blocks[0].key), np.arange(4, dtype=np.float32).reshape(1, 1, 2, 2)
         )
         restored_model = make_model()
         restored_model.graph.extended_initializer[0].paged_cache.CopyFrom(cache)
@@ -160,9 +159,7 @@ class TestPagedCacheProto(ExtTestCase):
         binding.input_name = "counter"
         binding.output_name = "next_counter"
         verify.verify_model(model)
-        state_session = runtime.RuntimeSession(
-            model, {"counter": numpy.ones(1, dtype=numpy.float32)}
-        )
+        state_session = runtime.RuntimeSession(model, {"counter": np.ones(1, dtype=np.float32)})
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
         self.assertEqual(len(state_session.run(context, {})["present"].blocks), 1)
         self.assertEqual(

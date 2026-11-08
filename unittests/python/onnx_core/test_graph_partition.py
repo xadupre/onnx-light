@@ -3,7 +3,7 @@
 import itertools
 import unittest
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
@@ -632,9 +632,9 @@ class TestPartitionGroupPattern(ExtTestCase):
                     feeds = {}
                     for i in range(3):
                         feeds[f"x{i}"] = (
-                            numpy.arange(rows * 2, dtype=numpy.float32).reshape(rows, 2) - i
+                            np.arange(rows * 2, dtype=np.float32).reshape(rows, 2) - i
                         )
-                        feeds[f"w{i}"] = numpy.array([[i + 1, -1], [0.5, 2]], dtype=numpy.float32)
+                        feeds[f"w{i}"] = np.array([[i + 1, -1], [0.5, 2]], dtype=np.float32)
                     expected = reference(model).run(None, feeds)
                     for result in (grouped, replayed):
                         actual = reference(result).run(None, feeds)
@@ -673,7 +673,7 @@ class TestPartitionGroupPattern(ExtTestCase):
         replayed = GraphBuilder(model).apply_rewritings(plan).to_model()
         checker.check_model(replayed)
         for value in (-2, 0, 3):
-            feeds = {"x": numpy.array(value, dtype=numpy.float32)}
+            feeds = {"x": np.array(value, dtype=np.float32)}
             self.assertEqualArray(
                 reference(model).run(None, feeds)[0], reference(grouped).run(None, feeds)[0]
             )
@@ -778,7 +778,7 @@ class TestPartitionGroupPattern(ExtTestCase):
         self.assertEqual(len(grouped.functions), 1)
         checker.check_model(grouped)
         for condition in (False, True):
-            feeds = {"cond": numpy.array(condition), "x": numpy.array(-3, dtype=numpy.float32)}
+            feeds = {"cond": np.array(condition), "x": np.array(-3, dtype=np.float32)}
             self.assertEqualArray(
                 reference(model).run(None, feeds)[0], reference(grouped).run(None, feeds)[0]
             )

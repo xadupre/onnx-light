@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 
-import numpy
+import numpy as np
 
 from onnx_light.__main__ import _optimization_patterns, main
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -111,7 +111,7 @@ class TestMainOptimize(ExtTestCase):
                     if as_function:
                         self.assertIn("KeepInput", operators)
                         self.assertEqual(result.functions[0].domain, "patterns")
-                    feeds = {"X": numpy.array([[True, False, True], [False, True, False]])}
+                    feeds = {"X": np.array([[True, False, True], [False, True, False]])}
                     for expected, actual in zip(
                         evaluator(model).run(None, feeds), evaluator(result).run(None, feeds)
                     ):
@@ -523,7 +523,7 @@ class TestMainOptimize(ExtTestCase):
             source = Path(tmp) / "model.onnx"
             output = Path(tmp) / "optimized.onnx"
             weights = Path(tmp) / "weights.bin"
-            values = numpy.arange(256, dtype=numpy.float32).reshape(16, 16)
+            values = np.arange(256, dtype=np.float32).reshape(16, 16)
             model = oh.make_model(
                 oh.make_graph(
                     [
@@ -580,19 +580,19 @@ class TestMainOptimize(ExtTestCase):
             model = _make_model()
             save(model, source)
             main(["optimize", str(source), "-o", str(output)])
-            feeds = {"X": numpy.array([[True, False, True], [False, True, False]])}
+            feeds = {"X": np.array([[True, False, True], [False, True, False]])}
             expected = ReferenceEvaluator(model).run(None, feeds)
             actual = ReferenceEvaluator(load(output)).run(None, feeds)
             for left, right in zip(expected, actual):
                 self.assertEqualArray(left, right)
 
     def test_inline_weights_are_preserved(self):
-        for dtype, raw in ((numpy.float32, True), (numpy.float32, False), (numpy.float64, False)):
+        for dtype, raw in ((np.float32, True), (np.float32, False), (np.float64, False)):
             with self.subTest(dtype=dtype, raw=raw), tempfile.TemporaryDirectory() as tmp:
                 source = Path(tmp) / "model.onnx"
                 output = Path(tmp) / "optimized.onnx"
-                values = numpy.arange(512 * 512, dtype=dtype).reshape(512, 512)
-                tensor_type = TensorProto.FLOAT if dtype == numpy.float32 else TensorProto.DOUBLE
+                values = np.arange(512 * 512, dtype=dtype).reshape(512, 512)
+                tensor_type = TensorProto.FLOAT if dtype == np.float32 else TensorProto.DOUBLE
                 weight = (
                     onh.from_array(values, name="W")
                     if raw
@@ -775,7 +775,7 @@ class TestMainOptimize(ExtTestCase):
                     shape_path = Path(tmp) / "shape.bin"
                     shape_path.write_bytes(
                         b"skip"
-                        + numpy.array([3, 2], dtype=numpy.int64).tobytes()
+                        + np.array([3, 2], dtype=np.int64).tobytes()
                         + b"trailing weights" * 1000
                     )
                     metadata = {"location": shape_path.name, "offset": "4"}
@@ -909,9 +909,9 @@ class TestMainOptimize(ExtTestCase):
                 )
                 self.assertEqual(tensor.data_location, TensorProto.EXTERNAL)
                 self.assertFalse((Path(tmp) / "missing.bin").exists())
-                values = numpy.arange(256, dtype=numpy.float32).reshape(16, 16)
+                values = np.arange(256, dtype=np.float32).reshape(16, 16)
                 (Path(tmp) / "missing.bin").write_bytes(values.tobytes())
-                feeds = {"X": numpy.ones((16, 16), dtype=numpy.float32)}
+                feeds = {"X": np.ones((16, 16), dtype=np.float32)}
                 actual = ReferenceEvaluator(load(output, load_external_data=True)).run(
                     None, feeds
                 )

@@ -47,7 +47,7 @@ class TestDocumentationExamples(ExtTestCase):
     def test_tensor_statistics_results(self):
         import runpy
         import matplotlib.pyplot as plt
-        import numpy
+        import numpy as np
         from onnx_light.onnx_core.quantization import dequantize_tensor_proto
         import onnx_light.onnx.numpy_helper as onh
 
@@ -70,21 +70,18 @@ class TestDocumentationExamples(ExtTestCase):
                 self.assertEqual(stats.count, expected.size)
                 self.assertEqual(stats.min, expected.min())
                 self.assertEqual(stats.max, expected.max())
-                self.assertAlmostEqual(stats.mean, expected.astype(numpy.float64).mean())
-                self.assertAlmostEqual(stats.median, numpy.median(expected))
-                numpy.testing.assert_allclose(
-                    stats.quantiles, numpy.quantile(expected, [0.25, 0.75])
-                )
+                self.assertAlmostEqual(stats.mean, expected.astype(np.float64).mean())
+                self.assertAlmostEqual(stats.median, np.median(expected))
+                np.testing.assert_allclose(stats.quantiles, np.quantile(expected, [0.25, 0.75]))
                 self.assertEqual(
-                    stats.distinct_count,
-                    None if name == "float32" else len(numpy.unique(expected)),
+                    stats.distinct_count, None if name == "float32" else len(np.unique(expected))
                 )
-                counts, edges = numpy.histogram(expected, bins=16)
-                numpy.testing.assert_array_equal(stats.distribution, counts)
-                numpy.testing.assert_allclose(stats.bin_edges, edges)
+                counts, edges = np.histogram(expected, bins=16)
+                np.testing.assert_array_equal(stats.distribution, counts)
+                np.testing.assert_allclose(stats.bin_edges, edges)
                 self.assertEqual(stats.rectangle_shape, [4, 8])
-                numpy.testing.assert_allclose(
-                    numpy.array(stats.rectangle_map).reshape(4, 8),
+                np.testing.assert_allclose(
+                    np.array(stats.rectangle_map).reshape(4, 8),
                     expected.reshape(4, 2, 8, 2).mean(axis=(1, 3)),
                     atol=1e-7,
                 )

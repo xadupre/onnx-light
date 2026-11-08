@@ -74,7 +74,7 @@ def add_quantization_parameters(
     Returns:
         The compact StructTypeProto used by encoded values referring to this set.
     """
-    import numpy
+    import numpy as np
     from .. import onnx
     import onnx_light.onnx.numpy_helper as onh
 
@@ -89,8 +89,8 @@ def add_quantization_parameters(
     candidate.CopyFrom(model)
     annotation = onnx.TensorAnnotation(tensor_name=prefix + name)
     parameters = dict(
-        storage_type=numpy.frombuffer(storage_type.SerializeToString(), dtype=numpy.uint8),
-        logical_type=numpy.frombuffer(logical_type.SerializeToString(), dtype=numpy.uint8),
+        storage_type=np.frombuffer(storage_type.SerializeToString(), dtype=np.uint8),
+        logical_type=np.frombuffer(logical_type.SerializeToString(), dtype=np.uint8),
         scales=scales,
         zero_points=zero_points,
         offsets=offsets,
@@ -113,7 +113,7 @@ def add_quantization_parameters(
             tensor.CopyFrom(value)
             tensor.name = tensor_name
         else:
-            tensor = onh.from_array(numpy.asarray(value), name=tensor_name)
+            tensor = onh.from_array(np.asarray(value), name=tensor_name)
         candidate.graph.initializer.append(tensor)
         additions.append(tensor)
         annotation.quant_parameter_tensor_names.append(

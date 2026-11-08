@@ -5,7 +5,7 @@
 import re
 from pathlib import Path
 import unittest
-import xml.etree.ElementTree
+import xml.etree.ElementTree as ET
 
 from onnx_light.ext_test_case import ExtTestCase
 
@@ -74,7 +74,7 @@ class TestProtoRelationsSync(ExtTestCase):
 
     def test_diagram_groups(self):
         dot = (self.STATIC / "protos_relations.dot").read_text(encoding="utf-8")
-        svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
+        svg = ET.parse(self.STATIC / "protos_relations.svg")
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         rendered = {
             group.find("svg:title", namespace).text: group.find("svg:text", namespace).text
@@ -138,14 +138,14 @@ class TestProtoRelationsSync(ExtTestCase):
         self.assertSetEqual(typed, groups["cluster_types"])
 
     def test_svg_portrait_layout(self):
-        svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
+        svg = ET.parse(self.STATIC / "protos_relations.svg")
         _, _, width, height = map(float, svg.getroot().attrib["viewBox"].split())
         self.assertGreater(height, width)
         # Keeps both dimensions below the original landscape diagram's width.
         self.assertLess(height, 5000)
 
     def test_svg_matches_dot(self):
-        svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
+        svg = ET.parse(self.STATIC / "protos_relations.svg")
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         rendered = set()
         for group in svg.findall(".//svg:g[@class='edge']", namespace):

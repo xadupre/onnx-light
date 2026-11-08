@@ -1,8 +1,8 @@
 import importlib.util
 from pathlib import Path
 
-import matplotlib.pyplot
-import numpy
+import matplotlib.pyplot as plt
+import numpy as np
 import pytest
 
 onnx = pytest.importorskip("onnx")
@@ -46,7 +46,7 @@ def test_native_fusion_parallel_matches_sequential_and_onnxscript(block_count):
     model = example.build_transpose_model(block_count)
     original = onnx.load_from_string(model.SerializeToString())
     onnx.checker.check_model(original)
-    feeds = {"X": numpy.random.default_rng(0).standard_normal((16, 16, 16)).astype(numpy.float32)}
+    feeds = {"X": np.random.default_rng(0).standard_normal((16, 16, 16)).astype(np.float32)}
     expected = ReferenceEvaluator(original).run(None, feeds)[0]
     plans = []
     for parallel in (False, True):
@@ -62,16 +62,14 @@ def test_native_fusion_parallel_matches_sequential_and_onnxscript(block_count):
                 opset.domain = ""
         onnx.checker.check_model(optimized)
         assert len(optimized.graph.node) == 2 * block_count
-        numpy.testing.assert_array_equal(
-            ReferenceEvaluator(optimized).run(None, feeds)[0], expected
-        )
+        np.testing.assert_array_equal(ReferenceEvaluator(optimized).run(None, feeds)[0], expected)
         assert example.measure_light_fusion(model, repeats=1, native=True, parallel=parallel) >= 0
     assert plans[0] == plans[1]
     scripted = onnx_ir.from_proto(original)
     assert example.ONNXSCRIPT_TRANSPOSE_RULES.apply_to_model(scripted) == block_count
     optimized = onnx_ir.to_proto(scripted)
     assert len(optimized.graph.node) == 2 * block_count
-    numpy.testing.assert_array_equal(ReferenceEvaluator(optimized).run(None, feeds)[0], expected)
+    np.testing.assert_array_equal(ReferenceEvaluator(optimized).run(None, feeds)[0], expected)
     assert example.measure_onnxscript_fusion(model, repeats=1, native=True) >= 0
 
 
@@ -103,4 +101,4 @@ def test_plot_benchmark():
         "onnxscript",
     ]
     assert list(figure.axes[2].lines[0].get_xdata()) == [25, 50]
-    matplotlib.pyplot.close(figure)
+    plt.close(figure)

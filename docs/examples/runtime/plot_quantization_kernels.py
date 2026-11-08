@@ -13,8 +13,8 @@ These operators are onnx-light extensions, not ONNX ``QuantizeLinear`` and
 the additional parameters required by learned or transformed layouts.
 """
 
-import matplotlib.pyplot
-import numpy
+import matplotlib.pyplot as plt
+import numpy as np
 
 from onnx_light import onnx
 import onnx_light.onnx.helper as oh
@@ -49,9 +49,9 @@ from onnx_light.onnx_py._onnxpykernels.runtime import (
 # Dequantize only needs that encoded value and its requested output dtype.
 # The endpoints below deliberately demonstrate saturation to the code range.
 
-linear_values = numpy.array([-40, -1, -0.6, 0, 0.6, 1, 40], dtype=numpy.float32)
-linear_scale = numpy.array(0.25, dtype=numpy.float32)
-linear_zero_point = numpy.array(-3, dtype=numpy.float32)
+linear_values = np.array([-40, -1, -0.6, 0, 0.6, 1, 40], dtype=np.float32)
+linear_scale = np.array(0.25, dtype=np.float32)
+linear_zero_point = np.array(-3, dtype=np.float32)
 linear_plan = make_quantization_plan(
     QuantizationFormat.INT8, linear_values.size, block_size=linear_values.size
 )
@@ -79,15 +79,15 @@ linear_context = RuntimeContext()
 linear_context.set("X", tensor_from_proto(onh.from_array(linear_values, name="X")))
 linear_session = RuntimeSession(linear_model)
 linear_session.run(linear_context)
-linear_output = numpy.from_dlpack(linear_context.get("Y"))
-reference_codes = numpy.clip(
-    numpy.rint(linear_values / linear_scale) + linear_zero_point, -128, 127
-).astype(numpy.int8)
-reference_output = (reference_codes.astype(numpy.float32) - linear_zero_point) * linear_scale
-numpy.testing.assert_array_equal(reference_codes, [-128, -7, -5, -3, -1, 1, 127])
-numpy.testing.assert_array_equal(linear_output, reference_output)
-numpy.testing.assert_array_equal(linear_output, [-31.25, -1, -0.5, 0, 0.5, 1, 32.5])
-assert linear_output.dtype == numpy.float32
+linear_output = np.from_dlpack(linear_context.get("Y"))
+reference_codes = np.clip(
+    np.rint(linear_values / linear_scale) + linear_zero_point, -128, 127
+).astype(np.int8)
+reference_output = (reference_codes.astype(np.float32) - linear_zero_point) * linear_scale
+np.testing.assert_array_equal(reference_codes, [-128, -7, -5, -3, -1, 1, 127])
+np.testing.assert_array_equal(linear_output, reference_output)
+np.testing.assert_array_equal(linear_output, [-31.25, -1, -0.5, 0, 0.5, 1, 32.5])
+assert linear_output.dtype == np.float32
 print("Linear input:          ", linear_values)
 print("Reference INT8 codes:  ", reference_codes)
 print("Quantize -> Dequantize:", linear_output)
@@ -110,11 +110,11 @@ print("Quantize -> Dequantize:", linear_output)
 # Encoded outputs use ``get_value`` rather than the tensor-only ``get``.
 # Importing the native runtime above registers its built-in kernels.
 
-values = numpy.array([-8, -3.3, 0.2, 7, -16, -1.2, 8.5, 14], dtype=numpy.float32)
+values = np.array([-8, -3.3, 0.2, 7, -16, -1.2, 8.5, 14], dtype=np.float32)
 plan = make_quantization_plan(QuantizationFormat.NF4, values.size, block_size=4)
-codebook = numpy.array(plan.run(0).block(0).codebook, dtype=numpy.float64)
+codebook = np.array(plan.run(0).block(0).codebook, dtype=np.float64)
 assert codebook.size == 16
-assert not numpy.allclose(numpy.diff(codebook), numpy.diff(codebook)[0])
+assert not np.allclose(np.diff(codebook), np.diff(codebook)[0])
 print("Nonuniform NF4 codebook:", codebook)
 destination = onnx.TypeProto()
 destination.struct_type.CopyFrom(make_quantization_type(plan))
@@ -143,24 +143,24 @@ model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 21), oh.make_ops
 
 def reconstruct_nf4(source, block_scales):
     """Returns the nearest scaled NF4 table entry for each source element."""
-    blocks = source.astype(numpy.float64).reshape(-1, 4)
+    blocks = source.astype(np.float64).reshape(-1, 4)
     levels = block_scales[:, None] * codebook[None, :]
-    distances = numpy.abs(blocks[:, :, None] - levels[:, None, :])
+    distances = np.abs(blocks[:, :, None] - levels[:, None, :])
     indices = distances.argmin(axis=2)
-    return numpy.take_along_axis(levels, indices, axis=1).reshape(source.shape)
+    return np.take_along_axis(levels, indices, axis=1).reshape(source.shape)
 
 
 context = RuntimeContext()
 context.set("X", tensor_from_proto(onh.from_array(values, name="X")))
 session = RuntimeSession(model)
 session.run(context)
-automatic = numpy.from_dlpack(context.get("Y"))
+automatic = np.from_dlpack(context.get("Y"))
 encoded = context.get_value("Q")
 assert isinstance(encoded, onnx.EncodedValueProto)
-assert automatic.dtype == numpy.float64
-automatic_scales = numpy.max(numpy.abs(values.reshape(-1, 4)), axis=1).astype(numpy.float64)
-numpy.testing.assert_array_equal(automatic_scales, [8, 16])
-numpy.testing.assert_allclose(
+assert automatic.dtype == np.float64
+automatic_scales = np.max(np.abs(values.reshape(-1, 4)), axis=1).astype(np.float64)
+np.testing.assert_array_equal(automatic_scales, [8, 16])
+np.testing.assert_allclose(
     automatic, reconstruct_nf4(values, automatic_scales), rtol=1e-12, atol=1e-12
 )
 print("Input:     ", values)
@@ -184,14 +184,14 @@ explicit_model.graph.node[0].input.append("scales")
 explicit_model.graph.input.append(
     oh.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
 )
-scales = numpy.array([10, 20], dtype=numpy.float64)
+scales = np.array([10, 20], dtype=np.float64)
 explicit_context = RuntimeContext()
 explicit_context.set("X", context.get("X"))
 explicit_context.set("scales", tensor_from_proto(onh.from_array(scales, name="scales")))
 explicit_session = RuntimeSession(explicit_model)
 explicit_session.run(explicit_context)
-explicit = numpy.from_dlpack(explicit_context.get("Y"))
-numpy.testing.assert_allclose(explicit, reconstruct_nf4(values, scales), rtol=1e-12, atol=1e-12)
+explicit = np.from_dlpack(explicit_context.get("Y"))
+np.testing.assert_allclose(explicit, reconstruct_nf4(values, scales), rtol=1e-12, atol=1e-12)
 print("Explicit:  ", explicit)
 
 # %%
@@ -218,8 +218,8 @@ initializer_model = oh.make_model(initializer_graph, opset_imports=[oh.make_opse
 initializer_context = RuntimeContext()
 initializer_session = RuntimeSession(initializer_model)
 initializer_session.run(initializer_context)
-reconstructed = numpy.from_dlpack(initializer_context.get("Y"))
-numpy.testing.assert_array_equal(reconstructed, automatic)
+reconstructed = np.from_dlpack(initializer_context.get("Y"))
+np.testing.assert_array_equal(reconstructed, automatic)
 print("Serialized:", reconstructed)
 
 # %%
@@ -230,16 +230,16 @@ print("Serialized:", reconstructed)
 # simple range calibration nor this small example guarantees optimal accuracy
 # for a real model.
 
-figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(10, 4))
+figure, axes = plt.subplots(1, 2, figsize=(10, 4))
 axes[0].plot(values, "o-", label="Input")
 axes[0].plot(automatic, "x--", label="Automatic scales")
 axes[0].plot(explicit, "+:", label="Explicit scales")
 axes[0].set_title("NF4 codebook reconstruction")
 axes[0].set_xlabel("Element")
 axes[0].legend()
-indices = numpy.arange(values.size)
-axes[1].bar(indices - 0.2, numpy.abs(automatic - values), width=0.4, label="Automatic")
-axes[1].bar(indices + 0.2, numpy.abs(explicit - values), width=0.4, label="Explicit")
+indices = np.arange(values.size)
+axes[1].bar(indices - 0.2, np.abs(automatic - values), width=0.4, label="Automatic")
+axes[1].bar(indices + 0.2, np.abs(explicit - values), width=0.4, label="Explicit")
 axes[1].set_title("Absolute reconstruction error")
 axes[1].set_xlabel("Element")
 axes[1].legend()

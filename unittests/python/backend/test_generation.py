@@ -5,7 +5,7 @@
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -20,14 +20,14 @@ add_quantization_parameters = import_or_skip(
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
-def transition_model(dtype=numpy.float32):
+def transition_model(dtype=np.float32):
     """Builds a token transition model with a three-token vocabulary."""
     model = parser.parse_model(
         '<ir_version: 10, opset_import: ["" : 23]>'
         "transition (int64[B, S] input_ids) => (float[B, S, 3] logits)"
         "{ logits = Gather(table, input_ids) }"
     )
-    table = numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=dtype)
+    table = np.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=dtype)
     model.graph.initializer.append(onh.from_array(table, name="table"))
     model.graph.output[0].type.tensor_type.elem_type = onh.from_array(table).data_type
     return model
@@ -35,13 +35,11 @@ def transition_model(dtype=numpy.float32):
 
 def _add_shared_parameters(model, name, shape, scales, prefix):
     """Adds one shared parameter set with model-unique initializer names."""
-    plan = runtime.make_quantization_plan(
-        runtime.QuantizationFormat.INT8, int(numpy.prod(shape)), 1
-    )
+    plan = runtime.make_quantization_plan(runtime.QuantizationFormat.INT8, int(np.prod(shape)), 1)
     storage = runtime.make_quantization_type(plan)
     logical = oh.make_tensor_type_proto(TensorProto.FLOAT, shape)
     compact = add_quantization_parameters(
-        model, name, storage, logical, scales=numpy.asarray(scales, dtype=numpy.float64)
+        model, name, storage, logical, scales=np.asarray(scales, dtype=np.float64)
     )
     annotation = model.graph.quantization_annotation[-1]
     renamed = {
@@ -58,12 +56,9 @@ def _add_shared_parameters(model, name, shape, scales, prefix):
 
 def _shared_value(model, name, values):
     """Quantizes values into a retained model-local shared runtime value."""
-    array = numpy.asarray(values, dtype=numpy.float32)
+    array = np.asarray(values, dtype=np.float32)
     tensor = runtime.tensor_from_numpy(
-        name,
-        TensorProto.FLOAT,
-        list(array.shape),
-        numpy.frombuffer(array.tobytes(), dtype=numpy.uint8),
+        name, TensorProto.FLOAT, list(array.shape), np.frombuffer(array.tobytes(), dtype=np.uint8)
     )
     return runtime.quantize_tensor_shared(tensor, model, name)
 
@@ -91,10 +86,10 @@ class TestGeneration(ExtTestCase):
                 options = runtime.GenerationOptions()
                 options.max_new_tokens = 4
                 options.eos_token_ids = eos_ids
-                feeds = {"input_ids": numpy.array(prompt, dtype=numpy.int64)}
+                feeds = {"input_ids": np.array(prompt, dtype=np.int64)}
                 result = runtime.generate(model, context, feeds, options)
-                numpy.testing.assert_array_equal(numpy.from_dlpack(result), expected)
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(np.from_dlpack(result), expected)
+                np.testing.assert_array_equal(
                     evaluator.generate(feeds, max_new_tokens=4, eos_token_ids=eos_ids), expected
                 )
 
@@ -121,8 +116,8 @@ class TestGeneration(ExtTestCase):
         model.graph.node[4].metadata_props.add(key="onnx_light.release_after", value=length_name)
         model.graph.initializer.extend(
             [
-                onh.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
-                onh.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
+                onh.from_array(np.array(1, dtype=np.int64), name="index"),
+                onh.from_array(np.array(0, dtype=np.int64), name="zero"),
                 transition_model().graph.initializer[0],
             ]
         )
@@ -131,14 +126,14 @@ class TestGeneration(ExtTestCase):
         binding.output_name = "present_ids"
         evaluator = ReferenceEvaluator(model)
         feeds = {
-            "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
-            "past_ids": numpy.empty((1, 0), dtype=numpy.int64),
+            "input_ids": np.array([[0, 1]], dtype=np.int64),
+            "past_ids": np.empty((1, 0), dtype=np.int64),
         }
         logits, present = evaluator.run(None, feeds)
-        numpy.testing.assert_array_equal(logits.argmax(axis=-1), [[1, 2]])
-        numpy.testing.assert_array_equal(present, [[0, 1]])
+        np.testing.assert_array_equal(logits.argmax(axis=-1), [[1, 2]])
+        np.testing.assert_array_equal(present, [[0, 1]])
         for _ in range(2):
-            numpy.testing.assert_array_equal(
+            np.testing.assert_array_equal(
                 evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0, 1]]
             )
 
@@ -170,11 +165,11 @@ class TestGeneration(ExtTestCase):
 
         def embedding_abs(node, value):
             embedding_calls.append(node.op_type)
-            return numpy.abs(value)
+            return np.abs(value)
 
         feeds = {
-            "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
-            "vision": [numpy.zeros((1, 1, 3), dtype=numpy.float32)],
+            "input_ids": np.array([[0, 1]], dtype=np.int64),
+            "vision": [np.zeros((1, 1, 3), dtype=np.float32)],
         }
 
         def generate():
@@ -185,18 +180,18 @@ class TestGeneration(ExtTestCase):
             {"input_ids": feeds["input_ids"]}, max_new_tokens=3
         )
         for result in [generate(), generate()]:
-            numpy.testing.assert_array_equal(result, expected)
+            np.testing.assert_array_equal(result, expected)
         with ThreadPoolExecutor(max_workers=2) as pool:
             for result in pool.map(lambda _: generate(), range(2)):
-                numpy.testing.assert_array_equal(result, expected)
+                np.testing.assert_array_equal(result, expected)
         self.assertEqual(decoder.cpu_executor_instance_id, embedding.cpu_executor_instance_id)
         self.assertGreaterEqual(decoder.cpu_execution_counters.dispatches - before, 4 * 3 * 2)
         self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
         decoder.register_custom_kernel("", "Abs", embedding_abs)
-        numpy.testing.assert_array_equal(generate(), expected)
+        np.testing.assert_array_equal(generate(), expected)
         self.assertEqual(len(embedding_calls), 3)
-        numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
+        np.testing.assert_array_equal(
             decoder.generate(
                 feeds,
                 max_new_tokens=3,
@@ -229,7 +224,7 @@ class TestGeneration(ExtTestCase):
         self.assertTrue({"Gather", "Abs"} <= {event.op_type for event in failure_events})
 
     def test_split_embedding_rejects_initializer_consumption_on_either_evaluator(self):
-        prompt = {"input_ids": numpy.array([[0, 1]], dtype=numpy.int64)}
+        prompt = {"input_ids": np.array([[0, 1]], dtype=np.int64)}
         for consume_decoder, consume_embedding in (
             (False, False),
             (False, True),
@@ -257,7 +252,7 @@ class TestGeneration(ExtTestCase):
                     with self.assertRaisesRegex(ValueError, "consume_initializers=False"):
                         decoder.generate(prompt, max_new_tokens=2, embedding=embedding)
                 else:
-                    numpy.testing.assert_array_equal(
+                    np.testing.assert_array_equal(
                         decoder.generate(prompt, max_new_tokens=2, embedding=embedding),
                         [[0, 1, 2, 0]],
                     )
@@ -270,7 +265,7 @@ class TestGeneration(ExtTestCase):
                 "embedding",
                 [oh.make_tensor_value_info("input_ids", TensorProto.INT64, [None, None])],
                 [oh.make_tensor_value_info("inputs_embeds", TensorProto.FLOAT, [None, None, 3])],
-                [onh.from_array(numpy.eye(3, dtype=numpy.float32) * 4, name="table")],
+                [onh.from_array(np.eye(3, dtype=np.float32) * 4, name="table")],
             ),
             opset_imports=[oh.make_opsetid("", 23), oh.make_opsetid("ai.rt", 1)],
             ir_version=10,
@@ -304,7 +299,7 @@ class TestGeneration(ExtTestCase):
 
         direct = _shared_value(embedding_model, "embedding", [1, 2, 3])
         cache_value = _shared_encoded(
-            embedding_model, "cache", numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
+            embedding_model, "cache", np.arange(4, dtype=np.float32).reshape(1, 1, 2, 2)
         )
         cache = onnx.PagedCacheProto(name="cache")
         block = cache.blocks.add()
@@ -323,7 +318,7 @@ class TestGeneration(ExtTestCase):
             ir_version=10,
         )
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "input_ids": np.array([[0]], dtype=np.int64),
             "direct": direct,
             "nested": {"payload": direct},
             "sequence": [direct],
@@ -333,7 +328,7 @@ class TestGeneration(ExtTestCase):
             "direct": direct.encoded.SerializeToString(),
             "cache": cache.SerializeToString(),
         }
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             ReferenceEvaluator(decoder_model).generate(
                 feeds, max_new_tokens=2, embedding=ReferenceEvaluator(embedding_model)
             ),
@@ -393,11 +388,7 @@ class TestGeneration(ExtTestCase):
                     prefix,
                     inputs,
                     outputs,
-                    [
-                        onh.from_array(
-                            numpy.array([0, 1], dtype=numpy.int64), name=f"{prefix}_axes"
-                        )
-                    ],
+                    [onh.from_array(np.array([0, 1], dtype=np.int64), name=f"{prefix}_axes")],
                 ),
                 opset_imports=[oh.make_opsetid("", 23), oh.make_opsetid("ai.rt", 1)],
                 ir_version=10,
@@ -411,8 +402,8 @@ class TestGeneration(ExtTestCase):
         embedding_model = make_model(True, [3], [5, 1, 1])
         decoder_model = make_model(False, [3], [1, 5, 1])
         shared = _shared_value(embedding_model, "common", [5, 1, 4])
-        feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64), "shared": shared}
-        numpy.testing.assert_array_equal(
+        feeds = {"input_ids": np.array([[0]], dtype=np.int64), "shared": shared}
+        np.testing.assert_array_equal(
             ReferenceEvaluator(decoder_model).generate(
                 feeds, max_new_tokens=1, embedding=ReferenceEvaluator(embedding_model)
             ),
@@ -445,8 +436,8 @@ class TestGeneration(ExtTestCase):
         decoder = ReferenceEvaluator(decoder_model)
         embedding = ReferenceEvaluator(embedding_model)
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
-            "past": numpy.empty((1, 0, 3), dtype=numpy.float32),
+            "input_ids": np.array([[0]], dtype=np.int64),
+            "past": np.empty((1, 0, 3), dtype=np.float32),
         }
 
         def generate():
@@ -455,11 +446,11 @@ class TestGeneration(ExtTestCase):
         expected = ReferenceEvaluator(transition_model()).generate(
             {"input_ids": feeds["input_ids"]}, max_new_tokens=4
         )
-        numpy.testing.assert_array_equal(generate(), expected)
-        numpy.testing.assert_array_equal(generate(), expected)
+        np.testing.assert_array_equal(generate(), expected)
+        np.testing.assert_array_equal(generate(), expected)
         with ThreadPoolExecutor(max_workers=2) as pool:
             for result in pool.map(lambda _: generate(), range(2)):
-                numpy.testing.assert_array_equal(result, expected)
+                np.testing.assert_array_equal(result, expected)
         self.assertEqual(feeds["past"].shape, (1, 0, 3))
 
     def test_split_embedding_prefill_only_image_features(self):
@@ -476,10 +467,10 @@ class TestGeneration(ExtTestCase):
         embedding_model.graph.initializer.extend(
             [
                 onh.from_array(
-                    numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [4, 0, 0]], numpy.float32),
+                    np.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [4, 0, 0]], np.float32),
                     name="table",
                 ),
-                onh.from_array(numpy.array(3, numpy.int64), name="image_token"),
+                onh.from_array(np.array(3, np.int64), name="image_token"),
             ]
         )
         decoder_model = parser.parse_model(
@@ -490,7 +481,7 @@ class TestGeneration(ExtTestCase):
             " logits = ReduceSum <keepdims: int = 0> (present, sequence_axis) }"
         )
         decoder_model.graph.initializer.append(
-            onh.from_array(numpy.array([1], numpy.int64), name="sequence_axis")
+            onh.from_array(np.array([1], np.int64), name="sequence_axis")
         )
         binding = decoder_model.graph.persistent_bindings.add()
         binding.input_name = "past"
@@ -505,9 +496,9 @@ class TestGeneration(ExtTestCase):
         ]:
             with self.subTest(prompt=prompt):
                 feeds = {
-                    "input_ids": numpy.array(prompt, dtype=numpy.int64),
-                    "image_features": numpy.array(features, dtype=numpy.float32).reshape(-1, 3),
-                    "past": numpy.empty((len(prompt), 0, 3), dtype=numpy.float32),
+                    "input_ids": np.array(prompt, dtype=np.int64),
+                    "image_features": np.array(features, dtype=np.float32).reshape(-1, 3),
+                    "past": np.empty((len(prompt), 0, 3), dtype=np.float32),
                 }
                 original = {name: value.copy() for name, value in feeds.items()}
                 # Compares with an explicit split loop, updating both features and cache.
@@ -526,13 +517,13 @@ class TestGeneration(ExtTestCase):
                         },
                     )[0]
                     logits, past = decoder.run(None, {"inputs_embeds": embeds, "past": past})
-                    tokens = numpy.concatenate(
-                        [tokens, numpy.argmax(logits, axis=-1).reshape(-1, 1)], axis=1
+                    tokens = np.concatenate(
+                        [tokens, np.argmax(logits, axis=-1).reshape(-1, 1)], axis=1
                     )
-                numpy.testing.assert_array_equal(tokens, expected)
+                np.testing.assert_array_equal(tokens, expected)
                 self.assertEqual(past.shape[1], len(prompt[0]) + 2)
                 for _ in range(2):
-                    numpy.testing.assert_array_equal(
+                    np.testing.assert_array_equal(
                         decoder.generate(
                             feeds,
                             embedding=embedding,
@@ -542,7 +533,7 @@ class TestGeneration(ExtTestCase):
                         tokens,
                     )
                 for count in [0, 1]:
-                    numpy.testing.assert_array_equal(
+                    np.testing.assert_array_equal(
                         decoder.generate(
                             feeds,
                             embedding=embedding,
@@ -552,19 +543,19 @@ class TestGeneration(ExtTestCase):
                         tokens[:, : len(prompt[0]) + count],
                     )
                 for name, value in original.items():
-                    numpy.testing.assert_array_equal(feeds[name], value)
+                    np.testing.assert_array_equal(feeds[name], value)
                 if features:
                     with self.assertRaisesRegex(ValueError, "ScatterND.*shape must be"):
                         decoder.generate(feeds, embedding=embedding, max_new_tokens=3)
                 else:
-                    numpy.testing.assert_array_equal(
+                    np.testing.assert_array_equal(
                         decoder.generate(feeds, embedding=embedding, max_new_tokens=3), tokens
                     )
 
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
-            "image_features": numpy.empty((0, 3), dtype=numpy.float32),
-            "past": numpy.empty((1, 0, 3), dtype=numpy.float32),
+            "input_ids": np.array([[0]], dtype=np.int64),
+            "image_features": np.empty((0, 3), dtype=np.float32),
+            "past": np.empty((1, 0, 3), dtype=np.float32),
         }
         for name in ["input_ids", "attention_mask", "position_ids", "past", "missing"]:
             with (
@@ -574,7 +565,7 @@ class TestGeneration(ExtTestCase):
                 decoder.generate(
                     feeds, embedding=embedding, max_new_tokens=0, prefill_only_inputs=[name]
                 )
-        for value in [numpy.array(0, numpy.float32), [numpy.empty((0, 3), numpy.float32)]]:
+        for value in [np.array(0, np.float32), [np.empty((0, 3), np.float32)]]:
             with (
                 self.subTest(invalid_value=value),
                 self.assertRaisesRegex(ValueError, "nonscalar tensor"),
@@ -594,7 +585,7 @@ class TestGeneration(ExtTestCase):
             )
         for shape in [[-1, 3], [2**62, 4], [1, 3]]:
             invalid = runtime.tensor_from_numpy(
-                "image_features", TensorProto.FLOAT, shape, numpy.empty(0, numpy.uint8)
+                "image_features", TensorProto.FLOAT, shape, np.empty(0, np.uint8)
             )
             with (
                 self.subTest(invalid_shape=shape),
@@ -622,34 +613,34 @@ class TestGeneration(ExtTestCase):
 
     def test_greedy_batch_and_eos(self):
         evaluator = ReferenceEvaluator(transition_model())
-        feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}
-        numpy.testing.assert_array_equal(
+        feeds = {"input_ids": np.array([[0], [1]], dtype=np.int64)}
+        np.testing.assert_array_equal(
             evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0], [1, 2, 0, 1]]
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             evaluator.generate(feeds, max_new_tokens=5, eos_token_ids=[2], pad_token_id=0),
             [[0, 1, 2], [1, 2, 0]],
         )
-        numpy.testing.assert_array_equal(feeds["input_ids"], [[0], [1]])
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(feeds["input_ids"], [[0], [1]])
+        np.testing.assert_array_equal(
             evaluator.generate(feeds, max_new_tokens=0), feeds["input_ids"]
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             evaluator.generate(feeds, max_new_tokens=1), [[0, 1], [1, 2]]
         )
 
     def test_temperature(self):
         evaluator = ReferenceEvaluator(transition_model())
-        feeds = {"input_ids": numpy.zeros((128, 1), dtype=numpy.int64)}
+        feeds = {"input_ids": np.zeros((128, 1), dtype=np.int64)}
         cold = evaluator.generate(feeds, max_new_tokens=1, temperature=0.01, seed=42)
         hot = evaluator.generate(feeds, max_new_tokens=1, temperature=100, seed=42)
-        numpy.testing.assert_array_equal(cold[:, -1], numpy.ones(128, dtype=numpy.int64))
-        self.assertGreater(numpy.count_nonzero(hot[:, -1] != 1), 30)
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(cold[:, -1], np.ones(128, dtype=np.int64))
+        self.assertGreater(np.count_nonzero(hot[:, -1] != 1), 30)
+        np.testing.assert_array_equal(
             hot, evaluator.generate(feeds, max_new_tokens=1, temperature=100, seed=42)
         )
         other = evaluator.generate(feeds, max_new_tokens=1, temperature=100, seed=43)
-        self.assertFalse(numpy.array_equal(hot, other))
+        self.assertFalse(np.array_equal(hot, other))
 
     def test_persistent_operator_without_append_optimization(self):
         model = parser.parse_model(
@@ -665,18 +656,18 @@ class TestGeneration(ExtTestCase):
         binding.output_name = "present_ids"
         evaluator = ReferenceEvaluator(model)
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
-            "past_ids": numpy.empty((1, 0), dtype=numpy.int64),
+            "input_ids": np.array([[0]], dtype=np.int64),
+            "past_ids": np.empty((1, 0), dtype=np.int64),
         }
         for _ in range(2):
-            numpy.testing.assert_array_equal(
+            np.testing.assert_array_equal(
                 evaluator.generate(feeds, max_new_tokens=4), [[0, 1, 2, 0, 1]]
             )
         self.assertEqual(feeds["past_ids"].shape, (1, 0))
         with self.assertRaisesRegex(ValueError, "missing initial"):
             evaluator.generate({"input_ids": feeds["input_ids"]})
         with self.assertRaisesRegex(ValueError, "dtype mismatch"):
-            evaluator.generate({**feeds, "past_ids": numpy.empty((1, 0), dtype=numpy.float32)})
+            evaluator.generate({**feeds, "past_ids": np.empty((1, 0), dtype=np.float32)})
 
     def test_persistent_state_with_multiple_consumers(self):
         model = parser.parse_model(
@@ -687,7 +678,7 @@ class TestGeneration(ExtTestCase):
             " logits = Gather(table, past_state) }"
         )
         model.graph.initializer.append(
-            onh.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
+            onh.from_array(np.ones((1, 1), dtype=np.int64), name="one")
         )
         model.graph.initializer.append(transition_model().graph.initializer[0])
         binding = model.graph.persistent_bindings.add()
@@ -695,24 +686,24 @@ class TestGeneration(ExtTestCase):
         binding.output_name = "present_state"
         evaluator = ReferenceEvaluator(model)
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
-            "past_state": numpy.array([[0]], dtype=numpy.int64),
+            "input_ids": np.array([[0]], dtype=np.int64),
+            "past_state": np.array([[0]], dtype=np.int64),
         }
         for _ in range(2):
-            numpy.testing.assert_array_equal(
+            np.testing.assert_array_equal(
                 evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0]]
             )
-        numpy.testing.assert_array_equal(feeds["past_state"], [[0]])
+        np.testing.assert_array_equal(feeds["past_state"], [[0]])
 
     def test_floating_logits(self):
         import ml_dtypes
 
-        for dtype in (numpy.float32, numpy.float64, numpy.float16, ml_dtypes.bfloat16):
+        for dtype in (np.float32, np.float64, np.float16, ml_dtypes.bfloat16):
             with self.subTest(dtype=dtype):
                 result = ReferenceEvaluator(transition_model(dtype)).generate(
-                    {"input_ids": numpy.array([[0, 1]], dtype=numpy.int64)}, max_new_tokens=2
+                    {"input_ids": np.array([[0, 1]], dtype=np.int64)}, max_new_tokens=2
                 )
-                numpy.testing.assert_array_equal(result, [[0, 1, 2, 0]])
+                np.testing.assert_array_equal(result, [[0, 1, 2, 0]])
 
     def test_bfloat16_key_value_feedback(self):
         import ml_dtypes
@@ -734,14 +725,14 @@ class TestGeneration(ExtTestCase):
             binding.input_name = past
             binding.output_name = present
         model.graph.initializer.append(
-            onh.from_array(numpy.ones((1, 4, 1, 64), dtype=ml_dtypes.bfloat16), name="new_cache")
+            onh.from_array(np.ones((1, 4, 1, 64), dtype=ml_dtypes.bfloat16), name="new_cache")
         )
         feeds = {
-            "input_ids": numpy.array([[0]], dtype=numpy.int64),
-            "past_key_values.0.key": numpy.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
-            "past_key_values.0.value": numpy.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
+            "input_ids": np.array([[0]], dtype=np.int64),
+            "past_key_values.0.key": np.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
+            "past_key_values.0.value": np.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
         }
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             ReferenceEvaluator(model).generate(feeds, max_new_tokens=3), [[0, 1, 2, 0]]
         )
         self.assertEqual(feeds["past_key_values.0.key"].shape, (1, 4, 0, 64))
@@ -754,12 +745,11 @@ class TestGeneration(ExtTestCase):
             "<int64 index = {0}>"
             "{ table = SequenceAt(tables, index) logits = Gather(table, input_ids) }"
         )
-        table = numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=numpy.float32)
+        table = np.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=np.float32)
         result = ReferenceEvaluator(model).generate(
-            {"input_ids": numpy.array([[0]], dtype=numpy.int64), "tables": [table]},
-            max_new_tokens=3,
+            {"input_ids": np.array([[0]], dtype=np.int64), "tables": [table]}, max_new_tokens=3
         )
-        numpy.testing.assert_array_equal(result, [[0, 1, 2, 0]])
+        np.testing.assert_array_equal(result, [[0, 1, 2, 0]])
 
     def test_masks_positions_and_custom_names(self):
         model = parser.parse_model(
@@ -770,7 +760,7 @@ class TestGeneration(ExtTestCase):
         )
         model.graph.initializer.append(
             onh.from_array(
-                numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [0, 4, 0]], dtype=numpy.float32),
+                np.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [0, 4, 0]], dtype=np.float32),
                 name="table",
             )
         )
@@ -782,17 +772,16 @@ class TestGeneration(ExtTestCase):
         options.attention_mask_name = "mask"
         options.position_ids_name = "positions"
         feeds = {
-            "tokens": numpy.array([[0, 0, 0]], dtype=numpy.int64),
-            "mask": numpy.array([[0, 0, 1]], dtype=numpy.int64),
+            "tokens": np.array([[0, 0, 0]], dtype=np.int64),
+            "mask": np.array([[0, 0, 1]], dtype=np.int64),
         }
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(runtime.generate(model, context, feeds, options)),
-            [[0, 0, 0, 1, 2, 0]],
+        np.testing.assert_array_equal(
+            np.from_dlpack(runtime.generate(model, context, feeds, options)), [[0, 0, 0, 1, 2, 0]]
         )
-        feeds["mask"] = numpy.array([[1, 0, 1]], dtype=numpy.int64)
+        feeds["mask"] = np.array([[1, 0, 1]], dtype=np.int64)
         with self.assertRaisesRegex(ValueError, "left-padded"):
             runtime.generate(model, context, feeds, options)
-        feeds["mask"] = numpy.zeros((1, 3), dtype=numpy.int64)
+        feeds["mask"] = np.zeros((1, 3), dtype=np.int64)
         with self.assertRaisesRegex(ValueError, "unmasked"):
             runtime.generate(model, context, feeds, options)
 
@@ -805,15 +794,15 @@ class TestGeneration(ExtTestCase):
         )
         model.graph.initializer.append(transition_model().graph.initializer[0])
         evaluator = ReferenceEvaluator(model)
-        feeds = {"input_ids": numpy.array([[0, 1], [1, 2]], dtype=numpy.int64)}
+        feeds = {"input_ids": np.array([[0, 1], [1, 2]], dtype=np.int64)}
         expected = [[0, 1, 2, 0], [1, 2, 0, 1]]
-        numpy.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
-        coordinates = numpy.array(
-            [[[1, 3], [2, 4]], [[1, 9], [2, 5]], [[1, 6], [2, 8]]], dtype=numpy.int64
+        np.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
+        coordinates = np.array(
+            [[[1, 3], [2, 4]], [[1, 9], [2, 5]], [[1, 6], [2, 8]]], dtype=np.int64
         )
         feeds["position_ids"] = coordinates
-        numpy.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
-        numpy.testing.assert_array_equal(feeds["position_ids"], coordinates)
+        np.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
+        np.testing.assert_array_equal(feeds["position_ids"], coordinates)
         with self.assertRaisesRegex(ValueError, "axis count mismatch"):
             evaluator.generate(feeds, max_new_tokens=2, position_axes=2)
         with self.assertRaisesRegex(ValueError, "shape or type mismatch"):
@@ -821,7 +810,7 @@ class TestGeneration(ExtTestCase):
 
     def test_invalid_options_and_inputs(self):
         evaluator = ReferenceEvaluator(transition_model())
-        feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64)}
+        feeds = {"input_ids": np.array([[0]], dtype=np.int64)}
         for temperature in (-1, float("nan"), float("inf")):
             with (
                 self.subTest(temperature=temperature),
@@ -840,10 +829,10 @@ class TestGeneration(ExtTestCase):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 evaluator.generate(feeds, **options)
         for tokens in (
-            numpy.array([[0]], dtype=numpy.int32),
-            numpy.array([0], dtype=numpy.int64),
-            numpy.empty((1, 0), dtype=numpy.int64),
-            numpy.array([[-1]], dtype=numpy.int64),
+            np.array([[0]], dtype=np.int32),
+            np.array([0], dtype=np.int64),
+            np.empty((1, 0), dtype=np.int64),
+            np.array([[-1]], dtype=np.int64),
         ):
             with self.subTest(tokens=tokens), self.assertRaises(ValueError):
                 evaluator.generate({"input_ids": tokens})
@@ -856,12 +845,12 @@ class TestGeneration(ExtTestCase):
 
     def test_invalid_logits_and_negative_infinity(self):
         for logits, message in (
-            (numpy.array([[numpy.nan, 1]], dtype=numpy.float32), "NaN"),
-            (numpy.array([[numpy.inf, 1]], dtype=numpy.float32), "infinity"),
-            (numpy.array([[-numpy.inf, -numpy.inf]], dtype=numpy.float32), "negative infinity"),
-            (numpy.array([[1, 2]], dtype=numpy.int64), "floating-point"),
-            (numpy.array([1, 2], dtype=numpy.float32), "shape"),
-            (numpy.empty((1, 0), dtype=numpy.float32), "shape"),
+            (np.array([[np.nan, 1]], dtype=np.float32), "NaN"),
+            (np.array([[np.inf, 1]], dtype=np.float32), "infinity"),
+            (np.array([[-np.inf, -np.inf]], dtype=np.float32), "negative infinity"),
+            (np.array([[1, 2]], dtype=np.int64), "floating-point"),
+            (np.array([1, 2], dtype=np.float32), "shape"),
+            (np.empty((1, 0), dtype=np.float32), "shape"),
         ):
             with self.subTest(message=message):
                 model = oh.make_model(
@@ -876,19 +865,15 @@ class TestGeneration(ExtTestCase):
                 )
                 with self.assertRaisesRegex(ValueError, message):
                     ReferenceEvaluator(model).generate(
-                        {"input_ids": numpy.array([[0]], dtype=numpy.int64)}, max_new_tokens=1
+                        {"input_ids": np.array([[0]], dtype=np.int64)}, max_new_tokens=1
                     )
         model = transition_model()
         model.graph.initializer[0].CopyFrom(
-            onh.from_array(
-                numpy.array([[-numpy.inf, 0, -numpy.inf]] * 3, dtype=numpy.float32), name="table"
-            )
+            onh.from_array(np.array([[-np.inf, 0, -np.inf]] * 3, dtype=np.float32), name="table")
         )
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             ReferenceEvaluator(model).generate(
-                {"input_ids": numpy.array([[0]], dtype=numpy.int64)},
-                max_new_tokens=2,
-                temperature=1,
+                {"input_ids": np.array([[0]], dtype=np.int64)}, max_new_tokens=2, temperature=1
             ),
             [[0, 1, 1]],
         )

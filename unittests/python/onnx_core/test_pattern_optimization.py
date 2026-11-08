@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import numpy
+import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light import onnx
@@ -55,9 +55,7 @@ def _transpose_weight_model():
             "transpose_weight",
             [oh.make_tensor_value_info("x", TensorProto.FLOAT, [3, 2])],
             [oh.make_tensor_value_info("y", TensorProto.FLOAT, [3, 2])],
-            initializer=[
-                onh.from_array(numpy.arange(6, dtype=numpy.float32).reshape(2, 3), "weight")
-            ],
+            initializer=[onh.from_array(np.arange(6, dtype=np.float32).reshape(2, 3), "weight")],
         ),
         opset_imports=[oh.make_opsetid("", 18)],
         ir_version=10,
@@ -360,13 +358,13 @@ class TestPatternSelection(ExtTestCase):
 
 class TestPatternOptimization(ExtTestCase):
     def test_constant_identity_folding_shares_raw_storage_and_honors_limit(self):
-        values = numpy.array([1, 2], dtype=numpy.float32)
+        values = np.array([1, 2], dtype=np.float32)
         builder = optim.GraphBuilder("sharing", opsets=18)
         builder.make_initializer(onh.from_array(values, "weight"))
         builder.make_node("Identity", ["weight"], ["Y"])
         builder.make_output("Y")
         canonical = builder.to_model()
-        pointer = numpy.from_dlpack(canonical.graph.initializer[0]).ctypes.data
+        pointer = np.from_dlpack(canonical.graph.initializer[0]).ctypes.data
         options = ConstantFoldingOptions()
         options.max_element_count = 1
         self.assertEqual(builder.constant_fold(options), 0)
@@ -374,7 +372,7 @@ class TestPatternOptimization(ExtTestCase):
         options.max_element_count = -1
         self.assertEqual(builder.constant_fold(options), 1)
         folded = next(t for t in builder.to_model().graph.initializer if t.name == "Y")
-        actual = numpy.from_dlpack(folded)
+        actual = np.from_dlpack(folded)
         self.assertEqual(actual.ctypes.data, pointer)
         self.assertEqualArray(actual, values)
 
@@ -475,7 +473,7 @@ class TestPatternOptimization(ExtTestCase):
                         [],
                         ["y"],
                         domain="local",
-                        value=onh.from_array(numpy.array([1, 2], dtype=numpy.float32)),
+                        value=onh.from_array(np.array([1, 2], dtype=np.float32)),
                     )
                 ],
                 "g",
@@ -908,8 +906,8 @@ class TestPatternOptimization(ExtTestCase):
                     replayed.graph.SerializeToString(), optimized.graph.SerializeToString()
                 )
                 feeds = {
-                    "x": numpy.array([[-1, 2], [3, -4]], dtype=numpy.float32),
-                    "z": numpy.ones((2, 2), dtype=numpy.float32),
+                    "x": np.array([[-1, 2], [3, -4]], dtype=np.float32),
+                    "z": np.ones((2, 2), dtype=np.float32),
                 }
                 for actual, expected in zip(
                     ReferenceEvaluator(replayed).run(None, feeds),
@@ -947,7 +945,7 @@ class TestPatternOptimization(ExtTestCase):
 
     def test_to_onnx_exports_relocate_external_weights_and_replay_recipes(self):
         model = _transpose_weight_model()
-        feeds = {"x": numpy.ones((3, 2), dtype=numpy.float32)}
+        feeds = {"x": np.ones((3, 2), dtype=np.float32)}
         expected = ReferenceEvaluator(model).run(None, feeds)[0]
         with TemporaryDirectory() as directory:
             source = Path(directory) / "source"
@@ -985,7 +983,7 @@ class TestPatternOptimization(ExtTestCase):
                 optim.GraphBuilder(restored).apply_rewritings("optimized").to_standard_model()
             )
             for exported in (plain, restored, replayed):
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     ReferenceEvaluator(exported).run(None, feeds)[0], expected
                 )
             self.assertEqual(
@@ -1000,44 +998,38 @@ class TestPatternOptimization(ExtTestCase):
     def test_rewritten_weights_are_new_but_canonical_payloads_are_shared(self):
         for borrowed in (False, True):
             with self.subTest(borrowed=borrowed):
-                values = numpy.arange(6, dtype=numpy.float32).reshape(2, 3)
+                values = np.arange(6, dtype=np.float32).reshape(2, 3)
                 model = _transpose_weight_model()
                 if borrowed:
                     model.graph.initializer[0]._set_raw_data_from_buffer(values)
-                original = numpy.from_dlpack(model.graph.initializer[0]).ctypes.data
+                original = np.from_dlpack(model.graph.initializer[0]).ctypes.data
                 builder = optim.GraphBuilder(model)
                 builder.register_pattern(optim.TransposeTransposePattern(priority=-1))
                 optimized = builder.to_onnx(optimize=OptimizationMode.kOptimize)
                 bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
                 self.assertEqual(
-                    numpy.from_dlpack(bundled.graph.initializer[0]).ctypes.data, original
+                    np.from_dlpack(bundled.graph.initializer[0]).ctypes.data, original
                 )
                 self.assertNotEqual(
-                    numpy.from_dlpack(optimized.graph.initializer[0]).ctypes.data, original
+                    np.from_dlpack(optimized.graph.initializer[0]).ctypes.data, original
                 )
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(optimized.graph.initializer[0]), values.T
                 )
                 replayed = (
                     optim.GraphBuilder(bundled).apply_rewritings("optimized").to_standard_model()
                 )
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(replayed.graph.initializer[0]), values.T
                 )
                 optimized.graph.initializer[0].raw_data = bytes(values.nbytes)
-                numpy.testing.assert_array_equal(
-                    onh.to_array(bundled.graph.initializer[0]), values
-                )
-                numpy.testing.assert_array_equal(onh.to_array(model.graph.initializer[0]), values)
+                np.testing.assert_array_equal(onh.to_array(bundled.graph.initializer[0]), values)
+                np.testing.assert_array_equal(onh.to_array(model.graph.initializer[0]), values)
                 model.graph.initializer[0].raw_data = bytes(values.nbytes)
-                numpy.testing.assert_array_equal(
-                    onh.to_array(bundled.graph.initializer[0]), values
-                )
+                np.testing.assert_array_equal(onh.to_array(bundled.graph.initializer[0]), values)
                 del model, builder
                 gc.collect()
-                numpy.testing.assert_array_equal(
-                    onh.to_array(bundled.graph.initializer[0]), values
-                )
+                np.testing.assert_array_equal(onh.to_array(bundled.graph.initializer[0]), values)
 
     def test_to_onnx_optimization_options_validate_before_matching(self):
         builder = optim.GraphBuilder(_double_neg_model())
@@ -1067,7 +1059,7 @@ class TestPatternOptimization(ExtTestCase):
                         "Constant",
                         [],
                         ["zero"],
-                        value=onh.from_array(numpy.zeros(2, dtype=numpy.float32)),
+                        value=onh.from_array(np.zeros(2, dtype=np.float32)),
                     ),
                     oh.make_node("Add", [nodes[0].input[0], "zero"], list(nodes[1].output)),
                 ]
@@ -1076,7 +1068,7 @@ class TestPatternOptimization(ExtTestCase):
         builder.register_pattern(LiteralNegNegPattern())
         bundled = builder.to_onnx(optimize=OptimizationMode.kRewritings)
         self.assertFalse(bundled.graph.initializer)
-        values = numpy.array([4, -5], dtype=numpy.float32)
+        values = np.array([4, -5], dtype=np.float32)
         default_tensor = onh.from_array(values, "default_weight")
         default_graph = oh.make_graph(
             [],
@@ -1144,12 +1136,12 @@ class TestPatternOptimization(ExtTestCase):
                         *(graph.initializer[0] for graph in attributes[2].graphs),
                     ]
                     for tensor in tensors:
-                        numpy.testing.assert_array_equal(onh.to_array(tensor), values)
+                        np.testing.assert_array_equal(onh.to_array(tensor), values)
                     replayed = (
                         optim.GraphBuilder(restored).apply_rewritings("optimized").to_model()
                     )
-                    x = numpy.array([2, -3], dtype=numpy.float32)
-                    numpy.testing.assert_array_equal(
+                    x = np.array([2, -3], dtype=np.float32)
+                    np.testing.assert_array_equal(
                         ReferenceEvaluator(replayed).run(None, {"x": x})[0], x
                     )
 
@@ -1198,7 +1190,7 @@ class TestPatternOptimization(ExtTestCase):
             self.assertEqual(builder.to_onnx().SerializeToString(), before)
 
     def test_to_onnx_optimized_function_preserves_constant_values(self):
-        values = numpy.array([1, 2], dtype=numpy.float32)
+        values = np.array([1, 2], dtype=np.float32)
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -1217,7 +1209,7 @@ class TestPatternOptimization(ExtTestCase):
             with self.subTest(mode=mode):
                 function = builder.to_onnx(ProtoKind.kFunction, domain="local", optimize=mode)
                 self.assertEqual([node.op_type for node in function.node], ["Constant", "Add"])
-                numpy.testing.assert_array_equal(
+                np.testing.assert_array_equal(
                     onh.to_array(function.node[0].attribute[0].t), values
                 )
                 called = oh.make_model(
@@ -1230,8 +1222,8 @@ class TestPatternOptimization(ExtTestCase):
                     functions=[function],
                     opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("local", 1)],
                 )
-                x = numpy.array([3, -4], dtype=numpy.float32)
-                numpy.testing.assert_array_equal(
+                x = np.array([3, -4], dtype=np.float32)
+                np.testing.assert_array_equal(
                     ReferenceEvaluator(called).run(None, {"x": x})[0], x + values
                 )
                 self.assertEqual(builder.to_onnx().SerializeToString(), before)
@@ -1357,7 +1349,7 @@ class TestPatternOptimization(ExtTestCase):
                     oh.make_tensor_value_info("z", TensorProto.INT64, [3]),
                 ],
                 [oh.make_tensor_value_info("y", TensorProto.INT64, ["size"])],
-                [onh.from_array(numpy.array([], dtype=numpy.int64), name="empty")],
+                [onh.from_array(np.array([], dtype=np.int64), name="empty")],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
         )
@@ -1374,7 +1366,7 @@ class TestPatternOptimization(ExtTestCase):
             restored.node[0].SerializeToString(), canonical.node[0].SerializeToString()
         )
         self.assertEqual([value.name for value in restored.initializer], ["empty"])
-        numpy.testing.assert_array_equal(
+        np.testing.assert_array_equal(
             onh.to_array(restored.initializer[0]), onh.to_array(canonical.initializer[0])
         )
 

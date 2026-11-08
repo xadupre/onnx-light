@@ -7,7 +7,7 @@ import struct
 import unittest
 
 import ml_dtypes
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 import onnx_light.onnx.numpy_helper as onh
@@ -18,10 +18,10 @@ runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 class TestQuantizationPrecision(ExtTestCase):
     output_types = (
-        (onnx.TensorProto.FLOAT16, numpy.float16),
+        (onnx.TensorProto.FLOAT16, np.float16),
         (onnx.TensorProto.BFLOAT16, ml_dtypes.bfloat16),
-        (onnx.TensorProto.FLOAT, numpy.float32),
-        (onnx.TensorProto.DOUBLE, numpy.float64),
+        (onnx.TensorProto.FLOAT, np.float32),
+        (onnx.TensorProto.DOUBLE, np.float64),
     )
 
     def encoded(
@@ -65,9 +65,7 @@ class TestQuantizationPrecision(ExtTestCase):
                 onnx.TensorProto.BFLOAT16: "<H",
             }
             if cast_type == onnx.TensorProto.BFLOAT16:
-                cast_value = int(
-                    numpy.array(cast_value, dtype=ml_dtypes.bfloat16).view(numpy.uint16)
-                )
+                cast_value = int(np.array(cast_value, dtype=ml_dtypes.bfloat16).view(np.uint16))
             payload += struct.pack(formats[cast_type], cast_value)
         else:
             payload += bytes([code & 15])
@@ -79,7 +77,7 @@ class TestQuantizationPrecision(ExtTestCase):
         wire = onnx.EncodedValueProto()
         wire.ParseFromString(value.SerializeToString())
         result = runtime.dequantize_tensor_proto(wire)
-        self.assertEqual(bytes(result.raw_data), numpy.array([expected], dtype=dtype).tobytes())
+        self.assertEqual(bytes(result.raw_data), np.array([expected], dtype=dtype).tobytes())
         tensor = runtime.dequantize_tensor(wire)
         self.assertEqual(runtime.tensor_to_numpy(tensor).tobytes(), bytes(result.raw_data))
 
@@ -88,11 +86,11 @@ class TestQuantizationPrecision(ExtTestCase):
         scale = 1 + 2**-23
         float_golden = 2**-21
         double_golden = 3 * 2**-23
-        centered = numpy.subtract(numpy.float32(3), numpy.float32(0), dtype=numpy.float32)
-        product = numpy.multiply(centered, numpy.float32(scale), dtype=numpy.float32)
-        reference = numpy.add(product, numpy.float32(-3), dtype=numpy.float32)
+        centered = np.subtract(np.float32(3), np.float32(0), dtype=np.float32)
+        product = np.multiply(centered, np.float32(scale), dtype=np.float32)
+        reference = np.add(product, np.float32(-3), dtype=np.float32)
         self.assertEqual(float(reference), float_golden)
-        self.assertNotEqual(float(numpy.float32(double_golden)), float_golden)
+        self.assertNotEqual(float(np.float32(double_golden)), float_golden)
         for output_type, dtype in self.output_types:
             for precision, golden in (
                 (onnx.TensorProto.FLOAT, float_golden),
@@ -108,9 +106,9 @@ class TestQuantizationPrecision(ExtTestCase):
 
     def test_additive_codebook_independent_rounding_golden(self):
         books = [2**24, 1, -(2**24)]
-        reference = numpy.float32(0)
+        reference = np.float32(0)
         for entry in books:
-            reference = numpy.add(reference, numpy.float32(entry), dtype=numpy.float32)
+            reference = np.add(reference, np.float32(entry), dtype=np.float32)
         self.assertEqual(float(reference), 0)
         self.assertEqual(sum(books), 1)
         for output_type, dtype in self.output_types:
@@ -149,7 +147,7 @@ class TestQuantizationPrecision(ExtTestCase):
                 + b"\x11\x01"
             )
             result = onh.to_array(runtime.dequantize_tensor_proto(value))
-            self.assertEqualArray(result, numpy.array([golden, 1, 1], dtype=numpy.float64))
+            self.assertEqualArray(result, np.array([golden, 1, 1], dtype=np.float64))
 
             # Outliers are restored after the inverse transform, rounding only in v2.
             plan.outliers = [0]
@@ -165,11 +163,11 @@ class TestQuantizationPrecision(ExtTestCase):
             for exponent in (-150, -149, -134, -133, -25, -24):
                 with self.subTest(output=output_type, exponent=exponent):
                     value = self.encoded(output_type, scale=2.0**exponent, code=1)
-                    expected = numpy.float32(2.0**exponent)
+                    expected = np.float32(2.0**exponent)
                     self.assert_decoded(value, expected, dtype)
         for offset, golden in ((2**-24, 1), (3 * 2**-24, 1 + 2**-22)):
             value = self.encoded(onnx.TensorProto.DOUBLE, code=1, offset=offset)
-            self.assert_decoded(value, golden, numpy.float64)
+            self.assert_decoded(value, golden, np.float64)
 
     def test_nonfinite_and_overflow_are_rejected(self):
         for output_type, _ in self.output_types:
@@ -192,7 +190,7 @@ class TestQuantizationPrecision(ExtTestCase):
         # A finite FLOAT reconstruction can still overflow the requested output.
         for output_type, scale in (
             (onnx.TensorProto.FLOAT16, 2.0**16),
-            (onnx.TensorProto.BFLOAT16, float(numpy.finfo(numpy.float32).max)),
+            (onnx.TensorProto.BFLOAT16, float(np.finfo(np.float32).max)),
         ):
             value = self.encoded(output_type, code=1, scale=scale)
             with self.assertRaises(ValueError):
@@ -209,9 +207,7 @@ class TestQuantizationPrecision(ExtTestCase):
         )
         plan.reconstruction_dtype = onnx.TensorProto.FLOAT
         with self.assertRaises(ValueError):
-            runtime.quantize_tensor_proto(
-                onh.from_array(numpy.zeros((16, 1), numpy.float32)), plan
-            )
+            runtime.quantize_tensor_proto(onh.from_array(np.zeros((16, 1), np.float32)), plan)
         value = self.encoded(onnx.TensorProto.FLOAT)
         value.struct_type.name = "onnx_light.quantization.v3/int4"
         with self.assertRaises(ValueError):

@@ -20,7 +20,7 @@ Serialization alone does not execute a pipeline.
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 import onnx_light.onnx.helper as oh
@@ -51,7 +51,7 @@ embedding = oh.make_model(
         [oh.make_tensor_value_info("inputs_embeds", onnx.TensorProto.FLOAT, ["B", "S", 3])],
         initializer=[
             onh.from_array(
-                numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=numpy.float32),
+                np.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=np.float32),
                 name="transition_table",
             )
         ],
@@ -156,7 +156,7 @@ print("Binary round trip preserved stages, settings, and interface names.")
 
 embedding_evaluator = ReferenceEvaluator(restored.embedding)
 evaluator = ReferenceEvaluator(restored.prefill)
-feeds = {restored.input_ids_name: numpy.array([[0]], dtype=numpy.int64)}
+feeds = {restored.input_ids_name: np.array([[0]], dtype=np.int64)}
 tokens = evaluator.generate(
     feeds,
     embedding=embedding_evaluator,
@@ -166,9 +166,9 @@ tokens = evaluator.generate(
     eos_token_ids=list(restored.eos_token_ids),
     pad_token_id=restored.pad_token_id,
 )
-numpy.testing.assert_array_equal(tokens, [[0, 1, 2]])
-assert tokens.dtype == numpy.int64
-numpy.testing.assert_array_equal(feeds["input_ids"], [[0]])
+np.testing.assert_array_equal(tokens, [[0, 1, 2]])
+assert tokens.dtype == np.int64
+np.testing.assert_array_equal(feeds["input_ids"], [[0]])
 print("Tokens (including prompt, stopping at EOS):", tokens.tolist())
 
 # %%
@@ -184,6 +184,6 @@ limited = evaluator.generate(
     temperature=restored.temperature,
     seed=restored.seed,
 )
-numpy.testing.assert_array_equal(limited, [[0, 1, 2, 0, 1]])
+np.testing.assert_array_equal(limited, [[0, 1, 2, 0, 1]])
 assert list(restored.eos_token_ids) == [2]
 print("Tokens (including prompt, stopping at token limit):", limited.tolist())

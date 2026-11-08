@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 
 import matplotlib.pyplot as plt
-import pandas
+import pandas as pd
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
 from onnx_light.onnx.backend import collect_test_cases_by_name
 from onnx_light.onnx_core.expressions import evaluate_expression
@@ -286,9 +286,9 @@ def main() -> None:
 
     print(f"Converted model with {len(onnx_model.graph.node)} nodes.")
     print(f"Peak ComputeContext total bytes: {max(total_bytes):,}")
-    memory_df = pandas.DataFrame(memory_rows)
+    memory_df = pd.DataFrame(memory_rows)
     memory_df.to_excel(f"{args.output_prefix}.xlsx", index=False)
-    with pandas.option_context("display.max_rows", None, "display.max_columns", None):
+    with pd.option_context("display.max_rows", None, "display.max_columns", None):
         print(memory_df.to_string(index=False))
 
     fig, ax = plt.subplots(figsize=(12, 5))

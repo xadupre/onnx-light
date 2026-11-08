@@ -25,7 +25,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas
+import pandas as pd
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -226,7 +226,7 @@ for layout_name, model_path, data_path in LAYOUTS:
             f"load={load_t * 1e3:7.2f} ms  save={save_t * 1e3:7.2f} ms"
         )
 
-df = pandas.DataFrame(rows)
+df = pd.DataFrame(rows)
 print(df)
 
 # %%

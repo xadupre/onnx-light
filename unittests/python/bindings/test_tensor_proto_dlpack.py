@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import weakref
 
-import numpy
+import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import (
@@ -97,7 +97,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                     self.subTest(construction=construction, threads=threads),
                     tempfile.TemporaryDirectory() as directory,
                 ):
-                    array = numpy.arange(1024, dtype=numpy.float32).reshape(32, 32)
+                    array = np.arange(1024, dtype=np.float32).reshape(32, 32)
                     address = array.ctypes.data
                     if construction == "builder":
                         builder = GraphBuilder()
@@ -137,8 +137,8 @@ class TestTensorProtoDLPack(ExtTestCase):
                     self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
                     restored = load_model(path, load_external_data=True)
                     self.assertEqual(restored.graph.node[0].doc_string, "export only")
-                    numpy.testing.assert_array_equal(
-                        numpy.from_dlpack(restored.graph.initializer[0]), expected
+                    np.testing.assert_array_equal(
+                        np.from_dlpack(restored.graph.initializer[0]), expected
                     )
 
                     def fail(node, graph):
@@ -164,7 +164,7 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_external_save_retains_owner_after_callback_clears_source(self):
         for fail in (False, True):
             with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
-                array = numpy.arange(512 * 1024, dtype=numpy.float32)
+                array = np.arange(512 * 1024, dtype=np.float32)
                 expected = array.copy()
                 lifetime = weakref.ref(array)
                 model = ModelProto()
@@ -192,8 +192,8 @@ class TestTensorProtoDLPack(ExtTestCase):
                 else:
                     model.SerializeToFile(path, options, weights)
                     restored = load_model(path, load_external_data=True)
-                    numpy.testing.assert_array_equal(
-                        numpy.from_dlpack(restored.graph.initializer[0]), expected
+                    np.testing.assert_array_equal(
+                        np.from_dlpack(restored.graph.initializer[0]), expected
                     )
                 gc.collect()
                 self.assertIsNone(lifetime())
@@ -201,7 +201,7 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_external_save_same_path_preserves_mapped_sources(self):
         for ownership in ("mapping", "callback", "callback_failure", "dlpack", "wrapped"):
             with self.subTest(ownership=ownership), tempfile.TemporaryDirectory() as directory:
-                expected = numpy.arange(1024, dtype=numpy.float32)
+                expected = np.arange(1024, dtype=np.float32)
                 model = ModelProto()
                 model.graph.initializer.append(TensorProto.from_dlpack(expected, name="weight"))
                 path = os.path.join(directory, "model.onnx")
@@ -219,7 +219,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 if ownership.startswith("callback"):
 
                     def callback(tensor, graph):
-                        view = numpy.from_dlpack(tensor)
+                        view = np.from_dlpack(tensor)
 
                         def cleanup():
                             released.append(view.size)
@@ -231,7 +231,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 model.ParseFromFile(path, options, os.path.join(directory, "weights.bin"))
                 if ownership in ("dlpack", "wrapped"):
                     tensor = model.graph.initializer[0]
-                    producer = tensor if ownership == "dlpack" else numpy.from_dlpack(tensor)
+                    producer = tensor if ownership == "dlpack" else np.from_dlpack(tensor)
                     imported = TensorProto.from_dlpack(producer, name="weight")
                     replacement = ModelProto()
                     replacement.graph.initializer.append(imported)
@@ -251,8 +251,8 @@ class TestTensorProtoDLPack(ExtTestCase):
                             size_threshold=0,
                             raw_data_callback=reject,
                         )
-                    numpy.testing.assert_array_equal(
-                        numpy.from_dlpack(model.graph.initializer[0]), expected
+                    np.testing.assert_array_equal(
+                        np.from_dlpack(model.graph.initializer[0]), expected
                     )
                 save_model(
                     model,
@@ -261,12 +261,12 @@ class TestTensorProtoDLPack(ExtTestCase):
                     location="weights.bin",
                     size_threshold=0,
                 )
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(model.graph.initializer[0]), expected
+                np.testing.assert_array_equal(
+                    np.from_dlpack(model.graph.initializer[0]), expected
                 )
                 restored = load_model(path, load_external_data=True)
-                numpy.testing.assert_array_equal(
-                    numpy.from_dlpack(restored.graph.initializer[0]), expected
+                np.testing.assert_array_equal(
+                    np.from_dlpack(restored.graph.initializer[0]), expected
                 )
                 if ownership.startswith("callback"):
                     self.assertEqual(released, [expected.size])
@@ -275,11 +275,11 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_external_save_numpy_mapping_views_are_not_classified_as_heap(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "mapped.bin")
-            mapping = numpy.memmap(path, mode="w+", dtype=numpy.float32, shape=(32,))
+            mapping = np.memmap(path, mode="w+", dtype=np.float32, shape=(32,))
             try:
-                mapping[:] = numpy.arange(32, dtype=numpy.float32)
+                mapping[:] = np.arange(32, dtype=np.float32)
                 expected = mapping.copy()
-                for producer in (mapping, numpy.asarray(mapping), numpy.asarray(mapping)[4:]):
+                for producer in (mapping, np.asarray(mapping), np.asarray(mapping)[4:]):
                     with self.subTest(type=type(producer), shape=producer.shape):
                         model = ModelProto()
                         model.graph.initializer.append(
@@ -297,9 +297,8 @@ class TestTensorProtoDLPack(ExtTestCase):
                             capsule_tensor(model.graph.initializer[0].__dlpack__()).data,
                             producer.ctypes.data,
                         )
-                        numpy.testing.assert_array_equal(
-                            numpy.from_dlpack(model.graph.initializer[0]),
-                            expected[-producer.size :],
+                        np.testing.assert_array_equal(
+                            np.from_dlpack(model.graph.initializer[0]), expected[-producer.size :]
                         )
                         del model
                 del producer
@@ -310,24 +309,24 @@ class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_import_numpy(self):
         for dtype in (
-            numpy.float16,
-            numpy.float32,
-            numpy.float64,
-            numpy.int8,
-            numpy.uint8,
-            numpy.int16,
-            numpy.uint16,
-            numpy.int32,
-            numpy.uint32,
-            numpy.int64,
-            numpy.uint64,
-            numpy.complex64,
-            numpy.complex128,
-            numpy.bool_,
+            np.float16,
+            np.float32,
+            np.float64,
+            np.int8,
+            np.uint8,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+            np.complex64,
+            np.complex128,
+            np.bool_,
         ):
             for shape in ((), (2, 3), (0,), (2, 0, 3)):
                 with self.subTest(dtype=dtype, shape=shape):
-                    array = numpy.ones(shape, dtype=dtype)
+                    array = np.ones(shape, dtype=dtype)
                     expected = onh.from_array(array, name="weights").SerializeToString()
                     address = array.ctypes.data
                     source = weakref.ref(array)
@@ -379,11 +378,11 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertEqual(len(released), 1)
 
     def test_import_readonly_singleton_and_metadata_snapshot(self):
-        array = numpy.arange(6, dtype=numpy.float32).reshape(2, 1, 3)
+        array = np.arange(6, dtype=np.float32).reshape(2, 1, 3)
         array.setflags(write=False)
         tensor = TensorProto.from_dlpack(array)
         self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, array.ctypes.data)
-        numpy.testing.assert_array_equal(numpy.from_dlpack(tensor), array)
+        np.testing.assert_array_equal(np.from_dlpack(tensor), array)
 
         original, address, released = self.make_borrowed()
         capsule = original.release_dlpack()
@@ -404,7 +403,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertEqual(len(released), 1)
 
     def test_copy_from_owned_still_copies(self):
-        tensor = onh.from_array(numpy.arange(8, dtype=numpy.uint8))
+        tensor = onh.from_array(np.arange(8, dtype=np.uint8))
         copied = TensorProto()
         copied.CopyFrom(tensor)
         self.assertNotEqual(
@@ -471,19 +470,14 @@ class TestTensorProtoDLPack(ExtTestCase):
                 self.assertEqual(len(released), 1)
 
     def test_import_numpy_rejections(self):
-        array = numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
-        for invalid in (
-            array.T,
-            array[:, ::2],
-            array[::-1],
-            numpy.broadcast_to(array, (2, 3, 4)),
-        ):
+        array = np.arange(12, dtype=np.float32).reshape(3, 4)
+        for invalid in (array.T, array[:, ::2], array[::-1], np.broadcast_to(array, (2, 3, 4))):
             with (
                 self.subTest(strides=invalid.strides),
                 self.assertRaisesRegex(BufferError, "compact"),
             ):
                 TensorProto.from_dlpack(invalid)
-        for invalid in (array.astype(">f4"), numpy.array(["abc"]), numpy.array([object()])):
+        for invalid in (array.astype(">f4"), np.array(["abc"]), np.array([object()])):
             with self.subTest(dtype=invalid.dtype), self.assertRaises((BufferError, TypeError)):
                 TensorProto.from_dlpack(invalid)
         with self.assertRaises(TypeError):
@@ -499,8 +493,8 @@ class TestTensorProtoDLPack(ExtTestCase):
         del array
         gc.collect()
         self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(tensor), numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
+        np.testing.assert_array_equal(
+            np.from_dlpack(tensor), np.arange(12, dtype=np.float32).reshape(3, 4)
         )
 
     def test_import_native_release_without_gil(self):
@@ -527,7 +521,7 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_numpy_initializer_native_release_without_gil(self):
         from onnx_light.onnx_core.graph_builder import GraphBuilder
 
-        array = numpy.ones(4, dtype=numpy.float32)
+        array = np.ones(4, dtype=np.float32)
         references = sys.getrefcount(array)
         builder = GraphBuilder()
         builder.init(array, copy=False)
@@ -639,13 +633,13 @@ class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_bool_uint8_metadata_roundtrip(self):
         for dtype, onnx_type, dlpack_code in (
-            (numpy.float32, TensorProto.FLOAT, 2),
-            (numpy.bool_, TensorProto.BOOL, 6),
-            (numpy.uint8, TensorProto.UINT8, 1),
+            (np.float32, TensorProto.FLOAT, 2),
+            (np.bool_, TensorProto.BOOL, 6),
+            (np.uint8, TensorProto.UINT8, 1),
         ):
             with self.subTest(dtype=dtype):
-                array = numpy.array([0, 1, 0, 1], dtype=dtype)
-                if dtype == numpy.uint8:
+                array = np.array([0, 1, 0, 1], dtype=dtype)
+                if dtype == np.uint8:
                     array[2:] = [2, 255]
                 tensor = TensorProto.from_dlpack(array)
                 capsule = tensor.__dlpack__()
@@ -658,20 +652,20 @@ class TestTensorProtoDLPack(ExtTestCase):
                 descriptor.strides = strides
                 descriptor.byte_offset = array.itemsize
                 imported = TensorProto.from_dlpack(CapsuleProducer(capsule))
-                view = numpy.from_dlpack(imported)
+                view = np.from_dlpack(imported)
                 self.assertEqual(imported.data_type, onnx_type)
                 self.assertEqual(view.dtype, array.dtype)
-                numpy.testing.assert_array_equal(view, array[1:])
+                np.testing.assert_array_equal(view, array[1:])
                 self.assertEqual(view.ctypes.data, array.ctypes.data + array.itemsize)
-                self.assertTrue(numpy.shares_memory(view, array))
+                self.assertTrue(np.shares_memory(view, array))
                 array[1] = 0
-                numpy.testing.assert_array_equal(view, array[1:])
+                np.testing.assert_array_equal(view, array[1:])
                 del tensor, imported, capsule, descriptor
                 gc.collect()
-                numpy.testing.assert_array_equal(view, array[1:])
+                np.testing.assert_array_equal(view, array[1:])
 
     def test_import_null_deleter(self):
-        array = numpy.array([0, 1, 2, 255], dtype=numpy.uint8)
+        array = np.array([0, 1, 2, 255], dtype=np.uint8)
         shape = (ctypes.c_int64 * 1)(array.size)
         managed = DLManagedTensor()
         managed.dl_tensor = DLTensor(
@@ -682,13 +676,13 @@ class TestTensorProtoDLPack(ExtTestCase):
         new_capsule.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
         capsule = new_capsule(ctypes.addressof(managed), b"dltensor", None)
         tensor = TensorProto.from_dlpack(CapsuleProducer(capsule))
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         self.assertEqual(tensor.data_type, TensorProto.UINT8)
         self.assertEqual(view.dtype, array.dtype)
-        self.assertTrue(numpy.shares_memory(view, array))
+        self.assertTrue(np.shares_memory(view, array))
         del tensor, view, capsule
         gc.collect()
-        numpy.testing.assert_array_equal(array, [0, 1, 2, 255])
+        np.testing.assert_array_equal(array, [0, 1, 2, 255])
 
     def ort_dlpack_runtime(self):
         """Returns the optional runtime and its native bool-override contract."""
@@ -706,32 +700,32 @@ class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_ort_roundtrip(self):
         ort, _ = self.ort_dlpack_runtime()
-        for dtype in (numpy.float32, numpy.uint8):
+        for dtype in (np.float32, np.uint8):
             for shape in ((), (2, 3)):
                 with self.subTest(dtype=dtype, shape=shape):
                     array = (
-                        numpy.array(255, dtype=dtype)
+                        np.array(255, dtype=dtype)
                         if not shape
-                        else numpy.array([[0, 1, 2], [3, 127, 255]], dtype=dtype)
+                        else np.array([[0, 1, 2], [3, 127, 255]], dtype=dtype)
                     )
                     tensor = TensorProto.from_dlpack(array)
                     for producer in (array, tensor):
                         value = ort.OrtValue.from_dlpack(producer)
-                        view = numpy.from_dlpack(value)
+                        view = np.from_dlpack(value)
                         imported = TensorProto.from_dlpack(value)
-                        other = numpy.from_dlpack(imported)
+                        other = np.from_dlpack(imported)
                         self.assertEqual(value.__dlpack_device__(), (1, 0))
                         self.assertEqual(imported.data_type, tensor.data_type)
                         for result in (view, other):
                             self.assertEqual(result.dtype, array.dtype)
-                            numpy.testing.assert_array_equal(result, array)
-                            self.assertTrue(numpy.shares_memory(result, array))
+                            np.testing.assert_array_equal(result, array)
+                            self.assertTrue(np.shares_memory(result, array))
                         array[...] = 1
-                        numpy.testing.assert_array_equal(other, array)
+                        np.testing.assert_array_equal(other, array)
 
     def test_ort_bool_contract(self):
         ort, legacy = self.ort_dlpack_runtime()
-        array = numpy.array([True, False, True, False], dtype=numpy.bool_)
+        array = np.array([True, False, True, False], dtype=np.bool_)
         tensor = TensorProto.from_dlpack(array)
         for producer in (array, tensor):
             if legacy:
@@ -740,20 +734,20 @@ class TestTensorProtoDLPack(ExtTestCase):
             else:
                 value = ort.OrtValue.from_dlpack(producer)
                 imported = TensorProto.from_dlpack(value)
-                view = numpy.from_dlpack(imported)
+                view = np.from_dlpack(imported)
                 self.assertEqual(imported.data_type, TensorProto.BOOL)
                 self.assertEqual(view.dtype, array.dtype)
-                numpy.testing.assert_array_equal(view, array)
-                self.assertTrue(numpy.shares_memory(view, array))
+                np.testing.assert_array_equal(view, array)
+                self.assertTrue(np.shares_memory(view, array))
 
         value = ort.OrtValue.ortvalue_from_numpy(array)
         imported = TensorProto.from_dlpack(value)
-        view = numpy.from_dlpack(imported)
+        view = np.from_dlpack(imported)
         # Old exporters label bool storage as uint8; consumers must honor that metadata.
         self.assertEqual(imported.data_type, TensorProto.UINT8 if legacy else TensorProto.BOOL)
-        self.assertEqual(view.dtype, numpy.dtype(numpy.uint8 if legacy else numpy.bool_))
-        numpy.testing.assert_array_equal(view, array)
-        self.assertTrue(numpy.shares_memory(view, array))
+        self.assertEqual(view.dtype, np.dtype(np.uint8 if legacy else np.bool_))
+        np.testing.assert_array_equal(view, array)
+        self.assertTrue(np.shares_memory(view, array))
 
     def test_ort_capsule_lifetime(self):
         ort, _ = self.ort_dlpack_runtime()
@@ -764,7 +758,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 if consume:
                     value = ort.OrtValue.from_dlpack(capsule)
                     tensor = TensorProto.from_dlpack(value)
-                    view = numpy.from_dlpack(tensor)
+                    view = np.from_dlpack(tensor)
                     self.assertEqual(view.ctypes.data, address)
                     del value, tensor
                 del original
@@ -774,7 +768,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 if consume:
                     gc.collect()
                     self.assertEqual(released, [])
-                    numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
+                    np.testing.assert_array_equal(view, np.arange(64, dtype=np.uint8))
                     del view
                 gc.collect()
                 self.assertEqual(len(released), 1)
@@ -784,13 +778,13 @@ class TestTensorProtoDLPack(ExtTestCase):
         ort, legacy = self.ort_dlpack_runtime()
         if legacy:
             self.skipTest("Offset/stride/null-deleter import requires the DLPack 1.3 contract.")
-        noncontiguous = numpy.arange(8, dtype=numpy.float32).reshape(2, 4)[:, ::2]
+        noncontiguous = np.arange(8, dtype=np.float32).reshape(2, 4)[:, ::2]
         with self.assertRaisesRegex(RuntimeError, "contiguous"):
             ort.OrtValue.from_dlpack(noncontiguous)
-        for dtype in (numpy.float32, numpy.bool_, numpy.uint8):
+        for dtype in (np.float32, np.bool_, np.uint8):
             for null_deleter in (False, True):
                 with self.subTest(dtype=dtype, null_deleter=null_deleter):
-                    array = numpy.array([0, 1, 0, 1, 1, 0, 1, 0], dtype=dtype)
+                    array = np.array([0, 1, 0, 1, 1, 0, 1, 0], dtype=dtype)
                     tensor = TensorProto.from_dlpack(array)
                     capsule = tensor.__dlpack__()
                     descriptor = capsule_tensor(capsule)
@@ -810,10 +804,10 @@ class TestTensorProtoDLPack(ExtTestCase):
                         new_capsule.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
                         capsule = new_capsule(ctypes.addressof(managed), b"dltensor", None)
                     value = ort.OrtValue.from_dlpack(capsule)
-                    view = numpy.from_dlpack(value)
+                    view = np.from_dlpack(value)
                     self.assertEqual(view.dtype, array.dtype)
                     self.assertEqual(view.ctypes.data, array.ctypes.data + array.itemsize)
-                    numpy.testing.assert_array_equal(view, array[1:7].reshape(2, 3))
+                    np.testing.assert_array_equal(view, array[1:7].reshape(2, 3))
                     del view, value, capsule
                     if null_deleter:
                         del managed
@@ -862,7 +856,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 self.assertEqual(len(calls), 1)
 
     def test_release_owned_and_aligned(self):
-        expected = numpy.arange(6, dtype=numpy.uint8).reshape(2, 3)
+        expected = np.arange(6, dtype=np.uint8).reshape(2, 3)
         for alignment in (0, 64):
             with self.subTest(alignment=alignment):
                 options = ParseOptions()
@@ -900,13 +894,13 @@ class TestTensorProtoDLPack(ExtTestCase):
                 del tensor, graph
                 gc.collect()
                 producer = CapsuleProducer(capsule)
-                view = numpy.from_dlpack(producer)
+                view = np.from_dlpack(producer)
                 with self.assertRaises(ValueError):
-                    numpy.from_dlpack(producer)
+                    np.from_dlpack(producer)
                 del capsule, producer
                 gc.collect()
                 self.assertEqual(view.ctypes.data, address)
-                numpy.testing.assert_array_equal(view, expected)
+                np.testing.assert_array_equal(view, expected)
 
     def test_release_shared_owner_cleanup(self):
         tensor, address, released = self.make_borrowed()
@@ -923,10 +917,10 @@ class TestTensorProtoDLPack(ExtTestCase):
         del tensor, copied, graph
         gc.collect()
         self.assertEqual(released, [])
-        view = numpy.from_dlpack(CapsuleProducer(capsule))
+        view = np.from_dlpack(CapsuleProducer(capsule))
         del capsule
         gc.collect()
-        numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
+        np.testing.assert_array_equal(view, np.arange(64, dtype=np.uint8))
         del view
         gc.collect()
         self.assertEqual(released, [])
@@ -935,8 +929,8 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertEqual(len(released), 1)
 
     def test_release_rejects_active_owned_views(self):
-        tensor = onh.from_array(numpy.arange(6, dtype=numpy.uint8))
-        view = numpy.from_dlpack(tensor)
+        tensor = onh.from_array(np.arange(6, dtype=np.uint8))
+        view = np.from_dlpack(tensor)
         capsule = tensor.__dlpack__()
         before = tensor.SerializeToString()
         with self.assertRaisesRegex(ValueError, "active DLPack exports"):
@@ -945,23 +939,23 @@ class TestTensorProtoDLPack(ExtTestCase):
         del capsule
         with self.assertRaisesRegex(ValueError, "active DLPack exports"):
             tensor.release_dlpack()
-        numpy.testing.assert_array_equal(view, numpy.arange(6, dtype=numpy.uint8))
+        np.testing.assert_array_equal(view, np.arange(6, dtype=np.uint8))
         del view
         gc.collect()
         transferred = tensor.release_dlpack()
         self.assertFalse(tensor.HasField("raw_data"))
-        numpy.testing.assert_array_equal(
-            numpy.from_dlpack(CapsuleProducer(transferred)), numpy.arange(6, dtype=numpy.uint8)
+        np.testing.assert_array_equal(
+            np.from_dlpack(CapsuleProducer(transferred)), np.arange(6, dtype=np.uint8)
         )
 
     def test_release_preserves_active_borrowed_view(self):
         tensor, _, released = self.make_borrowed()
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         capsule = tensor.release_dlpack()
         del capsule, tensor
         gc.collect()
         self.assertEqual(released, [])
-        numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
+        np.testing.assert_array_equal(view, np.arange(64, dtype=np.uint8))
         del view
         gc.collect()
         self.assertEqual(len(released), 1)
@@ -1013,7 +1007,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 tensor = TensorProto(
                     data_type=TensorProto.UINT8, dims=shape, raw_data=b"" if shape else b"\x07"
                 )
-                view = numpy.from_dlpack(CapsuleProducer(tensor.release_dlpack()))
+                view = np.from_dlpack(CapsuleProducer(tensor.release_dlpack()))
                 self.assertFalse(tensor.HasField("raw_data"))
                 self.assertEqual(view.shape, shape)
                 self.assertEqual(view.size, 0 if shape else 1)
@@ -1084,45 +1078,45 @@ class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_numpy_zero_copy_and_lifetime(self):
         for dtype in (
-            numpy.float16,
-            numpy.float32,
-            numpy.float64,
-            numpy.int8,
-            numpy.uint8,
-            numpy.int16,
-            numpy.uint16,
-            numpy.int32,
-            numpy.uint32,
-            numpy.int64,
-            numpy.uint64,
-            numpy.bool_,
-            numpy.complex64,
-            numpy.complex128,
+            np.float16,
+            np.float32,
+            np.float64,
+            np.int8,
+            np.uint8,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+            np.bool_,
+            np.complex64,
+            np.complex128,
         ):
             with self.subTest(dtype=dtype):
-                expected = numpy.arange(6).astype(dtype).reshape(2, 3)
+                expected = np.arange(6).astype(dtype).reshape(2, 3)
                 tensor = onh.from_array(expected)
                 self.assertEqual(tensor.__dlpack_device__(), (1, 0))
-                view = numpy.from_dlpack(tensor)
-                other = numpy.from_dlpack(tensor)
-                self.assertTrue(numpy.shares_memory(view, other))
+                view = np.from_dlpack(tensor)
+                other = np.from_dlpack(tensor)
+                self.assertTrue(np.shares_memory(view, other))
                 self.assertFalse(view.flags.writeable)
                 self.assertEqual(view.dtype, expected.dtype)
                 with self.assertRaisesRegex(ValueError, "active exported views"):
-                    tensor.raw_data = numpy.zeros_like(expected).tobytes()
+                    tensor.raw_data = np.zeros_like(expected).tobytes()
                 self.assertEqual(tensor.raw_data, expected.tobytes())
-                numpy.testing.assert_array_equal(view, expected)
+                np.testing.assert_array_equal(view, expected)
                 del other
                 gc.collect()
                 with self.assertRaisesRegex(ValueError, "active exported views"):
-                    tensor.raw_data = numpy.zeros_like(expected).tobytes()
+                    tensor.raw_data = np.zeros_like(expected).tobytes()
                 del tensor
                 gc.collect()
-                numpy.testing.assert_array_equal(view, expected)
+                np.testing.assert_array_equal(view, expected)
 
     def test_owned_assignment_after_export_release(self):
-        tensor = onh.from_array(numpy.arange(6, dtype=numpy.uint8))
-        view = numpy.from_dlpack(tensor)
+        tensor = onh.from_array(np.arange(6, dtype=np.uint8))
+        view = np.from_dlpack(tensor)
         del view
         gc.collect()
         tensor.raw_data = bytes(6)
@@ -1131,21 +1125,19 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_exports_survive_clear_and_storage_replacement(self):
         for borrowed in (False, True):
             with self.subTest(borrowed=borrowed):
-                array = numpy.arange(6, dtype=numpy.uint8)
+                array = np.arange(6, dtype=np.uint8)
                 tensor = TensorProto.from_dlpack(array) if borrowed else onh.from_array(array)
-                first = numpy.from_dlpack(tensor)
+                first = np.from_dlpack(tensor)
                 tensor.Clear()
                 tensor.data_type = TensorProto.UINT8
                 tensor.dims.extend([6])
                 tensor.raw_data = b"second"
-                second = numpy.from_dlpack(tensor)
+                second = np.from_dlpack(tensor)
                 tensor.Clear()
                 del tensor, array
                 gc.collect()
-                numpy.testing.assert_array_equal(first, numpy.arange(6, dtype=numpy.uint8))
-                numpy.testing.assert_array_equal(
-                    second, numpy.frombuffer(b"second", dtype=numpy.uint8)
-                )
+                np.testing.assert_array_equal(first, np.arange(6, dtype=np.uint8))
+                np.testing.assert_array_equal(second, np.frombuffer(b"second", dtype=np.uint8))
 
     def test_exact_descriptors(self):
         descriptors = {
@@ -1208,7 +1200,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         self.assertIsNot(copied, tensor)
         capsule = copied.__dlpack__()
         self.assertEqual(capsule_tensor(capsule).data, address)
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         self.assertEqual(view.ctypes.data, address)
         # The exported token must survive replacement of both borrowed spans.
         tensor.Clear()
@@ -1216,7 +1208,7 @@ class TestTensorProtoDLPack(ExtTestCase):
         del tensor, copied, graph
         gc.collect()
         self.assertEqual(released, [])
-        numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
+        np.testing.assert_array_equal(view, np.arange(64, dtype=np.uint8))
         del view
         gc.collect()
         self.assertEqual(released, [])
@@ -1227,10 +1219,10 @@ class TestTensorProtoDLPack(ExtTestCase):
     def test_capsule_consumed_once(self):
         tensor, address, released = self.make_borrowed()
         producer = CapsuleProducer(tensor.__dlpack__())
-        view = numpy.from_dlpack(producer)
+        view = np.from_dlpack(producer)
         self.assertEqual(view.ctypes.data, address)
         with self.assertRaises(ValueError):
-            numpy.from_dlpack(producer)
+            np.from_dlpack(producer)
         del tensor, producer
         gc.collect()
         self.assertEqual(released, [])
@@ -1260,7 +1252,7 @@ class TestTensorProtoDLPack(ExtTestCase):
             options,
         )
         references = sys.getrefcount(tensor)
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         self.assertGreater(sys.getrefcount(tensor), references)
         del tensor
         gc.collect()
@@ -1276,7 +1268,7 @@ class TestTensorProtoDLPack(ExtTestCase):
                 tensor = TensorProto(
                     data_type=TensorProto.UINT8, dims=shape, raw_data=b"" if shape else b"\x07"
                 )
-                view = numpy.from_dlpack(tensor)
+                view = np.from_dlpack(tensor)
                 self.assertEqual(view.shape, shape)
                 self.assertEqual(view.size, 0 if shape else 1)
         missing = TensorProto(data_type=TensorProto.FLOAT, dims=[0])
@@ -1342,26 +1334,26 @@ class TestTensorProtoDLPack(ExtTestCase):
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_alignment(self):
         aligned, address, _ = self.make_borrowed(TensorProto.FLOAT, 4, 0)
-        self.assertEqual(numpy.from_dlpack(aligned).ctypes.data, address)
+        self.assertEqual(np.from_dlpack(aligned).ctypes.data, address)
         unaligned, _, _ = self.make_borrowed(TensorProto.FLOAT, 4, 1)
         with self.assertRaisesRegex(BufferError, "align"):
             unaligned.__dlpack__()
 
     @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
     def test_aligned_owned_and_shape_snapshot(self):
-        expected = numpy.arange(6, dtype=numpy.float32).reshape(2, 3)
+        expected = np.arange(6, dtype=np.float32).reshape(2, 3)
         options = ParseOptions()
         options.alignment = 64
         tensor = TensorProto()
         tensor.ParseFromString(onh.from_array(expected).SerializeToString(), options)
-        view = numpy.from_dlpack(tensor)
+        view = np.from_dlpack(tensor)
         self.assertEqual(view.ctypes.data % 64, 0)
         tensor.dims.clear()
         tensor.dims.extend([6])
         del tensor
         gc.collect()
         self.assertEqual(view.shape, (2, 3))
-        numpy.testing.assert_array_equal(view, expected)
+        np.testing.assert_array_equal(view, expected)
 
     def test_protocol_arguments(self):
         tensor = TensorProto(data_type=TensorProto.UINT8, dims=[1], raw_data=b"\x07")
@@ -1375,7 +1367,7 @@ class TestTensorProtoDLPack(ExtTestCase):
             tensor.__dlpack__(stream=1)
 
     def test_loaded_mmap_payload(self):
-        expected = numpy.arange(64, dtype=numpy.uint8)
+        expected = np.arange(64, dtype=np.uint8)
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "model.onnx")
             with open(path, "wb") as stream:
@@ -1393,17 +1385,17 @@ class TestTensorProtoDLPack(ExtTestCase):
             graph.initializer.add()
             graph.initializer[0] = model.graph.initializer[0]
             copied = graph.initializer[0]
-            view = numpy.from_dlpack(copied)
-            source_view = numpy.from_dlpack(model.graph.initializer[0])
+            view = np.from_dlpack(copied)
+            source_view = np.from_dlpack(model.graph.initializer[0])
             self.assertEqual(view.ctypes.data, source_view.ctypes.data)
             del source_view
             del model, graph, copied
             gc.collect()
-            numpy.testing.assert_array_equal(view, expected)
+            np.testing.assert_array_equal(view, expected)
             del view
 
     def test_loaded_external_payload(self):
-        expected = numpy.arange(64, dtype=numpy.uint8)
+        expected = np.arange(64, dtype=np.uint8)
         with tempfile.TemporaryDirectory() as directory:
             with open(os.path.join(directory, "weights.bin"), "wb") as stream:
                 stream.write(expected.tobytes())
@@ -1415,10 +1407,10 @@ class TestTensorProtoDLPack(ExtTestCase):
                 tensor.__dlpack__()
             tensor.load_external_data(directory)
             self.assertEqual(tensor.data_location, TensorProto.EXTERNAL)
-            view = numpy.from_dlpack(tensor)
+            view = np.from_dlpack(tensor)
             del tensor
             gc.collect()
-            numpy.testing.assert_array_equal(view, expected)
+            np.testing.assert_array_equal(view, expected)
 
 
 if __name__ == "__main__":

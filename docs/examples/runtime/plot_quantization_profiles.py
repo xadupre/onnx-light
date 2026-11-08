@@ -20,7 +20,7 @@ selecting ``aqlm`` does not train codebooks. The small synthetic tables below
 demonstrate the API, not trained models or recommended quantization quality.
 """
 
-import numpy
+import numpy as np
 from onnx_light import onnx
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_core.quantization import (
@@ -54,8 +54,8 @@ def roundtrip(values, plan):
     restored = onh.to_array(dequantize_tensor_proto(encoded))
     assert restored.shape == values.shape
     assert restored.dtype == values.dtype
-    assert numpy.isfinite(restored).all()
-    error = float(numpy.max(numpy.abs(restored.astype(numpy.float64) - values)))
+    assert np.isfinite(restored).all()
+    error = float(np.max(np.abs(restored.astype(np.float64) - values)))
     block_count = sum(len(run.blocks) for run in plan.runs)
     print(
         f"{quantization_format_name(plan.format):16s} "
@@ -83,7 +83,7 @@ def roundtrip(values, plan):
 # ``run.block(i)``. Assign modified lists back or use the corresponding setters.
 # A run shares one layout; its blocks store only scales, offsets and codebooks.
 
-weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32).reshape(4, 4)
+weights = np.linspace(-1, 1, 16, dtype=np.float32).reshape(4, 4)
 for profile in (
     QuantizationFormat.INT8,
     QuantizationFormat.EETQ,
@@ -117,20 +117,20 @@ for profile in (
 # ordering and shape. A zero-valued channel uses scale 1, since scales must
 # be strictly positive.
 
-weights = numpy.array([[-1, -10, 0], [1, 10, 0]], dtype=numpy.float32)
+weights = np.array([[-1, -10, 0], [1, 10, 0]], dtype=np.float32)
 plan = make_quantization_plan(
     QuantizationFormat.INT8_PER_CHANNEL, weights.size, block_size=weights.shape[0]
 )
-plan.permutation = numpy.arange(weights.size).reshape(weights.shape).T.ravel().tolist()
+plan.permutation = np.arange(weights.size).reshape(weights.shape).T.ravel().tolist()
 for channel in range(weights.shape[1]):
     run = plan.run(0)
     block = run.block(channel)
-    maximum = float(numpy.max(numpy.abs(weights[:, channel])))
+    maximum = float(np.max(np.abs(weights[:, channel])))
     block.scale = maximum / 127 if maximum > 0 else 1.0
     run.set_block(channel, block)
     plan.set_run(0, run)
 _, restored = roundtrip(weights, plan)
-numpy.testing.assert_allclose(restored, weights, rtol=0, atol=1e-6)
+np.testing.assert_allclose(restored, weights, rtol=0, atol=1e-6)
 
 
 # %%
@@ -141,7 +141,7 @@ numpy.testing.assert_allclose(restored, weights, rtol=0, atol=1e-6)
 # the bit allocation and quantization parameters; the profile name does not
 # select a trained allocation, an EXL vendor layout or an HQQ optimizer.
 
-weights = numpy.array([-1, 0, 1, -2, 0, 2], dtype=numpy.float32)
+weights = np.array([-1, 0, 1, -2, 0, 2], dtype=np.float32)
 for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFormat.EXL3):
     plan = make_quantization_plan(profile, weights.size, block_size=3)
     runs = []
@@ -154,7 +154,7 @@ for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFor
         runs.append(run)
     plan.runs = runs
     _, restored = roundtrip(weights, plan)
-    numpy.testing.assert_array_equal(restored, weights)
+    np.testing.assert_array_equal(restored, weights)
 
 
 # %%
@@ -175,7 +175,7 @@ for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFor
 # ``block.codebook`` gives the actual unscaled levels. Here a NumPy nearest-
 # level reference also checks the decoder's output.
 
-weights = numpy.linspace(-1, 1, 17, dtype=numpy.float32)
+weights = np.linspace(-1, 1, 17, dtype=np.float32)
 for profile in (
     QuantizationFormat.NF4,
     QuantizationFormat.IQ4_NL,
@@ -199,10 +199,10 @@ for profile in (
     block.scale = 1.0 / 127 if profile == QuantizationFormat.IQ4_NL else 1.0
     run.set_block(0, block)
     plan.set_run(0, run)
-    levels = numpy.array(block.codebook) * block.scale
-    indices = numpy.abs(weights[:, None] - levels[None, :]).argmin(axis=1)
+    levels = np.array(block.codebook) * block.scale
+    indices = np.abs(weights[:, None] - levels[None, :]).argmin(axis=1)
     _, restored = roundtrip(weights, plan)
-    numpy.testing.assert_array_equal(restored, levels[indices].astype(weights.dtype))
+    np.testing.assert_array_equal(restored, levels[indices].astype(weights.dtype))
 
 
 # %%
@@ -220,7 +220,7 @@ for profile in (
 # forward/inverse transform: identity is used here solely to demonstrate
 # the required fields, not as a useful QuIP# rotation.
 
-weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32)
+weights = np.linspace(-1, 1, 16, dtype=np.float32)
 for profile in (
     QuantizationFormat.STQ1_0,
     QuantizationFormat.IQ1_S,
@@ -230,16 +230,16 @@ for profile in (
     plan = make_quantization_plan(profile, weights.size, block_size=weights.size)
     run = plan.run(0)
     block = run.block(0)
-    table = numpy.empty((run.layout.books, run.layout.entries, run.layout.vector_size))
+    table = np.empty((run.layout.books, run.layout.entries, run.layout.vector_size))
     for book in range(run.layout.books):
-        levels = numpy.linspace(-1, 1, run.layout.entries) / (book + 1)
+        levels = np.linspace(-1, 1, run.layout.entries) / (book + 1)
         table[book] = levels[:, None]
     block.codebook = table.ravel().tolist()
     run.set_block(0, block)
     plan.set_run(0, run)
     if profile == QuantizationFormat.QUIP_SHARP:
         plan.transform_size = 8
-        plan.forward = numpy.eye(8).ravel().tolist()
+        plan.forward = np.eye(8).ravel().tolist()
         plan.inverse = plan.forward
     roundtrip(weights, plan)
 
@@ -254,7 +254,7 @@ for profile in (
 # permutation or transformation. Their original values are stored separately
 # and restored exactly; selection of these indices is not automatic.
 
-weights = numpy.array([0.125, 1000, -0.25, 0.5], dtype=numpy.float32)
+weights = np.array([0.125, 1000, -0.25, 0.5], dtype=np.float32)
 for profile in (QuantizationFormat.SPQR, QuantizationFormat.SQUEEZELLM):
     plan = make_quantization_plan(profile, weights.size)
     plan.outliers = [1]
@@ -263,7 +263,7 @@ for profile in (QuantizationFormat.SPQR, QuantizationFormat.SQUEEZELLM):
     if profile == QuantizationFormat.SPQR:
         block.scale = 0.125
     else:
-        block.codebook = numpy.linspace(-1, 1, run.layout.entries).tolist()
+        block.codebook = np.linspace(-1, 1, run.layout.entries).tolist()
     run.set_block(0, block)
     plan.set_run(0, run)
     _, restored = roundtrip(weights, plan)
@@ -281,17 +281,17 @@ for profile in (QuantizationFormat.SPQR, QuantizationFormat.SQUEEZELLM):
 # The example supplies an orthogonal rotation or a diagonal rescaling;
 # neither is calibrated automatically.
 
-weights = numpy.array([1, 2, -1, -2], dtype=numpy.float32)
+weights = np.array([1, 2, -1, -2], dtype=np.float32)
 for profile in (QuantizationFormat.QUAROT, QuantizationFormat.SMOOTHQUANT):
     plan = make_quantization_plan(profile, weights.size)
     matrix = (
-        numpy.array([[1, 1], [1, -1]]) / numpy.sqrt(2)
+        np.array([[1, 1], [1, -1]]) / np.sqrt(2)
         if profile == QuantizationFormat.QUAROT
-        else numpy.diag([2.0, 0.5])
+        else np.diag([2.0, 0.5])
     )
     plan.transform_size = 2
     plan.forward = matrix.ravel().tolist()
-    plan.inverse = numpy.linalg.inv(matrix).ravel().tolist()
+    plan.inverse = np.linalg.inv(matrix).ravel().tolist()
     run = plan.run(0)
     block = run.block(0)
     block.scale = 0.5
@@ -310,8 +310,8 @@ for profile in (QuantizationFormat.QUAROT, QuantizationFormat.SMOOTHQUANT):
 # FLOAT16 storage demonstrates an optional precision reduction.
 # The reconstructed tensor retains its original FLOAT logical dtype.
 
-weights = numpy.arange(16, dtype=numpy.float32).reshape(4, 4) / 8
-indices = numpy.arange(weights.size).reshape(weights.shape)
+weights = np.arange(16, dtype=np.float32).reshape(4, 4) / 8
+indices = np.arange(weights.size).reshape(weights.shape)
 for profile in (QuantizationFormat.TILED_FLOAT, QuantizationFormat.COLUMN_MAJOR):
     plan = make_quantization_plan(profile, weights.size, block_size=4)
     if profile == QuantizationFormat.TILED_FLOAT:
@@ -322,7 +322,7 @@ for profile in (QuantizationFormat.TILED_FLOAT, QuantizationFormat.COLUMN_MAJOR)
     run.layout.cast_type = onnx.TensorProto.FLOAT16
     plan.set_run(0, run)
     encoded, restored = roundtrip(weights, plan)
-    numpy.testing.assert_array_equal(restored, weights)
+    np.testing.assert_array_equal(restored, weights)
 
 
 # %%
@@ -338,16 +338,14 @@ for profile in (QuantizationFormat.TILED_FLOAT, QuantizationFormat.COLUMN_MAJOR)
 wire = encoded.SerializeToString()
 loaded = onnx.EncodedValueProto()
 loaded.ParseFromString(wire)
-numpy.testing.assert_array_equal(onh.to_array(dequantize_tensor_proto(loaded)), weights)
+np.testing.assert_array_equal(onh.to_array(dequantize_tensor_proto(loaded)), weights)
 
 model = onnx.ModelProto()
 declaration = model.struct_types.add()
 declaration.CopyFrom(loaded.struct_type)
 declaration.type_id = 91
 loaded.struct_type = onnx.StructTypeProto(type_ref=91)
-numpy.testing.assert_array_equal(
-    onh.to_array(dequantize_tensor_proto(loaded, model=model)), weights
-)
+np.testing.assert_array_equal(onh.to_array(dequantize_tensor_proto(loaded, model=model)), weights)
 
 # %%
 # ONNX Runtime MatMulNBits input packing
@@ -358,7 +356,7 @@ numpy.testing.assert_array_equal(
 # group per column. Unlike the portable MATMULNBITS profile, the extracted
 # tensors can directly become initializers of com.microsoft::MatMulNBits.
 
-weights = (numpy.arange(35 * 3).reshape(35, 3) % 3 - 1).astype(numpy.float32)
+weights = (np.arange(35 * 3).reshape(35, 3) % 3 - 1).astype(np.float32)
 for profile in (
     QuantizationFormat.ORT_MATMULNBITS_INT2,
     QuantizationFormat.ORT_MATMULNBITS_INT4,
@@ -366,7 +364,7 @@ for profile in (
 ):
     plan = make_matmul_nbits_plan(profile, 35, 3, block_size=16)
     encoded, restored = roundtrip(weights, plan)
-    numpy.testing.assert_array_equal(restored, weights)
+    np.testing.assert_array_equal(restored, weights)
     inputs = export_matmul_nbits_inputs(encoded)
     assert tuple(inputs.weights.dims) == (3, 3, 16 * inputs.bits // 8)
     assert tuple(inputs.scales.dims) == (3, 3)
@@ -382,7 +380,7 @@ for profile in (
 # native E4M3FN bytes, unlike the portable ``fp8_e4m3`` codebook profile.
 # Complete groups of 32 and FLOAT32 input are required.
 
-weights = numpy.linspace(-1, 1, 64, dtype=numpy.float32).reshape(2, 32)
+weights = np.linspace(-1, 1, 64, dtype=np.float32).reshape(2, 32)
 plan = make_quantization_plan(QuantizationFormat.MXFP8, weights.size)
 roundtrip(weights, plan)
 
@@ -393,11 +391,11 @@ roundtrip(weights, plan)
 # This profile stores native E2M3 codes, four per three bytes, with automatic
 # E8M0 scales. The legacy MXFP6/FP6_LLM examples above retain their E3M2 tables.
 
-weights = numpy.tile([1, -0.125, 7.5, 0], 8).astype(numpy.float32).reshape(1, 32)
+weights = np.tile([1, -0.125, 7.5, 0], 8).astype(np.float32).reshape(1, 32)
 plan = make_quantization_plan(QuantizationFormat.MXFP6_E2M3, weights.size)
 encoded, restored = roundtrip(weights, plan)
 assert encoded.raw_data == bytes([0x48, 0xF8, 0x01] * 8 + [127])
-numpy.testing.assert_array_equal(restored, weights)
+np.testing.assert_array_equal(restored, weights)
 
 # %%
 # Coverage

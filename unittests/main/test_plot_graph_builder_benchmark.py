@@ -2,9 +2,9 @@ import gc
 import importlib.util
 from pathlib import Path
 
-import matplotlib.pyplot
+import matplotlib.pyplot as plt
 import pytest
-import numpy
+import numpy as np
 
 onnx = pytest.importorskip("onnx")
 ReferenceEvaluator = importlib.import_module("onnx.reference").ReferenceEvaluator
@@ -37,7 +37,7 @@ def test_timing_modes():
 @pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
 def test_large_initializers_are_model_outputs(build, monkeypatch):
     monkeypatch.setattr(example, "LARGE_INITIALIZER_BYTES", 16)
-    monkeypatch.setattr(example, "_LARGE_INITIALIZER", numpy.zeros(16, dtype=numpy.uint8))
+    monkeypatch.setattr(example, "_LARGE_INITIALIZER", np.zeros(16, dtype=np.uint8))
     model = onnx.load_from_string(build(20, large_initializers=True).SerializeToString())
     for opset in model.opset_import:
         if opset.domain == "ai.onnx":
@@ -90,15 +90,15 @@ def test_dynamic_attention(build, shape):
     ] == example.SHAPE
     assert len(model.graph.node) == 20
     assert len(model.graph.initializer) == 5
-    x = numpy.random.default_rng(1).standard_normal(shape).astype(numpy.float32)
+    x = np.random.default_rng(1).standard_normal(shape).astype(np.float32)
     query = x.reshape(*shape[:2], 2, shape[2] // 2).transpose(0, 2, 1, 3)
-    scores = query @ query.transpose(0, 1, 3, 2) / numpy.sqrt(numpy.float32(shape[2] // 2))
-    weights = numpy.exp(scores - scores.max(axis=-1, keepdims=True))
+    scores = query @ query.transpose(0, 1, 3, 2) / np.sqrt(np.float32(shape[2] // 2))
+    weights = np.exp(scores - scores.max(axis=-1, keepdims=True))
     weights /= weights.sum(axis=-1, keepdims=True)
     context = (weights @ query).transpose(0, 2, 1, 3).reshape(shape)
-    expected = numpy.maximum((x + context) * 0.5, 0)
+    expected = np.maximum((x + context) * 0.5, 0)
     (actual,) = ReferenceEvaluator(model).run(None, {"X": x})
-    numpy.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-6)
 
 
 @pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
@@ -139,4 +139,4 @@ def test_plot_benchmark():
     figure = example.plot_benchmark(results)
     assert len(figure.axes) == 2
     assert all(len(axis.lines) == 2 for axis in figure.axes)
-    matplotlib.pyplot.close(figure)
+    plt.close(figure)

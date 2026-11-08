@@ -37,7 +37,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import TypeAlias
 
-import numpy
+import numpy as np
 
 import onnx_light.onnx.helper as oh
 from ..onnx import FunctionProto, GraphProto, ModelProto, TensorProto
@@ -87,7 +87,7 @@ class _OperatorProxy:
         if op_type.startswith("_"):
             raise AttributeError(op_type)
 
-        def make_operator(*inputs: str | numpy.ndarray | None, **kwargs: object):
+        def make_operator(*inputs: str | np.ndarray | None, **kwargs: object):
             outputs = kwargs.pop("outputs", None)
             domain = kwargs.pop("domain", "")
             name = kwargs.pop("name", "")
@@ -124,7 +124,7 @@ class _OperatorProxy:
             for input_value in inputs:
                 if input_value is None:
                     resolved_inputs.append("")
-                elif isinstance(input_value, numpy.ndarray):
+                elif isinstance(input_value, np.ndarray):
                     resolved_inputs.append(self._builder.init(input_value))
                 elif isinstance(input_value, str):
                     resolved_inputs.append(input_value)
@@ -220,7 +220,7 @@ class GraphBuilder(_C.GraphBuilder):
             self.make_output(oh.make_tensor_value_info(name, elem_type, shape))
         return name
 
-    def init(self, value: numpy.ndarray, name: str | None = None, *, copy: bool = True) -> str:
+    def init(self, value: np.ndarray, name: str | None = None, *, copy: bool = True) -> str:
         """Adds a NumPy initializer and returns its final name.
 
         By default, copies the payload. With ``copy=False``, borrows C-contiguous,
@@ -235,7 +235,7 @@ class GraphBuilder(_C.GraphBuilder):
         reallocate storage while borrowed. Use ``copy=True`` for an independent
         snapshot; setting an array read-only does not freeze its aliases.
         """
-        if not isinstance(value, numpy.ndarray):
+        if not isinstance(value, np.ndarray):
             raise TypeError(f"An initializer must be a NumPy array, not {type(value).__name__}.")
         if not copy:
             if not value.flags.c_contiguous:

@@ -28,7 +28,7 @@ from __future__ import annotations
 from pprint import pprint
 
 import matplotlib.pyplot as plt
-import numpy
+import numpy as np
 
 from onnx_light import kernel_tuning
 from onnx_light.onnx import TensorProto
@@ -43,7 +43,7 @@ model = parser.parse_model(
     "  y = Abs(x)\n"
     "}\n"
 )
-values = -numpy.ones(100_000, dtype=numpy.float32)
+values = -np.ones(100_000, dtype=np.float32)
 tensor_proto = TensorProto()
 tensor_proto.name = "x"
 tensor_proto.dims.append(values.size)

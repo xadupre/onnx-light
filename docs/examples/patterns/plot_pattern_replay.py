@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import numpy
+import numpy as np
 
 from onnx_light import onnx
 from onnx_light.onnx.reference import ReferenceEvaluator
@@ -99,7 +99,7 @@ print(pretty_onnx(replayed_graph))
 
 exporter = GraphBuilder("export_weights", opsets=18)
 x = exporter.inp("x", onnx.TensorProto.FLOAT, [3, 2])
-weight = exporter.init(numpy.arange(6, dtype=numpy.float32).reshape(2, 3), name="weight")
+weight = exporter.init(np.arange(6, dtype=np.float32).reshape(2, 3), name="weight")
 weight_identity = exporter.op.Transpose(weight, perm=[0, 1])
 transposed = exporter.op.Transpose(weight_identity, perm=[1, 0])
 y = exporter.op.Add(x, transposed, outputs="y")
@@ -126,7 +126,7 @@ assert any(
 # Loading alone leaves the canonical graph unchanged; selecting a named plan
 # invokes replay without running any pattern matchers.
 
-feeds = {"x": numpy.ones((3, 2), dtype=numpy.float32)}
+feeds = {"x": np.ones((3, 2), dtype=np.float32)}
 expected = ReferenceEvaluator(canonical).run(None, feeds)[0]
 with TemporaryDirectory() as directory:
     path = Path(directory)
@@ -136,9 +136,7 @@ with TemporaryDirectory() as directory:
     selected = GraphBuilder(restored).apply_rewritings("optimized").to_standard_model()
     plain = onnx.load(path / "materialized.onnx", load_external_data=True)
     for exported in (restored, selected, plain):
-        numpy.testing.assert_array_equal(
-            ReferenceEvaluator(exported).run(None, feeds)[0], expected
-        )
+        np.testing.assert_array_equal(ReferenceEvaluator(exported).run(None, feeds)[0], expected)
     assert selected.graph.SerializeToString() == materialized.graph.SerializeToString()
     print(f"Canonical nodes: {len(restored.graph.node)}")
     print(f"Materialized nodes: {len(plain.graph.node)}")

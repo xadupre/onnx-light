@@ -18,7 +18,7 @@ import pstats
 
 import matplotlib.patches as mpatches
 import numpy as np
-import pandas
+import pandas as pd
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
@@ -170,7 +170,7 @@ print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 # Results
 # -------
 
-df = pandas.DataFrame(results).set_index("name").sort_index()
+df = pd.DataFrame(results).set_index("name").sort_index()
 print(df)
 
 # %%

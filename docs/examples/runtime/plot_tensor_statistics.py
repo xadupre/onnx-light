@@ -19,7 +19,7 @@ representations, not vendor-compatible files.
 """
 
 import matplotlib.pyplot as plt
-import numpy
+import numpy as np
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_core.quantization import (
     QuantizationFormat,
@@ -39,8 +39,8 @@ from onnx_light.onnx_core.tensor_statistics import compute_tensor_statistics
 # the portable Q3_K profile with 3-bit codes in [-4, 3]. NF4 uses its built-in
 # normal-float codebook with scale 1. No calibration is performed.
 
-floats = numpy.linspace(-1, 1, 128, dtype=numpy.float32).reshape(8, 16)
-integers = (numpy.arange(128, dtype=numpy.int32).reshape(8, 16) % 9) - 4
+floats = np.linspace(-1, 1, 128, dtype=np.float32).reshape(8, 16)
+integers = (np.arange(128, dtype=np.int32).reshape(8, 16) % 9) - 4
 tensors = {"float32": floats, "int32": integers}
 
 for name, profile, scale in (
@@ -100,7 +100,7 @@ for (name, stats), (histogram, rectangle) in zip(statistics.items(), axes):
     histogram.set_xlabel("value")
     histogram.set_ylabel("count")
     image = rectangle.imshow(
-        numpy.array(stats.rectangle_map).reshape(stats.rectangle_shape), aspect="auto"
+        np.array(stats.rectangle_map).reshape(stats.rectangle_shape), aspect="auto"
     )
     rectangle.set_title(f"{name}: area-averaged map")
     fig.colorbar(image, ax=rectangle)

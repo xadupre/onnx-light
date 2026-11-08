@@ -7,7 +7,7 @@ import gc
 import sys
 import unittest
 
-import numpy
+import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
@@ -81,7 +81,7 @@ class TestFunctionPattern(ExtTestCase):
         self.assertEqual([node.op_type for node in optimized.graph.node], ["body"] * 2)
         for output in ("y", "z"):
             self.assertEqual(list(builder.get_shape(output).shape), [2, 2])
-        feeds = {"x": numpy.array([[-2, 0], [1, 3]], dtype=numpy.float32)}
+        feeds = {"x": np.array([[-2, 0], [1, 3]], dtype=np.float32)}
         for expected, actual in zip(
             evaluator(model).run(None, feeds), evaluator(optimized).run(None, feeds)
         ):
@@ -105,7 +105,7 @@ class TestFunctionPattern(ExtTestCase):
         self.assertEqual(len(optimized.graph.node), 1)
         self.assertEqual(optimized.graph.node[0].domain, "patterns")
         self.assertEqual(len(optimized.functions), 1)
-        feeds = {"x": numpy.array([[-2, 0], [1, 3]], dtype=numpy.float32)}
+        feeds = {"x": np.array([[-2, 0], [1, 3]], dtype=np.float32)}
         self.assertEqualArray(
             evaluator(model).run(None, feeds)[0], evaluator(optimized).run(None, feeds)[0]
         )
@@ -177,7 +177,7 @@ class TestFunctionPattern(ExtTestCase):
         template, replacement, model = _double_neg()
         builder = GraphBuilder(model)
         GraphGraph(builder, patterns=[FunctionPattern(template, replacement)]).optimize()
-        feeds = {"x": numpy.array([[-2, 0], [1, 3]], dtype=numpy.float32)}
+        feeds = {"x": np.array([[-2, 0], [1, 3]], dtype=np.float32)}
         self.assertEqualArray(
             evaluator(model).run(None, feeds)[0], evaluator(builder.to_onnx()).run(None, feeds)[0]
         )

@@ -11,7 +11,7 @@ and rewritten directly against the onnx-light C++ API.
 |-----------------------------------|--------------------------------------------------------------------------|-------------------------------------|
 | `fuzz_checker.cc`                 | `ModelProto::ParseFromString` + `checker::check_model`                   | Raw bytes → protobuf parser         |
 | `fuzz_model_loader.cc`            | `ModelProto::ParseFromString` + graph walk + `checker::check_model`      | Raw bytes → protobuf parser         |
-| `fuzz_parser.cc`                  | `OnnxParser::Parse<ModelProto>`                                          | UTF-8 text (ONNX text format)       |
+| `fuzz_parser.cc`                  | `OnnxParser::Parse` for models, graphs, functions, and nodes              | Length-preserving text and scalar literals |
 | `fuzz_shape_inference.cc`         | `shape_inference::InferShapes`                                           | Raw bytes → protobuf parser         |
 | `fuzz_optim_shape_inference.cc`   | `onnx_shapes::shapes::InferShapesModel`                                   | Raw bytes → protobuf parser         |
 | `fuzz_version_converter.cc`       | `version_conversion::ConvertVersion`                                     | Raw bytes → protobuf parser         |
@@ -21,6 +21,11 @@ and rewritten directly against the onnx-light C++ API.
 | `make_seed_corpus.cc`             | *(seed generator, not a fuzzer)*                                         | Writes seed files for OSS-Fuzz      |
 
 ## Building
+
+The parser harness treats returned parse errors as expected, but leaves unexpected
+exceptions visible to libFuzzer. It checks integer ranges, scalar/tensor floating-point
+value and sign consistency, and escaped-string byte preservation, including embedded NULs.
+Its seed corpus includes numeric boundaries, overflow, underflow, and malformed exponents.
 
 The harnesses are compiled when `ONNX_LIGHT_BUILD_FUZZERS=ON` is
 passed to CMake. Clang is required because libFuzzer

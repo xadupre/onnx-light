@@ -18,9 +18,11 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -29,9 +31,6 @@
 #include "onnx_lib/common/string_utils.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-
-float LocaleIndependentStof(const std::string &s);
-double LocaleIndependentStod(const std::string &s);
 
 /// List of identifiers used in parser productions.
 using IdList = std::vector<std::string>;
@@ -372,7 +371,22 @@ public:
   /// Holds the raw text and classification of a parsed literal token.
   struct Literal {
     LiteralType type{LiteralType::UNDEFINED};
-    std::string value;
+    std::string_view value; // Borrows the parser input.
+
+    /// Decodes a validated string literal into the destination.
+    void DecodeString(std::string &target) const {
+      target.assign(value);
+      size_t output = target.find('\\');
+      if (output == std::string::npos)
+        return;
+      size_t input = output;
+      while (input < target.size()) {
+        if (target[input] == '\\')
+          ++input;
+        target[output++] = target[input++];
+      }
+      target.resize(output);
+    }
   };
 
   /// Parses the next scalar literal token.
@@ -385,7 +399,12 @@ public:
     CHECK_PARSER_STATUS(Parse(literal))
     if (literal.type != LiteralType::INT_LITERAL)
       return ParseError("Integer value expected, but not found.");
-    val = std::stoll(literal.value);
+    int64_t parsed = 0;
+    const char *end = literal.value.data() + literal.value.size();
+    const auto result = std::from_chars(literal.value.data(), end, parsed);
+    if (result.ec != std::errc{} || result.ptr != end)
+      return ParseError("Integer literal is invalid or out of range: ", literal.value);
+    val = parsed;
     return Common::Status::OK();
   }
 
@@ -396,39 +415,20 @@ public:
     CHECK_PARSER_STATUS(Parse(literal))
     if (literal.type != LiteralType::INT_LITERAL)
       return ParseError("Integer value expected, but not found.");
-    val = std::stoull(literal.value);
+    uint64_t parsed = 0;
+    const char *end = literal.value.data() + literal.value.size();
+    const auto result = std::from_chars(literal.value.data(), end, parsed);
+    if (result.ec != std::errc{} || result.ptr != end)
+      return ParseError("Unsigned integer literal is invalid or out of range: ", literal.value);
+    val = parsed;
     return Common::Status::OK();
   }
 
   /// Parses an integer or floating-point literal as `float`.
-  Common::Status Parse(float &val) {
-    Literal literal;
-    CHECK_PARSER_STATUS(Parse(literal))
-    switch (literal.type) {
-    case LiteralType::INT_LITERAL:
-    case LiteralType::FLOAT_LITERAL:
-      val = LocaleIndependentStof(literal.value);
-      break;
-    default:
-      return ParseError("Unexpected literal type.");
-    }
-    return Common::Status::OK();
-  }
+  Common::Status Parse(float &val);
 
   /// Parses an integer or floating-point literal as `double`.
-  Common::Status Parse(double &val) {
-    Literal literal;
-    CHECK_PARSER_STATUS(Parse(literal))
-    switch (literal.type) {
-    case LiteralType::INT_LITERAL:
-    case LiteralType::FLOAT_LITERAL:
-      val = LocaleIndependentStod(literal.value);
-      break;
-    default:
-      return ParseError("Unexpected literal type.");
-    }
-    return Common::Status::OK();
-  }
+  Common::Status Parse(double &val);
 
   /// Parses a double-quoted string literal; returns a parse error if a string is not found.
   Common::Status Parse(std::string &val) {
@@ -436,7 +436,7 @@ public:
     CHECK_PARSER_STATUS(Parse(literal))
     if (literal.type != LiteralType::STRING_LITERAL)
       return ParseError("String value expected, but not found.");
-    val = literal.value;
+    literal.DecodeString(val);
     return Common::Status::OK();
   }
 

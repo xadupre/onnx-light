@@ -1064,6 +1064,123 @@ TEST(onnx_defs, Parser_NonNulTerminatedStringView) {
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
+TEST(onnx_defs, Parser_IntegerLiteralRanges) {
+  int64_t signed_value = 0;
+  ParseIt(signed_value, "-9223372036854775808");
+  EXPECT_EQ(signed_value, std::numeric_limits<int64_t>::min());
+  ParseIt(signed_value, "9223372036854775807");
+  EXPECT_EQ(signed_value, std::numeric_limits<int64_t>::max());
+  uint64_t unsigned_value = 0;
+  ParseIt(unsigned_value, "18446744073709551615");
+  EXPECT_EQ(unsigned_value, std::numeric_limits<uint64_t>::max());
+
+  const std::string backing = "1234";
+  ParseIt(signed_value, std::string_view(backing.data(), 3));
+  EXPECT_EQ(signed_value, 123);
+  ParseIt(unsigned_value, std::string_view(backing.data(), 3));
+  EXPECT_EQ(unsigned_value, 123u);
+
+  for (const auto *literal :
+       {"9223372036854775808", "-9223372036854775809", "999999999999999999999999999999999999"}) {
+    SCOPED_TRACE(literal);
+    OnnxParser parser(literal);
+    signed_value = 42;
+    EXPECT_FALSE(parser.Parse(signed_value).IsOK());
+    EXPECT_EQ(signed_value, 42);
+    AttributeProto attr;
+    ExpectParseFailure(attr, std::string("x = ") + literal);
+    TensorProto tensor;
+    ExpectParseFailure(tensor, std::string("int64[1] {") + literal + "}");
+    TypeProto type;
+    ExpectParseFailure(type, std::string("float[") + literal + "]");
+  }
+  for (const auto *literal :
+       {"-1", "-0", "-00", "18446744073709551616", "999999999999999999999999999999999999"}) {
+    SCOPED_TRACE(literal);
+    OnnxParser parser(literal);
+    unsigned_value = 42;
+    EXPECT_FALSE(parser.Parse(unsigned_value).IsOK());
+    EXPECT_EQ(unsigned_value, 42u);
+    TensorProto tensor;
+    ExpectParseFailure(tensor, std::string("uint64[1] {") + literal + "}");
+  }
+}
+
+TEST(onnx_defs, Parser_FloatingPointLiteralErrorsAndRounding) {
+  for (const auto *literal : {"1e1000", "-1e1000", "1e99999999999999999", "1e+", "1e-"}) {
+    SCOPED_TRACE(literal);
+    float float_value = 42.0f;
+    double double_value = 42.0;
+    OnnxParser float_parser(literal);
+    OnnxParser double_parser(literal);
+    EXPECT_FALSE(float_parser.Parse(float_value).IsOK());
+    EXPECT_FALSE(double_parser.Parse(double_value).IsOK());
+    EXPECT_EQ(float_value, 42.0f);
+    EXPECT_EQ(double_value, 42.0);
+    AttributeProto attr;
+    ExpectParseFailure(attr, std::string("x : float = ") + literal);
+    TensorProto tensor;
+    ExpectParseFailure(tensor, std::string("double[1] {") + literal + "}");
+  }
+
+  for (const auto *literal : {"-1e-1000", "-0", "-00"}) {
+    float float_value = 1.0f;
+    double double_value = 1.0;
+    ParseIt(float_value, literal);
+    ParseIt(double_value, literal);
+    EXPECT_EQ(float_value, 0.0f);
+    EXPECT_EQ(double_value, 0.0);
+    EXPECT_TRUE(std::signbit(float_value));
+    EXPECT_TRUE(std::signbit(double_value));
+  }
+  double subnormal = 0.0;
+  ParseIt(subnormal, "4.9406564584124654e-324");
+  EXPECT_EQ(subnormal, std::numeric_limits<double>::denorm_min());
+  const std::string backing = "1.25e9";
+  float float_value = 0.0f;
+  double double_value = 0.0;
+  ParseIt(float_value, std::string_view(backing.data(), 4));
+  ParseIt(double_value, std::string_view(backing.data(), 4));
+  EXPECT_EQ(float_value, 1.25f);
+  EXPECT_EQ(double_value, 1.25);
+  AttributeProto attr;
+  ExpectParseFailure(attr, "x : float = 1e40");
+  TensorProto tensor;
+  ParseIt(tensor, "double[1] {1e40}");
+  EXPECT_EQ(tensor.ref_double_data()[0], 1e40);
+  ParseIt(attr, "x : float = 18446744073709551615");
+  EXPECT_EQ(attr.ref_f(), 0x1p64f);
+  ParseIt(attr, "x : float = 1.0000000596046447753906250000000001");
+  EXPECT_EQ(attr.ref_f(), std::nextafter(1.0f, 2.0f));
+}
+
+TEST(onnx_defs, Parser_StringLiteralPreservesBytes) {
+  for (const auto &value : {std::string(), std::string("before\0after", 12),
+                            std::string("quote: \" backslash: \\ newline: \n"),
+                            std::string("\xc3\xa9\xe4\xb8\xad\xf0\x9f\x99\x82")}) {
+    std::string quoted = "\"";
+    for (char c : value) {
+      if (c == '\\' || c == '"')
+        quoted += '\\';
+      quoted += c;
+    }
+    quoted += '"';
+    std::string parsed;
+    ParseIt(parsed, quoted);
+    EXPECT_EQ(parsed, value);
+    AttributeProto attr;
+    ParseIt(attr, "x = " + quoted);
+    EXPECT_EQ(attr.ref_s(), value);
+    TensorProto tensor;
+    ParseIt(tensor, "string[1] {" + quoted + "}");
+    ASSERT_EQ(tensor.ref_string_data().size(), 1u);
+    EXPECT_EQ(tensor.ref_string_data()[0], value);
+  }
+  std::string parsed;
+  ExpectParseFailure(parsed, "\"trailing\\");
+  ExpectParseFailure(parsed, "\"unterminated");
+}
+
 TEST(onnx_defs, Parser_FunctionProto_Basic) {
   const char *code = R"ONNX(
 <

@@ -1770,6 +1770,86 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "ReduceSum"
         assert converted_model.opset_import[0].version == 12
 
+    def test_reduce_downgrade_noop_with_empty_axes(self) -> None:
+        reductions = [
+            ("ReduceSum", 13, 12),
+            ("ReduceL1", 18, 17),
+            ("ReduceL2", 18, 17),
+            ("ReduceLogSum", 18, 17),
+            ("ReduceLogSumExp", 18, 17),
+            ("ReduceMax", 18, 13),
+            ("ReduceMean", 18, 17),
+            ("ReduceMin", 18, 17),
+            ("ReduceProd", 18, 17),
+            ("ReduceSumSquare", 18, 17),
+        ]
+        for op_type, from_opset, to_opset in reductions:
+            for axes_source in ("absent", "undefined", "initializer", "constant"):
+                for axes in ([], [1]):
+                    if axes_source in ("absent", "undefined") and axes:
+                        continue
+                    for noop in (0, 1):
+                        with self.subTest(
+                            op_type=op_type, axes_source=axes_source, axes=axes, noop=noop
+                        ):
+                            inputs = ["X"]
+                            nodes = []
+                            initializers = []
+                            if axes_source == "undefined":
+                                inputs.append("")
+                            elif axes_source in ("initializer", "constant"):
+                                inputs.append("axes")
+                                tensor = oh.make_tensor(
+                                    "axes", onnxl.TensorProto.INT64, [len(axes)], axes
+                                )
+                                if axes_source == "initializer":
+                                    initializers.append(tensor)
+                                else:
+                                    nodes.append(
+                                        oh.make_node("Constant", [], ["axes"], value=tensor)
+                                    )
+                            nodes.append(
+                                oh.make_node(
+                                    op_type, inputs, ["Y"], keepdims=1, noop_with_empty_axes=noop
+                                )
+                            )
+                            graph = oh.make_graph(
+                                nodes,
+                                "test",
+                                [
+                                    oh.make_tensor_value_info(
+                                        "X", onnxl.TensorProto.FLOAT, (2, 3, 4)
+                                    )
+                                ],
+                                [
+                                    oh.make_tensor_value_info(
+                                        "Y",
+                                        onnxl.TensorProto.FLOAT,
+                                        (2, 1, 4) if axes else ((2, 3, 4) if noop else (1, 1, 1)),
+                                    )
+                                ],
+                                initializers,
+                            )
+                            if noop == 1 and not axes:
+                                with self.assertRaisesRegex(RuntimeError, "noop_with_empty_axes"):
+                                    self._converted(
+                                        graph, oh.make_operatorsetid("", from_opset), to_opset
+                                    )
+                            else:
+                                converted = self._converted(
+                                    graph, oh.make_operatorsetid("", from_opset), to_opset
+                                )
+                                node = converted.graph.node[0]
+                                self.assertEqual(node.op_type, op_type)
+                                self.assertEqual(list(node.input), ["X"])
+                                attributes = {a.name: a for a in node.attribute}
+                                self.assertNotIn("noop_with_empty_axes", attributes)
+                                self.assertEqual(attributes["keepdims"].i, 1)
+                                if axes_source in ("initializer", "constant"):
+                                    self.assertEqual(list(attributes["axes"].ints), axes)
+                                else:
+                                    self.assertNotIn("axes", attributes)
+
     # Test AxesAttributeToInput Adapter: 12 -> 13
     def test_axes_attr_to_input_12_13(self) -> None:
         nodes = [oh.make_node("ReduceSum", ["X"], ["Y"], axes=[0])]

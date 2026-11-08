@@ -144,11 +144,11 @@ TEST(CompressedTensorsAdapter, RejectsUnsignedAffineSourcesWithoutChangingCodes)
 namespace {
 
 constexpr auto kQuantizationFormats = QuantizationFormats();
-static_assert(kQuantizationFormats.size() == 45);
+static_assert(kQuantizationFormats.size() == 47);
 static_assert(kQuantizationFormats.front() == QuantizationFormat::kInt8);
-static_assert(kQuantizationFormats.back() == QuantizationFormat::kMxfp6E2m3);
-static_assert(static_cast<int>(QuantizationFormat::kMxfp8) == 43);
-static_assert(static_cast<int>(QuantizationFormat::kOrtMatmulnbitsInt8) == 42);
+static_assert(kQuantizationFormats.back() == QuantizationFormat::kTq20);
+static_assert(static_cast<int>(QuantizationFormat::kMxfp8) == 34);
+static_assert(static_cast<int>(QuantizationFormat::kOrtMatmulnbitsInt8) == 33);
 static_assert([] {
   for (size_t i = 0; i < kQuantizationFormats.size(); ++i) {
     for (size_t j = 0; j < i; ++j)
@@ -1452,8 +1452,9 @@ TEST(Quantization, PagedCacheRetainsSharedParametersAcrossSerialization) {
 
 TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
   for (auto format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
-      continue; // Automatic MX profiles do not support shared numerical parameters.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
+        IsGgufQuantizationFormat(format))
+      continue; // Native codecs do not support portable shared numerical parameters.
     SCOPED_TRACE(std::string(QuantizationFormatName(format)));
     auto plan = WithTables(format, 16);
     auto source = Tensor::FromFloat(
@@ -1661,14 +1662,13 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   proto.add_dims(2);
   for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
     proto.add_float_data(value);
-  EXPECT_EQ(QuantizationFormats().size(), 45u);
+  EXPECT_EQ(QuantizationFormats().size(), 47u);
   for (const auto &format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
-      continue; // Covered with complete rank-two groups in the profile-specific tests.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
+        IsGgufQuantizationFormat(format))
+      continue; // Covered by the native codec tests.
     SCOPED_TRACE(QuantizationFormatName(format));
     auto plan = WithTables(format, 8);
-    if (format == QuantizationFormat::kIq4Nl)
-      plan.runs[0].blocks[0].scale = plan.runs[0].blocks[1].scale = 0.01;
     const auto encoded = QuantizeTensor(tensor, plan);
     const auto decoded = DequantizeTensor(WireRoundTrip(encoded));
     const auto encoded_proto = QuantizeTensorProto(proto, plan);
@@ -1684,9 +1684,7 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
     for (int i = 0; i < 8; ++i) {
       EXPECT_TRUE(std::isfinite(decoded.AsFloat()[i]));
       EXPECT_NEAR(decoded.AsFloat()[i], tensor.AsFloat()[i],
-                  format == QuantizationFormat::kBinary  ? 1
-                  : format == QuantizationFormat::kIq4Nl ? 0.14
-                                                         : 1e-6);
+                  format == QuantizationFormat::kBinary ? 1 : 1e-6);
     }
   }
 }
@@ -1723,7 +1721,7 @@ TEST(Quantization, ConstantProfileTablesRemainIndependent) {
 }
 
 TEST(Quantization, Base3GoldenBytesAndShortTail) {
-  auto plan = MakeQuantizationPlan(QuantizationFormat::kTq10, 7);
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kTernary, 7);
   auto encoded = QuantizeTensor(Tensor::FromFloat("", {7}, {-1, 0, 1, -1, 1, 1, 0}), plan);
   const auto raw = std::string(encoded.Encoded().raw_data());
   EXPECT_EQ(static_cast<uint8_t>(raw[raw.size() - 2]), 183);
@@ -2088,7 +2086,7 @@ TEST(Quantization, RejectsCorruptPayloadAndSchema) {
   corrupt = valid;
   corrupt.mutable_struct_type()->mutable_structure()->mutable_field(0)->set_name("changed");
   EXPECT_THROW(DequantizeTensor(RuntimeValue(corrupt)), std::invalid_argument);
-  valid = QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kTq10, 3)).Encoded();
+  valid = QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kTernary, 3)).Encoded();
   raw = std::string(valid.raw_data());
   raw.back() = static_cast<char>(243);
   valid.set_raw_data(raw);
@@ -2216,8 +2214,8 @@ TEST(Quantization, ScalarCodebookGoldenIndicesAndTieBreaking) {
 }
 
 TEST(Quantization, LearnedProfilesAcceptTheirDefaultTableDimensions) {
-  for (const auto format : {QuantizationFormat::kStq10, QuantizationFormat::kIq1S,
-                            QuantizationFormat::kAqlm, QuantizationFormat::kQuipSharp}) {
+  for (const auto format :
+       {QuantizationFormat::kStq10, QuantizationFormat::kAqlm, QuantizationFormat::kQuipSharp}) {
     SCOPED_TRACE(QuantizationFormatName(format));
     auto plan = MakeQuantizationPlan(format, 17);
     auto &block = plan.runs[0].blocks[0];
@@ -2254,9 +2252,9 @@ TEST(Quantization, CastProfilesRetainRequestedStoragePrecision) {
 }
 
 TEST(Quantization, RejectsOutOfRangeIndicesAndAlteredDescriptorGeometry) {
-  auto valid = QuantizeTensor(Tensor::FromFloat("", {1}, {1}),
-                              MakeQuantizationPlan(QuantizationFormat::kTq20, 1))
-                   .Encoded();
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kTernary, 1);
+  plan.runs[0].layout.base3 = false;
+  auto valid = QuantizeTensor(Tensor::FromFloat("", {1}, {1}), plan).Encoded();
   auto raw = std::string(valid.raw_data());
   raw.back() = 3;
   valid.set_raw_data(raw);
@@ -2299,7 +2297,9 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
   for (const auto format : QuantizationFormats()) {
     const auto name = QuantizationFormatName(format);
     EXPECT_EQ(ParseQuantizationFormat(name), format);
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
+    if (IsGgufQuantizationFormat(format))
+      EXPECT_THROW(MakeQuantizationPlan(format, 32), std::invalid_argument);
+    else if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
       EXPECT_EQ(MakeQuantizationPlan(format, 32).format, format);
     else if (format < QuantizationFormat::kOrtMatmulnbitsInt2)
       EXPECT_EQ(MakeQuantizationPlan(format, 0).format, format);
@@ -2307,7 +2307,9 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
       EXPECT_EQ(MakeMatMulNBitsPlan(format, 1, 1, 16).format, format);
   }
   EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(-1)), std::invalid_argument);
-  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(45)), std::invalid_argument);
+  EXPECT_THROW(
+      QuantizationFormatName(static_cast<QuantizationFormat>(QuantizationFormats().size())),
+      std::invalid_argument);
   EXPECT_THROW(ParseQuantizationFormat("INT4"), std::invalid_argument);
 }
 

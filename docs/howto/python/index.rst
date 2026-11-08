@@ -38,6 +38,7 @@ C++ counterpart linked from its introduction.
     use_custom_kernel
     persistent_feedback
     quantized_values
+    gguf_blocks
     tune_kernel_thresholds
     use_custom_shape_inference
     register_builtin_operators

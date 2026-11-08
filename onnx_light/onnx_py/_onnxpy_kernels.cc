@@ -84,6 +84,7 @@ using core::runtime::Tensors;
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
 void AddOnnxPyCompressedTensors(nb::module_ &m);
+void AddOnnxPyGguf(nb::module_ &m);
 void AddOnnxPyTuning(nb::module_ &m);
 
 namespace {
@@ -1208,25 +1209,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("AWQ", core::runtime::QuantizationFormat::kAwq)
       .value("EETQ", core::runtime::QuantizationFormat::kEetq)
       .value("MATMULNBITS", core::runtime::QuantizationFormat::kMatmulnbits)
-      .value("Q2_K", core::runtime::QuantizationFormat::kQ2K)
-      .value("Q3_K", core::runtime::QuantizationFormat::kQ3K)
-      .value("Q4_K", core::runtime::QuantizationFormat::kQ4K)
-      .value("Q5_K", core::runtime::QuantizationFormat::kQ5K)
-      .value("Q6_K", core::runtime::QuantizationFormat::kQ6K)
       .value("HQQ", core::runtime::QuantizationFormat::kHqq)
       .value("EXL2", core::runtime::QuantizationFormat::kExl2)
       .value("EXL3", core::runtime::QuantizationFormat::kExl3)
       .value("NF4", core::runtime::QuantizationFormat::kNf4)
-      .value("IQ4_NL", core::runtime::QuantizationFormat::kIq4Nl)
       .value("BINARY", core::runtime::QuantizationFormat::kBinary)
       .value("TERNARY", core::runtime::QuantizationFormat::kTernary)
-      .value("TQ1_0", core::runtime::QuantizationFormat::kTq10)
-      .value("TQ2_0", core::runtime::QuantizationFormat::kTq20)
       .value("BITNET", core::runtime::QuantizationFormat::kBitnet)
       .value("PARETOQ", core::runtime::QuantizationFormat::kParetoq)
       .value("TEQUILA", core::runtime::QuantizationFormat::kTequila)
       .value("STQ1_0", core::runtime::QuantizationFormat::kStq10)
-      .value("IQ1_S", core::runtime::QuantizationFormat::kIq1S)
       .value("AQLM", core::runtime::QuantizationFormat::kAqlm)
       .value("QUIP_SHARP", core::runtime::QuantizationFormat::kQuipSharp)
       .value("SPQR", core::runtime::QuantizationFormat::kSpqr)
@@ -1238,6 +1230,17 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
       .value("MXFP8", core::runtime::QuantizationFormat::kMxfp8)
       .value("MXFP6_E2M3", core::runtime::QuantizationFormat::kMxfp6E2m3)
+      .value("Q4_0", core::runtime::QuantizationFormat::kQ40)
+      .value("Q8_0", core::runtime::QuantizationFormat::kQ80)
+      .value("Q4_K", core::runtime::QuantizationFormat::kQ4K)
+      .value("Q5_K", core::runtime::QuantizationFormat::kQ5K)
+      .value("Q6_K", core::runtime::QuantizationFormat::kQ6K)
+      .value("Q2_K", core::runtime::QuantizationFormat::kQ2K)
+      .value("Q3_K", core::runtime::QuantizationFormat::kQ3K)
+      .value("IQ4_NL", core::runtime::QuantizationFormat::kIq4Nl)
+      .value("IQ1_S", core::runtime::QuantizationFormat::kIq1S)
+      .value("TQ1_0", core::runtime::QuantizationFormat::kTq10)
+      .value("TQ2_0", core::runtime::QuantizationFormat::kTq20)
       .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
       .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
       .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
@@ -1331,7 +1334,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         constexpr auto formats = core::runtime::QuantizationFormats();
         return std::vector<core::runtime::QuantizationFormat>(formats.begin(), formats.end());
       },
-      "Returns portable onnx-light profile enum values, not vendor packing ABIs.");
+      "Returns all supported quantization formats, including native GGML storage.");
+  rt_mod.def("is_gguf_quantization_format", &core::runtime::IsGgufQuantizationFormat,
+             "Returns whether the format uses exact native GGML block storage.");
   rt_mod.def("quantization_format_name", &core::runtime::QuantizationFormatName, nb::arg("format"),
              "Returns the stable wire name of a profile.");
   rt_mod.def("parse_quantization_format", &core::runtime::ParseQuantizationFormat, nb::arg("name"),
@@ -3173,4 +3178,5 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              "Removes every process-wide custom kernel registration.");
   nb::module_::import_("atexit").attr("register")(rt_mod.attr("clear_custom_kernels"));
   AddOnnxPyCompressedTensors(rt_mod);
+  AddOnnxPyGguf(rt_mod);
 }

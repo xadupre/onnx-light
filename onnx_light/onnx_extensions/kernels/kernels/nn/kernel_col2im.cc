@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -117,6 +118,12 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
   n_blocks.assign(n_spatial, 0);
   int64_t L_expected = 1;
   for (size_t i = 0; i < n_spatial; ++i) {
+    EXT_ENFORCE_INVALID(image_shape_vec[i] > 0,
+                        "kernel::Col2Im: every 'image_shape' entry must be > 0.");
+    EXT_ENFORCE_INVALID(resolved.dilations[i] > 0,
+                        "kernel::Col2Im: every 'dilations' entry must be > 0.");
+    EXT_ENFORCE_INVALID(resolved.pads[i] >= 0 && resolved.pads[i + n_spatial] >= 0,
+                        "kernel::Col2Im: every 'pads' entry must be >= 0.");
     const int64_t eff_k = (block_shape_vec[i] - 1) * resolved.dilations[i] + 1;
     const int64_t padded = image_shape_vec[i] + resolved.pads[i] + resolved.pads[i + n_spatial];
     EXT_ENFORCE_INVALID(resolved.strides[i] > 0,
@@ -160,7 +167,12 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
     }
   }
 
-  const int64_t image_total = total / (N * C);
+  const int64_t image_total = image_strides[0] * image_shape_vec[0];
+  onnx_kernels::Shape block_strides;
+  block_strides.assign(n_spatial, 1);
+  for (size_t i = n_spatial - 1; i > 0; --i) {
+    block_strides[i - 1] = block_strides[i] * n_blocks[i];
+  }
 
   float *py = output.AsFloat();
   for (int64_t i = 0; i < total; ++i) {
@@ -168,56 +180,69 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
   }
   const float *px = input.AsFloat();
 
-  // Iterate over (n, c, block index l, kernel index k) in the same
-  // lex order used by the input layout, accumulating into the output.
+  // Accumulate in kernel-offset order, matching upstream's strided slice adds.
   onnx_kernels::Shape block_idx;
   block_idx.assign(n_spatial, 0);
   onnx_kernels::Shape kernel_idx;
   kernel_idx.assign(n_spatial, 0);
+  onnx_kernels::Shape lo, hi, image_start;
+  lo.assign(n_spatial, 0);
+  hi.assign(n_spatial, 0);
+  image_start.assign(n_spatial, 0);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       float *out_image = py + (n * C + c) * image_total;
-      // Walk blocks in lex order: outer-most dim is slowest-changing.
       for (size_t i = 0; i < n_spatial; ++i) {
-        block_idx[i] = 0;
+        kernel_idx[i] = 0;
       }
-      for (int64_t l = 0; l < L_expected; ++l) {
-        // Walk kernel positions in lex order: outer-most dim slowest.
+      for (int64_t k = 0; k < block_product; ++k) {
+        // Clip each block axis once; every element of the remaining slice is in bounds.
+        bool empty = false;
         for (size_t i = 0; i < n_spatial; ++i) {
-          kernel_idx[i] = 0;
-        }
-        for (int64_t k = 0; k < block_product; ++k) {
-          // Compute the corresponding (unpadded) image position.
-          int64_t flat_image_offset = 0;
-          bool in_bounds = true;
-          for (size_t i = 0; i < n_spatial; ++i) {
-            const int64_t img_pos = block_idx[i] * resolved.strides[i] +
-                                    kernel_idx[i] * resolved.dilations[i] - resolved.pads[i];
-            if (img_pos < 0 || img_pos >= image_shape_vec[i]) {
-              in_bounds = false;
-              break;
-            }
-            flat_image_offset += img_pos * image_strides[i];
-          }
-          if (in_bounds) {
-            const int64_t in_chan = c * block_product + k;
-            const float v = px[(n * input.shape[1] + in_chan) * input.shape[2] + l];
-            out_image[flat_image_offset] += v;
-          }
-          // Increment kernel_idx (rightmost / fastest first).
-          for (size_t i = n_spatial; i-- > 0;) {
-            if (++kernel_idx[i] < block_shape_vec[i]) {
-              break;
-            }
-            kernel_idx[i] = 0;
-          }
-        }
-        // Increment block_idx (rightmost / fastest first).
-        for (size_t i = n_spatial; i-- > 0;) {
-          if (++block_idx[i] < n_blocks[i]) {
+          const int64_t stride = resolved.strides[i];
+          const int64_t first = kernel_idx[i] * resolved.dilations[i] - resolved.pads[i];
+          lo[i] = first < 0 ? -(first / stride) + (first % stride != 0) : 0;
+          const int64_t remainder = first % stride;
+          image_start[i] = first < 0 ? (remainder == 0 ? 0 : stride + remainder) : first;
+          if (lo[i] >= n_blocks[i] || image_start[i] >= image_shape_vec[i]) {
+            empty = true;
             break;
           }
-          block_idx[i] = 0;
+          hi[i] = lo[i] + std::min(n_blocks[i] - lo[i],
+                                   (image_shape_vec[i] - 1 - image_start[i]) / stride + 1);
+          block_idx[i] = lo[i];
+        }
+        const float *in_kernel = px + ((n * C + c) * block_product + k) * L_expected;
+        bool more_rows = !empty;
+        while (more_rows) {
+          int64_t flat_block_offset = lo[n_spatial - 1];
+          int64_t flat_image_offset = image_start[n_spatial - 1];
+          for (size_t i = 0; i + 1 < n_spatial; ++i) {
+            flat_block_offset += block_idx[i] * block_strides[i];
+            flat_image_offset +=
+                (image_start[i] + (block_idx[i] - lo[i]) * resolved.strides[i]) * image_strides[i];
+          }
+          for (int64_t j = lo[n_spatial - 1]; j < hi[n_spatial - 1]; ++j) {
+            out_image[flat_image_offset] += in_kernel[flat_block_offset++];
+            if (j + 1 < hi[n_spatial - 1]) {
+              flat_image_offset += resolved.strides[n_spatial - 1];
+            }
+          }
+          more_rows = false;
+          for (size_t i = n_spatial - 1; i-- > 0;) {
+            if (++block_idx[i] < hi[i]) {
+              more_rows = true;
+              break;
+            }
+            block_idx[i] = lo[i];
+          }
+        }
+        // Increment kernel_idx (rightmost / fastest first).
+        for (size_t i = n_spatial; i-- > 0;) {
+          if (++kernel_idx[i] < block_shape_vec[i]) {
+            break;
+          }
+          kernel_idx[i] = 0;
         }
       }
     }

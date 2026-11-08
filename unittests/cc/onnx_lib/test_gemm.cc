@@ -145,6 +145,7 @@ TEST(onnx_shape_inference, Gemm29FunctionDecomposition) {
           const std::vector<int64_t> c{7};
           auto model = MakeGemmModel(a, {7, 5}, has_bias ? &c : nullptr, 1, 1);
           auto *graph = model.mutable_graph();
+          graph->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
           std::vector<TypeProto> types;
           for (auto &input : *graph->mutable_input()) {
             input.mutable_type()->mutable_tensor_type()->set_elem_type(dtype);

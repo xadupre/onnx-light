@@ -2,7 +2,8 @@
 
 GPTQModel adaptation accepts extracted UINT8 SafeTensors qweight matrices and
 explicit subtype and logical shape metadata. This stage rejects partial blocks.
-Portable quantization profiles remain separate and cannot be exported as GGUF.
+Imports return EncodedValueProto with native GGML raw_data, understood by the
+standard dequantization APIs. Former incompatible GGML-named profiles are rejected.
 """
 
 from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
@@ -13,7 +14,6 @@ REFERENCE_REVISION = runtime.gguf_reference_revision
 DEFAULT_MAX_BYTES = 1 << 30
 GgufBlockLayout = runtime.GgufBlockLayout
 GgufBlockParameters = runtime.GgufBlockParameters
-GgufTensorPayload = runtime.GgufTensorPayload
 GptqModelGgufWeights = runtime.GptqModelGgufWeights
 gguf_block_layouts = runtime.gguf_block_layouts
 import_gguf_tensor_payload = runtime.import_gguf_tensor_payload
@@ -30,7 +30,6 @@ __all__ = [
     "UPSTREAM_REVISION",
     "GgufBlockLayout",
     "GgufBlockParameters",
-    "GgufTensorPayload",
     "GptqModelGgufWeights",
     "dequantize_gguf_tensor_payload",
     "export_gguf_tensor_payload",

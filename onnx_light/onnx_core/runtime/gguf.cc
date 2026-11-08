@@ -16,7 +16,12 @@ struct ValidatedLayout {
   const GgufBlockLayout &layout;
   size_t blocks;
   size_t decoded_bytes;
+  Shape shape;
 };
+
+std::string_view Bytes(const EncodedValueProto &value) {
+  return {reinterpret_cast<const char *>(value.raw_data().data()), value.raw_data().size()};
+}
 
 size_t CheckedMultiply(size_t a, size_t b) {
   EXT_ENFORCE_INVALID(b == 0 || a <= std::numeric_limits<size_t>::max() / b, "GGUF size overflow.");
@@ -48,7 +53,7 @@ ValidatedLayout ValidateLayout(std::string_view data, const Shape &shape, std::s
   EXT_ENFORCE_INVALID(count <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
                       "GGUF tensor element count exceeds int64.");
   EXT_ENFORCE_INVALID(data.size() == packed_bytes, "GGUF payload byte count mismatch.");
-  return {layout, blocks, decoded_bytes};
+  return {layout, blocks, decoded_bytes, shape};
 }
 
 float Half(const uint8_t *p) {
@@ -132,9 +137,64 @@ void ValidateBlocks(std::string_view data, const ValidatedLayout &validated) {
     DecodeBlock(bytes + i * validated.layout.type_size, validated.layout, nullptr);
 }
 
-ValidatedLayout Validate(const GgufTensorPayload &payload, size_t max_bytes) {
-  return ValidateLayout(payload.data, payload.shape, payload.subtype, payload.layout_version,
-                        payload.upstream_revision, max_bytes);
+StructTypeProto Schema(const ValidatedLayout &validated) {
+  StructTypeProto type;
+  type.set_name(std::string(kGgufTypePrefix) + validated.layout.subtype);
+  auto *revision = type.mutable_structure()->add_field();
+  revision->set_name("upstream_revision");
+  auto *constant = revision->mutable_constant();
+  constant->set_data_type(TensorProto::UINT8);
+  constant->add_dims(std::strlen(kGgufUpstreamRevision));
+  constant->set_raw_data(kGgufUpstreamRevision);
+  auto *field = type.mutable_structure()->add_field();
+  field->set_name("blocks");
+  auto *blocks = field->mutable_type()->mutable_tensor_type();
+  blocks->set_elem_type(TensorProto::UINT8);
+  blocks->mutable_shape()->add_dim()->set_dim_value(validated.blocks);
+  blocks->mutable_shape()->add_dim()->set_dim_value(validated.layout.type_size);
+  return type;
+}
+
+EncodedValueProto MakeValue(std::string_view data, const ValidatedLayout &validated) {
+  EncodedValueProto value;
+  *value.mutable_struct_type() = Schema(validated);
+  auto *logical = value.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  for (const auto dim : validated.shape)
+    logical->mutable_shape()->add_dim()->set_dim_value(dim);
+  value.set_raw_data(data.data(), data.size());
+  return value;
+}
+
+ValidatedLayout Validate(const EncodedValueProto &payload, size_t max_bytes,
+                         const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(!payload.has_parameter_ref(), "GGUF does not accept shared parameters.");
+  EXT_ENFORCE_INVALID(payload.has_raw_data() && payload.raw_data().size() <= max_bytes,
+                      "GGUF requires loaded bytes within max_bytes.");
+  const auto storage = catalogue.ValidateEncodedValue(payload);
+  EXT_ENFORCE_INVALID(!storage.external && storage.root && storage.record_count == 1,
+                      "GGUF requires one loaded encoded record.");
+  const std::string name = storage.root->name().value();
+  EXT_ENFORCE_INVALID(name.starts_with(kGgufTypePrefix), "Unsupported GGUF encoded layout.");
+  EXT_ENFORCE_INVALID(payload.has_logical_type() && payload.logical_type().has_tensor_type(),
+                      "GGUF requires a logical FLOAT tensor.");
+  const auto &logical = payload.logical_type().tensor_type();
+  EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT && logical.has_shape(),
+                      "GGUF requires a concrete logical FLOAT shape.");
+  Shape shape;
+  for (const auto &dim : logical.shape().dim()) {
+    EXT_ENFORCE_INVALID(dim.has_dim_value(), "GGUF requires concrete dimensions.");
+    shape.push_back(dim.dim_value());
+  }
+  const auto validated =
+      ValidateLayout(Bytes(payload), shape, name.substr(std::strlen(kGgufTypePrefix)),
+                     kGgufLayoutVersion, kGgufUpstreamRevision, max_bytes);
+  auto actual = *storage.root;
+  actual.clear_type_id();
+  std::string difference;
+  EXT_ENFORCE_INVALID(actual.Equals(Schema(validated), &difference),
+                      "GGUF descriptor does not match its native schema: ", difference);
+  return validated;
 }
 
 Shape PackedMatrixShape(const Shape &shape, const GgufBlockLayout &layout) {
@@ -164,28 +224,31 @@ const GgufBlockLayout &GgufLayout(std::string_view subtype) {
   throw std::invalid_argument("Unsupported canonical GGUF subtype: " + std::string(subtype) + ".");
 }
 
-GgufTensorPayload ImportGgufTensorPayload(std::string_view data, Shape shape, std::string subtype,
+EncodedValueProto ImportGgufTensorPayload(std::string_view data, Shape shape, std::string subtype,
                                           std::string layout_version, std::string upstream_revision,
                                           size_t max_bytes) {
   const auto validated =
       ValidateLayout(data, shape, subtype, layout_version, upstream_revision, max_bytes);
   ValidateBlocks(data, validated);
-  return {std::move(subtype), std::move(layout_version), std::move(upstream_revision),
-          std::move(shape), std::string(data)};
+  return MakeValue(data, validated);
 }
 
-std::string ExportGgufTensorPayload(const GgufTensorPayload &payload, size_t max_bytes) {
-  const auto validated = Validate(payload, max_bytes);
-  ValidateBlocks(payload.data, validated);
-  return payload.data;
+std::string ExportGgufTensorPayload(const EncodedValueProto &payload, size_t max_bytes,
+                                    const StructTypeCatalogue &catalogue) {
+  const auto validated = Validate(payload, max_bytes, catalogue);
+  ValidateBlocks(Bytes(payload), validated);
+  return std::string(payload.raw_data());
 }
 
-Tensor DequantizeGgufTensorPayload(const GgufTensorPayload &payload, size_t max_bytes) {
-  const auto validated = Validate(payload, max_bytes);
-  Tensor output("", TensorProto::FLOAT, payload.shape,
-                std::vector<uint8_t>(validated.decoded_bytes));
+Tensor DequantizeGgufTensorPayload(const EncodedValueProto &payload, size_t max_bytes,
+                                   const StructTypeCatalogue &catalogue,
+                                   RawBufferAllocator *allocator) {
+  const auto validated = Validate(payload, max_bytes, catalogue);
+  Tensor output =
+      MakeOutputTensor(TensorProto::FLOAT, validated.shape, validated.decoded_bytes, allocator);
+  output.name = payload.name().value();
   std::array<float, 256> block{};
-  const auto *bytes = reinterpret_cast<const uint8_t *>(payload.data.data());
+  const auto *bytes = reinterpret_cast<const uint8_t *>(payload.raw_data().data());
   for (size_t i = 0; i < validated.blocks; ++i) {
     DecodeBlock(bytes + i * validated.layout.type_size, validated.layout, block.data());
     std::memcpy(output.mutable_bytes() + i * validated.layout.block_size * sizeof(float),
@@ -194,19 +257,20 @@ Tensor DequantizeGgufTensorPayload(const GgufTensorPayload &payload, size_t max_
   return output;
 }
 
-GgufBlockParameters ReadGgufBlockParameters(const GgufTensorPayload &payload, size_t block_index,
-                                            size_t max_bytes) {
-  const auto validated = Validate(payload, max_bytes);
+GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, size_t block_index,
+                                            size_t max_bytes,
+                                            const StructTypeCatalogue &catalogue) {
+  const auto validated = Validate(payload, max_bytes, catalogue);
   EXT_ENFORCE_INVALID(block_index < validated.blocks, "GGUF block index out of range.");
-  ValidateBlocks(payload.data, validated);
-  const auto parameters = Parameters(reinterpret_cast<const uint8_t *>(payload.data.data()) +
+  ValidateBlocks(Bytes(payload), validated);
+  const auto parameters = Parameters(reinterpret_cast<const uint8_t *>(payload.raw_data().data()) +
                                          block_index * validated.layout.type_size,
                                      validated.layout.subtype);
   return {{parameters.scales.begin(), parameters.scales.begin() + parameters.scale_count},
           {parameters.minima.begin(), parameters.minima.begin() + parameters.minimum_count}};
 }
 
-GgufTensorPayload ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
+EncodedValueProto ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
                                              size_t max_bytes) {
   EXT_ENFORCE_INVALID(weights.shape.size() == 2,
                       "GPTQModel GGUF requires a rank-two logical shape.");
@@ -226,20 +290,21 @@ GgufTensorPayload ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights
   EXT_ENFORCE_INVALID(weights.qweight.shape == PackedMatrixShape(weights.shape, validated.layout),
                       "GPTQModel GGUF packed matrix shape mismatch; row padding is unsupported.");
   ValidateBlocks(data, validated);
-  return {weights.subtype, weights.layout_version, weights.upstream_revision, weights.shape,
-          std::string(data)};
+  auto value = MakeValue(data, validated);
+  value.set_name(weights.qweight.name);
+  return value;
 }
 
-GptqModelGgufWeights ExportGptqModelGgufWeights(const GgufTensorPayload &payload,
-                                                size_t max_bytes) {
-  const auto validated = Validate(payload, max_bytes);
-  const auto packed_shape = PackedMatrixShape(payload.shape, validated.layout);
-  ValidateBlocks(payload.data, validated);
+GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload, size_t max_bytes,
+                                                const StructTypeCatalogue &catalogue) {
+  const auto validated = Validate(payload, max_bytes, catalogue);
+  const auto packed_shape = PackedMatrixShape(validated.shape, validated.layout);
+  ValidateBlocks(Bytes(payload), validated);
   Tensor qweight("qweight", TensorProto::UINT8, packed_shape,
-                 std::vector<uint8_t>(payload.data.size()));
-  std::memcpy(qweight.mutable_bytes(), payload.data.data(), payload.data.size());
-  return {std::move(qweight), payload.shape, payload.subtype, payload.layout_version,
-          payload.upstream_revision};
+                 std::vector<uint8_t>(payload.raw_data().size()));
+  std::memcpy(qweight.mutable_bytes(), payload.raw_data().data(), payload.raw_data().size());
+  return {std::move(qweight), validated.shape, validated.layout.subtype, kGgufLayoutVersion,
+          kGgufUpstreamRevision};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

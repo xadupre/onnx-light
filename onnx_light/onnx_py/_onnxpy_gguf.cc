@@ -17,6 +17,13 @@ namespace {
 
 constexpr size_t kDefaultMaxBytes = size_t{1} << 30;
 
+StructTypeCatalogue Catalogue(const ModelProto *model) {
+  StructTypeCatalogue catalogue;
+  if (model)
+    catalogue.Build(*model);
+  return catalogue;
+}
+
 struct PythonGptqModelGgufWeights {
   nb::object qweight;
   std::vector<int64_t> shape;
@@ -77,20 +84,6 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
   nb::class_<GgufBlockParameters>(runtime, "GgufBlockParameters")
       .def_ro("scales", &GgufBlockParameters::scales)
       .def_ro("minima", &GgufBlockParameters::minima);
-  nb::class_<GgufTensorPayload>(runtime, "GgufTensorPayload")
-      .def(nb::init<>())
-      .def_rw("subtype", &GgufTensorPayload::subtype)
-      .def_rw("shape", &GgufTensorPayload::shape)
-      .def_rw("layout_version", &GgufTensorPayload::layout_version)
-      .def_rw("upstream_revision", &GgufTensorPayload::upstream_revision)
-      .def_prop_rw(
-          "data",
-          [](const GgufTensorPayload &payload) {
-            return nb::bytes(payload.data.data(), payload.data.size());
-          },
-          [](GgufTensorPayload &payload, nb::bytes data) {
-            payload.data.assign(data.c_str(), data.size());
-          });
   runtime.def("gguf_block_layouts", &GgufBlockLayouts);
   runtime.def(
       "import_gguf_tensor_payload",
@@ -106,15 +99,27 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
       nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(
       "export_gguf_tensor_payload",
-      [](const GgufTensorPayload &payload, size_t max_bytes) {
-        const auto data = ExportGgufTensorPayload(payload, max_bytes);
+      [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
+        const auto data = ExportGgufTensorPayload(payload, max_bytes, Catalogue(model));
         return nb::bytes(data.data(), data.size());
       },
-      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes);
-  runtime.def("dequantize_gguf_tensor_payload", &DequantizeGgufTensorPayload, nb::arg("payload"),
-              nb::arg("max_bytes") = kDefaultMaxBytes);
-  runtime.def("read_gguf_block_parameters", &ReadGgufBlockParameters, nb::arg("payload"),
-              nb::arg("block_index"), nb::arg("max_bytes") = kDefaultMaxBytes);
+      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("model").none() = nullptr);
+  runtime.def(
+      "dequantize_gguf_tensor_payload",
+      [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
+        return DequantizeGgufTensorPayload(payload, max_bytes, Catalogue(model));
+      },
+      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("model").none() = nullptr);
+  runtime.def(
+      "read_gguf_block_parameters",
+      [](const EncodedValueProto &payload, size_t block_index, size_t max_bytes,
+         const ModelProto *model) {
+        return ReadGgufBlockParameters(payload, block_index, max_bytes, Catalogue(model));
+      },
+      nb::arg("payload"), nb::arg("block_index"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("model").none() = nullptr);
   nb::class_<PythonGptqModelGgufWeights>(runtime, "GptqModelGgufWeights")
       .def(
           "__init__",
@@ -141,8 +146,9 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
       nb::arg("weights"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(
       "export_gptqmodel_gguf_weights",
-      [](const GgufTensorPayload &payload, size_t max_bytes) {
-        return FromNative(ExportGptqModelGgufWeights(payload, max_bytes));
+      [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
+        return FromNative(ExportGptqModelGgufWeights(payload, max_bytes, Catalogue(model)));
       },
-      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes);
+      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("model").none() = nullptr);
 }

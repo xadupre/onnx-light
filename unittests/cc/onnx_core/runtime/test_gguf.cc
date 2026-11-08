@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/gguf.h"
+#include "onnx_core/runtime/quantization.h"
 #include <array>
 #include <cstring>
 #include <gtest/gtest.h>
@@ -18,10 +20,10 @@ void PutHalf(std::string &bytes, size_t offset, uint16_t bits) {
   bytes[offset + 1] = static_cast<char>(bits >> 8);
 }
 
-std::vector<float> Values(const GgufTensorPayload &payload) {
+std::vector<float> Values(const EncodedValueProto &payload) {
   const auto tensor = DequantizeGgufTensorPayload(payload);
   EXPECT_EQ(tensor.data_type, TensorProto::FLOAT);
-  EXPECT_EQ(tensor.shape, payload.shape);
+  EXPECT_EQ(tensor.shape.size(), payload.logical_type().tensor_type().shape().dim().size());
   std::vector<float> values(tensor.size_bytes() / sizeof(float));
   std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
   return values;
@@ -50,11 +52,10 @@ TEST(GgufTensorPayload, CanonicalLayoutsAndExactBytes) {
     }
     auto payload =
         ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)}, names[i]);
-    EXPECT_EQ(payload.layout_version, kGgufLayoutVersion);
-    EXPECT_EQ(payload.upstream_revision, kGgufUpstreamRevision);
+    EXPECT_EQ(payload.struct_type().name().value(), std::string(kGgufTypePrefix) + names[i]);
     EXPECT_EQ(ExportGgufTensorPayload(payload), bytes);
     bytes[0] = static_cast<char>(static_cast<uint8_t>(bytes[0]) ^ 1);
-    EXPECT_NE(payload.data, bytes);
+    EXPECT_NE(payload.raw_data(), bytes);
     EXPECT_EQ(Values(payload).size(), layout.block_size * 2);
   }
   for (const auto *name : {"q4_0", "q4_k", "Q4", "Q4_K_M", "Q4_K_S", "Q2_K", "Q3_K", "IQ4_NL",
@@ -192,13 +193,21 @@ TEST(GgufTensorPayload, MetadataShapeLengthOverflowAndBudgets) {
   for (const size_t field : {size_t{0}, size_t{1}, size_t{2}, size_t{3}}) {
     mutated = payload;
     if (field == 0)
-      mutated.layout_version.clear();
+      mutated.mutable_struct_type()->set_name("onnx_light.gguf.ggml-blocks-v2/Q4_0");
     else if (field == 1)
-      mutated.upstream_revision.clear();
+      mutated.mutable_struct_type()
+          ->mutable_structure()
+          ->mutable_field(0)
+          ->mutable_constant()
+          ->set_raw_data("unknown");
     else if (field == 2)
-      mutated.shape = {31};
+      mutated.mutable_logical_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(0)
+          ->set_dim_value(31);
     else
-      mutated.data.push_back('\0');
+      mutated.set_raw_data(bytes + '\0');
     EXPECT_THROW(ExportGgufTensorPayload(mutated), std::invalid_argument);
     EXPECT_THROW(DequantizeGgufTensorPayload(mutated), std::invalid_argument);
     EXPECT_THROW(ReadGgufBlockParameters(mutated, 0), std::invalid_argument);
@@ -219,10 +228,10 @@ TEST(GgufTensorPayload, NonfiniteParametersAreRejectedEvenBehindZeroScales) {
         EXPECT_THROW(ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)},
                                              layout.subtype),
                      std::invalid_argument);
-        GgufTensorPayload payload;
-        payload.subtype = layout.subtype;
-        payload.shape = {2, static_cast<int64_t>(layout.block_size)};
-        payload.data = bytes;
+        auto payload =
+            ImportGgufTensorPayload(std::string(layout.type_size * 2, '\0'),
+                                    {2, static_cast<int64_t>(layout.block_size)}, layout.subtype);
+        payload.set_raw_data(bytes);
         EXPECT_THROW(ExportGgufTensorPayload(payload), std::invalid_argument);
         EXPECT_THROW(DequantizeGgufTensorPayload(payload), std::invalid_argument);
         EXPECT_THROW(ReadGgufBlockParameters(payload, 0), std::invalid_argument);
@@ -263,10 +272,10 @@ TEST(GptqModelGgufWeights, ImportsBorrowedMatrixAndExportsExactOwningBytes) {
     ASSERT_EQ(exported.qweight.size_bytes(), bytes.size());
     EXPECT_EQ(std::string(reinterpret_cast<const char *>(exported.qweight.bytes()), bytes.size()),
               bytes);
-    EXPECT_EQ(ImportGptqModelGgufWeights(exported).data, bytes);
+    EXPECT_EQ(ImportGptqModelGgufWeights(exported).raw_data(), bytes);
     bytes[0] = static_cast<char>(static_cast<uint8_t>(bytes[0]) ^ 1);
-    EXPECT_EQ(ImportGptqModelGgufWeights(exported).data, payload.data);
-    EXPECT_NE(payload.data, bytes);
+    EXPECT_EQ(ImportGptqModelGgufWeights(exported).raw_data(), payload.raw_data());
+    EXPECT_NE(payload.raw_data(), bytes);
   }
 }
 
@@ -316,13 +325,71 @@ TEST(GptqModelGgufWeights, RejectsPaddingShapeDtypeMetadataAndLimitsBeforeCopies
   invalid.subtype = "q4_0";
   EXPECT_THROW(ImportGptqModelGgufWeights(invalid), std::invalid_argument);
   auto invalid_payload = payload;
-  invalid_payload.shape = {64};
+  invalid_payload.mutable_logical_type()->mutable_tensor_type()->mutable_shape()->clear_dim();
+  invalid_payload.mutable_logical_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->add_dim()
+      ->set_dim_value(64);
   EXPECT_THROW(ExportGptqModelGgufWeights(invalid_payload), std::invalid_argument);
   invalid.qweight = Tensor("qweight", TensorProto::UINT8, {2, 18}, std::vector<uint8_t>(36));
   invalid.subtype = "Q4_0";
   invalid.qweight.mutable_bytes()[19] = 0x7c;
   EXPECT_THROW(ImportGptqModelGgufWeights(invalid), std::invalid_argument);
   invalid_payload = payload;
-  invalid_payload.data[19] = 0x7c;
+  auto bad_bytes = std::string(payload.raw_data());
+  bad_bytes[19] = 0x7c;
+  invalid_payload.set_raw_data(bad_bytes);
   EXPECT_THROW(ExportGptqModelGgufWeights(invalid_payload), std::invalid_argument);
+}
+
+TEST(GgufTensorPayload, NativeStorageUsesStandardEncodedValuesAndRejectsPortableAliases) {
+  for (const auto &layout : GgufBlockLayouts()) {
+    const std::string bytes(layout.type_size * 2, '\0');
+    const auto encoded = ImportGgufTensorPayload(
+        bytes, {2, static_cast<int64_t>(layout.block_size)}, layout.subtype);
+    EncodedValueProto restored;
+    ASSERT_TRUE(restored.ParseFromString(encoded.SerializeAsString()));
+    EXPECT_EQ(restored.raw_data(), bytes);
+    const auto direct = DequantizeGgufTensorPayload(restored);
+    const auto generic = DequantizeTensor(restored);
+    const auto runtime = DequantizeTensor(RuntimeValue(restored));
+    const auto decoded_proto = DequantizeTensorProto(restored);
+    const auto proto = TensorFromProto(decoded_proto);
+    EXPECT_EQ(generic.shape, direct.shape);
+    EXPECT_EQ(std::memcmp(direct.bytes(), generic.bytes(), direct.size_bytes()), 0);
+    EXPECT_EQ(std::memcmp(direct.bytes(), runtime.bytes(), direct.size_bytes()), 0);
+    EXPECT_EQ(std::memcmp(direct.bytes(), proto.bytes(), direct.size_bytes()), 0);
+    ModelProto model;
+    *model.add_struct_types() = restored.struct_type();
+    model.mutable_struct_types(0)->set_type_id(17);
+    auto referenced = restored;
+    referenced.mutable_struct_type()->Clear();
+    referenced.mutable_struct_type()->set_type_ref(17);
+    StructTypeCatalogue catalogue;
+    catalogue.Build(model);
+    SimpleRawBufferAllocator allocator(4);
+    const auto allocated = DequantizeTensor(referenced, catalogue, &allocator);
+    EXPECT_EQ(allocated.allocation_owner(), &allocator);
+    EXPECT_EQ(std::memcmp(direct.bytes(), allocated.bytes(), direct.size_bytes()), 0);
+    EXPECT_EQ(ExportGgufTensorPayload(referenced, size_t{1} << 30, catalogue), bytes);
+    EXPECT_THROW(ExportGgufTensorPayload(referenced), std::invalid_argument);
+    auto invalid = restored;
+    invalid.set_parameter_ref("ignored");
+    EXPECT_THROW(DequantizeGgufTensorPayload(invalid), std::invalid_argument);
+    invalid = restored;
+    invalid.mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    EXPECT_THROW(DequantizeTensor(invalid), std::invalid_argument);
+  }
+  for (const auto name :
+       {"q2_k", "q3_k", "q4_k", "q5_k", "q6_k", "iq4_nl", "iq1_s", "tq1_0", "tq2_0"}) {
+    EXPECT_THROW(ParseQuantizationFormat(name), std::invalid_argument);
+    auto invalid = QuantizeTensor(Tensor::FromFloat("", {1}, {0}),
+                                  MakeQuantizationPlan(QuantizationFormat::kInt4, 1))
+                       .Encoded();
+    invalid.mutable_struct_type()->set_name(std::string("onnx_light.quantization.v1/") + name);
+    EXPECT_THROW(DequantizeTensor(invalid), std::invalid_argument);
+    invalid.mutable_struct_type()->set_name(std::string("onnx_light.quantization.v2/") + name);
+    EXPECT_THROW(DequantizeTensor(invalid), std::invalid_argument);
+  }
 }

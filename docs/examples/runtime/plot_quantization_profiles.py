@@ -4,13 +4,14 @@
 Uses every portable quantization profile from Python
 ===================================================
 
-This example quantizes and dequantizes all 45 profiles exposed by
+This example quantizes and dequantizes all 36 profiles exposed by
 :mod:`onnx_light.onnx_core.quantization`. It shows the parameters to supply
 for affine, scalar-codebook, vector-codebook, transformed and cast storage.
 The :ref:`profile catalogue <l-quantized-values>` describes their numerical
 contracts and limitations.
 
-The original 40 are **onnx-light representations, not vendor-compatible files**.
+The generic profiles are **onnx-light representations, not vendor-compatible files**.
+GGML formats instead use :ref:`native GGUF blocks <l-gguf-blocks>`.
 ``mxfp8`` adds the explicit E4M3FN/group-32/E8M0 weight contract.
 ``mxfp6_e2m3`` adds packed E2M3/group-32/E8M0 without changing ``mxfp6`` E3M2.
 The three ``ORT_MATMULNBITS_INT*`` profiles produce compatible ONNX Runtime
@@ -71,13 +72,11 @@ def roundtrip(values, plan):
 #
 # ``int8`` and ``eetq`` start with signed 8-bit codes; ``int4`` starts with
 # signed 4-bit codes. ``gptq``, ``awq`` and ``matmulnbits`` start with unsigned
-# 4-bit codes and zero point 8. ``q2_k`` through ``q6_k`` start with signed
-# 2--6-bit codes, respectively.
+# 4-bit codes and zero point 8.
 #
 # The reconstruction is ``scale * (code - zero_point) + offset``.
 # The example supplies a range-based scale explicitly; this simple rule is
-# not GPTQ, AWQ or K-quant calibration. For imported K-quant parameters,
-# supply effective sub-block scales/offsets, not GGUF packed scale bytes.
+# not GPTQ or AWQ calibration. GGML blocks use the native GGUF import API.
 #
 # ``plan.runs`` and ``plan.run(i)`` return copies, as do ``run.blocks`` and
 # ``run.block(i)``. Assign modified lists back or use the corresponding setters.
@@ -91,11 +90,6 @@ for profile in (
     QuantizationFormat.GPTQ,
     QuantizationFormat.AWQ,
     QuantizationFormat.MATMULNBITS,
-    QuantizationFormat.Q2_K,
-    QuantizationFormat.Q3_K,
-    QuantizationFormat.Q4_K,
-    QuantizationFormat.Q5_K,
-    QuantizationFormat.Q6_K,
 ):
     plan = make_quantization_plan(profile, weights.size, block_size=4)
     run = plan.run(0)
@@ -161,10 +155,10 @@ for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFor
 # Fixed scalar codebooks and low-bit floating-point levels
 # -------------------------------------------------------
 #
-# ``nf4`` provides 16 normal-float levels; ``iq4_nl`` provides 16 integer
-# levels. ``log`` provides zero and signed powers of two from 1/8 to 8.
+# ``nf4`` provides 16 normal-float levels.
+# ``log`` provides zero and signed powers of two from 1/8 to 8.
 # ``binary`` uses [-1, 1]. The ternary families use [-1, 0, 1]: five trits
-# per byte, except ``tq2_0``, which uses two bits per index.
+# per byte.
 #
 # ``mxfp4``/``nvfp4`` use E2M1 levels; ``mxfp6``/``fp6_llm`` use E3M2
 # levels; ``fp8_e4m3`` uses finite E4M3FN levels. They store codebook indices,
@@ -178,12 +172,9 @@ for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFor
 weights = numpy.linspace(-1, 1, 17, dtype=numpy.float32)
 for profile in (
     QuantizationFormat.NF4,
-    QuantizationFormat.IQ4_NL,
     QuantizationFormat.LOG,
     QuantizationFormat.BINARY,
     QuantizationFormat.TERNARY,
-    QuantizationFormat.TQ1_0,
-    QuantizationFormat.TQ2_0,
     QuantizationFormat.BITNET,
     QuantizationFormat.PARETOQ,
     QuantizationFormat.TEQUILA,
@@ -196,7 +187,7 @@ for profile in (
     plan = make_quantization_plan(profile, weights.size, block_size=weights.size)
     run = plan.run(0)
     block = run.block(0)
-    block.scale = 1.0 / 127 if profile == QuantizationFormat.IQ4_NL else 1.0
+    block.scale = 1.0
     run.set_block(0, block)
     plan.set_run(0, run)
     levels = numpy.array(block.codebook) * block.scale
@@ -210,7 +201,7 @@ for profile in (
 # -------------------------------------
 #
 # Defaults are 32 entries of width 4 for ``stq1_0``, 256 entries of width 8
-# for ``iq1_s``/``quip_sharp``, and two such 256-entry books for ``aqlm``.
+# for ``quip_sharp``, and two such 256-entry books for ``aqlm``.
 # A codebook is flattened in [books, entries, vector_size] order.
 # Reconstruction sums one selected vector from each book, then multiplies
 # by ``scale``. The encoder chooses books greedily against the residual.
@@ -223,7 +214,6 @@ for profile in (
 weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32)
 for profile in (
     QuantizationFormat.STQ1_0,
-    QuantizationFormat.IQ1_S,
     QuantizationFormat.AQLM,
     QuantizationFormat.QUIP_SHARP,
 ):

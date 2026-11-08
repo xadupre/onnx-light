@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/gguf.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/runtime_session.h"
@@ -53,6 +54,54 @@ NodeProto QuantizeNode(const StructTypeProto &type) {
 }
 
 } // namespace
+
+TEST(QuantizedValueKernels, ExecutesNativeGgufCheckpointWeightsWithoutRepacking) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (const auto &layout : GgufBlockLayouts()) {
+    std::string bytes(layout.type_size, '\0');
+    const size_t scale_offset = layout.subtype == "Q6_K" ? 208 : 0;
+    bytes[scale_offset + 1] = 0x3c; // IEEE binary16 scale 1.
+    const GptqModelGgufWeights checkpoint{
+        Tensor::Borrow("Q", TensorProto::UINT8, {1, static_cast<int64_t>(layout.type_size)},
+                       reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size()),
+        {1, static_cast<int64_t>(layout.block_size)},
+        layout.subtype};
+    auto encoded = ImportGptqModelGgufWeights(checkpoint);
+    auto expected = DequantizeGgufTensorPayload(encoded);
+    ModelProto model;
+    auto *opset = model.add_opset_import();
+    opset->set_domain("ai.rt");
+    opset->set_version(1);
+    auto *type = model.add_struct_types();
+    *type = encoded.struct_type();
+    type->set_type_id(19);
+    encoded.mutable_struct_type()->Clear();
+    encoded.mutable_struct_type()->set_type_ref(19);
+    auto *graph = model.mutable_graph();
+    graph->set_name("gguf");
+    auto *input = graph->add_input();
+    input->set_name("Q");
+    input->mutable_type()->mutable_struct_type()->set_type_ref(19);
+    graph->add_output()->set_name("Y");
+    auto *node = graph->add_node();
+    node->set_domain("ai.rt");
+    node->set_op_type("Dequantize");
+    node->add_input("Q");
+    node->add_output("Y");
+    AddAttribute<int64_t>(*node, "dtype", TensorProto::FLOAT);
+    ModelProto restored;
+    ASSERT_TRUE(restored.ParseFromString(model.SerializeAsString()));
+    RuntimeSession session(restored);
+    SimpleRawBufferAllocator allocator(4);
+    RuntimeContext context(RuntimeContextOptions{.allocator = &allocator});
+    context.PutValue("Q", RuntimeValue(std::move(encoded)));
+    session.Run(context);
+    const auto &actual = context.Get("Y");
+    EXPECT_EQ(actual.shape, checkpoint.shape);
+    EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
+    EXPECT_EQ(context.values().at("Q").Encoded().raw_data(), bytes);
+  }
+}
 
 TEST(QuantizedValueKernels, CalibratesAffineBlocksAndReusesKernel) {
   auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 8, 4);

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/gguf.h"
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include <array>
@@ -49,32 +50,23 @@ template <typename T> T ReconstructionOperand(double value) {
     return value;
 }
 
-constexpr std::array<std::string_view, 45> kFormatNames = {"int8",
+constexpr std::array<std::string_view, 36> kFormatNames = {"int8",
                                                            "int8_per_channel",
                                                            "int4",
                                                            "gptq",
                                                            "awq",
                                                            "eetq",
                                                            "matmulnbits",
-                                                           "q2_k",
-                                                           "q3_k",
-                                                           "q4_k",
-                                                           "q5_k",
-                                                           "q6_k",
                                                            "hqq",
                                                            "exl2",
                                                            "exl3",
                                                            "nf4",
-                                                           "iq4_nl",
                                                            "binary",
                                                            "ternary",
-                                                           "tq1_0",
-                                                           "tq2_0",
                                                            "bitnet",
                                                            "paretoq",
                                                            "tequila",
                                                            "stq1_0",
-                                                           "iq1_s",
                                                            "aqlm",
                                                            "quip_sharp",
                                                            "spqr",
@@ -134,8 +126,6 @@ constexpr double kNf4[] = {-1,
                            0.5626170039176941,
                            0.7229568362236023,
                            1};
-constexpr double kIq4Nl[] = {-127, -104, -83, -65, -49, -35, -22, -10,
-                             1,    13,   25,  38,  53,  69,  89,  113};
 constexpr double kBinary[] = {-1, 1};
 constexpr double kTernary[] = {-1, 0, 1};
 constexpr double kLog[] = {0, 0.125, -0.125, 0.25, -0.25, 0.5, -0.5, 1, -1, 2, -2, 4, -4, 8, -8};
@@ -843,9 +833,6 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   if (format == QuantizationFormat::kInt8 || format == QuantizationFormat::kInt8PerChannel ||
       format == QuantizationFormat::kEetq || format == QuantizationFormat::kSmoothquant)
     layout.bits = 8;
-  if (format >= QuantizationFormat::kQ2K && format <= QuantizationFormat::kQ6K)
-    layout.bits =
-        2 + static_cast<uint32_t>(format) - static_cast<uint32_t>(QuantizationFormat::kQ2K);
   if (format == QuantizationFormat::kGptq || format == QuantizationFormat::kAwq ||
       format == QuantizationFormat::kMatmulnbits) {
     layout.signed_codes = false;
@@ -853,18 +840,15 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   }
   if (format == QuantizationFormat::kNf4)
     SetTable(layout, block, kNf4, 4);
-  if (format == QuantizationFormat::kIq4Nl)
-    SetTable(layout, block, kIq4Nl, 4);
   if (format == QuantizationFormat::kBinary)
     SetTable(layout, block, kBinary, 1);
-  if (format == QuantizationFormat::kTernary || format == QuantizationFormat::kTq10 ||
-      format == QuantizationFormat::kTq20 || format == QuantizationFormat::kBitnet ||
+  if (format == QuantizationFormat::kTernary || format == QuantizationFormat::kBitnet ||
       format == QuantizationFormat::kParetoq || format == QuantizationFormat::kTequila) {
     SetTable(layout, block, kTernary, 2);
-    layout.base3 = format != QuantizationFormat::kTq20;
+    layout.base3 = true;
   }
-  if (format == QuantizationFormat::kStq10 || format == QuantizationFormat::kIq1S ||
-      format == QuantizationFormat::kAqlm || format == QuantizationFormat::kQuipSharp) {
+  if (format == QuantizationFormat::kStq10 || format == QuantizationFormat::kAqlm ||
+      format == QuantizationFormat::kQuipSharp) {
     layout.method = QuantizationMethod::kCodebook;
     layout.bits = format == QuantizationFormat::kStq10 ? 5 : 8;
     layout.entries = uint32_t{1} << layout.bits;
@@ -1951,6 +1935,13 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
+    const auto tensor = DequantizeGgufTensorPayload(encoded, size_t{1} << 30, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == kMxfp6E2m3WeightsName) {
     const auto packed = ParseMxfp6E2m3Value(encoded, catalogue);
     std::vector<float> values(packed.geometry.count);
@@ -3031,6 +3022,10 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
                         RawBufferAllocator *allocator, int32_t output_dtype) {
   EXT_ENFORCE_INVALID(!value.has_parameter_ref(),
                       "Materialize shared parameters before decoding an EncodedValueProto.");
+  if ((output_dtype == TensorProto::UNDEFINED || output_dtype == TensorProto::FLOAT) &&
+      value.has_struct_type() &&
+      catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix))
+    return DequantizeGgufTensorPayload(value, size_t{1} << 30, catalogue, allocator);
   const auto decoded = DecodeValues(value, catalogue);
   const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
   const size_t width = FloatBytes(type);
@@ -3070,6 +3065,20 @@ EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const Quantizat
 
 TensorProto DequantizeTensorProto(const EncodedValueProto &value,
                                   const StructTypeCatalogue &catalogue) {
+  if (value.has_struct_type() &&
+      catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
+    const auto tensor = DequantizeGgufTensorPayload(value, size_t{1} << 30, catalogue);
+    TensorProto result;
+    if (value.has_name())
+      result.set_name(value.name().value());
+    if (value.has_doc_string())
+      result.set_doc_string(value.doc_string().value());
+    result.set_data_type(TensorProto::FLOAT);
+    for (const auto dim : tensor.shape)
+      result.add_dims(dim);
+    result.set_raw_data(tensor.bytes(), tensor.size_bytes());
+    return result;
+  }
   const auto decoded = DecodeValues(value, catalogue);
   TensorProto result;
   if (value.has_name())

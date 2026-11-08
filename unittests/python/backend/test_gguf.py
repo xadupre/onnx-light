@@ -12,6 +12,7 @@ import zlib
 import numpy
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+from onnx_light import onnx
 
 gguf = import_or_skip("onnx_light.onnx_core.gguf")
 
@@ -43,9 +44,15 @@ class TestGguf(ExtTestCase):
                 payload = gguf.import_gguf_tensor_payload(
                     raw, fixture["shape"], fixture["subtype"]
                 )
-                self.assertEqual(payload.data, raw)
-                self.assertEqual(payload.layout_version, gguf.LAYOUT_VERSION)
-                self.assertEqual(payload.upstream_revision, gguf.UPSTREAM_REVISION)
+                self.assertIsInstance(payload, onnx.EncodedValueProto)
+                self.assertEqual(payload.raw_data, raw)
+                self.assertEqual(
+                    payload.struct_type.name,
+                    "onnx_light.gguf.ggml-blocks-v1/" + fixture["subtype"],
+                )
+                restored = onnx.EncodedValueProto()
+                restored.ParseFromString(payload.SerializeToString())
+                payload = restored
                 self.assertEqual(gguf.export_gguf_tensor_payload(payload), raw)
                 actual = (
                     gguf.runtime.tensor_to_numpy(gguf.dequantize_gguf_tensor_payload(payload))
@@ -59,6 +66,11 @@ class TestGguf(ExtTestCase):
                 )
                 numpy.testing.assert_array_equal(
                     actual.view(numpy.uint32), expected.view(numpy.uint32)
+                )
+                generic = gguf.runtime.dequantize_tensor_proto(payload)
+                numpy.testing.assert_array_equal(
+                    numpy.frombuffer(generic.raw_data, dtype=numpy.float32).view(numpy.uint32),
+                    expected.ravel().view(numpy.uint32),
                 )
                 for field in ("scales", "minima"):
                     expected_parameters = (
@@ -79,14 +91,14 @@ class TestGguf(ExtTestCase):
                 self.assertEqual(checkpoint.qweight.shape, (2, 2 * fixture["type_size"]))
                 self.assertEqual(checkpoint.shape, fixture["shape"])
                 self.assertEqual(checkpoint.subtype, fixture["subtype"])
-                self.assertEqual(checkpoint.layout_version, payload.layout_version)
-                self.assertEqual(checkpoint.upstream_revision, payload.upstream_revision)
+                self.assertEqual(checkpoint.layout_version, gguf.LAYOUT_VERSION)
+                self.assertEqual(checkpoint.upstream_revision, gguf.UPSTREAM_REVISION)
                 self.assertEqual(checkpoint.qweight.tobytes(), raw)
-                self.assertEqual(gguf.import_gptqmodel_gguf_weights(checkpoint).data, raw)
+                self.assertEqual(gguf.import_gptqmodel_gguf_weights(checkpoint).raw_data, raw)
                 strided = numpy.empty((2, 4 * fixture["type_size"]), dtype=numpy.uint8)
                 strided[:, ::2] = checkpoint.qweight
                 checkpoint.qweight = strided[:, ::2]
-                self.assertEqual(gguf.import_gptqmodel_gguf_weights(checkpoint).data, raw)
+                self.assertEqual(gguf.import_gptqmodel_gguf_weights(checkpoint).raw_data, raw)
                 with self.assertRaises(ValueError):
                     gguf.read_gguf_block_parameters(payload, 4)
                 for malformed in (raw[:-1], raw + b"\0"):
@@ -156,10 +168,11 @@ class TestGguf(ExtTestCase):
         for consumer in (gguf.export_gguf_tensor_payload, gguf.dequantize_gguf_tensor_payload):
             with self.assertRaises(ValueError):
                 consumer(payload, max_bytes=127)
-            payload.layout_version = "unknown"
+            name = payload.struct_type.name
+            payload.struct_type.name = "onnx_light.gguf.ggml-blocks-v2/Q4_0"
             with self.assertRaises(ValueError):
                 consumer(payload)
-            payload.layout_version = gguf.LAYOUT_VERSION
+            payload.struct_type.name = name
         for layout in gguf.gguf_block_layouts():
             offsets = [208] if layout.subtype == "Q6_K" else [0]
             if layout.subtype in ("Q4_K", "Q5_K"):
@@ -182,7 +195,7 @@ class TestGguf(ExtTestCase):
                 numpy.float32
             )
             numpy.testing.assert_array_equal(values, numpy.zeros(layout.block_size))
-        payload.data = b"\0\x7e" + raw[2:]
+        payload.raw_data = b"\0\x7e" + raw[2:]
         for consumer in (
             gguf.export_gguf_tensor_payload,
             gguf.dequantize_gguf_tensor_payload,

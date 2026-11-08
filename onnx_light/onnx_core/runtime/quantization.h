@@ -23,25 +23,16 @@ enum class QuantizationFormat {
   kAwq,
   kEetq,
   kMatmulnbits,
-  kQ2K,
-  kQ3K,
-  kQ4K,
-  kQ5K,
-  kQ6K,
   kHqq,
   kExl2,
   kExl3,
   kNf4,
-  kIq4Nl,
   kBinary,
   kTernary,
-  kTq10,
-  kTq20,
   kBitnet,
   kParetoq,
   kTequila,
   kStq10,
-  kIq1S,
   kAqlm,
   kQuipSharp,
   kSpqr,
@@ -210,37 +201,30 @@ struct QuantizationRun {
  * <tr><td>gptq, awq, matmulnbits</td><td>MakeQuantizationPlan(QuantizationFormat::kGptq, 16, 4), or
  * "awq"/"matmulnbits": unsigned 4-bit blocks, zero_point=8. Supply each group's scale and integer
  * zero_point; optionally supply a real offset. No Hessian calculation or activation calibration
- * runs.</td></tr> <tr><td>q2_k, q3_k, q4_k, q5_k,
- * q6_k</td><td>MakeQuantizationPlan(QuantizationFormat::kQ2K, 16, 4), and analogously for the other
- * names: signed 2, 3, 4, 5 or 6-bit blocks. Supply effective sub-block scale and offset, including
- * any hierarchical scale products. No GGUF scale packing.</td></tr> <tr><td>hqq, exl2,
+ * runs.</td></tr> <tr><td>hqq, exl2,
  * exl3</td><td>MakeQuantizationPlan(QuantizationFormat::kExl2, 16, 8), or "hqq"/"exl3": signed
  * 4-bit defaults. Split the two blocks into separate runs and set runs[0].layout.bits=3 and
  * runs[1].layout.bits=5, then supply each block's scale/zero point/offset.
  * No bit allocation is inferred.</td></tr>
  * <tr><td>nf4</td><td>MakeQuantizationPlan(QuantizationFormat::kNf4, 16): one supplied-by-default
  * 16-level normal-float scalar table with 4-bit indices. Set scale; 1 preserves its [-1,1]
- * levels.</td></tr> <tr><td>iq4_nl</td><td>MakeQuantizationPlan(QuantizationFormat::kIq4Nl, 16): a
- * fixed 16-entry signed integer scalar table, 4-bit indices. Set scale, for
- * example 1.0/127.</td></tr>
+ * levels.</td></tr>
  * <tr><td>binary</td><td>MakeQuantizationPlan(QuantizationFormat::kBinary, 16): one-bit indices
- * into [-1,1]. Set scale to the desired reconstructed magnitude.</td></tr> <tr><td>ternary, tq1_0,
+ * into [-1,1]. Set scale to the desired reconstructed magnitude.</td></tr> <tr><td>ternary,
  * bitnet, paretoq, tequila</td><td>MakeQuantizationPlan(QuantizationFormat::kTernary, 16), or any
  * other listed name: [-1,0,1], base3=true. Set scale for the nonzero magnitude. Represents ternary
  * values, not the associated training algorithms.</td></tr>
- * <tr><td>tq2_0</td><td>MakeQuantizationPlan(QuantizationFormat::kTq20, 16): the same [-1,0,1]
- * table with base3=false and two-bit indices. Set scale.</td></tr>
  * <tr><td>stq1_0</td><td>MakeQuantizationPlan(QuantizationFormat::kStq10, 16): books=1, entries=32,
  * vector_size=4, bits=5. Supply 128 table values and scale. No code/sign splitting or scatter
- * layout.</td></tr> <tr><td>iq1_s</td><td>MakeQuantizationPlan(QuantizationFormat::kIq1S, 16):
- * books=1, entries=256, vector_size=8, bits=8. Supply 2048 table values and scale.</td></tr>
- * <tr><td>quip_sharp</td><td>MakeQuantizationPlan(QuantizationFormat::kQuipSharp, 16): the same
- * table defaults as iq1_s. Supply 2048 table values, scale, and a nonzero transform_size with both
- * matrices. The transform width need not equal the codebook vector width.</td></tr>
- * <tr><td>aqlm</td><td>MakeQuantizationPlan(QuantizationFormat::kAqlm, 16): books=2, entries=256,
- * vector_size=8, bits=8. Supply 4096 values ordered [2,256,8] and scale. See the codebook example
- * below.</td></tr> <tr><td>spqr</td><td>MakeQuantizationPlan(QuantizationFormat::kSpqr, 16): signed
- * 4-bit affine base. Set scale and optionally zero_point/offset, then set outliers, for example
+ * layout.</td></tr>
+ * <tr><td>quip_sharp</td><td>MakeQuantizationPlan(QuantizationFormat::kQuipSharp, 16):
+ * books=1, entries=256, vector_size=8. Supply 2048 table values, scale, and a nonzero
+ * transform_size with both matrices. The transform width need not equal the codebook vector
+ * width.</td></tr> <tr><td>aqlm</td><td>MakeQuantizationPlan(QuantizationFormat::kAqlm, 16):
+ * books=2, entries=256, vector_size=8, bits=8. Supply 4096 values ordered [2,256,8] and scale. See
+ * the codebook example below.</td></tr>
+ * <tr><td>spqr</td><td>MakeQuantizationPlan(QuantizationFormat::kSpqr, 16): signed 4-bit affine
+ * base. Set scale and optionally zero_point/offset, then set outliers, for example
  * {0,15}.</td></tr>
  * <tr><td>squeezellm</td><td>MakeQuantizationPlan(QuantizationFormat::kSqueezellm, 16): books=1,
  * entries=16, vector_size=1, bits=4. Supply 16 scalar levels and scale; set outliers as
@@ -297,7 +281,7 @@ struct QuantizationRun {
  * @endcode
  *
  * @par Supplied scalar, vector and additive tables
- * The same assignment pattern applies to stq1_0, iq1_s, quip_sharp, aqlm and squeezellm.
+ * The same assignment pattern applies to stq1_0, quip_sharp, aqlm and squeezellm.
  * Use their dimensions from the table above, or explicitly change books, entries,
  * vector_size and bits together. This small AQLM-family example overrides the default
  * dimensions with two synthetic books, four two-component entries each:
@@ -399,7 +383,8 @@ struct QuantizationRun {
  * Output conversion follows reconstruction; FLOAT16/BFLOAT16 convert via FLOAT as in v1.
  * v2 uses float-valued reconstruction/permutation/transform workspaces, even for DOUBLE
  * outputs. Parameter serialization and encoding/calibration arithmetic remain unchanged.
- * Neither version claims GGUF numerical or binary compatibility.
+ * GGML formats instead use the exact native block schema in gguf.h. Their former
+ * generic v1/v2 profile names are rejected; no legacy decoder is retained.
  *
  * @see MakeQuantizationPlan, QuantizationRun, QuantizationBlockLayout,
  * QuantizationBlockParameters, QuantizationFormats, QuantizeTensor,
@@ -427,9 +412,9 @@ struct QuantizationPlan {
   int32_t reconstruction_dtype = TensorProto::DOUBLE;
 };
 
-/** Returns the portable profiles as a compile-time array without dynamic allocation. */
-constexpr std::array<QuantizationFormat, 45> QuantizationFormats() {
-  std::array<QuantizationFormat, 45> formats{};
+/** Returns non-GGUF profiles; GGML formats use the native APIs in gguf.h. */
+constexpr std::array<QuantizationFormat, 36> QuantizationFormats() {
+  std::array<QuantizationFormat, 36> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;

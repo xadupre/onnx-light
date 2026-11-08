@@ -3,11 +3,21 @@
 Exact GGUF-family block payloads
 ===============================
 
-``onnx_light.onnx_core.gguf`` and ``onnx_core/runtime/gguf.h`` expose exact
-little-endian weight blocks separately from portable quantization profiles.
-The portable ``q2_k``/``q3_k``/``q4_k``/``q5_k``/``q6_k`` and ``iq4_nl``
-profiles retain their existing decoders; they are **not GGUF bytes**, and
-cannot be passed to this API or implicitly converted by it.
+``onnx_light.onnx_core.gguf`` and ``onnx_core/runtime/gguf.h`` store exact
+little-endian GGML weight blocks in the standard ``EncodedValueProto``.
+Its ``raw_data`` contains the original blocks without an onnx-light packing
+layer; its logical type records the FLOAT32 tensor shape. The versioned
+structured type records the canonical subtype and pinned upstream revision.
+The usual ``dequantize_tensor`` and ``dequantize_tensor_proto`` APIs decode
+these values using the native GGML codec.
+
+The former generic ``q2_k``/``q3_k``/``q4_k``/``q5_k``/``q6_k``,
+``iq4_nl``, ``iq1_s``, ``tq1_0`` and ``tq2_0`` profiles have been removed
+from the portable catalogue. Their old v1/v2 encoded values are rejected,
+not migrated or reinterpreted. Unsupported GGML subtypes are rejected rather
+than replaced with generic affine or codebook packing. Generic numerical
+experiments can still customize an ``int4`` or ``ternary`` layout, without
+claiming a GGML format name.
 
 Version identity
 ----------------
@@ -222,12 +232,12 @@ Usage
     # qweight is an extracted SafeTensors UINT8 array; do not reinterpret INT32.
     qweight = numpy.zeros((1, 18), dtype=numpy.uint8)
     checkpoint = gguf.GptqModelGgufWeights(qweight, [1, 32], "Q4_0")
-    payload = gguf.import_gptqmodel_gguf_weights(checkpoint)
-    tensor = gguf.dequantize_gguf_tensor_payload(payload)
+    encoded = gguf.import_gptqmodel_gguf_weights(checkpoint)
+    tensor = gguf.runtime.dequantize_tensor(encoded)
     values = gguf.runtime.tensor_to_numpy(tensor).view(numpy.float32).reshape(1, 32)
-    exported = gguf.export_gptqmodel_gguf_weights(payload)
+    exported = gguf.export_gptqmodel_gguf_weights(encoded)
     assert exported.qweight.tobytes() == qweight.tobytes()
-    raw = gguf.export_gguf_tensor_payload(payload)
+    raw = gguf.export_gguf_tensor_payload(encoded)
     restored = gguf.import_gguf_tensor_payload(raw, [1, 32], "Q4_0")
 
 The C++ counterparts are ``ImportGgufTensorPayload``,

@@ -17,6 +17,56 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
+TEST(onnx_shape_inference, EinsumScalarOperands) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::pair<std::string, std::vector<std::vector<int64_t>>>> cases{
+      {"->", {{}}},
+      {",->", {{}, {}}},
+      {",,->", {{}, {}, {}}},
+      {",ij->ij", {{}, {3, 3}}},
+      {"ij,->ij", {{3, 3}, {}}},
+      {",ij,", {{}, {3, 3}, {}}}};
+  for (const auto &[equation, shapes] : cases) {
+    SCOPED_TRACE(equation);
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset_import()->set_version(12);
+    auto *graph = model.mutable_graph();
+    graph->set_name("einsum_scalars");
+    auto *node = graph->add_node();
+    node->set_op_type("Einsum");
+    node->add_output("z");
+    AddAttribute<std::string>(*node, "equation", equation);
+    bool has_array = false;
+    for (size_t i = 0; i < shapes.size(); ++i) {
+      const auto name = "x" + std::to_string(i);
+      node->add_input(name);
+      auto *input = graph->add_input();
+      input->set_name(name);
+      auto *type = input->mutable_type()->mutable_tensor_type();
+      type->set_elem_type(TensorProto::FLOAT);
+      auto *shape = type->mutable_shape();
+      for (const auto dim : shapes[i])
+        shape->add_dim()->set_dim_value(dim);
+      has_array |= !shapes[i].empty();
+    }
+    graph->add_output()->set_name("z");
+    ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                 ShapeInferenceOptions(true, 1, false)));
+    const auto &output = graph->output(0).type().tensor_type();
+    EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
+    ASSERT_TRUE(output.has_shape());
+    ASSERT_EQ(output.shape().dim_size(), has_array ? 2u : 0u);
+    for (const auto &dim : output.shape().dim())
+      EXPECT_EQ(dim.dim_value(), 3);
+    ASSERT_NO_THROW(checker::check_model(model, true));
+    node->add_input("x0");
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(true, 1, false)),
+                 InferenceError);
+  }
+}
+
 TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   RegisterAllOnnxOperatorSchemas();
   const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");

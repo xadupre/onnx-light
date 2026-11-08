@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <string>
+#include <string_view>
 
 #include "onnx_lib/defs/schema.h"
 
@@ -20,7 +20,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 
 void ClearShape(TypeProto &input_type);
 
-int handle_negative_axis_validate(const std::string &attrib, int axis, int rank);
+int handle_negative_axis_validate(std::string_view attrib, int axis, int rank);
 
 /**
  * Validates the Scan input/output counts against the declared

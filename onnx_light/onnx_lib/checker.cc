@@ -13,6 +13,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -88,7 +89,7 @@ static int min_ir_version_for_data_type(int32_t data_type) {
   }
 }
 
-static void check_data_type_ir_version(int32_t data_type, const std::string &name,
+static void check_data_type_ir_version(int32_t data_type, std::string_view name,
                                        const CheckerContext &ctx) {
   const int min_ir_version = min_ir_version_for_data_type(data_type);
   // Non-positive versions mean the context does not carry an IR version.
@@ -99,7 +100,7 @@ static void check_data_type_ir_version(int32_t data_type, const std::string &nam
   }
 }
 
-static void check_type_ir_version(const TypeProto &type, const std::string &name,
+static void check_type_ir_version(const TypeProto &type, std::string_view name,
                                   const CheckerContext &ctx) {
   switch (type.value_case()) {
   case TypeProto::kTensorType:
@@ -214,7 +215,7 @@ static int64_t expected_raw_data_bytes(const TensorProto &tensor, int64_t nelem)
 
 // Parses an external-data offset or length as a non-negative decimal integer.
 static int64_t parse_external_data_integer(const StringStringEntryProto &entry,
-                                           const std::string &tensor_name) {
+                                           std::string_view tensor_name) {
   const std::string &value = entry.value();
   int64_t result = -1;
   const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), result);

@@ -13,6 +13,7 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -70,18 +71,18 @@ template <typename T> void PrintNumber(std::ostream &os, T value) {
   }
 }
 
-bool IsValidIdentifier(const std::string &str) {
+bool IsValidIdentifier(std::string_view str) {
   // Check if str is a valid identifier
-  const char *next_ = str.c_str();
-  const char *end_ = next_ + str.size();
-  if (next_ == end_)
+  if (str.empty())
     return false; // empty string is not a valid identifier
-  if (!IsAlpha(*next_) && (*next_ != '_'))
+  if (!IsAlpha(str.front()) && str.front() != '_')
     return false; // first character must be a letter or '_'
-  ++next_;
-  while ((next_ < end_) && (IsAlnum(*next_) || (*next_ == '_')))
-    ++next_;
-  return next_ == end_;
+  str.remove_prefix(1);
+  for (char ch : str) {
+    if (!IsAlnum(ch) && ch != '_')
+      return false;
+  }
+  return true;
 }
 
 class ProtoPrinter {
@@ -141,13 +142,13 @@ public:
   }
 
 private:
-  void printId(const std::string &str) {
+  void printId(std::string_view str) {
     if (IsValidIdentifier(str))
       output_ << str;
     else
       printQuoted(str);
   }
-  void printId(const utils::RefString &str) { printId(std::string(str)); }
+  void printId(const utils::RefString &str) { printId(str.sv()); }
 
   template <typename T> void print(const T &prim) {
     if constexpr (std::is_arithmetic_v<T>) {
@@ -157,17 +158,17 @@ private:
     }
   }
 
-  void printQuoted(const std::string &str) {
-    output_ << "\"";
-    for (char ch : str) {
-      if ((ch == '\\') || (ch == '"'))
-        output_ << '\\';
-      output_ << ch;
+  void printQuoted(std::string_view str) {
+    output_ << '"';
+    for (auto pos = str.find_first_of("\\\""); pos != std::string_view::npos;
+         pos = str.find_first_of("\\\"")) {
+      output_ << str.substr(0, pos) << '\\' << str[pos];
+      str.remove_prefix(pos + 1);
     }
-    output_ << "\"";
+    output_ << str << '"';
   }
 
-  inline void printQuoted(const utils::RefString &str) { printQuoted(std::string(str)); }
+  inline void printQuoted(const utils::RefString &str) { printQuoted(str.sv()); }
 
   template <typename T>
   void printKeyValuePair(KeyWordMap::KeyWord key, const T &val, bool addsep = true) {

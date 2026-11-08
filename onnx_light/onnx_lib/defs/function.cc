@@ -7,12 +7,6 @@
 #include <sstream>
 #include <unordered_map>
 
-static std::string InternalTensorNameGenerator(const std::string &node_name,
-                                               const std::string &internal_name) {
-  std::string new_name = "Func_" + node_name + internal_name;
-  return new_name;
-}
-
 namespace ONNX_LIGHT_NAMESPACE {
 void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, GraphProto &g,
                           const std::string &node_prefix) {
@@ -91,14 +85,14 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
       if (io_names_map.count(input)) {
         *new_node->add_input() = io_names_map[input];
       } else {
-        *new_node->add_input() = InternalTensorNameGenerator(node_name, input);
+        new_node->add_input()->assign("Func_").append(node_name).append(input);
       }
     }
     for (const auto &output : function_node.ref_output()) {
       if (io_names_map.count(output)) {
         *new_node->add_output() = io_names_map[output];
       } else {
-        *new_node->add_output() = InternalTensorNameGenerator(node_name, output);
+        new_node->add_output()->assign("Func_").append(node_name).append(output);
       }
     }
     for (const auto &attr : function_node.ref_attribute()) {

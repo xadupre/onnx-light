@@ -1064,6 +1064,37 @@ TEST(onnx_defs, Parser_NonNulTerminatedStringView) {
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
+TEST(onnx_defs, Parser_BoundedQuotedStringView) {
+  const std::string value("a\0b\"\\", 5);
+  const std::string literal("\"a\0b\\\"\\\\\"", 9);
+  const std::string backing = literal + "ignored";
+  ParserBase parser(std::string_view(backing.data(), literal.size()));
+  ParserBase::Literal parsed;
+  const auto status = parser.Parse(parsed);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+  EXPECT_EQ(parsed.value, value);
+  EXPECT_TRUE(parser.EndOfInput());
+
+  const char unfinished[] = {'"', 'a', '\\', '"'};
+  ParserBase incomplete(std::string_view(unfinished, 3));
+  EXPECT_FALSE(incomplete.Parse(parsed).IsOK());
+}
+
+TEST(onnx_defs, Parser_ErrorContextBoundaries) {
+  for (const auto &[text, expected] :
+       std::vector<std::pair<std::string, std::string>>{{"", ""},
+                                                        {" \t\v\f\r", " \t\v\f\r"},
+                                                        {"\n", ""},
+                                                        {"\nabc", ""},
+                                                        {"first\nsecond \t\n", "second \t"}}) {
+    SCOPED_TRACE(text);
+    ParserBase parser(text);
+    while (!parser.EndOfInput())
+      parser.Matches(static_cast<char>(parser.NextChar(false)), false);
+    EXPECT_EQ(parser.GetErrorContext(), expected);
+  }
+}
+
 TEST(onnx_defs, Parser_FunctionProto_Basic) {
   const char *code = R"ONNX(
 <

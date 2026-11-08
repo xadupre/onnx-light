@@ -11,6 +11,30 @@ from onnx_light.onnx import TensorProto
 MAX_SHORT_REPR_LENGTH = 60
 
 
+class TestSchemaTypeStringViews(ExtTestCase):
+    def test_input_type_constraints_canonicalize_whitespace(self):
+        cases = [
+            ("tensor(int64)", "tensor(int64)"),
+            (
+                " \tseq ( map ( int64 , optional ( tensor ( float ) ) ) ) \r\n",
+                "seq(map(int64,optional(tensor(float))))",
+            ),
+            ("opaque ( domain , name )", "opaque(domain , name)"),
+        ]
+        for type_str, canonical in cases:
+            with self.subTest(type_str=type_str):
+                schema = defs.OpSchema(
+                    "test_op",
+                    "test_domain",
+                    1,
+                    inputs=[defs.OpSchema.FormalParameter("input1", "T", "The first input.")],
+                    type_constraints=[("T", [type_str], "")],
+                )
+                self.assertEqual(schema.inputs[0].types, {canonical})
+                self.assertEqual(schema.inputs[0].name, "input1")
+                self.assertEqual(schema.inputs[0].type_str, "T")
+
+
 class TestParserSubmodule(ExtTestCase):
     """Tests for the `parser` submodule."""
 

@@ -17,6 +17,143 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
+namespace {
+
+ModelProto MakeIntegerRangeModel(int version, int dtype, bool raw, int64_t start, int64_t limit,
+                                 int64_t delta) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(version);
+  auto *graph = model.mutable_graph();
+  graph->set_name("range");
+  auto *node = graph->add_node();
+  node->set_op_type("Range");
+  const std::vector<std::pair<std::string, int64_t>> inputs = {
+      {"start", start}, {"limit", limit}, {"delta", delta}};
+  for (const auto &[name, value] : inputs) {
+    node->add_input(name);
+    auto *tensor = graph->add_initializer();
+    tensor->set_name(name);
+    tensor->set_data_type(dtype);
+    if (raw) {
+      const size_t width = dtype == TensorProto::INT32 ? sizeof(int32_t) : sizeof(int64_t);
+      std::string bytes(width, '\0');
+      for (size_t i = 0; i < width; ++i) {
+        bytes[i] = static_cast<char>((static_cast<uint64_t>(value) >> (8 * i)) & 0xff);
+      }
+      tensor->set_raw_data(bytes);
+    } else if (dtype == TensorProto::INT32) {
+      tensor->add_int32_data(static_cast<int32_t>(value));
+    } else {
+      tensor->add_int64_data(value);
+    }
+  }
+  node->add_output("output");
+  graph->add_output()->set_name("output");
+  return model;
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, RangeIntegerBoundaries) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const int dtype : {TensorProto::INT32, TensorProto::INT64}) {
+      const int64_t low = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::min()
+                                                      : std::numeric_limits<int64_t>::min();
+      const int64_t high = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::max()
+                                                       : std::numeric_limits<int64_t>::max();
+      const std::vector<std::tuple<int64_t, int64_t, int64_t, int64_t>> cases = {
+          {low, high, high, 3},  {high, low, -high, 3},   {high, low, low, 2},
+          {0, low, low, 1},      {low, low + 3, 1, 3},    {high - 3, high, 1, 3},
+          {low + 3, low, -1, 3}, {high, high - 3, -1, 3}, {low, high, -1, 0},
+          {high, low, 1, 0},     {low, low, 1, 0},        {high, high, -1, 0},
+          {0, high, 1, high},    {high, 0, -1, high}};
+      for (const bool raw : {false, true}) {
+        for (const auto &[start, limit, delta, expected] : cases) {
+          SCOPED_TRACE(::testing::Message() << version << " " << dtype << " " << raw << " " << start
+                                            << " " << limit << " " << delta);
+          auto model = MakeIntegerRangeModel(version, dtype, raw, start, limit, delta);
+          ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                       ShapeInferenceOptions(false, 1, false)));
+          const auto &tensor = model.graph().output(0).type().tensor_type();
+          EXPECT_EQ(tensor.elem_type(), dtype);
+          ASSERT_EQ(tensor.shape().dim_size(), 1);
+          ASSERT_TRUE(tensor.shape().dim(0).has_dim_value());
+          EXPECT_EQ(tensor.shape().dim(0).dim_value(), expected);
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeInt64ExactCeil) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const bool raw : {false, true}) {
+      for (const int64_t sign : {-1, 1}) {
+        auto model =
+            MakeIntegerRangeModel(version, TensorProto::INT64, raw, 0,
+                                  sign * ((int64_t{1} << 60) + 1), sign * (int64_t{1} << 60));
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(false, 1, false)));
+        EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(0).dim_value(), 2);
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeIntegerInvalidLength) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const int dtype : {TensorProto::INT32, TensorProto::INT64}) {
+      const int64_t low = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::min()
+                                                      : std::numeric_limits<int64_t>::min();
+      const int64_t high = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::max()
+                                                       : std::numeric_limits<int64_t>::max();
+      std::vector<std::tuple<int64_t, int64_t, int64_t>> cases = {{0, 1, 0}, {1, 0, 0}, {0, 0, 0}};
+      if (dtype == TensorProto::INT64) {
+        cases.emplace_back(low, high, 1);
+        cases.emplace_back(high, low, -1);
+        cases.emplace_back(low, high, 2);
+      }
+      for (const bool raw : {false, true}) {
+        for (const auto &[start, limit, delta] : cases) {
+          SCOPED_TRACE(::testing::Message() << version << " " << dtype << " " << raw << " " << start
+                                            << " " << limit << " " << delta);
+          auto model = MakeIntegerRangeModel(version, dtype, raw, start, limit, delta);
+          EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                    ShapeInferenceOptions(false, 1, false)),
+                       InferenceError);
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeFloatingPointUnchanged) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const std::string dtype : {"float", "double"}) {
+      for (const std::string delta : {"2", "-2"}) {
+        ModelProto model;
+        const std::string text =
+            "<ir_version: 12, opset_import: [\"\" : " + std::to_string(version) +
+            "]> graph () => (" + dtype + "[] output) <" + dtype + " start = {1}, " + dtype +
+            " limit = {6}, " + dtype + " delta = {" + delta +
+            "}> { output = Range (start, limit, delta) }";
+        OnnxParser parser(text);
+        const auto status = parser.Parse(model);
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(false, 1, false)));
+        EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(0).dim_value(),
+                  delta == "2" ? 3 : 0);
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   RegisterAllOnnxOperatorSchemas();
   const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");

@@ -1,11 +1,12 @@
 """
 .. _l-example-quantization-profiles:
 
-Uses every portable quantization profile from Python
-===================================================
+Uses every quantization format from Python
+=========================================
 
-This example quantizes and dequantizes all 36 profiles exposed by
-:mod:`onnx_light.onnx_core.quantization`. It shows the parameters to supply
+This example exercises all 41 formats in the unified catalogue exposed by
+:mod:`onnx_light.onnx_core.quantization`: it quantizes numerical profiles
+and imports already-quantized native GGML blocks. It shows the parameters to supply
 for affine, scalar-codebook, vector-codebook, transformed and cast storage.
 The :ref:`profile catalogue <l-quantized-values>` describes their numerical
 contracts and limitations.
@@ -24,12 +25,19 @@ demonstrate the API, not trained models or recommended quantization quality.
 import numpy
 from onnx_light import onnx
 import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx_core.gguf import (
+    export_gguf_tensor_payload,
+    gguf_block_layouts,
+    import_gguf_tensor_payload,
+)
 from onnx_light.onnx_core.quantization import (
     QuantizationFormat,
     dequantize_tensor_proto,
     export_matmul_nbits_inputs,
     make_matmul_nbits_plan,
     make_quantization_plan,
+    is_gguf_quantization_format,
+    parse_quantization_format,
     quantization_format_name,
     quantization_formats,
     quantize_tensor_proto,
@@ -388,6 +396,29 @@ plan = make_quantization_plan(QuantizationFormat.MXFP6_E2M3, weights.size)
 encoded, restored = roundtrip(weights, plan)
 assert encoded.raw_data == bytes([0x48, 0xF8, 0x01] * 8 + [127])
 numpy.testing.assert_array_equal(restored, weights)
+
+# %%
+# Native GGML formats in the same catalogue
+# ----------------------------------------
+#
+# These formats consume existing quantized blocks without repacking. Floating-point
+# quantization is not implemented; decoding uses the same API as the other formats.
+
+layouts = {layout.subtype: layout for layout in gguf_block_layouts()}
+for format in quantization_formats():
+    if not is_gguf_quantization_format(format):
+        continue
+    name = quantization_format_name(format)
+    layout = layouts[name]
+    assert parse_quantization_format(name) == format
+    data = bytes(layout.type_size)
+    encoded = import_gguf_tensor_payload(data, [1, layout.block_size], name)
+    assert export_gguf_tensor_payload(encoded) == data
+    restored = onh.to_array(dequantize_tensor_proto(encoded))
+    numpy.testing.assert_array_equal(
+        restored, numpy.zeros((1, layout.block_size), dtype=numpy.float32)
+    )
+    covered.add(format)
 
 # %%
 # Coverage

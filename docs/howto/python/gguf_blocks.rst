@@ -11,6 +11,14 @@ structured type records the canonical subtype and pinned upstream revision.
 The usual ``dequantize_tensor`` and ``dequantize_tensor_proto`` APIs decode
 these values using the native GGML codec.
 
+All supported formats belong to the single ``QuantizationFormat`` catalogue:
+``Q4_0``, ``Q8_0``, ``Q4_K``, ``Q5_K`` and ``Q6_K`` appear in
+``quantization_formats()`` and use their canonical uppercase names in
+``quantization_format_name()`` and ``parse_quantization_format()``.
+``gguf_block_layouts()`` provides their physical block sizes, not a separate
+format catalogue. Native formats accept existing blocks; ``make_quantization_plan``
+rejects them because floating-point-to-GGML quantization is not implemented.
+
 The former generic ``q2_k``/``q3_k``/``q4_k``/``q5_k``/``q6_k``,
 ``iq4_nl``, ``iq1_s``, ``tq1_0`` and ``tq2_0`` profiles have been removed
 from the portable catalogue. Their old v1/v2 encoded values are rejected,

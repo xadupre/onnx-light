@@ -1,10 +1,12 @@
-"""Converts tensors to portable, self-describing quantized values.
+"""Exposes the unified quantization catalogue and self-describing quantized values.
 
 Portable profiles describe onnx-light representations, not vendor binary layouts.
 Separate MXFP4 and NVFP4 weight codecs implement E8M0 and FP8 scale contracts.
 The MXFP8 profile implements E4M3FN values with automatic group-32 E8M0 scales.
 MXFP6_E2M3 implements compressed-tensors E2M3/group-32/E8M0; MXFP6 remains E3M2.
 NVFP4 also preserves its FLOAT32 global scale.
+Q4_0, Q8_0, Q4_K, Q5_K and Q6_K use exact native GGML blocks, imported through
+onnx_light.onnx_core.gguf and decoded by the standard dequantization APIs.
 ORT_MATMULNBITS_INT2/INT4/INT8 produce ONNX Runtime operator inputs, not internal
 kernel prepacking. No profile performs calibration. See :doc:`/howto/python/quantized_values`.
 """
@@ -36,6 +38,7 @@ quantize_mxfp6_e2m3_weights = runtime.quantize_mxfp6_e2m3_weights
 export_mxfp6_e2m3_weights = runtime.export_mxfp6_e2m3_weights
 import_mxfp6_e2m3_weights = runtime.import_mxfp6_e2m3_weights
 quantization_formats = runtime.quantization_formats
+is_gguf_quantization_format = runtime.is_gguf_quantization_format
 quantization_format_name = runtime.quantization_format_name
 parse_quantization_format = runtime.parse_quantization_format
 make_quantization_plan = runtime.make_quantization_plan
@@ -152,6 +155,7 @@ __all__ = [
     "import_mxfp6_e2m3_weights",
     "import_mxfp8_weights",
     "import_nvfp4_weights",
+    "is_gguf_quantization_format",
     "make_matmul_nbits_plan",
     "make_quantization_plan",
     "make_quantization_type",

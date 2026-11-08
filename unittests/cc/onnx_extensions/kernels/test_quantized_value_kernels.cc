@@ -497,7 +497,8 @@ TEST(QuantizedValueKernels, MatchesExplicitCodecPlansAcrossAllProfiles) {
   const auto input = Tensor::FromFloat("", {4, 2}, std::vector<float>(8, 1));
   const auto scale = Tensor::FromDouble("", {}, {1});
   for (auto format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
+        IsGgufQuantizationFormat(format))
       continue;
     SCOPED_TRACE(QuantizationFormatName(format));
     const bool ort = format >= QuantizationFormat::kOrtMatmulnbitsInt2;

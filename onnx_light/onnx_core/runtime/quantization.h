@@ -14,7 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /** Selects the numerical reconstruction of an independently encoded block. */
 enum class QuantizationMethod { kAffine = 0, kCodebook = 1, kCast = 2 };
 
-/** Selects a portable profile or an explicitly ORT-compatible MatMulNBits input layout. */
+/** Selects a quantization format, including native GGML and ORT-compatible storage. */
 enum class QuantizationFormat {
   kInt8,
   kInt8PerChannel,
@@ -52,7 +52,17 @@ enum class QuantizationFormat {
   kOrtMatmulnbitsInt8,
   kMxfp8,
   kMxfp6E2m3,
+  kQ40,
+  kQ80,
+  kQ4K,
+  kQ5K,
+  kQ6K,
 };
+
+/** Returns whether the format uses exact native GGML block storage. */
+constexpr bool IsGgufQuantizationFormat(QuantizationFormat format) {
+  return format >= QuantizationFormat::kQ40 && format <= QuantizationFormat::kQ6K;
+}
 
 /**
  * Describes the shared type of a run of contiguous blocks.
@@ -412,9 +422,9 @@ struct QuantizationPlan {
   int32_t reconstruction_dtype = TensorProto::DOUBLE;
 };
 
-/** Returns non-GGUF profiles; GGML formats use the native APIs in gguf.h. */
-constexpr std::array<QuantizationFormat, 36> QuantizationFormats() {
-  std::array<QuantizationFormat, 36> formats{};
+/** Returns all supported formats, including native GGML block storage. */
+constexpr auto QuantizationFormats() {
+  std::array<QuantizationFormat, static_cast<size_t>(QuantizationFormat::kQ6K) + 1> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;
@@ -428,6 +438,8 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name);
 
 /**
  * Creates run layouts and block parameters for a catalogue profile.
+ * Native GGML formats require already-quantized blocks through the import APIs in gguf.h;
+ * floating-point-to-GGML quantization is not implemented and is rejected.
  *
  * See @ref QuantizationPlan for the complete profile-by-profile configuration table,
  * required scales/codebooks/transforms, numerical rules, validation constraints,

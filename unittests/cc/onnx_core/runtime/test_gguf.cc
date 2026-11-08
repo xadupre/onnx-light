@@ -354,7 +354,29 @@ TEST(GptqModelGgufWeights, RejectsPaddingShapeDtypeMetadataAndLimitsBeforeCopies
 }
 
 TEST(GgufTensorPayload, NativeStorageUsesStandardEncodedValuesAndRejectsPortableAliases) {
+  size_t native_formats = 0;
+  for (const auto format : QuantizationFormats())
+    if (IsGgufQuantizationFormat(format)) {
+      ++native_formats;
+      EXPECT_EQ(GgufLayout(QuantizationFormatName(format)).subtype, QuantizationFormatName(format));
+    }
+  EXPECT_EQ(native_formats, GgufBlockLayouts().size());
   for (const auto &layout : GgufBlockLayouts()) {
+    const auto format = ParseQuantizationFormat(layout.subtype);
+    EXPECT_TRUE(IsGgufQuantizationFormat(format));
+    auto portable_plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 1);
+    portable_plan.format = format;
+    EXPECT_THROW(MakeQuantizationType(portable_plan), std::invalid_argument);
+    EXPECT_THROW(QuantizeTensor(Tensor::FromFloat("", {1}, {0}), portable_plan),
+                 std::invalid_argument);
+    for (const auto prefix : {"onnx_light.quantization.v1/", "onnx_light.quantization.v2/"}) {
+      auto portable = QuantizeTensor(Tensor::FromFloat("", {1}, {0}),
+                                     MakeQuantizationPlan(QuantizationFormat::kInt4, 1))
+                          .Encoded();
+      portable.mutable_struct_type()->set_name(std::string(prefix) + layout.subtype);
+      EXPECT_THROW(DequantizeTensor(portable), std::invalid_argument);
+      EXPECT_THROW(MakeSharedQuantizationType(portable.struct_type()), std::invalid_argument);
+    }
     const std::string bytes(layout.type_size * 2, '\0');
     const auto encoded = ImportGgufTensorPayload(
         bytes, {2, static_cast<int64_t>(layout.block_size)}, layout.subtype);

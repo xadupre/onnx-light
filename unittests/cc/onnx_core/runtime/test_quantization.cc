@@ -144,9 +144,9 @@ TEST(CompressedTensorsAdapter, RejectsUnsignedAffineSourcesWithoutChangingCodes)
 namespace {
 
 constexpr auto kQuantizationFormats = QuantizationFormats();
-static_assert(kQuantizationFormats.size() == 36);
+static_assert(kQuantizationFormats.size() == 41);
 static_assert(kQuantizationFormats.front() == QuantizationFormat::kInt8);
-static_assert(kQuantizationFormats.back() == QuantizationFormat::kMxfp6E2m3);
+static_assert(kQuantizationFormats.back() == QuantizationFormat::kQ6K);
 static_assert(static_cast<int>(QuantizationFormat::kMxfp8) == 34);
 static_assert(static_cast<int>(QuantizationFormat::kOrtMatmulnbitsInt8) == 33);
 static_assert([] {
@@ -1452,8 +1452,9 @@ TEST(Quantization, PagedCacheRetainsSharedParametersAcrossSerialization) {
 
 TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
   for (auto format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
-      continue; // Automatic MX profiles do not support shared numerical parameters.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
+        IsGgufQuantizationFormat(format))
+      continue; // Native codecs do not support portable shared numerical parameters.
     SCOPED_TRACE(std::string(QuantizationFormatName(format)));
     auto plan = WithTables(format, 16);
     auto source = Tensor::FromFloat(
@@ -1661,10 +1662,11 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   proto.add_dims(2);
   for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
     proto.add_float_data(value);
-  EXPECT_EQ(QuantizationFormats().size(), 36u);
+  EXPECT_EQ(QuantizationFormats().size(), 41u);
   for (const auto &format : QuantizationFormats()) {
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
-      continue; // Covered with complete rank-two groups in the profile-specific tests.
+    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3 ||
+        IsGgufQuantizationFormat(format))
+      continue; // Covered by the native codec tests.
     SCOPED_TRACE(QuantizationFormatName(format));
     auto plan = WithTables(format, 8);
     const auto encoded = QuantizeTensor(tensor, plan);
@@ -2295,7 +2297,9 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
   for (const auto format : QuantizationFormats()) {
     const auto name = QuantizationFormatName(format);
     EXPECT_EQ(ParseQuantizationFormat(name), format);
-    if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
+    if (IsGgufQuantizationFormat(format))
+      EXPECT_THROW(MakeQuantizationPlan(format, 32), std::invalid_argument);
+    else if (format == QuantizationFormat::kMxfp8 || format == QuantizationFormat::kMxfp6E2m3)
       EXPECT_EQ(MakeQuantizationPlan(format, 32).format, format);
     else if (format < QuantizationFormat::kOrtMatmulnbitsInt2)
       EXPECT_EQ(MakeQuantizationPlan(format, 0).format, format);

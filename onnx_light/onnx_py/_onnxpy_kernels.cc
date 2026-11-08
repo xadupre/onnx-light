@@ -1230,6 +1230,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
       .value("MXFP8", core::runtime::QuantizationFormat::kMxfp8)
       .value("MXFP6_E2M3", core::runtime::QuantizationFormat::kMxfp6E2m3)
+      .value("Q4_0", core::runtime::QuantizationFormat::kQ40)
+      .value("Q8_0", core::runtime::QuantizationFormat::kQ80)
+      .value("Q4_K", core::runtime::QuantizationFormat::kQ4K)
+      .value("Q5_K", core::runtime::QuantizationFormat::kQ5K)
+      .value("Q6_K", core::runtime::QuantizationFormat::kQ6K)
       .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
       .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
       .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
@@ -1323,7 +1328,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         constexpr auto formats = core::runtime::QuantizationFormats();
         return std::vector<core::runtime::QuantizationFormat>(formats.begin(), formats.end());
       },
-      "Returns portable onnx-light profile enum values, not vendor packing ABIs.");
+      "Returns all supported quantization formats, including native GGML storage.");
+  rt_mod.def("is_gguf_quantization_format", &core::runtime::IsGgufQuantizationFormat,
+             "Returns whether the format uses exact native GGML block storage.");
   rt_mod.def("quantization_format_name", &core::runtime::QuantizationFormatName, nb::arg("format"),
              "Returns the stable wire name of a profile.");
   rt_mod.def("parse_quantization_format", &core::runtime::ParseQuantizationFormat, nb::arg("name"),

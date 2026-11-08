@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/gguf.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/quantization.h"
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -220,11 +221,12 @@ ValidatedLayout ValidateCheckpointMetadata(const Shape &packed_shape, size_t pac
 } // namespace
 
 const std::vector<GgufBlockLayout> &GgufBlockLayouts() {
-  static const std::vector<GgufBlockLayout> layouts{{"Q4_0", 32, 18},
-                                                    {"Q8_0", 32, 34},
-                                                    {"Q4_K", 256, 144},
-                                                    {"Q5_K", 256, 176},
-                                                    {"Q6_K", 256, 210}};
+  static const std::vector<GgufBlockLayout> layouts{
+      {std::string(QuantizationFormatName(QuantizationFormat::kQ40)), 32, 18},
+      {std::string(QuantizationFormatName(QuantizationFormat::kQ80)), 32, 34},
+      {std::string(QuantizationFormatName(QuantizationFormat::kQ4K)), 256, 144},
+      {std::string(QuantizationFormatName(QuantizationFormat::kQ5K)), 256, 176},
+      {std::string(QuantizationFormatName(QuantizationFormat::kQ6K)), 256, 210}};
   return layouts;
 }
 

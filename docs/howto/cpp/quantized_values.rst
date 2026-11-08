@@ -13,6 +13,14 @@ The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their pr
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
 
+The single ``QuantizationFormat`` catalogue also includes ``kQ40``, ``kQ80``,
+``kQ4K``, ``kQ5K`` and ``kQ6K``, named ``Q4_0``, ``Q8_0``, ``Q4_K``,
+``Q5_K`` and ``Q6_K`` by ``QuantizationFormatName``. They use
+:ref:`native GGUF blocks <l-gguf-blocks>` rather than portable packing.
+``QuantizationFormats()`` lists all formats; ``IsGgufQuantizationFormat``
+identifies those requiring native block imports. ``MakeQuantizationPlan`` rejects
+these formats because floating-point-to-GGML quantization is not implemented.
+
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native
 implementation and can be dequantized without the original plan. A self-contained

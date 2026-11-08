@@ -713,10 +713,10 @@ class TestQuantizedValues(ExtTestCase):
 
         formats = quantization_formats()
         self.assertIsInstance(formats, list)
-        self.assertEqual(len(formats), 36)
+        self.assertEqual(len(formats), 41)
         self.assertTrue(all(isinstance(value, QuantizationFormat) for value in formats))
         self.assertEqual(formats[0], QuantizationFormat.INT8)
-        self.assertEqual(formats[-1], QuantizationFormat.MXFP6_E2M3)
+        self.assertEqual(formats[-1], QuantizationFormat.Q6_K)
         for value in formats:
             self.assertEqual(
                 runtime.parse_quantization_format(runtime.quantization_format_name(value)), value
@@ -741,6 +741,10 @@ class TestQuantizedValues(ExtTestCase):
         source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32).reshape(4, 2)
         for name in runtime.quantization_formats():
             with self.subTest(format=name):
+                if runtime.is_gguf_quantization_format(name):
+                    with self.assertRaisesRegex(ValueError, "import native blocks"):
+                        runtime.make_quantization_plan(name, source.size, 4)
+                    continue
                 if name in {QuantizationFormat.MXFP8, QuantizationFormat.MXFP6_E2M3}:
                     grouped = numpy.tile(source.ravel(), 4).reshape(1, 32)
                     plan = runtime.make_quantization_plan(name, grouped.size)

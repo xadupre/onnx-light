@@ -44,7 +44,7 @@ struct GptqModelGgufWeights {
   std::string upstream_revision = kGgufUpstreamRevision;
 };
 
-/** Returns the supported, exact block layouts. */
+/** Returns physical block metadata for native GGML formats in QuantizationFormats(). */
 const std::vector<GgufBlockLayout> &GgufBlockLayouts();
 /** Returns a canonical layout; rejects aliases and unsupported subtypes. */
 const GgufBlockLayout &GgufLayout(std::string_view subtype);

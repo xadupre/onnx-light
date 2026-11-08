@@ -18,6 +18,7 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light import onnx
 
 gguf = import_or_skip("onnx_light.onnx_core.gguf")
+quantization = import_or_skip("onnx_light.onnx_core.quantization")
 
 
 class TestGguf(ExtTestCase):
@@ -41,11 +42,23 @@ class TestGguf(ExtTestCase):
             {layout.subtype for layout in gguf.gguf_block_layouts()},
             {fixture["subtype"] for fixture in fixtures["fixtures"]},
         )
+        self.assertEqual(
+            {
+                quantization.quantization_format_name(format)
+                for format in quantization.quantization_formats()
+                if quantization.is_gguf_quantization_format(format)
+            },
+            {fixture["subtype"] for fixture in fixtures["fixtures"]},
+        )
         for fixture in fixtures["fixtures"]:
             with self.subTest(subtype=fixture["subtype"]):
+                format = quantization.parse_quantization_format(fixture["subtype"])
+                self.assertEqual(
+                    format, getattr(quantization.QuantizationFormat, fixture["subtype"])
+                )
                 raw = self.raw(fixture, "data")
                 payload = gguf.import_gguf_tensor_payload(
-                    raw, fixture["shape"], fixture["subtype"]
+                    raw, fixture["shape"], quantization.quantization_format_name(format)
                 )
                 self.assertIsInstance(payload, onnx.EncodedValueProto)
                 self.assertEqual(payload.raw_data, raw)
@@ -70,7 +83,7 @@ class TestGguf(ExtTestCase):
                 numpy.testing.assert_array_equal(
                     actual.view(numpy.uint32), expected.view(numpy.uint32)
                 )
-                generic = gguf.runtime.dequantize_tensor_proto(payload)
+                generic = quantization.dequantize_tensor_proto(payload)
                 numpy.testing.assert_array_equal(
                     numpy.frombuffer(generic.raw_data, dtype=numpy.float32).view(numpy.uint32),
                     expected.ravel().view(numpy.uint32),

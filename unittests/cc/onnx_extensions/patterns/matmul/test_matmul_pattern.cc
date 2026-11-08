@@ -6,6 +6,7 @@
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
+#include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -464,6 +465,7 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
 }
 
 TEST(MatMulAddPattern, RejectsHigherRankTransposedGemmFusion) {
+  onnx_shapes::RegisterShapeFunctions();
   core::builder::GraphBuilder builder("gemm29", SchemaLookup(), {{"", 29}});
   builder.MakeInput("A", core::symbolic::TensorType::kFloat, Shape({2, 5, 3}));
   builder.MakeInput("B", core::symbolic::TensorType::kFloat, Shape({5, 7}));

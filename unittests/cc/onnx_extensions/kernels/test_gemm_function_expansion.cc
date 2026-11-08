@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_op/operator_sets.h"
@@ -19,6 +20,7 @@
 
 TEST(Gemm29, Float16FunctionExpansionMatchesNativeExecution) {
   onnx_light::RegisterAllOnnxOperatorSchemas();
+  onnx_light::onnx_kernels::RegisterKernelFunctions();
   onnx_light::ModelProto model;
   model.set_ir_version(onnx_light::IR_VERSION);
   model.add_opset_import()->set_version(29);
@@ -51,6 +53,7 @@ TEST(Gemm29, Float16FunctionExpansionMatchesNativeExecution) {
   onnx_light::FunctionBodyBuildContextImpl context(node, input_types);
   onnx_light::FunctionProto function;
   ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, 29));
+  graph->clear_node();
   onnx_light::FunctionExpandHelper(node, function, *graph);
 
   const onnx_light::core::runtime::Tensor a =

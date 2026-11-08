@@ -6,11 +6,13 @@
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
+#include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <tuple>
@@ -1368,6 +1370,247 @@ TEST_P(TopKShapeInferenceTest, InfersRankWithDynamicK) {
 
 INSTANTIATE_TEST_SUITE_P(TopK, TopKShapeInferenceTest,
                          ::testing::Combine(::testing::Values(10, 11, 24), ::testing::Bool()));
+
+namespace {
+
+// Ports the historical schema coverage from onnx/onnx#8711.
+std::vector<int> HistoricalShapeInferenceVersions(const char *op_type) {
+  std::vector<int> versions;
+  if (std::string(op_type) == "Conv" || std::string(op_type) == "ConvTranspose") {
+    versions.push_back(10); // Exercises schema version 1.
+  }
+  // Parameter discovery must not initialize the global registry before test fixtures run.
+  for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false)) {
+    if (schema.domain() == core::schema::kOnnxDomain && schema.since_version() > 5) {
+      versions.push_back(schema.since_version());
+    }
+  }
+  std::sort(versions.begin(), versions.end());
+  versions.erase(std::unique(versions.begin(), versions.end()), versions.end());
+  return versions;
+}
+
+struct HistoricalShapeCase {
+  const char *name;
+  const char *graph;
+  bool has_shape = true;
+};
+
+class HistoricalShapeInferenceTest : public ::testing::TestWithParam<int> {
+protected:
+  void SetUp() override { RegisterAllOnnxOperatorSchemas(); }
+
+  void Parse(const char *graph, ModelProto &model) {
+    const std::string text = std::string("<ir_version: 10, opset_import: [\"\" : 10]> ") + graph;
+    OnnxParser parser(text);
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_opset_import(0)->set_version(GetParam());
+  }
+
+  void Infer(ModelProto &model) {
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(true, 1, false));
+  }
+
+  void CheckShapes(std::initializer_list<HistoricalShapeCase> cases) {
+    for (const auto &test_case : cases) {
+      SCOPED_TRACE(test_case.name);
+      ModelProto model;
+      ASSERT_NO_FATAL_FAILURE(Parse(test_case.graph, model));
+      const auto expected = model.graph().output(0).type().tensor_type();
+      model.mutable_graph()->mutable_output(0)->clear_type();
+      ASSERT_NO_THROW(Infer(model));
+      const auto &actual = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(actual.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(actual.has_shape(), test_case.has_shape);
+      if (!test_case.has_shape) {
+        continue;
+      }
+      ASSERT_EQ(actual.shape().dim_size(), expected.shape().dim_size());
+      for (int i = 0; i < expected.shape().dim_size(); ++i) {
+        SCOPED_TRACE(i);
+        const auto &dim = expected.shape().dim(i);
+        if (dim.has_dim_value()) {
+          ASSERT_TRUE(actual.shape().dim(i).has_dim_value());
+          EXPECT_EQ(actual.shape().dim(i).dim_value(), dim.dim_value());
+        } else {
+          EXPECT_FALSE(actual.shape().dim(i).has_dim_value());
+        }
+      }
+      ASSERT_NO_THROW(checker::check_model(model, true));
+    }
+  }
+
+  void CheckErrors(std::initializer_list<HistoricalShapeCase> cases) {
+    for (const auto &test_case : cases) {
+      SCOPED_TRACE(test_case.name);
+      ModelProto model;
+      ASSERT_NO_FATAL_FAILURE(Parse(test_case.graph, model));
+      model.mutable_graph()->mutable_output(0)->clear_type();
+      EXPECT_THROW(Infer(model), InferenceError);
+    }
+  }
+};
+
+class HistoricalConvShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalConvTransposeShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalFlattenShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalGemmShapeInferenceTest : public HistoricalShapeInferenceTest {};
+
+TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"conv", R"(g (float[3,4,5,6,7] X, float[5,4,2,4,3] W) => (float[3,5,4,1,3] Y) {
+        Y = Conv <pads=[0,1,1,0,0,1], dilations=[1,2,2], strides=[1,1,2]> (X, W) })"},
+      {"1d_simple", R"(g (float[30,4,5] X, float[50,4,2] W) => (float[30,50,4] Y) {
+        Y = Conv <dilations=[1]> (X, W) })"},
+      {"dilations", R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,4,2] Y) {
+        Y = Conv <dilations=[1,2,3]> (X, W) })"},
+      {"strides", R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,3,2] Y) {
+        Y = Conv <strides=[1,2,3]> (X, W) })"},
+      {"pads", R"(g (float[30,4,7,6,4] X, float[50,4,3,3,3] W) => (float[30,50,6,6,6] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })"},
+      {"auto_pad", R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,7,6,4] Y) {
+        Y = Conv <auto_pad="SAME_UPPER"> (X, W) })"},
+      {"auto_pads", R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,4,3,4] Y) {
+        Y = Conv <auto_pad="SAME_UPPER", strides=[2,2,1]> (X, W) })"},
+      {"auto_pad_dilation",
+       R"(g (float[30,4,65,64,63] X, float[50,4,4,3,2] W) => (float[30,50,65,64,63] Y) {
+        Y = Conv <auto_pad="SAME_UPPER", dilations=[2,3,4]> (X, W) })"},
+      {"group", R"(g (float[30,4,8,8,8] X, float[4,1,8,8,8] W) => (float[30,4,1,1,1] Y) {
+        Y = Conv <group=4> (X, W) })"},
+      {"only_one_pos", R"(g (float[30,4,5] X, float[50,4,5] W) => (float[30,50,1] Y) {
+        Y = Conv <strides=[2]> (X, W) })"},
+      {"partial_missing_shape",
+       R"(g (float[30,4,?,6,4] X, float[50,4,3,3,3] W) => (float[30,50,?,6,6] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })"},
+      {"partial_missing_weight_shape",
+       R"(g (float[30,4,7,6,4] X, float[50,4,?,3,3] W) => (float[] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })",
+       false},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"conv_transpose", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,33,33] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"pads", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,30,30] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
+      {"output_shape", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,36,36] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], output_shape=[36,36]> (X, W) })"},
+      {"kernel_shape", R"(g (float[25,48,16,16] X, float[48,32,?,?] W) => (float[25,32,30,30] Y) {
+        Y = ConvTranspose <kernel_shape=[3,3], strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
+      {"dilations", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,34,34] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], dilations=[3,3]> (X, W) })"},
+      {"group", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,30,30] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2> (X, W) })"},
+      {"group_and_output_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,36,36] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2, output_shape=[36,36]> (X, W) })"},
+      {"auto_pads", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,32,32] Y) {
+        Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[2,2]> (X, W) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsInvalidInputs) {
+  CheckErrors({
+      {"weight_spatial_rank_mismatch",
+       R"(g (float[1,1,4,4] X, float[1,1,3,3,3] W) => (float[] Y) { Y = ConvTranspose (X, W) })"},
+      {"negative_dilations", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <dilations=[-1,1]> (X, W) })"},
+      {"zero_strides", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[0,1]> (X, W) })"},
+      {"negative_pads", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <pads=[-1,0,0,0]> (X, W) })"},
+      {"negative_output_padding", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2], output_padding=[-1,0]> (X, W) })"},
+      {"negative_output_shape", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <output_shape=[-1,6]> (X, W) })"},
+      {"zero_kernel_shape", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <kernel_shape=[0,3]> (X, W) })"},
+      {"rank0_weight", R"(g (float[25,48,16,16] X, float W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank1_weight", R"(g (float[25,48,16,16] X, float[48] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank2_weight", R"(g (float[25,48,16,16] X, float[48,32] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank2_input", R"(g (float[25,48] X, float[48,32,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"undersized_weight",
+       R"(g (float[1,1,5] X, float[1,3] W) => (float[] Y) { Y = ConvTranspose (X, W) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsPadsWithAutoPad) {
+  // Schema version 1 does not enforce this restriction.
+  if (GetParam() < 11) {
+    GTEST_SKIP();
+  }
+  CheckErrors({
+      {"pads_and_auto_pad", R"(g (float[1,1,2,2] X, float[1,1,3,3] W, float[1] B) => (float[] Y) {
+        Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[1,1], pads=[0,1,1,0]> (X, W, B) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsOutputChannelsOverflow) {
+  ModelProto model;
+  ASSERT_NO_FATAL_FAILURE(Parse(R"(g (float[1,2,1] X, float[2,1,1] W) => (float[] Y) {
+    Y = ConvTranspose <group=2> (X, W) })",
+                                model));
+  model.mutable_graph()
+      ->mutable_input(1)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(1)
+      ->set_dim_value(std::numeric_limits<int64_t>::max());
+  model.mutable_graph()->mutable_output(0)->clear_type();
+  EXPECT_THROW(Infer(model), InferenceError);
+}
+
+TEST_P(HistoricalFlattenShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"flatten", R"(g (float[2,3,4,5] X) => (float[6,20] Y) { Y = Flatten <axis=2> (X) })"},
+      {"default_axis", R"(g (float[2,3,4,5] X) => (float[2,60] Y) { Y = Flatten (X) })"},
+      {"zero_axis", R"(g (float[2,3,4,5] X) => (float[1,120] Y) { Y = Flatten <axis=0> (X) })"},
+      {"unknown_dim", R"(g (float[2,N,4,5] X) => (float[?,20] Y) { Y = Flatten <axis=2> (X) })"},
+  });
+}
+
+TEST_P(HistoricalGemmShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"gemm",
+       R"(g (float[7,5] X, float[5,11] W, float[7,11] B) => (float[7,11] Y) { Y = Gemm (X, W, B) })"},
+      {"transA", R"(g (float[5,7] X, float[5,11] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transA=1> (X, W, B) })"},
+      {"transB", R"(g (float[7,5] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transB=1> (X, W, B) })"},
+      {"transA_and_transB", R"(g (float[5,7] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transA=1, transB=1> (X, W, B) })"},
+  });
+}
+
+TEST_P(HistoricalGemmShapeInferenceTest, InfersShapeWithoutBias) {
+  // The bias input becomes optional in Gemm-11.
+  if (GetParam() < 11) {
+    GTEST_SKIP();
+  }
+  CheckShapes({
+      {"no_bias", R"(g (float[13,7] X, float[7,17] W) => (float[13,17] Y) { Y = Gemm (X, W) })"},
+  });
+}
+
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Conv")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvTransposeShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("ConvTranspose")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalFlattenShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Flatten")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalGemmShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Gemm")));
+
+} // namespace
 
 TEST(onnx_shape_inference, InferShapesImpl_SplitAllowsOmittedTrailingOutputs) {
   for (const int64_t num_outputs : {2, 3}) {

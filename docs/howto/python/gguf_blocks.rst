@@ -244,6 +244,7 @@ GPTQModel's direct lower-precision GPU reconstruction is not the oracle.
 ``read_gguf_block_parameters()`` returns effective FLOAT32 scales (``d``
 times subgroup scale) and subtractive minima (``dmin`` times subgroup
 minimum), in logical subgroup order. Symmetric formats return no minima.
+It validates metadata and the requested block only, without scanning other blocks.
 Export retains the original binary16 fields and packed scale/minimum bytes.
 
 Validation and partial blocks
@@ -260,7 +261,8 @@ guessing a shape, trimming values or changing stored bytes.
 NaN and infinity in any binary16 parameter are rejected, even when a zero
 subgroup multiplier would hide them. Finite negative values, signed zero
 and binary16 subnormals are accepted. Every reconstructed value must be
-finite. Every consumer revalidates mutable payload metadata and bytes.
+finite. Consumers revalidate mutable payload metadata and the bytes they read;
+import and export validate every block.
 Checked products reject dimension/byte-size overflow before allocation.
 ``max_bytes`` (default 1 GiB) separately bounds both packed bytes and
 potential FLOAT32 reconstruction bytes, including on import and export;

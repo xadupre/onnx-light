@@ -140,6 +140,30 @@ TEST(GgufTensorPayload, Q4KAndQ5KHighScaleAndCodeBits) {
   }
 }
 
+TEST(GgufTensorPayload, TensorProtoUsesLittleEndianFloatBytes) {
+  std::string bytes(34, '\0');
+  PutHalf(bytes, 0, 0x3800);
+  bytes[2] = 2;
+  bytes[3] = static_cast<char>(-2);
+  bytes[4] = 1;
+  auto payload = ImportGgufTensorPayload(bytes, {32}, "Q8_0");
+  payload.set_name("weights");
+  payload.set_doc_string("Native Q8_0");
+  const auto proto = DequantizeTensorProto(payload);
+  EXPECT_EQ(proto.name(), "weights");
+  EXPECT_EQ(proto.doc_string(), "Native Q8_0");
+  EXPECT_EQ(proto.data_type(), TensorProto::FLOAT);
+  ASSERT_EQ(proto.dims().size(), size_t{1});
+  EXPECT_EQ(proto.dims()[0], 32);
+  std::string expected(128, '\0');
+  expected[2] = static_cast<char>(0x80);
+  expected[3] = static_cast<char>(0x3f);
+  expected[6] = static_cast<char>(0x80);
+  expected[7] = static_cast<char>(0xbf);
+  expected[11] = static_cast<char>(0x3f);
+  EXPECT_EQ(proto.raw_data(), expected);
+}
+
 TEST(GgufTensorPayload, Q6KPlanesAndSignedSubgroupScales) {
   std::string bytes(210, '\0');
   for (size_t i = 0; i < 128; ++i)
@@ -242,7 +266,8 @@ TEST(GgufTensorPayload, NonfiniteParametersAreRejectedEvenBehindZeroScales) {
         payload.set_raw_data(bytes);
         EXPECT_THROW(ExportGgufTensorPayload(payload), std::invalid_argument);
         EXPECT_THROW(DequantizeGgufTensorPayload(payload), std::invalid_argument);
-        EXPECT_THROW(ReadGgufBlockParameters(payload, 0), std::invalid_argument);
+        EXPECT_NO_THROW(ReadGgufBlockParameters(payload, 0));
+        EXPECT_THROW(ReadGgufBlockParameters(payload, 1), std::invalid_argument);
       }
     }
 

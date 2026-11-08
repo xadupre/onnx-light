@@ -15,8 +15,6 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
-constexpr size_t kDefaultMaxBytes = size_t{1} << 30;
-
 StructTypeCatalogue Catalogue(const ModelProto *model) {
   StructTypeCatalogue catalogue;
   if (model)
@@ -98,21 +96,21 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
       nb::arg("data"), nb::arg("shape"), nb::arg("subtype"),
       nb::arg("layout_version") = std::string(kGgufLayoutVersion),
       nb::arg("upstream_revision") = std::string(kGgufUpstreamRevision),
-      nb::arg("max_bytes") = kDefaultMaxBytes);
+      nb::arg("max_bytes") = kGgufDefaultMaxBytes);
   runtime.def(
       "export_gguf_tensor_payload",
       [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
         const auto data = ExportGgufTensorPayload(payload, max_bytes, Catalogue(model));
         return nb::bytes(data.data(), data.size());
       },
-      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("payload"), nb::arg("max_bytes") = kGgufDefaultMaxBytes,
       nb::arg("model").none() = nullptr);
   runtime.def(
       "dequantize_gguf_tensor_payload",
       [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
         return DequantizeGgufTensorPayload(payload, max_bytes, Catalogue(model));
       },
-      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("payload"), nb::arg("max_bytes") = kGgufDefaultMaxBytes,
       nb::arg("model").none() = nullptr);
   runtime.def(
       "read_gguf_block_parameters",
@@ -120,7 +118,7 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
          const ModelProto *model) {
         return ReadGgufBlockParameters(payload, block_index, max_bytes, Catalogue(model));
       },
-      nb::arg("payload"), nb::arg("block_index"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("payload"), nb::arg("block_index"), nb::arg("max_bytes") = kGgufDefaultMaxBytes,
       nb::arg("model").none() = nullptr);
   nb::class_<PythonGptqModelGgufWeights>(runtime, "GptqModelGgufWeights")
       .def(
@@ -145,12 +143,12 @@ void AddOnnxPyGguf(nb::module_ &runtime) {
         nb::object owner;
         return ImportGptqModelGgufWeights(ToNative(weights, max_bytes, owner), max_bytes);
       },
-      nb::arg("weights"), nb::arg("max_bytes") = kDefaultMaxBytes);
+      nb::arg("weights"), nb::arg("max_bytes") = kGgufDefaultMaxBytes);
   runtime.def(
       "export_gptqmodel_gguf_weights",
       [](const EncodedValueProto &payload, size_t max_bytes, const ModelProto *model) {
         return FromNative(ExportGptqModelGgufWeights(payload, max_bytes, Catalogue(model)));
       },
-      nb::arg("payload"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("payload"), nb::arg("max_bytes") = kGgufDefaultMaxBytes,
       nb::arg("model").none() = nullptr);
 }

@@ -14,6 +14,7 @@ inline constexpr char kGgufUpstreamRevision[] = "c1976918cfe3703fbcf6d1ce2440a82
 inline constexpr char kGgufReferenceRevision[] = "0c1e57098bba43ac29e6e3b677cdceebdd22334f";
 
 inline constexpr char kGgufTypePrefix[] = "onnx_light.gguf.ggml-blocks-v1/";
+inline constexpr size_t kGgufDefaultMaxBytes = size_t{1} << 30;
 
 struct GgufBlockLayout {
   std::string subtype;
@@ -57,26 +58,26 @@ const GgufBlockLayout &GgufLayout(std::string_view subtype);
 EncodedValueProto ImportGgufTensorPayload(std::string_view data, Shape shape, std::string subtype,
                                           std::string layout_version = kGgufLayoutVersion,
                                           std::string upstream_revision = kGgufUpstreamRevision,
-                                          size_t max_bytes = size_t{1} << 30);
+                                          size_t max_bytes = kGgufDefaultMaxBytes);
 /** Validates and returns unchanged payload bytes, with the same size limits as import. */
 std::string ExportGgufTensorPayload(const EncodedValueProto &payload,
-                                    size_t max_bytes = size_t{1} << 30,
+                                    size_t max_bytes = kGgufDefaultMaxBytes,
                                     const StructTypeCatalogue &catalogue = {});
 /** Validates and reconstructs an owning FLOAT32 tensor in logical row-major order. */
 Tensor DequantizeGgufTensorPayload(const EncodedValueProto &payload,
-                                   size_t max_bytes = size_t{1} << 30,
+                                   size_t max_bytes = kGgufDefaultMaxBytes,
                                    const StructTypeCatalogue &catalogue = {},
                                    RawBufferAllocator *allocator = nullptr);
-/** Validates the entire payload and returns one block's effective numerical parameters. */
+/** Validates payload metadata and the requested block, returning its effective parameters. */
 GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, size_t block_index,
-                                            size_t max_bytes = size_t{1} << 30,
+                                            size_t max_bytes = kGgufDefaultMaxBytes,
                                             const StructTypeCatalogue &catalogue = {});
 
 /** Imports a block-aligned UINT8 checkpoint matrix as a native EncodedValueProto.
  * Preserves qweight bytes and is decoded by the standard DequantizeTensor APIs.
  */
 EncodedValueProto ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
-                                             size_t max_bytes = size_t{1} << 30);
+                                             size_t max_bytes = kGgufDefaultMaxBytes);
 /** Validates checkpoint shapes, layout metadata and both byte budgets without accessing storage.
  * Allows bindings to reject invalid metadata before making a contiguous copy.
  */
@@ -84,10 +85,10 @@ void ValidateGptqModelGgufMetadata(const Shape &packed_shape, size_t packed_byte
                                    const Shape &shape, std::string_view subtype,
                                    std::string_view layout_version = kGgufLayoutVersion,
                                    std::string_view upstream_revision = kGgufUpstreamRevision,
-                                   size_t max_bytes = size_t{1} << 30);
+                                   size_t max_bytes = kGgufDefaultMaxBytes);
 /** Validates and exports unchanged blocks as an owning UINT8 checkpoint matrix. */
 GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload,
-                                                size_t max_bytes = size_t{1} << 30,
+                                                size_t max_bytes = kGgufDefaultMaxBytes,
                                                 const StructTypeCatalogue &catalogue = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

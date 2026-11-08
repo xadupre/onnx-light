@@ -344,7 +344,6 @@ GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, si
                                             const StructTypeCatalogue &catalogue) {
   const auto validated = Validate(payload, max_bytes, catalogue);
   EXT_ENFORCE_INVALID(block_index < validated.blocks, "GGUF block index out of range.");
-  ValidateBlocks(Bytes(payload), validated);
   const auto parameters = Parameters(reinterpret_cast<const uint8_t *>(payload.raw_data().data()) +
                                          block_index * validated.layout.type_size,
                                      validated.format);

@@ -1954,7 +1954,7 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
-    const auto tensor = DequantizeGgufTensorPayload(encoded, size_t{1} << 30, catalogue);
+    const auto tensor = DequantizeGgufTensorPayload(encoded, kGgufDefaultMaxBytes, catalogue);
     std::vector<float> values(tensor.size_bytes() / sizeof(float));
     std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
     return {tensor.shape, TensorProto::FLOAT, std::move(values)};
@@ -3050,7 +3050,7 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
   if ((output_dtype == TensorProto::UNDEFINED || output_dtype == TensorProto::FLOAT) &&
       value.has_struct_type() &&
       catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix))
-    return DequantizeGgufTensorPayload(value, size_t{1} << 30, catalogue, allocator);
+    return DequantizeGgufTensorPayload(value, kGgufDefaultMaxBytes, catalogue, allocator);
   const auto decoded = DecodeValues(value, catalogue);
   const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
   const size_t width = FloatBytes(type);
@@ -3092,7 +3092,7 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
                                   const StructTypeCatalogue &catalogue) {
   if (value.has_struct_type() &&
       catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
-    const auto tensor = DequantizeGgufTensorPayload(value, size_t{1} << 30, catalogue);
+    const auto tensor = DequantizeGgufTensorPayload(value, kGgufDefaultMaxBytes, catalogue);
     TensorProto result;
     if (value.has_name())
       result.set_name(value.name().value());
@@ -3101,7 +3101,14 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
     result.set_data_type(TensorProto::FLOAT);
     for (const auto dim : tensor.shape)
       result.add_dims(dim);
-    result.set_raw_data(tensor.bytes(), tensor.size_bytes());
+    if constexpr (std::endian::native == std::endian::little) {
+      result.set_raw_data(tensor.bytes(), tensor.size_bytes());
+    } else {
+      ByteWriter payload(*result.mutable_raw_data(), tensor.size_bytes());
+      for (size_t i = 0; i < tensor.size_bytes(); i += sizeof(float))
+        PutFloat(payload, Load<float>(tensor.bytes() + i), TensorProto::FLOAT);
+      payload.Finish();
+    }
     return result;
   }
   const auto decoded = DecodeValues(value, catalogue);

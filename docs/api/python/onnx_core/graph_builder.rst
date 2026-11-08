@@ -68,7 +68,7 @@ in repeated tensor and graph attributes.
 See :ref:`l-example-plot-pattern-replay` for a save/load/replay example.
 
 Builder-local operator registries
---------------------------------
+---------------------------------
 
 ``OperatorRegistry`` supplies local schemas and shape-inference callbacks without
 changing process-wide registrations::

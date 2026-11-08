@@ -1,4 +1,5 @@
 import unittest
+from io import StringIO
 
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -19,6 +20,44 @@ _run_onnxruntime = _runtime_coverage._run_onnxruntime
 _format_discrepancy = _runtime_coverage._format_discrepancy
 ort_max_ir_version = _runtime_coverage.ort_max_ir_version
 ort_max_opset_version = _runtime_coverage.ort_max_opset_version
+
+
+class TestRuntimeCoverageRendering(ExtTestCase):
+    def test_test_names_are_literals(self):
+        report = RuntimeCoverageReport(
+            statuses=[
+                TestCaseStatus(
+                    name=name,
+                    op_type="NegativeLogLikelihoodLoss",
+                    domain="",
+                    tag="",
+                    onnxruntime_cpu=None,
+                    onnxruntime_ok=False,
+                    onnxruntime_error=None,
+                    static_shape=True,
+                    static_shape_error=None,
+                    dynamic_shapes=True,
+                    dynamic_shapes_error=None,
+                )
+                for name in (
+                    "test_cc_negative_log_likelihood_loss_mean_ignore_",
+                    "test_cc_negative_log_likelihood_loss_mean_ignore_0",
+                )
+            ]
+        )
+        text = render_rst_table_for_domain(report, domain="")
+        for status in report.statuses:
+            self.assertIn(f"      - ``{status.name}``", text)
+
+        docutils_core = import_or_skip("docutils.core")
+        warnings = StringIO()
+        document = docutils_core.publish_doctree(
+            ".. role:: green\n\n.. role:: red\n\n" + text,
+            settings_overrides={"warning_stream": warnings, "halt_level": 2},
+        )
+        self.assertEqual(warnings.getvalue(), "")
+        for status in report.statuses:
+            self.assertIn(status.name, document.astext())
 
 
 class TestRuntimeCoverage(ExtTestCase):

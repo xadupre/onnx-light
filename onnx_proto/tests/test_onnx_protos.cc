@@ -1393,6 +1393,51 @@ TEST(onnx_stream, StringWriteStreamStrings) {
   EXPECT_EQ(read3, "reference string");
 }
 
+TEST(onnx_stream, StringWriteStreamEmptyWrites) {
+  utils::StringWriteStream stream;
+  stream.write_raw_bytes(nullptr, 0);
+  EXPECT_EQ(stream.size(), 0);
+  stream.write_string(utils::RefString(nullptr, 0));
+  stream.write_raw_bytes(nullptr, 0);
+  stream.write_string("after empty");
+
+  utils::StringStream reader(stream.data(), stream.size());
+  EXPECT_EQ(reader.next_string(), "");
+  EXPECT_EQ(reader.next_string(), "after empty");
+}
+
+TEST(onnx_stream, BorrowedStringWriteStreamEmptyWrites) {
+  utils::BorrowedStringWriteStream empty(nullptr, 0);
+  empty.write_raw_bytes(nullptr, 0);
+  EXPECT_EQ(empty.size(), 0);
+
+  std::vector<uint8_t> data(64, 0);
+  utils::BorrowedStringWriteStream stream(data.data(), data.size());
+  stream.write_string(utils::RefString(nullptr, 0));
+  stream.write_raw_bytes(nullptr, 0);
+  stream.write_string("after empty");
+
+  utils::StringStream reader(stream.data(), stream.size());
+  EXPECT_EQ(reader.next_string(), "");
+  EXPECT_EQ(reader.next_string(), "after empty");
+}
+
+TEST(onnx_proto, CopyModelWithDefaultOpsetDomain) {
+  ModelProto model;
+  model.add_opset_import()->set_version(18);
+  ModelProto copied;
+  copied.CopyFrom(model);
+  ASSERT_EQ(copied.opset_import_size(), 1);
+  EXPECT_EQ(copied.opset_import(0).domain(), "");
+  EXPECT_EQ(copied.opset_import(0).version(), 18);
+
+  ModelProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(copied.SerializeAsString()));
+  ASSERT_EQ(loaded.opset_import_size(), 1);
+  EXPECT_EQ(loaded.opset_import(0).domain(), "");
+  EXPECT_EQ(loaded.opset_import(0).version(), 18);
+}
+
 TEST(onnx_stream, BorrowedWriteStream) {
   std::vector<uint8_t> data = {'h', 'e', 'l', 'l', 'o'};
   utils::BorrowedWriteStream stream(data.data(), data.size());

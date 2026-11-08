@@ -62,6 +62,11 @@ jobs:
     timeout-minutes: 32
     permissions:
       contents: read
+    env:
+      # These are native executables, so leak detection stays enabled.
+      # libstdc++ is not instrumented for container-overflow checks.
+      ASAN_OPTIONS: detect_leaks=1:symbolize=1:detect_stack_use_after_return=true:strict_init_order=true:detect_odr_violation=1:detect_container_overflow=0:check_initialization_order=true:fast_unwind_on_malloc=1:alloc_dealloc_mismatch=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:abort_on_error=1
 
     steps:
       - uses: actions/checkout@v7
@@ -72,7 +77,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Clang and OpenSSL (Linux)
-        run: sudo apt-get install -y clang ninja-build libssl-dev
+        run: sudo apt-get install -y clang llvm ninja-build libssl-dev
 
       - name: Install Python build deps
         # nanobind is pulled in via CMakeLists.txt only when
@@ -86,13 +91,18 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
 
-      - name: Configure fuzz build (Clang + libFuzzer + AddressSanitizer)
+      - name: Configure fuzz build (Clang + libFuzzer + ASan + UBSan)
         env:
           CC: clang
           CXX: clang++
+          # Instrument the libraries as well as the fuzz harnesses.
+          CFLAGS: -fno-omit-frame-pointer -fsanitize=address,undefined
+          CXXFLAGS: -fno-omit-frame-pointer -fsanitize=address,undefined
+          LDFLAGS: -fsanitize=address,undefined
         run: |
           cmake -S . -B build-fuzz -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DONNX_LIGHT_FUZZER_SANITIZERS=address,undefined \
             -DONNX_LIGHT_BUILD_FUZZERS=ON \
             -DONNX_LIGHT_BUILD_PYTHON=OFF \
             -DONNX_LIGHT_INSTALL=OFF
@@ -114,6 +124,7 @@ jobs:
       - name: Generate seed corpora
         run: |
           mkdir -p /tmp/fuzz_seeds
+          mkdir -p crashes/{checker,model_loader,parser,shape_inference,optim_shape_inference,version_converter,compose,external_data,ort_flatbuffers}
           ./build-fuzz/make_seed_corpus \
             /tmp/fuzz_seeds/version_converter \
             /tmp/fuzz_seeds/parser \
@@ -121,28 +132,47 @@ jobs:
             /tmp/fuzz_seeds/external_data
 
       - name: Run fuzz_checker (smoke)
-        run: ./build-fuzz/fuzz_checker -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_checker -runs=2000 -timeout=25 -artifact_prefix=crashes/checker/
 
       - name: Run fuzz_model_loader (smoke)
-        run: ./build-fuzz/fuzz_model_loader -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_model_loader -runs=2000 -timeout=25 -artifact_prefix=crashes/model_loader/
 
       - name: Run fuzz_parser (smoke)
-        run: ./build-fuzz/fuzz_parser /tmp/fuzz_seeds/parser -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_parser /tmp/fuzz_seeds/parser -runs=2000 -timeout=25 -artifact_prefix=crashes/parser/
 
       - name: Run fuzz_shape_inference (smoke)
-        run: ./build-fuzz/fuzz_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25 -artifact_prefix=crashes/shape_inference/
 
       - name: Run fuzz_optim_shape_inference (smoke)
-        run: ./build-fuzz/fuzz_optim_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_optim_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25 -artifact_prefix=crashes/optim_shape_inference/
 
       - name: Run fuzz_version_converter (smoke)
-        run: ./build-fuzz/fuzz_version_converter /tmp/fuzz_seeds/version_converter -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_version_converter /tmp/fuzz_seeds/version_converter -runs=2000 -timeout=25 -artifact_prefix=crashes/version_converter/
 
       - name: Run fuzz_compose (smoke)
-        run: ./build-fuzz/fuzz_compose -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_compose -runs=2000 -timeout=25 -artifact_prefix=crashes/compose/
 
       - name: Run fuzz_external_data (smoke)
-        run: ./build-fuzz/fuzz_external_data /tmp/fuzz_seeds/external_data -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_external_data /tmp/fuzz_seeds/external_data -runs=2000 -timeout=25 -artifact_prefix=crashes/external_data/
 
       - name: Run fuzz_ort_flatbuffers (smoke)
-        run: ./build-fuzz/fuzz_ort_flatbuffers -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_ort_flatbuffers -runs=2000 -timeout=25 -artifact_prefix=crashes/ort_flatbuffers/
+
+      - name: Print backtraces for crashes
+        if: failure()
+        run: |
+          for crash in crashes/*/*; do
+            [ -f "$crash" ] || continue
+            harness="./build-fuzz/fuzz_$(basename "$(dirname "$crash")")"
+            echo "::group::Backtrace for $crash ($harness)"
+            "$harness" -timeout=25 "$crash" || true
+            echo "::endgroup::"
+          done
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-crashes
+          path: crashes/
+          if-no-files-found: ignore

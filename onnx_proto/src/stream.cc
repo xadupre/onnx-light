@@ -926,6 +926,8 @@ void BinaryWriteStream::WaitForDelayedBlock() {}
 // or resize the buffer.
 
 void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
+  if (n_bytes == 0)
+    return;
   if (write_pos_ + n_bytes > static_cast<offset_t>(buffer_.size())) {
     // Geometric growth to amortize repeated small writes.
     size_t required = static_cast<size_t>(write_pos_ + n_bytes);
@@ -1012,6 +1014,8 @@ void StringWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 void BorrowedStringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
   EXT_ENFORCE(write_pos_ + n_bytes <= capacity_, "Buffer too small: write at offset=", write_pos_,
               " size=", n_bytes, " exceeds capacity=", capacity_);
+  if (n_bytes == 0)
+    return;
   std::memcpy(data_ + write_pos_, ptr, static_cast<size_t>(n_bytes));
   write_pos_ += n_bytes;
 }

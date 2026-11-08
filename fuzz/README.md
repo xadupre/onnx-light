@@ -100,6 +100,15 @@ catch regressions in the harnesses themselves and obvious shallow
 bugs; long-running coverage-guided campaigns are still expected to be
 driven by OSS-Fuzz.
 
+Following [onnx/onnx#8751](https://github.com/onnx/onnx/pull/8751), the CI
+build instruments both the libraries and harnesses with AddressSanitizer and
+UndefinedBehaviorSanitizer, using `RelWithDebInfo` and frame pointers for native
+stack traces. Sanitizer reports abort the process so libFuzzer records the input.
+Crashing inputs are saved under `crashes/<harness>/`, replayed on failure with
+a 25-second timeout to print native backtraces, and uploaded as `fuzz-crashes`.
+These are standalone C++ executables, so no Python `faulthandler` or sanitizer
+`LD_PRELOAD` is needed, and leak detection stays enabled.
+
 ## Design notes
 
 ### Why `catch (...) { return 0; }`?

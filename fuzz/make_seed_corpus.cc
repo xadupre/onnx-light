@@ -30,6 +30,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 using ONNX_LIGHT_NAMESPACE::GraphProto;
@@ -189,10 +190,48 @@ int main(int argc, char *argv[]) {
     write_file(vc_dir, "add_13_node_input_undefined.onnx",
                make_model_unchecked("Add", 13, {"X", "W"}, {"Y"}, {"X"}, {"Y"}));
 
-    // parser seeds: textual ONNX models exercising the productions
-    // used by ``OnnxParser::Parse<ModelProto>`` directly. Written as
-    // raw text — the parser harness consumes them with the same UTF-8
-    // interpretation it applies to fuzzer-mutated inputs.
+    // Parser seeds include raw literals and malformed numeric conversions.
+    write_file(parser_dir, "string_escapes.txt", "quote: \" backslash: \\ newline: \n");
+    write_file(parser_dir, "string_nul.txt", std::string("before\0after", 12));
+    write_file(parser_dir, "string_unicode.txt", "\xc3\xa9\xe4\xb8\xad\xf0\x9f\x99\x82");
+    const std::vector<std::pair<std::string, std::string>> literals = {
+        {"int64_min", "-9223372036854775808"},
+        {"int64_max", "9223372036854775807"},
+        {"int64_overflow", "9223372036854775808"},
+        {"int64_underflow", "-9223372036854775809"},
+        {"uint64_max", "18446744073709551615"},
+        {"uint64_overflow", "18446744073709551616"},
+        {"negative", "-1"},
+        {"negative_zero", "-0"},
+        {"long_integer", std::string(128, '9')},
+        {"float_overflow", "1e1000"},
+        {"negative_float_overflow", "-1e1000"},
+        {"float_subnormal", "1.401298464324817e-45"},
+        {"double_subnormal", "4.9406564584124654e-324"},
+        {"double_rounding", "1.0000000596046447753906250000000001"},
+        {"long_exponent", "1e99999999999999999"},
+        {"float_underflow", "-1e-1000"},
+        {"incomplete_exponent", "1e+"},
+        {"infinity", "inf"},
+        {"nan", "nan"}};
+    for (const auto &[name, literal] : literals) {
+      write_file(parser_dir, "literal_" + name + ".txt", literal);
+      const std::vector<std::pair<std::string, std::string>> contexts = {
+          {"attribute", "value_int=" + literal},
+          {"float_attribute", "value_float: float=" + literal},
+          {"dimension", "value=int64[" + literal + "] {0}"},
+          {"int64_tensor", "value=int64[1] {" + literal + "}"},
+          {"uint64_tensor", "value=uint64[1] {" + literal + "}"},
+          {"double_tensor", "value=double[1] {" + literal + "}"}};
+      for (const auto &[context, body] : contexts) {
+        const std::string node = "Y = Constant<" + body + ">()";
+        const std::string graph = "numeric () => () { " + node + " }\n";
+        write_file(parser_dir, "node_" + context + "_" + name + ".txt", node);
+        write_file(parser_dir, "graph_" + context + "_" + name + ".txt", graph);
+        write_file(parser_dir, "model_" + context + "_" + name + ".txt",
+                   "<ir_version: 8, opset_import: [\"\": 18]>\n" + graph);
+      }
+    }
     write_file(parser_dir, "basic_matmul_softmax.txt",
                "<\n"
                "  ir_version: 7,\n"

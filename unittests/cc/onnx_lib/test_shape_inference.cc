@@ -17,6 +17,342 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
+namespace {
+
+// Includes the early schemas excluded by upstream's all_versions_for (> 5).
+std::vector<int> HistoricalShapeVersions(const std::string &op, int early_opset = 0) {
+  RegisterAllOnnxOperatorSchemas();
+  std::vector<int> versions;
+  if (early_opset != 0) {
+    versions.push_back(early_opset);
+  }
+  for (const auto &schema : OpSchemaRegistry::get_all_schemas_with_history()) {
+    if (schema.domain().empty() && schema.Name() == op && schema.SinceVersion() > 5) {
+      versions.push_back(schema.SinceVersion());
+    }
+  }
+  std::sort(versions.begin(), versions.end());
+  versions.erase(std::unique(versions.begin(), versions.end()), versions.end());
+  return versions;
+}
+
+// -1 denotes an unknown dimension; -2 denotes the symbolic dimension "a".
+void SetHistoricalShape(TypeProto &type, int dtype, const std::vector<int64_t> &dims) {
+  auto *tensor = type.mutable_tensor_type();
+  tensor->set_elem_type(dtype);
+  auto *shape = tensor->mutable_shape();
+  for (const int64_t value : dims) {
+    auto *dim = shape->add_dim();
+    if (value == -2) {
+      dim->set_dim_param("a");
+    } else if (value >= 0) {
+      dim->set_dim_value(value);
+    }
+  }
+}
+
+ModelProto HistoricalShapeModel(int version, int dtype, const std::vector<int64_t> &dims) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(version);
+  auto *graph = model.mutable_graph();
+  graph->set_name("historical_shape");
+  auto *input = graph->add_input();
+  input->set_name("X");
+  SetHistoricalShape(*input->mutable_type(), dtype, dims);
+  graph->add_output()->set_name("Y");
+  return model;
+}
+
+void CheckHistoricalShape(ModelProto &model, const std::vector<int64_t> &expected,
+                          int dtype = TensorProto::FLOAT) {
+  ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                               ShapeInferenceOptions(true, 1, false)));
+  for (const auto &output : model.graph().output()) {
+    const auto &tensor = output.type().tensor_type();
+    EXPECT_EQ(tensor.elem_type(),
+              output.name() == "Indices" ? static_cast<int>(TensorProto::INT64) : dtype);
+    ASSERT_TRUE(tensor.has_shape());
+    ASSERT_EQ(tensor.shape().dim_size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+      SCOPED_TRACE(i);
+      const auto &dim = tensor.shape().dim(static_cast<int>(i));
+      if (expected[i] == -2) {
+        EXPECT_EQ(dim.dim_param(), "a");
+        EXPECT_FALSE(dim.has_dim_value());
+      } else if (expected[i] == -1) {
+        EXPECT_FALSE(dim.has_dim_value());
+        EXPECT_NE(dim.dim_param(), "a");
+      } else {
+        EXPECT_TRUE(dim.has_dim_value());
+        EXPECT_EQ(dim.dim_value(), expected[i]);
+      }
+    }
+  }
+  ASSERT_NO_THROW(checker::check_model(model, true));
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, HistoricalSliceAttributes) {
+  RegisterAllOnnxOperatorSchemas();
+  auto model = HistoricalShapeModel(9, TensorProto::FLOAT, {3, 6, 2});
+  auto &node = *model.mutable_graph()->add_node();
+  node = MakeNode("Slice", {"X"}, {"Y"});
+  AddAttribute<std::vector<int64_t>>(node, "starts", {1, 0});
+  AddAttribute<std::vector<int64_t>>(node, "ends", {2, 2});
+  AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
+  CheckHistoricalShape(model, {1, 6, 2});
+}
+
+TEST(onnx_shape_inference, HistoricalSliceInputs) {
+  struct SliceCase {
+    const char *name;
+    std::vector<int64_t> shape, starts, ends, axes, steps, expected;
+    int dtype = TensorProto::FLOAT;
+    int index_dtype = TensorProto::INT64;
+    bool constant_bounds = true;
+    bool raw_starts = false;
+    bool dynamic_optional_inputs = false;
+  };
+  const std::vector<SliceCase> cases{
+      {"unknown_bounds",
+       {3, 2, -2},
+       {0},
+       {0},
+       {},
+       {},
+       {-1, -1, -1},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       false},
+      {"raw_starts",
+       {3, 2},
+       {1, 0},
+       {2, 2},
+       {},
+       {},
+       {1, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       true},
+      {"dim_params", {1, -2, 1}, {0, 0, 0}, {1, 1, 1}, {}, {}, {1, -1, 1}},
+      {"steps_without_axes",
+       {5, 6, 7},
+       {1, 0, 0},
+       {2, 6, 6},
+       {},
+       {1, 4, 3},
+       {1, 2, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       false,
+       true},
+      {"axes_without_steps",
+       {3, 6, 2},
+       {1, 0},
+       {2, 2},
+       {0, 2},
+       {},
+       {1, 6, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       false,
+       true},
+      {"unsorted_axes", {3, 2}, {1, 0}, {2, 2}, {1, 0}, {}, {2, 1}},
+      {"giant_end", {3, 2}, {1, 0}, {200, 22000}, {0, 1}, {}, {2, 2}},
+      {"giant_step", {3, 2}, {1, 0}, {200, 200}, {0, 1}, {1, 200}, {2, 1}},
+      {"negative_end", {3, 2}, {1, 0}, {200, -1}, {0, 1}, {}, {2, 1}},
+      {"negative_start", {3, 2}, {1, -2}, {200, 3}, {0, 1}, {}, {2, 2}},
+      {"negative_step", {3, 4}, {1, 4}, {200, 0}, {0, 1}, {1, -1}, {2, 3}},
+      {"variable_copy", {-2, 2}, {1}, {200}, {1}, {}, {-2, 1}},
+      {"int32_indices",
+       {3, 2},
+       {1, 0},
+       {200, 22000},
+       {0, 1},
+       {},
+       {2, 2},
+       TensorProto::DOUBLE,
+       TensorProto::INT32},
+      {"empty_positive_step", {0, 6}, {0}, {0}, {0}, {1}, {0, 6}},
+      {"empty_negative_step", {0, 6}, {1}, {0}, {0}, {-1}, {0, 6}},
+  };
+  const auto versions = HistoricalShapeVersions("Slice");
+  ASSERT_FALSE(versions.empty());
+  for (const int version : versions) {
+    if (version < 10) {
+      continue;
+    }
+    SCOPED_TRACE(version);
+    for (const auto &test : cases) {
+      SCOPED_TRACE(test.name);
+      auto model = HistoricalShapeModel(version, test.dtype, test.shape);
+      auto *graph = model.mutable_graph();
+      auto node = MakeNode("Slice", {"X"}, {"Y"});
+      const auto add_indices = [&](const char *name, const std::vector<int64_t> &values,
+                                   bool constant, bool raw = false) {
+        node.add_input(name);
+        auto *input = graph->add_input();
+        if (values.empty() && !constant) {
+          // Mirrors upstream's rank-unknown optional inputs produced by Reshape.
+          const std::string seed = std::string("SEED_") + name;
+          const std::string shape_name = std::string("UNKNOWN_SHAPE_") + name;
+          input->set_name(seed);
+          SetHistoricalShape(*input->mutable_type(), test.index_dtype, {});
+          auto *shape_input = graph->add_input();
+          shape_input->set_name(shape_name);
+          SetHistoricalShape(*shape_input->mutable_type(), TensorProto::INT64, {-1});
+          *graph->add_node() = MakeNode("Reshape", {seed, shape_name}, {name});
+          return;
+        }
+        input->set_name(name);
+        SetHistoricalShape(*input->mutable_type(), test.index_dtype,
+                           {static_cast<int64_t>(values.size())});
+        if (!constant) {
+          return;
+        }
+        auto *tensor = graph->add_initializer();
+        tensor->set_name(name);
+        tensor->set_data_type(test.index_dtype);
+        tensor->add_dims(static_cast<int64_t>(values.size()));
+        for (const int64_t value : values) {
+          if (raw) {
+            // ONNX raw tensor storage is little-endian, regardless of the host.
+            for (int byte = 0; byte < 8; ++byte) {
+              tensor->mutable_raw_data()->push_back(
+                  static_cast<uint8_t>((static_cast<uint64_t>(value) >> (8 * byte)) & 0xff));
+            }
+          } else if (test.index_dtype == TensorProto::INT32) {
+            tensor->add_int32_data(static_cast<int32_t>(value));
+          } else {
+            tensor->add_int64_data(value);
+          }
+        }
+      };
+      add_indices("starts", test.starts, test.constant_bounds, test.raw_starts);
+      add_indices("ends", test.ends, test.constant_bounds);
+      if (!test.axes.empty()) {
+        add_indices("axes", test.axes, true);
+      } else if (test.dynamic_optional_inputs) {
+        add_indices("axes", {}, false);
+      } else if (!test.steps.empty()) {
+        node.add_input("");
+      }
+      if (!test.steps.empty()) {
+        add_indices("steps", test.steps, true);
+      } else if (test.dynamic_optional_inputs) {
+        add_indices("steps", {}, false);
+      }
+      *graph->add_node() = std::move(node);
+      auto expected = test.expected;
+      if (version == 10 && std::string(test.name) == "dim_params") {
+        expected[1] = -2;
+      }
+      CheckHistoricalShape(model, expected, test.dtype);
+    }
+  }
+}
+
+TEST(onnx_shape_inference, HistoricalPooling) {
+  struct PoolCase {
+    const char *name;
+    std::vector<int64_t> shape, kernel, expected, pads = {}, strides = {}, dilations = {};
+    const char *auto_pad = "";
+    int ceil_mode = -1;
+    bool indices = false;
+  };
+  const std::vector<PoolCase> common{
+      {"default", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}},
+      {"3d", {5, 3, 4, 4, 4}, {2, 2, 2}, {5, 3, 3, 3, 3}},
+      {"padding", {5, 3, 4, 4}, {2, 2}, {5, 3, 6, 6}, {1, 1, 2, 2}},
+      {"padding_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}, {1, 1, 2, 2}, {2, 2}},
+      {"dilations", {5, 3, 4, 4}, {2, 2}, {5, 3, 2, 2}, {}, {}, {2, 2}},
+      {"same_upper_stride_dilation",
+       {5, 3, 4, 4},
+       {2, 2},
+       {5, 3, 2, 2},
+       {},
+       {2, 2},
+       {2, 3},
+       "SAME_UPPER"},
+  };
+  const std::vector<PoolCase> max_only{
+      {"indices", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}, {}, {}, {}, "", -1, true},
+      {"floor", {32, 288, 35, 35}, {2, 2}, {32, 288, 17, 17}, {}, {2, 2}, {}, "", 0},
+      {"ceil", {32, 288, 35, 35}, {2, 2}, {32, 288, 18, 18}, {}, {2, 2}, {}, "", 1},
+      {"same_upper_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 2, 2}, {}, {2, 2}, {}, "SAME_UPPER"},
+      {"same_upper_stride_one", {5, 3, 4, 4}, {2, 2}, {5, 3, 4, 4}, {}, {1, 1}, {}, "SAME_UPPER"},
+      {"same_lower_stride", {5, 3, 9, 9}, {2, 2}, {5, 3, 5, 5}, {}, {2, 2}, {}, "SAME_LOWER"},
+      {"same_lower_stride_dilation",
+       {5, 3, 9, 9},
+       {2, 2},
+       {5, 3, 5, 5},
+       {},
+       {2, 2},
+       {2, 3},
+       "SAME_LOWER"},
+      {"same_lower_big_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 1, 1}, {}, {4, 4}, {}, "SAME_LOWER"},
+  };
+  const PoolCase ceil_drop{"ceil_drop", {1, 1, 4, 4}, {3, 3}, {1, 1, 2, 2}, {}, {2, 2}, {}, "", 1};
+  const PoolCase average_auto{"auto_pads", {30, 4, 7, 6, 4}, {4, 3, 2}, {30, 4, 4, 3, 4},
+                              {},          {2, 2, 1},        {},        "SAME_UPPER"};
+  for (const auto *op : {"MaxPool", "AveragePool", "LpPool"}) {
+    SCOPED_TRACE(op);
+    const std::string name(op);
+    auto cases = common;
+    if (name == "MaxPool") {
+      cases.insert(cases.end(), max_only.begin(), max_only.end());
+    }
+    if (name != "LpPool") {
+      cases.push_back(ceil_drop);
+    }
+    if (name == "AveragePool") {
+      cases.push_back(average_auto);
+    }
+    const int early_opset = name == "MaxPool" ? 7 : name == "AveragePool" ? 6 : 10;
+    const int dilation_opset = name == "MaxPool" ? 10 : name == "AveragePool" ? 19 : 18;
+    const auto versions = HistoricalShapeVersions(op, early_opset);
+    ASSERT_FALSE(versions.empty());
+    for (const int version : versions) {
+      SCOPED_TRACE(version);
+      for (const auto &test : cases) {
+        if ((!test.dilations.empty() && version < dilation_opset) ||
+            (test.ceil_mode >= 0 && version < 10) || (test.indices && version < 8)) {
+          continue;
+        }
+        SCOPED_TRACE(test.name);
+        auto model = HistoricalShapeModel(version, TensorProto::FLOAT, test.shape);
+        auto *graph = model.mutable_graph();
+        auto &node = *graph->add_node();
+        node = MakeNode(op, {"X"}, {"Y"});
+        AddAttribute<std::vector<int64_t>>(node, "kernel_shape", test.kernel);
+        for (const auto &[attr, values] :
+             std::vector<std::pair<const char *, std::vector<int64_t>>>{
+                 {"pads", test.pads}, {"strides", test.strides}, {"dilations", test.dilations}}) {
+          if (!values.empty()) {
+            AddAttribute<std::vector<int64_t>>(node, attr, values);
+          }
+        }
+        if (test.auto_pad[0] != '\0') {
+          AddAttribute<std::string>(node, "auto_pad", test.auto_pad);
+        }
+        if (test.ceil_mode >= 0) {
+          AddAttribute<int64_t>(node, "ceil_mode", test.ceil_mode);
+        }
+        if (test.indices) {
+          node.add_output("Indices");
+          graph->add_output()->set_name("Indices");
+        }
+        CheckHistoricalShape(model, test.expected);
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   RegisterAllOnnxOperatorSchemas();
   const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");

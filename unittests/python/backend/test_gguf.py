@@ -6,6 +6,9 @@
 import base64
 import json
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 import unittest
 import zlib
 
@@ -232,6 +235,55 @@ class TestGguf(ExtTestCase):
             gguf.export_gptqmodel_gguf_weights(
                 gguf.import_gguf_tensor_payload(qweight.tobytes(), [32], "Q4_0")
             )
+
+    def test_checkpoint_subclass_metadata_is_not_trusted(self):
+        class MisleadingArray(numpy.ndarray):
+            @property
+            def shape(self):
+                return (2, 18)
+
+            @property
+            def nbytes(self):
+                return 36
+
+            @property
+            def dtype(self):
+                return numpy.dtype("uint8")
+
+        storage = numpy.zeros((1, 18), dtype=numpy.uint8)
+        subclass = storage.view(MisleadingArray)
+        valid = gguf.GptqModelGgufWeights(subclass, [1, 32], "Q4_0")
+        self.assertEqual(gguf.import_gptqmodel_gguf_weights(valid).raw_data, storage.tobytes())
+        invalid = gguf.GptqModelGgufWeights(subclass, [2, 32], "Q4_0")
+        with self.assertRaisesRegex(ValueError, "byte count mismatch"):
+            gguf.import_gptqmodel_gguf_weights(invalid)
+        wrong_dtype = numpy.zeros((1, 18), dtype=numpy.int32).view(MisleadingArray)
+        invalid.qweight = wrong_dtype
+        with self.assertRaisesRegex(ValueError, "UINT8 dtype"):
+            gguf.import_gptqmodel_gguf_weights(invalid)
+
+    @unittest.skipUnless(sys.platform == "linux", "Requires Linux address-space accounting.")
+    def test_decoded_budget_is_checked_before_contiguous_copy(self):
+        code = textwrap.dedent("""
+            import os
+            import resource
+            import unittest
+            import numpy
+            from onnx_light.onnx_core import gguf
+
+            qweight = numpy.broadcast_to(numpy.zeros(1, dtype=numpy.uint8), (8192, 36864))
+            checkpoint = gguf.GptqModelGgufWeights(qweight, [8192, 65536], "Q4_K")
+            with open("/proc/self/statm") as stream:
+                virtual_size = int(stream.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            resource.setrlimit(resource.RLIMIT_AS, (virtual_size + 16 * 2**20, hard))
+            with unittest.TestCase().assertRaisesRegex(ValueError, "decoded byte limit"):
+                gguf.import_gptqmodel_gguf_weights(checkpoint)
+            """)
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

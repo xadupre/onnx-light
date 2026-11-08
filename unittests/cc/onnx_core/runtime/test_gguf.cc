@@ -242,6 +242,16 @@ TEST(GgufTensorPayload, NonfiniteParametersAreRejectedEvenBehindZeroScales) {
     PutHalf(bytes, layout.subtype == "Q6_K" ? 208 : 0, 0x0001);
     EXPECT_NO_THROW(ImportGgufTensorPayload(bytes, {2, static_cast<int64_t>(layout.block_size)},
                                             layout.subtype));
+    bytes.assign(layout.type_size * 2, '\xff');
+    for (size_t block = 0; block < 2; ++block) {
+      PutHalf(bytes, block * layout.type_size + (layout.subtype == "Q6_K" ? 208 : 0), 0x7bff);
+      if (layout.subtype == "Q4_K" || layout.subtype == "Q5_K")
+        PutHalf(bytes, block * layout.type_size + 2, 0x7bff);
+    }
+    const auto largest = ImportGgufTensorPayload(
+        bytes, {2, static_cast<int64_t>(layout.block_size)}, layout.subtype);
+    EXPECT_EQ(ExportGgufTensorPayload(largest), bytes);
+    EXPECT_NO_THROW(Values(largest));
   }
 }
 

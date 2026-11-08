@@ -28,7 +28,7 @@ size_t CheckedMultiply(size_t a, size_t b) {
   return a * b;
 }
 
-ValidatedLayout ValidateLayout(std::string_view data, const Shape &shape, std::string_view subtype,
+ValidatedLayout ValidateLayout(size_t data_size, const Shape &shape, std::string_view subtype,
                                std::string_view version, std::string_view revision,
                                size_t max_bytes) {
   EXT_ENFORCE_INVALID(version == kGgufLayoutVersion, "Unsupported GGUF layout version.");
@@ -52,7 +52,7 @@ ValidatedLayout ValidateLayout(std::string_view data, const Shape &shape, std::s
                       "GGUF packed or decoded byte limit exceeded.");
   EXT_ENFORCE_INVALID(count <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
                       "GGUF tensor element count exceeds int64.");
-  EXT_ENFORCE_INVALID(data.size() == packed_bytes, "GGUF payload byte count mismatch.");
+  EXT_ENFORCE_INVALID(data_size == packed_bytes, "GGUF payload byte count mismatch.");
   return {layout, blocks, decoded_bytes, shape};
 }
 
@@ -126,15 +126,15 @@ void DecodeBlock(const uint8_t *p, const GgufBlockLayout &layout, float *output)
       value = product - parameters.minima[i / 32];
     }
     EXT_ENFORCE_INVALID(std::isfinite(value), "GGUF reconstructs a nonfinite FLOAT32 value.");
-    if (output != nullptr)
-      output[i] = value;
+    output[i] = value;
   }
 }
 
 void ValidateBlocks(std::string_view data, const ValidatedLayout &validated) {
   const auto *bytes = reinterpret_cast<const uint8_t *>(data.data());
+  // Finite binary16 fields and bounded integer scales/codes cannot overflow FLOAT32.
   for (size_t i = 0; i < validated.blocks; ++i)
-    DecodeBlock(bytes + i * validated.layout.type_size, validated.layout, nullptr);
+    Parameters(bytes + i * validated.layout.type_size, validated.layout.subtype);
 }
 
 StructTypeProto Schema(const ValidatedLayout &validated) {
@@ -187,7 +187,7 @@ ValidatedLayout Validate(const EncodedValueProto &payload, size_t max_bytes,
     shape.push_back(dim.dim_value());
   }
   const auto validated =
-      ValidateLayout(Bytes(payload), shape, name.substr(std::strlen(kGgufTypePrefix)),
+      ValidateLayout(payload.raw_data().size(), shape, name.substr(std::strlen(kGgufTypePrefix)),
                      kGgufLayoutVersion, kGgufUpstreamRevision, max_bytes);
   auto actual = *storage.root;
   actual.clear_type_id();
@@ -204,6 +204,17 @@ Shape PackedMatrixShape(const Shape &shape, const GgufBlockLayout &layout) {
   EXT_ENFORCE_INVALID(row_bytes <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
                       "GPTQModel GGUF packed row exceeds int64.");
   return {shape[0], static_cast<int64_t>(row_bytes)};
+}
+
+ValidatedLayout ValidateCheckpointMetadata(const Shape &packed_shape, size_t packed_bytes,
+                                           const Shape &shape, std::string_view subtype,
+                                           std::string_view version, std::string_view revision,
+                                           size_t max_bytes) {
+  EXT_ENFORCE_INVALID(shape.size() == 2, "GPTQModel GGUF requires a rank-two logical shape.");
+  const auto validated = ValidateLayout(packed_bytes, shape, subtype, version, revision, max_bytes);
+  EXT_ENFORCE_INVALID(packed_shape == PackedMatrixShape(shape, validated.layout),
+                      "GPTQModel GGUF packed matrix shape mismatch; row padding is unsupported.");
+  return validated;
 }
 
 } // namespace
@@ -228,7 +239,7 @@ EncodedValueProto ImportGgufTensorPayload(std::string_view data, Shape shape, st
                                           std::string layout_version, std::string upstream_revision,
                                           size_t max_bytes) {
   const auto validated =
-      ValidateLayout(data, shape, subtype, layout_version, upstream_revision, max_bytes);
+      ValidateLayout(data.size(), shape, subtype, layout_version, upstream_revision, max_bytes);
   ValidateBlocks(data, validated);
   return MakeValue(data, validated);
 }
@@ -272,27 +283,27 @@ GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, si
 
 EncodedValueProto ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
                                              size_t max_bytes) {
-  EXT_ENFORCE_INVALID(weights.shape.size() == 2,
-                      "GPTQModel GGUF requires a rank-two logical shape.");
   EXT_ENFORCE_INVALID(weights.qweight.data_type == TensorProto::UINT8,
                       "GPTQModel GGUF qweight must be UINT8.");
-  EXT_ENFORCE_INVALID(weights.qweight.shape.size() == 2,
-                      "GPTQModel GGUF qweight must be rank two.");
-  for (const auto dim : weights.qweight.shape)
-    EXT_ENFORCE_INVALID(dim > 0, "GPTQModel GGUF qweight requires positive dimensions.");
+  const auto validated = ValidateCheckpointMetadata(
+      weights.qweight.shape, weights.qweight.size_bytes(), weights.shape, weights.subtype,
+      weights.layout_version, weights.upstream_revision, max_bytes);
   EXT_ENFORCE_INVALID(weights.qweight.bytes() != nullptr,
                       "GPTQModel GGUF qweight has no byte storage.");
   const std::string_view data(reinterpret_cast<const char *>(weights.qweight.bytes()),
                               weights.qweight.size_bytes());
-  const auto validated =
-      ValidateLayout(data, weights.shape, weights.subtype, weights.layout_version,
-                     weights.upstream_revision, max_bytes);
-  EXT_ENFORCE_INVALID(weights.qweight.shape == PackedMatrixShape(weights.shape, validated.layout),
-                      "GPTQModel GGUF packed matrix shape mismatch; row padding is unsupported.");
   ValidateBlocks(data, validated);
   auto value = MakeValue(data, validated);
   value.set_name(weights.qweight.name);
   return value;
+}
+
+void ValidateGptqModelGgufMetadata(const Shape &packed_shape, size_t packed_bytes,
+                                   const Shape &shape, std::string_view subtype,
+                                   std::string_view layout_version,
+                                   std::string_view upstream_revision, size_t max_bytes) {
+  ValidateCheckpointMetadata(packed_shape, packed_bytes, shape, subtype, layout_version,
+                             upstream_revision, max_bytes);
 }
 
 GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload, size_t max_bytes,
@@ -300,8 +311,9 @@ GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload
   const auto validated = Validate(payload, max_bytes, catalogue);
   const auto packed_shape = PackedMatrixShape(validated.shape, validated.layout);
   ValidateBlocks(Bytes(payload), validated);
-  Tensor qweight("qweight", TensorProto::UINT8, packed_shape,
-                 std::vector<uint8_t>(payload.raw_data().size()));
+  Tensor qweight =
+      MakeOutputTensor(TensorProto::UINT8, packed_shape, payload.raw_data().size(), nullptr);
+  qweight.name = "qweight";
   std::memcpy(qweight.mutable_bytes(), payload.raw_data().data(), payload.raw_data().size());
   return {std::move(qweight), validated.shape, validated.layout.subtype, kGgufLayoutVersion,
           kGgufUpstreamRevision};

@@ -76,6 +76,14 @@ GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, si
  */
 EncodedValueProto ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
                                              size_t max_bytes = size_t{1} << 30);
+/** Validates checkpoint shapes, layout metadata and both byte budgets without accessing storage.
+ * Allows bindings to reject invalid metadata before making a contiguous copy.
+ */
+void ValidateGptqModelGgufMetadata(const Shape &packed_shape, size_t packed_bytes,
+                                   const Shape &shape, std::string_view subtype,
+                                   std::string_view layout_version = kGgufLayoutVersion,
+                                   std::string_view upstream_revision = kGgufUpstreamRevision,
+                                   size_t max_bytes = size_t{1} << 30);
 /** Validates and exports unchanged blocks as an owning UINT8 checkpoint matrix. */
 GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload,
                                                 size_t max_bytes = size_t{1} << 30,

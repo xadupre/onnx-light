@@ -37,13 +37,15 @@ GptqModelGgufWeights ToNative(const PythonGptqModelGgufWeights &weights, size_t 
   nb::module_ numpy = nb::module_::import_("numpy");
   EXT_ENFORCE_INVALID(nb::isinstance(weights.qweight, numpy.attr("ndarray")),
                       "GGUF: qweight must be a NumPy array.");
-  const nb::object dtype = weights.qweight.attr("dtype");
+  const nb::object normalized = numpy.attr("asarray")(weights.qweight);
+  const nb::object dtype = normalized.attr("dtype");
   EXT_ENFORCE_INVALID(nb::cast<std::string>(nb::str(dtype)) == "uint8",
                       "GGUF: qweight must have UINT8 dtype.");
-  const size_t nbytes = nb::cast<size_t>(weights.qweight.attr("nbytes"));
-  EXT_ENFORCE_INVALID(max_bytes > 0 && nbytes <= max_bytes, "GGUF: qweight exceeds max_bytes.");
-  const auto packed_shape = nb::cast<std::vector<int64_t>>(weights.qweight.attr("shape"));
-  owner = numpy.attr("ascontiguousarray")(weights.qweight);
+  const size_t nbytes = nb::cast<size_t>(normalized.attr("nbytes"));
+  const auto packed_shape = nb::cast<std::vector<int64_t>>(normalized.attr("shape"));
+  ValidateGptqModelGgufMetadata(Shape(packed_shape), nbytes, Shape(weights.shape), weights.subtype,
+                                weights.layout_version, weights.upstream_revision, max_bytes);
+  owner = numpy.attr("ascontiguousarray")(normalized);
   const auto array = nb::cast<nb::ndarray<nb::numpy, const uint8_t, nb::c_contig>>(owner);
   GptqModelGgufWeights result;
   result.qweight =

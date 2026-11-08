@@ -36,7 +36,7 @@ from onnx_light.onnx_core.tensor_statistics import compute_tensor_statistics
 # than its element count. All four quantized tensors encode the same float
 # tensor, allowing their distributions and payload sizes to be compared.
 # INT8, INT4, and INT3 use signed affine codes with explicit scales. INT3 uses
-# the portable Q3_K profile with 3-bit codes in [-4, 3]. NF4 uses its built-in
+# a generic affine layout with 3-bit codes in [-4, 3]. NF4 uses its built-in
 # normal-float codebook with scale 1. No calibration is performed.
 
 floats = numpy.linspace(-1, 1, 128, dtype=numpy.float32).reshape(8, 16)
@@ -46,11 +46,13 @@ tensors = {"float32": floats, "int32": integers}
 for name, profile, scale in (
     ("INT8", QuantizationFormat.INT8, 1.0 / 127),
     ("INT4", QuantizationFormat.INT4, 1.0 / 7),
-    ("INT3", QuantizationFormat.Q3_K, 1.0 / 3),
+    ("INT3", QuantizationFormat.INT4, 1.0 / 3),
     ("NF4", QuantizationFormat.NF4, 1.0),
 ):
     plan = make_quantization_plan(profile, floats.size, block_size=32)
     run = plan.run(0)
+    if name == "INT3":
+        run.layout.bits = 3
     blocks = run.blocks
     for block in blocks:
         block.scale = scale

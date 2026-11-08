@@ -13,6 +13,16 @@ The converters implement **portable onnx-light representations** of the
 The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their profile
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
+The single ``QuantizationFormat`` catalogue also includes ``Q4_0``, ``Q8_0``,
+``Q2_K``, ``Q3_K``, ``Q4_K``, ``Q5_K``, ``Q6_K``, ``IQ4_NL``, ``IQ1_S``,
+``TQ1_0`` and ``TQ2_0``. These use
+:ref:`native GGUF blocks <l-gguf-blocks>` in ``EncodedValueProto``,
+not portable packing. Their former generic profiles and old v1/v2 encoded
+values are no longer accepted. Native imports preserve checkpoint bytes;
+they do not implement floating-point-to-GGML quantization or a standalone
+``.gguf`` model loader. ``quantization_formats()`` lists all formats;
+``is_gguf_quantization_format()`` identifies those requiring native block imports.
+Codecs without a GGUF counterpart retain their existing representations.
 
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native
@@ -1161,26 +1171,6 @@ Replace them with your own parameters for real weights.
                run.blocks = blocks
                plan.set_run(0, run)
 
-   * - ``q2_k``, ``q3_k``, ``q4_k``, ``q5_k``, ``q6_k``
-     - 2--6-bit affine blocks; supplied effective sub-block scales and offsets.
-     - .. code-block:: python
-
-           for profile in (
-               QuantizationFormat.Q2_K,
-               QuantizationFormat.Q3_K,
-               QuantizationFormat.Q4_K,
-               QuantizationFormat.Q5_K,
-               QuantizationFormat.Q6_K,
-           ):
-               plan = make_quantization_plan(profile, n, block_size=4)
-               run = plan.run(0)
-               blocks = run.blocks
-               for block in blocks:
-                   block.scale = 1 / (2 ** (run.layout.bits - 1) - 1)
-                   block.offset = 0.125
-               run.blocks = blocks
-               plan.set_run(0, run)
-
    * - ``hqq``, ``exl2``, ``exl3``
      - Signed 4-bit affine defaults; override bits, counts and parameters
        for mixed precision, or select a codebook block explicitly.
@@ -1202,16 +1192,15 @@ Replace them with your own parameters for real weights.
                    runs.append(run)
                plan.runs = runs
 
-   * - ``nf4``, ``iq4_nl``
-     - Fixed scalar codebooks and supplied scales. NF4 uses the full-precision
-       normal-float table; IQ4_NL uses its 16 signed integer levels.
+   * - ``nf4``
+     - Fixed normal-float scalar codebook and supplied scale.
      - .. code-block:: python
 
-           for profile in (QuantizationFormat.NF4, QuantizationFormat.IQ4_NL):
+           for profile in (QuantizationFormat.NF4,):
                plan = make_quantization_plan(profile, n)
                run = plan.run(0)
                block = run.block(0)
-               block.scale = 1 if profile == QuantizationFormat.NF4 else 1 / 127
+               block.scale = 1
                run.set_block(0, block)
                plan.set_run(0, run)
 
@@ -1226,14 +1215,13 @@ Replace them with your own parameters for real weights.
            run.set_block(0, block)
            plan.set_run(0, run)
 
-   * - ``ternary``, ``tq1_0``, ``bitnet``, ``paretoq``, ``tequila``
+   * - ``ternary``, ``bitnet``, ``paretoq``, ``tequila``
      - Indices into ``[-1, 0, 1]``; five base-3 digits per byte.
        This represents ternary weights, not the associated training procedures.
      - .. code-block:: python
 
            for profile in (
                QuantizationFormat.TERNARY,
-               QuantizationFormat.TQ1_0,
                QuantizationFormat.BITNET,
                QuantizationFormat.PARETOQ,
                QuantizationFormat.TEQUILA,
@@ -1244,17 +1232,6 @@ Replace them with your own parameters for real weights.
                block.scale = 0.75
                run.set_block(0, block)
                plan.set_run(0, run)
-
-   * - ``tq2_0``
-     - The same ternary table with two bits per index.
-     - .. code-block:: python
-
-           plan = make_quantization_plan(QuantizationFormat.TQ2_0, n)
-           run = plan.run(0)
-           block = run.block(0)
-           block.scale = 0.75
-           run.set_block(0, block)
-           plan.set_run(0, run)
 
    * - ``stq1_0``
      - Supplied vector codebook; defaults to 32 four-component entries and 5-bit
@@ -1269,20 +1246,8 @@ Replace them with your own parameters for real weights.
            run.set_block(0, block)
            plan.set_run(0, run)
 
-   * - ``iq1_s``
-     - Supplied vector codebooks; defaults to 256 eight-component entries.
-     - .. code-block:: python
-
-           plan = make_quantization_plan(QuantizationFormat.IQ1_S, n)
-           run = plan.run(0)
-           block = run.block(0)
-           table = numpy.linspace(-1, 1, 2048).reshape(1, 256, 8)
-           block.codebook = table.ravel().tolist()
-           run.set_block(0, block)
-           plan.set_run(0, run)
-
    * - ``quip_sharp``
-     - The same default table dimensions as ``iq1_s``, plus an explicit
+     - A supplied 256-entry, eight-component codebook, plus an explicit
        transform pair. This example uses a two-component orthogonal rotation.
      - .. code-block:: python
 

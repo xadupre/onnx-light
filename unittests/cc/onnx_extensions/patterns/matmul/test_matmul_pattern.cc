@@ -463,6 +463,28 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(MatMulAddPattern, RejectsHigherRankTransposedGemmFusion) {
+  core::builder::GraphBuilder builder("gemm29", SchemaLookup(), {{"", 29}});
+  builder.MakeInput("A", core::symbolic::TensorType::kFloat, Shape({2, 5, 3}));
+  builder.MakeInput("B", core::symbolic::TensorType::kFloat, Shape({5, 7}));
+  builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({7}));
+  builder.MakeNode("Gemm", {"A", "B"}, {"gemm"}, "", "", IntAttr("transA", 1));
+  builder.MakeNode("Add", {"gemm", "bias"}, {"out"});
+  builder.MakeOutput("out");
+  ASSERT_EQ(builder.GetShape("gemm").Shape(), Shape({2, 3, 7}));
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::MatMulAddPattern>(2, true));
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  EXPECT_TRUE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Gemm");
+  EXPECT_EQ(builder.Nodes()[0].input(0), "A");
+  EXPECT_EQ(GetAttributeOr<int64_t>(builder.Nodes()[0], "transA", 0), 1);
+  EXPECT_EQ(builder.Nodes()[1].op_type(), "Add");
+}
+
 TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
   core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));

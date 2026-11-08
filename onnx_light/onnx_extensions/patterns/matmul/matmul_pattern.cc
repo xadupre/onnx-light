@@ -571,6 +571,10 @@ core::builder::MatchResult MatMulAddPattern::Match(core::builder::GraphGraph &gr
   if (left_shape.Rank() < 2 || right_shape.Rank() != 2) {
     return NoMatch(candidate, "the matrix input ranks are not supported");
   }
+  if (left_shape.Rank() > 2 && IsDefaultOp(candidate, "Gemm") &&
+      GetAttributeOr<int64_t>(candidate, "transA", 0) != 0) {
+    return NoMatch(candidate, "a higher-rank Gemm with transA cannot be flattened safely");
+  }
   if (!allow_reshape_ && left_shape.Rank() != 2) {
     return NoMatch(candidate, "the left matrix requires a disabled reshape");
   }

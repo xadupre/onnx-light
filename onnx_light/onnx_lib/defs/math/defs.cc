@@ -1152,11 +1152,16 @@ static bool BuildContextDependentFunctionBodyGemm(const FunctionBodyBuildContext
   }
   const auto *transA = ctx.getAttribute("transA");
   const auto *transB = ctx.getAttribute("transB");
+  if (transA != nullptr && transA->i() != 0 && !a_type->tensor_type().has_shape()) {
+    return false;
+  }
   FunctionBuilder builder(functionProto);
+  const bool promote_half = elem_type == TensorProto::FLOAT16 || elem_type == TensorProto::BFLOAT16;
+  if (promote_half) {
+    builder.Add("AFloat = Cast <to = 1> (A)");
+    builder.Add("BFloat = Cast <to = 1> (B)");
+  }
   if (transA != nullptr && transA->i() != 0) {
-    if (!a_type->tensor_type().has_shape()) {
-      return false;
-    }
     const int rank = a_type->tensor_type().shape().dim_size();
     std::vector<int64_t> perm;
     perm.reserve(rank);
@@ -1166,28 +1171,45 @@ static bool BuildContextDependentFunctionBodyGemm(const FunctionBodyBuildContext
     if (rank > 1) {
       std::swap(perm[rank - 2], perm[rank - 1]);
     }
-    builder.Add("AT = Transpose (A)", "perm", perm);
+    builder.Add(promote_half ? "AT = Transpose (AFloat)" : "AT = Transpose (A)", "perm", perm);
   } else {
-    builder.Add("AT = Identity (A)");
+    builder.Add(promote_half ? "AT = Identity (AFloat)" : "AT = Identity (A)");
   }
-  builder.Add(transB != nullptr && transB->i() != 0 ? "BT = Transpose <perm = [1, 0]> (B)"
-                                                    : "BT = Identity (B)");
+  if (transB != nullptr && transB->i() != 0) {
+    builder.Add(promote_half ? "BT = Transpose <perm = [1, 0]> (BFloat)"
+                             : "BT = Transpose <perm = [1, 0]> (B)");
+  } else {
+    builder.Add(promote_half ? "BT = Identity (BFloat)" : "BT = Identity (B)");
+  }
   builder.Add(R"ONNX(
     Product = MatMul (AT, BT)
     Alpha = Constant <value_float: float = @alpha> ()
-    AlphaCast = CastLike (Alpha, A)
+  )ONNX");
+  builder.Add(promote_half ? "AlphaCast = CastLike (Alpha, AFloat)"
+                           : "AlphaCast = CastLike (Alpha, A)");
+  builder.Add(R"ONNX(
     ScaledProduct = Mul (Product, AlphaCast)
   )ONNX");
   const auto *beta = ctx.getAttribute("beta");
   if (ctx.hasInput(2) && (beta == nullptr || beta->f() != 0.0f)) {
+    if (promote_half) {
+      builder.Add("CFloat = Cast <to = 1> (C)");
+    }
     builder.Add(R"ONNX(
       Beta = Constant <value_float: float = @beta> ()
-      BetaCast = CastLike (Beta, A)
-      ScaledBias = Mul (C, BetaCast)
-      Y = Add (ScaledProduct, ScaledBias)
     )ONNX");
+    builder.Add(promote_half ? "BetaCast = CastLike (Beta, AFloat)"
+                             : "BetaCast = CastLike (Beta, A)");
+    builder.Add(promote_half ? "ScaledBias = Mul (CFloat, BetaCast)"
+                             : "ScaledBias = Mul (C, BetaCast)");
+    builder.Add(promote_half ? "YFloat = Add (ScaledProduct, ScaledBias)"
+                             : "Y = Add (ScaledProduct, ScaledBias)");
   } else {
-    builder.Add("Y = Identity (ScaledProduct)");
+    builder.Add(promote_half ? "YFloat = Identity (ScaledProduct)"
+                             : "Y = Identity (ScaledProduct)");
+  }
+  if (promote_half) {
+    builder.Add("Y = CastLike (YFloat, A)");
   }
   schema.BuildFunction(functionProto);
   return true;

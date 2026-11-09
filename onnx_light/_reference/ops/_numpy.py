@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import ml_dtypes
 import numpy as np
 
 
@@ -20,6 +21,11 @@ def _gemm(node, a, b, c=None, *, opset=13):
         raise ValueError(f"Gemm input A has invalid rank {a.ndim} for opset {opset}.")
     if b.ndim != 2:
         raise ValueError(f"Gemm input B must have rank 2, got {b.ndim}.")
+    output_dtype = a.dtype
+    promote_half = output_dtype in (np.float16, ml_dtypes.bfloat16)
+    if promote_half:
+        a = a.astype(np.float32)
+        b = b.astype(np.float32)
     if attrs.get("transA") and attrs["transA"].i and a.ndim > 1:
         a = a.swapaxes(-1, -2)
     if attrs.get("transB") and attrs["transB"].i:
@@ -33,8 +39,10 @@ def _gemm(node, a, b, c=None, *, opset=13):
         ):
             raise ValueError(f"Gemm input C shape {c.shape} cannot broadcast to {y.shape}.")
         if beta != 0:
+            if promote_half:
+                c = c.astype(np.float32)
             y += beta * c
-    return y.astype(a.dtype, copy=False)
+    return y.astype(output_dtype, copy=False)
 
 
 def _matmul(node, a, b):

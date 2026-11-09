@@ -186,6 +186,25 @@ class TestMixedReferenceEvaluator(ExtTestCase):
                         evaluator.run(None, {"a": a[0], "b": b})[0], a[0] @ b
                     )
 
+    def test_gemm_half_precision_scales_before_rounding(self):
+        for dtype in (np.float16, ml_dtypes.bfloat16):
+            for beta in (0.0, 2.0):
+                with self.subTest(dtype=dtype, beta=beta):
+                    a = np.array([60000 if beta == 0 else -60000], dtype=dtype)
+                    b = np.array([[2 if beta == 0 else 1]], dtype=dtype)
+                    c = np.array([60000], dtype=dtype)
+                    alpha = 0.5 if beta == 0 else 1.0
+                    model = _model("Gemm", ["a", "b", "c"], ["y"], alpha=alpha, beta=beta)
+                    model.opset_import[0].version = 29
+                    expected = np.array([60000], dtype=dtype)
+                    with np.errstate(over="raise", invalid="raise"):
+                        direct = _gemm(model.graph.node[0], a, b, c, opset=29)
+                        np.testing.assert_array_equal(direct, expected)
+                        for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+                            actual = evaluator_class(model).run(None, {"a": a, "b": b, "c": c})[0]
+                            self.assertEqual(actual.dtype, dtype)
+                            np.testing.assert_array_equal(actual, expected)
+
     def test_gemm_does_not_copy_an_already_correct_output_dtype(self):
         class NoCopyArray(np.ndarray):
             """Rejects a redundant dtype-preserving copy."""

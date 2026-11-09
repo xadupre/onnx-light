@@ -125,15 +125,24 @@ std::unordered_set<std::string>
 FunctionOnlyCallers(const GraphBuilder &builder,
                     const utils::RepeatedProtoField<FunctionProto> &functions,
                     const utils::RepeatedProtoField<FunctionProto> &added_functions =
-                        utils::RepeatedProtoField<FunctionProto>()) {
-  std::set<FunctionKey> identities;
-  for (const auto *definitions : {&functions, &added_functions})
-    for (const auto &function : *definitions)
-      identities.insert(Identity(function));
+                        utils::RepeatedProtoField<FunctionProto>(),
+                    const std::set<std::string> &replaced_functions = {}) {
+  std::map<FunctionKey, const FunctionProto *> definitions;
+  for (const auto &function : functions)
+    definitions.emplace(Identity(function), &function);
+  for (const auto &function : added_functions) {
+    const auto identity =
+        ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload());
+    if (replaced_functions.count(identity) != 0)
+      definitions[Identity(function)] = &function;
+    else
+      // An existing body remains authoritative without an explicit replacement.
+      definitions.emplace(Identity(function), &function);
+  }
   std::unordered_set<std::string> result;
   const auto visit = [&](const auto &self, const NodeProto &node,
                          const utils::RepeatedProtoField<OperatorSetIdProto> &imports) -> void {
-    if (identities.count(Identity(node)) != 0 &&
+    if (definitions.count(Identity(node)) != 0 &&
         !IsRegisteredFunctionIdentity(builder, node.domain(), node.op_type(), node.overload(),
                                       &imports))
       result.insert(
@@ -147,19 +156,18 @@ FunctionOnlyCallers(const GraphBuilder &builder,
           self(self, child, imports);
     }
   };
-  for (const auto *definitions : {&functions, &added_functions})
-    for (const auto &function : *definitions) {
-      for (const auto &node : function.node())
-        visit(visit, node, function.opset_import());
-      for (const auto &attribute : function.attribute_proto()) {
-        if (attribute.has_g())
-          for (const auto &node : attribute.g().node())
-            visit(visit, node, function.opset_import());
-        for (const auto &graph : attribute.graphs())
-          for (const auto &node : graph.node())
-            visit(visit, node, function.opset_import());
-      }
+  for (const auto &[key, function] : definitions) {
+    for (const auto &node : function->node())
+      visit(visit, node, function->opset_import());
+    for (const auto &attribute : function->attribute_proto()) {
+      if (attribute.has_g())
+        for (const auto &node : attribute.g().node())
+          visit(visit, node, function->opset_import());
+      for (const auto &graph : attribute.graphs())
+        for (const auto &node : graph.node())
+          visit(visit, node, function->opset_import());
     }
+  }
   return result;
 }
 
@@ -3282,11 +3290,11 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
       self(self, *subgraph);
   };
   merge_source_functions(merge_source_functions, *this);
-  const auto function_only_callers =
-      FunctionOnlyCallers(*this, model.functions(), rewrites.added_functions());
   std::set<std::string> requested_replacements;
   for (const auto &identity : rewrites.replaced_function_ids())
     requested_replacements.insert(identity.value());
+  const auto function_only_callers = FunctionOnlyCallers(
+      *this, model.functions(), rewrites.added_functions(), requested_replacements);
   FunctionIndex planned_functions;
   std::set<FunctionKey> new_functions;
   std::set<std::string> replaceable_functions;

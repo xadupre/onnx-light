@@ -432,6 +432,58 @@ TEST(RewritingOperatorPrecedence, AddedCallerImportsPreserveConflicts) {
   EXPECT_THROW(source.CaptureRewritings(edits), core::builder::BuilderError);
 }
 
+TEST(RewritingOperatorPrecedence, DiscardedProposalsDoNotIntroduceLocalCallers) {
+  for (bool reverse : {false, true}) {
+    for (bool replace_caller : {false, true}) {
+      SCOPED_TRACE(reverse);
+      SCOPED_TRACE(replace_caller);
+      auto model = CollisionModel("custom", "F", "A");
+      model.ref_opset_import()[1].set_version(2);
+      model.ref_functions()[0].ref_attribute().clear();
+      auto callee = model.functions(0);
+      callee.set_overload("B");
+      model.ref_functions().push_back(callee);
+      core::builder::GraphBuilder source(model, CollisionSchemaLookup(), VersionedRegistry());
+      const auto before = source.ToModel().SerializeAsString();
+      RewritingProto edits;
+      auto caller = model.functions(0);
+      caller.add_opset("custom", 1);
+      caller.ref_node()[0] = MakeNode("F", {"a"}, {"b"}, "custom");
+      caller.ref_node()[0].set_overload("B");
+      callee.ref_node()[0].set_op_type("Abs");
+      edits.ref_added_functions().push_back(reverse ? callee : caller);
+      edits.ref_added_functions().push_back(reverse ? caller : callee);
+      if (replace_caller) {
+        edits.add_replaced_function_ids(
+            core::shapes::ShapesContext::LocalFunctionKey("custom", "F", "A"));
+        EXPECT_THROW(source.CaptureRewritings(edits), core::builder::BuilderError);
+      } else {
+        auto replayed = source.ApplyRewritings(source.CaptureRewritings(edits));
+        EXPECT_EQ(replayed.RewritingHash(), source.RewritingHash());
+        const auto replayed_model = replayed.ToModel();
+        ASSERT_EQ(replayed_model.functions().size(), 2u);
+        for (const auto &function : replayed_model.functions())
+          EXPECT_EQ(function.node(0).op_type(), "Neg");
+      }
+      EXPECT_EQ(source.ToModel().SerializeAsString(), before);
+    }
+  }
+}
+
+TEST(RewritingOperatorPrecedence, ReplacedBodiesDoNotRetainOldLocalCallers) {
+  auto model = VersionedCallerModel(false, false);
+  core::builder::GraphBuilder source(model, CollisionSchemaLookup(), VersionedRegistry());
+  auto edits = CollisionPlan(model, false);
+  auto wrapper = model.functions(1);
+  wrapper.ref_node()[0] = MakeNode("Identity", {"a"}, {"b"});
+  edits.ref_added_functions().push_back(wrapper);
+  edits.add_replaced_function_ids(
+      core::shapes::ShapesContext::LocalFunctionKey("local.control", "Wrapper", ""));
+  const auto replayed = source.ApplyRewritings(source.CaptureRewritings(edits));
+  EXPECT_EQ(replayed.LocalFunction("F").Nodes()[0].op_type(), "Neg");
+  EXPECT_EQ(replayed.LocalFunction("Wrapper").Nodes()[0].op_type(), "Identity");
+}
+
 TEST(RewritingOperatorPrecedence, OptimizesBodiesSelectedByLocalCallerImports) {
   auto model = VersionedCallerModel(false, false);
   SetOptimizableBody(model);

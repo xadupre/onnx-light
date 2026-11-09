@@ -85,6 +85,7 @@ jobs:
 
       - name: Collect files for clang-tidy
         id: files
+        shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # Weekly or manual full scan: check every source file.

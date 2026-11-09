@@ -2385,8 +2385,11 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
   schemas.push_back(LightOpSchema(
       "Gemm", kOnnxDomain, 29, MakeGemmDoc(29),
       {{"A", "Rank >= 1 tensor. After applying transA, its shape is (..., K).", "T"},
-       {"B", "Rank 2 tensor of shape (K, N), or (N, K) when transB is non-zero.", "T"},
-       {"C", "Optional bias, unidirectionally broadcastable to output shape (..., N).", "T"}},
+       {"B", "Rank 2 tensor. Its shape is (K, N) if transB is 0, or (N, K) otherwise.", "T"},
+       {"C",
+        "Optional bias, unidirectionally broadcastable to output shape (..., N). If absent, the "
+        "computation is done as if C is a scalar 0.",
+        "T"}},
       {{"Y", "Output tensor of shape (..., N).", "T"}},
       {{"T", MatMulGemmTypes(29), MatMulGemmTypeDescription(29)}},
       {AttributeParam{"transA", "Transposes the final two axes of A.", AttributeType::INT, false,

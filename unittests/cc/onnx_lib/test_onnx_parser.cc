@@ -1072,7 +1072,9 @@ TEST(onnx_defs, Parser_BoundedQuotedStringView) {
   ParserBase::Literal parsed;
   const auto status = parser.Parse(parsed);
   ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
-  EXPECT_EQ(parsed.value, value);
+  std::string decoded;
+  parsed.DecodeString(decoded);
+  EXPECT_EQ(decoded, value);
   EXPECT_TRUE(parser.EndOfInput());
 
   const char unfinished[] = {'"', 'a', '\\', '"'};

@@ -34,6 +34,30 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Native GPTQModel EXL3 weights
+-----------------------------
+
+``Exl3Weights`` in ``onnx_core/runtime/quantization.h`` accepts the canonical
+loaded trellis, scales and optional codebook marker for one module. See the
+:ref:`pinned EXL3 contract <l-exl3-checkpoints>` for exact tensor shapes, rates,
+arithmetic, provenance and rejected configurations. This API is separate from
+the unchanged portable ``kExl3`` affine profile.
+
+.. code-block:: cpp
+
+    Exl3Weights checkpoint;
+    checkpoint.tensors = loaded_module_tensors;  // trellis, suh, svh, optional mcg/mul1
+    auto encoded = ImportExl3Weights(checkpoint);
+    auto restored = ExportExl3Weights(encoded);  // original checkpoint bytes
+    auto states = UnpackExl3States(encoded);    // cyclic INT16 state bit patterns
+    auto weights = ReconstructExl3Weights(encoded);  // FLOAT [input,output]
+
+Both payload and logical FLOAT workspace are separately bounded by ``max_bytes``
+(default 1 GiB). Generic ``DequantizeTensor`` and ``DequantizeTensorProto`` also
+recognize this schema. Pass ``TensorProto::FLOAT16`` as the fourth argument of
+``ReconstructExl3Weights`` to round transform/scale boundaries to FP16.
+No accelerated inference or floating-point-to-trellis quantizer is implemented.
+
 Compressed-tensors checkpoint interoperability
 ----------------------------------------------
 

@@ -21,6 +21,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
+using core::runtime::Exl3Weights;
 using core::runtime::Shape;
 using core::runtime::Tensor;
 using ONNX_LIGHT_NAMESPACE::EncodedValueProto;
@@ -28,6 +29,7 @@ using ONNX_LIGHT_NAMESPACE::EncodedValueProto;
 namespace {
 
 constexpr const char *kRevision = "eb058d630f7344099459b6795b1e3eeffdda4b40";
+constexpr const char *kExl3Revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
 constexpr size_t kDefaultMaxBytes = size_t{1} << 30;
 
 struct PythonCompressedTensorsWeights {
@@ -116,6 +118,8 @@ int32_t NumpyType(nb::handle array) {
   const std::string name = nb::cast<std::string>(nb::str(dtype));
   if (name == "int8")
     return TensorProto::INT8;
+  if (name == "int16")
+    return TensorProto::INT16;
   if (name == "uint8")
     return TensorProto::UINT8;
   if (name == "int32")
@@ -124,6 +128,8 @@ int32_t NumpyType(nb::handle array) {
     return TensorProto::INT64;
   if (name == "float32")
     return TensorProto::FLOAT;
+  if (name == "float16")
+    return TensorProto::FLOAT16;
   if (name == "float8_e4m3fn")
     return TensorProto::FLOAT8E4M3FN;
   EXT_THROW_INVALID("compressed-tensors: unsupported NumPy dtype ", name, ".");
@@ -139,6 +145,8 @@ Tensor TensorFromArray(const std::string &name, nb::handle array, size_t max_byt
   const int32_t type = NumpyType(value);
   Shape shape(nb::cast<std::vector<int64_t>>(value.attr("shape")));
   nb::bytes raw = nb::cast<nb::bytes>(value.attr("tobytes")("C"));
+  EXT_ENFORCE_INVALID(raw.size() == nbytes && raw.size() <= max_bytes,
+                      "compressed-tensors: inconsistent array byte extent.");
   std::vector<uint8_t> bytes(raw.size());
   if (!bytes.empty())
     std::memcpy(bytes.data(), raw.data(), bytes.size());
@@ -174,6 +182,9 @@ nb::object ArrayFromTensor(const Tensor &tensor) {
   case TensorProto::INT8:
     dtype = "int8";
     break;
+  case TensorProto::INT16:
+    dtype = "int16";
+    break;
   case TensorProto::UINT8:
     dtype = "uint8";
     break;
@@ -185,6 +196,9 @@ nb::object ArrayFromTensor(const Tensor &tensor) {
     break;
   case TensorProto::FLOAT:
     dtype = "float32";
+    break;
+  case TensorProto::FLOAT16:
+    dtype = "float16";
     break;
   case TensorProto::FLOAT8E4M3FN:
     dtype = "float8_e4m3fn";
@@ -209,6 +223,55 @@ nb::dict TensorDictionary(const CompressedTensorsWeights &checkpoint) {
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("exl3_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_exl3_weights",
+      [](const nb::dict &tensors, const std::string &revision, size_t max_bytes) {
+        EXT_ENFORCE_INVALID(revision == kExl3Revision, "EXL3 unsupported upstream revision.");
+        EXT_ENFORCE_INVALID(tensors.size() >= 3 && tensors.size() <= 4,
+                            "EXL3 requires trellis, suh, svh and at most one codebook marker.");
+        Exl3Weights weights;
+        weights.upstream_revision = revision;
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "EXL3 tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "trellis" || name == "suh" || name == "svh" ||
+                                  name == "mcg" || name == "mul1",
+                              "EXL3 unexpected side tensor.");
+          Tensor tensor = TensorFromArray(name, item.second, max_bytes - total);
+          total += tensor.size_bytes();
+          weights.tensors.emplace(name, std::move(tensor));
+        }
+        return core::runtime::ImportExl3Weights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_exl3_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportExl3Weights(value, max_bytes);
+        nb::dict result;
+        for (const auto &[name, tensor] : weights.tensors)
+          result[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_exl3_states",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackExl3States(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_exl3_weights",
+      [](const EncodedValueProto &value, size_t max_bytes, int32_t reconstruction_dtype) {
+        return ArrayFromTensor(
+            core::runtime::ReconstructExl3Weights(value, max_bytes, {}, reconstruction_dtype));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("reconstruction_dtype") = static_cast<int32_t>(TensorProto::FLOAT));
   nb::class_<PythonCompressedTensorsWeights>(runtime, "CompressedTensorsWeights")
       .def(
           "__init__",

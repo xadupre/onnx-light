@@ -67,11 +67,12 @@ std::uint16_t FloatToFloat16Bits(float f) noexcept {
     if (e < -10) {
       return static_cast<std::uint16_t>(sign); // too small -> +/-0
     }
-    const std::uint32_t m = (m32 | 0x00800000u) >> static_cast<std::uint32_t>(1 - e);
-    const std::uint32_t round_bit = (m >> 12) & 1u;
-    const std::uint32_t sticky = m & 0x00000fffu;
-    std::uint16_t h = static_cast<std::uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
+    const std::uint32_t m = m32 | 0x00800000u;
+    const std::uint32_t shift = static_cast<std::uint32_t>(14 - e);
+    const std::uint32_t discarded = m & ((1u << shift) - 1u);
+    const std::uint32_t halfway = 1u << (shift - 1u);
+    std::uint16_t h = static_cast<std::uint16_t>(sign | (m >> shift));
+    if (discarded > halfway || (discarded == halfway && (h & 1u))) {
       h = static_cast<std::uint16_t>(h + 1);
     }
     return h;

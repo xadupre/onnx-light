@@ -526,6 +526,132 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(MatMulAddPattern, HigherRanksRemainOptInAcrossTypesAndBiasLayouts) {
+  for (const auto type :
+       {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kDouble,
+        core::symbolic::TensorType::kFloat16, core::symbolic::TensorType::kBfloat16}) {
+    for (const auto &dimensions :
+         {std::vector<int64_t>{2, 3, 4}, std::vector<int64_t>{2, 2, 3, 4}}) {
+      for (bool full_bias : {false, true}) {
+        SCOPED_TRACE(static_cast<int>(type));
+        SCOPED_TRACE(dimensions.size());
+        SCOPED_TRACE(full_bias);
+        core::builder::GraphBuilder builder("higher_rank", SchemaLookup(), {{"", 28}});
+        auto output_shape = dimensions;
+        output_shape.at(output_shape.size() - 1) = 5;
+        builder.MakeInput("x", type, Shape(dimensions));
+        builder.MakeInput("w", type, Shape({4, 5}));
+        builder.MakeInput("bias", type, Shape(full_bias ? output_shape : std::vector<int64_t>{5}));
+        builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+        builder.MakeNode("Add", {"bias", "mm"}, {"out"});
+        builder.MakeOutput("out");
+        const auto before = builder.ToModel().SerializeAsString();
+        core::builder::GraphGraph graph(builder);
+        auto standard = onnx_patterns::CreatePattern("MatMulAdd");
+        EXPECT_EQ(standard->Match(graph, builder.Nodes()[0]).pattern, nullptr);
+        EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+        onnx_patterns::MatMulAddPattern opt_in(2, true);
+        const auto match = opt_in.Match(graph, builder.Nodes()[0]);
+        ASSERT_EQ(match.pattern, &opt_in);
+        const auto replacements = opt_in.Apply(graph, match.nodes);
+        ASSERT_EQ(replacements.size(), full_bias ? 4u : 3u);
+        EXPECT_EQ(replacements[0].op_type(), "Reshape");
+        const auto &gemm = replacements[replacements.size() - 2];
+        EXPECT_EQ(gemm.op_type(), "Gemm");
+        EXPECT_EQ(gemm.input()[1], "w");
+        EXPECT_EQ(gemm.input()[2] == "bias", !full_bias);
+        EXPECT_EQ(replacements[replacements.size() - 1].op_type(), "Reshape");
+        EXPECT_EQ(replacements[replacements.size() - 1].output()[0], "out");
+      }
+    }
+  }
+}
+
+TEST(MatMulAddPattern, OptInRejectsPartialBroadcastsAndBatchedWeightsWithoutMutation) {
+  const std::vector<std::vector<int64_t>> biases = {{1, 1, 5}, {3, 5}, {2, 1, 5}, {}, {1}};
+  for (std::size_t layout = 0; layout <= biases.size(); ++layout) {
+    SCOPED_TRACE(layout);
+    core::builder::GraphBuilder builder("unsupported", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+    builder.MakeInput("w", core::symbolic::TensorType::kFloat,
+                      Shape(layout == biases.size() ? std::vector<int64_t>{2, 4, 5}
+                                                    : std::vector<int64_t>{4, 5}));
+    builder.MakeInput("bias", core::symbolic::TensorType::kFloat,
+                      Shape(layout == biases.size() ? std::vector<int64_t>{5} : biases[layout]));
+    builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+    builder.MakeNode("Add", {"mm", "bias"}, {"out"});
+    builder.MakeOutput("out");
+    const auto before = builder.ToModel().SerializeAsString();
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::MatMulAddPattern opt_in(2, true);
+    EXPECT_EQ(opt_in.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+    EXPECT_THROW(opt_in.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}),
+                 core::builder::BuilderError);
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+  }
+}
+
+TEST(MatMulAddPattern, StandardFactoryLeavesDynamicOldOpsetsAndEmptyShapesUnchanged) {
+  for (int layout = 0; layout < 4; ++layout) {
+    SCOPED_TRACE(layout);
+    core::builder::GraphBuilder builder("default_safety", SchemaLookup(), {{"", 13}});
+    const auto input_shape =
+        layout == 0 ? SymbolicShape({core::symbolic::SymDim("batch"), core::symbolic::SymDim(3),
+                                     core::symbolic::SymDim(4)})
+                    : Shape(layout == 1   ? std::vector<int64_t>{2, 0, 4}
+                            : layout == 2 ? std::vector<int64_t>{2, 3, 0}
+                                          : std::vector<int64_t>{2, 3, 4});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, input_shape);
+    builder.MakeInput("w", core::symbolic::TensorType::kFloat,
+                      Shape({layout == 2 ? 0 : 4, layout == 3 ? 0 : 5}));
+    builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({layout == 3 ? 0 : 5}));
+    builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+    builder.MakeNode("Add", {"mm", "bias"}, {"out"});
+    builder.MakeOutput("out");
+    const auto before = builder.ToModel().SerializeAsString();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(onnx_patterns::CreatePattern("MatMulAdd"));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    EXPECT_TRUE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+  }
+}
+
+TEST(MatMulAddPattern, OptInPreservesSharedExportedAndCapturedHigherRankResults) {
+  for (int use = 0; use < 3; ++use) {
+    SCOPED_TRACE(use);
+    core::builder::GraphBuilder builder("private_result", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+    builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({4, 5}));
+    builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({5}));
+    builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+    builder.MakeNode("Add", {"mm", "bias"}, {"out"});
+    builder.MakeOutput("out");
+    if (use == 0) {
+      builder.MakeNode("Identity", {"mm"}, {"other"});
+      builder.MakeOutput("other");
+    } else if (use == 1) {
+      builder.MakeOutput("mm");
+    } else {
+      auto &body = builder.MakeSubgraph("body");
+      body.MakeNode("Identity", {"mm"}, {"body_out"});
+      body.MakeOutput("body_out");
+      AddSubgraphReference(builder, "body", "body", "body_result");
+      builder.MakeOutput("body_result", core::symbolic::TensorType::kFloat, Shape({2, 3, 5}));
+    }
+    const auto before = builder.ToModel().SerializeAsString();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::MatMulAddPattern>(2, true));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    EXPECT_TRUE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+  }
+}
+
 TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
   core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));

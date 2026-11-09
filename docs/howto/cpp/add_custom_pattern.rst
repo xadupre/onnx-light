@@ -159,6 +159,68 @@ standard patterns, or a higher one to run it only once they have stabilized:
 ``pattern.priority = 0``; C++: the public ``priority`` field), as long as it
 is set before the pattern is passed to ``GraphGraph``.
 
+Higher-rank MatMul + Add: explicit opt-in
+---------------------------------------
+
+The A5 assessment in :issue:`5552` keeps
+``MatMulAddPattern(priority=2, allow_reshape=false)`` unchanged by default,
+including the registered ``"MatMulAdd"`` factory and Python constructor.
+The existing ``allow_reshape=true`` mode is **not a generally safe default**:
+it introduces shape-dependent operations whose preconditions the matcher does
+not fully validate. This decision does not add a matcher or kernels.
+
+The opt-in rewrite flattens the left input, replaces ``MatMul + Add`` with
+``Gemm``, and restores the output rank. Tests cover nonempty rank-three and
+rank-four inputs, vector and exact-output-shaped biases, both Add input orders,
+symbolic batch/output dimensions at opset 15 and later, and an attention graph
+containing projection, head-layout changes, batched score MatMul, mask Add and
+Softmax. These cases compare the resulting graph and numerical outputs.
+
+Restrictions and reasons not to enable it globally:
+
+* The right input must have rank two. Batched attention score MatMuls remain
+  unchanged; this mode only handles the projection part of such a graph.
+* Biases must have the output width as their last dimension and must be either
+  vectors or exactly output-shaped. Valid Add broadcasts such as ``[1, 1, N]``,
+  ``[S, N]`` or ``[B, 1, N]`` for output ``[B, S, N]``, scalar biases, and
+  last-dimension broadcasting are conservatively rejected.
+* At least one reduction dimension must be a known integer. Symbolic prefixes
+  use ``Shape(start=0, end=-1)``; a symbolic full-bias width uses
+  ``Shape(start=-1)``. These attributes require opset 15, but the opt-in matcher
+  does not enforce that minimum. Do not opt in for those layouts at older opsets.
+* All runtime input, weight and bias dimensions must be nonempty. The generated
+  ``Reshape`` targets use ``-1`` and the default meaning of ``0`` (copy an input
+  dimension), which cannot generally restore empty higher-rank outputs. Static
+  or symbolic shapes that can be empty are not safe opt-in inputs, even when
+  the matcher accepts them.
+* The output type must be supported by the target Gemm schema and backend;
+  accepting a MatMul type does not establish Gemm support. Numerical coverage
+  here uses float32; structural coverage also exercises double, float16 and
+  bfloat16 at opset 28.
+* The removed MatMul result must be private: shared consumers, graph outputs
+  and subgraph captures prevent fusion.
+
+The standard factory is tested to leave higher-rank graphs unchanged, including
+old-opset symbolic and empty-shape cases. Explicit opt-in is appropriate only
+when the caller establishes the above preconditions for every runtime shape.
+Even for supported cases, the added Reshapes (and Shape/Concat nodes for dynamic
+shapes) can interfere with other layout rewrites. Correctness tests are not
+performance benchmarks and establish no end-to-end attention speedup.
+
+For a validated workload, select the existing mode locally rather than
+re-registering or changing the standard factory:
+
+.. code-block:: cpp
+
+    #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
+
+    std::vector<std::unique_ptr<builder::PatternOptimization>> patterns;
+    patterns.push_back(
+        std::make_unique<onnx_light::onnx_patterns::MatMulAddPattern>(
+            /*priority=*/2, /*allow_reshape=*/true));
+    builder::GraphGraph optimizer(graph_builder, std::move(patterns));
+    optimizer.Optimize();
+
 See also
 --------
 

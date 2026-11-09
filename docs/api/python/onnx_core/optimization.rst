@@ -89,9 +89,13 @@ reuse the source storage without opening payload files. ``base_dir`` and
 ``target_dir`` locate the respective external payloads when comparing different
 references, including identical filenames in different directories. Such
 comparisons materialize the two compared tensors, not the complete checkpoint.
-Changed or new dense initializers from another directory are embedded in the
-plan so replay cannot accidentally read the source model's file with the same
-name. Retained external references preserve their locations, offsets and
+This storage-aware comparison also covers tensor attributes, local-function
+bodies and defaults. Deferred tensors reuse a fast path only when their backing
+sources match; copied deferred payloads are loaded and detached so the plan can
+be serialized independently. Changed or new dense initializers, tensor attributes
+and nested graph weights from another directory are embedded in the plan so
+replay cannot accidentally read the source model's file with the same name.
+Retained external references preserve their locations, offsets and
 lengths; callers must keep their backing files available.
 Replay performs the usual graph import, shape inference and validation;
 constants needed for inference may therefore require materialization.

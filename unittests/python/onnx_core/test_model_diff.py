@@ -10,13 +10,14 @@ import unittest
 import numpy
 
 from onnx_light import onnx
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import ModelProto, RewritingProto, TensorProto
-from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_core.optimization import GraphBuilder, apply_rewritings_to_model, diff_models
 from onnx_light.onnx_lib.external_data_helper import load_external_data_for_model
+
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
 def _model(op="Add", weight=(1, 2)):
@@ -31,6 +32,18 @@ def _model(op="Add", weight=(1, 2)):
         ),
         opset_imports=[oh.make_opsetid("", 18)],
     )
+
+
+def _external_tensor(directory, values, name="literal"):
+    """Creates an external tensor with identical metadata across storage directories."""
+    directory.mkdir(exist_ok=True)
+    tensor = onh.from_array(numpy.array(values, numpy.float32), name)
+    (directory / "weights.bin").write_bytes(tensor.raw_data)
+    tensor.ClearField("raw_data")
+    tensor.data_location = TensorProto.EXTERNAL
+    tensor.external_data.add(key="location", value="weights.bin")
+    tensor.external_data.add(key="length", value=str(4 * len(values)))
+    return tensor
 
 
 class TestModelDiff(ExtTestCase):
@@ -114,6 +127,41 @@ class TestModelDiff(ExtTestCase):
         self.assertTrue(plan.Equals(serialized))
         self.assertEquivalent(target, apply_rewritings_to_model(base, serialized))
 
+    def test_constant_to_initializer_replacement_is_atomic(self):
+        target = _model()
+        base = _model()
+        weight = base.graph.initializer[0]
+        base.graph.initializer.clear()
+        nodes = list(base.graph.node)
+        base.graph.node.clear()
+        base.graph.node.extend([oh.make_node("Constant", [], ["w"], value=weight), *nodes])
+        plan = diff_models(base, target)
+        self.assertEqual(len(plan.rewrites), 1)
+        self.assertEqual(list(plan.rewrites[0].matched_nodes), [0])
+        self.assertEquivalent(target, apply_rewritings_to_model(base, plan))
+
+    def test_moves_use_dependency_repaired_node_positions(self):
+        base, target = _model(), _model()
+        base.graph.node.clear()
+        base.graph.node.extend(
+            [
+                oh.make_node("Neg", ["x"], ["a"]),
+                oh.make_node("Relu", ["x"], ["b"]),
+                oh.make_node("Add", ["a", "b"], ["y"]),
+            ]
+        )
+        target.graph.node.clear()
+        target.graph.node.extend(
+            [
+                base.graph.node[1],
+                oh.make_node("Neg", ["b"], ["n"]),
+                base.graph.node[0],
+                oh.make_node("Add", ["a", "n"], ["y"]),
+            ]
+        )
+        plan = diff_models(base, target)
+        self.assertEquivalent(target, apply_rewritings_to_model(base, plan))
+
     def test_initializer_permutation_uses_local_function_calls(self):
         base = _model()
         base.graph.initializer.append(onh.from_array(numpy.array([3, 4], numpy.float32), "b"))
@@ -179,6 +227,197 @@ class TestModelDiff(ExtTestCase):
             result = apply_rewritings_to_model(base, serialized)
             load_external_data_for_model(result, str(root / "base"))
             self.assertEquivalent(_model("Mul", (7, 8)), result)
+
+    def test_deferred_weight_sources_and_serializable_new_payloads(self):
+        for external in (False, True):
+            with self.subTest(external=external), TemporaryDirectory() as folder:
+                root = Path(folder)
+                for name, shift in (("base", 0), ("target", 10)):
+                    directory = root / name
+                    directory.mkdir()
+                    model = _model()
+                    model.graph.initializer.append(
+                        onh.from_array(numpy.arange(1024, dtype=numpy.float32) + shift, "unused")
+                    )
+                    if name == "target":
+                        model.graph.initializer.append(
+                            onh.from_array(numpy.arange(1024, dtype=numpy.float32), "new")
+                        )
+                    onnx.save(
+                        model,
+                        directory / "model.onnx",
+                        save_as_external_data=external,
+                        size_threshold=0,
+                    )
+                base = onnx.load(root / "base/model.onnx", defer_weights=True)
+                target = onnx.load(root / "target/model.onnx", defer_weights=True)
+                plan = diff_models(base, target)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                result.load_weights()
+                expected = onnx.load(root / "target/model.onnx", load_external_data=True)
+                self.assertEquivalent(expected, result)
+                self.assertFalse(base.is_weight_loaded("unused"))
+                self.assertFalse(target.is_weight_loaded("unused"))
+                self.assertFalse(target.is_weight_loaded("new"))
+
+    def test_external_tensor_attributes_and_local_function_definitions(self):
+        for context in ("node", "body", "default", "repeated", "sparse"):
+            with self.subTest(context=context), TemporaryDirectory() as folder:
+                root = Path(folder)
+                models = []
+                for name, values in (("base", [1, 2]), ("target", [7, 8])):
+                    tensor = _external_tensor(root / name, values)
+                    model = _model()
+                    model.graph.initializer.clear()
+                    body = [
+                        oh.make_node("Constant", [], ["w"], value=tensor),
+                        oh.make_node("Add", ["x", "w"], ["y"]),
+                    ]
+                    if context == "node":
+                        model.graph.node.clear()
+                        model.graph.node.extend(body)
+                    else:
+                        function = oh.make_function(
+                            "local",
+                            "F",
+                            ["x"],
+                            ["y"],
+                            body if context == "body" else [oh.make_node("Neg", ["x"], ["y"])],
+                            [oh.make_opsetid("", 18)],
+                        )
+                        if context in ("default", "repeated", "sparse"):
+                            function.attribute.append("extra")
+                            if context == "repeated":
+                                value = [tensor]
+                            elif context == "sparse":
+                                value = oh.make_sparse_tensor(
+                                    tensor, onh.from_array(numpy.array([0, 1], numpy.int64)), [2]
+                                )
+                            else:
+                                value = tensor
+                            function.attribute_proto.append(oh.make_attribute("extra", value))
+                        model.functions.append(function)
+                        model.opset_import.append(oh.make_opsetid("local", 1))
+                        model.graph.node.clear()
+                        model.graph.node.append(oh.make_node("F", ["x"], ["y"], domain="local"))
+                    models.append(model)
+                base, target = models
+                directories = {"base_dir": str(root / "base"), "target_dir": str(root / "target")}
+                if context != "node":
+                    with self.assertRaisesRegex(ValueError, "conflicting local function"):
+                        diff_models(base, target, **directories)
+                    base = _model()
+                plan = diff_models(base, target, **directories)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                load_external_data_for_model(target, str(root / "target"))
+                self.assertEquivalent(target, result)
+                if context in ("default", "repeated", "sparse"):
+                    attribute = result.functions[0].attribute_proto[0]
+                    actual = (
+                        attribute.tensors[0]
+                        if context == "repeated"
+                        else (
+                            attribute.sparse_tensor.values if context == "sparse" else attribute.t
+                        )
+                    )
+                    self.assertEqualArray(
+                        onh.to_array(actual), numpy.array([7, 8], numpy.float32)
+                    )
+
+    def test_added_subgraphs_embed_target_weights_and_new_parent_captures(self):
+        for external in (False, True):
+            with self.subTest(external=external), TemporaryDirectory() as folder:
+                root = Path(folder)
+                base = _model()
+                base.graph.input.append(
+                    oh.make_tensor_value_info("condition", TensorProto.BOOL, [])
+                )
+                base.graph.node.clear()
+                branch = oh.make_graph(
+                    [oh.make_node("Neg", ["x"], ["z"])],
+                    "branch",
+                    [],
+                    [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+                )
+                base.graph.node.append(
+                    oh.make_node(
+                        "If", ["condition"], ["y"], then_branch=branch, else_branch=branch
+                    )
+                )
+                target = ModelProto()
+                target.CopyFrom(base)
+                target.graph.node.clear()
+                if external:
+                    weight = _external_tensor(root / "target", [7, 8], "inner")
+                    branch = oh.make_graph(
+                        [oh.make_node("Add", ["x", "inner"], ["z"])],
+                        "weighted",
+                        [],
+                        [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+                        initializer=[weight],
+                    )
+                    target.graph.node.append(oh.make_node("Not", ["condition"], ["inverted"]))
+                    condition = "inverted"
+                else:
+                    branch.node[0].input.clear()
+                    branch.node[0].input.append("v")
+                    target.graph.node.append(oh.make_node("Neg", ["x"], ["v"]))
+                    condition = "condition"
+                target.graph.node.append(
+                    oh.make_node("If", [condition], ["y"], then_branch=branch, else_branch=branch)
+                )
+                plan = diff_models(
+                    base, target, base_dir=str(root), target_dir=str(root / "target")
+                )
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                if external:
+                    load_external_data_for_model(target, str(root / "target"))
+                for condition in (False, True):
+                    self.assertEquivalent(
+                        target,
+                        result,
+                        {
+                            "condition": numpy.array(condition),
+                            "x": numpy.array([-2, 3], numpy.float32),
+                        },
+                    )
+
+    def test_added_subgraphs_reject_cross_directory_external_extensions(self):
+        base, target = _model(), _model()
+        for model in (base, target):
+            model.graph.input.append(oh.make_tensor_value_info("condition", TensorProto.BOOL, []))
+        branch = oh.make_graph(
+            [oh.make_node("Neg", ["x"], ["z"])],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+        )
+        encoded = onnx.EncodedValueProto(
+            name="unused",
+            affine=onnx.AffineLayoutProto(
+                storage_type=TensorProto.UINT8,
+                scale=onh.from_array(numpy.array(1, numpy.float32)),
+            ),
+            logical_type=oh.make_tensor_type_proto(TensorProto.FLOAT, [2]),
+            data_location=TensorProto.EXTERNAL,
+            external_data=[
+                onnx.StringStringEntryProto(key="location", value="weights.bin"),
+                onnx.StringStringEntryProto(key="length", value="2"),
+            ],
+        )
+        branch.extended_initializer.append(onnx.ExtendedInitializerProto(encoded_value=encoded))
+        target.graph.node.clear()
+        target.graph.node.append(
+            oh.make_node("If", ["condition"], ["y"], then_branch=branch, else_branch=branch)
+        )
+        with self.assertRaisesRegex(ValueError, "external encoded declarations"):
+            diff_models(base, target, base_dir="base", target_dir="target")
 
     def test_forwarding_recipes_chain_and_retain_runtime_dependencies(self):
         base = _model()

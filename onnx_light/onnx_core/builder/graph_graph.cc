@@ -3281,6 +3281,7 @@ RewritingProto GraphBuilder::DiffRewritings(const ModelProto &target_model,
 
 RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const std::string &base_dir,
                                             const std::string &target_dir) const {
+  // Check model declarations and opsets before planning graph-local changes.
   if (parent_ != nullptr || is_local_function_ || target.parent_ != nullptr ||
       target.is_local_function_)
     throw BuilderError("DiffRewritings requires two complete root builders.");
@@ -3310,6 +3311,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       opset->set_version(version);
     }
   }
+  // Validate storage metadata even when an unchanged tensor takes the no-I/O path.
   const auto validate_tensor = [](const TensorProto &tensor) {
     if (!TensorProto::DataType_IsValid(tensor.data_type()) ||
         tensor.data_type() == TensorProto::UNDEFINED)
@@ -3370,7 +3372,11 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     }
     message.ref_metadata_props() = std::move(retained);
   };
-  const auto same_tensor = [&](const TensorProto &left, const TensorProto &right) {
+  // Compare payloads only when shared backing sources cannot establish equality.
+  const auto same_tensor = [&](const TensorProto &left, const TensorProto &right,
+                               const std::string &left_dir, const std::string &right_dir) {
+    validate_tensor(left);
+    validate_tensor(right);
     auto a = utils::CopyWithSharedTensorStorage(left);
     auto b = utils::CopyWithSharedTensorStorage(right);
     a.set_doc_string("");
@@ -3386,21 +3392,21 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     };
     const bool external_a = a.data_location() == TensorProto::EXTERNAL;
     const bool external_b = b.data_location() == TensorProto::EXTERNAL;
+    const bool deferred = a.HasDeferredWeight() || b.HasDeferredWeight();
     const bool same_source =
-        (!a.HasDeferredWeight() && !b.HasDeferredWeight()) ||
-        (a.deferred_weight_source == b.deferred_weight_source) ||
-        (external_a && external_b && external_path(a, base_dir) == external_path(b, target_dir));
-    if (same_source && a.Equals(b) &&
-        (!external_a || external_path(a, base_dir) == external_path(b, target_dir)))
+        deferred ? a.deferred_weight_source == b.deferred_weight_source
+                 : (!external_a ||
+                    (external_b && external_path(a, left_dir) == external_path(b, right_dir)));
+    if (same_source && a.Equals(b))
       return true;
     if (a.HasDeferredWeight())
       a.LoadDeferredWeight();
     else if (external_a && a.raw_data().empty())
-      a.LoadExternalData(base_dir);
+      a.LoadExternalData(left_dir);
     if (b.HasDeferredWeight())
       b.LoadDeferredWeight();
     else if (external_b && b.raw_data().empty())
-      b.LoadExternalData(target_dir);
+      b.LoadExternalData(right_dir);
     a.clr_external_data();
     b.clr_external_data();
     a.set_data_location(TensorProto::DEFAULT);
@@ -3425,21 +3431,117 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     clear_payload(b);
     return a.Equals(b);
   };
+  // Detach copied deferred weights and embed external payloads from other directories.
   const bool same_storage_directory =
       std::filesystem::absolute(base_dir.empty() ? "." : base_dir).lexically_normal() ==
       std::filesystem::absolute(target_dir.empty() ? "." : target_dir).lexically_normal();
   const auto copy_initializer = [&](const TensorProto &tensor) {
+    validate_tensor(tensor);
     auto result = utils::CopyWithSharedTensorStorage(tensor);
-    if (!same_storage_directory && result.data_location() == TensorProto::EXTERNAL) {
-      if (result.HasDeferredWeight())
-        result.LoadDeferredWeight();
-      else if (result.raw_data().empty())
+    const bool deferred = result.HasDeferredWeight();
+    if (deferred) {
+      result.LoadDeferredWeight();
+      result.deferred_weight_source.reset();
+    }
+    if (deferred || (!same_storage_directory && result.data_location() == TensorProto::EXTERNAL)) {
+      if (!deferred && result.raw_data().empty())
         result.LoadExternalData(target_dir);
       result.clr_external_data();
       result.set_data_location(TensorProto::DEFAULT);
     }
     return result;
   };
+  const auto validate_extended_storage = [&](const GraphProto &graph) {
+    if (same_storage_directory)
+      return;
+    const auto external = [](const auto &value) {
+      return value.data_location() == TensorProto::EXTERNAL;
+    };
+    for (const auto &initializer : graph.extended_initializer()) {
+      if (initializer.has_encoded_value() && external(initializer.encoded_value()))
+        throw BuilderError("DiffRewritings: external encoded declarations require the same "
+                           "storage directory.");
+      if (initializer.has_paged_cache())
+        for (const auto &block : initializer.paged_cache().blocks())
+          if ((block.has_key() && external(block.key())) ||
+              (block.has_value() && external(block.value())) ||
+              (block.has_encoded_key() && external(block.encoded_key())) ||
+              (block.has_encoded_value() && external(block.encoded_value())))
+            throw BuilderError("DiffRewritings: external cache declarations require the same "
+                               "storage directory.");
+    }
+  };
+  // Use one traversal for node attributes, function defaults, and materialized subgraphs.
+  const auto tensor_fields = [&](auto &message) {
+    std::vector<TensorProto *> tensors;
+    const auto visit = [&](const auto &self, auto &value) -> void {
+      using Message = std::remove_cvref_t<decltype(value)>;
+      if constexpr (std::is_same_v<Message, TensorProto>) {
+        tensors.push_back(&value);
+      } else {
+        if constexpr (std::is_same_v<Message, GraphProto>)
+          validate_extended_storage(value);
+        if constexpr (std::is_same_v<Message, SparseTensorProto>) {
+          self(self, value.ref_values());
+          self(self, value.ref_indices());
+        }
+        if constexpr (std::is_same_v<Message, AttributeProto>) {
+          if (value.has_t())
+            self(self, value.ref_t());
+          if (value.has_sparse_tensor())
+            self(self, value.ref_sparse_tensor());
+          if (value.has_g())
+            self(self, value.ref_g());
+          for (auto &tensor : value.ref_tensors())
+            self(self, tensor);
+          for (auto &tensor : value.ref_sparse_tensors())
+            self(self, tensor);
+          for (auto &graph : value.ref_graphs())
+            self(self, graph);
+        }
+        if constexpr (requires { value.ref_node(); })
+          for (auto &node : value.ref_node())
+            self(self, node);
+        if constexpr (requires { value.ref_attribute(); })
+          for (auto &attribute : value.ref_attribute())
+            self(self, attribute);
+        if constexpr (requires { value.ref_attribute_proto(); })
+          for (auto &attribute : value.ref_attribute_proto())
+            self(self, attribute);
+        if constexpr (requires { value.ref_initializer(); })
+          for (auto &tensor : value.ref_initializer())
+            self(self, tensor);
+        if constexpr (requires { value.ref_sparse_initializer(); })
+          for (auto &tensor : value.ref_sparse_initializer())
+            self(self, tensor);
+      }
+    };
+    visit(visit, message);
+    return tensors;
+  };
+  const auto same_message = [&](const auto &left, const auto &right, const std::string &left_dir,
+                                const std::string &right_dir) {
+    auto a = utils::CopyWithSharedTensorStorage(left);
+    auto b = utils::CopyWithSharedTensorStorage(right);
+    const auto left_tensors = tensor_fields(a);
+    const auto right_tensors = tensor_fields(b);
+    if (left_tensors.size() != right_tensors.size())
+      return false;
+    for (std::size_t i = 0; i < left_tensors.size(); ++i) {
+      if (!same_tensor(*left_tensors[i], *right_tensors[i], left_dir, right_dir))
+        return false;
+      *left_tensors[i] = TensorProto();
+      *right_tensors[i] = TensorProto();
+    }
+    return a.Equals(b);
+  };
+  const auto copy_message = [&](const auto &message) {
+    auto result = utils::CopyWithSharedTensorStorage(message);
+    for (auto *tensor : tensor_fields(result))
+      *tensor = copy_initializer(*tensor);
+    return result;
+  };
+  // Index nodes by stable value identity and ignore regenerated diagnostic annotations.
   const auto node_key = [](const NodeProto &node, std::size_t position) {
     for (const auto &output : node.output())
       if (!output.empty())
@@ -3464,35 +3566,38 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     }
     return result;
   };
+  // Existing local functions must keep the same definition, including tensor contents.
   std::map<FunctionKey, FunctionProto> source_functions;
   std::map<FunctionKey, FunctionProto> target_functions;
-  const auto collect = [](const auto &self, const GraphBuilder &scope,
-                          std::map<FunctionKey, FunctionProto> &functions) -> void {
+  const auto collect = [&](const auto &self, const GraphBuilder &scope,
+                           std::map<FunctionKey, FunctionProto> &functions,
+                           const std::string &directory) -> void {
     for (const auto &function : scope.local_functions_) {
       auto definition = function->BuildFunction(function->function_domain_);
       const auto [found, inserted] =
           functions.emplace(Identity(definition), utils::CopyWithSharedTensorStorage(definition));
-      if (!inserted && !found->second.Equals(definition))
+      if (!inserted && !same_message(found->second, definition, directory, directory))
         throw BuilderError("DiffRewritings: conflicting local function definitions.");
-      self(self, *function, functions);
+      self(self, *function, functions, directory);
     }
     for (const auto &child : scope.subgraphs_)
-      self(self, *child, functions);
+      self(self, *child, functions, directory);
   };
-  collect(collect, *this, source_functions);
-  collect(collect, target, target_functions);
+  collect(collect, *this, source_functions, base_dir);
+  collect(collect, target, target_functions, target_dir);
   for (const auto &[key, function] : target_functions) {
     const auto found = source_functions.find(key);
     if (found != source_functions.end()) {
-      if (!found->second.Equals(function))
+      if (!same_message(found->second, function, base_dir, target_dir))
         throw BuilderError("DiffRewritings: conflicting local function definitions.");
     } else {
-      plan.ref_added_functions().push_back(utils::CopyWithSharedTensorStorage(function));
+      plan.ref_added_functions().push_back(copy_message(function));
     }
   }
   for (const auto &[key, function] : source_functions)
     if (target_functions.count(key) == 0)
       throw BuilderError("DiffRewritings: removing local functions is unsupported.");
+  // Express initializer permutations through an ordinary local-function preparation recipe.
   std::string forwarding_name;
   const auto forwarding_call = [&](const std::string &name) {
     NodeProto call;
@@ -3518,6 +3623,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   const auto diff_scope = [&](const auto &self, const GraphBuilder &source,
                               const GraphBuilder &destination,
                               const std::vector<std::string> &path) -> void {
+    // Preserve each scope's public interface, declarations, and effective value tags.
     auto a = utils::CopyWithSharedTensorStorage(source.graph_template_);
     auto b = utils::CopyWithSharedTensorStorage(destination.graph_template_);
     a.set_name("");
@@ -3582,19 +3688,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
           if (external(sparse.values()) || external(sparse.indices()))
             throw BuilderError("DiffRewritings: external sparse declarations require the same "
                                "storage directory.");
-        for (const auto &initializer : header->extended_initializer()) {
-          if (initializer.has_encoded_value() && external(initializer.encoded_value()))
-            throw BuilderError("DiffRewritings: external encoded declarations require the same "
-                               "storage directory.");
-          if (initializer.has_paged_cache())
-            for (const auto &block : initializer.paged_cache().blocks())
-              if ((block.has_key() && external(block.key())) ||
-                  (block.has_value() && external(block.value())) ||
-                  (block.has_encoded_key() && external(block.encoded_key())) ||
-                  (block.has_encoded_value() && external(block.encoded_value())))
-                throw BuilderError("DiffRewritings: external cache declarations require the same "
-                                   "storage directory.");
-        }
+        validate_extended_storage(*header);
       }
     }
     if (!a.Equals(b))
@@ -3604,6 +3698,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       validate_tensor(initializer);
     for (const auto &initializer : destination.initializers_)
       validate_tensor(initializer);
+    // Stage genuinely new constants early, but replace existing producers atomically.
     LocalRewritingProto edit;
     edit.set_pattern_name("ModelDiff");
     for (const auto &component : path)
@@ -3620,10 +3715,10 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       const auto &initializer = destination.initializers_[i];
       const auto found = initializers.find(initializer.name().value());
       if (found != initializers.end() &&
-          same_tensor(source.initializers_[found->second], initializer)) {
+          same_tensor(source.initializers_[found->second], initializer, base_dir, target_dir)) {
         kept_initializers.insert(found->second);
       } else {
-        if (found == initializers.end()) {
+        if (found == initializers.end() && !source.HasName(initializer.name().value())) {
           additions.add_added_initializer_positions(source.initializers_.size() +
                                                     additions.added_initializers().size());
           additions.ref_added_initializers().push_back(copy_initializer(initializer));
@@ -3636,6 +3731,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     for (std::size_t i = 0; i < source.initializers_.size(); ++i)
       if (kept_initializers.count(i) == 0)
         edit.add_removed_initializers(i);
+    // Forward only the constants whose positions still differ after ordinary edits.
     std::vector<std::string> retained_names;
     for (std::size_t i = 0; i < source.initializers_.size(); ++i)
       if (kept_initializers.count(i) != 0)
@@ -3670,16 +3766,24 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     if (!additions.added_initializers().empty())
       plan.ref_rewrites().push_back(std::move(additions));
 
+    // Match retained nodes; new enclosing captures require atomic subgraph replacement.
     std::unordered_map<std::string, std::size_t> nodes;
     for (std::size_t i = 0; i < source.nodes_.size(); ++i)
       if (!nodes.emplace(node_key(source.nodes_[i], i), i).second)
         throw BuilderError("DiffRewritings: ambiguous source node identity.");
     std::unordered_map<std::size_t, std::size_t> kept_nodes;
-    std::unordered_set<std::size_t> added_positions;
     for (std::size_t i = 0; i < destination.nodes_.size(); ++i) {
       const auto &node = destination.nodes_[i];
       const auto found = nodes.find(node_key(node, i));
-      if (found != nodes.end() && skeleton(source.nodes_[found->second]).Equals(skeleton(node))) {
+      bool retained = found != nodes.end() && same_message(skeleton(source.nodes_[found->second]),
+                                                           skeleton(node), base_dir, target_dir);
+      if (retained && !destination.ReferencedSubgraphs(node).empty()) {
+        std::vector<std::string> references;
+        destination.CollectNodeReferences(node, references);
+        retained = std::all_of(references.begin(), references.end(),
+                               [&](const auto &name) { return source.HasName(name); });
+      }
+      if (retained) {
         for (const auto &output : node.output()) {
           if (output.empty())
             continue;
@@ -3705,30 +3809,13 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       } else {
         auto materialized = utils::CopyWithSharedTensorStorage(node);
         destination.MaterializeGraphReferences(materialized, true);
-        edit.ref_added_nodes().push_back(std::move(materialized));
+        edit.ref_added_nodes().push_back(copy_message(materialized));
         edit.add_added_nodes_positions(i);
-        added_positions.insert(i);
       }
     }
     for (std::size_t i = 0; i < source.nodes_.size(); ++i)
       if (kept_nodes.count(i) == 0)
         edit.add_matched_nodes(i);
-    std::size_t position = 0;
-    for (std::size_t i = 0; i < source.nodes_.size(); ++i) {
-      const auto found = kept_nodes.find(i);
-      if (found == kept_nodes.end())
-        continue;
-      while (added_positions.count(position) != 0)
-        ++position;
-      if (position != found->second) {
-        auto *move = plan.add_moved_nodes();
-        move->set_from_position(position);
-        move->set_to_position(found->second);
-        for (const auto &component : path)
-          move->add_graph_path(component);
-      }
-      ++position;
-    }
     if (!edit.matched_nodes().empty() || !edit.added_nodes().empty() ||
         !edit.removed_initializers().empty() || !edit.added_initializers().empty())
       plan.ref_rewrites().push_back(std::move(edit));
@@ -3736,15 +3823,56 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       plan.ref_rewrites().push_back(std::move(reorder));
   };
   diff_scope(diff_scope, *this, target, {});
+  // Replay edits before computing moves: incremental dependency repair can reorder nodes.
   std::pair<uint64_t, uint64_t> hashes;
-  const auto reconstructed = ReplayRewritings(plan, &hashes);
+  auto reconstructed = ReplayRewritings(plan, &hashes);
+  const auto align_nodes = [&](const auto &self, const GraphBuilder &actual,
+                               const GraphBuilder &expected,
+                               const std::vector<std::string> &path) -> void {
+    if (actual.nodes_.size() != expected.nodes_.size())
+      throw BuilderError("DiffRewritings: reconstructed node count differs.");
+    std::unordered_map<std::string, std::size_t> positions;
+    for (std::size_t i = 0; i < expected.nodes_.size(); ++i)
+      if (!positions.emplace(node_key(expected.nodes_[i], i), i).second)
+        throw BuilderError("DiffRewritings: ambiguous target node identity.");
+    for (std::size_t i = 0; i < actual.nodes_.size(); ++i) {
+      const auto found = positions.find(node_key(actual.nodes_[i], i));
+      if (found == positions.end())
+        throw BuilderError("DiffRewritings: reconstructed node identity differs.");
+      if (i != found->second) {
+        auto *move = plan.add_moved_nodes();
+        move->set_from_position(i);
+        move->set_to_position(found->second);
+        for (const auto &component : path)
+          move->add_graph_path(component);
+      }
+      const auto children = actual.ReferencedSubgraphs(actual.nodes_[i]);
+      const auto targets = expected.ReferencedSubgraphs(expected.nodes_[found->second]);
+      if (children.size() != targets.size())
+        throw BuilderError("DiffRewritings: reconstructed nested graph count differs.");
+      for (std::size_t child = 0; child < children.size(); ++child) {
+        auto child_path = path;
+        child_path.push_back(children[child]->name_);
+        self(self, *children[child], *targets[child], child_path);
+      }
+    }
+  };
+  align_nodes(align_nodes, reconstructed, target, {});
+  reconstructed.ApplyNodeMoves(plan.moved_nodes());
+  hashes.second = reconstructed.RewritingHash();
+  // Verify target structure, tags, and actual weight contents before recording replay hashes.
   const auto verify_result = [&](const auto &self, const GraphBuilder &actual,
                                  const GraphBuilder &expected) -> void {
     if (actual.Compute().ValueTags() != expected.Compute().ValueTags() ||
-        actual.nodes_.size() != expected.nodes_.size())
+        actual.nodes_.size() != expected.nodes_.size() ||
+        actual.initializers_.size() != expected.initializers_.size())
       throw BuilderError("DiffRewritings: reconstructed value tags or node count differ.");
+    for (std::size_t i = 0; i < actual.initializers_.size(); ++i)
+      if (!same_tensor(actual.initializers_[i], expected.initializers_[i], base_dir, target_dir))
+        throw BuilderError("DiffRewritings: reconstructed initializer differs from the target.");
     for (std::size_t i = 0; i < actual.nodes_.size(); ++i) {
-      if (!skeleton(actual.nodes_[i]).Equals(skeleton(expected.nodes_[i])))
+      if (!same_message(skeleton(actual.nodes_[i]), skeleton(expected.nodes_[i]), base_dir,
+                        target_dir))
         throw BuilderError("DiffRewritings: reconstructed node differs from the target.");
       const auto children = actual.ReferencedSubgraphs(actual.nodes_[i]);
       const auto targets = expected.ReferencedSubgraphs(expected.nodes_[i]);
@@ -3755,6 +3883,16 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     }
   };
   verify_result(verify_result, reconstructed, target);
+  std::map<FunctionKey, FunctionProto> reconstructed_functions;
+  collect(collect, reconstructed, reconstructed_functions, base_dir);
+  if (reconstructed_functions.size() != target_functions.size())
+    throw BuilderError("DiffRewritings: reconstructed local function count differs.");
+  for (const auto &[key, function] : target_functions) {
+    const auto found = reconstructed_functions.find(key);
+    if (found == reconstructed_functions.end() ||
+        !same_message(found->second, function, base_dir, target_dir))
+      throw BuilderError("DiffRewritings: reconstructed local function differs from the target.");
+  }
   auto captured = utils::CopyWithSharedTensorStorage(plan);
   captured.set_hash_before(hashes.first);
   captured.set_hash_after(hashes.second);

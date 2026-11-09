@@ -9,6 +9,31 @@ from onnx_light.ext_test_case import ExtTestCase
 
 
 class TestParser(ExtTestCase):
+    def test_parse_graph_whitespace_comments(self):
+        text = (
+            " \t\n\v\f\r# leading comment\n"
+            "agraph (float[N] x) => (float[N] y) { y = Identity(x) }"
+            "# trailing comment"
+        )
+        graph = parser.parse_graph(text)
+        self.assertEqual(graph.node[0].op_type, "Identity")
+
+    def test_parse_graph_error_context(self):
+        text = (
+            "agraph (float[N] x) => (float[N] y) {\n"
+            "  T = MatMul[X, W]\n"
+            "  y = Identity(T)\n}"
+        )
+        with self.assertRaisesRegex(ValueError, r"Error context: +T = MatMul\[X, W\]"):
+            parser.parse_graph(text)
+
+    def test_incomplete_string_literal(self):
+        for literal in ['"unterminated', '"trailing\\', '"escaped\\"']:
+            with self.subTest(literal=literal):
+                text = f"agraph (float[{literal}] x) => (float[N] y) {{ y = Identity(x) }}"
+                with self.assertRaisesRegex(ValueError, "Incomplete string literal"):
+                    parser.parse_graph(text)
+
     def test_parse_float6_types(self):
         model = parser.parse_model("""
             <ir_version: 14, opset_import: ["": 28]>

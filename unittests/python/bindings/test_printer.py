@@ -12,6 +12,23 @@ from onnx_light.onnx_lib.printer import to_text as lib_to_text
 
 
 class TestPrinter(ExtTestCase):
+    def test_quoted_string_symbolic_dim_roundtrip(self):
+        cases = [('"M + N"', "M + N"), (r'"M\"\\N\\"', 'M"\\N\\'), ('"a\x00b"', "a\x00b")]
+        for quoted, dimension in cases:
+            with self.subTest(dimension=dimension):
+                text = f"agraph (float[{quoted}] x) => (float[{quoted}] y) {{ y = Identity(x) }}"
+                graph = parser.parse_graph(text)
+                printed = to_text(graph)
+                reparsed = parser.parse_graph(printed)
+                self.assertEqual(printed, to_text(reparsed))
+                self.assertEqual(
+                    reparsed.input[0].type.tensor_type.shape.dim[0].dim_param, dimension
+                )
+                self.assertEqual(
+                    reparsed.output[0].type.tensor_type.shape.dim[0].dim_param, dimension
+                )
+                self.assertIn(quoted, printed)
+
     @staticmethod
     def _print_initializer(initializer):
         graph = oh.make_graph([], "graph", [], [], [initializer])

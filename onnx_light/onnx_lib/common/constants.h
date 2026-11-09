@@ -7,6 +7,7 @@
 #include "onnx_pb.h"
 
 #include <string>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -24,12 +25,12 @@ constexpr const char *ONNX_DOMAIN = "";
 constexpr const char *AI_ONNX_DOMAIN = "ai.onnx";
 
 /// Returns the canonical ONNX domain for the provided domain value.
-inline std::string NormalizeDomain(const std::string &domain) {
-  return (domain == AI_ONNX_DOMAIN) ? ONNX_DOMAIN : domain;
+inline std::string NormalizeDomain(std::string_view domain) {
+  return (domain == AI_ONNX_DOMAIN) ? ONNX_DOMAIN : std::string(domain);
 }
 
 /// Indicates whether a domain is the canonical ONNX domain or its legacy alias.
-inline bool IsOnnxDomain(const std::string &domain) {
+inline bool IsOnnxDomain(std::string_view domain) {
   return (domain == AI_ONNX_DOMAIN) || (domain == ONNX_DOMAIN);
 }
 

@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "onnx_lib/defs/schema.h"
@@ -52,6 +53,6 @@ void MatMulShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx, int input
 
 void QLinearMatMulShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx);
 
-int64_t MathOpTwoIntegers(const std::string &op_type, int64_t a, int64_t b);
+int64_t MathOpTwoIntegers(std::string_view op_type, int64_t a, int64_t b);
 
 } // namespace ONNX_LIGHT_NAMESPACE::defs::math::utils

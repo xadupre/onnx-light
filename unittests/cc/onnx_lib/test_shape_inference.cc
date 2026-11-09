@@ -19,6 +19,56 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
+TEST(onnx_shape_inference, EinsumScalarOperands) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::pair<std::string, std::vector<std::vector<int64_t>>>> cases{
+      {"->", {{}}},
+      {",->", {{}, {}}},
+      {",,->", {{}, {}, {}}},
+      {",ij->ij", {{}, {3, 3}}},
+      {"ij,->ij", {{3, 3}, {}}},
+      {",ij,", {{}, {3, 3}, {}}}};
+  for (const auto &[equation, shapes] : cases) {
+    SCOPED_TRACE(equation);
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset_import()->set_version(12);
+    auto *graph = model.mutable_graph();
+    graph->set_name("einsum_scalars");
+    auto *node = graph->add_node();
+    node->set_op_type("Einsum");
+    node->add_output("z");
+    AddAttribute<std::string>(*node, "equation", equation);
+    bool has_array = false;
+    for (size_t i = 0; i < shapes.size(); ++i) {
+      const auto name = "x" + std::to_string(i);
+      node->add_input(name);
+      auto *input = graph->add_input();
+      input->set_name(name);
+      auto *type = input->mutable_type()->mutable_tensor_type();
+      type->set_elem_type(TensorProto::FLOAT);
+      auto *shape = type->mutable_shape();
+      for (const auto dim : shapes[i])
+        shape->add_dim()->set_dim_value(dim);
+      has_array |= !shapes[i].empty();
+    }
+    graph->add_output()->set_name("z");
+    ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                 ShapeInferenceOptions(true, 1, false)));
+    const auto &output = graph->output(0).type().tensor_type();
+    EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
+    ASSERT_TRUE(output.has_shape());
+    ASSERT_EQ(output.shape().dim_size(), has_array ? 2u : 0u);
+    for (const auto &dim : output.shape().dim())
+      EXPECT_EQ(dim.dim_value(), 3);
+    ASSERT_NO_THROW(checker::check_model(model, true));
+    node->add_input("x0");
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(true, 1, false)),
+                 InferenceError);
+  }
+}
+
 namespace {
 
 // Includes the early schemas excluded by upstream's all_versions_for (> 5).
@@ -1796,7 +1846,8 @@ TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
         Y = Conv <pads=[0,1,1,0,0,1], dilations=[1,2,2], strides=[1,1,2]> (X, W) })"},
       {"1d_simple", R"(g (float[30,4,5] X, float[50,4,2] W) => (float[30,50,4] Y) {
         Y = Conv <dilations=[1]> (X, W) })"},
-      {"dilations", R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,4,2] Y) {
+      {"dilations",
+       R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,4,2] Y) {
         Y = Conv <dilations=[1,2,3]> (X, W) })"},
       {"strides", R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,3,2] Y) {
         Y = Conv <strides=[1,2,3]> (X, W) })"},
@@ -1804,7 +1855,8 @@ TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
         Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })"},
       {"auto_pad", R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,7,6,4] Y) {
         Y = Conv <auto_pad="SAME_UPPER"> (X, W) })"},
-      {"auto_pads", R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,4,3,4] Y) {
+      {"auto_pads",
+       R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,4,3,4] Y) {
         Y = Conv <auto_pad="SAME_UPPER", strides=[2,2,1]> (X, W) })"},
       {"auto_pad_dilation",
        R"(g (float[30,4,65,64,63] X, float[50,4,4,3,2] W) => (float[30,50,65,64,63] Y) {
@@ -1825,22 +1877,27 @@ TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
 
 TEST_P(HistoricalConvTransposeShapeInferenceTest, InfersShapes) {
   CheckShapes({
-      {"conv_transpose", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,33,33] Y) {
+      {"conv_transpose",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,33,33] Y) {
         Y = ConvTranspose <strides=[2,2]> (X, W) })"},
       {"pads", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,30,30] Y) {
         Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
-      {"output_shape", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,36,36] Y) {
+      {"output_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,36,36] Y) {
         Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], output_shape=[36,36]> (X, W) })"},
-      {"kernel_shape", R"(g (float[25,48,16,16] X, float[48,32,?,?] W) => (float[25,32,30,30] Y) {
+      {"kernel_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,?,?] W) => (float[25,32,30,30] Y) {
         Y = ConvTranspose <kernel_shape=[3,3], strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
-      {"dilations", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,34,34] Y) {
+      {"dilations",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,34,34] Y) {
         Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], dilations=[3,3]> (X, W) })"},
       {"group", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,30,30] Y) {
         Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2> (X, W) })"},
       {"group_and_output_shape",
        R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,36,36] Y) {
         Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2, output_shape=[36,36]> (X, W) })"},
-      {"auto_pads", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,32,32] Y) {
+      {"auto_pads",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,32,32] Y) {
         Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[2,2]> (X, W) })"},
   });
 }
@@ -1880,7 +1937,8 @@ TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsPadsWithAutoPad) {
     GTEST_SKIP();
   }
   CheckErrors({
-      {"pads_and_auto_pad", R"(g (float[1,1,2,2] X, float[1,1,3,3] W, float[1] B) => (float[] Y) {
+      {"pads_and_auto_pad",
+       R"(g (float[1,1,2,2] X, float[1,1,3,3] W, float[1] B) => (float[] Y) {
         Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[1,1], pads=[0,1,1,0]> (X, W, B) })"},
   });
 }
@@ -1918,7 +1976,8 @@ TEST_P(HistoricalGemmShapeInferenceTest, InfersShapes) {
         Y = Gemm <transA=1> (X, W, B) })"},
       {"transB", R"(g (float[7,5] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
         Y = Gemm <transB=1> (X, W, B) })"},
-      {"transA_and_transB", R"(g (float[5,7] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
+      {"transA_and_transB",
+       R"(g (float[5,7] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
         Y = Gemm <transA=1, transB=1> (X, W, B) })"},
   });
 }

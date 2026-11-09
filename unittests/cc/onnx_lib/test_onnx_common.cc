@@ -10,15 +10,36 @@
 #include "../common/status.h"
 #include "../common/tensor.h"
 #include "onnx.h"
+#include "onnx_lib/defs/controlflow/utils.h"
+#include "onnx_lib/defs/math/utils.h"
 #include <array>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <limits>
 #include <stdexcept>
+#include <string_view>
 #include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+TEST(onnx_common, BoundedStringViews) {
+  const char domain[] = {'a', 'i', '.', 'o', 'n', 'n', 'x', '!'};
+  const std::string_view domain_view(domain, 7);
+  EXPECT_TRUE(IsOnnxDomain(domain_view));
+  EXPECT_EQ(NormalizeDomain(domain_view), "");
+  EXPECT_FALSE(IsOnnxDomain(std::string_view(domain, sizeof(domain))));
+  const char path[] = {'f', 'o', 'o', '!'};
+  EXPECT_EQ(path_to_utf8(utf8_to_path(std::string_view(path, 3))), "foo");
+  EXPECT_EQ(NormalizeDomain(std::string_view(path, 3)), "foo");
+  const char operation[] = {'A', 'd', 'd', '!'};
+  EXPECT_EQ(defs::math::utils::MathOpTwoIntegers(std::string_view(operation, 3), 2, 3), 5);
+  EXPECT_THROW(
+      defs::math::utils::MathOpTwoIntegers(std::string_view(operation, sizeof(operation)), 2, 3),
+      InferenceError);
+  EXPECT_EQ(handle_negative_axis_validate(std::string_view(path, 3), -1, 3), 2);
+  EXPECT_THROW(handle_negative_axis_validate(std::string_view(path, 3), 3, 3), InferenceError);
+}
 
 namespace {
 

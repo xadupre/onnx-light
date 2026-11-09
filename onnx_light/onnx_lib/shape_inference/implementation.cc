@@ -68,10 +68,6 @@ std::string GetElemTypeString(const TypeProto_SparseTensor &type) {
   return ONNX_LIGHT_NAMESPACE::to_string(type.elem_type());
 }
 
-inline bool IsOnnxDomainOp(const NodeProto &node, const std::string &op_type) {
-  return (IsOnnxDomain(node.domain()) && (node.op_type() == op_type));
-}
-
 } // namespace
 
 template <class T>
@@ -430,7 +426,7 @@ public:
   }
 
   void ProcessConstant(const NodeProto &n) {
-    if (IsOnnxDomainOp(n, "Constant") && n.output().size() == 1) {
+    if (IsOnnxDomain(n.domain()) && n.op_type() == "Constant" && n.output().size() == 1) {
       const std::string &output_name = n.output(0);
       for (const auto &attr : n.attribute()) {
         if (attr.name() == "value") {

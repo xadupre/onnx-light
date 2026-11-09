@@ -19,6 +19,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -44,7 +45,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @throws std::runtime_error Throws when @c MultiByteToWideChar fails (e.g.
  *         the input contains invalid UTF-8 sequences).
  */
-inline std::wstring utf8str_to_wstring(const std::string &utf8str) {
+inline std::wstring utf8str_to_wstring(std::string_view utf8str) {
   if (utf8str.empty()) {
     return std::wstring();
   }
@@ -109,7 +110,7 @@ inline std::string wstring_to_utf8str(const std::wstring &ws_str) {
  * @param utf8 UTF-8 encoded path string.
  * @return Corresponding @c std::filesystem::path.
  */
-inline std::filesystem::path utf8_to_path(const std::string &utf8) {
+inline std::filesystem::path utf8_to_path(std::string_view utf8) {
 #ifdef _WIN32
   return std::filesystem::path(utf8str_to_wstring(utf8));
 #else

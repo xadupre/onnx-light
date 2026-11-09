@@ -160,6 +160,15 @@ std::string MakeMatMulIntegerDoc() {
 }
 
 std::string MakeGemmDoc(int since_version) {
+  if (since_version >= 29) {
+    return R"DOC(Generalized matrix multiplication: Y = alpha * A' * B' + beta * C.
+A has rank at least 1 and B has rank 2. transA swaps A's final two axes
+and has no effect on vectors; transB transposes B. For A' of shape (..., K)
+and B' of shape (K, N), Y has shape (..., N).
+C is optional and must be unidirectionally broadcastable to Y.
+If C is absent or beta is zero, its contribution and data read are skipped.
+)DOC";
+  }
   if (since_version <= 6) {
     return R"DOC(General Matrix multiplication:
 https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3

@@ -89,7 +89,8 @@ void AddOnnxPyTuning(nb::module_ &m);
 
 namespace {
 
-core::runtime::CustomKernelFn PythonCustomKernel(nb::callable fn) {
+core::runtime::ContextualCustomKernelFn PythonCustomKernel(nb::callable fn,
+                                                           bool with_opset = false) {
   // Native sessions copy and release callbacks while the GIL is released.
   auto callable =
       std::shared_ptr<nb::callable>(new nb::callable(std::move(fn)), [](nb::callable *value) {
@@ -101,10 +102,15 @@ core::runtime::CustomKernelFn PythonCustomKernel(nb::callable fn) {
         nb::gil_scoped_acquire gil;
         delete value;
       });
-  return [callable](const NodeProto &node, RuntimeContext &context) {
+  return [callable, with_opset](const NodeProto &node, RuntimeContext &context,
+                                const KernelContext &kernel_context) {
     nb::gil_scoped_acquire gil;
-    (*callable)(nb::cast(&node, nb::rv_policy::reference),
-                nb::cast(&context, nb::rv_policy::reference));
+    if (with_opset)
+      (*callable)(nb::cast(&node, nb::rv_policy::reference),
+                  nb::cast(&context, nb::rv_policy::reference), kernel_context.opset.version);
+    else
+      (*callable)(nb::cast(&node, nb::rv_policy::reference),
+                  nb::cast(&context, nb::rv_policy::reference));
   };
 }
 
@@ -2899,15 +2905,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "register_custom_kernel",
           [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,
-             nb::callable fn) {
-            rt.RegisterCustomKernel(domain, op_type, PythonCustomKernel(std::move(fn)));
+             nb::callable fn, bool with_opset) {
+            rt.RegisterCustomKernel(domain, op_type, PythonCustomKernel(std::move(fn), with_opset));
           },
-          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"), nb::kw_only(),
+          nb::arg("with_opset") = false,
           "Registers a custom kernel for ``(domain, op_type)``. The empty domain "
           "is normalised to ``ai.onnx``. ``fn`` is a Python callable invoked as "
           "``fn(node, ctx)`` where ``node`` is the :class:`NodeProto` being "
           "dispatched and ``ctx`` is this :class:`RuntimeContext`. The callable "
-          "must read its inputs from ``ctx`` (via :meth:`get` / :meth:`get_sequence`) "
+          "receives the effective per-node opset version as a third argument "
+          "when ``with_opset=True``, using the owning model or function's imports. "
+          "The callable must read its inputs from ``ctx`` (via :meth:`get` / :meth:`get_sequence`) "
           "and write its outputs back into ``ctx`` (via :meth:`put` / "
           ":meth:`put_sequence`) under the names declared by ``node.output``. "
           "Custom kernels override any built-in entry with the same key, but "

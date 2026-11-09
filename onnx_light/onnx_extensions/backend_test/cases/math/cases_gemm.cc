@@ -79,6 +79,53 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  for (const auto &[shape, suffix] : {std::pair{std::vector<int64_t>{5}, "vector"},
+                                      std::pair{std::vector<int64_t>{2, 3, 5}, "rank3"},
+                                      std::pair{std::vector<int64_t>{2, 3, 4, 5}, "rank4"},
+                                      std::pair{std::vector<int64_t>{0, 3, 5}, "empty_batch"},
+                                      std::pair{std::vector<int64_t>{2, 3, 0}, "empty_features"}}) {
+    for (const bool has_bias : {false, true}) {
+      Expect(
+          registry, MakeGemmNode(has_bias, 1.0f, 1.0f, 0, 1),
+          std::string("test_cc_gemm_linear_") + suffix + (has_bias ? "_bias" : "_no_bias"),
+          {DefaultOpset(29)}, [shape, has_bias]() -> IoData {
+            const Shape input_shape(shape);
+            auto output_shape = shape;
+            output_shape.back() = 7;
+            const Shape y_shape(output_shape);
+            const int64_t features = shape.back();
+            Tensor a =
+                Tensor::FromFloat("", shape, std::vector<float>(input_shape.product(), 2.0f));
+            Tensor b = Tensor::FromFloat("", {7, features}, std::vector<float>(7 * features, 3.0f));
+            Tensor y = Tensor::FromFloat(
+                "", output_shape,
+                std::vector<float>(y_shape.product(), 6.0f * features + (has_bias ? 1.0f : 0.0f)));
+            if (has_bias) {
+              Tensor c = Tensor::FromFloat("", {7}, std::vector<float>(7, 1.0f));
+              return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
+            }
+            return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+          });
+    }
+  }
+  Expect(registry, MakeGemmNode(true, 0.25f, 0.5f, 1, 1), "test_cc_gemm_high_rank_transpose",
+         {DefaultOpset(29)}, []() -> IoData {
+           Tensor a = Tensor::FromFloat("", {2, 5, 3}, std::vector<float>(30, 2.0f));
+           Tensor b = Tensor::FromFloat("", {7, 5}, std::vector<float>(35, 3.0f));
+           Tensor c = Tensor::FromFloat("", {2, 1, 7},
+                                        {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26});
+           std::vector<float> expected;
+           for (int64_t batch = 0; batch < 2; ++batch) {
+             for (int64_t row = 0; row < 3; ++row) {
+               for (int64_t col = 0; col < 7; ++col) {
+                 expected.push_back(7.5f + static_cast<float>(batch * 7 + col));
+               }
+             }
+           }
+           Tensor y = Tensor::FromFloat("", {2, 3, 7}, expected);
+           return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
+         });
+
   // test_cc_gemm_default — Y = A * B, no bias, default attributes.
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/false);

@@ -1040,7 +1040,11 @@ public:
 /// General matrix multiplication: Y = alpha * op(A) * op(B) + beta * C.
 /// ``transA``/``transB`` control whether A and B are transposed (0 = no,
 /// non-zero = yes); ``alpha`` and ``beta`` are scalar multipliers.
-/// When ``c`` is ``nullptr`` the bias term is omitted (treated as zero).
+/// Since opset 29, A has rank at least one and B remains rank two.
+/// ``transA`` swaps A's final two axes and has no effect on vectors.
+/// Effective shapes (..., K) and (K, N) produce (..., N).
+/// C must broadcast unidirectionally to the output; its contribution and data
+/// read are skipped when ``c`` is ``nullptr`` or ``beta`` is zero.
 class Gemm : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Gemm";
@@ -1067,7 +1071,7 @@ public:
   /// Returns the immutable configuration used by the execution path.
   const tuning::GemmTuning &tuning() const noexcept { return tuning_; }
 
-  /// Gemm produces a new matrix that cannot alias any input.
+  /// Gemm produces a new tensor that cannot alias any input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:

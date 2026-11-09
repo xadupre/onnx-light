@@ -6,11 +6,13 @@
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
+#include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <tuple>
@@ -64,6 +66,475 @@ TEST(onnx_shape_inference, EinsumScalarOperands) {
     EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
                                               ShapeInferenceOptions(true, 1, false)),
                  InferenceError);
+  }
+}
+
+namespace {
+
+// Includes the early schemas excluded by upstream's all_versions_for (> 5).
+std::vector<int> HistoricalShapeVersions(const std::string &op, int early_opset = 0) {
+  RegisterAllOnnxOperatorSchemas();
+  std::vector<int> versions;
+  if (early_opset != 0) {
+    versions.push_back(early_opset);
+  }
+  for (const auto &schema : OpSchemaRegistry::get_all_schemas_with_history()) {
+    if (schema.domain().empty() && schema.Name() == op && schema.SinceVersion() > 5) {
+      versions.push_back(schema.SinceVersion());
+    }
+  }
+  std::sort(versions.begin(), versions.end());
+  versions.erase(std::unique(versions.begin(), versions.end()), versions.end());
+  return versions;
+}
+
+// -1 denotes an unknown dimension; -2 denotes the symbolic dimension "a".
+void SetHistoricalShape(TypeProto &type, int dtype, const std::vector<int64_t> &dims) {
+  auto *tensor = type.mutable_tensor_type();
+  tensor->set_elem_type(dtype);
+  auto *shape = tensor->mutable_shape();
+  for (const int64_t value : dims) {
+    auto *dim = shape->add_dim();
+    if (value == -2) {
+      dim->set_dim_param("a");
+    } else if (value >= 0) {
+      dim->set_dim_value(value);
+    }
+  }
+}
+
+ModelProto HistoricalShapeModel(int version, int dtype, const std::vector<int64_t> &dims) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(version);
+  auto *graph = model.mutable_graph();
+  graph->set_name("historical_shape");
+  auto *input = graph->add_input();
+  input->set_name("X");
+  SetHistoricalShape(*input->mutable_type(), dtype, dims);
+  graph->add_output()->set_name("Y");
+  return model;
+}
+
+void CheckHistoricalShape(ModelProto &model, const std::vector<int64_t> &expected,
+                          int dtype = TensorProto::FLOAT) {
+  ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                               ShapeInferenceOptions(true, 1, false)));
+  for (const auto &output : model.graph().output()) {
+    const auto &tensor = output.type().tensor_type();
+    EXPECT_EQ(tensor.elem_type(),
+              output.name() == "Indices" ? static_cast<int>(TensorProto::INT64) : dtype);
+    ASSERT_TRUE(tensor.has_shape());
+    ASSERT_EQ(tensor.shape().dim_size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+      SCOPED_TRACE(i);
+      const auto &dim = tensor.shape().dim(static_cast<int>(i));
+      if (expected[i] == -2) {
+        EXPECT_EQ(dim.dim_param(), "a");
+        EXPECT_FALSE(dim.has_dim_value());
+      } else if (expected[i] == -1) {
+        EXPECT_FALSE(dim.has_dim_value());
+        EXPECT_NE(dim.dim_param(), "a");
+      } else {
+        EXPECT_TRUE(dim.has_dim_value());
+        EXPECT_EQ(dim.dim_value(), expected[i]);
+      }
+    }
+  }
+  ASSERT_NO_THROW(checker::check_model(model, true));
+}
+
+ModelProto MakeIntegerRangeModel(int version, int dtype, bool raw, int64_t start, int64_t limit,
+                                 int64_t delta) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(version);
+  auto *graph = model.mutable_graph();
+  graph->set_name("range");
+  auto *node = graph->add_node();
+  node->set_op_type("Range");
+  const std::vector<std::pair<std::string, int64_t>> inputs = {
+      {"start", start}, {"limit", limit}, {"delta", delta}};
+  for (const auto &[name, value] : inputs) {
+    node->add_input(name);
+    auto *tensor = graph->add_initializer();
+    tensor->set_name(name);
+    tensor->set_data_type(dtype);
+    if (raw) {
+      const size_t width = dtype == TensorProto::INT32 ? sizeof(int32_t) : sizeof(int64_t);
+      std::string bytes(width, '\0');
+      for (size_t i = 0; i < width; ++i) {
+        bytes[i] = static_cast<char>((static_cast<uint64_t>(value) >> (8 * i)) & 0xff);
+      }
+      tensor->set_raw_data(bytes);
+    } else if (dtype == TensorProto::INT32) {
+      tensor->add_int32_data(static_cast<int32_t>(value));
+    } else {
+      tensor->add_int64_data(value);
+    }
+  }
+  node->add_output("output");
+  graph->add_output()->set_name("output");
+  return model;
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, HistoricalSliceAttributes) {
+  RegisterAllOnnxOperatorSchemas();
+  auto model = HistoricalShapeModel(9, TensorProto::FLOAT, {3, 6, 2});
+  auto &node = *model.mutable_graph()->add_node();
+  node = MakeNode("Slice", {"X"}, {"Y"});
+  AddAttribute<std::vector<int64_t>>(node, "starts", {1, 0});
+  AddAttribute<std::vector<int64_t>>(node, "ends", {2, 2});
+  AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
+  CheckHistoricalShape(model, {1, 6, 2});
+}
+
+TEST(onnx_shape_inference, HistoricalSliceInputs) {
+  struct SliceCase {
+    const char *name;
+    std::vector<int64_t> shape, starts, ends, axes, steps, expected;
+    int dtype = TensorProto::FLOAT;
+    int index_dtype = TensorProto::INT64;
+    bool constant_bounds = true;
+    bool raw_starts = false;
+    bool dynamic_optional_inputs = false;
+  };
+  const std::vector<SliceCase> cases{
+      {"unknown_bounds",
+       {3, 2, -2},
+       {0},
+       {0},
+       {},
+       {},
+       {-1, -1, -1},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       false},
+      {"raw_starts",
+       {3, 2},
+       {1, 0},
+       {2, 2},
+       {},
+       {},
+       {1, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       true},
+      {"dim_params", {1, -2, 1}, {0, 0, 0}, {1, 1, 1}, {}, {}, {1, -1, 1}},
+      {"steps_without_axes",
+       {5, 6, 7},
+       {1, 0, 0},
+       {2, 6, 6},
+       {},
+       {1, 4, 3},
+       {1, 2, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       false,
+       true},
+      {"axes_without_steps",
+       {3, 6, 2},
+       {1, 0},
+       {2, 2},
+       {0, 2},
+       {},
+       {1, 6, 2},
+       TensorProto::FLOAT,
+       TensorProto::INT64,
+       true,
+       false,
+       true},
+      {"unsorted_axes", {3, 2}, {1, 0}, {2, 2}, {1, 0}, {}, {2, 1}},
+      {"giant_end", {3, 2}, {1, 0}, {200, 22000}, {0, 1}, {}, {2, 2}},
+      {"giant_step", {3, 2}, {1, 0}, {200, 200}, {0, 1}, {1, 200}, {2, 1}},
+      {"negative_end", {3, 2}, {1, 0}, {200, -1}, {0, 1}, {}, {2, 1}},
+      {"negative_start", {3, 2}, {1, -2}, {200, 3}, {0, 1}, {}, {2, 2}},
+      {"negative_step", {3, 4}, {1, 4}, {200, 0}, {0, 1}, {1, -1}, {2, 3}},
+      {"variable_copy", {-2, 2}, {1}, {200}, {1}, {}, {-2, 1}},
+      {"int32_indices",
+       {3, 2},
+       {1, 0},
+       {200, 22000},
+       {0, 1},
+       {},
+       {2, 2},
+       TensorProto::DOUBLE,
+       TensorProto::INT32},
+      {"empty_positive_step", {0, 6}, {0}, {0}, {0}, {1}, {0, 6}},
+      {"empty_negative_step", {0, 6}, {1}, {0}, {0}, {-1}, {0, 6}},
+  };
+  const auto versions = HistoricalShapeVersions("Slice");
+  ASSERT_FALSE(versions.empty());
+  for (const int version : versions) {
+    if (version < 10) {
+      continue;
+    }
+    SCOPED_TRACE(version);
+    for (const auto &test : cases) {
+      SCOPED_TRACE(test.name);
+      auto model = HistoricalShapeModel(version, test.dtype, test.shape);
+      auto *graph = model.mutable_graph();
+      auto node = MakeNode("Slice", {"X"}, {"Y"});
+      const auto add_indices = [&](const char *name, const std::vector<int64_t> &values,
+                                   bool constant, bool raw = false) {
+        node.add_input(name);
+        auto *input = graph->add_input();
+        if (values.empty() && !constant) {
+          // Mirrors upstream's rank-unknown optional inputs produced by Reshape.
+          const std::string seed = std::string("SEED_") + name;
+          const std::string shape_name = std::string("UNKNOWN_SHAPE_") + name;
+          input->set_name(seed);
+          SetHistoricalShape(*input->mutable_type(), test.index_dtype, {});
+          auto *shape_input = graph->add_input();
+          shape_input->set_name(shape_name);
+          SetHistoricalShape(*shape_input->mutable_type(), TensorProto::INT64, {-1});
+          *graph->add_node() = MakeNode("Reshape", {seed, shape_name}, {name});
+          return;
+        }
+        input->set_name(name);
+        SetHistoricalShape(*input->mutable_type(), test.index_dtype,
+                           {static_cast<int64_t>(values.size())});
+        if (!constant) {
+          return;
+        }
+        auto *tensor = graph->add_initializer();
+        tensor->set_name(name);
+        tensor->set_data_type(test.index_dtype);
+        tensor->add_dims(static_cast<int64_t>(values.size()));
+        for (const int64_t value : values) {
+          if (raw) {
+            // ONNX raw tensor storage is little-endian, regardless of the host.
+            for (int byte = 0; byte < 8; ++byte) {
+              tensor->mutable_raw_data()->push_back(
+                  static_cast<uint8_t>((static_cast<uint64_t>(value) >> (8 * byte)) & 0xff));
+            }
+          } else if (test.index_dtype == TensorProto::INT32) {
+            tensor->add_int32_data(static_cast<int32_t>(value));
+          } else {
+            tensor->add_int64_data(value);
+          }
+        }
+      };
+      add_indices("starts", test.starts, test.constant_bounds, test.raw_starts);
+      add_indices("ends", test.ends, test.constant_bounds);
+      if (!test.axes.empty()) {
+        add_indices("axes", test.axes, true);
+      } else if (test.dynamic_optional_inputs) {
+        add_indices("axes", {}, false);
+      } else if (!test.steps.empty()) {
+        node.add_input("");
+      }
+      if (!test.steps.empty()) {
+        add_indices("steps", test.steps, true);
+      } else if (test.dynamic_optional_inputs) {
+        add_indices("steps", {}, false);
+      }
+      *graph->add_node() = std::move(node);
+      auto expected = test.expected;
+      if (version == 10 && std::string(test.name) == "dim_params") {
+        expected[1] = -2;
+      }
+      CheckHistoricalShape(model, expected, test.dtype);
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeIntegerBoundaries) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const int dtype : {TensorProto::INT32, TensorProto::INT64}) {
+      const int64_t low = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::min()
+                                                      : std::numeric_limits<int64_t>::min();
+      const int64_t high = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::max()
+                                                       : std::numeric_limits<int64_t>::max();
+      const std::vector<std::tuple<int64_t, int64_t, int64_t, int64_t>> cases = {
+          {low, high, high, 3},  {high, low, -high, 3},   {high, low, low, 2},
+          {0, low, low, 1},      {low, low + 3, 1, 3},    {high - 3, high, 1, 3},
+          {low + 3, low, -1, 3}, {high, high - 3, -1, 3}, {low, high, -1, 0},
+          {high, low, 1, 0},     {low, low, 1, 0},        {high, high, -1, 0},
+          {0, high, 1, high},    {high, 0, -1, high}};
+      for (const bool raw : {false, true}) {
+        for (const auto &[start, limit, delta, expected] : cases) {
+          SCOPED_TRACE(::testing::Message() << version << " " << dtype << " " << raw << " " << start
+                                            << " " << limit << " " << delta);
+          auto model = MakeIntegerRangeModel(version, dtype, raw, start, limit, delta);
+          ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                       ShapeInferenceOptions(false, 1, false)));
+          const auto &tensor = model.graph().output(0).type().tensor_type();
+          EXPECT_EQ(tensor.elem_type(), dtype);
+          ASSERT_EQ(tensor.shape().dim_size(), 1);
+          ASSERT_TRUE(tensor.shape().dim(0).has_dim_value());
+          EXPECT_EQ(tensor.shape().dim(0).dim_value(), expected);
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeInt64ExactCeil) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const bool raw : {false, true}) {
+      for (const int64_t sign : {-1, 1}) {
+        auto model =
+            MakeIntegerRangeModel(version, TensorProto::INT64, raw, 0,
+                                  sign * ((int64_t{1} << 60) + 1), sign * (int64_t{1} << 60));
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(false, 1, false)));
+        EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(0).dim_value(), 2);
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeIntegerInvalidLength) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const int dtype : {TensorProto::INT32, TensorProto::INT64}) {
+      const int64_t low = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::min()
+                                                      : std::numeric_limits<int64_t>::min();
+      const int64_t high = dtype == TensorProto::INT32 ? std::numeric_limits<int32_t>::max()
+                                                       : std::numeric_limits<int64_t>::max();
+      std::vector<std::tuple<int64_t, int64_t, int64_t>> cases = {{0, 1, 0}, {1, 0, 0}, {0, 0, 0}};
+      if (dtype == TensorProto::INT64) {
+        cases.emplace_back(low, high, 1);
+        cases.emplace_back(high, low, -1);
+        cases.emplace_back(low, high, 2);
+      }
+      for (const bool raw : {false, true}) {
+        for (const auto &[start, limit, delta] : cases) {
+          SCOPED_TRACE(::testing::Message() << version << " " << dtype << " " << raw << " " << start
+                                            << " " << limit << " " << delta);
+          auto model = MakeIntegerRangeModel(version, dtype, raw, start, limit, delta);
+          EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                    ShapeInferenceOptions(false, 1, false)),
+                       InferenceError);
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, HistoricalPooling) {
+  struct PoolCase {
+    const char *name;
+    std::vector<int64_t> shape, kernel, expected, pads = {}, strides = {}, dilations = {};
+    const char *auto_pad = "";
+    int ceil_mode = -1;
+    bool indices = false;
+  };
+  const std::vector<PoolCase> common{
+      {"default", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}},
+      {"3d", {5, 3, 4, 4, 4}, {2, 2, 2}, {5, 3, 3, 3, 3}},
+      {"padding", {5, 3, 4, 4}, {2, 2}, {5, 3, 6, 6}, {1, 1, 2, 2}},
+      {"padding_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}, {1, 1, 2, 2}, {2, 2}},
+      {"dilations", {5, 3, 4, 4}, {2, 2}, {5, 3, 2, 2}, {}, {}, {2, 2}},
+      {"same_upper_stride_dilation",
+       {5, 3, 4, 4},
+       {2, 2},
+       {5, 3, 2, 2},
+       {},
+       {2, 2},
+       {2, 3},
+       "SAME_UPPER"},
+  };
+  const std::vector<PoolCase> max_only{
+      {"indices", {5, 3, 4, 4}, {2, 2}, {5, 3, 3, 3}, {}, {}, {}, "", -1, true},
+      {"floor", {32, 288, 35, 35}, {2, 2}, {32, 288, 17, 17}, {}, {2, 2}, {}, "", 0},
+      {"ceil", {32, 288, 35, 35}, {2, 2}, {32, 288, 18, 18}, {}, {2, 2}, {}, "", 1},
+      {"same_upper_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 2, 2}, {}, {2, 2}, {}, "SAME_UPPER"},
+      {"same_upper_stride_one", {5, 3, 4, 4}, {2, 2}, {5, 3, 4, 4}, {}, {1, 1}, {}, "SAME_UPPER"},
+      {"same_lower_stride", {5, 3, 9, 9}, {2, 2}, {5, 3, 5, 5}, {}, {2, 2}, {}, "SAME_LOWER"},
+      {"same_lower_stride_dilation",
+       {5, 3, 9, 9},
+       {2, 2},
+       {5, 3, 5, 5},
+       {},
+       {2, 2},
+       {2, 3},
+       "SAME_LOWER"},
+      {"same_lower_big_stride", {5, 3, 4, 4}, {2, 2}, {5, 3, 1, 1}, {}, {4, 4}, {}, "SAME_LOWER"},
+  };
+  const PoolCase ceil_drop{"ceil_drop", {1, 1, 4, 4}, {3, 3}, {1, 1, 2, 2}, {}, {2, 2}, {}, "", 1};
+  const PoolCase average_auto{"auto_pads", {30, 4, 7, 6, 4}, {4, 3, 2}, {30, 4, 4, 3, 4},
+                              {},          {2, 2, 1},        {},        "SAME_UPPER"};
+  for (const auto *op : {"MaxPool", "AveragePool", "LpPool"}) {
+    SCOPED_TRACE(op);
+    const std::string name(op);
+    auto cases = common;
+    if (name == "MaxPool") {
+      cases.insert(cases.end(), max_only.begin(), max_only.end());
+    }
+    if (name != "LpPool") {
+      cases.push_back(ceil_drop);
+    }
+    if (name == "AveragePool") {
+      cases.push_back(average_auto);
+    }
+    const int early_opset = name == "MaxPool" ? 7 : name == "AveragePool" ? 6 : 10;
+    const int dilation_opset = name == "MaxPool" ? 10 : name == "AveragePool" ? 19 : 18;
+    const auto versions = HistoricalShapeVersions(op, early_opset);
+    ASSERT_FALSE(versions.empty());
+    for (const int version : versions) {
+      SCOPED_TRACE(version);
+      for (const auto &test : cases) {
+        if ((!test.dilations.empty() && version < dilation_opset) ||
+            (test.ceil_mode >= 0 && version < 10) || (test.indices && version < 8)) {
+          continue;
+        }
+        SCOPED_TRACE(test.name);
+        auto model = HistoricalShapeModel(version, TensorProto::FLOAT, test.shape);
+        auto *graph = model.mutable_graph();
+        auto &node = *graph->add_node();
+        node = MakeNode(op, {"X"}, {"Y"});
+        AddAttribute<std::vector<int64_t>>(node, "kernel_shape", test.kernel);
+        for (const auto &[attr, values] :
+             std::vector<std::pair<const char *, std::vector<int64_t>>>{
+                 {"pads", test.pads}, {"strides", test.strides}, {"dilations", test.dilations}}) {
+          if (!values.empty()) {
+            AddAttribute<std::vector<int64_t>>(node, attr, values);
+          }
+        }
+        if (test.auto_pad[0] != '\0') {
+          AddAttribute<std::string>(node, "auto_pad", test.auto_pad);
+        }
+        if (test.ceil_mode >= 0) {
+          AddAttribute<int64_t>(node, "ceil_mode", test.ceil_mode);
+        }
+        if (test.indices) {
+          node.add_output("Indices");
+          graph->add_output()->set_name("Indices");
+        }
+        CheckHistoricalShape(model, test.expected);
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, RangeFloatingPointUnchanged) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const int version : {11, 27}) {
+    for (const std::string dtype : {"float", "double"}) {
+      for (const std::string delta : {"2", "-2"}) {
+        ModelProto model;
+        const std::string text =
+            "<ir_version: 12, opset_import: [\"\" : " + std::to_string(version) +
+            "]> graph () => (" + dtype + "[] output) <" + dtype + " start = {1}, " + dtype +
+            " limit = {6}, " + dtype + " delta = {" + delta +
+            "}> { output = Range (start, limit, delta) }";
+        OnnxParser parser(text);
+        const auto status = parser.Parse(model);
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(false, 1, false)));
+        EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(0).dim_value(),
+                  delta == "2" ? 3 : 0);
+      }
+    }
   }
 }
 
@@ -1281,6 +1752,256 @@ TEST_P(TopKShapeInferenceTest, InfersRankWithDynamicK) {
 
 INSTANTIATE_TEST_SUITE_P(TopK, TopKShapeInferenceTest,
                          ::testing::Combine(::testing::Values(10, 11, 24), ::testing::Bool()));
+
+namespace {
+
+// Ports the historical schema coverage from onnx/onnx#8711.
+std::vector<int> HistoricalShapeInferenceVersions(const char *op_type) {
+  std::vector<int> versions;
+  if (std::string(op_type) == "Conv" || std::string(op_type) == "ConvTranspose") {
+    versions.push_back(10); // Exercises schema version 1.
+  }
+  // Parameter discovery must not initialize the global registry before test fixtures run.
+  for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false)) {
+    if (schema.domain() == core::schema::kOnnxDomain && schema.since_version() > 5) {
+      versions.push_back(schema.since_version());
+    }
+  }
+  std::sort(versions.begin(), versions.end());
+  versions.erase(std::unique(versions.begin(), versions.end()), versions.end());
+  return versions;
+}
+
+struct HistoricalShapeCase {
+  const char *name;
+  const char *graph;
+  bool has_shape = true;
+};
+
+class HistoricalShapeInferenceTest : public ::testing::TestWithParam<int> {
+protected:
+  void SetUp() override { RegisterAllOnnxOperatorSchemas(); }
+
+  void Parse(const char *graph, ModelProto &model) {
+    const std::string text = std::string("<ir_version: 10, opset_import: [\"\" : 10]> ") + graph;
+    OnnxParser parser(text);
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_opset_import(0)->set_version(GetParam());
+  }
+
+  void Infer(ModelProto &model) {
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(true, 1, false));
+  }
+
+  void CheckShapes(std::initializer_list<HistoricalShapeCase> cases) {
+    for (const auto &test_case : cases) {
+      SCOPED_TRACE(test_case.name);
+      ModelProto model;
+      ASSERT_NO_FATAL_FAILURE(Parse(test_case.graph, model));
+      const auto expected = model.graph().output(0).type().tensor_type();
+      model.mutable_graph()->mutable_output(0)->clear_type();
+      ASSERT_NO_THROW(Infer(model));
+      const auto &actual = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(actual.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(actual.has_shape(), test_case.has_shape);
+      if (!test_case.has_shape) {
+        continue;
+      }
+      ASSERT_EQ(actual.shape().dim_size(), expected.shape().dim_size());
+      for (int i = 0; i < expected.shape().dim_size(); ++i) {
+        SCOPED_TRACE(i);
+        const auto &dim = expected.shape().dim(i);
+        if (dim.has_dim_value()) {
+          ASSERT_TRUE(actual.shape().dim(i).has_dim_value());
+          EXPECT_EQ(actual.shape().dim(i).dim_value(), dim.dim_value());
+        } else {
+          EXPECT_FALSE(actual.shape().dim(i).has_dim_value());
+        }
+      }
+      ASSERT_NO_THROW(checker::check_model(model, true));
+    }
+  }
+
+  void CheckErrors(std::initializer_list<HistoricalShapeCase> cases) {
+    for (const auto &test_case : cases) {
+      SCOPED_TRACE(test_case.name);
+      ModelProto model;
+      ASSERT_NO_FATAL_FAILURE(Parse(test_case.graph, model));
+      model.mutable_graph()->mutable_output(0)->clear_type();
+      EXPECT_THROW(Infer(model), InferenceError);
+    }
+  }
+};
+
+class HistoricalConvShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalConvTransposeShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalFlattenShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalGemmShapeInferenceTest : public HistoricalShapeInferenceTest {};
+
+TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"conv", R"(g (float[3,4,5,6,7] X, float[5,4,2,4,3] W) => (float[3,5,4,1,3] Y) {
+        Y = Conv <pads=[0,1,1,0,0,1], dilations=[1,2,2], strides=[1,1,2]> (X, W) })"},
+      {"1d_simple", R"(g (float[30,4,5] X, float[50,4,2] W) => (float[30,50,4] Y) {
+        Y = Conv <dilations=[1]> (X, W) })"},
+      {"dilations",
+       R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,4,2] Y) {
+        Y = Conv <dilations=[1,2,3]> (X, W) })"},
+      {"strides", R"(g (float[30,4,8,8,8] X, float[50,4,3,3,3] W) => (float[30,50,6,3,2] Y) {
+        Y = Conv <strides=[1,2,3]> (X, W) })"},
+      {"pads", R"(g (float[30,4,7,6,4] X, float[50,4,3,3,3] W) => (float[30,50,6,6,6] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })"},
+      {"auto_pad", R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,7,6,4] Y) {
+        Y = Conv <auto_pad="SAME_UPPER"> (X, W) })"},
+      {"auto_pads",
+       R"(g (float[30,4,7,6,4] X, float[50,4,4,3,2] W) => (float[30,50,4,3,4] Y) {
+        Y = Conv <auto_pad="SAME_UPPER", strides=[2,2,1]> (X, W) })"},
+      {"auto_pad_dilation",
+       R"(g (float[30,4,65,64,63] X, float[50,4,4,3,2] W) => (float[30,50,65,64,63] Y) {
+        Y = Conv <auto_pad="SAME_UPPER", dilations=[2,3,4]> (X, W) })"},
+      {"group", R"(g (float[30,4,8,8,8] X, float[4,1,8,8,8] W) => (float[30,4,1,1,1] Y) {
+        Y = Conv <group=4> (X, W) })"},
+      {"only_one_pos", R"(g (float[30,4,5] X, float[50,4,5] W) => (float[30,50,1] Y) {
+        Y = Conv <strides=[2]> (X, W) })"},
+      {"partial_missing_shape",
+       R"(g (float[30,4,?,6,4] X, float[50,4,3,3,3] W) => (float[30,50,?,6,6] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })"},
+      {"partial_missing_weight_shape",
+       R"(g (float[30,4,7,6,4] X, float[50,4,?,3,3] W) => (float[] Y) {
+        Y = Conv <pads=[1,1,2,0,1,2]> (X, W) })",
+       false},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"conv_transpose",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,33,33] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"pads", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,30,30] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
+      {"output_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,36,36] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], output_shape=[36,36]> (X, W) })"},
+      {"kernel_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,?,?] W) => (float[25,32,30,30] Y) {
+        Y = ConvTranspose <kernel_shape=[3,3], strides=[2,2], pads=[1,1,2,2]> (X, W) })"},
+      {"dilations",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,34,34] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], dilations=[3,3]> (X, W) })"},
+      {"group", R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,30,30] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2> (X, W) })"},
+      {"group_and_output_shape",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,64,36,36] Y) {
+        Y = ConvTranspose <strides=[2,2], pads=[1,1,2,2], group=2, output_shape=[36,36]> (X, W) })"},
+      {"auto_pads",
+       R"(g (float[25,48,16,16] X, float[48,32,3,3] W) => (float[25,32,32,32] Y) {
+        Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[2,2]> (X, W) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsInvalidInputs) {
+  CheckErrors({
+      {"weight_spatial_rank_mismatch",
+       R"(g (float[1,1,4,4] X, float[1,1,3,3,3] W) => (float[] Y) { Y = ConvTranspose (X, W) })"},
+      {"negative_dilations", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <dilations=[-1,1]> (X, W) })"},
+      {"zero_strides", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[0,1]> (X, W) })"},
+      {"negative_pads", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <pads=[-1,0,0,0]> (X, W) })"},
+      {"negative_output_padding", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2], output_padding=[-1,0]> (X, W) })"},
+      {"negative_output_shape", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <output_shape=[-1,6]> (X, W) })"},
+      {"zero_kernel_shape", R"(g (float[1,1,4,4] X, float[1,1,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <kernel_shape=[0,3]> (X, W) })"},
+      {"rank0_weight", R"(g (float[25,48,16,16] X, float W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank1_weight", R"(g (float[25,48,16,16] X, float[48] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank2_weight", R"(g (float[25,48,16,16] X, float[48,32] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"rank2_input", R"(g (float[25,48] X, float[48,32,3,3] W) => (float[] Y) {
+        Y = ConvTranspose <strides=[2,2]> (X, W) })"},
+      {"undersized_weight",
+       R"(g (float[1,1,5] X, float[1,3] W) => (float[] Y) { Y = ConvTranspose (X, W) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsPadsWithAutoPad) {
+  // Schema version 1 does not enforce this restriction.
+  if (GetParam() < 11) {
+    GTEST_SKIP();
+  }
+  CheckErrors({
+      {"pads_and_auto_pad",
+       R"(g (float[1,1,2,2] X, float[1,1,3,3] W, float[1] B) => (float[] Y) {
+        Y = ConvTranspose <auto_pad="SAME_UPPER", strides=[1,1], pads=[0,1,1,0]> (X, W, B) })"},
+  });
+}
+
+TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsOutputChannelsOverflow) {
+  ModelProto model;
+  ASSERT_NO_FATAL_FAILURE(Parse(R"(g (float[1,2,1] X, float[2,1,1] W) => (float[] Y) {
+    Y = ConvTranspose <group=2> (X, W) })",
+                                model));
+  model.mutable_graph()
+      ->mutable_input(1)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(1)
+      ->set_dim_value(std::numeric_limits<int64_t>::max());
+  model.mutable_graph()->mutable_output(0)->clear_type();
+  EXPECT_THROW(Infer(model), InferenceError);
+}
+
+TEST_P(HistoricalFlattenShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"flatten", R"(g (float[2,3,4,5] X) => (float[6,20] Y) { Y = Flatten <axis=2> (X) })"},
+      {"default_axis", R"(g (float[2,3,4,5] X) => (float[2,60] Y) { Y = Flatten (X) })"},
+      {"zero_axis", R"(g (float[2,3,4,5] X) => (float[1,120] Y) { Y = Flatten <axis=0> (X) })"},
+      {"unknown_dim", R"(g (float[2,N,4,5] X) => (float[?,20] Y) { Y = Flatten <axis=2> (X) })"},
+  });
+}
+
+TEST_P(HistoricalGemmShapeInferenceTest, InfersShapes) {
+  CheckShapes({
+      {"gemm",
+       R"(g (float[7,5] X, float[5,11] W, float[7,11] B) => (float[7,11] Y) { Y = Gemm (X, W, B) })"},
+      {"transA", R"(g (float[5,7] X, float[5,11] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transA=1> (X, W, B) })"},
+      {"transB", R"(g (float[7,5] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transB=1> (X, W, B) })"},
+      {"transA_and_transB",
+       R"(g (float[5,7] X, float[11,5] W, float[7,11] B) => (float[7,11] Y) {
+        Y = Gemm <transA=1, transB=1> (X, W, B) })"},
+  });
+}
+
+TEST_P(HistoricalGemmShapeInferenceTest, InfersShapeWithoutBias) {
+  // The bias input becomes optional in Gemm-11.
+  if (GetParam() < 11) {
+    GTEST_SKIP();
+  }
+  CheckShapes({
+      {"no_bias", R"(g (float[13,7] X, float[7,17] W) => (float[13,17] Y) { Y = Gemm (X, W) })"},
+  });
+}
+
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Conv")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvTransposeShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("ConvTranspose")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalFlattenShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Flatten")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalGemmShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Gemm")));
+
+} // namespace
 
 TEST(onnx_shape_inference, InferShapesImpl_SplitAllowsOmittedTrailingOutputs) {
   for (const int64_t num_outputs : {2, 3}) {

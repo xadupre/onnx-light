@@ -1,0 +1,94 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/runtime/runtime_value.h"
+#include <string_view>
+
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+
+inline constexpr char kGgufLayoutVersion[] = "ggml-blocks-v1";
+inline constexpr char kGgufUpstreamRevision[] = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+inline constexpr char kGgufReferenceRevision[] = "0c1e57098bba43ac29e6e3b677cdceebdd22334f";
+
+inline constexpr char kGgufTypePrefix[] = "onnx_light.gguf.ggml-blocks-v1/";
+inline constexpr size_t kGgufDefaultMaxBytes = size_t{1} << 30;
+
+struct GgufBlockLayout {
+  std::string subtype;
+  size_t block_size;
+  size_t type_size;
+};
+
+/** Stores effective FLOAT32 subgroup multipliers and subtractive minima in logical order.
+ * Q4_0, Q8_0, IQ4_NL and TQ formats have one scale; Q2_K has sixteen scales/minima;
+ * Q4_K and Q5_K have eight scales/minima; Q3_K and Q6_K have sixteen signed scales.
+ * IQ1_S has eight scales; its dimensionless +/-0.125 offsets remain in its block metadata.
+ */
+struct GgufBlockParameters {
+  std::vector<float> scales;
+  std::vector<float> minima;
+};
+
+/** Stores an extracted GPTQModel GGUF safetensors qweight and explicit layout metadata.
+ * Supports only nonempty matrices with block-aligned logical input features.
+ * qweight is UINT8 [out_features, in_features / block_size * type_size].
+ * This stage rejects upstream row padding and partial original dimensions;
+ * it does not load an entire checkpoint or infer subtype metadata.
+ */
+struct GptqModelGgufWeights {
+  Tensor qweight;
+  Shape shape;
+  std::string subtype;
+  std::string layout_version = kGgufLayoutVersion;
+  std::string upstream_revision = kGgufUpstreamRevision;
+};
+
+/** Returns physical block metadata for native GGML formats in QuantizationFormats(). */
+const std::vector<GgufBlockLayout> &GgufBlockLayouts();
+/** Returns a canonical layout; rejects aliases and unsupported subtypes. */
+const GgufBlockLayout &GgufLayout(std::string_view subtype);
+
+/** Stores exact GGML bytes in EncodedValueProto, without repacking or requantization.
+ * Records the logical FLOAT shape and native subtype in the standard structured type.
+ * Bounds both packed and FLOAT32 decoded sizes.
+ */
+EncodedValueProto ImportGgufTensorPayload(std::string_view data, Shape shape, std::string subtype,
+                                          std::string layout_version = kGgufLayoutVersion,
+                                          std::string upstream_revision = kGgufUpstreamRevision,
+                                          size_t max_bytes = kGgufDefaultMaxBytes);
+/** Validates and returns unchanged payload bytes, with the same size limits as import. */
+std::string ExportGgufTensorPayload(const EncodedValueProto &payload,
+                                    size_t max_bytes = kGgufDefaultMaxBytes,
+                                    const StructTypeCatalogue &catalogue = {});
+/** Validates and reconstructs an owning FLOAT32 tensor in logical row-major order. */
+Tensor DequantizeGgufTensorPayload(const EncodedValueProto &payload,
+                                   size_t max_bytes = kGgufDefaultMaxBytes,
+                                   const StructTypeCatalogue &catalogue = {},
+                                   RawBufferAllocator *allocator = nullptr);
+/** Validates payload metadata and the requested block, returning its effective parameters. */
+GgufBlockParameters ReadGgufBlockParameters(const EncodedValueProto &payload, size_t block_index,
+                                            size_t max_bytes = kGgufDefaultMaxBytes,
+                                            const StructTypeCatalogue &catalogue = {});
+
+/** Imports a block-aligned UINT8 checkpoint matrix as a native EncodedValueProto.
+ * Preserves qweight bytes and is decoded by the standard DequantizeTensor APIs.
+ */
+EncodedValueProto ImportGptqModelGgufWeights(const GptqModelGgufWeights &weights,
+                                             size_t max_bytes = kGgufDefaultMaxBytes);
+/** Validates checkpoint shapes, layout metadata and both byte budgets without accessing storage.
+ * Allows bindings to reject invalid metadata before making a contiguous copy.
+ */
+void ValidateGptqModelGgufMetadata(const Shape &packed_shape, size_t packed_bytes,
+                                   const Shape &shape, std::string_view subtype,
+                                   std::string_view layout_version = kGgufLayoutVersion,
+                                   std::string_view upstream_revision = kGgufUpstreamRevision,
+                                   size_t max_bytes = kGgufDefaultMaxBytes);
+/** Validates and exports unchanged blocks as an owning UINT8 checkpoint matrix. */
+GptqModelGgufWeights ExportGptqModelGgufWeights(const EncodedValueProto &payload,
+                                                size_t max_bytes = kGgufDefaultMaxBytes,
+                                                const StructTypeCatalogue &catalogue = {});
+
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

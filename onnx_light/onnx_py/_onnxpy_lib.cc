@@ -18,10 +18,12 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/string_view.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -64,7 +66,7 @@ void AddOnnxPyLib(nb::module_ &m) {
   parser_mod.doc() = "Parser submodule";
 
   // Returns (ok: bool, error_message: str, proto_object)
-  parser_mod.def("parse_model", [](const std::string &text) -> nb::tuple {
+  parser_mod.def("parse_model", [](std::string_view text) -> nb::tuple {
     ModelProto proto{};
     OnnxParser parser(text);
     auto status = parser.Parse(proto);
@@ -72,7 +74,7 @@ void AddOnnxPyLib(nb::module_ &m) {
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
   });
 
-  parser_mod.def("parse_graph", [](const std::string &text) -> nb::tuple {
+  parser_mod.def("parse_graph", [](std::string_view text) -> nb::tuple {
     GraphProto proto{};
     OnnxParser parser(text);
     auto status = parser.Parse(proto);
@@ -80,7 +82,7 @@ void AddOnnxPyLib(nb::module_ &m) {
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
   });
 
-  parser_mod.def("parse_function", [](const std::string &text) -> nb::tuple {
+  parser_mod.def("parse_function", [](std::string_view text) -> nb::tuple {
     FunctionProto proto{};
     OnnxParser parser(text);
     auto status = parser.Parse(proto);
@@ -88,7 +90,7 @@ void AddOnnxPyLib(nb::module_ &m) {
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
   });
 
-  parser_mod.def("parse_node", [](const std::string &text) -> nb::tuple {
+  parser_mod.def("parse_node", [](std::string_view text) -> nb::tuple {
     NodeProto proto{};
     OnnxParser parser(text);
     auto status = parser.Parse(proto);

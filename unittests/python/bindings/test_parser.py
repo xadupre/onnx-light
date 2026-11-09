@@ -75,6 +75,43 @@ class TestParser(ExtTestCase):
         node = parser.parse_node("y = Identity(x)")
         self.assertEqual(node.op_type, "Identity")
 
+    def test_string_literals_preserve_bytes(self):
+        for value in ("", "before\0after", 'quote: " backslash: \\ newline: \n', "é中🙂"):
+            quoted = value.replace("\\", "\\\\").replace('"', '\\"')
+            body = f'Y = Constant<value_string="{quoted}">()'
+            graph = f"g () => () {{ {body} }}"
+            function = f'<opset_import: ["": 18]> f () => () {{ {body} }}'
+            model = f'<ir_version: 8, opset_import: ["": 18]> {graph}'
+            for parse, text in (
+                (parser.parse_node, body),
+                (parser.parse_graph, graph),
+                (parser.parse_function, function),
+                (parser.parse_model, model),
+            ):
+                with self.subTest(value=value, parse=parse.__name__):
+                    result = parse(text)
+                    if parse == parser.parse_model:
+                        result = result.graph
+                    node = result if parse == parser.parse_node else result.node[0]
+                    self.assertEqual(node.attribute[0].s, value.encode("utf-8"))
+
+    def test_numeric_literal_errors(self):
+        for body in (
+            "value_int=9223372036854775808",
+            "value_int=-9223372036854775809",
+            "value=uint64[1] {-1}",
+            "value=uint64[1] {-0}",
+            "value=uint64[1] {18446744073709551616}",
+            "value_float: float=1e1000",
+            "value=double[1] {1e1000}",
+            "value_float: float=1e+",
+        ):
+            with (
+                self.subTest(body=body),
+                self.assertRaisesRegex(ValueError, "Failed to parse node"),
+            ):
+                parser.parse_node(f"Y = Constant<{body}>()")
+
     def test_parse_float_attribute_from_int_literal(self):
         from onnx_light.onnx import AttributeProto
 

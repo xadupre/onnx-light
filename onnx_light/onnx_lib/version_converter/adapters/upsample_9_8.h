@@ -44,7 +44,7 @@ struct Upsample_9_8 final : public Adapter {
 
         node->removeInput(1);
         if (scales->uses().empty()) {
-          graph->removeInitializer(scale_input_name);
+          graph->eraseInitializer(scale_input_name);
         }
         return;
       }

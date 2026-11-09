@@ -53,7 +53,7 @@ public:
           node->removeInput(1);
           // Remove initializer
           if (const_val->uses().empty())
-            graph->removeInitializerAndInput(const_val);
+            graph->eraseInitializerAndInput(const_val);
           break;
         }
       }

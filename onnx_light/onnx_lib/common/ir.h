@@ -976,7 +976,7 @@ public:
    * @brief Removes the output at index @p i.
    * @param i Zero-based output index (the output must have no uses).
    */
-  void removeOutput(size_t i);
+  void eraseOutput(size_t i);
 
   /**
    * @brief Inserts an unattached node @em before @p n in topological order.
@@ -1520,7 +1520,7 @@ public:
    * @brief Removes the initializer with the given name from all lists.
    * @param name Name of the initializer to remove.
    */
-  void removeInitializer(const std::string &name) {
+  void eraseInitializer(const std::string &name) {
     // Preserves an aliased initializer name before erasure invalidates its storage.
     // NOLINTNEXTLINE(performance-unnecessary-copy-initialization)
     const std::string stable_name = name;
@@ -1535,7 +1535,7 @@ public:
     releaseName(stable_name);
     for (size_t i = 0; i < initializer_node_->outputs().size(); i++) {
       if (initializer_node_->outputs()[i]->uniqueName() == stable_name) {
-        initializer_node_->removeOutput(i);
+        initializer_node_->eraseOutput(i);
         break;
       }
     }
@@ -1648,7 +1648,7 @@ public:
    * @brief Removes the formal input at index @p i.
    * @param i Zero-based input index.
    */
-  void removeInput(size_t i) { input_->removeOutput(i); }
+  void eraseInput(size_t i) { input_->eraseOutput(i); }
   /** @brief Increments the current node-stage counter. */
   void advanceStage() { new_node_stage_++; }
   /**
@@ -1786,12 +1786,12 @@ public:
    * @pre @p v must have no remaining uses.
    * @param v The initializer value to erase.
    */
-  void removeInitializerAndInput(Value *v) {
+  void eraseInitializerAndInput(Value *v) {
     Node *node = v->node();
     const size_t offset = v->offset();
-    removeInitializer(v->uniqueName());
+    eraseInitializer(v->uniqueName());
     if (node == input_) {
-      removeInput(offset);
+      eraseInput(offset);
     }
   }
 
@@ -2035,7 +2035,7 @@ inline Value *Node::addOutput() {
   return v;
 }
 
-inline void Node::removeOutput(size_t i) {
+inline void Node::eraseOutput(size_t i) {
   ONNX_ASSERT(i < outputs_.size())
   ONNX_ASSERT(outputs_[i]->uses().empty())
   Value *n = outputs_[i];
@@ -2071,7 +2071,7 @@ inline bool Node::isBefore(const Node *n) {
 inline void Node::destroy() {
   ONNX_ASSERT(inGraphList())
   while (!outputs().empty())
-    removeOutput(outputs().size() - 1);
+    eraseOutput(outputs().size() - 1);
   removeAllInputs();
   removeFromList();
   graph_->freeNode(this);

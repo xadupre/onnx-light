@@ -704,7 +704,7 @@ struct InlinerImpl {
     Process(nodes, value_infos, scope);
   }
 
-  // Remove every model-local function whose id appears in `inlined`.
+  // Erase every model-local function whose id appears in `inlined`.
   static void RemoveInlinedFunctions(ModelProto &model, const FunctionMap &inlined) {
     auto &local_functions = model.functions();
     for (auto it = local_functions.begin(); it != local_functions.end();) {

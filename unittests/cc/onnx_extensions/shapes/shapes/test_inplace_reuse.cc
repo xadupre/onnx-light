@@ -861,13 +861,13 @@ TEST(OnnxOptimInPlaceReuse, UnusedOutputsReleaseAtProducer) {
       if (action.kind() == ExecuteActionKind::kExecuteNode) {
         executed_node = action.node_index();
       }
-      if (action.name() == names[i] && (action.kind() == ExecuteActionKind::kDeleteBuffer ||
-                                        action.kind() == ExecuteActionKind::kDeleteShape)) {
+      if (action.name() == names[i] && (action.kind() == ExecuteActionKind::kRemoveBuffer ||
+                                        action.kind() == ExecuteActionKind::kRemoveShape)) {
         ++deletes;
         EXPECT_EQ(action.node_index(), i);
         EXPECT_EQ(executed_node, i);
         EXPECT_EQ(action.kind(),
-                  i == 0 ? ExecuteActionKind::kDeleteShape : ExecuteActionKind::kDeleteBuffer);
+                  i == 0 ? ExecuteActionKind::kRemoveShape : ExecuteActionKind::kRemoveBuffer);
       }
     }
     EXPECT_EQ(deletes, 1);
@@ -1281,7 +1281,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesLiteralName
         size_t release_count = 0;
         size_t unlock_count = 0;
         for (const auto &action : plan->actions()) {
-          if (action.kind() == ExecuteActionKind::kDeleteBuffer) {
+          if (action.kind() == ExecuteActionKind::kRemoveBuffer) {
             EXPECT_EQ(action.node_index(), 2u);
             releases.insert(action.name());
             ++release_count;
@@ -1320,12 +1320,12 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlanPreservesShapeNames)
     if (action.kind() == ExecuteActionKind::kCreateShape) {
       EXPECT_EQ(action.name(), name);
       ++created;
-    } else if (action.kind() == ExecuteActionKind::kDeleteShape) {
+    } else if (action.kind() == ExecuteActionKind::kRemoveShape) {
       EXPECT_EQ(action.name(), name);
       EXPECT_EQ(action.node_index(), 1u);
       ++deleted;
     }
-    EXPECT_NE(action.kind(), ExecuteActionKind::kDeleteBuffer);
+    EXPECT_NE(action.kind(), ExecuteActionKind::kRemoveBuffer);
   }
   EXPECT_EQ(created, 1u);
   EXPECT_EQ(deleted, 1u);
@@ -1343,7 +1343,7 @@ TEST(OnnxOptimInPlaceReuse, ExecutionPlanLifetimeEncodingCompatibilityAndValidat
   const core::runtime::ExecutionPlan legacy_plan(graph);
   size_t releases = 0;
   for (const auto &action : legacy_plan.actions()) {
-    if (action.kind() == core::runtime::ExecuteActionKind::kDeleteBuffer) {
+    if (action.kind() == core::runtime::ExecuteActionKind::kRemoveBuffer) {
       EXPECT_EQ(action.name(), "literal%3Bname");
       ++releases;
     }

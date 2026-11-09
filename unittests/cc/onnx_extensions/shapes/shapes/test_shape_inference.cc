@@ -133,7 +133,7 @@ TEST(OnnxOptimShapeInference, UnsqueezeUsesAxesAttributeBeforeOpset13) {
     EXPECT_EQ(ctx.Get("y").Shape(),
               (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
                                         core::symbolic::SymDim(3), core::symbolic::SymDim(1)}));
-    ctx.Erase("y");
+    ctx.Remove("y");
     NodeProto extra_input = node;
     extra_input.add_input("x");
     EXPECT_THROW(ctx.ComputeShapeNode(extra_input), std::invalid_argument);
@@ -2075,22 +2075,22 @@ TEST(OnnxOptimShapesContextConstraints, PreservesSharedAndExplicitContributions)
   const NodeProto second = MakeNode("Contribute", {}, {"second"}, "constraint_test");
   ctx.ComputeShapeNode(first);
   ctx.ComputeShapeNode(second);
-  ctx.EraseNodeConstraints(first);
+  ctx.RemoveNodeConstraints(first);
   EXPECT_TRUE(ctx.HasConstraint("A", "B"));
   EXPECT_TRUE(ctx.HasLessEqualConstraint("count", "8"));
-  ctx.EraseNodeConstraints(second);
+  ctx.RemoveNodeConstraints(second);
   EXPECT_EQ(ctx.ConstraintsSize(), 0u);
   EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
 
   ctx.ComputeShapeNode(first);
   EXPECT_FALSE(ctx.AddConstraint("B", "A"));
   EXPECT_FALSE(ctx.AddLessEqualConstraint("count", "8"));
-  ctx.EraseNodeConstraints(first);
+  ctx.RemoveNodeConstraints(first);
   EXPECT_TRUE(ctx.HasConstraint("A", "B"));
   EXPECT_TRUE(ctx.HasLessEqualConstraint("count", "8"));
   ctx.ClearInferredState();
   ctx.ComputeShapeNode(first);
-  ctx.EraseNodeConstraints(first);
+  ctx.RemoveNodeConstraints(first);
   EXPECT_EQ(ctx.ConstraintsSize(), 0u);
   EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
 }

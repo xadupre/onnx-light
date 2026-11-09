@@ -1186,7 +1186,7 @@ TEST(GemmOutputTransposePattern, RejectsUnsafeFormsAndDirectCalls) {
       SeedShape(builder, "x", {1, 2, 3});
     } else if (variant == "missing_rank") {
       auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-      shapes.Erase("x");
+      shapes.Remove("x");
     } else {
       nodes[0].set_op_type("MatMul");
     }

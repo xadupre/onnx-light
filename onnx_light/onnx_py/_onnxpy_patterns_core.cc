@@ -305,6 +305,19 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                   "Returns registered C++ pattern names in evaluation order, excluding opt-in "
                   "patterns unless requested. Listing patterns does not enable them.");
   builder_mod.def(
+      "diff_models",
+      [](const ModelProto &model, const ModelProto &target, const std::string &base_dir,
+         const std::string &target_dir, nb::object schema_lookup) {
+        core::builder::GraphBuilder builder(
+            model, schema_lookup.is_none()
+                       ? core::builder::GraphBuilder::SchemaLookupFn{}
+                       : nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+        return builder.DiffRewritings(target, base_dir, target_dir);
+      },
+      nb::arg("model"), nb::arg("target"), nb::arg("base_dir") = "", nb::arg("target_dir") = "",
+      nb::arg("schema_lookup") = nb::none(),
+      "Constructs a validated native delta between independently produced models.");
+  builder_mod.def(
       "apply_rewritings",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
         core::builder::GraphBuilder builder(

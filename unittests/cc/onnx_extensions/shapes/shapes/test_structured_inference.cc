@@ -349,12 +349,12 @@ TEST(StructuredInference, SubgraphStructuredInputsShadowCapturedValues) {
   EXPECT_TRUE(context.HasEncodedValue("encoded"));
 }
 
-TEST(StructuredInference, EraseDropsAllValueDescriptorsAndPreservesScope) {
+TEST(StructuredInference, RemoveDropsAllValueDescriptorsAndPreservesScope) {
   auto model = StructuredModel();
   core::shapes::ShapesContext context;
   context.ComputeShapeModel(model);
   context.SetOpsetVersion("", 24);
-  context.Erase("output");
+  context.Remove("output");
   EXPECT_FALSE(context.Has("output"));
   EXPECT_FALSE(context.HasType("output"));
   EXPECT_FALSE(context.HasEncodedValue("output"));

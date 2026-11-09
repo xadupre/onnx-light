@@ -70,7 +70,7 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
     type.mutable_tensor_type()->set_elem_type(core::symbolic::TensorTypeToDataType(elem_dtype));
     ctx.SetType(node.output(0), type);
   } else {
-    ctx.Erase(node.output(0));
+    ctx.Remove(node.output(0));
   }
 }
 

@@ -138,7 +138,7 @@ TEST(OnnxOptimShapeIf, MergesSequenceOutputs) {
     if (length == 2) {
       EXPECT_EQ(ctx.GetSequence("y").Length().AsInt(), 2);
     }
-    ctx.Erase("y");
+    ctx.Remove("y");
     ctx.SetSequence("b", core::symbolic::SymSequence(core::symbolic::TensorType::kInt64,
                                                      core::symbolic::SymDim(length)));
     EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);

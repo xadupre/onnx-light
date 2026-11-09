@@ -19,6 +19,89 @@ Optimization always operates on a
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx()
 
+Independent model deltas
+++++++++++++++++++++++++
+
+``diff_models(canonical, target, base_dir=..., target_dir=...)`` constructs a
+``RewritingProto`` from independently produced models. Comparison and replay
+run in C++ (``GraphBuilder::DiffRewritings``); consumers do not implement a graph
+diff or a replay engine. The returned plan already contains validated native
+``hash_before`` and ``hash_after`` compatibility hashes and can be passed
+directly to :func:`apply_rewritings_to_model`.
+
+``source_builder.diff_rewritings(target)`` also accepts a ``ModelProto`` or a
+root ``GraphBuilder``. The native builder overload compares both existing
+builders directly without exporting and reimporting the target, and preserves
+both builders.
+
+Named plans use the existing ``ModelProto.rewritings`` representation:
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnx
+    from onnx_light.onnx_core.optimization import (
+        apply_rewritings_to_model,
+        diff_models,
+    )
+
+    canonical.add_rewriting("cpu", diff_models(canonical, cpu_model))
+    canonical.add_rewriting("cuda", diff_models(canonical, cuda_model))
+    onnx.save(canonical, "artifacts/model.onnx")
+    loaded = onnx.load("artifacts/model.onnx")
+    cpu = apply_rewritings_to_model(loaded, loaded.rewritings["cpu"])
+    cuda = apply_rewritings_to_model(loaded, loaded.rewritings["cuda"])
+
+No proto fields or separate reference-file format are introduced. A target is
+reconstructed from its source model and a list of native rewrites, with normal
+pre/post structural-hash validation and no fallback.
+
+Dense initializer additions, removals, same-name replacements and ordering,
+node ordering, empty optional output slots, nested graph edits, and local
+function additions are supported. Initializer permutations are ordinary rewrites
+whose ``initializer_calls`` invoke a local forwarding function and whose
+``computed_initializer_positions`` specify the resulting positions. Forwarding
+functions with no nodes and outputs referring directly to their inputs reuse
+the tensor storage and external byte ranges without materialization. New
+forwarding functions needed only during initializer preparation remain in the
+rewriting plan, not in the reconstructed model. Functions also used by runtime
+nodes are retained.
+
+Two different definitions of the same local-function identity
+``(domain, name, overload)`` are unsupported and raise an error. Removing local
+functions or reordering graph-input defaults is also unsupported.
+
+Input/output names, shapes, dtypes, effective value tags, persistent bindings,
+sparse/extended initializer declarations, model declarations and user metadata
+must remain compatible. Existing opset versions cannot be removed or changed;
+external sparse, encoded and paged-cache declarations additionally require
+matching source storage directories during diff construction.
+New required domains are added to the plan. Unsupported differences raise
+explicit errors rather than adapting interfaces (in particular, no implicit
+FP32/FP16 conversion). Producer strings, graph/node names and documentation,
+inferred intermediate value-info shapes, and regenerated lifetime, constant,
+in-place and peak-memory annotations are nonsemantic diagnostics. Effective
+value tags are compared, not ignored. Changes to other intermediate value
+metadata are rejected.
+
+Comparison indexes nodes and initializers by identity rather than performing
+quadratic sequence alignment. Equal external references with equal metadata
+reuse the source storage without opening payload files. ``base_dir`` and
+``target_dir`` locate the respective external payloads when comparing different
+references, including identical filenames in different directories. Such
+comparisons materialize the two compared tensors, not the complete checkpoint.
+This storage-aware comparison also covers tensor attributes, local-function
+bodies and defaults. Sparse initializer contents must also match; changes are
+rejected. Deferred tensors reuse a fast path when their backing-file snapshots
+and byte ranges match, even across independent loads. Copied deferred payloads
+are loaded and detached so the plan can be serialized independently.
+Changed or new dense initializers, tensor attributes
+and nested graph weights from another directory are embedded in the plan so
+replay cannot accidentally read the source model's file with the same name.
+Retained external references preserve their locations, offsets and
+lengths; callers must keep their backing files available.
+Replay performs the usual graph import, shape inference and validation;
+constants needed for inference may therefore require materialization.
+
 Optimization callback
 +++++++++++++++++++++
 

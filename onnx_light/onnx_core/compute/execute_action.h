@@ -38,25 +38,25 @@ enum class ExecuteActionKind : int32_t {
   kUnlockInput = 3,
   /// Allocates a buffer for a named result.
   kAllocateBuffer = 4,
-  /// Deletes a named result (frees its buffer).
-  kDeleteBuffer = 5,
+  /// Removes a named result (frees its buffer).
+  kRemoveBuffer = 5,
   /// Transfers a named result to another named result.
   kTransfer = 6,
   /// Executes a node.
   kExecuteNode = 7,
   /// Creates the shape of a named result.
   kCreateShape = 8,
-  /// Deletes the shape of a named result.
-  kDeleteShape = 9,
+  /// Removes the shape of a named result.
+  kRemoveShape = 9,
   /// Allocates a temporary buffer required for one or several kernels to
   /// handle a memory peak.
   kAllocateTemporaryBuffer = 10,
   /// Deallocates a temporary buffer once the kernel(s) using it are done.
-  kDeleteTemporaryBuffer = 11,
-  /// Deletes a named sequence result (frees the sequence it holds).
-  kDeleteSequence = 12,
-  /// Deletes a named map result (frees the map it holds).
-  kDeleteMap = 13,
+  kRemoveTemporaryBuffer = 11,
+  /// Removes a named sequence result (frees the sequence it holds).
+  kRemoveSequence = 12,
+  /// Removes a named map result (frees the map it holds).
+  kRemoveMap = 13,
 };
 
 /// Returns a stable, human-readable name for ``kind``.
@@ -72,24 +72,24 @@ inline constexpr const char *ExecuteActionKindName(ExecuteActionKind kind) noexc
     return "UnlockInput";
   case ExecuteActionKind::kAllocateBuffer:
     return "AllocateBuffer";
-  case ExecuteActionKind::kDeleteBuffer:
-    return "DeleteBuffer";
+  case ExecuteActionKind::kRemoveBuffer:
+    return "RemoveBuffer";
   case ExecuteActionKind::kTransfer:
     return "Transfer";
   case ExecuteActionKind::kExecuteNode:
     return "ExecuteNode";
   case ExecuteActionKind::kCreateShape:
     return "CreateShape";
-  case ExecuteActionKind::kDeleteShape:
-    return "DeleteShape";
+  case ExecuteActionKind::kRemoveShape:
+    return "RemoveShape";
   case ExecuteActionKind::kAllocateTemporaryBuffer:
     return "AllocateTemporaryBuffer";
-  case ExecuteActionKind::kDeleteTemporaryBuffer:
-    return "DeleteTemporaryBuffer";
-  case ExecuteActionKind::kDeleteSequence:
-    return "DeleteSequence";
-  case ExecuteActionKind::kDeleteMap:
-    return "DeleteMap";
+  case ExecuteActionKind::kRemoveTemporaryBuffer:
+    return "RemoveTemporaryBuffer";
+  case ExecuteActionKind::kRemoveSequence:
+    return "RemoveSequence";
+  case ExecuteActionKind::kRemoveMap:
+    return "RemoveMap";
   }
   return "Unknown";
 }
@@ -199,12 +199,12 @@ public:
     case ExecuteActionKind::kUnlockInitializer:
     case ExecuteActionKind::kLockInput:
     case ExecuteActionKind::kUnlockInput:
-    case ExecuteActionKind::kDeleteBuffer:
-    case ExecuteActionKind::kDeleteTemporaryBuffer:
+    case ExecuteActionKind::kRemoveBuffer:
+    case ExecuteActionKind::kRemoveTemporaryBuffer:
     case ExecuteActionKind::kCreateShape:
-    case ExecuteActionKind::kDeleteShape:
-    case ExecuteActionKind::kDeleteSequence:
-    case ExecuteActionKind::kDeleteMap:
+    case ExecuteActionKind::kRemoveShape:
+    case ExecuteActionKind::kRemoveSequence:
+    case ExecuteActionKind::kRemoveMap:
       text += " name='" + name_ + "'";
       break;
     }

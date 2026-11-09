@@ -2383,7 +2383,6 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   builder.MakeOutput("y");
   const ModelProto original = builder.ToModel();
   for (const TensorProto &tensor : {
-           MakeInitializer<float>("x", {2}, {3.0f, 4.0f}),
            MakeInitializer<int64_t>("x", {2}, {1, 2}),
            MakeInitializer<float>("x", {}, {1.0f}),
            MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f}),
@@ -2410,9 +2409,17 @@ TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetained
   EXPECT_EQ(replayed.initializer(0).SerializeAsString(),
             original.graph().initializer(0).SerializeAsString());
   EXPECT_EQ(replayed.input(0).SerializeAsString(), original.graph().input(0).SerializeAsString());
+  edit.ref_removed_initializers()[0] = 0;
+  edit.ref_added_initializers()[0] = MakeInitializer<float>("x", {2}, {3.0f, 4.0f});
+  edit.ref_added_initializer_positions()[0] = 0;
+  const auto replaced =
+      ApplyCapturedRewritings(core::builder::GraphBuilder(original, SchemaLookup()), plan)
+          .BuildGraph();
+  EXPECT_TRUE(replaced.initializer(0).Equals(edit.added_initializers(0)));
+  EXPECT_EQ(replaced.input(0).SerializeAsString(), original.graph().input(0).SerializeAsString());
 }
 
-TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
+TEST(PatternOptimization, ReplaySupportsSameNameInitializerReplacement) {
   ScopedAddKernel kernel;
   for (bool input_default : {false, true}) {
     for (bool computed : {false, true}) {
@@ -2451,7 +2458,19 @@ TEST(PatternOptimization, ReplayRejectsSameNameInitializerReplacement) {
       }
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-      EXPECT_THROW(ApplyCapturedRewritings(source, loaded), core::builder::BuilderError);
+      const auto result = ApplyCapturedRewritings(source, loaded);
+      const auto replayed = result.BuildGraph();
+      ASSERT_EQ(replayed.initializer().size(), computed ? 3u : 2u);
+      EXPECT_EQ(replayed.initializer(0).name(), "p");
+      EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(replayed.initializer(0)).AsFloat()[0],
+                      computed ? 6.0f : 5.0f);
+      EXPECT_EQ(result.GetShape("p").Shape(), shape.Shape());
+      EXPECT_EQ(result.GetShape("p").Dtype(), shape.Dtype());
+      if (input_default) {
+        EXPECT_EQ(replayed.input(0).SerializeAsString(),
+                  source.BuildGraph().input(0).SerializeAsString());
+        EXPECT_EQ(result.Compute().ValueTags().at("p"), tags.at("p"));
+      }
       EXPECT_EQ(source.ToModel().SerializeAsString(), original);
       EXPECT_EQ(source.Compute().ValueTags(), tags);
       EXPECT_EQ(source.Compute().NodeTags(), node_tags);

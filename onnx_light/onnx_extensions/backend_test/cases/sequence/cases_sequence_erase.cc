@@ -84,13 +84,13 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
     seq_node->add_output("input_seq");
 
     // Node 2: SequenceErase input_seq [, position] → output_sequence.
-    NodeProto *erase_node = graph->add_node();
-    erase_node->set_op_type("SequenceErase");
-    erase_node->add_input("input_seq");
+    NodeProto *remove_node = graph->add_node();
+    remove_node->set_op_type("SequenceErase");
+    remove_node->add_input("input_seq");
     if (has_position) {
-      erase_node->add_input("position");
+      remove_node->add_input("position");
     }
-    erase_node->add_output("output_sequence");
+    remove_node->add_output("output_sequence");
 
     // Graph inputs: the individual tensors (and optionally the position scalar).
     for (const Tensor &t : inputs) {

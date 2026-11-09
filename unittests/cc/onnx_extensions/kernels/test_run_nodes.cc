@@ -6569,7 +6569,7 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
 
   // Exactly one ExecuteNode action per node, in order.
   std::vector<size_t> execute_indices;
-  bool t_deleted = false;
+  bool t_removed = false;
   bool t_inplace = false;
   bool y_allocated = false;
   for (const auto &action : actions) {
@@ -6588,8 +6588,8 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
       y_allocated = true;
       EXPECT_FALSE(action.is_inplace());
     }
-    if (action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "t") {
-      t_deleted = true;
+    if (action.kind() == ExecuteActionKind::kRemoveBuffer && action.name() == "t") {
+      t_removed = true;
     }
   }
   ASSERT_EQ(execute_indices.size(), 2u);
@@ -6597,7 +6597,7 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   EXPECT_EQ(execute_indices[1], 1u);
   EXPECT_TRUE(t_inplace);
   EXPECT_TRUE(y_allocated);
-  EXPECT_TRUE(t_deleted);
+  EXPECT_TRUE(t_removed);
 }
 
 TEST(RunNodes, ExecuteActionSummary) {
@@ -6631,12 +6631,12 @@ TEST(RunNodes, ExecuteActionSummary) {
   EXPECT_EQ(transfer.summary(), "Transfer name='a' -> target='b'");
 
   // Sequence / map deletions mention only the name and expose stable names.
-  ExecuteAction delete_sequence(ExecuteActionKind::kDeleteSequence, "seq");
-  EXPECT_EQ(delete_sequence.kind_name(), std::string("DeleteSequence"));
-  EXPECT_EQ(delete_sequence.summary(), "DeleteSequence name='seq'");
-  ExecuteAction delete_map(ExecuteActionKind::kDeleteMap, "m");
-  EXPECT_EQ(delete_map.kind_name(), std::string("DeleteMap"));
-  EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
+  ExecuteAction remove_sequence(ExecuteActionKind::kRemoveSequence, "seq");
+  EXPECT_EQ(remove_sequence.kind_name(), std::string("RemoveSequence"));
+  EXPECT_EQ(remove_sequence.summary(), "RemoveSequence name='seq'");
+  ExecuteAction remove_map(ExecuteActionKind::kRemoveMap, "m");
+  EXPECT_EQ(remove_map.kind_name(), std::string("RemoveMap"));
+  EXPECT_EQ(remove_map.summary(), "RemoveMap name='m'");
 }
 
 TEST(RunNodes, ExecutionPlanSeedsStableSlotsAcrossNestedGraphs) {
@@ -6697,7 +6697,7 @@ TEST(RunNodes, ExecutionPlanShapeTagActions) {
 
   using core::runtime::ExecuteActionKind;
   bool s_shape_created = false;
-  bool s_shape_deleted = false;
+  bool s_shape_removed = false;
   bool s_buffer_touched = false;
   for (const auto &action : plan.actions()) {
     if (action.name() != "s") {
@@ -6706,16 +6706,16 @@ TEST(RunNodes, ExecutionPlanShapeTagActions) {
     if (action.kind() == ExecuteActionKind::kCreateShape) {
       s_shape_created = true;
     }
-    if (action.kind() == ExecuteActionKind::kDeleteShape) {
-      s_shape_deleted = true;
+    if (action.kind() == ExecuteActionKind::kRemoveShape) {
+      s_shape_removed = true;
     }
     if (action.kind() == ExecuteActionKind::kAllocateBuffer ||
-        action.kind() == ExecuteActionKind::kDeleteBuffer) {
+        action.kind() == ExecuteActionKind::kRemoveBuffer) {
       s_buffer_touched = true;
     }
   }
   EXPECT_TRUE(s_shape_created);
-  EXPECT_TRUE(s_shape_deleted);
+  EXPECT_TRUE(s_shape_removed);
   EXPECT_FALSE(s_buffer_touched);
 }
 
@@ -6744,7 +6744,7 @@ TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
 
   // Locate the temporary-buffer actions and the executions they wrap.
   std::optional<size_t> alloc_temp_index;
-  std::optional<size_t> delete_temp_index;
+  std::optional<size_t> remove_temp_index;
   std::optional<size_t> execute_node0_index;
   size_t temp_action_count = 0;
   for (size_t i = 0; i < actions.size(); ++i) {
@@ -6755,9 +6755,9 @@ TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
       EXPECT_EQ(action.node_index(), 0u);
       EXPECT_EQ(action.size(), 256u);
     }
-    if (action.kind() == ExecuteActionKind::kDeleteTemporaryBuffer) {
+    if (action.kind() == ExecuteActionKind::kRemoveTemporaryBuffer) {
       ++temp_action_count;
-      delete_temp_index = i;
+      remove_temp_index = i;
       EXPECT_EQ(action.node_index(), 0u);
       EXPECT_EQ(action.size(), 256u);
     }
@@ -6768,11 +6768,11 @@ TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
   // Exactly one allocate + one delete, and only for the annotated node.
   EXPECT_EQ(temp_action_count, 2u);
   ASSERT_TRUE(alloc_temp_index.has_value());
-  ASSERT_TRUE(delete_temp_index.has_value());
+  ASSERT_TRUE(remove_temp_index.has_value());
   ASSERT_TRUE(execute_node0_index.has_value());
   // The scratch buffer wraps the node execution: allocate before, delete after.
   EXPECT_LT(*alloc_temp_index, *execute_node0_index);
-  EXPECT_LT(*execute_node0_index, *delete_temp_index);
+  EXPECT_LT(*execute_node0_index, *remove_temp_index);
 }
 
 // ---------------------------------------------------------------------------

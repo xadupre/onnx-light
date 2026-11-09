@@ -114,8 +114,8 @@ public:
   /// ``node``. ``node`` must be one of the :cpp:class:`NodeProto` instances
   /// the plan was built from (lookup is by address); if it is not, this is a
   /// no-op. The names to release are the ones carried by the
-  /// :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
-  /// :cpp:enumerator:`ExecuteActionKind::kDeleteShape` actions
+  /// :cpp:enumerator:`ExecuteActionKind::kRemoveBuffer` /
+  /// :cpp:enumerator:`ExecuteActionKind::kRemoveShape` actions
   /// :cpp:func:`BuildActions` scheduled for ``node`` (their
   /// :cpp:func:`ExecuteAction::node_index`), so the release schedule lives
   /// entirely in :cpp:func:`actions`. Each removal is performed on both the

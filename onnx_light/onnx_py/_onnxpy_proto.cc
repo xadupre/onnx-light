@@ -216,7 +216,7 @@ struct ReleasedDLPackOwner {
   DLManagedTensor managed{};
   DLManagedTensor *native = nullptr;
 
-  static void Delete(DLManagedTensor *managed) {
+  static void Remove(DLManagedTensor *managed) {
     // A consumer may release from a native worker thread. Storage callbacks can own Python objects.
     nb::gil_scoped_acquire gil;
     auto *owner = static_cast<ReleasedDLPackOwner *>(managed->manager_ctx);
@@ -229,7 +229,7 @@ struct ReleasedDLPackOwner {
 nb::object ReleaseTensorProtoDLPack(TensorProto &tensor) {
   auto owner = std::make_unique<ReleasedDLPackOwner>();
   owner->managed.manager_ctx = owner.get();
-  owner->managed.deleter = ReleasedDLPackOwner::Delete;
+  owner->managed.deleter = ReleasedDLPackOwner::Remove;
   // Allocate the Python capsule before the destructive native call, too.
   PyObject *object = PyCapsule_New(&owner->managed, "dltensor", [](PyObject *capsule) {
     if (PyCapsule_IsValid(capsule, "dltensor")) {

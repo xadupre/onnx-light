@@ -310,7 +310,7 @@ public:
   const TypeProto &GetType(const std::string &name) const { return types_.at(name); }
   const std::unordered_map<std::string, TypeProto> &Types() const { return types_; }
   /// Removes all descriptors for one value without changing the catalogue or inference hooks.
-  void Erase(const std::string &name) {
+  void Remove(const std::string &name) {
     tensors_.erase(name);
     sequences_.erase(name);
     types_.erase(name);
@@ -788,7 +788,7 @@ public:
 
   /// Removes only constraints contributed by ``node`` during shape inference.
   /// Retains constraints also contributed by other nodes or explicit callers.
-  void EraseNodeConstraints(const NodeProto &node);
+  void RemoveNodeConstraints(const NodeProto &node);
 
   // ── Shape-inference entry points ────────────────────────────────────
   //

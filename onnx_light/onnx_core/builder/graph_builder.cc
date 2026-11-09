@@ -641,7 +641,7 @@ bool GraphBuilder::RefreshOpsetVersion(const std::string &domain, int version,
   std::unordered_set<std::string> affected_values;
   for (const auto &name : inherited_values) {
     if (inherited_names_.count(name) != 0) {
-      shapes.Erase(name);
+      shapes.Remove(name);
       SeedInheritedValue(name);
       affected_values.insert(name);
     }
@@ -716,8 +716,16 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
 void GraphBuilder::SeedInheritedValue(const std::string &name) {
   auto &shapes = compute_.Shapes();
   if (name.empty() || shapes.Has(name) || shapes.HasSequence(name) || shapes.HasType(name) ||
-      parent_ == nullptr || inherited_names_.count(name) == 0) {
+      parent_ == nullptr) {
     return;
+  }
+  if (inherited_names_.count(name) == 0) {
+    if (names_.count(name) != 0)
+      return;
+    parent_->SeedInheritedValue(name);
+    if (!parent_->HasName(name))
+      return;
+    inherited_names_.insert(name);
   }
   parent_->SeedInheritedValue(name);
   const auto &outer = parent_->Shapes();
@@ -781,7 +789,7 @@ void GraphBuilder::RefreshInferredInputsFrom(
         (!source.HasEncodedValue(name) ||
          shapes.GetEncodedValue(name).Equals(source.GetEncodedValue(name)));
     if (!unchanged) {
-      shapes.Erase(name);
+      shapes.Remove(name);
       shapes.CopyValueFrom(name, source, name);
       changed_values.insert(name);
     }
@@ -1006,11 +1014,11 @@ bool GraphBuilder::RefreshDependentNodes(
       continue;
     }
     affected = true;
-    compute_.Shapes().EraseNodeConstraints(stored);
+    compute_.Shapes().RemoveNodeConstraints(stored);
     for (const std::string &output : stored.output()) {
       if (!output.empty()) {
         affected_values.insert(output);
-        compute_.Shapes().Erase(output);
+        compute_.Shapes().Remove(output);
       }
     }
 
@@ -1097,8 +1105,11 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     CollectNodeReferences(nodes_[index], references[index]);
     if (old_indices[index] == old_count) {
-      for (const auto &name : references[index])
+      for (const auto &name : references[index]) {
         SeedInheritedValue(name);
+        if (inherited_names_.count(name) != 0)
+          available.insert(name);
+      }
     }
   }
   for (const auto &initializer : initializers_) {
@@ -1148,7 +1159,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   auto &shapes = compute_.Shapes();
   for (const auto &name : affected_values) {
     if (parent_ != nullptr && inherited_names_.count(name) != 0) {
-      shapes.Erase(name);
+      shapes.Remove(name);
       SeedInheritedValue(name);
     }
   }
@@ -1161,7 +1172,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
       return input.name() == initializer.name();
     });
     if (!is_input) {
-      shapes.Erase(name);
+      shapes.Remove(name);
       SymTensor tensor;
       if (SymTensorFromTensorProto(initializer, tensor)) {
         shapes.Set(name, std::move(tensor));
@@ -1761,7 +1772,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
       for (const std::string &name : excluded_inherited_names) {
         subgraph.inherited_names_.erase(name);
-        subgraph.compute_.Shapes().Erase(name);
+        subgraph.compute_.Shapes().Remove(name);
       }
       subgraph.ImportGraph(graph);
       AttributeProto ref;
@@ -1791,7 +1802,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
         GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
         for (const std::string &name : excluded_inherited_names) {
           subgraph.inherited_names_.erase(name);
-          subgraph.compute_.Shapes().Erase(name);
+          subgraph.compute_.Shapes().Remove(name);
         }
         subgraph.ImportGraph(graph);
         refs.add_strings(subgraph_name);
@@ -1876,7 +1887,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     }
     if (!is_input) {
       inherited_names_.erase(name);
-      compute_.Shapes().Erase(name);
+      compute_.Shapes().Remove(name);
       ReserveName(name);
     }
   }
@@ -3378,7 +3389,7 @@ GraphBuilder::ConstantFoldNodes(const ConstantFoldingOptions &options,
     }
     for (const auto &node : original_nodes)
       if (retained.count(node.get()) == 0)
-        compute_.Shapes().EraseNodeConstraints(*node);
+        compute_.Shapes().RemoveNodeConstraints(*node);
     std::unordered_set<std::string> affected_values;
     for (std::size_t index = initializer_count; index < initializers_.size(); ++index)
       affected_values.insert(initializers_[index].name().value());
@@ -3801,8 +3812,8 @@ void GraphBuilder::RewriteCapturedReferences(
   for (const auto &[source, target] : rename) {
     if (source != target && inherited_names_.erase(source) != 0) {
       inherited_names_.insert(target);
-      compute_.Shapes().Erase(source);
-      compute_.EraseValue(source);
+      compute_.Shapes().Remove(source);
+      compute_.RemoveValue(source);
     }
   }
   for (NodeProto &node : nodes_) {

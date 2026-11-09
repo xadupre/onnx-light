@@ -481,7 +481,7 @@ public:
                    const NodeMaterializerFn &materialize = {});
 
   /// Forgets an initializer or node value removed by a graph mutation.
-  void EraseValue(const std::string &name);
+  void RemoveValue(const std::string &name);
 
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.

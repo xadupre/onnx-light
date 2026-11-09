@@ -900,13 +900,13 @@ class TestExecutionPlanBindings(ExtTestCase):
         actions = plan.actions()
         # A shape is created for "t1" (no data buffer) and destroyed on release.
         self.assertIn(("CreateShape", "t1"), [(a.kind_name, a.name) for a in actions])
-        self.assertIn(("DeleteShape", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("RemoveShape", "t1"), [(a.kind_name, a.name) for a in actions])
         # "t0" is a result: it is allocated and freed as a buffer.
         self.assertIn(("AllocateBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
-        self.assertIn(("DeleteBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("RemoveBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
         # The shape value is never allocated / freed as a buffer.
         self.assertNotIn(("AllocateBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
-        self.assertNotIn(("DeleteBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertNotIn(("RemoveBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
 
     def test_execution_plan_actions_peak_memory(self):
         model = parser.parse_model(self._PLAN_SRC)
@@ -920,22 +920,22 @@ class TestExecutionPlanBindings(ExtTestCase):
         # A temporary buffer is allocated before node 0 runs and deleted after,
         # sized from the peak-memory metadata.
         alloc = [a for a in actions if a.kind_name == "AllocateTemporaryBuffer"]
-        delete = [a for a in actions if a.kind_name == "DeleteTemporaryBuffer"]
+        remove = [a for a in actions if a.kind_name == "RemoveTemporaryBuffer"]
         self.assertEqual(len(alloc), 1)
-        self.assertEqual(len(delete), 1)
+        self.assertEqual(len(remove), 1)
         self.assertEqual(alloc[0].node_index, 0)
         self.assertEqual(alloc[0].size, 512)
-        self.assertEqual(delete[0].node_index, 0)
-        self.assertEqual(delete[0].size, 512)
+        self.assertEqual(remove[0].node_index, 0)
+        self.assertEqual(remove[0].size, 512)
         kinds = [a.kind_name for a in actions]
         alloc_index = kinds.index("AllocateTemporaryBuffer")
-        delete_index = kinds.index("DeleteTemporaryBuffer")
+        remove_index = kinds.index("RemoveTemporaryBuffer")
         execute0_index = next(
             i for i, a in enumerate(actions) if a.kind_name == "ExecuteNode" and a.node_index == 0
         )
         # The scratch buffer wraps the node execution.
         self.assertLess(alloc_index, execute0_index)
-        self.assertLess(execute0_index, delete_index)
+        self.assertLess(execute0_index, remove_index)
 
     def test_default_execution_plan_has_no_actions(self):
         plan = rt.ExecutionPlan()
@@ -963,9 +963,9 @@ class TestExecutionPlanBindings(ExtTestCase):
         execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
         self.assertEqual(execute_indices, [0, 1, 2])
         # The intermediates are freed; the output ``y`` is kept.
-        deleted = {a.name for a in plan.actions() if a.kind_name == "DeleteBuffer"}
-        self.assertEqual(deleted, {"t0", "t1"})
-        self.assertNotIn("y", deleted)
+        removed = {a.name for a in plan.actions() if a.kind_name == "RemoveBuffer"}
+        self.assertEqual(removed, {"t0", "t1"})
+        self.assertNotIn("y", removed)
         # "t0" is produced in place from "x": its allocation carries the reuse
         # information and does not reference an allocator.
         t0_alloc = [

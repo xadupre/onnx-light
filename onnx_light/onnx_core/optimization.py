@@ -460,6 +460,24 @@ class GraphGraph(_C.GraphGraph):
         )
 
 
+def diff_models(
+    model: ModelProto,
+    target: ModelProto,
+    *,
+    base_dir: str = "",
+    target_dir: str = "",
+    schema_lookup: SchemaLookup | None = _default_schema_lookup,
+) -> RewritingProto:
+    """Constructs a replay-validated native delta to an independent target model.
+
+    External references are interpreted relative to their respective directories.
+    Identical references reuse storage without reading payloads; different
+    references are compared by content. Interface and persistent declarations
+    must match. See the model-delta documentation for supported differences.
+    """
+    return _C.diff_models(model, target, base_dir, target_dir, schema_lookup)
+
+
 def apply_rewritings(
     model: ModelProto,
     rewrites: RewritingProto,
@@ -621,6 +639,7 @@ __all__ = [
     "apply_rewritings",
     "apply_rewritings_to_model",
     "clear_registered_patterns",
+    "diff_models",
     "extend_pattern_set",
     "register_pattern",
     "register_pattern_set",

@@ -91,7 +91,7 @@ using OnnxMapMap = std::unordered_map<std::string, Map>;
  * pure metadata (a rank-sized list of dimensions) with no data buffer: the
  * runtime keeps a sibling map of shape-typed edges, looked up by the same
  * ``NodeProto::input`` / ``NodeProto::output`` names, so a value can be
- * released as a shape (:cpp:enumerator:`ExecuteActionKind::kDeleteShape`)
+ * released as a shape (:cpp:enumerator:`ExecuteActionKind::kRemoveShape`)
  * independently of the tensor map.
  */
 using ShapeMap = std::unordered_map<std::string, Shape>;

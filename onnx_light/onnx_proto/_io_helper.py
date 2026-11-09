@@ -195,10 +195,6 @@ def save(
     if isinstance(proto, PipelineProto):
         proto.validate_deferred_export()
     if isinstance(proto, ModelProto):
-        if (proto.HasField("base_model") or proto.HasField("base_model_sha256")) and (
-            format or _infer_format(f)
-        ) != "protobuf":
-            raise ValueError("Model variant envelopes require binary protobuf serialization.")
         proto.validate_weight_save_path(str(f) if isinstance(f, (str, Path)) else "")
         if proto.has_deferred_weights() and (
             save_as_external_data or location or (format or _infer_format(f)) != "protobuf"
@@ -325,7 +321,6 @@ def load(
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
     format: Optional[str] = None,
     defer_weights: bool = False,
-    resolve_references: bool = True,
 ) -> ModelProto | PipelineProto:
     """
     Loads a serialized ModelProto or PipelineProto into memory.
@@ -418,8 +413,6 @@ def load(
         files, no typed payloads, no explicit external-data stream, and ``no_copy=False``.
         External locations are resolved relative to the original model directory.
         PipelineProto input is unsupported in deferred mode.
-    :param resolve_references: resolves graph-free base-reference variants using native
-        replay (default). False returns the serialized envelope for inspection.
     :return: Loaded in-memory ModelProto or PipelineProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -459,10 +452,6 @@ def load(
             with open(f, encoding="utf-8") as handle:
                 text = handle.read()
         model = parse_from_textproto(text, proto_type())
-        if isinstance(model, ModelProto) and (
-            model.HasField("base_model") or model.HasField("base_model_sha256")
-        ):
-            raise ValueError("Model variant envelopes require binary protobuf files.")
         return model
     if isinstance(file_load_mode, str):
         try:
@@ -475,7 +464,6 @@ def load(
     assert isinstance(
         file_load_mode, FileLoadMode
     ), f"Unexpected type {type(file_load_mode)} for file_load_mode."
-    explicit_location = bool(location)
     if load_external_data is None:
         load_external_data = bool(location)
     assert (
@@ -519,30 +507,6 @@ def load(
             model.ParseFromFile(f, external_data_file=location)
         else:
             model.ParseFromFile(f)
-    if (
-        resolve_references
-        and isinstance(model, ModelProto)
-        and (model.HasField("base_model") or model.HasField("base_model_sha256"))
-    ):
-        if not isinstance(f, str):
-            raise ValueError("Resolving a model variant requires its file path.")
-        if explicit_location or defer_weights:
-            raise ValueError("Model variants do not support location overrides or defer_weights.")
-        from ._model_variants import resolve_model_variant
-
-        return resolve_model_variant(
-            model,
-            f,
-            load_external_data=load_external_data,
-            skip_raw_data=skip_raw_data,
-            raw_data_threshold=raw_data_threshold,
-            tiny_external_data_threshold=tiny_external_data_threshold,
-            num_threads=num_threads,
-            min_block_size=min_block_size,
-            no_copy=no_copy,
-            file_load_mode=file_load_mode,
-            touch_raw_data_pages=touch_raw_data_pages,
-        )
     return model
 
 

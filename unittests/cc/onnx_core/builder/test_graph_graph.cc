@@ -3269,13 +3269,41 @@ TEST(GraphGraph, ModelDiffReplacesSameNameInitializerWithoutCopyingRetainedStora
     ASSERT_EQ(plan.rewrites().size(), 1u);
     ASSERT_EQ(plan.rewrites(0).added_initializers().size(), 1u);
     EXPECT_EQ(plan.rewrites(0).added_initializers(0).name(), "weight");
-    EXPECT_EQ(plan.rewrites(0).initializer_order(0), "bias");
     const auto actual = source.ApplyRewritings(plan).ToModel();
     EXPECT_TRUE(actual.graph().Equals(expected.graph()));
   }
   EXPECT_EQ(target.RewritingHash(), target_before);
   EXPECT_EQ(source.Initializers()[0].name(), "weight");
   EXPECT_EQ(source.Nodes()[0].op_type(), "Add");
+}
+
+TEST(GraphGraph, ModelDiffReordersInitializersWithForwardingFunctionWithoutCopyingStorage) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  for (const char *name : {"weight", "bias"}) {
+    auto tensor = MakeInitializer<float>(name, {2}, {1, 2});
+    tensor.set_raw_data(std::as_const(tensor).ref_float_data().data(), 2 * sizeof(float));
+    tensor.clr_float_data();
+    source.MakeInitializer(tensor);
+  }
+  source.MakeNode("Add", {"X", "weight"}, {"Y"});
+  source.MakeOutput("Y");
+  auto target = source.ToModel();
+  std::swap(target.ref_graph().ref_initializer().get(0),
+            target.ref_graph().ref_initializer().get(1));
+  const auto *weight_bytes = source.Initializers()[0].ref_raw_data().data();
+  const auto *bias_bytes = source.Initializers()[1].ref_raw_data().data();
+  const auto plan = source.DiffRewritings(target);
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  EXPECT_TRUE(plan.rewrites(0).added_initializers().empty());
+  EXPECT_EQ(plan.rewrites(0).initializer_calls().size(), 2u);
+  auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Initializers().size(), 2u);
+  EXPECT_EQ(result.Initializers()[0].ref_raw_data().data(), bias_bytes);
+  EXPECT_EQ(result.Initializers()[1].ref_raw_data().data(), weight_bytes);
+  EXPECT_TRUE(result.ToModel().graph().Equals(target.graph()));
+  EXPECT_TRUE(result.ToModel().functions().empty());
 }
 
 TEST(GraphGraph, ModelDiffRejectsNestedBuilderTargets) {

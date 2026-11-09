@@ -1639,8 +1639,6 @@ FIELD_REPEATED(uint64_t, computed_initializer_positions, 12,
                "Reserved for prepared initializer positions.")
 FIELD_REPEATED(uint64_t, removed_extended_initializers, 13,
                "Removed extended initializer positions before this edit.")
-FIELD_REPEATED_STR(utils::String, initializer_order, 14,
-                   "Optional complete dense initializer name order after this edit.")
 END_PROTO()
 
 BEGIN_PROTO(MoveNodeProto, "Moves one node in the final simultaneous relocation stage.")
@@ -1661,8 +1659,6 @@ FIELD_REPEATED_STR(
 FIELD_OPTIONAL(uint64_t, hash_before, 6, "Structural hash before applying this complete plan.")
 FIELD_OPTIONAL(uint64_t, hash_after, 7, "Structural hash after all edits and node moves.")
 FIELD_REPEATED_PROTO(MoveNodeProto, moved_nodes, 8, "Simultaneous moves after all ordinary edits.")
-FIELD_REPEATED_STR(utils::String, removed_function_ids, 9,
-                   "Escaped identities of model-local functions removed by this plan.")
 END_PROTO()
 
 // ModelProto
@@ -1748,10 +1744,6 @@ FIELD_MAP_PROTO(
     RewritingProto, rewritings, 1001,
     "Named variants applied independently to the canonical model (onnx-light extension). "
     "Keys must be nonempty and unique. Model mutations must clear or regenerate these plans.")
-FIELD_STR(base_model, 1002,
-          "Relative canonical model path for a graph-free, single-plan variant envelope.")
-FIELD_STR(base_model_sha256, 1003,
-          "SHA-256 of the referenced model file; required for base-referencing variants.")
 /** Copies model values while retaining non-serialized deferred sources. */
 ModelProto(const ModelProto &other) { CopyFrom(other); }
 ModelProto(ModelProto &&other) noexcept = default;

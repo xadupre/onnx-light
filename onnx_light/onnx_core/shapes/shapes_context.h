@@ -613,11 +613,6 @@ public:
 
   /// Clears function definitions without discarding inferred shapes.
   void ClearLocalFunctions() noexcept;
-  /// Removes one definition without discarding inferred shapes or other functions.
-  void RemoveLocalFunction(const std::string &key) {
-    local_functions_.erase(key);
-    owned_local_functions_.erase(key);
-  }
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
   /// ``nullptr`` when none is registered or a registered operator takes

@@ -473,7 +473,7 @@ def diff_models(
     External references are interpreted relative to their respective directories.
     Identical references reuse storage without reading payloads; different
     references are compared by content. Interface and persistent declarations
-    must match. See the model-variant documentation for supported differences.
+    must match. See the model-delta documentation for supported differences.
     """
     return _C.diff_models(model, target, base_dir, target_dir, schema_lookup)
 

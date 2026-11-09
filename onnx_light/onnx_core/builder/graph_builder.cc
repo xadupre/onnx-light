@@ -488,8 +488,6 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
                            const OperatorRegistry &local_registry)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
       schema_lookup_(std::move(schema_lookup)), local_registry_(local_registry) {
-  if (model.has_base_model() || model.has_base_model_sha256())
-    throw BuilderError("GraphBuilder: resolve the base-referencing variant with onnx.load first.");
   local_registry_.ConfigureShapes(compute_.Shapes());
   // Copy only metadata: copying the optional graph would serialize its payload
   // before discarding it. Graphs, functions, types and opsets are imported below.

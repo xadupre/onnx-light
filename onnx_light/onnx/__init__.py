@@ -74,7 +74,6 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save_to_file_descriptor,
 )
 from ..onnx_proto._helper import proto_str_to_multiline  # noqa: F401
-from ..onnx_proto._model_variants import resolve_model_variant, save_model_variant  # noqa: F401
 
 # Aliases matching the upstream onnx API.
 load_model = load

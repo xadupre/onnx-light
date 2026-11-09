@@ -19,8 +19,8 @@ Optimization always operates on a
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx()
 
-Independent model deltas and file-backed variants
-+++++++++++++++++++++++++++++++++++++++++++++++++
+Independent model deltas
+++++++++++++++++++++++++
 
 ``diff_models(canonical, target, base_dir=..., target_dir=...)`` constructs a
 ``RewritingProto`` from independently produced models. Comparison and replay
@@ -34,81 +34,67 @@ root ``GraphBuilder``. The native builder overload compares both existing
 builders directly without exporting and reimporting the target, and preserves
 both builders.
 
-To keep exactly one full canonical model on disk:
+Named plans use the existing ``ModelProto.rewritings`` representation:
 
 .. code-block:: python
 
     import onnx_light.onnx as onnx
+    from onnx_light.onnx_core.optimization import (
+        apply_rewritings_to_model,
+        diff_models,
+    )
 
+    canonical.add_rewriting("cpu", diff_models(canonical, cpu_model))
+    canonical.add_rewriting("cuda", diff_models(canonical, cuda_model))
     onnx.save(canonical, "artifacts/model.onnx")
-    onnx.save_model_variant(
-        "artifacts/model.onnx", cpu_model, "artifacts/model.cpu.onnx", name="cpu"
-    )
-    onnx.save_model_variant(
-        "artifacts/model.onnx", cuda_model, "artifacts/model.cuda.onnx", name="cuda"
-    )
-    cpu = onnx.load("artifacts/model.cpu.onnx", load_external_data=True)
-    cuda = onnx.load("artifacts/model.cuda.onnx", load_external_data=True)
+    loaded = onnx.load("artifacts/model.onnx")
+    cpu = apply_rewritings_to_model(loaded, loaded.rewritings["cpu"])
+    cuda = apply_rewritings_to_model(loaded, loaded.rewritings["cuda"])
 
-The target may also be an existing model path. For an in-memory target,
-``target_dir`` specifies the directory containing its external weights
-(by default, the variant's directory). Standalone target model files are not
-dependencies and can be removed after export. Changed external weight shards
-must remain available.
+No proto fields or separate reference-file format are introduced. A target is
+reconstructed from its source model and a list of native rewrites, with normal
+pre/post structural-hash validation and no fallback.
 
-Each variant is a binary ``ModelProto`` envelope with **no graph**, one named
-native plan in ``rewritings``, a relative ``base_model`` reference (extension
-field 1002), and ``base_model_sha256`` (field 1003). It contains neither the base
-graph nor unchanged dense initializer payloads. Normal ``ModelProto`` files and
-their loading behavior are unchanged. ``onnx.load(..., resolve_references=False)``
-returns an envelope for inspection; ``onnx.resolve_model_variant(envelope, path)``
-resolves it explicitly. Low-level proto parsers return the envelope rather than
-resolving filesystem references. Upstream ONNX does not understand this extension.
-
-Resolution checks the referenced model file's SHA-256 and then runs normal native
-replay with both structural hashes. There is no fallback to another plan or the
-canonical graph. SHA-256 identifies the exact base file, not its external
-payloads, and is not an authenticity mechanism: artifact files and weight shards
-must be immutable while used. Relative model and weight references must remain
-inside the variant's directory tree under the existing external-data path
-policy. Absolute paths, traversal, links, missing bases, malformed envelopes,
-cycles and chains longer than 32 references are errors. Moving the complete
-artifact directory preserves resolution. Rebasing changes only tensor
-``location`` entries, never their offsets or lengths.
-
-Dense initializer additions, deletions, same-name replacements and ordering,
+Dense initializer additions, removals, same-name replacements and ordering,
 node ordering, empty optional output slots, nested graph edits, and local
-function additions, replacements and removals are supported. Dense initializer
-order uses ``LocalRewritingProto.initializer_order`` (field 14), a complete
-name permutation with no payloads. ``RewritingProto.removed_function_ids``
-(field 9) removes definitions after ordinary edits and moves, rejecting any
-remaining calls.
+function additions are supported. Initializer permutations are ordinary rewrites
+whose ``initializer_calls`` invoke a local forwarding function and whose
+``computed_initializer_positions`` specify the resulting positions. Forwarding
+functions with no nodes and outputs referring directly to their inputs reuse
+the tensor storage and external byte ranges without materialization. New
+forwarding functions needed only during initializer preparation remain in the
+rewriting plan, not in the reconstructed model. Functions also used by runtime
+nodes are retained.
+
+Two different definitions of the same local-function identity
+``(domain, name, overload)`` are unsupported and raise an error. Removing local
+functions or reordering graph-input defaults is also unsupported.
 
 Input/output names, shapes, dtypes, effective value tags, persistent bindings,
 sparse/extended initializer declarations, model declarations and user metadata
 must remain compatible. Existing opset versions cannot be removed or changed;
 external sparse, encoded and paged-cache declarations additionally require
-matching source storage directories during diff construction;
-new required domains are added to the plan. Unsupported differences raise
+matching source storage directories during diff construction.
+New required domains are added to the plan. Unsupported differences raise
 explicit errors rather than adapting interfaces (in particular, no implicit
 FP32/FP16 conversion). Producer strings, graph/node names and documentation,
 inferred intermediate value-info shapes, and regenerated lifetime, constant,
 in-place and peak-memory annotations are nonsemantic diagnostics. Effective
 value tags are compared, not ignored. Changes to other intermediate value
-metadata are rejected. Envelopes do not support textproto, explicit external
-stream overrides, or ``defer_weights=True`` resolution.
+metadata are rejected.
 
 Comparison indexes nodes and initializers by identity rather than performing
 quadratic sequence alignment. Equal external references with equal metadata
-reuse the base storage without opening payload files. Different references
-(including identical filenames in different directories) are compared using
-their actual tensor contents; names alone never establish equality. This
-currently materializes the two compared tensors, not the complete checkpoint.
-Changed deferred tensors are materialized when exporting their delta.
-The base-file SHA-256 is streamed over the ONNX file, including inline payloads,
-but does not read external shards. Replay performs the usual graph import,
-shape inference and validation; constants needed for inference may therefore
-require materialization.
+reuse the source storage without opening payload files. ``base_dir`` and
+``target_dir`` locate the respective external payloads when comparing different
+references, including identical filenames in different directories. Such
+comparisons materialize the two compared tensors, not the complete checkpoint.
+Changed or new dense initializers from another directory are embedded in the
+plan so replay cannot accidentally read the source model's file with the same
+name. Retained external references preserve their locations, offsets and
+lengths; callers must keep their backing files available.
+Replay performs the usual graph import, shape inference and validation;
+constants needed for inference may therefore require materialization.
 
 Optimization callback
 +++++++++++++++++++++

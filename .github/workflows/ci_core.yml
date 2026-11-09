@@ -155,17 +155,24 @@ jobs:
           python -m pip install cmake==${{ matrix.cmake }} setuptools "nanobind>=3.0.1" "numpy>=2.2"
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Build all Python extensions with free-threaded Python
         env:
-          SCCACHE_GHA_ENABLED: "true"
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
           CMAKE_ARGS: >-
             -DONNX_LIGHT_BUILD_KERNELS=ON
             -DPython_FIND_ABI=ANY;ANY;ANY;ON
             -DPython3_FIND_ABI=ANY;ANY;ANY;ON
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+            -DCMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }}
+            -DCMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }}
         run: |
           python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
           export CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
@@ -220,7 +227,14 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Set parallel build level
         shell: bash
@@ -237,8 +251,8 @@ jobs:
 
       - name: Build and Install package without kernels/backend
         env:
-          SCCACHE_GHA_ENABLED: "true"
-        run: pip install --no-build-isolation -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: pip freeze
         run: pip freeze
@@ -275,7 +289,14 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Set parallel build level
         shell: bash
@@ -292,8 +313,8 @@ jobs:
 
       - name: Build and Install package
         env:
-          SCCACHE_GHA_ENABLED: "true"
-        run: pip install -Cbuild-dir=build -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install -Cbuild-dir=build -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: uninstall onnx
         run: pip uninstall -y onnx
@@ -323,7 +344,14 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Set parallel build level
         shell: bash
@@ -340,8 +368,8 @@ jobs:
 
       - name: Build and Install package (Linux)
         env:
-          SCCACHE_GHA_ENABLED: "true"
-        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: Report installed lib_onnx_proto size
         # Includes the native ORT codec and persistent-binding allowances documented in
@@ -469,7 +497,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Install OpenSSL (macOS)
         if: runner.os == 'macOS'
@@ -512,14 +547,14 @@ jobs:
         if: runner.os == 'Windows'
         env:
           CMAKE_GENERATOR: Ninja
-          SCCACHE_GHA_ENABLED: "true"
-        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: Build and Install package (macOS)
         if: runner.os == 'macOS'
         env:
-          SCCACHE_GHA_ENABLED: "true"
-        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: Install ONNX weekly
         run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
@@ -566,22 +601,13 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    # Ninja honors the compiler launcher for MSVC, unlike the Visual Studio
-    # platform generator previously used here. This lets the x86 build share
-    # the same persistent sccache strategy as the x64 Windows build. The
-    # sccache speedup only shows up once the cache is warm; when the cache
-    # does not trigger enough (e.g. a cold or partially invalidated cache),
-    # the build can approach the previous 60-minute limit, so keep a
-    # generous timeout to absorb that variance.
+    # Keep the x86 build independent of sccache so cache-server startup failures
+    # cannot block compilation. The uncached build needs a generous timeout.
     timeout-minutes: 90
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v7
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set up x86 MSVC for Ninja
         uses: ilammy/msvc-dev-cmd@v1.13.0
@@ -594,14 +620,10 @@ jobs:
           ninja --version
 
       - name: Configure 32-bit CMake build
-        env:
-          SCCACHE_GHA_ENABLED: "true"
         run: |
-          cmake -S . -B build-win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          cmake -S . -B build-win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 
       - name: Build 32-bit CMake build
-        env:
-          SCCACHE_GHA_ENABLED: "true"
         run: |
           cmake --build build-win32 --parallel
 

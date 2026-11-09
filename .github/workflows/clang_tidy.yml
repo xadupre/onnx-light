@@ -7,12 +7,14 @@ on:
       - "onnx_light/**/*.cc"
       - "onnx_light/**/*.h"
       - ".clang-tidy"
+      - ".github/workflows/clang_tidy.yml"
   pull_request:
     branches: ["main"]
     paths:
       - "onnx_light/**/*.cc"
       - "onnx_light/**/*.h"
       - ".clang-tidy"
+      - ".github/workflows/clang_tidy.yml"
   schedule:
     # Full scan every Monday at 03:00 UTC.
     - cron: "0 3 * * 1"
@@ -44,7 +46,14 @@ jobs:
         run: pip install "cmake>=4.0" "nanobind>=3.0.1" numpy scikit-build-core
 
       - name: Set up sccache
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Set parallel build level
         run: |
@@ -57,7 +66,7 @@ jobs:
       # of this workflow.
       - name: Configure CMake
         env:
-          SCCACHE_GHA_ENABLED: "true"
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: |
           cmake -B build \
             -G Ninja \
@@ -65,17 +74,18 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} \
             -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
       - name: Build
         env:
-          SCCACHE_GHA_ENABLED: "true"
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: cmake --build build
 
       - name: Collect files for clang-tidy
         id: files
+        shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # Weekly or manual full scan: check every source file.
@@ -85,7 +95,7 @@ jobs:
             FILES=$(git diff --name-only \
                       "${{ github.event.pull_request.base.sha }}" HEAD \
                       -- '*.cc' \
-                    | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+                    | awk '/^onnx_light\// && !/\/build\// { printf "%s ", $0 }')
           else
             # Push: only files changed in this push.
             BEFORE="${{ github.event.before }}"
@@ -93,10 +103,10 @@ jobs:
             if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]] \
                || ! git cat-file -e "$BEFORE" 2>/dev/null; then
               FILES=$(git diff --name-only HEAD~1 HEAD -- '*.cc' \
-                      | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+                      | awk '/^onnx_light\// && !/\/build\// { printf "%s ", $0 }')
             else
               FILES=$(git diff --name-only "$BEFORE" "$SHA" -- '*.cc' \
-                      | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+                      | awk '/^onnx_light\// && !/\/build\// { printf "%s ", $0 }')
             fi
           fi
           echo "files=$FILES" >> "$GITHUB_OUTPUT"

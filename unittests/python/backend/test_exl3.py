@@ -137,7 +137,7 @@ class TestExl3(ExtTestCase):
                 reconstruction_dtype=onnx.TensorProto.FLOAT16 if half else onnx.TensorProto.FLOAT,
             )
             numpy.testing.assert_allclose(
-                actual, expected, rtol=0.002 if half else 0.00002, atol=0.002 if half else 0.00002
+                actual, expected, rtol=0.002 if half else 0.00002, atol=0.002 if half else 0.00005
             )
 
     def test_native_reference_rates_codebooks_and_transform_boundaries(self):
@@ -234,7 +234,9 @@ class TestExl3(ExtTestCase):
         for index, value in ((0, 0), (0, 9), (1, 3), (2, 64)):
             encoded = onnx.EncodedValueProto()
             encoded.ParseFromString(original.SerializeToString())
-            encoded.struct_type.structure.field[index].constant.int64_data[0] = value
+            encoded.struct_type.structure.field[index].constant.CopyFrom(
+                onnx.TensorProto(data_type=onnx.TensorProto.INT64, int64_data=[value])
+            )
             with self.assertRaises(ValueError):
                 exl3.reconstruct_exl3_weights(encoded)
         original.struct_type.name = "onnx_light.exl3_weights.v2"

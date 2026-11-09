@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/gguf.h"
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include <array>
@@ -49,52 +50,55 @@ template <typename T> T ReconstructionOperand(double value) {
     return value;
 }
 
-constexpr std::array<std::string_view, 45> kFormatNames = {"int8",
-                                                           "int8_per_channel",
-                                                           "int4",
-                                                           "gptq",
-                                                           "awq",
-                                                           "eetq",
-                                                           "matmulnbits",
-                                                           "q2_k",
-                                                           "q3_k",
-                                                           "q4_k",
-                                                           "q5_k",
-                                                           "q6_k",
-                                                           "hqq",
-                                                           "exl2",
-                                                           "exl3",
-                                                           "nf4",
-                                                           "iq4_nl",
-                                                           "binary",
-                                                           "ternary",
-                                                           "tq1_0",
-                                                           "tq2_0",
-                                                           "bitnet",
-                                                           "paretoq",
-                                                           "tequila",
-                                                           "stq1_0",
-                                                           "iq1_s",
-                                                           "aqlm",
-                                                           "quip_sharp",
-                                                           "spqr",
-                                                           "squeezellm",
-                                                           "log",
-                                                           "fp6_llm",
-                                                           "fp8_e4m3",
-                                                           "mxfp4",
-                                                           "mxfp6",
-                                                           "nvfp4",
-                                                           "quarot",
-                                                           "smoothquant",
-                                                           "tiled_float",
-                                                           "column_major",
-                                                           "ort_matmulnbits_int2",
-                                                           "ort_matmulnbits_int4",
-                                                           "ort_matmulnbits_int8",
-                                                           "mxfp8",
-                                                           "mxfp6_e2m3"};
-static_assert(static_cast<size_t>(QuantizationFormat::kMxfp6E2m3) + 1 == kFormatNames.size());
+constexpr std::array<std::string_view, QuantizationFormats().size()> kFormatNames = {
+    "int8",
+    "int8_per_channel",
+    "int4",
+    "gptq",
+    "awq",
+    "eetq",
+    "matmulnbits",
+    "hqq",
+    "exl2",
+    "exl3",
+    "nf4",
+    "binary",
+    "ternary",
+    "bitnet",
+    "paretoq",
+    "tequila",
+    "stq1_0",
+    "aqlm",
+    "quip_sharp",
+    "spqr",
+    "squeezellm",
+    "log",
+    "fp6_llm",
+    "fp8_e4m3",
+    "mxfp4",
+    "mxfp6",
+    "nvfp4",
+    "quarot",
+    "smoothquant",
+    "tiled_float",
+    "column_major",
+    "ort_matmulnbits_int2",
+    "ort_matmulnbits_int4",
+    "ort_matmulnbits_int8",
+    "mxfp8",
+    "mxfp6_e2m3",
+    "Q4_0",
+    "Q8_0",
+    "Q4_K",
+    "Q5_K",
+    "Q6_K",
+    "Q2_K",
+    "Q3_K",
+    "IQ4_NL",
+    "IQ1_S",
+    "TQ1_0",
+    "TQ2_0"};
+static_assert(static_cast<size_t>(QuantizationFormat::kTq20) + 1 == kFormatNames.size());
 
 constexpr uint32_t OrtBits(QuantizationFormat format) {
   switch (format) {
@@ -134,8 +138,6 @@ constexpr double kNf4[] = {-1,
                            0.5626170039176941,
                            0.7229568362236023,
                            1};
-constexpr double kIq4Nl[] = {-127, -104, -83, -65, -49, -35, -22, -10,
-                             1,    13,   25,  38,  53,  69,  89,  113};
 constexpr double kBinary[] = {-1, 1};
 constexpr double kTernary[] = {-1, 0, 1};
 constexpr double kLog[] = {0, 0.125, -0.125, 0.25, -0.25, 0.5, -0.5, 1, -1, 2, -2, 4, -4, 8, -8};
@@ -323,6 +325,8 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
 void ValidatePlan(const QuantizationPlan &plan, size_t count) {
   ValidatePrecision(plan);
   QuantizationFormatName(plan.format);
+  EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(plan.format),
+                      "GGML formats require native block storage, not a portable block plan.");
   EXT_ENFORCE_INVALID(plan.format != QuantizationFormat::kMxfp8,
                       "MXFP8 requires its dedicated versioned weight schema.");
   EXT_ENFORCE_INVALID(plan.format != QuantizationFormat::kMxfp6E2m3,
@@ -815,6 +819,8 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name) {
 QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
                                       uint64_t block_size) {
   QuantizationFormatName(format);
+  EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(format),
+                      "GGML floating-point quantization is not implemented; import native blocks.");
   EXT_ENFORCE_INVALID(OrtBits(format) == 0,
                       "Use MakeMatMulNBitsPlan with K and N for ORT MatMulNBits profiles.");
   EXT_ENFORCE_INVALID(block_size > 0 && block_size <= std::numeric_limits<uint32_t>::max(),
@@ -843,9 +849,6 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   if (format == QuantizationFormat::kInt8 || format == QuantizationFormat::kInt8PerChannel ||
       format == QuantizationFormat::kEetq || format == QuantizationFormat::kSmoothquant)
     layout.bits = 8;
-  if (format >= QuantizationFormat::kQ2K && format <= QuantizationFormat::kQ6K)
-    layout.bits =
-        2 + static_cast<uint32_t>(format) - static_cast<uint32_t>(QuantizationFormat::kQ2K);
   if (format == QuantizationFormat::kGptq || format == QuantizationFormat::kAwq ||
       format == QuantizationFormat::kMatmulnbits) {
     layout.signed_codes = false;
@@ -853,18 +856,15 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   }
   if (format == QuantizationFormat::kNf4)
     SetTable(layout, block, kNf4, 4);
-  if (format == QuantizationFormat::kIq4Nl)
-    SetTable(layout, block, kIq4Nl, 4);
   if (format == QuantizationFormat::kBinary)
     SetTable(layout, block, kBinary, 1);
-  if (format == QuantizationFormat::kTernary || format == QuantizationFormat::kTq10 ||
-      format == QuantizationFormat::kTq20 || format == QuantizationFormat::kBitnet ||
+  if (format == QuantizationFormat::kTernary || format == QuantizationFormat::kBitnet ||
       format == QuantizationFormat::kParetoq || format == QuantizationFormat::kTequila) {
     SetTable(layout, block, kTernary, 2);
-    layout.base3 = format != QuantizationFormat::kTq20;
+    layout.base3 = true;
   }
-  if (format == QuantizationFormat::kStq10 || format == QuantizationFormat::kIq1S ||
-      format == QuantizationFormat::kAqlm || format == QuantizationFormat::kQuipSharp) {
+  if (format == QuantizationFormat::kStq10 || format == QuantizationFormat::kAqlm ||
+      format == QuantizationFormat::kQuipSharp) {
     layout.method = QuantizationMethod::kCodebook;
     layout.bits = format == QuantizationFormat::kStq10 ? 5 : 8;
     layout.entries = uint32_t{1} << layout.bits;
@@ -1779,6 +1779,8 @@ QuantizationHeader ReadQuantizationHeader(const EncodedValueProto &encoded,
     count = Product(count, dim.dim_value());
   }
   const auto format = ParseQuantizationFormat(ProfileName(name));
+  EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(format),
+                      "GGML formats require their native schema, not portable v1/v2 storage.");
   EXT_ENFORCE_INVALID(format != QuantizationFormat::kMxfp8,
                       "MXFP8 requires its dedicated versioned weight schema.");
   EXT_ENFORCE_INVALID(format != QuantizationFormat::kMxfp6E2m3,
@@ -1950,6 +1952,13 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 }
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
+    const auto tensor = DequantizeGgufTensorPayload(encoded, kGgufDefaultMaxBytes, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
   if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == kMxfp6E2m3WeightsName) {
     const auto packed = ParseMxfp6E2m3Value(encoded, catalogue);
@@ -2357,7 +2366,8 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
 
 StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
   EXT_ENFORCE_INVALID(OrtBits(plan.format) == 0 && plan.format != QuantizationFormat::kMxfp8 &&
-                          plan.format != QuantizationFormat::kMxfp6E2m3,
+                          plan.format != QuantizationFormat::kMxfp6E2m3 &&
+                          !IsGgufQuantizationFormat(plan.format),
                       "MakeQuantizationType requires a portable block plan.");
   return Schema(plan);
 }
@@ -2365,6 +2375,8 @@ StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
 StructTypeProto MakeSharedQuantizationType(const StructTypeProto &type) {
   const std::string name = type.name().value();
   const auto format = ParseQuantizationFormat(ProfileName(name));
+  EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(format),
+                      "GGML formats do not accept portable shared parameters.");
   size_t size = 1;
   auto add = [&](size_t bytes) {
     EXT_ENFORCE_INVALID(bytes <= size_t(std::numeric_limits<int64_t>::max()) - size,
@@ -2486,6 +2498,8 @@ QuantizationPlan PlanFromParameters(const Shape &shape, size_t value_count,
   QuantizationPlan plan;
   plan.reconstruction_dtype = ReconstructionType(name);
   plan.format = ParseQuantizationFormat(ProfileName(name));
+  EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(plan.format),
+                      "GGML formats require native block storage, not portable parameters.");
   const bool ort = OrtBits(plan.format) != 0;
   if (ort) {
     const auto &field = GetField(root, 0, "parameters");
@@ -2773,6 +2787,8 @@ QuantizationParameterCatalogue::EstimateMemory(const ModelProto &model) {
     const auto &root = entry.storage_type;
     const std::string name = root.name().value();
     const auto format = ParseQuantizationFormat(ProfileName(name));
+    EXT_ENFORCE_INVALID(!IsGgufQuantizationFormat(format),
+                        "GGML formats do not accept portable shared parameters.");
     size_t blocks = 0, runs = 0, tables = 0, common = 0;
     if (OrtBits(format)) {
       const auto &parameters = GetField(root, 0, "parameters");
@@ -3031,6 +3047,10 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
                         RawBufferAllocator *allocator, int32_t output_dtype) {
   EXT_ENFORCE_INVALID(!value.has_parameter_ref(),
                       "Materialize shared parameters before decoding an EncodedValueProto.");
+  if ((output_dtype == TensorProto::UNDEFINED || output_dtype == TensorProto::FLOAT) &&
+      value.has_struct_type() &&
+      catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix))
+    return DequantizeGgufTensorPayload(value, kGgufDefaultMaxBytes, catalogue, allocator);
   const auto decoded = DecodeValues(value, catalogue);
   const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
   const size_t width = FloatBytes(type);
@@ -3070,6 +3090,27 @@ EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const Quantizat
 
 TensorProto DequantizeTensorProto(const EncodedValueProto &value,
                                   const StructTypeCatalogue &catalogue) {
+  if (value.has_struct_type() &&
+      catalogue.Resolve(value.struct_type()).name().value().starts_with(kGgufTypePrefix)) {
+    const auto tensor = DequantizeGgufTensorPayload(value, kGgufDefaultMaxBytes, catalogue);
+    TensorProto result;
+    if (value.has_name())
+      result.set_name(value.name().value());
+    if (value.has_doc_string())
+      result.set_doc_string(value.doc_string().value());
+    result.set_data_type(TensorProto::FLOAT);
+    for (const auto dim : tensor.shape)
+      result.add_dims(dim);
+    if constexpr (std::endian::native == std::endian::little) {
+      result.set_raw_data(tensor.bytes(), tensor.size_bytes());
+    } else {
+      ByteWriter payload(*result.mutable_raw_data(), tensor.size_bytes());
+      for (size_t i = 0; i < tensor.size_bytes(); i += sizeof(float))
+        PutFloat(payload, Load<float>(tensor.bytes() + i), TensorProto::FLOAT);
+      payload.Finish();
+    }
+    return result;
+  }
   const auto decoded = DecodeValues(value, catalogue);
   TensorProto result;
   if (value.has_name())

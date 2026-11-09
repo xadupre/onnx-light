@@ -713,10 +713,10 @@ class TestQuantizedValues(ExtTestCase):
 
         formats = quantization_formats()
         self.assertIsInstance(formats, list)
-        self.assertEqual(len(formats), 45)
+        self.assertEqual(len(formats), 47)
         self.assertTrue(all(isinstance(value, QuantizationFormat) for value in formats))
         self.assertEqual(formats[0], QuantizationFormat.INT8)
-        self.assertEqual(formats[-1], QuantizationFormat.MXFP6_E2M3)
+        self.assertEqual(formats[-1], QuantizationFormat.TQ2_0)
         for value in formats:
             self.assertEqual(
                 runtime.parse_quantization_format(runtime.quantization_format_name(value)), value
@@ -741,6 +741,10 @@ class TestQuantizedValues(ExtTestCase):
         source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32).reshape(4, 2)
         for name in runtime.quantization_formats():
             with self.subTest(format=name):
+                if runtime.is_gguf_quantization_format(name):
+                    with self.assertRaisesRegex(ValueError, "import native blocks"):
+                        runtime.make_quantization_plan(name, source.size, 4)
+                    continue
                 if name in {QuantizationFormat.MXFP8, QuantizationFormat.MXFP6_E2M3}:
                     grouped = numpy.tile(source.ravel(), 4).reshape(1, 32)
                     plan = runtime.make_quantization_plan(name, grouped.size)
@@ -772,8 +776,6 @@ class TestQuantizedValues(ExtTestCase):
                             for entry in range(4)
                             for _ in range(2)
                         ]
-                    if name == QuantizationFormat.IQ4_NL:
-                        block.scale = 0.01
                 run.blocks = blocks
                 plan.set_run(0, run)
                 if name in {
@@ -784,11 +786,7 @@ class TestQuantizedValues(ExtTestCase):
                     plan.transform_size = 2
                     plan.forward = [1, 0, 0, 1]
                     plan.inverse = plan.forward
-                tolerance = (
-                    1
-                    if name == QuantizationFormat.BINARY
-                    else 0.14 if name == QuantizationFormat.IQ4_NL else 1e-6
-                )
+                tolerance = 1 if name == QuantizationFormat.BINARY else 1e-6
                 numpy.testing.assert_allclose(
                     self.roundtrip(source, plan), source, rtol=0, atol=tolerance
                 )
@@ -1128,7 +1126,6 @@ class TestQuantizedValues(ExtTestCase):
         for format_name, message in [
             (QuantizationFormat.AQLM, "codebook"),
             (QuantizationFormat.STQ1_0, "codebook"),
-            (QuantizationFormat.IQ1_S, "codebook"),
             (QuantizationFormat.SQUEEZELLM, "codebook"),
             (QuantizationFormat.QUAROT, "transforms"),
         ]:
@@ -1262,7 +1259,6 @@ class TestQuantizedValues(ExtTestCase):
         source = numpy.linspace(-2, 2, 129, dtype=numpy.float64)
         for name in (
             QuantizationFormat.NF4,
-            QuantizationFormat.IQ4_NL,
             QuantizationFormat.LOG,
             QuantizationFormat.MXFP4,
             QuantizationFormat.MXFP6,
@@ -1272,7 +1268,7 @@ class TestQuantizedValues(ExtTestCase):
                 plan = runtime.make_quantization_plan(name, source.size, source.size)
                 run = plan.run(0)
                 block = run.block(0)
-                block.scale = 0.02 if name == QuantizationFormat.IQ4_NL else 2
+                block.scale = 2
                 run.set_block(0, block)
                 plan.set_run(0, run)
                 table = numpy.array(block.codebook) * block.scale

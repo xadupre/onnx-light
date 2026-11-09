@@ -21,6 +21,46 @@ QuantizationFormat = runtime.QuantizationFormat
 
 
 class TestSharedQuantizationParameters(ExtTestCase):
+    def test_model_diff_preserves_semantic_parameter_reference(self):
+        from onnx_light.onnx_core.optimization import GraphBuilder, apply_rewritings_to_model
+        from onnx_light.onnx_core.quantization import add_quantization_parameters
+
+        base, quantization = self.make_model()
+        add_quantization_parameters(
+            base,
+            "parameters_B",
+            runtime.make_quantization_type(quantization),
+            oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
+            scales=numpy.array([2, 4], dtype=numpy.float64),
+        )
+        target = onnx.ModelProto()
+        target.CopyFrom(base)
+        for attribute in target.graph.node[0].attribute:
+            if attribute.name == "parameter_ref":
+                attribute.s = b"parameters_B"
+        source, destination = GraphBuilder(base), GraphBuilder(target)
+        before = source.to_model().SerializeToString()
+        after = destination.to_model().SerializeToString()
+        plan = source.diff_rewritings(destination)
+        self.assertEqual(len(plan.rewrites), 1)
+        # Structural hashes deliberately omit attribute payloads.
+        self.assertEqual(plan.hash_before, plan.hash_after)
+        serialized = onnx.RewritingProto()
+        serialized.ParseFromString(plan.SerializeToString())
+        result = apply_rewritings_to_model(base, serialized)
+        self.assertEqual(
+            next(a.s for a in result.graph.node[0].attribute if a.name == "parameter_ref"),
+            b"parameters_B",
+        )
+        base_context, _ = self.run_model(base)
+        target_context, _ = self.run_model(target)
+        result_context, _ = self.run_model(result)
+        expected = numpy.from_dlpack(target_context.get("Y"))
+        self.assertFalse(numpy.array_equal(numpy.from_dlpack(base_context.get("Y")), expected))
+        self.assertEqualArray(numpy.from_dlpack(result_context.get("Y")), expected)
+        self.assertEqual(source.to_model().SerializeToString(), before)
+        self.assertEqual(destination.to_model().SerializeToString(), after)
+
     def make_model(self):
         """Returns a two-path model using one fixed parameter set."""
         from onnx_light.onnx_core.quantization import add_quantization_parameters

@@ -403,6 +403,371 @@ class TestModelDiff(ExtTestCase):
                 },
             )
 
+    def test_deep_captures_use_replaced_values_and_descriptors(self):
+        for producer in (
+            "initializer",
+            "default",
+            "Constant",
+            "Identity",
+            "ConstantToInitializer",
+        ):
+            with self.subTest(producer=producer):
+                models = []
+                for changed in (False, True):
+                    shape = onh.from_array(
+                        numpy.array([3 if changed else 2, -1], numpy.int64), "shape"
+                    )
+                    axes = onh.from_array(
+                        numpy.array(
+                            [0, 1] if producer == "initializer" and not changed else [0],
+                            numpy.int64,
+                        ),
+                        "axes",
+                    )
+                    initializers, nodes = [
+                        axes,
+                        onh.from_array(numpy.array([3], numpy.int64), "final_shape"),
+                    ], []
+                    if producer in ("initializer", "default") or (
+                        producer == "ConstantToInitializer" and changed
+                    ):
+                        initializers.append(shape)
+                    elif producer in ("Constant", "ConstantToInitializer"):
+                        nodes.append(oh.make_node("Constant", [], ["shape"], value=shape))
+                    else:
+                        shape.name = "shape_source"
+                        initializers.append(shape)
+                        nodes.append(oh.make_node("Identity", ["shape_source"], ["shape"]))
+                    branch = oh.make_graph(
+                        (
+                            [
+                                oh.make_node("Reshape", ["x", "shape"], ["reshaped"]),
+                                oh.make_node(
+                                    "Transpose", ["reshaped"], ["transposed"], perm=[1, 0]
+                                ),
+                                oh.make_node("Squeeze", ["transposed", "axes"], ["squeezed"]),
+                                oh.make_node("Reshape", ["squeezed", "final_shape"], ["z"]),
+                            ]
+                            if changed
+                            else [oh.make_node("Neg", ["x"], ["z"])]
+                        ),
+                        "inner",
+                        [],
+                        [oh.make_tensor_value_info("z", TensorProto.FLOAT, [3])],
+                    )
+                    outer = oh.make_graph(
+                        [
+                            oh.make_node(
+                                "If",
+                                ["inner_condition"],
+                                ["nested"],
+                                then_branch=branch,
+                                else_branch=branch,
+                            )
+                        ],
+                        "outer",
+                        [],
+                        [oh.make_tensor_value_info("nested", TensorProto.FLOAT, [3])],
+                    )
+                    nodes.extend(
+                        [
+                            oh.make_node(
+                                "If", ["condition"], ["y"], then_branch=outer, else_branch=outer
+                            ),
+                            oh.make_node("Identity", ["x"], ["unchanged"]),
+                        ]
+                    )
+                    models.append(
+                        oh.make_model(
+                            oh.make_graph(
+                                nodes,
+                                "captures",
+                                [
+                                    oh.make_tensor_value_info("x", TensorProto.FLOAT, [3]),
+                                    oh.make_tensor_value_info("condition", TensorProto.BOOL, []),
+                                    oh.make_tensor_value_info(
+                                        "inner_condition", TensorProto.BOOL, []
+                                    ),
+                                ],
+                                [
+                                    oh.make_tensor_value_info(name, TensorProto.FLOAT, [3])
+                                    for name in ("y", "unchanged")
+                                ],
+                                initializer=initializers,
+                            ),
+                            opset_imports=[oh.make_opsetid("", 18)],
+                        )
+                    )
+                    if producer == "default":
+                        models[-1].graph.input.append(
+                            oh.make_tensor_value_info("shape", TensorProto.INT64, [2])
+                        )
+                base, target = models
+                source, destination = GraphBuilder(base), GraphBuilder(target)
+                before = source.to_model().SerializeToString()
+                after = destination.to_model().SerializeToString()
+                plan = source.diff_rewritings(destination)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                replayed = source.apply_rewritings(serialized)
+                for name, shape in (
+                    ("shape", [2]),
+                    ("axes", [1]),
+                    ("y", [3]),
+                    ("unchanged", [3]),
+                ):
+                    self.assertEqual(list(replayed.get_shape(name).shape), shape)
+                result = replayed.to_model()
+                for condition in (False, True):
+                    for inner_condition in (False, True):
+                        self.assertEquivalent(
+                            target,
+                            result,
+                            {
+                                "x": numpy.array([-2, 3, 5], numpy.float32),
+                                "condition": numpy.array(condition),
+                                "inner_condition": numpy.array(inner_condition),
+                                **(
+                                    {"shape": numpy.array([3, 1], numpy.int64)}
+                                    if producer == "default"
+                                    else {}
+                                ),
+                            },
+                        )
+                self.assertEqual(source.to_model().SerializeToString(), before)
+                self.assertEqual(destination.to_model().SerializeToString(), after)
+
+    def test_replaced_loop_preserves_inferred_body_inputs(self):
+        models = []
+        for changed in (False, True):
+            body = oh.make_graph(
+                [
+                    oh.make_node("Identity", ["cond"], ["continue"]),
+                    (
+                        oh.make_node("Add", ["state", "bias"], ["updated"])
+                        if changed
+                        else oh.make_node("Neg", ["state"], ["updated"])
+                    ),
+                    oh.make_node("Identity", ["updated"], ["next"]),
+                ],
+                "body",
+                [
+                    oh.make_tensor_value_info("iteration", TensorProto.INT64, []),
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("state", TensorProto.FLOAT, ["N"]),
+                ],
+                [
+                    oh.make_tensor_value_info("continue", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("next", TensorProto.FLOAT, ["N"]),
+                ],
+            )
+            models.append(
+                oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("Loop", ["trip", "condition", "x"], ["y"], body=body)],
+                        "loop",
+                        [oh.make_tensor_value_info("x", TensorProto.FLOAT, [3])],
+                        [oh.make_tensor_value_info("y", TensorProto.FLOAT, [3])],
+                        initializer=[
+                            onh.from_array(numpy.array(2, numpy.int64), "trip"),
+                            onh.from_array(numpy.array(True), "condition"),
+                            onh.from_array(
+                                numpy.array([2 if changed else 1], numpy.float32), "bias"
+                            ),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                )
+            )
+        base, target = models
+        source, destination = GraphBuilder(base), GraphBuilder(target)
+        plan = source.diff_rewritings(destination)
+        serialized = RewritingProto()
+        serialized.ParseFromString(plan.SerializeToString())
+        replayed = source.apply_rewritings(serialized)
+        self.assertEqual(
+            list(replayed.shapes.subgraph_context(0, "body").get("state").shape), [3]
+        )
+        result = replayed.to_model()
+        body = next(a.g for a in result.graph.node[0].attribute if a.name == "body")
+        updated = next(v for v in body.value_info if v.name == "updated")
+        self.assertEqual(updated.type.tensor_type.shape.dim[0].dim_value, 3)
+        self.assertEquivalent(target, result, {"x": numpy.array([-2, 3, 5], numpy.float32)})
+
+    def test_graph_reference_aliases_preserve_attribute_identity(self):
+        for both in (False, True):
+            with self.subTest(both=both):
+                base, target = _model(), _model()
+                branch = oh.make_graph(
+                    [oh.make_node("Neg", ["x"], ["z"])],
+                    "branch",
+                    [],
+                    [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+                )
+                function = oh.make_function(
+                    "local",
+                    "Reference",
+                    ["x"],
+                    ["y"],
+                    [oh.make_node("Identity", ["x"], ["y"])],
+                    [oh.make_opsetid("", 18)],
+                    attribute_protos=[
+                        oh.make_attribute(name, branch) for name in ("body", "body_ref")
+                    ],
+                )
+                for model in (base, target):
+                    model.functions.append(function)
+                    model.opset_import.append(oh.make_opsetid("local", 1))
+                    model.graph.node.clear()
+                    attributes = {"body": branch} if model is base else {"body_ref": branch}
+                    if both:
+                        attributes = {"body": branch, "body_ref": branch}
+                        if model is target:
+                            changed = onnx.GraphProto()
+                            changed.CopyFrom(branch)
+                            changed.node[0].op_type = "Relu"
+                            attributes["body_ref"] = changed
+                    model.graph.node.append(
+                        oh.make_node("Reference", ["x"], ["y"], domain="local", **attributes)
+                    )
+                plan = diff_models(base, target)
+                self.assertTrue(plan.rewrites)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                self.assertEqual(
+                    [
+                        (a.name, a.type, a.g.node[0].op_type)
+                        for a in result.graph.node[0].attribute
+                    ],
+                    [
+                        (a.name, a.type, a.g.node[0].op_type)
+                        for a in target.graph.node[0].attribute
+                    ],
+                )
+
+    def test_internal_subgraph_renaming_is_not_a_semantic_edit(self):
+        for repeated, declared_reference in (
+            (False, False),
+            (True, False),
+            (False, True),
+            (True, True),
+        ):
+            with self.subTest(repeated=repeated, declared_reference=declared_reference):
+                base, target = _model(), _model()
+                function = oh.make_function(
+                    "local",
+                    "Reference",
+                    ["x"],
+                    ["y"],
+                    [oh.make_node("Identity", ["x"], ["y"])],
+                    [oh.make_opsetid("", 18)],
+                    attributes=["body"],
+                    attribute_protos=(
+                        [oh.make_attribute("body_ref", "unused")] if declared_reference else None
+                    ),
+                )
+                for model, name in ((base, "old"), (target, "renamed")):
+                    branch = oh.make_graph(
+                        [oh.make_node("Neg", ["x"], ["z"])],
+                        name,
+                        [],
+                        [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+                    )
+                    model.functions.append(function)
+                    model.opset_import.append(oh.make_opsetid("local", 1))
+                    model.graph.node.clear()
+                    model.graph.node.append(
+                        oh.make_node(
+                            "Reference",
+                            ["x"],
+                            ["y"],
+                            domain="local",
+                            body=[branch, branch] if repeated else branch,
+                        )
+                    )
+                plan = diff_models(base, target)
+                self.assertFalse(plan.rewrites)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                self.assertEquivalent(target, apply_rewritings_to_model(base, serialized))
+
+    def test_semantic_string_references_are_not_subgraph_names(self):
+        for value in (
+            "",
+            "parameters_A",
+            ["unresolved"],
+            ["parameters_A", "parameters_B"],
+            ["parameters_A", "unresolved"],
+            [],
+        ):
+            with self.subTest(value=value):
+                base, target = _model(), _model()
+                function = oh.make_function(
+                    "local",
+                    "Reference",
+                    ["x"],
+                    ["y"],
+                    [oh.make_node("Identity", ["x"], ["y"])],
+                    [oh.make_opsetid("", 18)],
+                    attributes=["semantic_ref", "bodies"],
+                )
+                for model in (base, target):
+                    model.functions.append(function)
+                    model.opset_import.append(oh.make_opsetid("local", 1))
+                    model.graph.node.clear()
+                    node = oh.make_node("Reference", ["x"], ["y"], domain="local")
+                    node.attribute.append(
+                        oh.make_attribute(
+                            "bodies",
+                            [
+                                oh.make_graph(
+                                    [oh.make_node("Identity", ["x"], ["z"])],
+                                    name,
+                                    [],
+                                    [oh.make_tensor_value_info("z", TensorProto.FLOAT, [2])],
+                                )
+                                for name in ("parameters_A", "parameters_B")
+                            ],
+                        )
+                    )
+                    node.attribute.append(
+                        oh.make_attribute(
+                            "semantic_ref",
+                            (
+                                value
+                                if model is base
+                                else (
+                                    "parameters_B" if isinstance(value, str) else ["parameters_B"]
+                                )
+                            ),
+                            attr_type=(
+                                onnx.AttributeProto.STRING
+                                if isinstance(value, str)
+                                else onnx.AttributeProto.STRINGS
+                            ),
+                        )
+                    )
+                    model.graph.node.append(node)
+                source, destination = GraphBuilder(base), GraphBuilder(target)
+                before = source.to_model().SerializeToString()
+                after = destination.to_model().SerializeToString()
+                self.assertEqual(
+                    source.to_model().graph.node[0].attribute[1].type,
+                    base.graph.node[0].attribute[1].type,
+                )
+                plan = source.diff_rewritings(destination)
+                self.assertEqual(len(plan.rewrites), 1)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                self.assertEqual(
+                    result.graph.node[0].attribute[1].SerializeToString(),
+                    target.graph.node[0].attribute[1].SerializeToString(),
+                )
+                self.assertEqual(source.to_model().SerializeToString(), before)
+                self.assertEqual(destination.to_model().SerializeToString(), after)
+
     def test_external_tensor_attributes_and_local_function_definitions(self):
         for context in ("node", "body", "default", "repeated", "sparse"):
             with self.subTest(context=context), TemporaryDirectory() as folder:

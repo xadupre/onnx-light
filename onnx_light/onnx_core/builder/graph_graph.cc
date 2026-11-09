@@ -3058,6 +3058,8 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
         retired_outputs.erase(output.value());
   // Nested inference must see replacement capture values, not the retired initializers.
   initializers = std::move(rebuilt_initializers);
+  for (const auto &initializer : initializers)
+    retired_outputs.erase(initializer.name().value());
   if (!removed_extended.empty())
     extended_initializers_ = std::move(rebuilt_extended_initializers);
   for (const auto &addition : added_initializers) {
@@ -3070,15 +3072,17 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       compute_.SeedConstant(initializer.name().value());
     }
   }
+  std::unordered_map<NodeProto *, std::unordered_set<std::string>> nested_imports;
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
       rebuilt.push_back(utils::CopyWithSharedTensorStorage(*nodes_by_position[position]));
       NodeProto &node = rebuilt.back();
-      std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
-      if (NodeCarriesSubgraph(node))
+      if (NodeCarriesSubgraph(node)) {
+        std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
         excluded.insert(retired_outputs.begin(), retired_outputs.end());
-      node.ref_attribute() = ImportAttributes(node, excluded);
+        nested_imports.emplace(&node, std::move(excluded));
+      }
       old_indices.push_back(nodes.size());
       for (const auto &output : node.output()) {
         if (!output.empty()) {
@@ -3109,6 +3113,25 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   nodes = std::move(rebuilt);
   PruneValueInfos();
   RefreshAfterRewriting(old_indices, std::move(affected_values));
+  // Import children only after enclosing producers publish their target values and descriptors.
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    auto &node = nodes[index];
+    const auto pending = nested_imports.find(&node);
+    if (pending == nested_imports.end())
+      continue;
+    node.ref_attribute() = ImportAttributes(node, pending->second);
+    for (const auto &attribute : node.attribute()) {
+      if (IsGraphReference(node, attribute) && attribute.type() == AttributeProto::STRING) {
+        const auto attribute_name = GraphAttributeName(attribute);
+        if (Shapes().HasSubgraphContext(static_cast<int64_t>(index), attribute_name)) {
+          auto &child = Subgraph(attribute.s().value());
+          AncestorRefreshGuard guard(child);
+          child.RefreshInferredInputsFrom(
+              Shapes().GetSubgraphContext(static_cast<int64_t>(index), attribute_name), {});
+        }
+      }
+    }
+  }
 }
 
 void GraphBuilder::AddRewriting(const std::string &name, const RewritingProto &rewrites) {
@@ -3560,19 +3583,27 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     return node.name().empty() ? "position:" + std::to_string(position)
                                : "name:" + node.name().value();
   };
-  const auto skeleton = [&](const NodeProto &node) {
+  const auto skeleton = [&](const GraphBuilder &scope, const NodeProto &node) {
     auto result = utils::CopyWithSharedTensorStorage(node);
     result.set_name("");
     result.set_doc_string("");
     strip_annotations(result);
     for (auto &attribute : result.ref_attribute()) {
       attribute.set_doc_string("");
-      if (HasGraphReferenceSuffix(attribute.name().value())) {
-        if (attribute.type() == AttributeProto::STRING)
-          attribute.set_s("");
-        else if (attribute.type() == AttributeProto::STRINGS)
-          for (auto &name : attribute.ref_strings())
-            name = "";
+      if (scope.IsGraphReference(node, attribute)) {
+        const auto name = scope.GraphAttributeName(attribute);
+        const bool single = attribute.type() == AttributeProto::STRING;
+        const auto count = attribute.strings().size();
+        attribute = AttributeProto();
+        attribute.set_name(name);
+        if (single) {
+          attribute.set_type(AttributeProto::GRAPH);
+          attribute.mutable_g();
+        } else {
+          attribute.set_type(AttributeProto::GRAPHS);
+          for (std::size_t i = 0; i < count; ++i)
+            attribute.add_graphs();
+        }
       }
     }
     return result;
@@ -3772,6 +3803,13 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       reorder.ref_initializer_calls().push_back(forwarding_call(name));
       reorder.add_computed_initializer_positions(i);
     }
+    std::unordered_set<std::string> changed_values;
+    for (const auto position : edit.removed_initializers())
+      changed_values.insert(source.initializers_[position].name().value());
+    for (const auto &initializer : edit.added_initializers())
+      changed_values.insert(initializer.name().value());
+    for (const auto &initializer : additions.added_initializers())
+      changed_values.insert(initializer.name().value());
     // New captures must be visible before descendant edits; old captures
     // remain available until the parent edit retires them.
     if (!additions.added_initializers().empty())
@@ -3786,17 +3824,24 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     for (std::size_t i = 0; i < destination.nodes_.size(); ++i) {
       const auto &node = destination.nodes_[i];
       const auto found = nodes.find(node_key(node, i));
-      bool retained = found != nodes.end() && same_message(skeleton(source.nodes_[found->second]),
-                                                           skeleton(node), base_dir, target_dir);
+      bool retained =
+          found != nodes.end() && same_message(skeleton(source, source.nodes_[found->second]),
+                                               skeleton(destination, node), base_dir, target_dir);
+      std::vector<std::string> references;
+      destination.CollectNodeReferences(node, references);
+      const bool consumes_changed =
+          std::any_of(references.begin(), references.end(),
+                      [&](const auto &name) { return changed_values.count(name) != 0; });
       if (retained && !destination.ReferencedSubgraphs(node).empty()) {
-        std::vector<std::string> references;
-        destination.CollectNodeReferences(node, references);
-        retained = std::all_of(references.begin(), references.end(), [&](const auto &name) {
-          const auto initializer = initializers.find(name);
-          return source.HasName(name) && (initializer == initializers.end() ||
-                                          kept_initializers.count(initializer->second) != 0);
-        });
+        retained =
+            !consumes_changed &&
+            std::all_of(references.begin(), references.end(), [&](const auto &name) {
+              const auto initializer = initializers.find(name);
+              return source.HasName(name) && (initializer == initializers.end() ||
+                                              kept_initializers.count(initializer->second) != 0);
+            });
       }
+      const auto rewrites_before = plan.rewrites().size();
       if (retained) {
         for (const auto &output : node.output()) {
           if (output.empty())
@@ -3826,6 +3871,10 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         edit.ref_added_nodes().push_back(copy_message(materialized));
         edit.add_added_nodes_positions(i);
       }
+      if (!retained || consumes_changed || plan.rewrites().size() != rewrites_before)
+        for (const auto &output : node.output())
+          if (!output.empty())
+            changed_values.insert(output.value());
     }
     for (std::size_t i = 0; i < source.nodes_.size(); ++i)
       if (kept_nodes.count(i) == 0)
@@ -3875,6 +3924,22 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   reconstructed.ApplyNodeMoves(plan.moved_nodes());
   hashes.second = reconstructed.RewritingHash();
   // Verify target structure, tags, and actual weight contents before recording replay hashes.
+  const auto verified_node = [&](const GraphBuilder &scope, const NodeProto &node) {
+    auto result = utils::CopyWithSharedTensorStorage(node);
+    scope.MaterializeGraphReferences(result, true);
+    result.set_name("");
+    result.set_doc_string("");
+    strip_annotations(result);
+    for (auto &attribute : result.ref_attribute()) {
+      attribute.set_doc_string("");
+      // Nested bodies are verified recursively; semantic strings remain exact.
+      if (attribute.has_g())
+        attribute.ref_g() = GraphProto();
+      for (auto &graph : attribute.ref_graphs())
+        graph = GraphProto();
+    }
+    return result;
+  };
   const auto verify_result = [&](const auto &self, const GraphBuilder &actual,
                                  const GraphBuilder &expected) -> void {
     if (actual.Compute().ValueTags() != expected.Compute().ValueTags() ||
@@ -3891,8 +3956,8 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       if (!same_tensor(actual.initializers_[i], expected.initializers_[i], base_dir, target_dir))
         throw BuilderError("DiffRewritings: reconstructed initializer differs from the target.");
     for (std::size_t i = 0; i < actual.nodes_.size(); ++i) {
-      if (!same_message(skeleton(actual.nodes_[i]), skeleton(expected.nodes_[i]), base_dir,
-                        target_dir))
+      if (!same_message(verified_node(actual, actual.nodes_[i]),
+                        verified_node(expected, expected.nodes_[i]), base_dir, target_dir))
         throw BuilderError("DiffRewritings: reconstructed node differs from the target.");
       const auto children = actual.ReferencedSubgraphs(actual.nodes_[i]);
       const auto targets = expected.ReferencedSubgraphs(expected.nodes_[i]);
@@ -4249,10 +4314,10 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
         if (retained == nullptr)
           continue;
         for (const auto &attribute : node.attribute()) {
-          if (!HasGraphReferenceSuffix(attribute.name().value()))
+          if (!source.IsGraphReference(node, attribute))
             continue;
           const auto *replacement = FindAttribute(*retained, attribute.name().value().c_str());
-          if (replacement == nullptr)
+          if (replacement == nullptr || !reconstructed.IsGraphReference(*retained, *replacement))
             continue;
           const auto originals = attribute_graphs(source_children, attribute);
           const auto children = attribute_graphs(reconstructed_children, *replacement);

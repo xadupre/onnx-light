@@ -33,6 +33,35 @@ Exl3Weights Fixture(uint32_t bits = 3, uint32_t book = 0) {
 
 } // namespace
 
+TEST(Exl3Weights, Float16SubnormalRoundingRetainsStickyBits) {
+  for (uint16_t lower = 0; lower < 0x0400; ++lower) {
+    const float midpoint = (Float16BitsToFloat(lower) + Float16BitsToFloat(lower + 1)) * 0.5f;
+    const float below = std::nextafter(midpoint, 0.f);
+    const float above = std::nextafter(midpoint, std::numeric_limits<float>::infinity());
+    const uint16_t nearest_even = lower + (lower & 1);
+    for (uint16_t sign : {uint16_t{0}, uint16_t{0x8000}}) {
+      const float multiplier = sign ? -1.f : 1.f;
+      EXPECT_EQ(FloatToFloat16Bits(multiplier * below), sign | lower) << lower;
+      EXPECT_EQ(FloatToFloat16Bits(multiplier * midpoint), sign | nearest_even) << lower;
+      EXPECT_EQ(FloatToFloat16Bits(multiplier * above), sign | (lower + 1)) << lower;
+    }
+  }
+}
+
+TEST(Exl3Weights, Float16ReconstructionRoundsSubnormalScales) {
+  auto checkpoint = Fixture(1, 0);
+  const uint16_t left_scale = 0x14ac, right_scale = 0x00a5;
+  std::memcpy(checkpoint.tensors.at("suh").mutable_bytes(), &left_scale, sizeof(left_scale));
+  std::memcpy(checkpoint.tensors.at("svh").mutable_bytes(), &right_scale, sizeof(right_scale));
+  const auto weights = ReconstructExl3Weights(ImportExl3Weights(checkpoint), size_t{1} << 30, {},
+                                              TensorProto::FLOAT16);
+  ASSERT_EQ(weights.data_type, TensorProto::FLOAT16);
+  ASSERT_EQ(weights.shape, (Shape{128, 128}));
+  uint16_t first;
+  std::memcpy(&first, weights.bytes(), sizeof(first));
+  EXPECT_EQ(first, 0x0013);
+}
+
 TEST(Exl3Weights, NativeRatesAndCodebooksRoundTrip) {
   // State zero from GPTQModel's binary16 decoder: 3inst, mcg, mul1 respectively.
   constexpr float decoded[] = {0.76806640625f, 1.84375f, -3.453125f};

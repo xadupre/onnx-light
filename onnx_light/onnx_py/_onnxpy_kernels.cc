@@ -2325,6 +2325,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "kernels in execution order. Repeated operators are preserved. Returns an "
            "empty list until the first :func:`run`.");
 
+  rt_mod.def("prepare_generation_model", &core::runtime::PrepareGenerationModel, nb::arg("model"),
+             nb::arg("logits_name") = "logits",
+             "Prepares an explicitly generation-only model in place, selecting the final "
+             "hidden-state row before its LM-head projection. Changes logits from [B,S,V] "
+             "to [B,1,V]. Call before creating sessions or exporting; unsupported or shared "
+             "heads are rejected. Does not consume initializer storage.");
+
   nb::class_<core::runtime::GenerationOptions>(rt_mod, "GenerationOptions",
                                                "Configures autoregressive token generation.")
       .def(nb::init<>())

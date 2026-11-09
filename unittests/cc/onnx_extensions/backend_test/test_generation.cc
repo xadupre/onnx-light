@@ -6,11 +6,14 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_lib/common/scoped_resource.h"
 
 #include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <limits>
 
@@ -18,6 +21,121 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
+
+void PreparationInfo(ValueInfoProto &value, const std::string &name, int32_t type,
+                     const std::vector<int64_t> &dimensions) {
+  value.set_name(name);
+  auto *tensor = value.mutable_type()->mutable_tensor_type();
+  tensor->set_elem_type(type);
+  for (size_t index = 0; index < dimensions.size(); ++index) {
+    auto *dimension = tensor->mutable_shape()->add_dim();
+    if (dimensions[index] >= 0)
+      dimension->set_dim_value(dimensions[index]);
+    else
+      dimension->set_dim_param(index == 0          ? "batch"
+                               : name == "past"    ? "past_sequence"
+                               : name == "present" ? "present_sequence"
+                                                   : "sequence");
+  }
+}
+
+NodeProto &PreparationNode(GraphProto &graph, const std::string &op,
+                           const std::vector<std::string> &inputs, const std::string &output) {
+  auto &node = *graph.add_node();
+  node.set_op_type(op);
+  for (const auto &name : inputs)
+    node.add_input(name);
+  node.add_output(output);
+  return node;
+}
+
+void PreparationInteger(NodeProto &node, const std::string &name, int64_t value) {
+  auto *attribute = node.add_attribute();
+  attribute->set_name(name);
+  attribute->set_type(AttributeProto::INT);
+  attribute->set_i(value);
+}
+
+ModelProto PreparationModel(bool persistent = false, int32_t type = TensorProto::FLOAT,
+                            bool trailing = false, bool embedded = false) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(23);
+  GraphProto &graph = *model.mutable_graph();
+  PreparationInfo(*graph.add_input(), embedded ? "inputs_embeds" : "input_ids",
+                  embedded ? TensorProto::FLOAT : TensorProto::INT64,
+                  embedded ? std::vector<int64_t>{-1, -1, 4} : std::vector<int64_t>{-1, -1});
+  PreparationInfo(*graph.add_input(), "attention_mask", TensorProto::INT64, {-1, -1});
+  PreparationInfo(*graph.add_output(), "logits", trailing ? TensorProto::FLOAT : type, {-1, -1, 4});
+  std::vector<float> embedding(16, 0), projection(16, 0);
+  for (size_t index = 0; index < 4; ++index) {
+    embedding[index * 4 + index] = 1;
+    projection[index * 4 + (index + 1) % 4] = 2;
+  }
+  const auto weight = [&](const std::string &name, const std::vector<float> &values) {
+    TensorProto &tensor = *graph.add_initializer();
+    tensor.set_name(name);
+    tensor.set_data_type(TensorProto::FLOAT);
+    tensor.add_dims(4);
+    tensor.add_dims(4);
+    tensor.set_raw_data(
+        std::string(reinterpret_cast<const char *>(values.data()), values.size() * sizeof(float)));
+  };
+  if (!embedded) {
+    weight("token_embedding", embedding);
+    PreparationNode(graph, "Gather", {"token_embedding", "input_ids"}, "inputs_embeds");
+  }
+  weight("projection", projection);
+  PreparationInfo(*graph.add_output(), "current_shape", TensorProto::INT64, {3});
+  PreparationNode(graph, "Shape", {"inputs_embeds"}, "current_shape");
+  if (persistent) {
+    PreparationInfo(*graph.add_input(), "past", TensorProto::FLOAT, {-1, -1, 4});
+    PreparationInfo(*graph.add_output(), "present", TensorProto::FLOAT, {-1, -1, 4});
+    PreparationInteger(PreparationNode(graph, "Concat", {"past", "inputs_embeds"}, "present"),
+                       "axis", 1);
+    PreparationInfo(*graph.add_output(), "cache_shape", TensorProto::INT64, {3});
+    PreparationNode(graph, "Shape", {"present"}, "cache_shape");
+    auto *binding = graph.add_persistent_bindings();
+    binding->set_input_name("past");
+    binding->set_output_name("present");
+  }
+  std::string hidden = "inputs_embeds", rhs = "projection";
+  if (type != TensorProto::FLOAT) {
+    hidden = "typed_hidden";
+    rhs = "typed_projection";
+    PreparationInteger(PreparationNode(graph, "Cast", {"inputs_embeds"}, hidden), "to", type);
+    PreparationInteger(PreparationNode(graph, "Cast", {"projection"}, rhs), "to", type);
+    PreparationInfo(*graph.add_value_info(), rhs, type, {4, 4});
+  }
+  const std::string head_output = trailing ? "head_logits" : "logits";
+  PreparationNode(graph, "MatMul", {hidden, rhs}, head_output);
+  if (trailing) {
+    PreparationInfo(*graph.add_value_info(), head_output, type, {-1, -1, 4});
+    PreparationInteger(PreparationNode(graph, "Cast", {head_output}, "float_logits"), "to",
+                       TensorProto::FLOAT);
+    PreparationInfo(*graph.add_value_info(), "float_logits", TensorProto::FLOAT, {-1, -1, 4});
+    PreparationNode(graph, "Identity", {"float_logits"}, "logits");
+  }
+  return model;
+}
+
+ModelProto PreparationEmbedding() {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(23);
+  auto &graph = *model.mutable_graph();
+  PreparationInfo(*graph.add_input(), "input_ids", TensorProto::INT64, {-1, -1});
+  PreparationInfo(*graph.add_output(), "inputs_embeds", TensorProto::FLOAT, {-1, -1, 4});
+  TensorProto &weight = *graph.add_initializer();
+  weight.set_name("external_embedding");
+  weight.set_data_type(TensorProto::FLOAT);
+  weight.add_dims(4);
+  weight.add_dims(4);
+  for (int index = 0; index < 16; ++index)
+    weight.add_float_data(index % 5 == 0 ? 1 : 0);
+  PreparationNode(graph, "Gather", {"external_embedding", "input_ids"}, "inputs_embeds");
+  return model;
+}
 
 std::vector<int64_t> Tokens(const Tensor &tensor) {
   return {tensor.AsInt64(), tensor.AsInt64() + tensor.element_count()};
@@ -431,6 +549,369 @@ TEST(Generation, ObserverReportsEosAndPaddingAndPreservesFailurePaths) {
   EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
   EXPECT_EQ(calls, 1);
   EXPECT_EQ(observations, 0);
+}
+
+TEST(GenerationPreparation, PreservesLastLogitsAndInitializerOwnership) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (int32_t type :
+       {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    for (bool trailing : {false, true}) {
+      for (int64_t batch : {1, 2}) {
+        SCOPED_TRACE(type);
+        SCOPED_TRACE(trailing);
+        SCOPED_TRACE(batch);
+        auto model = PreparationModel(false, type, trailing);
+        if (trailing && batch == 2) {
+          for (auto &value : *model.mutable_graph()->mutable_value_info())
+            if (value.name() == "head_logits") {
+              auto *tensor = value.mutable_type()->mutable_tensor_type();
+              tensor->clear_shape();
+              tensor->set_elem_type(TensorProto::UNDEFINED);
+            }
+        }
+        const auto original = model.SerializeAsString();
+        const TensorProto *weight = &model.graph().initializer(1);
+        const auto *payload = weight->raw_data().data();
+        RuntimeValueMap feeds{
+            {"input_ids",
+             RuntimeValue(Tensor::FromInt64("", {batch, 3},
+                                            batch == 1 ? std::vector<int64_t>{0, 1, 2}
+                                                       : std::vector<int64_t>{0, 1, 2, 0, 0, 3}))},
+            {"attention_mask",
+             RuntimeValue(Tensor::FromInt64("", {batch, 3},
+                                            batch == 1 ? std::vector<int64_t>{0, 1, 1}
+                                                       : std::vector<int64_t>{0, 1, 1, 0, 0, 1}))}};
+        const auto evaluate = [&](const ModelProto &source) {
+          RuntimeContext context;
+          RuntimeSessionOptions settings;
+          settings.check_shapes = true;
+          RuntimeSession session(source, settings);
+          for (const auto &[name, value] : feeds)
+            context.PutValue(name, value.BorrowView());
+          session.Run(context);
+          return context.Get("logits").ToOwned();
+        };
+        const Tensor full = evaluate(model);
+        EXPECT_EQ(model.SerializeAsString(), original);
+        EXPECT_EQ(full.shape, (Shape{batch, 3, 4}));
+        PrepareGenerationModel(model);
+        EXPECT_EQ(&model.graph().initializer(1), weight);
+        EXPECT_EQ(model.graph().initializer(1).raw_data().data(), payload);
+        EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(1).dim_value(), 1);
+        EXPECT_FALSE(model.graph().output(0).type().tensor_type().shape().dim(1).has_dim_param());
+        const Tensor reduced = evaluate(model);
+        ASSERT_EQ(reduced.shape, (Shape{batch, 1, 4}));
+        ASSERT_EQ(reduced.data_type, full.data_type);
+        const size_t row_bytes = reduced.size_bytes() / batch;
+        for (int64_t row = 0; row < batch; ++row)
+          EXPECT_EQ(std::memcmp(reduced.bytes() + row * row_bytes,
+                                full.bytes() + (row * 3 + 2) * row_bytes, row_bytes),
+                    0);
+        const auto prepared = model.SerializeAsString();
+        EXPECT_THROW(PrepareGenerationModel(model), std::invalid_argument);
+        EXPECT_EQ(model.SerializeAsString(), prepared);
+      }
+    }
+  }
+}
+
+TEST(GenerationPreparation, GenerationParityAndCacheAppendRemainUnchanged) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (bool persistent : {false, true}) {
+    for (int64_t batch : {1, 2}) {
+      for (size_t capacity : {size_t{0}, size_t{32}}) {
+        SCOPED_TRACE(persistent);
+        SCOPED_TRACE(batch);
+        SCOPED_TRACE(capacity);
+        auto full = PreparationModel(persistent);
+        const auto full_original = full.SerializeAsString();
+        auto reduced = PreparationModel(persistent);
+        PrepareGenerationModel(reduced);
+        const auto prepared = reduced.SerializeAsString();
+        RuntimeValueMap feeds{
+            {"input_ids",
+             RuntimeValue(Tensor::FromInt64("", {batch, 3},
+                                            batch == 1 ? std::vector<int64_t>{0, 1, 2}
+                                                       : std::vector<int64_t>{0, 1, 2, 0, 0, 3}))},
+            {"attention_mask",
+             RuntimeValue(Tensor::FromInt64("", {batch, 3},
+                                            batch == 1 ? std::vector<int64_t>{0, 1, 1}
+                                                       : std::vector<int64_t>{0, 1, 1, 0, 0, 1}))}};
+        if (persistent)
+          feeds.emplace("past", RuntimeValue(Tensor::FromFloat("", {batch, 0, 4}, {})));
+        RuntimeSessionOptions settings;
+        settings.check_shapes = true;
+        settings.persistent_tensor_initial_capacity = capacity;
+        std::vector<std::vector<int64_t>> token_results;
+        std::vector<std::vector<Tensor>> snapshots;
+        std::vector<std::vector<int64_t>> widths, lengths;
+        std::vector<uint64_t> reuse;
+        for (const ModelProto *model : {&full, &reduced, &reduced}) {
+          RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
+          snapshots.emplace_back();
+          GenerationOptions options;
+          options.max_new_tokens = 3;
+          options.max_logit_bytes = 4096;
+          options.on_step = [&](const GenerationStep &step) {
+            EXPECT_TRUE(step.raw_logits.has_value());
+            if (step.raw_logits)
+              snapshots.back().push_back(step.raw_logits->ToOwned());
+            return true;
+          };
+          token_results.push_back(Tokens(Generate(*model, context, feeds, options, settings)));
+          widths.emplace_back();
+          lengths.emplace_back();
+          for (const auto &event : context.events()) {
+            if (event.kind != RuntimeEventKind::kOutput || event.value_count != 3)
+              continue;
+            if (event.name == "current_shape")
+              widths.back().push_back(static_cast<int64_t>(event.values[1]));
+            if (event.name == "cache_shape")
+              lengths.back().push_back(static_cast<int64_t>(event.values[1]));
+          }
+          reuse.push_back(StorageTotal(context.events(), &RuntimeEvent::storage_reuse_count));
+        }
+        EXPECT_EQ(token_results[0], token_results[1]);
+        EXPECT_EQ(token_results[0], token_results[2]);
+        EXPECT_EQ(token_results[0],
+                  (batch == 1 ? std::vector<int64_t>{0, 1, 2, 3, 0, 1}
+                              : std::vector<int64_t>{0, 1, 2, 3, 0, 1, 0, 0, 3, 0, 1, 2}));
+        for (size_t run = 0; run < 3; ++run) {
+          EXPECT_EQ(widths[run],
+                    (persistent ? std::vector<int64_t>{3, 1, 1} : std::vector<int64_t>{3, 4, 5}));
+          EXPECT_EQ(lengths[run],
+                    (persistent ? std::vector<int64_t>{3, 4, 5} : std::vector<int64_t>{}));
+          ASSERT_EQ(snapshots[run].size(), 3u);
+          for (size_t step = 0; step < 3; ++step) {
+            EXPECT_EQ(snapshots[run][step].shape, (Shape{batch, 4}));
+            EXPECT_EQ(std::memcmp(snapshots[run][step].bytes(), snapshots[0][step].bytes(),
+                                  snapshots[0][step].size_bytes()),
+                      0);
+          }
+          EXPECT_EQ(reuse[run], reuse[0]);
+        }
+        if (persistent && capacity && batch == 1)
+          EXPECT_GT(reuse[0], 0u);
+        EXPECT_EQ(reduced.SerializeAsString(), prepared);
+        EXPECT_EQ(full.SerializeAsString(), full_original);
+        if (persistent)
+          EXPECT_EQ(feeds.at("past").tensor.shape, (Shape{batch, 0, 4}));
+      }
+    }
+  }
+}
+
+TEST(GenerationPreparation, PipelineBorrowedEmbeddingAndOwningLoader) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (bool persistent : {false, true}) {
+    auto full = PreparationModel(persistent, TensorProto::BFLOAT16, true, true);
+    auto reduced = PreparationModel(persistent, TensorProto::BFLOAT16, true, true);
+    auto embedding = PreparationEmbedding();
+    PrepareGenerationModel(reduced);
+    RuntimeValueMap feeds{
+        {"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 2, 0, 0, 3}))},
+        {"attention_mask", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 1, 0, 0, 1}))}};
+    if (persistent)
+      feeds.emplace("past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {})));
+    GenerationOptions options;
+    options.max_new_tokens = 3;
+    RuntimeContext context;
+    const auto expected = Tokens(Generate(full, &embedding, context, feeds, options));
+    EXPECT_EQ(Tokens(Generate(reduced, &embedding, context, feeds, options)), expected);
+    PipelineProto pipeline;
+    *pipeline.mutable_prefill() = std::move(reduced);
+    *pipeline.mutable_embedding() = std::move(embedding);
+    EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), expected);
+    const std::string path =
+        "generation-prepared-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx";
+    ScopeExit cleanup([&]() noexcept {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+    });
+    {
+      std::ofstream output(path, std::ios::binary);
+      ASSERT_TRUE(output.good());
+      const auto bytes = pipeline.SerializeAsString();
+      output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+      ASSERT_TRUE(output.good());
+    }
+    LoadedRuntimePipeline loaded(path, context);
+    EXPECT_EQ(Tokens(Generate(loaded, context, feeds, options)), expected);
+    EXPECT_EQ(Tokens(Generate(loaded, context, feeds, options)), expected);
+  }
+}
+
+TEST(GenerationPreparation, NativeAttentionPrefillAndDecodeParity) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto cases = core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_");
+  ASSERT_EQ(cases.size(), 2u);
+  for (auto &test : cases) {
+    SCOPED_TRACE(test.name);
+    auto &model = test.model();
+    auto &graph = *model.mutable_graph();
+    graph.mutable_node(graph.node().size() - 1)->set_output(0, "attention_hidden");
+    TensorProto &projection = *graph.add_initializer();
+    projection.set_name("attention_projection");
+    projection.set_data_type(TensorProto::FLOAT);
+    projection.add_dims(2);
+    projection.add_dims(2);
+    for (float value : {1.f, 0.f, 0.f, 1.f})
+      projection.add_float_data(value);
+    PreparationNode(graph, "MatMul", {"attention_hidden", "attention_projection"}, "logits");
+    RuntimeValueMap feeds;
+    for (const auto &input : test.data_sets()[0].inputs)
+      feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
+    GenerationOptions options;
+    options.max_new_tokens = 4;
+    RuntimeContext context;
+    const auto expected = Tokens(Generate(model, context, feeds, options));
+    std::vector<std::string> cache_outputs;
+    for (size_t index = 1; index < graph.output().size(); ++index)
+      cache_outputs.push_back(graph.output(index).SerializeAsString());
+    PrepareGenerationModel(model);
+    EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), expected);
+    EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), expected);
+    for (size_t index = 1; index < graph.output().size(); ++index)
+      EXPECT_EQ(graph.output(index).SerializeAsString(), cache_outputs[index - 1]);
+  }
+}
+
+TEST(GenerationPreparation, RejectsUnsupportedAndSharedHeadsBeforeMutation) {
+  const auto reject = [](ModelProto &model, const std::string &name = "logits") {
+    const auto original = model.SerializeAsString();
+    EXPECT_THROW(PrepareGenerationModel(model, name), std::invalid_argument);
+    EXPECT_EQ(model.SerializeAsString(), original);
+  };
+  for (int variant = 0; variant < 18; ++variant) {
+    SCOPED_TRACE(variant);
+    auto model = PreparationModel(false, TensorProto::FLOAT, true);
+    auto &graph = *model.mutable_graph();
+    switch (variant) {
+    case 0:
+      PreparationNode(graph, "Identity", {"head_logits"}, "other");
+      break;
+    case 1:
+      PreparationInfo(*graph.add_output(), "head_logits", TensorProto::FLOAT, {-1, -1, 4});
+      break;
+    case 2:
+    case 3: {
+      auto *attribute = graph.mutable_node(0)->add_attribute();
+      attribute->set_name("body");
+      attribute->set_type(variant == 2 ? AttributeProto::GRAPH : AttributeProto::GRAPHS);
+      auto *nested = variant == 2 ? attribute->mutable_g() : attribute->add_graphs();
+      PreparationNode(*nested, "Identity", {"float_logits"}, "captured");
+      break;
+    }
+    case 4:
+    case 5: {
+      auto *binding = graph.add_persistent_bindings();
+      binding->set_input_name(variant == 4 ? "head_logits" : "state");
+      binding->set_output_name(variant == 4 ? "next_state" : "logits");
+      break;
+    }
+    case 6:
+      graph.mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::INT64);
+      break;
+    case 7:
+      graph.mutable_node(2)->set_op_type("Add");
+      break;
+    case 8:
+      graph.mutable_node(2)->set_domain("custom");
+      break;
+    case 9:
+      graph.mutable_initializer(1)->add_dims(1);
+      break;
+    case 10:
+      PreparationInfo(*graph.add_value_info(), "inputs_embeds", TensorProto::FLOAT, {-1, 4});
+      break;
+    case 11:
+      graph.mutable_output(0)->mutable_type()->mutable_tensor_type()->mutable_shape()->clear_dim();
+      break;
+    case 12:
+      PreparationNode(graph, "Identity", {"logits"}, "other");
+      break;
+    case 13:
+      PreparationInfo(*graph.add_input(), "head_logits", TensorProto::FLOAT, {-1, -1, 4});
+      break;
+    case 14:
+      graph.mutable_node(3)->mutable_attribute(0)->set_i(TensorProto::INT64);
+      break;
+    case 15:
+      graph.mutable_node(3)->mutable_attribute(0)->set_i((int64_t{1} << 32) + TensorProto::FLOAT);
+      break;
+    case 16:
+      graph.mutable_initializer(0)->set_name("head_logits");
+      break;
+    case 17:
+      model.add_functions()->set_name("Gather");
+      break;
+    }
+    reject(model);
+  }
+  auto model = PreparationModel();
+  reject(model, "missing");
+  reject(model, "");
+  model.mutable_graph()->mutable_output(0)->set_name("scores");
+  model.mutable_graph()->mutable_node(2)->set_output(0, "scores");
+  PrepareGenerationModel(model, "scores");
+  EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(1).dim_value(), 1);
+}
+
+TEST(GenerationPreparation, ReservesNestedNamesAndInvalidatesExecutionAnnotations) {
+  auto model = PreparationModel();
+  auto &graph = *model.mutable_graph();
+  auto *attribute = graph.mutable_node(0)->add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  PreparationNode(*attribute->mutable_g(), "Identity", {"logits_last_indices"},
+                  "logits_last_hidden");
+  const auto metadata = [](auto &proto, const std::string &key) {
+    auto *entry = proto.add_metadata_props();
+    entry->set_key(key);
+    entry->set_value("stale");
+  };
+  for (auto &node : *graph.mutable_node()) {
+    metadata(node, "onnx_light.release_after");
+    metadata(node, "onnx_light.inplace_reuse");
+    metadata(node, "onnx_light.peak_memory_max");
+    metadata(node, "user.annotation");
+  }
+  metadata(graph, "onnx_light.peak_memory");
+  (*model.mutable_rewritings())["stale"] = RewritingProto{};
+  PrepareGenerationModel(model);
+  EXPECT_TRUE(model.rewritings().empty());
+  EXPECT_TRUE(graph.metadata_props().empty());
+  ASSERT_EQ(graph.node(2).op_type(), "Gather");
+  EXPECT_NE(graph.node(2).input(1), "logits_last_indices");
+  EXPECT_NE(graph.node(2).output(0), "logits_last_hidden");
+  EXPECT_EQ(graph.node(3).input(0), graph.node(2).output(0));
+  EXPECT_EQ(graph.initializer(2).data_type(), TensorProto::INT64);
+  ASSERT_EQ(graph.initializer(2).dims_size(), 1);
+  EXPECT_EQ(graph.initializer(2).dims(0), 1);
+  EXPECT_EQ(graph.initializer(2).int64_data(0), -1);
+  for (const auto &node : graph.node())
+    for (const auto &entry : node.metadata_props())
+      EXPECT_EQ(entry.key(), "user.annotation");
+}
+
+TEST(GenerationPreparation, RejectsEmptySequenceAndInvalidGenerationMasks) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = PreparationModel();
+  PrepareGenerationModel(model);
+  RuntimeContext context;
+  RuntimeSession session(model);
+  context.Put("input_ids", Tensor::FromInt64("", {1, 0}, {}));
+  context.Put("attention_mask", Tensor::FromInt64("", {1, 0}, {}));
+  EXPECT_THROW(session.Run(context), std::exception);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 0}, {}))}};
+  EXPECT_THROW(Generate(model, context, feeds), std::invalid_argument);
+  feeds.insert_or_assign("input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1})));
+  feeds.emplace("attention_mask", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 0})));
+  EXPECT_THROW(Generate(model, context, feeds), std::invalid_argument);
+  feeds.insert_or_assign("attention_mask", RuntimeValue(Tensor::FromInt64("", {1, 2}, {1, 0})));
+  EXPECT_THROW(Generate(model, context, feeds), std::invalid_argument);
 }
 
 TEST(Generation, BackendAttentionModels) {

@@ -18,6 +18,7 @@ add_quantization_parameters = import_or_skip(
     "onnx_light.onnx_core.quantization", "add_quantization_parameters"
 )
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+prepare_generation_model = import_or_skip("onnx_light.onnx.reference", "prepare_generation_model")
 
 
 def transition_model(dtype=numpy.float32):
@@ -74,6 +75,100 @@ def _shared_encoded(model, name, values):
 
 
 class TestGeneration(ExtTestCase):
+    def test_prepare_generation_model_export(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Gather", ["table", "input_ids"], ["hidden"]),
+                    oh.make_node("MatMul", ["hidden", "head"], ["logits"]),
+                ],
+                "generation_head",
+                [
+                    oh.make_tensor_value_info("input_ids", TensorProto.INT64, ["B", "S"]),
+                    oh.make_tensor_value_info("attention_mask", TensorProto.INT64, ["B", "S"]),
+                ],
+                [oh.make_tensor_value_info("logits", TensorProto.FLOAT, ["B", "S", 3])],
+                [
+                    onh.from_array(
+                        numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=numpy.float32),
+                        name="table",
+                    ),
+                    onh.from_array(numpy.eye(3, dtype=numpy.float32), name="head"),
+                ],
+                value_info=[
+                    oh.make_tensor_value_info("hidden", TensorProto.FLOAT, ["B", "S", 3])
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=10,
+        )
+        original = model.SerializeToString()
+        reduced = onnx.load_model_from_string(original)
+        self.assertIsNone(prepare_generation_model(reduced))
+        self.assertEqual(model.SerializeToString(), original)
+        # Exercises the exported graph, rather than a runtime-only shortcut.
+        reduced = onnx.load_model_from_string(reduced.SerializeToString())
+        self.assertEqual(reduced.graph.output[0].type.tensor_type.shape.dim[1].dim_value, 1)
+        full_session = ReferenceEvaluator(model)
+        reduced_session = ReferenceEvaluator(reduced)
+        for tokens, mask in [
+            ([[0, 1, 2]], [[1, 1, 1]]),
+            ([[0, 0, 1], [1, 2, 0]], [[0, 1, 1], [1, 1, 1]]),
+            ([[1], [2]], [[1], [1]]),
+        ]:
+            feeds = {
+                "input_ids": numpy.array(tokens, dtype=numpy.int64),
+                "attention_mask": numpy.array(mask, dtype=numpy.int64),
+            }
+            self.assertEqualArray(
+                full_session.run(None, feeds)[0][:, -1:, :], reduced_session.run(None, feeds)[0]
+            )
+            for _ in range(2):
+                self.assertEqualArray(
+                    full_session.generate(feeds, max_new_tokens=3),
+                    reduced_session.generate(feeds, max_new_tokens=3),
+                )
+        for tokens, mask in [([[]], [[]]), ([[0, 0]], [[0, 0]]), ([[0, 1]], [[1, 0]])]:
+            with self.subTest(tokens=tokens, mask=mask), self.assertRaises(ValueError):
+                reduced_session.generate(
+                    {
+                        "input_ids": numpy.array(tokens, dtype=numpy.int64),
+                        "attention_mask": numpy.array(mask, dtype=numpy.int64),
+                    }
+                )
+
+    def test_prepare_generation_model_ort(self):
+        InferenceSession = import_or_skip("onnxruntime", "InferenceSession")
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("MatMul", ["hidden", "head"], ["logits"])],
+                "projection",
+                [oh.make_tensor_value_info("hidden", TensorProto.FLOAT, ["B", "S", 3])],
+                [oh.make_tensor_value_info("logits", TensorProto.FLOAT, ["B", "S", 5])],
+                [
+                    onh.from_array(
+                        numpy.arange(15, dtype=numpy.float32).reshape(3, 5), name="head"
+                    )
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=10,
+        )
+        full_session = InferenceSession(
+            model.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        prepare_generation_model(model)
+        reduced_session = InferenceSession(
+            model.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        for shape in [(1, 128, 3), (2, 4, 3), (2, 1, 3)]:
+            feeds = {
+                "hidden": numpy.arange(numpy.prod(shape), dtype=numpy.float32).reshape(shape)
+            }
+            expected = full_session.run(None, feeds)[0][:, -1:, :]
+            self.assertEqualArray(expected, reduced_session.run(None, feeds)[0])
+            self.assertEqualArray(expected, ReferenceEvaluator(model).run(None, feeds)[0])
+
     def test_multiple_eos(self):
         model = transition_model()
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))

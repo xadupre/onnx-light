@@ -20,6 +20,105 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
+constexpr const char *kGenerationPrepared = "onnx_light.generation_prepared";
+
+bool StandardDomain(const std::string &domain) { return domain.empty() || domain == "ai.onnx"; }
+
+bool GenerationFloat(int64_t type) {
+  return type == TensorProto::FLOAT || type == TensorProto::DOUBLE ||
+         type == TensorProto::FLOAT16 || type == TensorProto::BFLOAT16;
+}
+
+// Scans nested scopes conservatively: even a shadowed name is reserved.
+void GenerationNames(const GraphProto &graph, std::unordered_set<std::string> &names) {
+  for (const auto *values : {&graph.input(), &graph.output(), &graph.value_info()})
+    for (const auto &value : *values)
+      names.insert(value.name());
+  for (const auto &value : graph.initializer())
+    names.insert(value.name());
+  for (const auto &value : graph.sparse_initializer()) {
+    names.insert(value.values().name());
+    names.insert(value.indices().name());
+  }
+  for (const auto &value : graph.extended_initializer()) {
+    if (value.has_encoded_value())
+      names.insert(value.encoded_value().name());
+    if (value.has_paged_cache())
+      names.insert(value.paged_cache().name());
+  }
+  for (const auto &binding : graph.persistent_bindings()) {
+    names.insert(binding.input_name());
+    names.insert(binding.output_name());
+  }
+  for (const auto &node : graph.node()) {
+    names.insert(node.name());
+    for (const auto &name : node.input())
+      names.insert(name);
+    for (const auto &name : node.output())
+      names.insert(name);
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g())
+        GenerationNames(attribute.g(), names);
+      for (const auto &nested : attribute.graphs())
+        GenerationNames(nested, names);
+    }
+  }
+}
+
+struct GenerationTensorInfo {
+  int rank = -1;
+  int32_t type = TensorProto::UNDEFINED;
+};
+
+GenerationTensorInfo GenerationInfo(const GraphProto &graph, const std::string &name) {
+  GenerationTensorInfo result;
+  const auto merge = [&](int rank, int32_t type) {
+    EXT_ENFORCE_INVALID((rank < 0 || result.rank < 0 || result.rank == rank) &&
+                            (!type || !result.type || result.type == type),
+                        "PrepareGenerationModel: conflicting tensor metadata for ", name, ".");
+    if (rank >= 0)
+      result.rank = rank;
+    if (type)
+      result.type = type;
+  };
+  for (const auto *values : {&graph.input(), &graph.output(), &graph.value_info()})
+    for (const auto &value : *values)
+      if (value.name() == name) {
+        EXT_ENFORCE_INVALID(value.type().has_tensor_type(),
+                            "PrepareGenerationModel: head values must be tensors.");
+        const auto &tensor = value.type().tensor_type();
+        merge(tensor.has_shape() ? tensor.shape().dim_size() : -1, tensor.elem_type());
+      }
+  for (const auto &value : graph.initializer())
+    if (value.name() == name)
+      merge(value.dims_size(), value.data_type());
+  for (const auto &value : graph.extended_initializer())
+    if (value.has_encoded_value() && value.encoded_value().name() == name) {
+      const auto &type = value.encoded_value().logical_type();
+      EXT_ENFORCE_INVALID(type.has_tensor_type(),
+                          "PrepareGenerationModel: weight must be a tensor.");
+      const auto &tensor = type.tensor_type();
+      merge(tensor.has_shape() ? tensor.shape().dim_size() : -1, tensor.elem_type());
+    }
+  return result;
+}
+
+template <class Proto> void ClearGenerationExecutionMetadata(Proto &proto) {
+  auto &metadata = *proto.mutable_metadata_props();
+  for (size_t index = metadata.size(); index > 0; --index) {
+    const std::string &key = metadata[index - 1].key();
+    if (key == "onnx_light.inplace_reuse" || key == "onnx_light.release_after" ||
+        key == "onnx_light.release_after_shape_tag" || key == "onnx_light.not_used_after" ||
+        key == "onnx_light.lifetime_names_encoding" ||
+        std::string_view(key).find("onnx_light.peak_memory") == 0) {
+      // RepeatedProtoField deliberately has no arbitrary erase.
+      for (size_t next = index; next < metadata.size(); ++next)
+        metadata.SwapElements(static_cast<int>(next - 1), static_cast<int>(next));
+      metadata.RemoveLast();
+    }
+  }
+}
+
 bool HasInput(const ModelProto &model, const std::string &name) {
   return std::any_of(model.graph().input().begin(), model.graph().input().end(),
                      [&](const auto &input) { return input.name() == name; });
@@ -453,6 +552,223 @@ static Tensor GeneratePipeline(const GenerationPipelineView &pipeline, RuntimeCo
   }
   return GenerateImpl(pipeline, context, prefill_feeds, embedding_feeds, options,
                       std::move(session_options), feeds);
+}
+
+void PrepareGenerationModel(ModelProto &model, const std::string &logits_name) {
+  EXT_ENFORCE_INVALID(model.has_graph() && !logits_name.empty(),
+                      "PrepareGenerationModel: requires a graph and logits name.");
+  for (const auto &entry : model.metadata_props())
+    EXT_ENFORCE_INVALID(entry.key() != kGenerationPrepared,
+                        "PrepareGenerationModel: model is already prepared.");
+  const GraphProto &graph = model.graph();
+  const ValueInfoProto *output = nullptr;
+  for (const auto &value : graph.output())
+    if (value.name() == logits_name) {
+      EXT_ENFORCE_INVALID(!output, "PrepareGenerationModel: duplicate logits output.");
+      output = &value;
+    }
+  EXT_ENFORCE_INVALID(output, "PrepareGenerationModel: logits must be a graph output.");
+  const auto logits_info = GenerationInfo(graph, logits_name);
+  EXT_ENFORCE_INVALID(logits_info.rank == 3 && GenerationFloat(logits_info.type),
+                      "PrepareGenerationModel: logits must have floating rank-three metadata.");
+  int64_t opset = 0;
+  for (const auto &import : model.opset_import())
+    if (import.domain().empty())
+      opset = import.version();
+  EXT_ENFORCE_INVALID(opset >= 11, "PrepareGenerationModel: requires standard opset >= 11.");
+  for (const auto &function : model.functions())
+    EXT_ENFORCE_INVALID(
+        !StandardDomain(function.domain()) ||
+            (function.name() != "MatMul" && function.name() != "Gather" &&
+             function.name() != "Cast" && function.name() != "Identity"),
+        "PrepareGenerationModel: local functions must not override head operators.");
+
+  std::unordered_map<std::string, size_t> producers;
+  for (size_t index = 0; index < graph.node().size(); ++index)
+    for (const auto &name : graph.node(index).output())
+      if (!name.empty())
+        EXT_ENFORCE_INVALID(producers.emplace(name, index).second,
+                            "PrepareGenerationModel: duplicate producer.");
+  std::vector<size_t> chain;
+  std::unordered_set<std::string> changed;
+  std::string current = logits_name;
+  int32_t expected_type = logits_info.type;
+  size_t head = 0;
+  while (true) {
+    const auto producer = producers.find(current);
+    EXT_ENFORCE_INVALID(producer != producers.end() && changed.insert(current).second,
+                        "PrepareGenerationModel: unsupported or cyclic logits head.");
+    const size_t index = producer->second;
+    const NodeProto &node = graph.node(index);
+    EXT_ENFORCE_INVALID(StandardDomain(node.domain()) && node.overload().empty() &&
+                            node.output_size() == 1,
+                        "PrepareGenerationModel: requires a standard single-output head.");
+    const auto info = GenerationInfo(graph, current);
+    EXT_ENFORCE_INVALID((info.rank < 0 || info.rank == 3) &&
+                            (!info.type || info.type == expected_type),
+                        "PrepareGenerationModel: inconsistent head metadata.");
+    chain.push_back(index);
+    if (node.op_type() == "MatMul") {
+      EXT_ENFORCE_INVALID(node.input_size() == 2 && node.attribute().empty(),
+                          "PrepareGenerationModel: unsupported MatMul.");
+      for (const auto &name : node.input())
+        EXT_ENFORCE_INVALID(!name.empty() && !changed.count(name) &&
+                                (!producers.count(name) || producers.at(name) < index),
+                            "PrepareGenerationModel: invalid MatMul dependency.");
+      const auto lhs = GenerationInfo(graph, node.input(0));
+      const auto rhs = GenerationInfo(graph, node.input(1));
+      EXT_ENFORCE_INVALID(
+          rhs.rank == 2 && (lhs.rank < 0 || lhs.rank == 3) && GenerationFloat(expected_type) &&
+              (!lhs.type || lhs.type == expected_type) && (!rhs.type || rhs.type == expected_type),
+          "PrepareGenerationModel: requires a floating [B,S,D] x [D,V] MatMul.");
+      head = index;
+      break;
+    }
+    EXT_ENFORCE_INVALID(node.input_size() == 1 &&
+                            (node.op_type() == "Identity" || node.op_type() == "Cast"),
+                        "PrepareGenerationModel: unsupported logits head.");
+    if (node.op_type() == "Cast") {
+      EXT_ENFORCE_INVALID(node.attribute_size() == 1,
+                          "PrepareGenerationModel: unsupported Cast attributes.");
+      int64_t to = TensorProto::UNDEFINED;
+      for (const auto &attribute : node.attribute()) {
+        EXT_ENFORCE_INVALID(attribute.name() == "to" && attribute.type() == AttributeProto::INT,
+                            "PrepareGenerationModel: unsupported Cast attributes.");
+        to = attribute.i();
+      }
+      auto source = GenerationInfo(graph, node.input(0));
+      // Exporters often omit intermediate metadata; a MatMul weight still fixes its dtype.
+      std::string source_name = node.input(0);
+      size_t before = index;
+      while (!source.type && producers.count(source_name)) {
+        const size_t source_index = producers.at(source_name);
+        EXT_ENFORCE_INVALID(source_index < before,
+                            "PrepareGenerationModel: head must be topologically ordered.");
+        const auto &source_node = graph.node(source_index);
+        if (!StandardDomain(source_node.domain()))
+          break;
+        if (source_node.op_type() == "MatMul" && source_node.input_size() == 2) {
+          source.type = GenerationInfo(graph, source_node.input(1)).type;
+          break;
+        }
+        if (source_node.op_type() == "Cast" && source_node.attribute_size() == 1) {
+          const auto &attribute = source_node.attribute(0);
+          if (attribute.name() == "to" && attribute.type() == AttributeProto::INT &&
+              GenerationFloat(attribute.i()))
+            source.type = static_cast<int32_t>(attribute.i());
+          break;
+        }
+        if (source_node.op_type() != "Identity" || source_node.input_size() != 1)
+          break;
+        before = source_index;
+        source_name = source_node.input(0);
+        source.type = GenerationInfo(graph, source_name).type;
+      }
+      EXT_ENFORCE_INVALID(to == expected_type && GenerationFloat(source.type),
+                          "PrepareGenerationModel: Cast requires known floating source dtype.");
+      expected_type = source.type;
+    } else {
+      EXT_ENFORCE_INVALID(node.attribute().empty(),
+                          "PrepareGenerationModel: unsupported Identity attributes.");
+    }
+    EXT_ENFORCE_INVALID(producers.count(node.input(0)) && producers.at(node.input(0)) < index,
+                        "PrepareGenerationModel: head must be topologically ordered.");
+    current = node.input(0);
+  }
+
+  for (const auto &value : graph.input())
+    EXT_ENFORCE_INVALID(!changed.count(value.name()),
+                        "PrepareGenerationModel: head aliases a graph input.");
+  for (const auto &value : graph.output())
+    EXT_ENFORCE_INVALID(value.name() == logits_name || !changed.count(value.name()),
+                        "PrepareGenerationModel: head has another exposed output.");
+  std::unordered_set<std::string> initializer_names;
+  for (const auto &value : graph.initializer())
+    initializer_names.insert(value.name());
+  for (const auto &value : graph.sparse_initializer())
+    initializer_names.insert(value.values().name());
+  for (const auto &value : graph.extended_initializer()) {
+    if (value.has_encoded_value())
+      initializer_names.insert(value.encoded_value().name());
+    if (value.has_paged_cache())
+      initializer_names.insert(value.paged_cache().name());
+  }
+  for (const auto &name : changed)
+    EXT_ENFORCE_INVALID(!initializer_names.count(name),
+                        "PrepareGenerationModel: head aliases an initializer.");
+  for (const auto &binding : graph.persistent_bindings())
+    EXT_ENFORCE_INVALID(!changed.count(binding.input_name()) &&
+                            !changed.count(binding.output_name()),
+                        "PrepareGenerationModel: head aliases persistent state.");
+  std::unordered_map<std::string, size_t> permitted_consumer;
+  for (size_t index = 0; index + 1 < chain.size(); ++index)
+    permitted_consumer.emplace(graph.node(chain[index + 1]).output(0), chain[index]);
+  for (size_t index = 0; index < graph.node().size(); ++index) {
+    const auto &node = graph.node(index);
+    for (const auto &name : node.input())
+      EXT_ENFORCE_INVALID(!changed.count(name) || (permitted_consumer.count(name) &&
+                                                   permitted_consumer.at(name) == index),
+                          "PrepareGenerationModel: head has another consumer.");
+    std::unordered_set<std::string> nested_names;
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g())
+        GenerationNames(attribute.g(), nested_names);
+      for (const auto &nested : attribute.graphs())
+        GenerationNames(nested, nested_names);
+    }
+    for (const auto &name : changed)
+      EXT_ENFORCE_INVALID(!nested_names.count(name),
+                          "PrepareGenerationModel: nested graph captures a head value.");
+  }
+
+  std::unordered_set<std::string> names;
+  GenerationNames(graph, names);
+  const auto unique = [&](const std::string &base) {
+    std::string name = base;
+    for (size_t suffix = 0; !names.insert(name).second; ++suffix)
+      name = base + "_" + std::to_string(suffix);
+    return name;
+  };
+  const std::string indices_name = unique(logits_name + "_last_indices");
+  const std::string hidden_name = unique(logits_name + "_last_hidden");
+  NodeProto gather;
+  gather.set_name(unique(logits_name + "_last_position"));
+  gather.set_op_type("Gather");
+  gather.add_input(graph.node(head).input(0));
+  gather.add_input(indices_name);
+  gather.add_output(hidden_name);
+  auto *axis = gather.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(1);
+  TensorProto indices;
+  indices.set_name(indices_name);
+  indices.set_data_type(TensorProto::INT64);
+  indices.add_dims(1);
+  indices.add_int64_data(-1);
+
+  // Everything above is read-only. Move node ownership, never copy the graph or weights.
+  GraphProto &prepared = *model.mutable_graph();
+  *prepared.mutable_node(head)->mutable_input(0) = hidden_name;
+  *prepared.add_initializer() = std::move(indices);
+  *prepared.add_node() = std::move(gather);
+  for (size_t index = prepared.node().size() - 1; index > head; --index)
+    prepared.mutable_node()->SwapElements(static_cast<int>(index), static_cast<int>(index - 1));
+  for (auto *values : {prepared.mutable_value_info(), prepared.mutable_output()})
+    for (auto &value : *values)
+      if (changed.count(value.name()) && value.type().tensor_type().has_shape()) {
+        auto *sequence =
+            value.mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(1);
+        sequence->clear_dim_param();
+        sequence->set_dim_value(1);
+      }
+  for (auto &node : *prepared.mutable_node())
+    ClearGenerationExecutionMetadata(node);
+  ClearGenerationExecutionMetadata(prepared);
+  model.clear_rewritings();
+  auto *marker = model.add_metadata_props();
+  marker->set_key(kGenerationPrepared);
+  marker->set_value(logits_name);
 }
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,

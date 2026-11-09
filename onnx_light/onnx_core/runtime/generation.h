@@ -12,6 +12,25 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+/**
+ * Prepares an explicitly generation-only model in place, without copying its weights.
+ *
+ * Changes the named graph output contract from [B,S,V] to [B,1,V] by gathering
+ * the last hidden position before a standard floating-point MatMul LM head.
+ * Supports a trailing standard Cast/Identity chain only. Rejects unsupported or
+ * shared heads before mutation, including persistent aliases and nested captures.
+ * Requires rank-three output metadata and rank-two weight metadata/initializer;
+ * hidden rank may be inferred from these. Invalidates saved rewritings and
+ * execution/memory annotations. Initializer payload ownership is preserved.
+ * A second preparation is rejected. Ordinary models and Generate calls are
+ * never prepared implicitly. Callers must prepare before constructing sessions.
+ *
+ * The inserted Gather rejects an empty sequence. Generate already rejects empty
+ * prompts and all-padding rows; left-padded rows must end in a real token.
+ */
+ONNX_LIGHT_CORE_API void PrepareGenerationModel(ModelProto &model,
+                                                const std::string &logits_name = "logits");
+
 /** Identifies the logical generation phase, including full-prefix decoding without caches. */
 enum class GenerationPhase { kPrefill, kDecode };
 

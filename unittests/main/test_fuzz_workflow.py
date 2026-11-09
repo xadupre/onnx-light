@@ -1,5 +1,7 @@
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +12,17 @@ class TestFuzzWorkflow(unittest.TestCase):
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
         cls.content = (cls.root / ".github/workflows/cq_fuzz.yml").read_text(encoding="utf-8")
+        cls.bash = shutil.which("bash")
+        if sys.platform == "win32":
+            # PATH may resolve Bash to the WSL launcher instead of native Git Bash.
+            git = shutil.which("git")
+            if git is None:
+                raise FileNotFoundError("Git is required to locate native Git Bash on Windows.")
+            git_directory = Path(git).resolve().parent
+            candidates = (git_directory / "bash.exe", git_directory.parent / "bin" / "bash.exe")
+            cls.bash = next((str(path) for path in candidates if path.is_file()), None)
+        if cls.bash is None:
+            raise FileNotFoundError("A native Bash executable is required for workflow tests.")
 
     def test_sanitizers_cover_libraries_and_harnesses(self):
         """Verifies that sanitizer instrumentation reaches the fuzzed libraries."""
@@ -54,8 +67,11 @@ class TestFuzzWorkflow(unittest.TestCase):
         blocks = re.findall(r"        run: \|\n((?:          .*\n|\n)+)", self.content)
         self.assertTrue(blocks)
         for block in blocks:
-            subprocess.run(
-                ["bash", "-n"], input=block, text=True, check=True, capture_output=True
+            result = subprocess.run(
+                [self.bash, "-n"], input=block.encode("utf-8"), capture_output=True, timeout=30
+            )
+            self.assertEqual(
+                result.returncode, 0, result.stderr.decode("utf-8", errors="replace")
             )
 
     def test_replay_without_crashes(self):
@@ -64,12 +80,13 @@ class TestFuzzWorkflow(unittest.TestCase):
         block = re.search(r"        run: \|\n((?:          .*\n|\n)+)", replay).group(1)
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
-                ["bash", "-e", "-c", block],
+                [self.bash, "-e", "-c", block],
                 cwd=directory,
-                check=True,
                 capture_output=True,
                 text=True,
+                timeout=30,
             )
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
 
 

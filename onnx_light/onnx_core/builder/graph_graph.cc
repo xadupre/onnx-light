@@ -6,8 +6,11 @@
 
 #include <algorithm>
 #include <bit>
+#include <charconv>
 #include <chrono>
+#include <cstring>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -22,6 +25,8 @@
 
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_core/compute/constant_info.h"
+#include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
@@ -1191,7 +1196,7 @@ bool IsNodeOnlyRewrite(const LocalRewritingProto &rewrite) {
   return !rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
          rewrite.removed_extended_initializers().empty() && rewrite.added_initializers().empty() &&
          rewrite.added_initializer_positions().empty() && rewrite.initializer_calls().empty() &&
-         rewrite.computed_initializer_positions().empty();
+         rewrite.computed_initializer_positions().empty() && rewrite.initializer_order().empty();
 }
 
 bool SameGraphPath(const LocalRewritingProto &left, const LocalRewritingProto &right) {
@@ -2709,6 +2714,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   auto &initializers = initializers_;
   std::unordered_set<const NodeProto *> removed;
   std::unordered_set<std::size_t> removed_initializers;
+  std::unordered_set<std::string> removed_values;
   struct AddedInitializer {
     std::size_t position;
     const TensorProto *initializer;
@@ -2721,7 +2727,8 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   std::vector<AddedNode> added_nodes;
   if (rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
       rewrite.removed_extended_initializers().empty() && rewrite.added_nodes().empty() &&
-      rewrite.added_initializers().empty() && rewrite.initializer_calls().empty()) {
+      rewrite.added_initializers().empty() && rewrite.initializer_calls().empty() &&
+      rewrite.initializer_order().empty()) {
     throw BuilderError("ApplyRewriting: an empty rewrite is not allowed.");
   }
   for (const uint64_t encoded_position : rewrite.matched_nodes()) {
@@ -2734,6 +2741,9 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       throw BuilderError("ApplyRewriting: duplicate matched node position " +
                          std::to_string(position) + ".");
     }
+    for (const auto &output : nodes[position].output())
+      if (!output.empty())
+        removed_values.insert(output.value());
   }
   if (rewrite.added_nodes_positions().size() != rewrite.added_nodes().size()) {
     throw BuilderError("ApplyRewriting: added node positions must align with added nodes.");
@@ -2752,6 +2762,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       throw BuilderError("ApplyRewriting: duplicate removed initializer position " +
                          std::to_string(position) + ".");
     }
+    removed_values.insert(initializers[position].name().value());
   }
   std::unordered_set<std::size_t> removed_extended;
   for (uint64_t encoded_position : rewrite.removed_extended_initializers()) {
@@ -2917,11 +2928,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   const std::size_t final_initializer_count = retained_initializers + added_initializers.size();
   std::vector<const TensorProto *> initializers_by_position(final_initializer_count, nullptr);
   for (const auto &addition : added_initializers) {
-    for (std::size_t position : removed_initializers) {
-      if (initializers[position].name() == addition.initializer->name()) {
-        throw BuilderError("ApplyRewriting: initializer name is already reserved.");
-      }
-    }
     if (addition.position >= final_initializer_count) {
       throw BuilderError(
           "ApplyRewriting: added initializer position is outside the rewritten graph.");
@@ -2957,6 +2963,24 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       throw BuilderError("ApplyRewriting: initializers must have unique, nonempty names.");
     }
   }
+  if (!rewrite.initializer_order().empty()) {
+    if (rewrite.initializer_order().size() != rebuilt_initializers.size())
+      throw BuilderError("ApplyRewriting: initializer order must be a complete permutation.");
+    std::unordered_map<std::string, std::size_t> positions;
+    for (std::size_t i = 0; i < rebuilt_initializers.size(); ++i)
+      positions.emplace(rebuilt_initializers[i].name().value(), i);
+    utils::RepeatedProtoField<TensorProto> ordered;
+    ordered.reserve(rebuilt_initializers.size());
+    for (const auto &name : rewrite.initializer_order()) {
+      const auto found = positions.find(name.value());
+      if (found == positions.end())
+        throw BuilderError("ApplyRewriting: invalid or duplicate initializer order name.");
+      ordered.add();
+      ordered.get(ordered.size() - 1) = rebuilt_initializers.shared_at(found->second);
+      positions.erase(found);
+    }
+    rebuilt_initializers = std::move(ordered);
+  }
   const auto validate_node_outputs = [&](const NodeProto &node) {
     for (const auto &output : node.output()) {
       if (initializer_names.count(output.value()) != 0) {
@@ -2986,12 +3010,7 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     // First-time defaults must respect the public-input contract.
     ValidateInputDefault(inputs_, *addition.initializer);
     const auto &name = addition.initializer->name();
-    bool replaces_removed_value = false;
-    for (const NodeProto *node : removed) {
-      for (const auto &output : node->output()) {
-        replaces_removed_value = replaces_removed_value || output == name;
-      }
-    }
+    const bool replaces_removed_value = removed_values.count(name.value()) != 0;
     if (!replaces_removed_value) {
       const bool input_default = std::any_of(
           inputs_.begin(), inputs_.end(), [&](const auto &input) { return input.name() == name; });
@@ -3253,6 +3272,432 @@ RewritingProto GraphBuilder::CaptureRewritings(const RewritingProto &rewrites) c
   return result;
 }
 
+RewritingProto GraphBuilder::DiffRewritings(const ModelProto &target_model,
+                                            const std::string &base_dir,
+                                            const std::string &target_dir) const {
+  if (parent_ != nullptr || is_local_function_ || !target_model.has_graph() ||
+      target_model.has_base_model() || target_model.has_base_model_sha256())
+    throw BuilderError("DiffRewritings requires two complete root models.");
+  GraphBuilder target(target_model, schema_lookup_, local_registry_);
+  auto before_header = model_template_;
+  auto after_header = target.model_template_;
+  for (auto *header : {&before_header, &after_header}) {
+    if (!header->has_ir_version())
+      header->set_ir_version(static_cast<int64_t>(IR_VERSION));
+    header->set_producer_name("");
+    header->set_producer_version("");
+    header->set_doc_string("");
+  }
+  before_header.ref_struct_types() = Shapes().StructTypes();
+  after_header.ref_struct_types() = target.Shapes().StructTypes();
+  if (!before_header.Equals(after_header))
+    throw BuilderError("DiffRewritings: incompatible model declarations.");
+  RewritingProto plan;
+  for (const auto &[domain, version] : opsets_) {
+    const auto found = target.opsets_.find(domain);
+    if (found == target.opsets_.end() || found->second != version)
+      throw BuilderError("DiffRewritings: removing or changing an existing opset is unsupported.");
+  }
+  for (const auto &[domain, version] : target.opsets_) {
+    if (opsets_.count(domain) == 0) {
+      auto *opset = plan.add_required_opset_imports();
+      opset->set_domain(domain);
+      opset->set_version(version);
+    }
+  }
+  const auto validate_tensor = [](const TensorProto &tensor) {
+    if (!TensorProto::DataType_IsValid(tensor.data_type()) ||
+        tensor.data_type() == TensorProto::UNDEFINED)
+      throw BuilderError("DiffRewritings: invalid initializer dtype.");
+    bool empty = false;
+    for (const auto dim : tensor.dims()) {
+      if (dim < 0)
+        throw BuilderError("DiffRewritings: negative initializer dimension.");
+      empty |= dim == 0;
+    }
+    if (tensor.data_location() == TensorProto::EXTERNAL) {
+      std::unordered_set<std::string> keys;
+      bool has_location = false;
+      uint64_t offset = 0, length = 0;
+      for (const auto &entry : tensor.external_data()) {
+        const auto key = entry.key().value();
+        if (!keys.insert(key).second)
+          throw BuilderError("DiffRewritings: duplicate external data key.");
+        if (key == "location") {
+          has_location = IsSafeExternalDataLocation(entry.value().sv());
+        } else if (key == "offset" || key == "length" || key == "size") {
+          uint64_t value = 0;
+          const auto &text = entry.value();
+          const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+          if (parsed.ec != std::errc() || parsed.ptr != text.data() + text.size() ||
+              value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+            throw BuilderError("DiffRewritings: invalid external tensor byte range.");
+          (key == "offset" ? offset : length) = value;
+        }
+      }
+      if (!has_location || (keys.count("length") != 0 && keys.count("size") != 0) ||
+          offset > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - length)
+        throw BuilderError("DiffRewritings: invalid external tensor location or byte range.");
+    } else if (!tensor.HasDeferredWeight() && !empty && tensor.raw_data().empty() &&
+               tensor.float_data().empty() && tensor.int32_data().empty() &&
+               tensor.int64_data().empty() && tensor.uint64_data().empty() &&
+               tensor.double_data().empty() && tensor.string_data().empty()) {
+      throw BuilderError("DiffRewritings: missing initializer payload; do not use skip_raw_data.");
+    }
+  };
+  const auto strip_annotations = [](auto &message) {
+    utils::RepeatedProtoField<StringStringEntryProto> retained;
+    for (const auto &entry : message.metadata_props()) {
+      const auto &key = entry.key();
+      if (key != core::compute::kValueTagMetadataKey &&
+          key != core::compute::kValueTagsMetadataKey &&
+          key != core::compute::kNodeTagMetadataKey &&
+          key != core::compute::kInPlaceReuseMetadataKey &&
+          key != core::compute::kLifetimeNamesEncodingMetadataKey &&
+          key != core::compute::kReleaseAfterMetadataKey &&
+          key != core::compute::kNotUsedAfterMetadataKey &&
+          key != core::compute::kReleaseAfterShapeTagMetadataKey &&
+          key != core::compute::kConstantMetadataKey &&
+          key != core::compute::kNodePeakMemoryMetadataKey &&
+          key != core::compute::kNodePeakMemoryMaxMetadataKey &&
+          key != core::compute::kNodePeakMemoryAverageMetadataKey)
+        retained.push_back(entry);
+    }
+    message.ref_metadata_props() = std::move(retained);
+  };
+  const auto same_tensor = [&](const TensorProto &left, const TensorProto &right) {
+    auto a = utils::CopyWithSharedTensorStorage(left);
+    auto b = utils::CopyWithSharedTensorStorage(right);
+    a.set_doc_string("");
+    b.set_doc_string("");
+    strip_annotations(a);
+    strip_annotations(b);
+    const auto external_path = [](const TensorProto &tensor, const std::string &dir) {
+      for (const auto &entry : tensor.external_data())
+        if (entry.key() == "location")
+          return std::filesystem::absolute(std::filesystem::path(dir) / entry.value().value())
+              .lexically_normal();
+      throw BuilderError("DiffRewritings: external tensor has no location.");
+    };
+    const bool external_a = a.data_location() == TensorProto::EXTERNAL;
+    const bool external_b = b.data_location() == TensorProto::EXTERNAL;
+    const bool same_source =
+        (!a.HasDeferredWeight() && !b.HasDeferredWeight()) ||
+        (a.deferred_weight_source == b.deferred_weight_source) ||
+        (external_a && external_b && external_path(a, base_dir) == external_path(b, target_dir));
+    if (same_source && a.Equals(b) &&
+        (!external_a || external_path(a, base_dir) == external_path(b, target_dir)))
+      return true;
+    if (a.HasDeferredWeight())
+      a.LoadDeferredWeight();
+    else if (external_a && a.raw_data().empty())
+      a.LoadExternalData(base_dir);
+    if (b.HasDeferredWeight())
+      b.LoadDeferredWeight();
+    else if (external_b && b.raw_data().empty())
+      b.LoadExternalData(target_dir);
+    a.clr_external_data();
+    b.clr_external_data();
+    a.set_data_location(TensorProto::DEFAULT);
+    b.set_data_location(TensorProto::DEFAULT);
+    const auto left_value = core::runtime::TensorFromProto(a);
+    const auto right_value = core::runtime::TensorFromProto(b);
+    if (left_value.string_data != right_value.string_data ||
+        left_value.size_bytes() != right_value.size_bytes() ||
+        (left_value.size_bytes() != 0 &&
+         std::memcmp(left_value.bytes(), right_value.bytes(), left_value.size_bytes()) != 0))
+      return false;
+    const auto clear_payload = [](TensorProto &tensor) {
+      tensor.clear_raw_data();
+      tensor.clr_float_data();
+      tensor.clr_int32_data();
+      tensor.clr_int64_data();
+      tensor.clr_uint64_data();
+      tensor.clr_double_data();
+      tensor.clr_string_data();
+    };
+    clear_payload(a);
+    clear_payload(b);
+    return a.Equals(b);
+  };
+  const auto node_key = [](const NodeProto &node, std::size_t position) {
+    for (const auto &output : node.output())
+      if (!output.empty())
+        return "output:" + output.value();
+    return node.name().empty() ? "position:" + std::to_string(position)
+                               : "name:" + node.name().value();
+  };
+  const auto skeleton = [&](const NodeProto &node) {
+    auto result = utils::CopyWithSharedTensorStorage(node);
+    result.set_name("");
+    result.set_doc_string("");
+    strip_annotations(result);
+    for (auto &attribute : result.ref_attribute()) {
+      attribute.set_doc_string("");
+      if (HasGraphReferenceSuffix(attribute.name().value())) {
+        if (attribute.type() == AttributeProto::STRING)
+          attribute.set_s("");
+        else if (attribute.type() == AttributeProto::STRINGS)
+          for (auto &name : attribute.ref_strings())
+            name = "";
+      }
+    }
+    return result;
+  };
+  const auto diff_scope = [&](const auto &self, const GraphBuilder &source,
+                              const GraphBuilder &destination,
+                              const std::vector<std::string> &path) -> void {
+    auto a = utils::CopyWithSharedTensorStorage(source.graph_template_);
+    auto b = utils::CopyWithSharedTensorStorage(destination.graph_template_);
+    a.set_name("");
+    b.set_name("");
+    a.set_doc_string("");
+    b.set_doc_string("");
+    a.ref_input() = source.inputs_;
+    b.ref_input() = destination.inputs_;
+    a.ref_output() = source.outputs_;
+    b.ref_output() = destination.outputs_;
+    const auto normalize_interface = [&](auto &values, const GraphBuilder &scope) {
+      for (auto &value : values) {
+        value.set_doc_string("");
+        const auto &name = value.name().value();
+        if (!value.has_type()) {
+          if (scope.Shapes().HasType(name))
+            *value.mutable_type() = scope.Shapes().GetType(name);
+          else if (scope.HasShape(name))
+            core::symbolic::SymTensorToValueInfo(scope.GetShape(name), value);
+        }
+        const auto &source_tags = source.Compute().ValueTags();
+        const auto &target_tags = destination.Compute().ValueTags();
+        const auto source_tag = source_tags.find(name);
+        const auto target_tag = target_tags.find(name);
+        if ((source_tag == source_tags.end()) != (target_tag == target_tags.end()) ||
+            (source_tag != source_tags.end() && source_tag->second != target_tag->second))
+          throw BuilderError("DiffRewritings: incompatible interface value tags.");
+        strip_annotations(value);
+      }
+    };
+    normalize_interface(a.ref_input(), source);
+    normalize_interface(b.ref_input(), destination);
+    normalize_interface(a.ref_output(), source);
+    normalize_interface(b.ref_output(), destination);
+    const auto value_metadata = [&](const GraphBuilder &scope) {
+      std::map<std::string, ValueInfoProto> metadata;
+      for (const auto &value : scope.value_infos_) {
+        ValueInfoProto entry;
+        entry.set_name(value.name().value());
+        entry.ref_metadata_props() = value.metadata_props();
+        strip_annotations(entry);
+        if (!entry.metadata_props().empty())
+          metadata.emplace(entry.name().value(), std::move(entry));
+      }
+      GraphProto header;
+      for (const auto &[name, value] : metadata)
+        header.ref_value_info().push_back(value);
+      return header;
+    };
+    if (!value_metadata(source).Equals(value_metadata(destination)))
+      throw BuilderError("DiffRewritings: changing internal value metadata is unsupported.");
+    a.ref_extended_initializer() =
+        utils::CopyWithSharedTensorStorage(source.extended_initializers_);
+    b.ref_extended_initializer() =
+        utils::CopyWithSharedTensorStorage(destination.extended_initializers_);
+    if (std::filesystem::absolute(base_dir.empty() ? "." : base_dir).lexically_normal() !=
+        std::filesystem::absolute(target_dir.empty() ? "." : target_dir).lexically_normal()) {
+      const auto external = [](const auto &value) {
+        return value.data_location() == TensorProto::EXTERNAL;
+      };
+      for (const auto *header : {&a, &b}) {
+        for (const auto &sparse : header->sparse_initializer())
+          if (external(sparse.values()) || external(sparse.indices()))
+            throw BuilderError("DiffRewritings: external sparse declarations require the same "
+                               "storage directory.");
+        for (const auto &initializer : header->extended_initializer()) {
+          if (initializer.has_encoded_value() && external(initializer.encoded_value()))
+            throw BuilderError("DiffRewritings: external encoded declarations require the same "
+                               "storage directory.");
+          if (initializer.has_paged_cache())
+            for (const auto &block : initializer.paged_cache().blocks())
+              if ((block.has_key() && external(block.key())) ||
+                  (block.has_value() && external(block.value())) ||
+                  (block.has_encoded_key() && external(block.encoded_key())) ||
+                  (block.has_encoded_value() && external(block.encoded_value())))
+                throw BuilderError("DiffRewritings: external cache declarations require the same "
+                                   "storage directory.");
+        }
+      }
+    }
+    if (!a.Equals(b))
+      throw BuilderError(
+          "DiffRewritings: incompatible graph interface or persistent declarations.");
+    for (const auto &initializer : source.initializers_)
+      validate_tensor(initializer);
+    for (const auto &initializer : destination.initializers_)
+      validate_tensor(initializer);
+    LocalRewritingProto edit;
+    edit.set_pattern_name("ModelDiff");
+    for (const auto &component : path)
+      edit.add_graph_path(component);
+    LocalRewritingProto additions;
+    additions.set_pattern_name("ModelDiffInitializers");
+    for (const auto &component : path)
+      additions.add_graph_path(component);
+    std::unordered_map<std::string, std::size_t> initializers;
+    for (std::size_t i = 0; i < source.initializers_.size(); ++i)
+      initializers.emplace(source.initializers_[i].name().value(), i);
+    std::unordered_set<std::size_t> kept_initializers;
+    for (std::size_t i = 0; i < destination.initializers_.size(); ++i) {
+      const auto &initializer = destination.initializers_[i];
+      const auto found = initializers.find(initializer.name().value());
+      if (found != initializers.end() &&
+          same_tensor(source.initializers_[found->second], initializer)) {
+        kept_initializers.insert(found->second);
+      } else {
+        if (found == initializers.end()) {
+          additions.add_added_initializer_positions(source.initializers_.size() +
+                                                    additions.added_initializers().size());
+          additions.ref_added_initializers().push_back(
+              utils::CopyWithSharedTensorStorage(initializer));
+        } else {
+          edit.ref_added_initializers().push_back(utils::CopyWithSharedTensorStorage(initializer));
+          edit.add_added_initializer_positions(i);
+        }
+      }
+    }
+    for (std::size_t i = 0; i < source.initializers_.size(); ++i)
+      if (kept_initializers.count(i) == 0)
+        edit.add_removed_initializers(i);
+    // Ordering contains names only, never copies retained payloads.
+    bool reorder = source.initializers_.size() != destination.initializers_.size();
+    for (std::size_t i = 0; !reorder && i < source.initializers_.size(); ++i)
+      reorder = source.initializers_[i].name() != destination.initializers_[i].name();
+    if (reorder)
+      for (const auto &initializer : destination.initializers_)
+        edit.add_initializer_order(initializer.name().value());
+    // New captures must be visible before descendant edits; old captures
+    // remain available until the parent edit retires them.
+    if (!additions.added_initializers().empty())
+      plan.ref_rewrites().push_back(std::move(additions));
+
+    std::unordered_map<std::string, std::size_t> nodes;
+    for (std::size_t i = 0; i < source.nodes_.size(); ++i)
+      if (!nodes.emplace(node_key(source.nodes_[i], i), i).second)
+        throw BuilderError("DiffRewritings: ambiguous source node identity.");
+    std::unordered_map<std::size_t, std::size_t> kept_nodes;
+    std::unordered_set<std::size_t> added_positions;
+    for (std::size_t i = 0; i < destination.nodes_.size(); ++i) {
+      const auto &node = destination.nodes_[i];
+      const auto found = nodes.find(node_key(node, i));
+      if (found != nodes.end() && skeleton(source.nodes_[found->second]).Equals(skeleton(node))) {
+        for (const auto &output : node.output()) {
+          if (output.empty())
+            continue;
+          const auto &left = source.Compute().ValueTags();
+          const auto &right = destination.Compute().ValueTags();
+          const auto a = left.find(output.value());
+          const auto b = right.find(output.value());
+          if ((a == left.end()) != (b == right.end()) ||
+              (a != left.end() && a->second != b->second))
+            throw BuilderError("DiffRewritings: changing retained value tags is unsupported.");
+        }
+        if (!kept_nodes.emplace(found->second, i).second)
+          throw BuilderError("DiffRewritings: ambiguous target node identity.");
+        const auto children = source.ReferencedSubgraphs(source.nodes_[found->second]);
+        const auto targets = destination.ReferencedSubgraphs(node);
+        if (children.size() != targets.size())
+          throw BuilderError("DiffRewritings: incompatible nested graph count.");
+        for (std::size_t child = 0; child < children.size(); ++child) {
+          auto child_path = path;
+          child_path.push_back(children[child]->name_);
+          self(self, *children[child], *targets[child], child_path);
+        }
+      } else {
+        auto materialized = utils::CopyWithSharedTensorStorage(node);
+        destination.MaterializeGraphReferences(materialized, true);
+        edit.ref_added_nodes().push_back(std::move(materialized));
+        edit.add_added_nodes_positions(i);
+        added_positions.insert(i);
+      }
+    }
+    for (std::size_t i = 0; i < source.nodes_.size(); ++i)
+      if (kept_nodes.count(i) == 0)
+        edit.add_matched_nodes(i);
+    std::size_t position = 0;
+    for (std::size_t i = 0; i < source.nodes_.size(); ++i) {
+      const auto found = kept_nodes.find(i);
+      if (found == kept_nodes.end())
+        continue;
+      while (added_positions.count(position) != 0)
+        ++position;
+      if (position != found->second) {
+        auto *move = plan.add_moved_nodes();
+        move->set_from_position(position);
+        move->set_to_position(found->second);
+        for (const auto &component : path)
+          move->add_graph_path(component);
+      }
+      ++position;
+    }
+    if (!edit.matched_nodes().empty() || !edit.added_nodes().empty() ||
+        !edit.removed_initializers().empty() || !edit.added_initializers().empty() ||
+        !edit.initializer_order().empty())
+      plan.ref_rewrites().push_back(std::move(edit));
+  };
+  diff_scope(diff_scope, *this, target, {});
+  std::map<FunctionKey, FunctionProto> source_functions;
+  std::map<FunctionKey, FunctionProto> target_functions;
+  const auto collect = [](const auto &self, const GraphBuilder &scope,
+                          std::map<FunctionKey, FunctionProto> &functions) -> void {
+    for (const auto &function : scope.local_functions_) {
+      auto definition = function->BuildFunction(function->function_domain_);
+      functions.emplace(Identity(definition), std::move(definition));
+      self(self, *function, functions);
+    }
+    for (const auto &child : scope.subgraphs_)
+      self(self, *child, functions);
+  };
+  collect(collect, *this, source_functions);
+  collect(collect, target, target_functions);
+  for (const auto &[key, function] : target_functions) {
+    const auto found = source_functions.find(key);
+    if (found == source_functions.end() || !found->second.Equals(function)) {
+      plan.ref_added_functions().push_back(utils::CopyWithSharedTensorStorage(function));
+      if (found != source_functions.end())
+        plan.add_replaced_function_ids(ShapesContext::LocalFunctionKey(
+            function.domain(), function.name(), function.overload()));
+    }
+  }
+  for (const auto &[key, function] : source_functions)
+    if (target_functions.count(key) == 0)
+      plan.add_removed_function_ids(
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload()));
+  std::pair<uint64_t, uint64_t> hashes;
+  const auto reconstructed = ReplayRewritings(plan, &hashes);
+  const auto verify_result = [&](const auto &self, const GraphBuilder &actual,
+                                 const GraphBuilder &expected) -> void {
+    if (actual.Compute().ValueTags() != expected.Compute().ValueTags() ||
+        actual.nodes_.size() != expected.nodes_.size())
+      throw BuilderError("DiffRewritings: reconstructed value tags or node count differ.");
+    for (std::size_t i = 0; i < actual.nodes_.size(); ++i) {
+      if (!skeleton(actual.nodes_[i]).Equals(skeleton(expected.nodes_[i])))
+        throw BuilderError("DiffRewritings: reconstructed node differs from the target.");
+      const auto children = actual.ReferencedSubgraphs(actual.nodes_[i]);
+      const auto targets = expected.ReferencedSubgraphs(expected.nodes_[i]);
+      if (children.size() != targets.size())
+        throw BuilderError("DiffRewritings: reconstructed nested graph count differs.");
+      for (std::size_t child = 0; child < children.size(); ++child)
+        self(self, *children[child], *targets[child]);
+    }
+  };
+  verify_result(verify_result, reconstructed, target);
+  auto captured = utils::CopyWithSharedTensorStorage(plan);
+  captured.set_hash_before(hashes.first);
+  captured.set_hash_after(hashes.second);
+  if (captured.hash_after() != target.RewritingHash())
+    throw BuilderError("DiffRewritings: target structural hash differs after validated replay.");
+  return captured;
+}
+
 GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
                                             std::pair<uint64_t, uint64_t> *captured_hashes) const {
   if (parent_ != nullptr || is_local_function_)
@@ -3290,6 +3735,22 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
       self(self, *subgraph);
   };
   merge_source_functions(merge_source_functions, *this);
+  if (!rewrites.removed_function_ids().empty()) {
+    std::unordered_set<std::string> removed;
+    for (const auto &identity : rewrites.removed_function_ids())
+      if (!removed.insert(identity.value()).second)
+        throw BuilderError("ApplyRewritings: duplicate removed function identity.");
+    for (const auto &function : model.functions()) {
+      const auto identity =
+          ShapesContext::LocalFunctionKey(function.domain(), function.name(), function.overload());
+      if (removed.erase(identity) != 0 &&
+          std::any_of(rewrites.added_functions().begin(), rewrites.added_functions().end(),
+                      [&](const auto &added) { return Identity(added) == Identity(function); }))
+        throw BuilderError("ApplyRewritings: a removed function cannot also be added.");
+    }
+    if (!removed.empty())
+      throw BuilderError("ApplyRewritings: unknown removed function identity.");
+  }
   std::set<std::string> requested_replacements;
   for (const auto &identity : rewrites.replaced_function_ids())
     requested_replacements.insert(identity.value());
@@ -3647,6 +4108,44 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
     index = end;
   }
   result.ApplyNodeMoves(rewrites.moved_nodes());
+  if (!rewrites.removed_function_ids().empty()) {
+    std::unordered_set<std::string> removed;
+    for (const auto &identity : rewrites.removed_function_ids())
+      removed.insert(identity.value());
+    const auto validate_call = [&](const auto &self, const NodeProto &node) -> void {
+      if (removed.count(
+              ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) != 0)
+        throw BuilderError("ApplyRewritings: a removed function is still referenced.");
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g())
+          for (const auto &child : attribute.g().node())
+            self(self, child);
+        for (const auto &graph : attribute.graphs())
+          for (const auto &child : graph.node())
+            self(self, child);
+      }
+    };
+    const auto remove_functions = [&](const auto &self, GraphBuilder &scope) -> void {
+      for (const auto &node : scope.nodes_)
+        validate_call(validate_call, node);
+      NodeProto defaults;
+      defaults.ref_attribute() =
+          utils::CopyWithSharedTensorStorage(scope.function_template_.attribute_proto());
+      validate_call(validate_call, defaults);
+      std::erase_if(scope.local_functions_, [&](const auto &function) {
+        return removed.count(
+                   ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                                   function->function_template_.overload())) != 0;
+      });
+      for (const auto &identity : removed)
+        scope.compute_.Shapes().EraseLocalFunction(identity);
+      for (const auto &function : scope.local_functions_)
+        self(self, *function);
+      for (const auto &child : scope.subgraphs_)
+        self(self, *child);
+    };
+    remove_functions(remove_functions, result);
+  }
   result.BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
   const auto hash_after = result.RewritingHash();
   if (captured_hashes == nullptr && hash_after != rewrites.hash_after())

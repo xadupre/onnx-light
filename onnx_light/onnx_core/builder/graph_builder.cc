@@ -488,6 +488,8 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
                            const OperatorRegistry &local_registry)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
       schema_lookup_(std::move(schema_lookup)), local_registry_(local_registry) {
+  if (model.has_base_model() || model.has_base_model_sha256())
+    throw BuilderError("GraphBuilder: resolve the base-referencing variant with onnx.load first.");
   local_registry_.ConfigureShapes(compute_.Shapes());
   // Copy only metadata: copying the optional graph would serialize its payload
   // before discarding it. Graphs, functions, types and opsets are imported below.
@@ -716,8 +718,16 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
 void GraphBuilder::SeedInheritedValue(const std::string &name) {
   auto &shapes = compute_.Shapes();
   if (name.empty() || shapes.Has(name) || shapes.HasSequence(name) || shapes.HasType(name) ||
-      parent_ == nullptr || inherited_names_.count(name) == 0) {
+      parent_ == nullptr) {
     return;
+  }
+  if (inherited_names_.count(name) == 0) {
+    if (names_.count(name) != 0)
+      return;
+    parent_->SeedInheritedValue(name);
+    if (!parent_->HasName(name))
+      return;
+    inherited_names_.insert(name);
   }
   parent_->SeedInheritedValue(name);
   const auto &outer = parent_->Shapes();
@@ -1097,8 +1107,11 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     CollectNodeReferences(nodes_[index], references[index]);
     if (old_indices[index] == old_count) {
-      for (const auto &name : references[index])
+      for (const auto &name : references[index]) {
         SeedInheritedValue(name);
+        if (inherited_names_.count(name) != 0)
+          available.insert(name);
+      }
     }
   }
   for (const auto &initializer : initializers_) {

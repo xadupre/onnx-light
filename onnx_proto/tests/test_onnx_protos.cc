@@ -78,6 +78,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   edit.add_metadata_props()->set_key("local");
   edit.add_initializer_calls()->set_op_type("Prepare");
   edit.add_computed_initializer_positions(4);
+  edit.add_initializer_order("retained");
+  edit.add_initializer_order("literal");
   auto &opset = *source.add_required_opset_imports();
   opset.set_domain("custom");
   opset.set_version(18);
@@ -86,6 +88,7 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   function.set_name("Prepare");
   function.set_domain("custom");
   source.add_replaced_function_ids("custom:Prepare");
+  source.add_removed_function_ids("custom:Unused");
   source.set_hash_before(0);
   source.set_hash_after(UINT64_MAX);
   auto &move = *source.add_moved_nodes();
@@ -101,6 +104,8 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
   EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
   EXPECT_EQ(loaded.replaced_function_ids(0), "custom:Prepare");
+  EXPECT_EQ(loaded.removed_function_ids(0), "custom:Unused");
+  EXPECT_EQ(loaded.rewrites(0).initializer_order(0), "retained");
   EXPECT_TRUE(loaded.has_hash_before());
   EXPECT_EQ(loaded.hash_after(), UINT64_MAX);
   EXPECT_EQ(loaded.moved_nodes(0).from_position(), UINT64_MAX);
@@ -115,6 +120,23 @@ TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
   LocalRewritingProto local;
   ASSERT_TRUE(local.ParseFromString(local_bytes));
   EXPECT_TRUE(local.Equals(edit));
+}
+
+TEST(onnx_proto, BaseReferencingModelEnvelopeRoundTrip) {
+  ModelProto source;
+  source.set_base_model("model.onnx");
+  source.set_base_model_sha256(std::string(64, 'a'));
+  RewritingProto plan;
+  plan.set_hash_before(1);
+  plan.set_hash_after(2);
+  source.add_rewritings("cpu", plan);
+  ModelProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(source.SerializeAsString()));
+  EXPECT_FALSE(loaded.has_graph());
+  EXPECT_TRUE(loaded.Equals(source));
+  ModelProto copied;
+  copied.CopyFrom(loaded);
+  EXPECT_TRUE(copied.Equals(source));
 }
 
 TEST(onnx_proto, RewritingHashTracksPositionedNodeStructureWithoutWeights) {

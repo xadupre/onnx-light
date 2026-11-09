@@ -2405,6 +2405,9 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "Returns the combined positioned-node structural hash without reading weights.")
       .def("capture_rewritings", &GraphBuilder::CaptureRewritings, nb::arg("rewrites"),
            "Creates a hashed plan by validated replay of manually assembled edits.")
+      .def("diff_rewritings", &GraphBuilder::DiffRewritings, nb::arg("target"),
+           nb::arg("base_dir") = "", nb::arg("target_dir") = "",
+           "Constructs a validated delta to an independently produced model.")
       .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
            "Returns the finalised graph wrapped in a ModelProto.")

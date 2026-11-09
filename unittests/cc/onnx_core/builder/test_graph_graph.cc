@@ -3245,4 +3245,65 @@ TEST(GraphGraph, NativeExportRejectsCyclesAndUndefinedDependencies) {
   }
 }
 
+TEST(GraphGraph, ModelDiffReplacesSameNameInitializerWithoutCopyingRetainedStorage) {
+  const auto make = [](bool target) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    if (target)
+      builder.MakeInitializer(MakeInitializer<float>("bias", {2}, {3, 4}));
+    builder.MakeInitializer(MakeInitializer<float>(
+        "weight", {2}, target ? std::vector<float>{5, 6} : std::vector<float>{1, 2}));
+    if (!target)
+      builder.MakeInitializer(MakeInitializer<float>("bias", {2}, {3, 4}));
+    builder.MakeNode(target ? "Mul" : "Add", {"X", "weight"}, {"Y"});
+    builder.MakeOutput("Y");
+    return builder;
+  };
+  auto source = make(false);
+  auto target = make(true);
+  const auto expected = target.ToModel();
+  const auto plan = source.DiffRewritings(expected);
+  ASSERT_TRUE(plan.has_hash_before());
+  ASSERT_TRUE(plan.has_hash_after());
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(plan.rewrites(0).added_initializers().size(), 1u);
+  EXPECT_EQ(plan.rewrites(0).added_initializers(0).name(), "weight");
+  EXPECT_EQ(plan.rewrites(0).initializer_order(0), "bias");
+  const auto actual = source.ApplyRewritings(plan).ToModel();
+  EXPECT_TRUE(actual.graph().Equals(expected.graph()));
+  EXPECT_EQ(source.Initializers()[0].name(), "weight");
+  EXPECT_EQ(source.Nodes()[0].op_type(), "Add");
+}
+
+TEST(GraphGraph, ModelDiffRejectsMissingPayloadsAndUnsafeExternalMetadata) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  source.MakeInitializer(MakeInitializer<float>("weight", {2}, {1, 2}));
+  source.MakeNode("Add", {"X", "weight"}, {"Y"});
+  source.MakeOutput("Y");
+  auto target = source.ToModel();
+  target.ref_graph().ref_initializer()[0].ref_raw_data().clear();
+  target.ref_graph().ref_initializer()[0].clr_float_data();
+  EXPECT_THROW(source.DiffRewritings(target), core::builder::BuilderError);
+  auto &weight = target.ref_graph().ref_initializer()[0];
+  weight.set_data_location(TensorProto::EXTERNAL);
+  auto *location = weight.add_external_data();
+  location->set_key("location");
+  location->set_value("../outside.bin");
+  EXPECT_THROW(source.DiffRewritings(target), core::builder::BuilderError);
+  location->set_value("weights.bin");
+  auto *offset = weight.add_external_data();
+  offset->set_key("offset");
+  offset->set_value("-1");
+  EXPECT_THROW(source.DiffRewritings(target), core::builder::BuilderError);
+  offset->set_value("0");
+  auto *length = weight.add_external_data();
+  length->set_key("length");
+  length->set_value("8");
+  auto *size = weight.add_external_data();
+  size->set_key("size");
+  size->set_value("8");
+  EXPECT_THROW(source.DiffRewritings(target), core::builder::BuilderError);
+}
+
 } // namespace Test

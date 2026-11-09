@@ -2156,6 +2156,7 @@ SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream 
   SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
   SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
   SIZE_REPEATED_FIELD(size, options, stream, removed_extended_initializers)
+  SIZE_REPEATED_FIELD(size, options, stream, initializer_order)
   return size;
 }
 void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2172,6 +2173,7 @@ void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, initializer_calls)
   WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
   WRITE_REPEATED_FIELD(options, stream, removed_extended_initializers)
+  WRITE_REPEATED_FIELD(options, stream, initializer_order)
 }
 bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, LocalRewritingProto)
@@ -2191,6 +2193,7 @@ bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_REPEATED_FIELD(options, stream, initializer_calls)
   READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
   READ_REPEATED_FIELD(options, stream, removed_extended_initializers)
+  READ_REPEATED_FIELD(options, stream, initializer_order)
   READ_END(options, stream, LocalRewritingProto)
   return true;
 }
@@ -2203,7 +2206,7 @@ void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
       NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
       NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(initializer_calls),
       NAME_EXIST_VALUE(computed_initializer_positions),
-      NAME_EXIST_VALUE(removed_extended_initializers));
+      NAME_EXIST_VALUE(removed_extended_initializers), NAME_EXIST_VALUE(initializer_order));
 }
 
 IMPLEMENT_PROTO(MoveNodeProto)
@@ -2250,6 +2253,7 @@ SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stre
   SIZE_FIELD(size, options, stream, hash_before)
   SIZE_FIELD(size, options, stream, hash_after)
   SIZE_REPEATED_FIELD(size, options, stream, moved_nodes)
+  SIZE_REPEATED_FIELD(size, options, stream, removed_function_ids)
   return size;
 }
 void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2262,6 +2266,7 @@ void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, hash_before)
   WRITE_FIELD(options, stream, hash_after)
   WRITE_REPEATED_FIELD(options, stream, moved_nodes)
+  WRITE_REPEATED_FIELD(options, stream, removed_function_ids)
 }
 bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, RewritingProto)
@@ -2273,6 +2278,7 @@ bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_FIELD(options, stream, hash_before)
   READ_FIELD(options, stream, hash_after)
   READ_REPEATED_FIELD(options, stream, moved_nodes)
+  READ_REPEATED_FIELD(options, stream, removed_function_ids)
   READ_END(options, stream, RewritingProto)
   return true;
 }
@@ -2282,7 +2288,8 @@ void RewritingProto::PrintToStringStream(std::stringstream &ss,
       ss, options, NAME_EXIST_VALUE(rewrites), NAME_EXIST_VALUE(required_opset_imports),
       NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions),
       NAME_EXIST_VALUE(replaced_function_ids), NAME_EXIST_VALUE(hash_before),
-      NAME_EXIST_VALUE(hash_after), NAME_EXIST_VALUE(moved_nodes));
+      NAME_EXIST_VALUE(hash_after), NAME_EXIST_VALUE(moved_nodes),
+      NAME_EXIST_VALUE(removed_function_ids));
 }
 
 // ModelProto
@@ -2340,6 +2347,8 @@ SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, configuration)
   SIZE_REPEATED_FIELD(size, options, stream, struct_types)
   size += size_map_field(stream, order_rewritings(), rewritings_, options);
+  SIZE_FIELD(size, options, stream, base_model)
+  SIZE_FIELD(size, options, stream, base_model_sha256)
   return size;
 }
 void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -2416,6 +2425,8 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, configuration)
   WRITE_REPEATED_FIELD(options, stream, struct_types)
   write_map_field(stream, order_rewritings(), rewritings_, options);
+  WRITE_FIELD(options, stream, base_model)
+  WRITE_FIELD(options, stream, base_model_sha256)
 }
 bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   const std::string source_identity = utils::detail::ValidateDeferredWeightParse(stream, options);
@@ -2440,6 +2451,8 @@ bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
     read_map_field(stream, static_cast<int>(field_number.wire_type), rewritings_, "rewritings",
                    options);
   }
+  READ_FIELD(options, stream, base_model)
+  READ_FIELD(options, stream, base_model_sha256)
   READ_END(options, stream, ModelProto) //  // NOLINT
   EXT_ENFORCE(!options.defer_weights ||
                   source_identity == utils::detail::ValidateDeferredWeightParse(stream, options),
@@ -2447,13 +2460,13 @@ bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   return true;
 }
 void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
-  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(ir_version),
-                                 NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(producer_name),
-                                 NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
-                                 NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string),
-                                 NAME_EXIST_VALUE(graph), NAME_EXIST_VALUE(metadata_props),
-                                 NAME_EXIST_VALUE(functions), NAME_EXIST_VALUE(configuration),
-                                 NAME_EXIST_VALUE(struct_types), NAME_EXIST_VALUE(rewritings));
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(ir_version), NAME_EXIST_VALUE(opset_import),
+      NAME_EXIST_VALUE(producer_name), NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
+      NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(graph),
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(functions),
+      NAME_EXIST_VALUE(configuration), NAME_EXIST_VALUE(struct_types), NAME_EXIST_VALUE(rewritings),
+      NAME_EXIST_VALUE(base_model), NAME_EXIST_VALUE(base_model_sha256));
 }
 
 bool ModelProto::SerializeToString(std::string &out,
@@ -3134,6 +3147,7 @@ bool VisitProtoFields(const LocalRewritingProto &left, Right &right, Visitor &&v
   VISIT_FIELD(matched_nodes)
   VISIT_FIELD(removed_initializers)
   VISIT_FIELD(removed_extended_initializers)
+  VISIT_FIELD(initializer_order)
   VISIT_FIELD(added_nodes)
   VISIT_FIELD(added_nodes_positions)
   VISIT_FIELD(added_initializers)
@@ -3163,6 +3177,7 @@ bool VisitProtoFields(const RewritingProto &left, Right &right, Visitor &&visito
   VISIT_FIELD(hash_before)
   VISIT_FIELD(hash_after)
   VISIT_FIELD(moved_nodes)
+  VISIT_FIELD(removed_function_ids)
   return true;
 }
 
@@ -3381,6 +3396,8 @@ bool VisitProtoFields(const ModelProto &left, Right &right, Visitor &&visitor) {
   VISIT_FIELD(configuration)
   VISIT_FIELD(struct_types)
   VISIT_FIELD(rewritings)
+  VISIT_FIELD(base_model)
+  VISIT_FIELD(base_model_sha256)
   return true;
 }
 

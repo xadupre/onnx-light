@@ -3430,6 +3430,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(LocalRewritingProto, matched_nodes)
       .PYFIELD(LocalRewritingProto, removed_initializers)
       .PYFIELD(LocalRewritingProto, removed_extended_initializers)
+      .PYFIELD(LocalRewritingProto, initializer_order)
       .PYFIELD(LocalRewritingProto, added_nodes)
       .PYFIELD(LocalRewritingProto, added_nodes_positions)
       .PYFIELD(LocalRewritingProto, added_initializers)
@@ -3480,7 +3481,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(RewritingProto, replaced_function_ids)
       .PYFIELD_OPTIONAL_INT(RewritingProto, hash_before)
       .PYFIELD_OPTIONAL_INT(RewritingProto, hash_after)
-      .PYFIELD(RewritingProto, moved_nodes);
+      .PYFIELD(RewritingProto, moved_nodes)
+      .PYFIELD(RewritingProto, removed_function_ids);
   PYADD_PROTO_SERIALIZATION(RewritingProto);
   nb_RewritingProto
       .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })
@@ -3504,6 +3506,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_STR(ModelProto, producer_name)
       .PYFIELD_STR(ModelProto, producer_version)
       .PYFIELD_STR(ModelProto, domain)
+      .PYFIELD_STR(ModelProto, base_model)
+      .PYFIELD_STR(ModelProto, base_model_sha256)
       .PYFIELD_OPTIONAL_INT(ModelProto, model_version)
       .PYFIELD_STR(ModelProto, doc_string)
       .PYFIELD_OPTIONAL_PROTO(ModelProto, graph)
@@ -3525,6 +3529,69 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
           },
           nb::arg("name"), nb::arg("rewrites"), "Adds a named plan, rejecting duplicate names.")
       .def("clear_rewritings", &ModelProto::clear_rewritings)
+      .def(
+          "external_tensors",
+          [](ModelProto &self) {
+            nb::list tensors;
+            IteratorTensorProto iterator(&self);
+            while (iterator.next())
+              if (iterator->data_location() == TensorProto::EXTERNAL)
+                tensors.append(
+                    nb::cast(&*iterator, nb::rv_policy::reference_internal, nb::cast(&self)));
+            const auto append_encoded = [&](EncodedValueProto &value) {
+              if (value.data_location() == TensorProto::EXTERNAL)
+                tensors.append(
+                    nb::cast(&value, nb::rv_policy::reference_internal, nb::cast(&self)));
+            };
+            const auto visit_graph = [&](const auto &visit, GraphProto &graph) -> void {
+              for (auto &initializer : graph.ref_extended_initializer()) {
+                if (initializer.has_encoded_value())
+                  append_encoded(*initializer.mutable_encoded_value());
+                if (initializer.has_paged_cache())
+                  for (auto &block : initializer.mutable_paged_cache()->ref_blocks()) {
+                    if (block.has_encoded_key())
+                      append_encoded(*block.mutable_encoded_key());
+                    if (block.has_encoded_value())
+                      append_encoded(*block.mutable_encoded_value());
+                  }
+              }
+              for (auto &node : graph.ref_node())
+                for (auto &attribute : node.ref_attribute()) {
+                  if (attribute.has_g())
+                    visit(visit, *attribute.mutable_g());
+                  for (auto &child : attribute.ref_graphs())
+                    visit(visit, child);
+                }
+            };
+            const auto visit_attributes = [&](auto &attributes) {
+              for (auto &attribute : attributes) {
+                if (attribute.has_g())
+                  visit_graph(visit_graph, *attribute.mutable_g());
+                for (auto &graph : attribute.ref_graphs())
+                  visit_graph(visit_graph, graph);
+              }
+            };
+            const auto visit_nodes = [&](auto &nodes) {
+              for (auto &node : nodes)
+                visit_attributes(node.ref_attribute());
+            };
+            if (self.has_graph())
+              visit_graph(visit_graph, *self.mutable_graph());
+            const auto visit_functions = [&](auto &functions) {
+              for (auto &function : functions) {
+                visit_nodes(function.ref_node());
+                visit_attributes(function.ref_attribute_proto());
+              }
+            };
+            visit_functions(self.ref_functions());
+            for (auto &[name, rewriting] : self.ref_rewritings()) {
+              visit_functions(rewriting.ref_added_functions());
+              for (auto &edit : rewriting.ref_rewrites())
+                visit_nodes(edit.ref_added_nodes());
+            }
+            return tensors;
+          },
+          "Returns mutable external TensorProto/EncodedValueProto references in all scopes.")
       .def("weight_names", &ModelProto::WeightNames,
            "Returns tensor names across all scopes; duplicate names remain ambiguous.")
       .def("is_weight_loaded", &ModelProto::IsWeightLoaded, nb::arg("name"),
@@ -3554,6 +3621,10 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_producer_version();
             if (field_name == "domain")
               return self.has_domain();
+            if (field_name == "base_model")
+              return self.has_base_model();
+            if (field_name == "base_model_sha256")
+              return self.has_base_model_sha256();
             if (field_name == "model_version")
               return self.has_model_version();
             if (field_name == "doc_string")

@@ -172,7 +172,7 @@ public:
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
-  /// Erases the element at ``position`` (default: last element).
+  /// Removes the element at ``position`` (default: last element).
   Sequence operator()(const Sequence &input_sequence, const Tensor *position = nullptr) const;
 };
 

@@ -243,7 +243,7 @@ TEST(GeluPattern, ExactRejectsIncorrectConstantsOperandsAndTypesWithoutMutation)
     } else if (variant == "missing_type" || variant == "missing_shape") {
       auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
       if (variant == "missing_shape")
-        shapes.Erase("x");
+        shapes.Remove("x");
       else
         shapes.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUndefined,
                                                   Shape({2, 3})));

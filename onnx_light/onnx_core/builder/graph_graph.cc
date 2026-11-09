@@ -1671,11 +1671,11 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed, bool move_shap
     }
     for (std::size_t i = 0; i < original_nodes.size(); ++i)
       if (retained.count(i) == 0) {
-        builder_.compute_.Shapes().EraseNodeConstraints(original_nodes[i]);
+        builder_.compute_.Shapes().RemoveNodeConstraints(original_nodes[i]);
         for (const auto &output : original_nodes[i].output())
           if (!output.empty()) {
             affected.insert(output.value());
-            builder_.compute_.Shapes().Erase(output.value());
+            builder_.compute_.Shapes().Remove(output.value());
           }
       }
     std::unordered_set<std::string> initializers;
@@ -1686,8 +1686,8 @@ std::size_t GraphGraph::CanonicalizeImpl(bool &reference_changed, bool move_shap
     for (const auto &name : original_initializers)
       if (initializers.count(name) == 0) {
         affected.insert(name);
-        builder_.compute_.EraseValue(name);
-        builder_.compute_.Shapes().Erase(name);
+        builder_.compute_.RemoveValue(name);
+        builder_.compute_.Shapes().Remove(name);
       }
     builder_.RefreshAfterRewriting(indices, std::move(affected));
   }
@@ -2369,11 +2369,11 @@ RewritingProto GraphGraph::OptimizeImpl(
       utils::RepeatedProtoField<NodeProto> rebuilt;
       std::unordered_set<std::string> affected_values;
       for (const NodeProto *node : removed) {
-        builder_.compute_.Shapes().EraseNodeConstraints(*node);
+        builder_.compute_.Shapes().RemoveNodeConstraints(*node);
         for (const auto &output : node->output()) {
           if (!output.empty()) {
             affected_values.insert(output.value());
-            builder_.compute_.Shapes().Erase(output.value());
+            builder_.compute_.Shapes().Remove(output.value());
           }
         }
       }
@@ -2660,11 +2660,11 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     }
     for (std::size_t index = 0; index < original_nodes.size(); ++index) {
       if (retained.count(index) == 0) {
-        builder_.compute_.Shapes().EraseNodeConstraints(original_nodes[index]);
+        builder_.compute_.Shapes().RemoveNodeConstraints(original_nodes[index]);
         for (const auto &output : original_nodes[index].output()) {
           if (!output.empty()) {
             affected_values.insert(output.value());
-            builder_.compute_.Shapes().Erase(output.value());
+            builder_.compute_.Shapes().Remove(output.value());
           }
         }
       }
@@ -2674,10 +2674,10 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     for (const auto &name : initializers_before) {
       if (retained_initializers.count(name) == 0) {
         affected_values.insert(name);
-        builder_.compute_.EraseValue(name);
+        builder_.compute_.RemoveValue(name);
         if (std::none_of(builder_.inputs_.begin(), builder_.inputs_.end(),
                          [&](const auto &input) { return input.name() == name; }))
-          builder_.compute_.Shapes().Erase(name);
+          builder_.compute_.Shapes().Remove(name);
       }
     }
     builder_.RefreshAfterRewriting(old_indices, std::move(affected_values));
@@ -3025,27 +3025,27 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   old_indices.reserve(final_node_count);
   std::unordered_set<std::string> affected_values;
   for (const NodeProto *node : removed) {
-    compute_.Shapes().EraseNodeConstraints(*node);
+    compute_.Shapes().RemoveNodeConstraints(*node);
     for (const auto &output : node->output()) {
       if (!output.empty()) {
         affected_values.insert(output.value());
-        compute_.Shapes().Erase(output.value());
+        compute_.Shapes().Remove(output.value());
       }
     }
   }
-  const auto erase_removed_values = [&](const auto &initializers, const auto &positions) {
+  const auto remove_initializer_values = [&](const auto &initializers, const auto &positions) {
     for (const auto position : positions) {
       const std::string name = initializers[position].name().value();
       affected_values.insert(name);
-      compute_.EraseValue(name);
+      compute_.RemoveValue(name);
       if (std::none_of(inputs_.begin(), inputs_.end(),
                        [&](const auto &input) { return input.name() == name; })) {
-        compute_.Shapes().Erase(name);
+        compute_.Shapes().Remove(name);
       }
     }
   };
-  erase_removed_values(initializers, removed_initializers);
-  erase_removed_values(extended_initializers_, removed_extended);
+  remove_initializer_values(initializers, removed_initializers);
+  remove_initializer_values(extended_initializers_, removed_extended);
   for (const auto &addition : added_initializers) {
     affected_values.insert(addition.initializer->name().value());
   }
@@ -4146,7 +4146,7 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
                                                    function->function_template_.overload())) != 0;
       });
       for (const auto &identity : removed)
-        scope.compute_.Shapes().EraseLocalFunction(identity);
+        scope.compute_.Shapes().RemoveLocalFunction(identity);
       for (const auto &function : scope.local_functions_)
         self(self, *function);
       for (const auto &child : scope.subgraphs_)

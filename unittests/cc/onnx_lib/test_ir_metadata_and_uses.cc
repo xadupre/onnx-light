@@ -58,7 +58,7 @@ TEST(onnx_ir, HasUsesInCurrentGraphTracksDirectUses) {
   EXPECT_FALSE(producer->hasUsesInCurrentGraph());
 }
 
-TEST(onnx_ir, EraseInitializerAcceptsAliasedLongName) {
+TEST(onnx_ir, RemoveInitializerAcceptsAliasedLongName) {
   Graph graph;
   Tensor initializer;
   initializer.setName("scale_initializer_name_longer_than_sso");
@@ -66,7 +66,7 @@ TEST(onnx_ir, EraseInitializerAcceptsAliasedLongName) {
   ASSERT_EQ(graph.initializers().size(), 1u);
   const std::string &aliased_name = graph.initializers().front().name();
 
-  graph.eraseInitializer(aliased_name);
+  graph.removeInitializer(aliased_name);
 
   EXPECT_TRUE(graph.initializers().empty());
   EXPECT_TRUE(graph.initializer_names().empty());

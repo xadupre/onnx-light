@@ -139,7 +139,7 @@ TEST(ExecutionPlan, DerivesMissingReleasesFromPartialMetadata) {
   const auto &actions = plan.actions();
   const auto releases = [&](const std::string &name, size_t node_index) {
     return std::count_if(actions.begin(), actions.end(), [&](const auto &action) {
-      return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == name &&
+      return action.kind() == ExecuteActionKind::kRemoveBuffer && action.name() == name &&
              action.node_index() == node_index;
     });
   };
@@ -147,7 +147,7 @@ TEST(ExecutionPlan, DerivesMissingReleasesFromPartialMetadata) {
   EXPECT_EQ(releases("B", 2), 1);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
                           [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kDeleteBuffer;
+                            return action.kind() == ExecuteActionKind::kRemoveBuffer;
                           }),
             2);
 }
@@ -175,19 +175,19 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
   const auto &actions = plan.actions();
   const auto explicit_release =
       std::find_if(actions.begin(), actions.end(), [](const auto &action) {
-        return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "A";
+        return action.kind() == ExecuteActionKind::kRemoveBuffer && action.name() == "A";
       });
   ASSERT_NE(explicit_release, actions.end());
   EXPECT_EQ(explicit_release->node_index(), 2);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
                           [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+                            return action.kind() == ExecuteActionKind::kRemoveBuffer &&
                                    action.name() == "A";
                           }),
             1);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
                           [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+                            return action.kind() == ExecuteActionKind::kRemoveBuffer &&
                                    action.name() == "B" && action.node_index() == 2;
                           }),
             1);
@@ -237,7 +237,7 @@ TEST(ExecutionPlan, IgnoresStaleExplicitReleaseForGraphOutput) {
   const ExecutionPlan plan(graph);
   EXPECT_EQ(std::count_if(plan.actions().begin(), plan.actions().end(),
                           [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+                            return action.kind() == ExecuteActionKind::kRemoveBuffer &&
                                    action.name() == "Y";
                           }),
             0);

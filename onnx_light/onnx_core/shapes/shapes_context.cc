@@ -31,7 +31,7 @@ void ShapesContext::RecordConstraint(const Constraint &constraint, bool less_equ
   }
 }
 
-void ShapesContext::EraseNodeConstraints(const NodeProto &node) {
+void ShapesContext::RemoveNodeConstraints(const NodeProto &node) {
   const std::string owner = ConstraintOwner(node);
   if (owner.empty()) {
     return;

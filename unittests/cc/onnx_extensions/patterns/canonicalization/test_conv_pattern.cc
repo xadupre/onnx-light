@@ -668,7 +668,7 @@ TEST(PadPoolPattern, RejectsMalformedFormsAndInconsistentApply) {
       AddAttribute<std::vector<int64_t>>(nodes[1], "dilations", {1, 1});
     } else {
       auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
-      shapes.Erase("x");
+      shapes.Remove("x");
     }
     const auto before = builder.ToModel();
     core::builder::GraphGraph graph(builder);

@@ -96,14 +96,14 @@ TEST(onnx_ir_name_bookkeeping, IsNameUniqueSeesDefaultNamesInsideSubgraphs) {
   }
 }
 
-// eraseInitializer() removes the Tensor-level bookkeeping for an initializer
+// removeInitializer() removes the Tensor-level bookkeeping for an initializer
 // and, if it finds a matching output on initializer_node_, erases that too --
 // but for an IR<4 (or input-shadowed) initializer, the value holding that name
 // is a *graph input* added separately via addInitializer() alone (mirroring
 // ir_pb_converter.cc's import path: see its ir_version < 4 / "exists in input"
-// branch), not a value under initializer_node_. eraseInitializer() must not
+// branch), not a value under initializer_node_. removeInitializer() must not
 // touch that value's name.
-TEST(onnx_ir_name_bookkeeping, EraseInitializerKeepsNameReservedForLiveValue) {
+TEST(onnx_ir_name_bookkeeping, RemoveInitializerKeepsNameReservedForLiveValue) {
   Graph g;
   g.setName("test");
   const std::string w_name = toVarName(5);
@@ -114,7 +114,7 @@ TEST(onnx_ir_name_bookkeeping, EraseInitializerKeepsNameReservedForLiveValue) {
   t.setName(w_name);
   g.addInitializer(t);
 
-  g.eraseInitializer(w_name);
+  g.removeInitializer(w_name);
   ASSERT_EQ(v->uniqueName(), w_name); // v itself must be untouched
   bool saw_reserved_name_again = false;
   for (int i = 0; i < 10; ++i) {

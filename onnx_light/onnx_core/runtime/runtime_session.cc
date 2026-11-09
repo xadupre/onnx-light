@@ -1098,8 +1098,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
   }
   // Replay the plan's ordered action list. Each kExecuteNode action invokes
-  // the kernel prepared during initialization; each kDeleteBuffer /
-  // kDeleteShape action frees the intermediate the plan scheduled for release.
+  // the kernel prepared during initialization; each kRemoveBuffer /
+  // kRemoveShape action frees the intermediate the plan scheduled for release.
   // Every other action (lock / unlock / allocate / transfer / temporary-buffer
   // bookkeeping) is informational for this session — the kernels manage their
   // own allocations — but is still matched by an explicit case so no scheduled
@@ -1203,7 +1203,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
       break;
     }
-    case ExecuteActionKind::kDeleteBuffer:
+    case ExecuteActionKind::kRemoveBuffer:
       // Releasing intermediates is opt-in (RuntimeContext::release_intermediates);
       // when it is disabled every intermediate stays observable in ``rt`` after
       // Run() returns, so the scheduled delete actions are skipped entirely.
@@ -1215,19 +1215,19 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
       rt.Remove(action_value_slots_[action_index]);
       break;
-    case ExecuteActionKind::kDeleteShape:
+    case ExecuteActionKind::kRemoveShape:
       if (!rt.release_intermediates()) {
         break;
       }
       rt.RemoveShape(rt.ValueName(action_value_slots_[action_index]));
       break;
-    case ExecuteActionKind::kDeleteSequence:
+    case ExecuteActionKind::kRemoveSequence:
       if (!rt.release_intermediates()) {
         break;
       }
       rt.Remove(action_value_slots_[action_index]);
       break;
-    case ExecuteActionKind::kDeleteMap:
+    case ExecuteActionKind::kRemoveMap:
       if (!rt.release_intermediates()) {
         break;
       }
@@ -1245,7 +1245,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     case ExecuteActionKind::kTransfer:
     case ExecuteActionKind::kCreateShape:
     case ExecuteActionKind::kAllocateTemporaryBuffer:
-    case ExecuteActionKind::kDeleteTemporaryBuffer:
+    case ExecuteActionKind::kRemoveTemporaryBuffer:
       break;
     }
   }

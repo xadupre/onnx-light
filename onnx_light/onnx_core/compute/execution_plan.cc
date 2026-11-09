@@ -406,8 +406,8 @@ void ExecutionPlan::BuildActions() {
   //   * ``release_after`` metadata specifies releases explicitly; intermediates
   //     without an explicit release are freed after their last topological use.
   //     Either way the schedule is materialised as
-  //     :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
-  //     :cpp:enumerator:`ExecuteActionKind::kDeleteShape` actions tagged with
+  //     :cpp:enumerator:`ExecuteActionKind::kRemoveBuffer` /
+  //     :cpp:enumerator:`ExecuteActionKind::kRemoveShape` actions tagged with
   //     the releasing node index, so :cpp:func:`ReleaseAfter` reads it back
   //     from :cpp:func:`actions` alone.
   //   * ``strict`` (any ``not_used_after`` entry) means the node range carries
@@ -581,7 +581,7 @@ void ExecutionPlan::BuildActions() {
     actions_.emplace_back(ExecuteActionKind::kExecuteNode, std::string(), i);
 
     if (peak_memory != 0) {
-      actions_.emplace_back(ExecuteActionKind::kDeleteTemporaryBuffer, std::string(), i,
+      actions_.emplace_back(ExecuteActionKind::kRemoveTemporaryBuffer, std::string(), i,
                             peak_memory);
     }
 
@@ -603,15 +603,15 @@ void ExecutionPlan::BuildActions() {
         // A shape is destroyed: it must have been created earlier.
         EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
                     "' is released but was never created (missing shape metadata).");
-        actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, i);
+        actions_.emplace_back(ExecuteActionKind::kRemoveShape, name, i);
       } else {
-        actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, i);
+        actions_.emplace_back(ExecuteActionKind::kRemoveBuffer, name, i);
       }
       released.insert(name);
     }
     for (const std::string &name : topology_releases[i]) {
-      actions_.emplace_back(shape_tagged.count(name) != 0 ? ExecuteActionKind::kDeleteShape
-                                                          : ExecuteActionKind::kDeleteBuffer,
+      actions_.emplace_back(shape_tagged.count(name) != 0 ? ExecuteActionKind::kRemoveShape
+                                                          : ExecuteActionKind::kRemoveBuffer,
                             name, i);
       released.insert(name);
     }
@@ -694,7 +694,7 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
   }
   // The release schedule lives entirely in :cpp:func:`actions`: every
   // intermediate whose last use falls at ``node`` is materialised as a
-  // kDeleteBuffer / kDeleteShape / kDeleteSequence / kDeleteMap action tagged
+  // kRemoveBuffer / kRemoveShape / kRemoveSequence / kRemoveMap action tagged
   // with this node's index.
   const size_t index = it->second;
   for (const ExecuteAction &action : actions_) {
@@ -703,16 +703,16 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
     }
     // Sequence edges may use either the tensor sequence map or RuntimeValue storage.
     switch (action.kind()) {
-    case ExecuteActionKind::kDeleteBuffer:
+    case ExecuteActionKind::kRemoveBuffer:
       rt.Remove(action.name());
       break;
-    case ExecuteActionKind::kDeleteShape:
+    case ExecuteActionKind::kRemoveShape:
       rt.RemoveShape(action.name());
       break;
-    case ExecuteActionKind::kDeleteSequence:
+    case ExecuteActionKind::kRemoveSequence:
       rt.Remove(action.name());
       break;
-    case ExecuteActionKind::kDeleteMap:
+    case ExecuteActionKind::kRemoveMap:
       rt.RemoveMap(action.name());
       break;
     default:

@@ -949,7 +949,7 @@ void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input
 namespace {
 
 // Removes every occurrence of ``value`` from ``list``.
-void EraseValueFromList(std::vector<std::string> &list, const std::string &value) {
+void RemoveValueFromList(std::vector<std::string> &list, const std::string &value) {
   list.erase(std::remove(list.begin(), list.end(), value), list.end());
 }
 
@@ -982,10 +982,10 @@ void ComputeContext::SeedReuseOutput(const std::string &name,
   if (last_use_it != incr_last_use_.end() && last_use_it->second >= 0) {
     const std::size_t idx = static_cast<std::size_t>(last_use_it->second);
     if (idx < release_after_.size()) {
-      EraseValueFromList(release_after_[idx], name);
+      RemoveValueFromList(release_after_[idx], name);
     }
     if (idx < release_after_shape_tagged_.size()) {
-      EraseValueFromList(release_after_shape_tagged_[idx], name);
+      RemoveValueFromList(release_after_shape_tagged_[idx], name);
     }
     if (idx < reuse_.size()) {
       RefreshNodeReuse(nodes, idx, ctx);
@@ -1034,12 +1034,12 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
       continue;
     }
     const std::size_t p = static_cast<std::size_t>(prev);
-    EraseValueFromList(release_after_[p], entry.first);
+    RemoveValueFromList(release_after_[p], entry.first);
     if (p < not_used_after_.size()) {
-      EraseValueFromList(not_used_after_[p], entry.first);
+      RemoveValueFromList(not_used_after_[p], entry.first);
     }
     if (p < release_after_shape_tagged_.size()) {
-      EraseValueFromList(release_after_shape_tagged_[p], entry.first);
+      RemoveValueFromList(release_after_shape_tagged_[p], entry.first);
     }
     if (incr_keep_.count(entry.first) == 0) {
       RefreshNodeReuse(nodes, p, ctx);
@@ -1216,9 +1216,9 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     const auto previous = incr_last_use_.find(name);
     if (previous != incr_last_use_.end() && previous->second >= 0) {
       const std::size_t index = static_cast<std::size_t>(previous->second);
-      EraseValueFromList(release_after_[index], name);
-      EraseValueFromList(not_used_after_[index], name);
-      EraseValueFromList(release_after_shape_tagged_[index], name);
+      RemoveValueFromList(release_after_[index], name);
+      RemoveValueFromList(not_used_after_[index], name);
+      RemoveValueFromList(release_after_shape_tagged_[index], name);
     }
     if (last < 0) {
       incr_last_use_.erase(name);
@@ -1247,8 +1247,8 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
         (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0)) {
       const auto index = static_cast<std::size_t>(last->second);
       reclassified_last_uses.insert(index);
-      EraseValueFromList(release_after_[index], name);
-      EraseValueFromList(release_after_shape_tagged_[index], name);
+      RemoveValueFromList(release_after_[index], name);
+      RemoveValueFromList(release_after_shape_tagged_[index], name);
     }
   }
   for (const auto index : reclassified_last_uses) {
@@ -1277,7 +1277,7 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     RefreshIncrementalMemory(nodes, ctx, device, materialize);
 }
 
-void ComputeContext::EraseValue(const std::string &name) {
+void ComputeContext::RemoveValue(const std::string &name) {
   if (incr_graph_inputs_.count(name) != 0) {
     incr_graph_initializers_.erase(name);
     return;

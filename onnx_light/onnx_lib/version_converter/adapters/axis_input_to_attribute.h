@@ -71,7 +71,7 @@ private:
         node->removeInput(this->axis_index);
         // Remove initializer
         if (axis_val->uses().empty())
-          graph->eraseInitializer(initializer_name);
+          graph->removeInitializer(initializer_name);
         break;
       }
     }

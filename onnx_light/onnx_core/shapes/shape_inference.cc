@@ -1086,7 +1086,7 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node,
                                      std::unordered_set<std::string> *annotation_symbols) {
-  EraseNodeConstraints(node);
+  RemoveNodeConstraints(node);
   struct RestoreConstraintOwner {
     std::string &owner;
     std::string previous;

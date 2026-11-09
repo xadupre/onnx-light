@@ -72,7 +72,7 @@ private:
           node->removeInput(1);
           // Remove initializer
           if (const_val->uses().empty())
-            graph->eraseInitializerAndInput(const_val);
+            graph->removeInitializerAndInput(const_val);
           break;
         }
       }

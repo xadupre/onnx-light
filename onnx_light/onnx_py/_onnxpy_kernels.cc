@@ -1801,23 +1801,23 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              "Unlocks an input once no remaining node references it.")
       .value("kAllocateBuffer", ExecuteActionKind::kAllocateBuffer,
              "Allocates a buffer for a named result.")
-      .value("kDeleteBuffer", ExecuteActionKind::kDeleteBuffer,
-             "Deletes a named result (frees its buffer).")
+      .value("kRemoveBuffer", ExecuteActionKind::kRemoveBuffer,
+             "Removes a named result (frees its buffer).")
       .value("kTransfer", ExecuteActionKind::kTransfer,
              "Transfers a named result to another named result.")
       .value("kExecuteNode", ExecuteActionKind::kExecuteNode, "Executes a node.")
       .value("kCreateShape", ExecuteActionKind::kCreateShape,
              "Creates the shape of a named result.")
-      .value("kDeleteShape", ExecuteActionKind::kDeleteShape,
-             "Deletes the shape of a named result.")
+      .value("kRemoveShape", ExecuteActionKind::kRemoveShape,
+             "Removes the shape of a named result.")
       .value("kAllocateTemporaryBuffer", ExecuteActionKind::kAllocateTemporaryBuffer,
              "Allocates a temporary buffer to handle a kernel memory peak.")
-      .value("kDeleteTemporaryBuffer", ExecuteActionKind::kDeleteTemporaryBuffer,
+      .value("kRemoveTemporaryBuffer", ExecuteActionKind::kRemoveTemporaryBuffer,
              "Deallocates a temporary buffer once the kernel(s) are done.")
-      .value("kDeleteSequence", ExecuteActionKind::kDeleteSequence,
-             "Deletes a named sequence result (frees the sequence it holds).")
-      .value("kDeleteMap", ExecuteActionKind::kDeleteMap,
-             "Deletes a named map result (frees the map it holds).");
+      .value("kRemoveSequence", ExecuteActionKind::kRemoveSequence,
+             "Removes a named sequence result (frees the sequence it holds).")
+      .value("kRemoveMap", ExecuteActionKind::kRemoveMap,
+             "Removes a named map result (frees the map it holds).");
 
   // ExecuteAction — single step of an ExecutionPlan.
   nb::class_<ExecuteAction>(

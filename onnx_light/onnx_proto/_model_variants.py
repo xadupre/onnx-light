@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto
+from ._io_helper import FileLoadMode, ModelProto
 from ._path_security import validate_external_data_path
 
 

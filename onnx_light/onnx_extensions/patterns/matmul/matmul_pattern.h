@@ -244,8 +244,7 @@ public:
  * opset preconditions are not checked by the opt-in matcher.
  * The extra Reshape/Shape/Concat nodes are not a guaranteed performance win,
  * particularly around attention layout changes; batched attention score
- * MatMuls are not supported. See the C++ custom-pattern guide for the A5
- * activation decision and tested cases.
+ * MatMuls are not supported.
  */
 class MatMulAddPattern final : public core::builder::PatternOptimization {
 public:

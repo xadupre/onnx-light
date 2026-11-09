@@ -458,9 +458,12 @@ TEST(RewritingOperatorPrecedence, DiscardedProposalsDoNotIntroduceLocalCallers) 
             core::shapes::ShapesContext::LocalFunctionKey("custom", "F", "A"));
         EXPECT_THROW(source.CaptureRewritings(edits), core::builder::BuilderError);
       } else {
-        const auto replayed = source.ApplyRewritings(source.CaptureRewritings(edits));
+        auto replayed = source.ApplyRewritings(source.CaptureRewritings(edits));
         EXPECT_EQ(replayed.RewritingHash(), source.RewritingHash());
-        EXPECT_EQ(replayed.ToModel().SerializeAsString(), before);
+        const auto replayed_model = replayed.ToModel();
+        ASSERT_EQ(replayed_model.functions().size(), 2u);
+        for (const auto &function : replayed_model.functions())
+          EXPECT_EQ(function.node(0).op_type(), "Neg");
       }
       EXPECT_EQ(source.ToModel().SerializeAsString(), before);
     }

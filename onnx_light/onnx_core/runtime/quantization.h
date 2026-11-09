@@ -590,6 +590,47 @@ CompressedTensorsWeights ExportCompressedTensorsWeights(
     size_t max_bytes = size_t{1} << 30);
 
 /**
+ * Carries one GPTQModel EXL3 module, distinct from the portable kExl3 profile.
+ *
+ * Pins GPTQModel's canonical checkpoint contract: INT16 trellis [K/16,N/16,16*bits],
+ * FLOAT16 suh [K], svh [N], and optional scalar INT32 mcg or mul1 codebook marker.
+ * K and N are positive multiples of 128; bits is an integer from 1 through 8.
+ * The pinned producer floors fractional per-module bit settings before packing; the
+ * physical rate is inferred from trellis shape, not configuration prose. Different
+ * modules may have different rates. Other revisions, custom codebooks, legacy packed
+ * signs, transforms and side tensors are rejected.
+ */
+struct Exl3Weights {
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports EXL3 streams and side tensors losslessly into onnx_light.exl3_weights.v1. */
+EncodedValueProto ImportExl3Weights(const Exl3Weights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports the validated native checkpoint state without scalar recoding. */
+Exl3Weights ExportExl3Weights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks cyclic INT16 state bit patterns in [K/16,N/16,256] tensor-core lane order. */
+Tensor UnpackExl3States(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                        const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs FLOAT [K,N] weights using binary16 codebook rounding and block-128
+ * normalized FLOAT butterflies, with suh after the input transform and svh after
+ * the output transform. FLOAT16 reconstruction additionally rounds each transform
+ * and scale multiplication to binary16, following native materialization boundaries.
+ * Uses deterministic ascending butterflies, not backend-dependent dense GEMM reductions;
+ * neither mode promises bit-identical accelerator inference or materialization.
+ * Bounds both payload and logical FLOAT workspace by max_bytes.
+ * Does not implement quantization, training, bias or accelerated matrix multiplication.
+ */
+Tensor ReconstructExl3Weights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {},
+                              int32_t reconstruction_dtype = TensorProto::FLOAT);
+
+/**
  * Quantizes a finite FLOAT matrix using complete groups of 32 columns along axis 1.
  *
  * Implements compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40's E2M3

@@ -35,6 +35,104 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-exl3-checkpoints:
+
+Native GPTQModel EXL3 checkpoints
+--------------------------------
+
+``onnx_light.onnx_core.exl3`` provides lossless import/export, cyclic state
+unpacking and deterministic reference reconstruction for **one module**.
+The C++ equivalents are ``Exl3Weights``, ``ImportExl3Weights``,
+``ExportExl3Weights``, ``UnpackExl3States`` and ``ReconstructExl3Weights`` in
+``onnx_core/runtime/quantization.h``. This is **not** the unchanged portable
+``QuantizationFormat.EXL3`` affine profile.
+
+The version-1 contract pins GPTQModel
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``, including its **vendored**
+ExLlamaV3 decoder. No external GPTQModel, Torch, MLX or ExLlamaV3 package is
+required. The vendored kernel-map generator cites ExLlamaV3
+``ba1ad9ac66670785c0ca95b0f1ab3ad044fda7c6`` as provenance; this is not a
+claim that the entire vendor tree matches that revision. The authoritative
+pinned sources are:
+
+* `CUDA packing <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel_ext/exllamav3/quant/pack.cu>`_
+  and `procedural codebooks <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel_ext/exllamav3/quant/codebook.cuh>`_.
+* `Native materialization <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/exllamav3/modules/quant/exl3.py>`_
+  and `MLX state-window decoder <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/mlx_exl3.py>`_.
+* `Configuration and rate conversion <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/quantization/config.py>`_,
+  `vendoring statement <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/exllamav3/CREDITS.md>`_
+  and `provenance pin <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/scripts/generate_exl3_kernel_map_packed.py>`_.
+
+Pass loaded NumPy arrays keyed by module-local checkpoint suffix:
+
+* ``trellis``: INT16 ``[K/16,N/16,16*b]``, with physical rate ``b`` from 1 to 8.
+* ``suh``: FLOAT16 ``[K]`` and ``svh``: FLOAT16 ``[N]``, finite signed scales.
+  Zero and negative scales are supported; signs and global scale are already folded in.
+* Optionally **one** scalar INT32 marker: ``mcg`` with bit pattern ``0xcbac1fed``,
+  or ``mul1`` with ``0x83dcd12d``. Neither marker selects ``3inst``.
+  Canonical marker values are required, more strictly than upstream inference,
+  which selects by presence alone.
+
+``K`` is input width and ``N`` output width; both must be positive multiples
+of 128. Reconstruction returns ``[K,N]``, **not** PyTorch Linear's ``[N,K]``.
+Bias, legacy packed ``su``/``sv`` signs, custom codebooks, separate global
+scales, other transforms and unknown side tensors are explicitly rejected.
+Handle bias separately. Different modules may have different integer rates.
+At this upstream pin a fractional per-module setting such as ``3.5`` is
+**floored to 3** before packing: it does not define a fractional-rate bitstream
+or mixed-rate tiles. The adapter infers the actual rate from tensor shape.
+No fractional allocation optimizer or configuration-file loader is implemented.
+
+Each 16x16 tile stores 256 symbols, MSB-first, in little-endian 32-bit words
+(adjacent logical 16-bit words are swapped). The codebook index at position
+``p`` is the cyclic 16-bit window ending at bit ``(p+1)*b``. There is no
+independently stored initial state. For ``lane=p//8``, ``item=p%8``, the
+matrix position is ``row=2*(lane%4)+(item&1)+(8 if item&2 else 0)``,
+``column=lane//4+(8 if item&4 else 0)``. ``unpack_exl3_states`` returns the
+signed INT16 bit patterns in ``[K/16,N/16,256]`` lane order.
+
+``3inst`` and ``mcg`` use modulo-2**32 generators and a sum rounded to FP16;
+``mul1`` uses byte sums and one fused FP16 multiply-add. The generated
+65,536-entry codebook is not a learned side tensor. Reconstruction widens
+its FP16 entries and applies normalized Sylvester Hadamards independently
+to contiguous 128-channel blocks:
+``W = diag(suh) @ H_K @ D @ H_N @ diag(svh)``.
+
+The default arithmetic is **FP32**, with ascending butterfly strides
+1, 2, 4, 8, 16, 32, 64, then multiplication by FP32 ``1/sqrt(128)``.
+``reconstruction_dtype=onnx.TensorProto.FLOAT16`` additionally rounds
+each complete transform and subsequent scale multiplication to FP16.
+This models native materialization's precision boundaries, but its dense
+GEMM reduction order can differ. Neither mode guarantees bit-identical
+accelerator materialization or inference. Nonfinite scales and reconstruction
+overflow are rejected; FP16 intermediate overflow is rejected in FP16 mode.
+This is a weight-format/reference API, **not accelerated matmul** or training.
+
+``onnx_light.exl3_weights.v1`` stores the original trellis, scales and marker
+bytes with an exact schema recording the rate, codebook, transform and upstream
+revision. It reuses ``EncodedValueProto`` and ``StructTypeCatalogue`` validation,
+not scalar affine recoding or a separate checkpoint container. Import/export
+preserve supported state byte-for-byte; export does not quantize dense weights.
+The portable v1/v2 serialized quantization contracts remain unchanged.
+
+Every entry point checks dimensions, checked products, tensor types/extents,
+schema/version and payload length before decoding or allocating logical storage.
+``max_bytes`` (default 1 GiB) bounds the total checkpoint payload and the
+logical FP32 workspace **separately**, not total process RSS. Python imports
+also bound loaded arrays before copying. External files are never opened.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.exl3 import (
+        import_exl3_weights, export_exl3_weights, reconstruct_exl3_weights,
+    )
+
+    # tensors contains the loaded trellis, suh, svh and optional codebook marker.
+    encoded = import_exl3_weights(tensors)
+    restored_tensors = export_exl3_weights(encoded)  # exact checkpoint state
+    weight_in_out = reconstruct_exl3_weights(encoded)  # NumPy float32 [K,N]
+    # Generic dequantize_tensor_proto(encoded) also uses FP32 reconstruction.
+
 .. _l-compressed-tensors-checkpoints:
 
 Explicit compressed-tensors checkpoint adapters

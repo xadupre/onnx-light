@@ -18,18 +18,18 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
-    def test_windows_x86_build_uses_msvc_ninja_with_sccache(self):
-        """Verifies that the 32-bit Windows build uses MSVC-backed Ninja with sccache."""
+    def test_windows_x86_build_uses_msvc_ninja_without_sccache(self):
+        """Verifies that the 32-bit Windows build does not depend on sccache."""
         match = re.search(r"(?ms)^  windows_x86_build:\s*$(.*?)(?=^  \w+:\s*$|\Z)", self.content)
         self.assertIsNotNone(match)
         job = match.group(1)
-        self.assertIn("- name: Set up sccache", job)
         self.assertIn("- name: Set up x86 MSVC for Ninja", job)
         self.assertIn("uses: ilammy/msvc-dev-cmd@v1.13.0", job)
         self.assertIn("arch: x86", job)
         self.assertIn("-G Ninja", job)
-        self.assertIn(f"-DCMAKE_C_COMPILER_LAUNCHER={self.launcher}", job)
-        self.assertIn(f"-DCMAKE_CXX_COMPILER_LAUNCHER={self.launcher}", job)
+        self.assertNotIn("- name: Set up sccache", job)
+        self.assertNotIn("SCCACHE_", job)
+        self.assertNotIn("COMPILER_LAUNCHER", job)
         self.assertNotIn("-A Win32", job)
 
     def test_windows_64_build_uses_msvc_ninja_with_sccache(self):

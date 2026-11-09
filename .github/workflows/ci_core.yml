@@ -599,29 +599,13 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    # Ninja honors the compiler launcher for MSVC, unlike the Visual Studio
-    # platform generator previously used here. This lets the x86 build share
-    # the same persistent sccache strategy as the x64 Windows build. The
-    # sccache speedup only shows up once the cache is warm; when the cache
-    # does not trigger enough (e.g. a cold or partially invalidated cache),
-    # the build can approach the previous 60-minute limit, so keep a
-    # generous timeout to absorb that variance.
+    # Keep the x86 build independent of sccache so cache-server startup failures
+    # cannot block compilation. The uncached build needs a generous timeout.
     timeout-minutes: 90
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v7
-
-      - name: Set up sccache
-        id: sccache
-        continue-on-error: true
-        uses: mozilla-actions/sccache-action@v0.0.11
-
-      - name: Warn if sccache is unavailable
-        if: steps.sccache.outcome != 'success'
-        shell: bash
-        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
 
       - name: Set up x86 MSVC for Ninja
         uses: ilammy/msvc-dev-cmd@v1.13.0
@@ -634,14 +618,10 @@ jobs:
           ninja --version
 
       - name: Configure 32-bit CMake build
-        env:
-          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: |
-          cmake -S . -B build-win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DCMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -DCMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }}
+          cmake -S . -B build-win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 
       - name: Build 32-bit CMake build
-        env:
-          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: |
           cmake --build build-win32 --parallel
 

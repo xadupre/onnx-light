@@ -262,6 +262,147 @@ class TestModelDiff(ExtTestCase):
                 self.assertFalse(target.is_weight_loaded("unused"))
                 self.assertFalse(target.is_weight_loaded("new"))
 
+    def test_independent_deferred_loads_share_unchanged_sources_without_io(self):
+        for external in (False, True):
+            with self.subTest(external=external), TemporaryDirectory() as folder:
+                root = Path(folder)
+                model = _model()
+                model.graph.initializer.clear()
+                model.graph.initializer.append(
+                    onh.from_array(numpy.arange(1024, dtype=numpy.float32), "unused")
+                )
+                model.graph.sparse_initializer.append(
+                    oh.make_sparse_tensor(
+                        onh.from_array(numpy.arange(1024, dtype=numpy.float32), "sparse_values"),
+                        onh.from_array(numpy.arange(1024, dtype=numpy.int64), "sparse_indices"),
+                        [2048],
+                    )
+                )
+                model.graph.node.clear()
+                model.graph.node.append(oh.make_node("Identity", ["x"], ["y"]))
+                path = root / "model.onnx"
+                onnx.save(model, path, save_as_external_data=external, size_threshold=0)
+                base = onnx.load(path, defer_weights=True)
+                target = onnx.load(path, defer_weights=True)
+                target.graph.node[0].op_type = "Neg"
+                source, destination = GraphBuilder(base), GraphBuilder(target)
+                for file in root.iterdir():
+                    file.unlink()
+                plan = source.diff_rewritings(destination)
+                serialized = RewritingProto()
+                serialized.ParseFromString(plan.SerializeToString())
+                result = apply_rewritings_to_model(base, serialized)
+                self.assertEqual(result.graph.node[0].op_type, "Neg")
+                for model in (base, target, result):
+                    for name in ("unused", "sparse_values", "sparse_indices"):
+                        self.assertFalse(model.is_weight_loaded(name))
+                self.assertTrue(all(not r.added_initializers for r in plan.rewrites))
+
+    def test_deferred_inline_ranges_in_the_same_file_are_distinct(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "model.onnx"
+            model = _model()
+            for name, shift in (("first", 0), ("second", 10)):
+                model.graph.initializer.append(
+                    onh.from_array(numpy.arange(1024, dtype=numpy.float32) + shift, name)
+                )
+            onnx.save(model, path)
+            base = onnx.load(path, defer_weights=True)
+            target = onnx.load(path, defer_weights=True)
+            target.graph.initializer[1].CopyFrom(target.graph.initializer[2])
+            target.graph.initializer[1].name = "first"
+            plan = diff_models(base, target)
+            serialized = RewritingProto()
+            serialized.ParseFromString(plan.SerializeToString())
+            result = apply_rewritings_to_model(base, serialized)
+            self.assertEqualArray(
+                onh.to_array(result.graph.initializer[1]),
+                numpy.arange(1024, dtype=numpy.float32) + 10,
+            )
+            self.assertFalse(base.is_weight_loaded("first"))
+            self.assertFalse(target.is_weight_loaded("first"))
+
+    def test_deferred_sparse_changes_are_rejected(self):
+        for external in (False, True):
+            for changed in ("values", "indices"):
+                with (
+                    self.subTest(external=external, changed=changed),
+                    TemporaryDirectory() as folder,
+                ):
+                    root = Path(folder)
+                    for name, shift in (("base", 0), ("target", 1)):
+                        model = _model()
+                        model.graph.sparse_initializer.append(
+                            oh.make_sparse_tensor(
+                                onh.from_array(
+                                    numpy.arange(1024, dtype=numpy.float32)
+                                    + (shift if changed == "values" else 0),
+                                    "sparse_values",
+                                ),
+                                onh.from_array(
+                                    numpy.arange(1024, dtype=numpy.int64)
+                                    + (shift if changed == "indices" else 0),
+                                    "sparse_indices",
+                                ),
+                                [2048],
+                            )
+                        )
+                        directory = root / name
+                        directory.mkdir()
+                        onnx.save(
+                            model,
+                            directory / "model.onnx",
+                            save_as_external_data=external,
+                            size_threshold=0,
+                        )
+                    base = onnx.load(root / "base/model.onnx", defer_weights=True)
+                    target = onnx.load(root / "target/model.onnx", defer_weights=True)
+                    with self.assertRaisesRegex(ValueError, "persistent declarations"):
+                        diff_models(base, target)
+                    self.assertFalse(base.is_weight_loaded("sparse_values"))
+                    self.assertFalse(target.is_weight_loaded("sparse_indices"))
+
+    def test_nested_edits_use_replaced_parent_initializer_values(self):
+        base, target = _model(), _model()
+        for model in (base, target):
+            model.graph.initializer.clear()
+            model.graph.input[0].type.tensor_type.shape.dim[0].dim_value = 3
+            model.graph.input.append(oh.make_tensor_value_info("condition", TensorProto.BOOL, []))
+            model.graph.output[0].type.CopyFrom(oh.make_tensor_type_proto(TensorProto.FLOAT, [3]))
+            shape = [2, -1] if model is base else [3, -1]
+            model.graph.initializer.append(
+                onh.from_array(numpy.array(shape, numpy.int64), "shape")
+            )
+            nodes = (
+                [oh.make_node("Neg", ["x"], ["z"])]
+                if model is base
+                else [
+                    oh.make_node("Reshape", ["x", "shape"], ["reshaped"]),
+                    oh.make_node("Flatten", ["reshaped"], ["flat"], axis=0),
+                    oh.make_node("Squeeze", ["flat"], ["z"]),
+                ]
+            )
+            branch = oh.make_graph(
+                nodes, "branch", [], [oh.make_tensor_value_info("z", TensorProto.FLOAT, [3])]
+            )
+            model.graph.node.clear()
+            model.graph.node.append(
+                oh.make_node("If", ["condition"], ["y"], then_branch=branch, else_branch=branch)
+            )
+        plan = diff_models(base, target)
+        serialized = RewritingProto()
+        serialized.ParseFromString(plan.SerializeToString())
+        result = apply_rewritings_to_model(base, serialized)
+        for condition in (False, True):
+            self.assertEquivalent(
+                target,
+                result,
+                {
+                    "condition": numpy.array(condition),
+                    "x": numpy.array([-2, 3, 5], numpy.float32),
+                },
+            )
+
     def test_external_tensor_attributes_and_local_function_definitions(self):
         for context in ("node", "body", "default", "repeated", "sparse"):
             with self.subTest(context=context), TemporaryDirectory() as folder:

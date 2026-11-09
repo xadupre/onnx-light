@@ -181,6 +181,16 @@ void FinishDeferredWeight(TensorProto &tensor, BinaryStream &stream, const Parse
 
 } // namespace utils::detail
 
+bool HaveSameDeferredWeightSource(const TensorProto &left, const TensorProto &right) {
+  if (!left.HasDeferredWeight() || !right.HasDeferredWeight())
+    return false;
+  if (left.deferred_weight_source == right.deferred_weight_source)
+    return true;
+  const auto &a = *left.deferred_weight_source;
+  const auto &b = *right.deferred_weight_source;
+  return a.identity == b.identity && a.offset == b.offset && a.length == b.length;
+}
+
 bool TensorProto::LoadDeferredWeight() {
   EXT_ENFORCE(HasDeferredWeight(), "Weight '", str_name(), "' has no recoverable backing source.");
   if (has_raw_data())

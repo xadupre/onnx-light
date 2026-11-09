@@ -3056,6 +3056,20 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     if (node != nullptr)
       for (const auto &output : node->output())
         retired_outputs.erase(output.value());
+  // Nested inference must see replacement capture values, not the retired initializers.
+  initializers = std::move(rebuilt_initializers);
+  if (!removed_extended.empty())
+    extended_initializers_ = std::move(rebuilt_extended_initializers);
+  for (const auto &addition : added_initializers) {
+    const auto &initializer = *addition.initializer;
+    if (std::none_of(inputs_.begin(), inputs_.end(),
+                     [&](const auto &input) { return input.name() == initializer.name(); })) {
+      core::symbolic::SymTensor descriptor;
+      if (core::symbolic::SymTensorFromTensorProto(initializer, descriptor))
+        compute_.Shapes().Set(initializer.name().value(), std::move(descriptor));
+      compute_.SeedConstant(initializer.name().value());
+    }
+  }
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
@@ -3093,9 +3107,6 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
         "ApplyRewriting: added node positions do not leave enough slots for retained nodes.");
   }
   nodes = std::move(rebuilt);
-  initializers = std::move(rebuilt_initializers);
-  if (!removed_extended.empty())
-    extended_initializers_ = std::move(rebuilt_extended_initializers);
   PruneValueInfos();
   RefreshAfterRewriting(old_indices, std::move(affected_values));
 }
@@ -3394,7 +3405,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     const bool external_b = b.data_location() == TensorProto::EXTERNAL;
     const bool deferred = a.HasDeferredWeight() || b.HasDeferredWeight();
     const bool same_source =
-        deferred ? a.deferred_weight_source == b.deferred_weight_source
+        deferred ? HaveSameDeferredWeightSource(a, b)
                  : (!external_a ||
                     (external_b && external_path(a, left_dir) == external_path(b, right_dir)));
     if (same_source && a.Equals(b))
@@ -3691,7 +3702,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         validate_extended_storage(*header);
       }
     }
-    if (!a.Equals(b))
+    if (!same_message(a, b, base_dir, target_dir))
       throw BuilderError(
           "DiffRewritings: incompatible graph interface or persistent declarations.");
     for (const auto &initializer : source.initializers_)
@@ -3766,7 +3777,7 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     if (!additions.added_initializers().empty())
       plan.ref_rewrites().push_back(std::move(additions));
 
-    // Match retained nodes; new enclosing captures require atomic subgraph replacement.
+    // New or replaced enclosing captures require atomic subgraph replacement.
     std::unordered_map<std::string, std::size_t> nodes;
     for (std::size_t i = 0; i < source.nodes_.size(); ++i)
       if (!nodes.emplace(node_key(source.nodes_[i], i), i).second)
@@ -3780,8 +3791,11 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       if (retained && !destination.ReferencedSubgraphs(node).empty()) {
         std::vector<std::string> references;
         destination.CollectNodeReferences(node, references);
-        retained = std::all_of(references.begin(), references.end(),
-                               [&](const auto &name) { return source.HasName(name); });
+        retained = std::all_of(references.begin(), references.end(), [&](const auto &name) {
+          const auto initializer = initializers.find(name);
+          return source.HasName(name) && (initializer == initializers.end() ||
+                                          kept_initializers.count(initializer->second) != 0);
+        });
       }
       if (retained) {
         for (const auto &output : node.output()) {
@@ -3865,8 +3879,14 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
                                  const GraphBuilder &expected) -> void {
     if (actual.Compute().ValueTags() != expected.Compute().ValueTags() ||
         actual.nodes_.size() != expected.nodes_.size() ||
-        actual.initializers_.size() != expected.initializers_.size())
+        actual.initializers_.size() != expected.initializers_.size() ||
+        actual.graph_template_.sparse_initializer().size() !=
+            expected.graph_template_.sparse_initializer().size())
       throw BuilderError("DiffRewritings: reconstructed value tags or node count differ.");
+    for (std::size_t i = 0; i < actual.graph_template_.sparse_initializer().size(); ++i)
+      if (!same_message(actual.graph_template_.sparse_initializer(i),
+                        expected.graph_template_.sparse_initializer(i), base_dir, target_dir))
+        throw BuilderError("DiffRewritings: reconstructed sparse initializer differs.");
     for (std::size_t i = 0; i < actual.initializers_.size(); ++i)
       if (!same_tensor(actual.initializers_[i], expected.initializers_[i], base_dir, target_dir))
         throw BuilderError("DiffRewritings: reconstructed initializer differs from the target.");

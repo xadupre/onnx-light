@@ -426,6 +426,11 @@ ONNX_LIGHT_PROTO_API void ConvertModelToExternalData(ModelProto &model,
  */
 ONNX_LIGHT_PROTO_API void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir);
 
+/** Returns whether two deferred tensors share a backing-file snapshot and byte range,
+ * without opening or reading their backing files. */
+ONNX_LIGHT_PROTO_API bool HaveSameDeferredWeightSource(const TensorProto &left,
+                                                       const TensorProto &right);
+
 /**
  * IteratorTensorProto is an iterator that traverses all TensorProto objects.
  */

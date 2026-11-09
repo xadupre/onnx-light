@@ -3279,6 +3279,14 @@ RewritingProto GraphBuilder::DiffRewritings(const ModelProto &target_model,
       target_model.has_base_model() || target_model.has_base_model_sha256())
     throw BuilderError("DiffRewritings requires two complete root models.");
   GraphBuilder target(target_model, schema_lookup_, local_registry_);
+  return DiffRewritings(target, base_dir, target_dir);
+}
+
+RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const std::string &base_dir,
+                                            const std::string &target_dir) const {
+  if (parent_ != nullptr || is_local_function_ || target.parent_ != nullptr ||
+      target.is_local_function_)
+    throw BuilderError("DiffRewritings requires two complete root builders.");
   auto before_header = model_template_;
   auto after_header = target.model_template_;
   for (auto *header : {&before_header, &after_header}) {

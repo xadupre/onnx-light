@@ -3262,17 +3262,27 @@ TEST(GraphGraph, ModelDiffReplacesSameNameInitializerWithoutCopyingRetainedStora
   auto source = make(false);
   auto target = make(true);
   const auto expected = target.ToModel();
-  const auto plan = source.DiffRewritings(expected);
-  ASSERT_TRUE(plan.has_hash_before());
-  ASSERT_TRUE(plan.has_hash_after());
-  ASSERT_EQ(plan.rewrites().size(), 1u);
-  ASSERT_EQ(plan.rewrites(0).added_initializers().size(), 1u);
-  EXPECT_EQ(plan.rewrites(0).added_initializers(0).name(), "weight");
-  EXPECT_EQ(plan.rewrites(0).initializer_order(0), "bias");
-  const auto actual = source.ApplyRewritings(plan).ToModel();
-  EXPECT_TRUE(actual.graph().Equals(expected.graph()));
+  const auto target_before = target.RewritingHash();
+  for (const auto &plan : {source.DiffRewritings(expected), source.DiffRewritings(target)}) {
+    ASSERT_TRUE(plan.has_hash_before());
+    ASSERT_TRUE(plan.has_hash_after());
+    ASSERT_EQ(plan.rewrites().size(), 1u);
+    ASSERT_EQ(plan.rewrites(0).added_initializers().size(), 1u);
+    EXPECT_EQ(plan.rewrites(0).added_initializers(0).name(), "weight");
+    EXPECT_EQ(plan.rewrites(0).initializer_order(0), "bias");
+    const auto actual = source.ApplyRewritings(plan).ToModel();
+    EXPECT_TRUE(actual.graph().Equals(expected.graph()));
+  }
+  EXPECT_EQ(target.RewritingHash(), target_before);
   EXPECT_EQ(source.Initializers()[0].name(), "weight");
   EXPECT_EQ(source.Nodes()[0].op_type(), "Add");
+}
+
+TEST(GraphGraph, ModelDiffRejectsNestedBuilderTargets) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+  auto &nested = source.MakeSubgraph("nested");
+  EXPECT_THROW(source.DiffRewritings(nested), core::builder::BuilderError);
+  EXPECT_THROW(nested.DiffRewritings(source), core::builder::BuilderError);
 }
 
 TEST(GraphGraph, ModelDiffRejectsMissingPayloadsAndUnsafeExternalMetadata) {

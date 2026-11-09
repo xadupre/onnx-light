@@ -16,7 +16,7 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import ModelProto, RewritingProto, TensorProto
 from onnx_light.onnx.reference import ReferenceEvaluator
-from onnx_light.onnx_core.optimization import apply_rewritings_to_model, diff_models
+from onnx_light.onnx_core.optimization import GraphBuilder, apply_rewritings_to_model, diff_models
 
 
 def _model(op="Add", weight=(1, 2)):
@@ -52,6 +52,19 @@ class TestModelVariants(ExtTestCase):
             ReferenceEvaluator(actual).run(None, feeds),
         ):
             self.assertEqualArray(left, right)
+
+    def test_diff_rewritings_accepts_models_and_builders_without_mutation(self):
+        canonical, expected = _model(), _model("Mul", (7, 8))
+        source, target = GraphBuilder(canonical), GraphBuilder(expected)
+        source_before = source.to_model().SerializeToString()
+        target_before = target.to_model().SerializeToString()
+        for destination in (expected, target):
+            plan = source.diff_rewritings(destination)
+            self.assertEquivalent(expected, apply_rewritings_to_model(canonical, plan))
+        self.assertEqual(source.to_model().SerializeToString(), source_before)
+        self.assertEqual(target.to_model().SerializeToString(), target_before)
+        with self.assertRaisesRegex(ValueError, "root builders"):
+            source.diff_rewritings(source.make_subgraph("nested"))
 
     def test_cpu_cuda_files_relocate_without_target_exports(self):
         canonical = _model()

@@ -753,6 +753,9 @@ public:
   /// Reads external payloads only when different references must be compared.
   RewritingProto DiffRewritings(const ModelProto &target, const std::string &base_dir = "",
                                 const std::string &target_dir = "") const;
+  /// Constructs the delta directly from a root builder, preserving both builders.
+  RewritingProto DiffRewritings(const GraphBuilder &target, const std::string &base_dir = "",
+                                const std::string &target_dir = "") const;
   /// Returns the combined positioned-node structural hash without reading weights.
   uint64_t RewritingHash() const;
 

@@ -29,6 +29,11 @@ diff or a replay engine. The returned plan already contains validated native
 ``hash_before`` and ``hash_after`` compatibility hashes and can be passed
 directly to :func:`apply_rewritings_to_model`.
 
+``source_builder.diff_rewritings(target)`` also accepts a ``ModelProto`` or a
+root ``GraphBuilder``. The native builder overload compares both existing
+builders directly without exporting and reimporting the target, and preserves
+both builders.
+
 To keep exactly one full canonical model on disk:
 
 .. code-block:: python

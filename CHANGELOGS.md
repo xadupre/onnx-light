@@ -5,8 +5,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.7] – Unreleased
 
+### New Features
+
+- Added native MXFP4 E2M1 and MXFP8 E4M3FN weight codecs with automatic group-32 E8M0 scales, versioned storage, FLOAT32 reconstruction and lossless packed-weight import/export in C++ and Python. Existing portable MXFP4 and `fp8_e4m3` contracts remain unchanged; these codecs do not add accelerated matrix multiplication ([#5800](https://github.com/xadupre/onnx-light/pull/5800), [#5803](https://github.com/xadupre/onnx-light/pull/5803)).
+- Added the explicit `mxfp6_e2m3` profile with compressed-tensors-compatible E2M3 codes, group-32 E8M0 scales and packed-weight import/export, while preserving legacy `mxfp6` and `fp6_llm` E3M2 payloads ([#5805](https://github.com/xadupre/onnx-light/pull/5805)).
+- Added validated compressed-tensors checkpoint adapters for signed/asymmetric 1–8-bit `pack-quantized`, MXFP4, MXFP6 E2M3, MXFP8 and NVFP4 weights. Imports and exports preserve codes and parameters without dequantizing/requantizing, using already-loaded arrays and explicit metadata rather than checkpoint discovery or activation execution ([#5815](https://github.com/xadupre/onnx-light/pull/5815)).
+- Replaced incompatible generic GGML-named encodings with exact native GGML blocks for `Q4_0`, `Q8_0`, `Q2_K`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `IQ4_NL`, `IQ1_S`, `TQ1_0` and `TQ2_0`. Standard dequantization APIs and GPTQModel weight import/export now preserve native block semantics and bytes. Former generic v1/v2 GGML-named payloads are rejected; floating-point quantization and standalone `.gguf` container loading remain unsupported ([#5825](https://github.com/xadupre/onnx-light/pull/5825)).
+- Added Gemm-29 support for vector and higher-rank activations with shared rank-two weights, preserved leading dimensions, native prepacked/preallocated execution and NumPy evaluation. Earlier schemas remain unchanged, and downgrade to opset 28 requires a known rank-two activation ([#5831](https://github.com/xadupre/onnx-light/pull/5831)).
+- Added native model-to-model diff through `GraphBuilder::DiffRewritings` and Python `diff_models` / `builder.diff_rewritings`, using existing hash-validated rewriting plans without changing proto serialization. Supports compatible initializer and nested-graph edits while preserving unchanged external references; incompatible interfaces and unsupported function changes fail explicitly. Project-owned removal APIs now use `Remove` names without compatibility aliases ([#5857](https://github.com/xadupre/onnx-light/pull/5857)).
+- Added `prefill_only_inputs` to C++ and Python cached generation, replacing explicitly listed embedding-only feature feeds with correctly typed empty tensors during decode instead of reusing prefill image features. Caller feeds, persistent decoder state and default behavior remain unchanged ([#5802](https://github.com/xadupre/onnx-light/pull/5802)).
+
+### Improvements
+
+- Paired peak-memory estimators with kernel factories through `KernelRegistration`, including global/context-local overrides and resolved-session accounting. Refused overrides change neither implementation nor accounting, and an omitted estimator means zero additional memory rather than inherited estimates ([#5806](https://github.com/xadupre/onnx-light/pull/5806)).
+- Extended `GeluPattern` to recognize validated exact Erf-based decompositions and emit standard-domain `Gelu(approximate="none")` at opset 20+, preserving the existing tanh rewrite and rejecting numerically unsafe or shared intermediate layouts ([#5809](https://github.com/xadupre/onnx-light/pull/5809)).
+- Added `PadPoolPattern` to fuse safe non-negative zero-valued spatial padding into AveragePool and UINT8 MaxPool, preserving divisors, output names and pooling attributes while rejecting unsafe ceil-mode, shared-value and unsupported dtype cases ([#5811](https://github.com/xadupre/onnx-light/pull/5811)).
+- Extended MatMul/BatchNormalization fusion through private, statically validated Reshape/Transpose chains that preserve the channel mapping; retained shape operations and output names without adding kernels ([#5854](https://github.com/xadupre/onnx-light/pull/5854)).
+- Optimized native Col2Im with clipped strided accumulation while preserving upstream kernel-offset addition order for byte-exact floating-point results, including empty batches/channels and 1D–3D boundary cases ([#5841](https://github.com/xadupre/onnx-light/pull/5841)).
+- Ported upstream read-only string-view handling in parsing, printing and type-string utilities, preserving escaped identifiers and literal text while removing ad-hoc string-range handling ([#5843](https://github.com/xadupre/onnx-light/pull/5843)).
+
+### Fixes
+
+- Recorded only actual node deletions in cleanup rewriting provenance, keeping unchanged live nodes out of matches and replacements. Initializer-only cleanup now records zero impacted/replacement nodes while preserving replay, undo, nested scopes and shared tensor storage ([#5814](https://github.com/xadupre/onnx-light/pull/5814), [#5816](https://github.com/xadupre/onnx-light/pull/5816)).
+- Simplified inverse Transpose pairs through Identity chains, retaining shared prefixes and continuing past rejected branches so consumer order no longer hides a valid cancellation ([#5818](https://github.com/xadupre/onnx-light/pull/5818)).
+- Honored registered-operator precedence when merging colliding local-function declarations during rewriting replay, preserving required overload declarations and genuine function-resolution conflicts ([#5851](https://github.com/xadupre/onnx-light/pull/5851)).
+- Excluded discarded function proposals and superseded bodies from replay caller analysis, preventing ignored proposals from forcing local-function resolution or spurious declaration conflicts ([#5853](https://github.com/xadupre/onnx-light/pull/5853)).
+- Made integer Range shape inference exact across signed boundaries using overflow-safe unsigned distances and ceiling division; rejected zero steps and lengths exceeding INT64_MAX without changing floating-point inference ([#5835](https://github.com/xadupre/onnx-light/pull/5835)).
+- Preserved reduction semantics when downgrading axes inputs by removing unsupported `noop_with_empty_axes` attributes and rejecting identity cases that older opsets cannot represent ([#5833](https://github.com/xadupre/onnx-light/pull/5833)).
+- Preserved scalar operands, including trailing empty terms, in Einsum shape inference and explicitly rejected type strings missing a map key/value separator ([#5843](https://github.com/xadupre/onnx-light/pull/5843)).
+- Hardened ONNX literal parsing with checked integer conversions, direct FLOAT attribute parsing and length-aware string handling. Numeric overflow and negative unsigned literals now report parser errors; floating-point underflow, signed zero, subnormals and embedded NUL bytes are preserved ([#5845](https://github.com/xadupre/onnx-light/pull/5845)).
+- Avoided GCC 13 array-bounds diagnostics when constructing GroupedMatMul backend case names, preserving names and warnings-as-errors in standalone Release builds ([#5824](https://github.com/xadupre/onnx-light/pull/5824)).
+
+### Pending Pull Requests
+
+- **Pending merge:** Added pinned GPTQModel EXL3 trellis/codebook weight import/export and C++/Python reference reconstruction, separate from the portable affine `exl3` profile. Preserves native state for integer rates 1–8 and three procedural codebooks, with validated block-128 transforms and explicit FLOAT32/FLOAT16-intermediate arithmetic contracts; no accelerated matmul or training support is claimed ([#5859](https://github.com/xadupre/onnx-light/pull/5859)).
+
 ### Documentation & CI
 
+- Documented ONNX Runtime DLPack bool/uint8 compatibility and added CPU interoperability regressions for dtype/value preservation, shared storage, byte offsets and capsule ownership without reinterpreting legacy uint8-labelled bool exports ([#5812](https://github.com/xadupre/onnx-light/pull/5812)).
+- Kept higher-rank `MatMulAddPattern(allow_reshape=true)` explicitly opt-in after assessing empty-layout and dynamic-opset limitations, adding structural and numerical coverage without enabling the optional path by default ([#5856](https://github.com/xadupre/onnx-light/pull/5856)).
+- Ported historical C++ shape-inference coverage for Slice, pooling, Conv, ConvTranspose, Flatten and Gemm across applicable registered schema versions ([#5839](https://github.com/xadupre/onnx-light/pull/5839), [#5847](https://github.com/xadupre/onnx-light/pull/5847)).
+- Enabled ASan/UBSan instrumentation for native fuzzed libraries and harnesses, with symbolized diagnostics, bounded crash replay and uploaded reproducer artifacts ([#5849](https://github.com/xadupre/onnx-light/pull/5849)).
+- Corrected strict Sphinx source diagnostics for RST tables/headings, test-name literals and duplicate compatibility-shim API indexing without expanding warning exemptions ([#5823](https://github.com/xadupre/onnx-light/pull/5823)).
+- Added weekly/manual Pixi lockfile updates for OpenSSL and CMake, opening or updating a PR only when dependencies change ([#5821](https://github.com/xadupre/onnx-light/pull/5821)).
+- Made sccache installation optional in cache-enabled core and clang-tidy CI jobs, warning and clearing compiler launchers when setup fails while keeping compilation, tests and analysis mandatory ([#5858](https://github.com/xadupre/onnx-light/pull/5858)).
+- Updated mypy from `2.4.0` to `2.4.1` and `prefix-dev/setup-pixi` from `0.11.2` to `0.11.3` ([#5808](https://github.com/xadupre/onnx-light/pull/5808), [#5807](https://github.com/xadupre/onnx-light/pull/5807)).
 - Bumped the release version to `0.2.7`.
 
 ## [0.2.6] – Unreleased

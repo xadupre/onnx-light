@@ -234,6 +234,17 @@ public:
  * The bias last dimension must match the output width. For a higher-rank left
  * input, when enabled, the rewrite flattens it to rank two, applies ``Gemm``,
  * and restores the output shape; a higher-rank bias is flattened as needed.
+ *
+ * Higher-rank reshaping remains opt-in, including in the standard collection.
+ * It requires rank-two weights and either a vector bias or a bias with exactly
+ * the matrix output shape, not arbitrary Add broadcasting. Callers must ensure
+ * nonempty dimensions: the generated Reshapes use -1 inference and default
+ * zero-as-copy semantics. Symbolic input shapes or symbolic full-bias widths also
+ * require opset 15 or newer for Shape start/end attributes. These runtime and
+ * opset preconditions are not checked by the opt-in matcher.
+ * The extra Reshape/Shape/Concat nodes are not a guaranteed performance win,
+ * particularly around attention layout changes; batched attention score
+ * MatMuls are not supported.
  */
 class MatMulAddPattern final : public core::builder::PatternOptimization {
 public:

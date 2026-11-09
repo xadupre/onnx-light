@@ -734,7 +734,12 @@ public:
   /// and merges added functions and opset imports. Requires a root model builder.
   /// Checks both structural hashes and applies simultaneous node moves last.
   /// Reuses identical function definitions after builder normalization.
-  /// Throws on conflicting definitions or calls incompatible with the merged
+  /// Ignores conflicting local definitions whose normalized domain and name resolve
+  /// to a registered operator in the model and every caller scope at the merged
+  /// opsets, regardless of function overload. Explicit replacements are applied
+  /// even if later imports make the local function body unused.
+  /// Retains new declarations so nonempty node overloads still identify a local function.
+  /// Throws on other conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.
   /// Throws before applying rewrites if reconstruction changes or loses an existing
   /// value tag, including tags in reconstructed nested builders.

@@ -152,12 +152,10 @@ Common::Status ParserBase::Parse(Literal &result) {
   size_t from = pos_;
   if (nextch == '"') {
     ++pos_;
-    bool has_escape = false;
     while (!AtEnd()) {
       pos_ = std::min(input_.find_first_of("\\\"", pos_), input_.size());
       if (AtEnd() || Cur() == '"')
         break;
-      has_escape = true;
       // A backslash escapes the following character, including a quote or backslash.
       pos_ = std::min(pos_ + 2, input_.size());
     }

@@ -437,6 +437,8 @@ TEST(BackendRunModel, ReduceProd) { RunBackendCasesFor("ReduceProd"); }
 TEST(BackendRunModel, ReduceSum) { RunBackendCasesFor("ReduceSum"); }
 TEST(BackendRunModel, ReduceSumSquare) { RunBackendCasesFor("ReduceSumSquare"); }
 
+TEST(BackendRunModel, Gemm) { RunBackendCasesFor("Gemm"); }
+
 // Attribute-driven unary math kernels.
 TEST(BackendRunModel, Celu) { RunBackendCasesFor("Celu"); }
 TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }

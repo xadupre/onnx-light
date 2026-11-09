@@ -32,6 +32,49 @@ constexpr std::array<int32_t, 4> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
     static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
+Shape GemmOutputShape(const Shape &a, const Shape &b, int64_t transA, int64_t transB) {
+  EXT_ENFORCE_INVALID(!a.empty(), kGemmName, " input A must have rank at least 1.");
+  EXT_ENFORCE_INVALID(b.size() == 2, kGemmName, " input B must have rank 2.");
+  Shape shape = a;
+  if (transA && shape.size() > 1) {
+    std::swap(shape[shape.size() - 2], shape[shape.size() - 1]);
+  }
+  EXT_ENFORCE_INVALID(shape[shape.size() - 1] == b[transB ? 1 : 0], kGemmName,
+                      " incompatible contraction dimensions.");
+  shape[shape.size() - 1] = b[transB ? 0 : 1];
+  return shape;
+}
+
+void ValidateGemmTensor(const Tensor &tensor) {
+  const int64_t count = tensor.shape.product(0, tensor.shape.size(), kGemmName);
+  const size_t bytes = PackedByteSize(tensor.data_type, count);
+  EXT_ENFORCE_INVALID(tensor.size_bytes() == bytes && (bytes == 0 || tensor.bytes() != nullptr),
+                      kGemmName, " tensor payload does not match its shape.");
+}
+
+Shape ValidateGemmInputs(const Tensor &a, const Shape &b, const Tensor *c, int64_t transA,
+                         int64_t transB, int64_t opset) {
+  EXT_ENFORCE_INVALID(opset >= 29 || a.shape.size() == 2, kGemmName,
+                      " input A must have rank 2 before opset 29.");
+  ValidateGemmTensor(a);
+  b.product(0, b.size(), kGemmName);
+  const Shape shape = GemmOutputShape(a.shape, b, transA, transB);
+  PackedByteSize(a.data_type, shape.product(0, shape.size(), kGemmName));
+  if (c != nullptr) {
+    EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
+                        " input C must share dtype with A and B.");
+    ValidateGemmTensor(*c);
+    EXT_ENFORCE_INVALID(c->shape.size() <= shape.size(), kGemmName,
+                        " input C rank exceeds output rank.");
+    for (size_t i = 0; i < c->shape.size(); ++i) {
+      EXT_ENFORCE_INVALID(c->shape[i] == 1 ||
+                              c->shape[i] == shape[shape.size() - c->shape.size() + i],
+                          kGemmName, " input C cannot broadcast to output.");
+    }
+  }
+  return shape;
+}
+
 size_t ValidateConstantB(const Tensor &b, int64_t trans_b) {
   EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
   EXT_ENFORCE_INVALID(trans_b == 0 || trans_b == 1, kGemmName, " transB must be 0 or 1.");
@@ -73,15 +116,19 @@ template <typename T> std::vector<T> PackB(const T *b, int64_t k, int64_t n, int
 /// ``trans`` flag is non-zero.  ``result`` must point to storage large
 /// enough to hold ``M * N`` elements.
 ///
-/// A has shape (M, K) when transA=0, (K, M) when transA≠0.
+/// A has effective shape (..., K); its leading dimensions are collapsed into M.
 /// B has shape (K, N) when transB=0, (N, K) when transB≠0.
-/// C (optional) is unidirectionally broadcastable to (M, N).
+/// C (optional) is unidirectionally broadcastable to the original output shape.
 template <typename T>
 void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                  int64_t transA, int64_t transB, const tuning::GemmTuning &tuning, T *result,
                  const T *prepared_b = nullptr) {
-  const int64_t m = transA ? a.shape[1] : a.shape[0];
-  const int64_t k = transA ? a.shape[0] : a.shape[1];
+  const Shape shape = GemmOutputShape(a.shape, b.shape, transA, transB);
+  const size_t rank = a.shape.size();
+  const bool transpose_a = transA && rank > 1;
+  const int64_t m = shape.product(0, rank - 1, kGemmName);
+  const int64_t k = a.shape[transpose_a ? rank - 2 : rank - 1];
+  const int64_t matrix_m = rank > 1 ? shape[rank - 2] : 1;
   const int64_t n = transB ? b.shape[0] : b.shape[1];
 
   const T *pa = a.As<T>();
@@ -90,7 +137,7 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
   const std::vector<T> packed_b =
       pack_b && prepared_b == nullptr ? PackB(pb, k, n, transB) : std::vector<T>{};
   const T *packed_data = prepared_b != nullptr ? prepared_b : packed_b.data();
-  const T *pc = c != nullptr ? c->As<T>() : nullptr;
+  const T *pc = c != nullptr && beta != 0.0f ? c->As<T>() : nullptr;
   const int64_t c_rank = c != nullptr ? static_cast<int64_t>(c->shape.size()) : 0;
 
   const int64_t tile_m = m <= tuning.skinny_m_limit ? int64_t{1} : tuning.tile_m;
@@ -115,7 +162,9 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
           for (int64_t l_begin = 0; l_begin < k; l_begin += tuning.tile_k) {
             const int64_t l_end = l_begin + std::min(tuning.tile_k, k - l_begin);
             for (int64_t l = l_begin; l < l_end; ++l) {
-              const T a_val = transA ? pa[l * m + i] : pa[i * k + l];
+              const T a_val = transpose_a
+                                  ? pa[(i / matrix_m) * matrix_m * k + l * matrix_m + i % matrix_m]
+                                  : pa[i * k + l];
               const T b_val = pack_b ? packed_data[static_cast<size_t>(j * k + l)]
                                      : (transB ? pb[j * k + l] : pb[l * n + j]);
               sum += a_val * b_val;
@@ -128,12 +177,26 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
               c_val = pc[0];
             } else if (c_rank == 1) {
               c_val = (c->shape[0] == 1) ? pc[0] : pc[j];
-            } else {
+            } else if (rank == 2) {
               const int64_t c_rows = c->shape[0];
               const int64_t c_cols = c->shape[1];
               const int64_t ci = (c_rows == 1) ? 0 : i;
               const int64_t cj = (c_cols == 1) ? 0 : j;
               c_val = pc[ci * c_cols + cj];
+            } else {
+              int64_t output_index = i * n + j;
+              int64_t bias_index = 0;
+              int64_t stride = 1;
+              for (size_t axis = rank; axis-- > rank - c->shape.size();) {
+                const size_t c_axis = axis - (rank - c->shape.size());
+                const int64_t coordinate = output_index % shape[axis];
+                output_index /= shape[axis];
+                if (c->shape[c_axis] != 1) {
+                  bias_index += coordinate * stride;
+                }
+                stride *= c->shape[c_axis];
+              }
+              c_val = pc[bias_index];
             }
             value += static_cast<T>(beta) * c_val;
           }
@@ -155,10 +218,9 @@ template <typename T>
 Tensor GemmAlloc(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                  int64_t transA, int64_t transB, const tuning::GemmTuning &tuning,
                  RawBufferAllocator *allocator = nullptr) {
-  const int64_t m = transA ? a.shape[1] : a.shape[0];
-  const int64_t n = transB ? b.shape[0] : b.shape[1];
-  const std::size_t n_bytes = static_cast<std::size_t>(m * n) * sizeof(T);
-  Tensor y = MakeOutputTensor(TensorElementType<T>::value, {m, n}, n_bytes, allocator);
+  const Shape shape = GemmOutputShape(a.shape, b.shape, transA, transB);
+  const size_t n_bytes = PackedByteSize(a.data_type, shape.product(0, shape.size(), kGemmName));
+  Tensor y = MakeOutputTensor(TensorElementType<T>::value, shape, n_bytes, allocator);
   GemmCompute<T>(a, b, c, alpha, beta, transA, transB, tuning, y.As<T>());
   return y;
 }
@@ -168,13 +230,11 @@ Tensor GemmAlloc(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
 template <typename T>
 void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                  int64_t transA, int64_t transB, const tuning::GemmTuning &tuning, Tensor &output) {
-  const int64_t m = transA ? a.shape[1] : a.shape[0];
-  const int64_t n = transB ? b.shape[0] : b.shape[1];
+  const Shape shape = GemmOutputShape(a.shape, b.shape, transA, transB);
   EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
                       " preallocated output must have the same dtype as input A.");
-  EXT_ENFORCE_INVALID(output.shape.size() == 2 && output.shape[0] == m && output.shape[1] == n,
-                      kGemmName, " preallocated output shape must be [", std::to_string(m), ", ",
-                      std::to_string(n), "].");
+  EXT_ENFORCE_INVALID(output.shape == shape, kGemmName, " preallocated output shape is invalid.");
+  ValidateGemmTensor(output);
   GemmCompute<T>(a, b, c, alpha, beta, transA, transB, tuning, output.As<T>());
 }
 
@@ -347,15 +407,19 @@ void Gemm::DeclarePreparations(const std::unordered_set<std::string> &immutable_
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                         int64_t transA, int64_t transB, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(a.data_type == b.data_type, kGemmName,
+                      " inputs A and B must share the same dtype.");
+  ValidateGemmTensor(b);
+  const Shape shape = ValidateGemmInputs(a, b.shape, c, transA, transB, ctx_.opset.version);
+  const int64_t count = shape.product(0, shape.size(), kGemmName);
   switch (a.data_type) {
   case DataType::FLOAT: {
     if (rt == nullptr) {
       return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB, tuning_);
     }
 
-    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
-    Tensor output = rt->MakeOutputTensor(0, DataType::FLOAT, shape,
-                                         static_cast<size_t>(shape[0] * shape[1]) * sizeof(float));
+    Tensor output =
+        rt->MakeOutputTensor(0, DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count));
     GemmInPlace<float>(a, b, c, alpha, beta, transA, transB, tuning_, output);
     return output;
   }
@@ -363,9 +427,8 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     if (rt == nullptr) {
       return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB, tuning_);
     }
-    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
-    Tensor output = rt->MakeOutputTensor(0, DataType::DOUBLE, shape,
-                                         static_cast<size_t>(shape[0] * shape[1]) * sizeof(double));
+    Tensor output =
+        rt->MakeOutputTensor(0, DataType::DOUBLE, shape, PackedByteSize(DataType::DOUBLE, count));
     GemmInPlace<double>(a, b, c, alpha, beta, transA, transB, tuning_, output);
     return output;
   }
@@ -377,18 +440,16 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     const Tensor b_f = PromoteToFloat32(b, rt, tuning_.conversion_parallel_minimum_elements);
     Tensor c_f;
     const Tensor *c_ptr = nullptr;
-    if (c != nullptr) {
+    if (c != nullptr && beta != 0.0f) {
       EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
                           " input C must share dtype with A and B.");
       c_f = PromoteToFloat32(*c, rt, tuning_.conversion_parallel_minimum_elements);
       c_ptr = &c_f;
     }
-    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
     Tensor y =
-        rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape,
-                                     static_cast<size_t>(shape[0] * shape[1]) * sizeof(float))
-           : MakeOutputTensor(DataType::FLOAT, shape,
-                              static_cast<size_t>(shape[0] * shape[1]) * sizeof(float), nullptr);
+        rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count))
+           : MakeOutputTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count),
+                              nullptr);
     GemmInPlace<float>(a_f, b_f, c_ptr, alpha, beta, transA, transB, tuning_, y);
     return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
   }
@@ -404,29 +465,25 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                       " inputs A and prepared B must share the same dtype.");
   const RuntimeValue &prepared_value = b.state_->slot.Get();
   const Tensor &packed = prepared_value.tensor;
-  const int64_t m = transA ? a.shape[1] : a.shape[0];
-  const int64_t a_k = transA ? a.shape[0] : a.shape[1];
-  const int64_t b_k = b.state_->trans_b ? b.state_->shape[1] : b.state_->shape[0];
-  EXT_ENFORCE_INVALID(a_k == b_k, kGemmName,
-                      " inputs A and prepared B have incompatible reduction dimensions.");
-  const int64_t n = b.state_->trans_b ? b.state_->shape[0] : b.state_->shape[1];
-  const Shape shape{m, n};
+  const Shape shape =
+      ValidateGemmInputs(a, b.state_->shape, c, transA, b.state_->trans_b, ctx_.opset.version);
+  const int64_t count = shape.product(0, shape.size(), kGemmName);
 
   switch (a.data_type) {
   case DataType::FLOAT: {
-    Tensor output = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, shape,
-                                              static_cast<size_t>(m * n) * sizeof(float))
-                       : MakeOutputTensor(DataType::FLOAT, shape,
-                                          static_cast<size_t>(m * n) * sizeof(float), nullptr);
+    Tensor output =
+        rt ? rt->MakeOutputTensor(0, DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count))
+           : MakeOutputTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count),
+                              nullptr);
     GemmCompute<float>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
                        output.As<float>(), packed.As<float>());
     return output;
   }
   case DataType::DOUBLE: {
     Tensor output = rt ? rt->MakeOutputTensor(0, DataType::DOUBLE, shape,
-                                              static_cast<size_t>(m * n) * sizeof(double))
+                                              PackedByteSize(DataType::DOUBLE, count))
                        : MakeOutputTensor(DataType::DOUBLE, shape,
-                                          static_cast<size_t>(m * n) * sizeof(double), nullptr);
+                                          PackedByteSize(DataType::DOUBLE, count), nullptr);
     GemmCompute<double>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
                         output.As<double>(), packed.As<double>());
     return output;
@@ -436,16 +493,16 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
     const Tensor a_f = PromoteToFloat32(a, rt, tuning_.conversion_parallel_minimum_elements);
     Tensor c_f;
     const Tensor *c_ptr = nullptr;
-    if (c != nullptr) {
+    if (c != nullptr && beta != 0.0f) {
       EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
                           " input C must share dtype with A and prepared B.");
       c_f = PromoteToFloat32(*c, rt, tuning_.conversion_parallel_minimum_elements);
       c_ptr = &c_f;
     }
-    Tensor y = rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape,
-                                            static_cast<size_t>(m * n) * sizeof(float))
-                  : MakeOutputTensor(DataType::FLOAT, shape,
-                                     static_cast<size_t>(m * n) * sizeof(float), nullptr);
+    Tensor y =
+        rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count))
+           : MakeOutputTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, count),
+                              nullptr);
     GemmCompute<float>(a_f, packed, c_ptr, alpha, beta, transA, b.state_->trans_b, tuning_,
                        y.As<float>(), packed.As<float>());
     return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
@@ -458,6 +515,11 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
 
 void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                       int64_t transA, int64_t transB, Tensor &output) const {
+  EXT_ENFORCE_INVALID(a.data_type == b.data_type, kGemmName,
+                      " inputs A and B must share the same dtype.");
+  ValidateGemmTensor(b);
+  ValidateGemmInputs(a, b.shape, c, transA, transB, ctx_.opset.version);
+  ValidateGemmTensor(output);
   switch (a.data_type) {
   case DataType::FLOAT:
     return GemmInPlace<float>(a, b, c, alpha, beta, transA, transB, tuning_, output);

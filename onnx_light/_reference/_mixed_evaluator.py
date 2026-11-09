@@ -25,4 +25,4 @@ class MixedReferenceEvaluator(ReferenceEvaluator):
             ("Conv", _conv),
             ("Attention", _attention),
         ):
-            self.register_custom_kernel("", op_type, kernel)
+            self.register_custom_kernel("", op_type, kernel, with_opset=op_type == "Gemm")

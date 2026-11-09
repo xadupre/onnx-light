@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the mixed native/NumPy reference evaluator."""
 
+import ml_dtypes
 import numpy as np
 
 import onnx_light.onnx.helper as oh
@@ -12,6 +13,7 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 MixedReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "MixedReferenceEvaluator")
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 _attention = import_or_skip("onnx_light._reference.ops", "_attention")
+_gemm = import_or_skip("onnx_light._reference.ops", "_gemm")
 
 
 def _model(op_type, inputs, outputs, **attributes):
@@ -83,6 +85,143 @@ class TestMixedReferenceEvaluator(ExtTestCase):
             None, {"a": a, "b": b}
         )[0]
         np.testing.assert_array_equal(result, a @ b)
+
+    def test_gemm29_linear_ranks_transpose_and_empty_dimensions(self):
+        for shape in ((5,), (2, 3, 5), (2, 3, 4, 5), (0, 3, 5), (2, 3, 0)):
+            for trans_a in (0, 1):
+                for dtype in (np.float32, np.float64, np.float16, ml_dtypes.bfloat16):
+                    a_effective = (np.arange(np.prod(shape)) % 4).astype(dtype).reshape(shape)
+                    a = (
+                        a_effective.swapaxes(-1, -2)
+                        if trans_a and len(shape) > 1
+                        else a_effective
+                    )
+                    b = (np.arange(7 * shape[-1]) % 3).astype(dtype).reshape(7, shape[-1])
+                    c = np.arange(7, dtype=dtype)
+                    expected = (0.25 * (a_effective @ b.T) + 0.5 * c).astype(dtype)
+                    model = _model(
+                        "Gemm",
+                        ["a", "b", "c"],
+                        ["y"],
+                        transA=trans_a,
+                        transB=1,
+                        alpha=0.25,
+                        beta=0.5,
+                    )
+                    model.opset_import[0].version = 29
+                    for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+                        with self.subTest(
+                            shape=shape, trans_a=trans_a, dtype=dtype, evaluator=evaluator_class
+                        ):
+                            actual = evaluator_class(model).run(None, {"a": a, "b": b, "c": c})[0]
+                            self.assertEqual(actual.shape, expected.shape)
+                            self.assertEqual(actual.dtype, dtype)
+                            np.testing.assert_array_equal(actual, expected)
+
+    def test_gemm29_bias_validation_and_zero_beta(self):
+        a = np.arange(12, dtype=np.float32).reshape(2, 3, 2)
+        b = np.array([[2, 3], [1, 4]], dtype=np.float32)
+        model = _model("Gemm", ["a", "b", "c"], ["y"], beta=0.0)
+        model.opset_import[0].version = 29
+        for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+            evaluator = evaluator_class(model)
+            np.testing.assert_array_equal(
+                evaluator.run(None, {"a": a, "b": b, "c": np.full((2,), np.nan, np.float32)})[0],
+                a @ b,
+            )
+            for bias_shape in ((2, 2), (1, 2, 3, 2)):
+                with (
+                    self.subTest(evaluator=evaluator_class, bias_shape=bias_shape),
+                    self.assertRaises((ValueError, RuntimeError)),
+                ):
+                    evaluator.run(
+                        None, {"a": a, "b": b, "c": np.ones(bias_shape, dtype=np.float32)}
+                    )
+        model.opset_import[0].version = 28
+        with self.assertRaisesRegex(ValueError, "rank"):
+            MixedReferenceEvaluator(model).run(
+                None, {"a": a, "b": b, "c": np.ones((2,), dtype=np.float32)}
+            )
+
+    def test_gemm_function_uses_its_own_opset(self):
+        a = np.arange(12, dtype=np.float32).reshape(2, 3, 2)
+        b = np.array([[2, 3], [1, 4]], dtype=np.float32)
+        for model_opset, function_opset in ((28, 29), (29, 28)):
+            function = oh.make_function(
+                "local",
+                "Linear",
+                ["a", "b"],
+                ["y"],
+                [oh.make_node("Gemm", ["a", "b"], ["y"])],
+                [oh.make_operatorsetid("", function_opset)],
+            )
+            graph = oh.make_graph(
+                [oh.make_node("Linear", ["a", "b"], ["y"], domain="local")],
+                "local_gemm",
+                [
+                    oh.make_tensor_value_info("a", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("b", TensorProto.FLOAT, None),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, None)],
+            )
+            model = oh.make_model(
+                graph,
+                functions=[function],
+                opset_imports=[
+                    oh.make_operatorsetid("", model_opset),
+                    oh.make_operatorsetid("local", 1),
+                ],
+            )
+            evaluator = MixedReferenceEvaluator(model)
+            with self.subTest(model_opset=model_opset, function_opset=function_opset):
+                if function_opset == 29:
+                    for inputs in (a, a[:, :1], a):
+                        np.testing.assert_array_equal(
+                            evaluator.run(None, {"a": inputs, "b": b})[0], inputs @ b
+                        )
+                else:
+                    with self.assertRaisesRegex(ValueError, "rank"):
+                        evaluator.run(None, {"a": a, "b": b})
+                    np.testing.assert_array_equal(
+                        evaluator.run(None, {"a": a[0], "b": b})[0], a[0] @ b
+                    )
+
+    def test_gemm_half_precision_scales_before_rounding(self):
+        for dtype in (np.float16, ml_dtypes.bfloat16):
+            for beta in (0.0, 2.0):
+                with self.subTest(dtype=dtype, beta=beta):
+                    a = np.array([60000 if beta == 0 else -60000], dtype=dtype)
+                    b = np.array([[2 if beta == 0 else 1]], dtype=dtype)
+                    c = np.array([60000], dtype=dtype)
+                    alpha = 0.5 if beta == 0 else 1.0
+                    model = _model("Gemm", ["a", "b", "c"], ["y"], alpha=alpha, beta=beta)
+                    model.opset_import[0].version = 29
+                    expected = np.array([60000], dtype=dtype)
+                    with np.errstate(over="raise", invalid="raise"):
+                        direct = _gemm(model.graph.node[0], a, b, c, opset=29)
+                        np.testing.assert_array_equal(direct, expected)
+                        for evaluator_class in (MixedReferenceEvaluator, ReferenceEvaluator):
+                            actual = evaluator_class(model).run(None, {"a": a, "b": b, "c": c})[0]
+                            self.assertEqual(actual.dtype, dtype)
+                            np.testing.assert_array_equal(actual, expected)
+
+    def test_gemm_does_not_copy_an_already_correct_output_dtype(self):
+        class NoCopyArray(np.ndarray):
+            """Rejects a redundant dtype-preserving copy."""
+
+            def astype(self, dtype, *args, **kwargs):
+                if np.dtype(dtype) == self.dtype and kwargs.get("copy", True):
+                    raise AssertionError("Gemm copied an output with the correct dtype.")
+                return super().astype(dtype, *args, **kwargs)
+
+        node = oh.make_node("Gemm", ["a", "b"], ["y"])
+        for dtype in (np.float32, np.float64):
+            a = np.arange(6, dtype=dtype).reshape(2, 3).view(NoCopyArray)
+            b = np.ones((3, 4), dtype=dtype)
+            with self.subTest(dtype=dtype):
+                result = _gemm(node, a, b, opset=29)
+                np.testing.assert_array_equal(result, a @ b)
+                self.assertEqual(result.dtype, dtype)
 
     def test_conv_grouped_dilated_and_bias(self):
         x = np.arange(14, dtype=np.float32).reshape(1, 2, 7)

@@ -20,6 +20,7 @@ adapters
     dropout_11_12
     extend_supported_types
     gemm_6_7
+    gemm_29_28
     gemm_7_6
     gridsample_19_20
     group_normalization_20_21

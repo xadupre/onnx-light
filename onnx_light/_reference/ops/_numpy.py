@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import ml_dtypes
 import numpy as np
 
 
@@ -13,17 +14,35 @@ def _attributes(node):
     return {str(attr.name): attr for attr in node.attribute}
 
 
-def _gemm(node, a, b, c=None):
+def _gemm(node, a, b, c=None, *, opset=13):
     """Computes Gemm using NumPy."""
     attrs = _attributes(node)
-    if attrs.get("transA") and attrs["transA"].i:
-        a = a.T
+    if (opset < 29 and a.ndim != 2) or a.ndim < 1:
+        raise ValueError(f"Gemm input A has invalid rank {a.ndim} for opset {opset}.")
+    if b.ndim != 2:
+        raise ValueError(f"Gemm input B must have rank 2, got {b.ndim}.")
+    output_dtype = a.dtype
+    promote_half = output_dtype in (np.float16, ml_dtypes.bfloat16)
+    if promote_half:
+        a = a.astype(np.float32)
+        b = b.astype(np.float32)
+    if attrs.get("transA") and attrs["transA"].i and a.ndim > 1:
+        a = a.swapaxes(-1, -2)
     if attrs.get("transB") and attrs["transB"].i:
         b = b.T
     alpha = float(attrs["alpha"].f) if "alpha" in attrs else 1.0
     beta = float(attrs["beta"].f) if "beta" in attrs else 1.0
     y = alpha * (a @ b)
-    return y if c is None else y + beta * c
+    if c is not None:
+        if c.ndim > y.ndim or any(
+            c_dim not in (1, y_dim) for c_dim, y_dim in zip(c.shape[::-1], y.shape[::-1])
+        ):
+            raise ValueError(f"Gemm input C shape {c.shape} cannot broadcast to {y.shape}.")
+        if beta != 0:
+            if promote_half:
+                c = c.astype(np.float32)
+            y += beta * c
+    return y.astype(output_dtype, copy=False)
 
 
 def _matmul(node, a, b):

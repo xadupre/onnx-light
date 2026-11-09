@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
 #include "onnx_op/operator_sets.h"
@@ -50,6 +51,68 @@ void AddShape(core::builder::GraphBuilder &builder, const std::string &name,
 void AddFloat(core::builder::GraphBuilder &builder, const std::string &name,
               const std::vector<int64_t> &dims, const std::vector<float> &values) {
   builder.MakeInitializer(MakeInitializer<float>(name.c_str(), dims, values));
+}
+
+using BatchNormLayout = std::vector<std::pair<std::string, std::vector<int64_t>>>;
+
+void AddBatchNormConstant(core::builder::GraphBuilder &builder, const std::string &name,
+                          const std::vector<int64_t> &dims, const std::vector<float> &values,
+                          core::symbolic::TensorType type) {
+  auto tensor = MakeInitializer<float>(name.c_str(), dims, values);
+  tensor.set_data_type(core::symbolic::TensorTypeToDataType(type));
+  if (type != core::symbolic::TensorType::kFloat) {
+    tensor.clear_float_data();
+    for (float value : values) {
+      if (type == core::symbolic::TensorType::kDouble) {
+        tensor.add_double_data(value);
+      } else {
+        tensor.add_int32_data(type == core::symbolic::TensorType::kFloat16
+                                  ? core::runtime::FloatToFloat16Bits(value)
+                                  : core::runtime::FloatToBfloat16Bits(value));
+      }
+    }
+  }
+  builder.MakeInitializer(tensor);
+}
+
+void MakeBatchNormChain(core::builder::GraphBuilder &builder, const BatchNormLayout &layout,
+                        int64_t rows = 2, int64_t channels = 4,
+                        core::symbolic::TensorType type = core::symbolic::TensorType::kFloat) {
+  builder.MakeInput("x", type, Shape({rows, 3}));
+  std::vector<float> weights(static_cast<std::size_t>(3 * channels));
+  for (std::size_t index = 0; index < weights.size(); ++index) {
+    weights[index] = static_cast<float>(index + 1);
+  }
+  AddBatchNormConstant(builder, "w", {3, channels}, weights, type);
+  for (const auto &name : {"scale", "bias", "mean", "variance"}) {
+    std::vector<float> values(static_cast<std::size_t>(channels), 1.0F);
+    if (std::string(name) == "scale") {
+      for (std::size_t index = 0; index < values.size(); ++index) {
+        values[index] = static_cast<float>(index + 1);
+      }
+    }
+    AddBatchNormConstant(builder, name, {channels}, values, type);
+  }
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"}, "", "matrix");
+  std::string input = "mm";
+  for (std::size_t index = 0; index < layout.size(); ++index) {
+    const auto &[op, dimensions] = layout[index];
+    const std::string output = "layout_" + std::to_string(index);
+    if (op == "Reshape") {
+      const std::string target = "shape_" + std::to_string(index);
+      AddShape(builder, target, dimensions);
+      builder.MakeNode(op, {input, target}, {output}, "", "reshape");
+    } else {
+      NodeProto node = MakeNode(op.c_str(), {input}, {output}, "", "transpose");
+      if (!dimensions.empty()) {
+        AddAttribute<std::vector<int64_t>>(node, "perm", dimensions);
+      }
+      builder.MakeNode(op, {input}, {output}, "", "transpose", node.attribute());
+    }
+    input = output;
+  }
+  builder.MakeNode("BatchNormalization", {input, "scale", "bias", "mean", "variance"}, {"out"});
+  builder.MakeOutput("out");
 }
 
 utils::RepeatedProtoField<AttributeProto> PermAttr(const std::vector<int64_t> &perm) {
@@ -1186,6 +1249,169 @@ TEST(MatMulBatchNormalizationFusionPattern, RejectsTrainingOutputsBeforeOpset14)
   core::builder::GraphGraph graph(builder);
   onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
   EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, PreservesChannelAlignedShapeChains) {
+  const std::vector<BatchNormLayout> layouts{
+      {{"Reshape", {2, 4, 1, 1}}},
+      {{"Reshape", {2, 1, 4}}, {"Transpose", {0, 2, 1}}},
+      {{"Reshape", {1, 2, 4}}, {"Transpose", {1, 2, 0}}, {"Reshape", {2, 4, 1, 1}}},
+      {{"Transpose", {1, 0}}, {"Transpose", {1, 0}}},
+      {{"Transpose", {}}, {"Transpose", {}}},
+      {{"Reshape", {0, -1, 1}}},
+  };
+  for (const auto type :
+       {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kDouble,
+        core::symbolic::TensorType::kFloat16, core::symbolic::TensorType::kBfloat16}) {
+    for (const auto &layout : layouts) {
+      core::builder::GraphBuilder builder("chain", SchemaLookup(), {{"", 28}});
+      MakeBatchNormChain(builder, layout, 2, 4, type);
+      const auto expected_shape = builder.GetShape("out").Shape();
+      std::vector<NodeProto> original_layout;
+      for (std::size_t index = 1; index <= layout.size(); ++index) {
+        original_layout.push_back(builder.Nodes()[index]);
+      }
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(onnx_patterns::CreatePattern("MatMulBatchNormalizationFusion"));
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = false;
+      ASSERT_FALSE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), layout.size() + 1);
+      EXPECT_EQ(builder.Nodes()[0].op_type(), "Gemm");
+      EXPECT_EQ(builder.Nodes()[0].input()[0], "x");
+      EXPECT_EQ(builder.Nodes()[0].output()[0], "mm");
+      for (std::size_t index = 0; index < layout.size(); ++index) {
+        auto expected = original_layout[index];
+        if (index + 1 == layout.size()) {
+          (*expected.mutable_output())[0] = "out";
+        }
+        EXPECT_EQ(builder.Nodes()[index + 1].SerializeAsString(), expected.SerializeAsString());
+      }
+      EXPECT_EQ(builder.GetShape("out").Shape(), expected_shape);
+      EXPECT_EQ(graph.GetType("out"), type);
+      EXPECT_TRUE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+    }
+  }
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, RejectsEqualSizeButWrongChannelMapping) {
+  for (const auto &layout : std::vector<BatchNormLayout>{
+           {{"Reshape", {1, 4, 2, 1}}},
+           {{"Transpose", {1, 0}}, {"Reshape", {1, 4, 2}}},
+           {{"Transpose", {1, 0}}},
+       }) {
+    core::builder::GraphBuilder builder("wrong_channels", SchemaLookup(), {{"", 28}});
+    MakeBatchNormChain(builder, layout,
+                       layout.size() == 1 && layout[0].first == "Transpose" ? 4 : 2);
+    const auto before = builder.ToModel().SerializeAsString();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(onnx_patterns::CreatePattern("MatMulBatchNormalizationFusion"));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    EXPECT_TRUE(graph.Optimize().rewrites().empty());
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+  }
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, KeepsSharedResultsAndSingletonChannelsFromOpset9) {
+  for (int opset : {9, 28}) {
+    for (int64_t channels : {1, 4}) {
+      core::builder::GraphBuilder builder("shared_result", SchemaLookup(), {{"", opset}});
+      MakeBatchNormChain(builder, {{"Reshape", {1, 2, channels}}, {"Transpose", {1, 2, 0}}}, 2,
+                         channels);
+      builder.MakeNode("Identity", {"out"}, {"shared"});
+      builder.MakeOutput("shared");
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(onnx_patterns::CreatePattern("MatMulBatchNormalizationFusion"));
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      core::builder::ConstantFoldingOptions folding;
+      folding.enabled = false;
+      ASSERT_FALSE(graph.Optimize(4, nullptr, folding).rewrites().empty());
+      ASSERT_EQ(builder.Nodes().size(), 4u);
+      EXPECT_EQ(builder.Nodes()[0].op_type(), "Gemm");
+      EXPECT_EQ(builder.Nodes()[2].output()[0], "out");
+      EXPECT_EQ(builder.Nodes()[3].input()[0], "out");
+      EXPECT_EQ(builder.GetShape("shared").Shape(), Shape({2, channels, 1}));
+    }
+  }
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, RejectsSharedExportedAndCapturedChainValues) {
+  for (const auto &value : {"mm", "layout_0", "layout_1"}) {
+    for (int usage = 0; usage < 3; ++usage) {
+      core::builder::GraphBuilder builder("private_chain", SchemaLookup(), {{"", 28}});
+      MakeBatchNormChain(builder, {{"Reshape", {2, 1, 4}}, {"Transpose", {0, 2, 1}}});
+      if (usage == 0) {
+        builder.MakeNode("Identity", {value}, {"shared"});
+        builder.MakeOutput("shared");
+      } else if (usage == 1) {
+        builder.MakeOutput(value);
+      } else {
+        auto &subgraph = builder.MakeSubgraph("captured");
+        subgraph.MakeNode("Identity", {value}, {"captured_out"});
+        subgraph.MakeOutput("captured_out");
+        AddSubgraphReference(builder, "body", "captured", "carrier");
+      }
+      const auto before = builder.ToModel().SerializeAsString();
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr);
+      EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+    }
+  }
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, RejectsUnprovenLayoutsAndRevalidatesApply) {
+  for (int guard = 0; guard < 12; ++guard) {
+    SCOPED_TRACE(guard);
+    core::builder::GraphBuilder builder("unproven", SchemaLookup(), {{"", 28}});
+    MakeBatchNormChain(builder, {{"Reshape", {2, 1, 4}}, {"Transpose", {0, 2, 1}}});
+    if (guard == 0) {
+      builder.MakeInput("dynamic_shape", core::symbolic::TensorType::kInt64, Shape({3}));
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      (*nodes[1].mutable_input())[1] = "dynamic_shape";
+    } else if (guard == 1) {
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.Set("mm", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                                 SymbolicShape({core::symbolic::SymDim("rows"),
+                                                                core::symbolic::SymDim(4)})));
+    } else if (guard == 2) {
+      SetNodeDomain(builder, 1, "custom");
+    } else if (guard == 3) {
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      nodes[2].set_overload("other");
+    } else if (guard == 4) {
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      nodes[2].mutable_attribute(0)->set_ref_attr_name("permutation");
+    } else if (guard == 5) {
+      builder.SetOpsetVersion("", 8);
+    } else if (guard == 6) {
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.Set("mm", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                                 Shape({3, 4})));
+    } else if (guard == 7 || guard == 8) {
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      *nodes[2].mutable_attribute() =
+          PermAttr(guard == 7 ? std::vector<int64_t>{0, 2, 2} : std::vector<int64_t>{0, 3, 1});
+    } else if (guard == 9) {
+      auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+      *nodes[1].mutable_attribute() = IntAttr("allowzero", 2);
+    } else if (guard == 10) {
+      SeedShape(builder, "layout_0", {2, 0, 4});
+    } else {
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble,
+                                                Shape({2, 3})));
+    }
+    const auto before = builder.ToModel().SerializeAsString();
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[3]).pattern, nullptr) << guard;
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1],
+                                       &builder.Nodes()[2], &builder.Nodes()[3]}),
+                 core::builder::BuilderError);
+    EXPECT_EQ(builder.ToModel().SerializeAsString(), before);
+  }
 }
 
 TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {

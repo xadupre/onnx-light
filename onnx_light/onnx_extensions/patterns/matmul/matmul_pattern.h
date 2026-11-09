@@ -340,24 +340,27 @@ public:
 /**
  * Folds inference BatchNormalization parameters into a constant MatMul weight.
  *
- * Both MatMul inputs and the BatchNormalization input/output must be rank two.
+ * Both MatMul inputs must be rank two. At opset 9 or newer, a private chain of
+ * Reshape and Transpose nodes may separate MatMul from BatchNormalization.
+ * The chain must keep column j as channel j on axis 1. Reshape shapes must be
+ * constant INT64 vectors; all intermediate shapes must have concrete positive
+ * dimensions. Unknown, empty, or dynamically specified layouts are not fused.
  * The MatMul weight and all four BatchNormalization parameters must be
  * floating-point constants. The replacement is a standard Gemm with folded
- * weight and bias initializers.
+ * weight and bias initializers, followed by the unchanged shape operations.
  *
  * @code
  * Before:
- *          +--------+       +--------------------+
- *   x, W ->| MatMul |------>| BatchNormalization |---> y
- *          +--------+       +--------------------+
- *                              ^    ^    ^    ^
- *                              |    |    |    |
- *                           scale  bias mean variance
+ *          ┌────────┐    ┌────────────────────┐    ┌────────────────────┐
+ *   x, W → │ MatMul │ →  │ Reshape/Transpose* │ →  │ BatchNormalization │ → y
+ *          └────────┘    └────────────────────┘    └────────────────────┘
+ *                                                   ↑    ↑    ↑    ↑
+ *                                                scale bias mean variance
  *
  * After:
- *                              +------+
- *   x, folded_W, folded_bias ->| Gemm |---> y
- *                              +------+
+ *                             ┌──────┐    ┌────────────────────┐
+ *   x, folded_W, folded_bias → │ Gemm │ →  │ Reshape/Transpose* │ → y
+ *                             └──────┘    └────────────────────┘
  * @endcode
  */
 class MatMulBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {

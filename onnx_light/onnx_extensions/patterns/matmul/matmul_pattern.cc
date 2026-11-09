@@ -369,6 +369,138 @@ bool IsRankTwo(core::builder::GraphGraph &graph, const std::string &name) {
   return graph.HasShape(name) && graph.GetShape(name).Shape().Rank() == 2;
 }
 
+std::optional<int64_t> PositiveElementCount(const std::vector<int64_t> &shape) {
+  int64_t count = 1;
+  for (int64_t dimension : shape) {
+    if (dimension <= 0 || count > std::numeric_limits<int64_t>::max() / dimension) {
+      return std::nullopt;
+    }
+    count *= dimension;
+  }
+  return count;
+}
+
+bool MatMulColumnsAreBatchNormChannels(core::builder::GraphGraph &graph,
+                                       const std::vector<const NodeProto *> &nodes,
+                                       int64_t channels) {
+  std::vector<int64_t> shape;
+  if (!ReadStaticShape(graph, nodes.front()->output()[0].value(), shape) || shape.size() != 2 ||
+      shape[1] != channels) {
+    return false;
+  }
+  const auto element_count = PositiveElementCount(shape);
+  if (!element_count.has_value()) {
+    return false;
+  }
+  const auto &matmul = *nodes.front();
+  if (!graph.HasType(matmul.input()[0].value()) || !graph.HasType(matmul.input()[1].value()) ||
+      graph.GetType(matmul.input()[0].value()) != graph.GetType(matmul.input()[1].value())) {
+    return false;
+  }
+  const auto type = graph.GetType(matmul.input()[1].value());
+  for (const NodeProto *node : nodes) {
+    if (!graph.HasType(node->output()[0].value()) ||
+        graph.GetType(node->output()[0].value()) != type) {
+      return false;
+    }
+  }
+  std::size_t column_axis = 1;
+  for (std::size_t index = 1; index + 1 < nodes.size(); ++index) {
+    const NodeProto &node = *nodes[index];
+    std::vector<int64_t> output;
+    if (!ReadStaticShape(graph, node.output()[0].value(), output) || output.empty() ||
+        PositiveElementCount(output) != element_count) {
+      return false;
+    }
+    if (IsDefaultOp(node, "Transpose")) {
+      std::vector<int64_t> permutation;
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.name() != "perm" || attribute.type() != AttributeProto::INTS ||
+            !attribute.ref_attr_name().value().empty() || !permutation.empty()) {
+          return false;
+        }
+        permutation.assign(attribute.ints().begin(), attribute.ints().end());
+        if (permutation.size() != shape.size()) {
+          return false;
+        }
+      }
+      if (permutation.empty()) {
+        for (std::size_t axis = shape.size(); axis > 0; --axis) {
+          permutation.push_back(static_cast<int64_t>(axis - 1));
+        }
+      }
+      if (output.size() != shape.size()) {
+        return false;
+      }
+      std::vector<bool> seen(shape.size());
+      std::size_t next_axis = column_axis;
+      for (std::size_t axis = 0; axis < permutation.size(); ++axis) {
+        const int64_t source = permutation[axis];
+        if (source < 0 || static_cast<std::size_t>(source) >= shape.size() || seen[source] ||
+            output[axis] != shape[source]) {
+          return false;
+        }
+        seen[source] = true;
+        if (static_cast<std::size_t>(source) == column_axis) {
+          next_axis = axis;
+        }
+      }
+      column_axis = next_axis;
+    } else {
+      const TensorProto *target = graph.IsConstant(node.input()[1].value())
+                                      ? graph.GetComputedConstant(node.input()[1].value())
+                                      : nullptr;
+      std::vector<int64_t> dimensions;
+      if (target == nullptr || target->data_type() != TensorProto::INT64 ||
+          target->dims_size() != 1 || target->dims(0) != static_cast<int64_t>(output.size()) ||
+          !ReadIntegerValues(*target, dimensions) || dimensions.size() != output.size()) {
+        return false;
+      }
+      int64_t allowzero = 0;
+      bool found_allowzero = false;
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.name() != "allowzero" || attribute.type() != AttributeProto::INT ||
+            !attribute.ref_attr_name().value().empty() || found_allowzero ||
+            graph.Builder().OpsetVersion("") < 14 || (attribute.i() != 0 && attribute.i() != 1)) {
+          return false;
+        }
+        found_allowzero = true;
+        allowzero = attribute.i();
+      }
+      bool inferred = false;
+      for (std::size_t axis = 0; axis < dimensions.size(); ++axis) {
+        const int64_t dimension = dimensions[axis];
+        if (dimension == -1) {
+          if (inferred) {
+            return false;
+          }
+          inferred = true;
+        } else if (dimension == 0) {
+          if (allowzero != 0 || axis >= shape.size() || output[axis] != shape[axis]) {
+            return false;
+          }
+        } else if (dimension < 0 || dimension != output[axis]) {
+          return false;
+        }
+      }
+      for (std::size_t axis = column_axis + 1; axis < shape.size(); ++axis) {
+        if (shape[axis] != 1) {
+          return false;
+        }
+      }
+      column_axis = output.size() - 1;
+      while (channels != 1 && column_axis > 0 && output[column_axis] == 1) {
+        --column_axis;
+      }
+      if (output[column_axis] != channels) {
+        return false;
+      }
+    }
+    shape = std::move(output);
+  }
+  return column_axis == 1;
+}
+
 bool GemmBiasBroadcasts(const SymShape &output, const SymShape &bias) {
   if (output.Rank() != 2 || bias.Rank() > 2) {
     return false;
@@ -1163,7 +1295,7 @@ core::builder::MatchResult
 MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
                                              const NodeProto &candidate) const {
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
-      candidate.output_size() < 1) {
+      candidate.output_size() < 1 || !candidate.overload().value().empty()) {
     return NoMatch(candidate, "candidate is not an inference BatchNormalization");
   }
   const int opset = graph.Builder().OpsetVersion("");
@@ -1178,9 +1310,26 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
     }
   }
   const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
+  if (matmul == nullptr || !(IsDefaultOp(*matmul, "MatMul") || IsDefaultOp(*matmul, "Reshape") ||
+                             IsDefaultOp(*matmul, "Transpose"))) {
+    return NoMatch(candidate, "the BatchNormalization input is not a private rank-two MatMul");
+  }
+  std::vector<const NodeProto *> nodes{&candidate};
+  std::unordered_set<const NodeProto *> visited;
+  while (matmul != nullptr &&
+         (IsDefaultOp(*matmul, "Reshape") || IsDefaultOp(*matmul, "Transpose"))) {
+    if (opset < 9 || !visited.insert(matmul).second ||
+        matmul->input_size() != (IsDefaultOp(*matmul, "Reshape") ? 2 : 1) ||
+        matmul->output_size() != 1 || !matmul->overload().value().empty() ||
+        graph.IsUsedMoreThanOnce(matmul->output()[0].value())) {
+      return NoMatch(candidate, "a shape-changing intermediate is not a private supported node");
+    }
+    nodes.push_back(matmul);
+    matmul = graph.NodeBefore(matmul->input()[0].value());
+  }
   if (matmul == nullptr || !IsDefaultOp(*matmul, "MatMul") || matmul->input_size() != 2 ||
       matmul->output_size() != 1 || !IsRankTwo(graph, matmul->input()[0].value()) ||
-      !IsRankTwo(graph, matmul->input()[1].value()) ||
+      !IsRankTwo(graph, matmul->input()[1].value()) || !matmul->overload().value().empty() ||
       graph.IsUsedMoreThanOnce(matmul->output()[0].value())) {
     return NoMatch(candidate, "the BatchNormalization input is not a private rank-two MatMul");
   }
@@ -1201,6 +1350,11 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
     return NoMatch(candidate, "the MatMul weight is not floating-point");
   }
   const int64_t channels = weight->dims(1);
+  nodes.push_back(matmul);
+  std::reverse(nodes.begin(), nodes.end());
+  if (nodes.size() > 2 && !MatMulColumnsAreBatchNormChannels(graph, nodes, channels)) {
+    return NoMatch(candidate, "the shape chain does not preserve MatMul columns as BN channels");
+  }
   std::vector<double> weight_values;
   if (!ReadFloatingTensor(*weight, weight_values) ||
       weight_values.size() != static_cast<std::size_t>(weight->dims(0) * weight->dims(1)) ||
@@ -1236,22 +1390,23 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
       return NoMatch(candidate, "the folded BatchNormalization parameters are non-finite");
     }
   }
-  return core::builder::MatchResult{this, {matmul, &candidate}, &candidate};
+  return core::builder::MatchResult{this, nodes, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
 MatMulBatchNormalizationFusionPattern::Apply(core::builder::GraphGraph &graph,
                                              const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+  if (nodes.size() < 2 || std::any_of(nodes.begin(), nodes.end(),
+                                      [](const NodeProto *node) { return node == nullptr; })) {
     throw BuilderError(
         "MatMulBatchNormalizationFusionPattern::Apply expects MatMul and BatchNormalization.");
   }
-  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  const core::builder::MatchResult verified = Match(graph, *nodes.back());
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError("MatMulBatchNormalizationFusionPattern::Apply received an unsafe match.");
   }
   const NodeProto &matmul = *nodes[0];
-  const NodeProto &batch = *nodes[1];
+  const NodeProto &batch = *nodes.back();
   const TensorProto *weight = graph.GetComputedConstant(matmul.input()[1].value());
   if (weight == nullptr) {
     throw BuilderError(
@@ -1295,12 +1450,19 @@ MatMulBatchNormalizationFusionPattern::Apply(core::builder::GraphGraph &graph,
   builder.MakeInitializer(
       MakeFloatingTensor(weight_name, type, TensorDims(*weight), weight_values));
   builder.MakeInitializer(MakeFloatingTensor(bias_name, type, {channels}, folded_bias));
-  NodeProto replacement = MakePatternNode(
-      "Gemm", {matmul.input()[0].value(), weight_name, bias_name}, {batch.output()[0].value()}, "",
-      "MatMulBatchNormalizationFusionPattern--" + matmul.name().value());
+  NodeProto replacement =
+      MakePatternNode("Gemm", {matmul.input()[0].value(), weight_name, bias_name},
+                      {nodes.size() == 2 ? batch.output()[0].value() : matmul.output()[0].value()},
+                      "", "MatMulBatchNormalizationFusionPattern--" + matmul.name().value());
   replacement.set_doc_string(matmul.doc_string().value());
   utils::RepeatedProtoField<NodeProto> replacements;
   replacements.push_back(std::move(replacement));
+  for (std::size_t index = 1; index + 1 < nodes.size(); ++index) {
+    replacements.push_back(*nodes[index]);
+  }
+  if (nodes.size() > 2) {
+    (*replacements.back().mutable_output())[0] = batch.output()[0].value();
+  }
   return replacements;
 }
 

@@ -122,7 +122,6 @@ suppress_warnings = [
 
 epkg_dictionary = {
     "Breathe": "https://breathe.readthedocs.io/",
-    "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
     "Doxygen": "https://www.doxygen.nl/",
     "FlatBuffers": "https://flatbuffers.dev/",
     "libFuzzer": "https://llvm.org/docs/LibFuzzer.html",

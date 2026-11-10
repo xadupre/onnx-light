@@ -40,6 +40,8 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
+constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
+
 bool HasUnloadedExternalData(const TensorProto &tensor) {
   return !tensor.has_raw_data() && (tensor.has_external_data() ||
                                     tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
@@ -1765,6 +1767,17 @@ bool GraphBuilder::IsGraphReference(const NodeProto &node, const AttributeProto 
 
 std::string GraphBuilder::GraphAttributeName(const AttributeProto &attribute) const {
   const auto &name = attribute.name().value();
+  const std::string marker = kGraphReferenceAliasMarker;
+  const std::size_t marker_pos = name.rfind(marker);
+  if (marker_pos != std::string::npos) {
+    const std::size_t suffix_pos = marker_pos + marker.size();
+    const std::size_t suffix_size = name.size() - suffix_pos;
+    if (suffix_size > 4 && name.compare(name.size() - 4, 4, "_ref") == 0 &&
+        std::all_of(name.begin() + static_cast<std::ptrdiff_t>(suffix_pos), name.end() - 4,
+                    [](unsigned char c) { return c >= '0' && c <= '9'; })) {
+      return name.substr(0, marker_pos);
+    }
+  }
   return name.substr(0, name.size() - 4);
 }
 
@@ -1787,27 +1800,34 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
            graph.value_info().size() > 0 || !graph.extended_initializer().empty();
   };
-  std::unordered_set<std::string> reference_names;
+  std::unordered_set<std::string> occupied_names;
   for (const auto &attribute : node.attribute()) {
-    if (attribute.type() != AttributeProto::GRAPH && attribute.type() != AttributeProto::GRAPHS)
-      continue;
-    const std::string reference_name = attribute.name().value() + "_ref";
-    if (IsDeclaredAttribute(node, reference_name) || FindAttribute(node, reference_name.c_str()) ||
-        !reference_names.insert(reference_name).second) {
-      throw BuilderError("GraphBuilder::ImportAttributes: generated graph reference name '" +
-                         reference_name + "' collides with an existing attribute.");
-    }
+    occupied_names.insert(attribute.name().value());
   }
+  std::size_t alias_index = 0;
+  const auto reference_name_for = [&](const AttributeProto &attribute) {
+    const std::string direct_name = attribute.name().value() + "_ref";
+    if (!IsDeclaredAttribute(node, direct_name) && occupied_names.count(direct_name) == 0) {
+      occupied_names.insert(direct_name);
+      return direct_name;
+    }
+    std::string alias;
+    do {
+      alias = attribute.name().value() + kGraphReferenceAliasMarker +
+              std::to_string(alias_index++) + "_ref";
+    } while (IsDeclaredAttribute(node, alias) || occupied_names.count(alias) != 0);
+    occupied_names.insert(alias);
+    return alias;
+  };
   utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
   for (const auto &attribute : node.attribute()) {
-    const std::string direct_reference_name = attribute.name().value() + "_ref";
-    const std::string &reference_name = direct_reference_name;
     const bool has_single_graph_payload =
         (attribute.has_g() && has_graph_content(attribute.g())) ||
         (attribute.graphs().size() > 0 &&
          has_graph_content(attribute.graphs()[static_cast<std::size_t>(0)]));
     if (attribute.type() == AttributeProto::AttributeType::GRAPH && has_single_graph_payload) {
+      const std::string reference_name = reference_name_for(attribute);
       const GraphProto &graph =
           attribute.has_g() ? attribute.g() : attribute.graphs()[static_cast<std::size_t>(0)];
       std::string base = graph.name().empty() ? attribute.name().value() : graph.name().value();
@@ -1834,6 +1854,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
     }
     if (attribute.type() == AttributeProto::AttributeType::GRAPHS &&
         attribute.graphs().size() > 0) {
+      const std::string reference_name = reference_name_for(attribute);
       AttributeProto refs;
       refs.set_name(reference_name);
       refs.set_type(AttributeProto::AttributeType::STRINGS);

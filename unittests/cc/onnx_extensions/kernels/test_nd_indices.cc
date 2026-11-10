@@ -27,7 +27,12 @@ namespace {
 Tensor NDIndices(bool int32, const std::vector<int64_t> &shape,
                  const std::vector<int64_t> &values) {
   if (int32) {
-    return Tensor::FromInt32("", shape, std::vector<int32_t>(values.begin(), values.end()));
+    std::vector<int32_t> indices;
+    indices.reserve(values.size());
+    for (int64_t value : values) {
+      indices.push_back(static_cast<int32_t>(value));
+    }
+    return Tensor::FromInt32("", shape, indices);
   }
   return Tensor::FromInt64("", shape, values);
 }

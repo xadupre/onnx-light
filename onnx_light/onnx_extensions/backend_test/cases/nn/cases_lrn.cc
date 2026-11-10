@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -49,6 +52,26 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (bool bfloat : {false, true}) {
+    NodeProto node;
+    node.set_op_type("LRN");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "size", 5);
+    const std::string dtype = bfloat ? "bfloat16" : "float16";
+    Expect(registry, std::move(node), "test_cc_lrn_" + dtype + "_large_values", {opset},
+           [bfloat]() -> IoData {
+             const auto make = bfloat ? MakeBfloat16Tensor : MakeFloat16Tensor;
+             std::vector<float> y;
+             // Each square is 90000, which overflows float16 before the reduction.
+             for (int count : {3, 4, 5, 4, 3}) {
+               y.push_back(300.0f / std::pow(1.0f + (0.0001f / 5) * count * 90000.0f, 0.75f));
+             }
+             return IoData{{make("", {1, 5, 1, 1}, std::vector<float>(5, 300.0f), nullptr)},
+                           {make("", {1, 5, 1, 1}, y, nullptr)}};
+           });
   }
 
   // Build a deterministic 2x4x5x5 input shared between both cases. Using

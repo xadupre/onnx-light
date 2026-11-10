@@ -15,6 +15,7 @@ adapters
     broadcast_backward_compatibility
     broadcast_forward_compatibility
     cast_9_8
+    cast_28_27
     clip_10_11
     compatible
     dropout_11_12
@@ -26,6 +27,7 @@ adapters
     group_normalization_20_21
     group_normalization_21_20
     maxpool_8_7
+    nd_indices_29_28
     no_previous_version
     pad_10_11
     pad_18_17

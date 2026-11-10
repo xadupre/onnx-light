@@ -65,10 +65,13 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::GatherND: output dtype must match data dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape, "kernel::GatherND: output shape mismatch.");
-  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
-                      "kernel::GatherND: 'indices' input must be INT64.");
+  const bool int32_indices = indices.data_type == static_cast<int32_t>(DataType::INT32);
+  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64) ||
+                          (ctx_.opset.version >= 29 && int32_indices),
+                      "kernel::GatherND: 'indices' input must be INT64 or INT32 (opset 29+).");
 
   const int64_t *idx_values = reinterpret_cast<const int64_t *>(indices.bytes());
+  const int32_t *idx_values32 = reinterpret_cast<const int32_t *>(indices.bytes());
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t q = static_cast<int64_t>(indices.shape.size());
   const int64_t k_last = indices.shape[static_cast<std::size_t>(q - 1)];
@@ -117,7 +120,8 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
     }
     // Read the k_last-component index tuple from indices.
     for (int64_t k = 0; k < k_last; ++k) {
-      int64_t idx = idx_values[static_cast<std::size_t>(t * k_last + k)];
+      const auto offset = static_cast<std::size_t>(t * k_last + k);
+      int64_t idx = int32_indices ? static_cast<int64_t>(idx_values32[offset]) : idx_values[offset];
       const int64_t dim = data.shape[static_cast<std::size_t>(batch_dims + k)];
       if (idx < 0) {
         idx += dim;
@@ -139,7 +143,7 @@ void GatherND::Run(RuntimeContext &rt) {
   const Tensor &data = GetInput(node, 0, rt);
   const Tensor &indices = GetInput(node, 1, rt);
   const int64_t batch_dims = GetAttributeIntOrDefault(node, "batch_dims", 0);
-  onnx_kernels::kernel::GatherND k(rt.kernel_ctx());
+  onnx_kernels::kernel::GatherND k(ctx_);
   SetOutput(node, 0, k(data, indices, batch_dims, &rt), rt);
 }
 

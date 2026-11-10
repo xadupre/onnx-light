@@ -19,6 +19,9 @@
 #include "onnx_lib/defs/schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
+OpSchema GatherNDSchema(bool allow_int32_indices);
+OpSchema ScatterNDSchema(bool allow_int32_indices);
+
 // The below is called by ops after opset 11, inclusively.
 void resizeShapeInference(InferenceContext &ctx);
 

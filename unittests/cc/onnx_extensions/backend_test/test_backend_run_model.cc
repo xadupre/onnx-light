@@ -459,6 +459,7 @@ TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
 TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }
 TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }
 TEST(BackendRunModel, GatherElements) { RunBackendCasesFor("GatherElements"); }
+TEST(BackendRunModel, GatherND) { RunBackendCasesFor("GatherND"); }
 TEST(BackendRunModel, ScatterElements) { RunBackendCasesFor("ScatterElements"); }
 TEST(BackendRunModel, ScatterND) { RunBackendCasesFor("ScatterND"); }
 TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }

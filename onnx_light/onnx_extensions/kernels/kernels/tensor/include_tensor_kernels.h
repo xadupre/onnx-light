@@ -650,8 +650,8 @@ public:
 /// produces an output of rank ``q + r - indices_shape[-1] - 1 - b`` where
 /// ``q = rank(indices)``, ``r = rank(data)`` and ``b = batch_dims``.
 ///
-/// ``indices`` must be INT64. Negative index values count from the back of the
-/// corresponding ``data`` axis.
+/// ``indices`` must be INT64, or INT32 from opset 29. Negative index values
+/// count from the back of the corresponding ``data`` axis.
 class GatherND : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GatherND";
@@ -777,8 +777,8 @@ public:
 /// Reference implementation of the ONNX ``ScatterND`` operator (since opset
 /// 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset 16
 /// (``add``/``mul``) and extended in opset 18 (``max``/``min``)). The output
-/// has the same shape and dtype as ``data``. ``indices`` must be INT64;
-/// negative values count from the back of the corresponding ``data`` axis.
+/// has the same shape and dtype as ``data``. ``indices`` must be INT64, or INT32
+/// from opset 29; negative values count from the back of the corresponding ``data`` axis.
 ///
 /// When ``reduction`` is ``"none"``, repeated indices result in unspecified
 /// behaviour. When ``reduction`` is ``"add"``, ``"mul"``, ``"max"`` or

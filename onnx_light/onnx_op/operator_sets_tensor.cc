@@ -1459,26 +1459,42 @@ LightOpSchema MakeGatherNDSchema(int since_version, const std::vector<TensorType
   if (since_version >= 12) {
     attributes.push_back(
         {"batch_dims",
-         "The number of batch dimensions. The gather of indexing starts from dimension of "
-         "data[batch_dims:]",
+         since_version >= 13
+             ? "The number of leading batch dimensions shared by data and indices. "
+               "Index tuples address data axes starting at axis batch_dims."
+             : "The number of batch dimensions. The gather of indexing starts from dimension of "
+               "data[batch_dims:]",
          AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  }
+  std::vector<TypeConstraintParam> constraints = {
+      {"T", types, "Constrain input and output types to any tensor type."}};
+  if (since_version >= 29) {
+    constraints.push_back({"Tind",
+                           {TensorType::kInt32, TensorType::kInt64},
+                           "Constrain indices to int32 or int64 tensors."});
   }
   return LightOpSchema(
       "GatherND", kOnnxDomain, since_version, MakeGatherNDDoc(since_version),
       {
           {"data", "Tensor of rank r >= 1.", "T"},
           {"indices",
-           "Tensor of rank q >= 1. All index values are expected to be within bounds [-s, s-1] "
-           "along axis of size s. It is an error if any of the index values are out of bounds.",
-           "tensor(int64)"},
+           since_version >= 13
+               ? "Tensor of rank q >= 1. Each index must be in [-s, s-1], where s is "
+                 "the size of the corresponding data axis after the batch dimensions. "
+                 "An out-of-bounds index is an error."
+               : "Tensor of rank q >= 1. All index values are expected to be within bounds [-s, "
+                 "s-1] "
+                 "along axis of size s. It is an error if any of the index values are out of "
+                 "bounds.",
+           since_version >= 29 ? "Tind" : "tensor(int64)"},
       },
       {
-          {"output", "Tensor of rank q + r - indices_shape[-1] - 1.", "T"},
+          {"output",
+           since_version >= 13 ? "Tensor of rank q + r - indices_shape[-1] - 1 - batch_dims."
+                               : "Tensor of rank q + r - indices_shape[-1] - 1.",
+           "T"},
       },
-      {
-          {"T", types, "Constrain input and output types to any tensor type."},
-      },
-      std::move(attributes));
+      std::move(constraints), std::move(attributes));
 }
 
 LightOpSchema MakeTensorScatterSchema(int since_version, const std::vector<TensorType> &types) {
@@ -1610,9 +1626,9 @@ LightOpSchema MakeScatterNDSchema(int since_version, const std::vector<TensorTyp
     if (since_version >= 18) {
       reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min. "
                        "'none': no reduction applied. "
-                       "'add':  reduction using the addition operation. "
-                       "'mul':  reduction using the addition operation. "
-                       "'max': reduction using the maximum operation."
+                       "'add': reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation. "
+                       "'max': reduction using the maximum operation. "
                        "'min': reduction using the minimum operation.";
     } else {
       reduction_desc = "Type of reduction to apply: none (default), add, mul. "
@@ -1623,19 +1639,24 @@ LightOpSchema MakeScatterNDSchema(int since_version, const std::vector<TensorTyp
     attributes.push_back({"reduction", reduction_desc, AttributeType::STRING,
                           /*required=*/false, std::string("none")});
   }
-  return LightOpSchema("ScatterND", kOnnxDomain, since_version, MakeScatterNDDoc(since_version),
-                       {
-                           {"data", "Tensor of rank r >= 1.", "T"},
-                           {"indices", "Tensor of rank q >= 1.", "tensor(int64)"},
-                           {"updates", "Tensor of rank q + r - indices_shape[-1] - 1.", "T"},
-                       },
-                       {
-                           {"output", "Tensor of rank r >= 1.", "T"},
-                       },
-                       {
-                           {"T", types, "Constrain input and output types to any tensor type."},
-                       },
-                       std::move(attributes));
+  std::vector<TypeConstraintParam> constraints = {
+      {"T", types, "Constrain input and output types to any tensor type."}};
+  if (since_version >= 29) {
+    constraints.push_back({"Tind",
+                           {TensorType::kInt32, TensorType::kInt64},
+                           "Constrain indices to int32 or int64 tensors."});
+  }
+  return LightOpSchema(
+      "ScatterND", kOnnxDomain, since_version, MakeScatterNDDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices", "Tensor of rank q >= 1.", since_version >= 29 ? "Tind" : "tensor(int64)"},
+          {"updates", "Tensor of rank q + r - indices_shape[-1] - 1.", "T"},
+      },
+      {
+          {"output", "Tensor of rank r >= 1.", "T"},
+      },
+      std::move(constraints), std::move(attributes));
 }
 
 LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &types) {
@@ -1986,6 +2007,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"GatherND",
        [] {
          return std::vector<LightOpSchema>{
+             MakeGatherNDSchema(29, ConcatTypesVer13()),
              MakeGatherNDSchema(13, ConcatTypesVer13()),
              MakeGatherNDSchema(12, AllTensorTypes()),
              MakeGatherNDSchema(11, AllTensorTypes()),
@@ -2016,6 +2038,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"ScatterND",
        [] {
          return std::vector<LightOpSchema>{
+             MakeScatterNDSchema(29, ConcatTypesVer13()),
              MakeScatterNDSchema(18, ConcatTypesVer13()),
              MakeScatterNDSchema(16, ConcatTypesVer13()),
              MakeScatterNDSchema(13, ConcatTypesVer13()),

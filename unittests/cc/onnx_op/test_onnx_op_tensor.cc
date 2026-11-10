@@ -141,13 +141,38 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {
   }
 }
 
+TEST(OnnxOpTensorRegistrationTest, NDIndicesAllowInt32OnlyFromOpset29) {
+  for (const char *name : {"GatherND", "ScatterND"}) {
+    SCOPED_TRACE(name);
+    const auto schemas = onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory(name);
+    ASSERT_NE(FindByVersion(schemas, 29), nullptr);
+    for (const auto &schema : schemas) {
+      SCOPED_TRACE(schema.since_version());
+      ASSERT_GE(schema.inputs().size(), 2u);
+      if (schema.since_version() < 29) {
+        EXPECT_EQ(schema.inputs()[1].type, "tensor(int64)");
+        EXPECT_EQ(schema.type_constraints().size(), 1u);
+      } else {
+        EXPECT_EQ(schema.inputs()[1].type, "Tind");
+        ASSERT_EQ(schema.type_constraints().size(), 2u);
+        const auto &indices = schema.type_constraints()[1];
+        EXPECT_EQ(indices.type_param_str, "Tind");
+        EXPECT_EQ(indices.allowed_type_strs,
+                  (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                         core::schema::TensorType::kInt64}));
+        EXPECT_NE(schema.doc().find("Opset 29 adds support for int32 indices"), std::string::npos);
+      }
+    }
+  }
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 143u);
+  EXPECT_EQ(schemas.size(), 145u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);

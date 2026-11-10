@@ -69,6 +69,18 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  {
+    Expect(registry, MakeScatterNDNode("add"), "test_cc_scatternd_batched_token_add_int32_indices",
+           {DefaultOpset(29)}, []() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 3, 2}, std::vector<float>(12, 0));
+             Tensor indices = Tensor::FromInt32("", {4, 2}, {0, 1, 1, 0, 0, 1, 1, -1});
+             Tensor updates = Tensor::FromFloat("", {4, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
+             Tensor output = Tensor::FromFloat("", {2, 3, 2}, {0, 0, 6, 8, 0, 0, 3, 4, 0, 0, 7, 8});
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
+  }
+
   // test_cc_scatternd — mirrors upstream ``test_scatternd``.
   {
     Expect(registry, MakeScatterNDNode("none"), "test_cc_scatternd", {opset}, []() -> IoData {

@@ -78,8 +78,10 @@ Tensor ScatterND::operator()(const Tensor &data, const Tensor &indices, const Te
 
 void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                            const Attributes &attrs, Tensor &output) const {
-  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
-                      "kernel::ScatterND: 'indices' input must be INT64.");
+  const bool int32_indices = indices.data_type == static_cast<int32_t>(DataType::INT32);
+  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64) ||
+                          (ctx_.opset.version >= 29 && int32_indices),
+                      "kernel::ScatterND: 'indices' input must be INT64 or INT32 (opset 29+).");
   EXT_ENFORCE_INVALID(updates.data_type == data.data_type,
                       "kernel::ScatterND: 'updates' dtype must match 'data' dtype.");
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
@@ -136,11 +138,12 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
 
   const std::size_t elem_size = ElementSize(data.data_type);
   const int64_t *idx_ptr = reinterpret_cast<const int64_t *>(indices.bytes());
+  const int32_t *idx_ptr32 = reinterpret_cast<const int32_t *>(indices.bytes());
 
   for (int64_t t = 0; t < n_tuples; ++t) {
     int64_t data_offset = 0;
     for (int64_t j = 0; j < k; ++j) {
-      int64_t v = idx_ptr[t * k + j];
+      int64_t v = int32_indices ? static_cast<int64_t>(idx_ptr32[t * k + j]) : idx_ptr[t * k + j];
       const int64_t dim = data.shape[static_cast<std::size_t>(j)];
       if (v < 0) {
         v += dim;
@@ -163,7 +166,7 @@ void ScatterND::Run(RuntimeContext &rt) {
   const Tensor &updates = GetInput(node, 2, rt);
   onnx_kernels::kernel::ScatterND::Attributes attrs;
   attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
-  onnx_kernels::kernel::ScatterND k(rt.kernel_ctx());
+  onnx_kernels::kernel::ScatterND k(ctx_);
   SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
 }
 

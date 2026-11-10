@@ -88,97 +88,106 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const bool produce_log_prob =
       rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  const auto compute_float32 = [&](const Tensor &float_scores, const Tensor *float_weights,
+                                   bool output_tensors) {
+    Tensor log_prob =
+        rt ? (output_tensors && produce_log_prob
+                  ? rt->MakeOutputTensor(1, DataType::FLOAT, float_scores.shape, log_prob_n_bytes)
+                  : rt->MakeTemporaryTensor(DataType::FLOAT, float_scores.shape, log_prob_n_bytes))
+           : MakeOutputTensor(DataType::FLOAT, float_scores.shape, log_prob_n_bytes, nullptr);
+    ComputeLogSoftmaxOverClassAxis(float_scores.AsFloat(), log_prob.AsFloat(), n_batch, n_classes,
+                                   n_inner);
+
+    const float *log_prob_ptr = log_prob.AsFloat();
+    const float *weights_ptr = float_weights != nullptr ? float_weights->AsFloat() : nullptr;
+
+    detail::TemporaryTypedBuffer<float> per_sample_loss_buf(
+        static_cast<size_t>(n_loss), allocator, "kernel::SoftmaxCrossEntropyLoss per_sample_loss");
+    detail::TemporaryTypedBuffer<float> per_sample_weight_buf(
+        static_cast<size_t>(n_loss), allocator,
+        "kernel::SoftmaxCrossEntropyLoss per_sample_weight");
+    float *per_sample_loss = per_sample_loss_buf.data();
+    float *per_sample_weight = per_sample_weight_buf.data();
+
+    for (int64_t o = 0; o < n_batch; ++o) {
+      for (int64_t i = 0; i < n_inner; ++i) {
+        const int64_t flat = o * n_inner + i;
+        int64_t label_value;
+        if (labels.data_type == DataType::INT64) {
+          label_value = labels.AsInt64()[static_cast<size_t>(flat)];
+        } else {
+          label_value = static_cast<int64_t>(labels.AsInt32()[static_cast<size_t>(flat)]);
+        }
+
+        if (has_ignore_index && label_value == ignore_index) {
+          per_sample_loss[static_cast<size_t>(flat)] = 0.0f;
+          per_sample_weight[static_cast<size_t>(flat)] = 0.0f;
+          continue;
+        }
+
+        EXT_ENFORCE_INVALID(label_value >= 0 && label_value < n_classes,
+                            "kernel::SoftmaxCrossEntropyLoss: label is out of range [0, C).");
+
+        const int64_t log_prob_offset = (o * n_classes + label_value) * n_inner + i;
+        const float neg_log_prob = -log_prob_ptr[static_cast<size_t>(log_prob_offset)];
+        const float w =
+            weights_ptr != nullptr ? weights_ptr[static_cast<size_t>(label_value)] : 1.0f;
+        per_sample_loss[static_cast<size_t>(flat)] = w * neg_log_prob;
+        per_sample_weight[static_cast<size_t>(flat)] = w;
+      }
+    }
+
+    Tensor loss;
+    if (reduction == "none") {
+      const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
+      loss = rt ? (output_tensors
+                       ? rt->MakeOutputTensor(0, DataType::FLOAT, labels.shape, loss_n_bytes)
+                       : rt->MakeTemporaryTensor(DataType::FLOAT, labels.shape, loss_n_bytes))
+                : MakeOutputTensor(DataType::FLOAT, labels.shape, loss_n_bytes, nullptr);
+      float *out = loss.AsFloat();
+      for (int64_t k = 0; k < n_loss; ++k) {
+        out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
+      }
+      return std::make_pair(std::move(loss), std::move(log_prob));
+    }
+
+    float sum_loss = 0.0f;
+    float sum_weight = 0.0f;
+    for (int64_t k = 0; k < n_loss; ++k) {
+      sum_loss += per_sample_loss[static_cast<size_t>(k)];
+      sum_weight += per_sample_weight[static_cast<size_t>(k)];
+    }
+
+    float reduced;
+    if (reduction == "sum") {
+      reduced = sum_loss;
+    } else {
+      reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
+    }
+
+    const size_t loss_n_bytes = sizeof(float);
+    loss = rt ? (output_tensors ? rt->MakeOutputTensor(0, DataType::FLOAT, Shape{}, loss_n_bytes)
+                                : rt->MakeTemporaryTensor(DataType::FLOAT, Shape{}, loss_n_bytes))
+              : MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, nullptr);
+    loss.AsFloat()[0] = reduced;
+    return std::make_pair(std::move(loss), std::move(log_prob));
+  };
+
   if (core::runtime::IsHalfPrecision(scores.data_type)) {
     const Tensor promoted_scores = core::runtime::PromoteToFloat32(scores, rt);
     const Tensor promoted_weights =
         weights != nullptr ? core::runtime::PromoteToFloat32(*weights, rt) : Tensor{};
     auto [loss, log_prob] =
-        (*this)(promoted_scores, labels, weights != nullptr ? &promoted_weights : nullptr,
-                reduction, has_ignore_index, ignore_index);
-    return {core::runtime::DemoteFromFloat32(loss, scores.data_type, rt),
-            core::runtime::DemoteFromFloat32(log_prob, scores.data_type,
-                                             produce_log_prob ? rt : nullptr,
-                                             std::numeric_limits<int64_t>::max(), 1)};
-  }
-  Tensor log_prob =
-      rt ? (produce_log_prob
-                ? rt->MakeOutputTensor(1, DataType::FLOAT, scores.shape, log_prob_n_bytes)
-                : rt->MakeTemporaryTensor(DataType::FLOAT, scores.shape, log_prob_n_bytes))
-         : MakeOutputTensor(DataType::FLOAT, scores.shape, log_prob_n_bytes, nullptr);
-  ComputeLogSoftmaxOverClassAxis(scores.AsFloat(), log_prob.AsFloat(), n_batch, n_classes, n_inner);
-
-  const float *log_prob_ptr = log_prob.AsFloat();
-  const float *weights_ptr = weights != nullptr ? weights->AsFloat() : nullptr;
-
-  // Per-sample loss and weight, prior to reduction. Backed by the runtime
-  // allocator when available, falling back to inline storage otherwise.
-  detail::TemporaryTypedBuffer<float> per_sample_loss_buf(
-      static_cast<size_t>(n_loss), allocator, "kernel::SoftmaxCrossEntropyLoss per_sample_loss");
-  detail::TemporaryTypedBuffer<float> per_sample_weight_buf(
-      static_cast<size_t>(n_loss), allocator, "kernel::SoftmaxCrossEntropyLoss per_sample_weight");
-  float *per_sample_loss = per_sample_loss_buf.data();
-  float *per_sample_weight = per_sample_weight_buf.data();
-
-  for (int64_t o = 0; o < n_batch; ++o) {
-    for (int64_t i = 0; i < n_inner; ++i) {
-      const int64_t flat = o * n_inner + i;
-      int64_t label_value;
-      if (labels.data_type == DataType::INT64) {
-        label_value = labels.AsInt64()[static_cast<size_t>(flat)];
-      } else {
-        label_value = static_cast<int64_t>(labels.AsInt32()[static_cast<size_t>(flat)]);
-      }
-
-      if (has_ignore_index && label_value == ignore_index) {
-        per_sample_loss[static_cast<size_t>(flat)] = 0.0f;
-        per_sample_weight[static_cast<size_t>(flat)] = 0.0f;
-        continue;
-      }
-
-      EXT_ENFORCE_INVALID(label_value >= 0 && label_value < n_classes,
-                          "kernel::SoftmaxCrossEntropyLoss: label is out of range [0, C).");
-
-      const int64_t log_prob_offset = (o * n_classes + label_value) * n_inner + i;
-      const float neg_log_prob = -log_prob_ptr[static_cast<size_t>(log_prob_offset)];
-      const float w = weights_ptr != nullptr ? weights_ptr[static_cast<size_t>(label_value)] : 1.0f;
-      per_sample_loss[static_cast<size_t>(flat)] = w * neg_log_prob;
-      per_sample_weight[static_cast<size_t>(flat)] = w;
+        compute_float32(promoted_scores, weights != nullptr ? &promoted_weights : nullptr, false);
+    Tensor demoted_loss = core::runtime::DemoteFromFloat32(loss, scores.data_type, rt);
+    Tensor demoted_log_prob;
+    if (produce_log_prob) {
+      demoted_log_prob = core::runtime::DemoteFromFloat32(log_prob, scores.data_type, rt,
+                                                          std::numeric_limits<int64_t>::max(), 1);
     }
+    return {std::move(demoted_loss), std::move(demoted_log_prob)};
   }
-
-  if (reduction == "none") {
-    const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
-    Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, labels.shape, loss_n_bytes)
-                     : MakeOutputTensor(DataType::FLOAT, labels.shape, loss_n_bytes, nullptr);
-    float *out = loss.AsFloat();
-    for (int64_t k = 0; k < n_loss; ++k) {
-      out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
-    }
-    return std::make_pair(std::move(loss), std::move(log_prob));
-  }
-
-  float sum_loss = 0.0f;
-  float sum_weight = 0.0f;
-  for (int64_t k = 0; k < n_loss; ++k) {
-    sum_loss += per_sample_loss[static_cast<size_t>(k)];
-    sum_weight += per_sample_weight[static_cast<size_t>(k)];
-  }
-
-  float reduced;
-  if (reduction == "sum") {
-    reduced = sum_loss;
-  } else {
-    // "mean": divide by the sum of selected weights. When ``weights`` is not
-    // provided, ``per_sample_weight`` is 1.0 for every contributing sample,
-    // so ``sum_weight`` equals the number of contributing samples.
-    reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
-  }
-
-  const size_t loss_n_bytes = sizeof(float);
-  Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, Shape{}, loss_n_bytes)
-                   : MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, nullptr);
-  loss.AsFloat()[0] = reduced;
-  return std::make_pair(std::move(loss), std::move(log_prob));
+  return compute_float32(scores, weights, true);
 }
 
 void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) {

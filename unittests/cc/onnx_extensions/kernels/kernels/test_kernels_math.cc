@@ -167,6 +167,28 @@ TEST(KernelClass, SoftmaxCrossEntropyLossHalfPrecisionIgnoreIndexAndValidation) 
   }
 }
 
+TEST(KernelClass, SoftmaxCrossEntropyLossHalfPrecisionLossOnlyUsesExecutionScratch) {
+  const KernelContext ctx{DefaultOpset(13)};
+  const onnx_kernels::kernel::SoftmaxCrossEntropyLoss kernel{ctx};
+  const Tensor scores32 = Tensor::FromFloat("", {1, 64}, std::vector<float>(64, 0.0f));
+  const Tensor labels = Tensor::FromInt64("", {1}, {0});
+  const size_t scores_n_bytes = static_cast<size_t>(scores32.element_count()) * sizeof(float);
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    const Tensor scores = core::runtime::DemoteFromFloat32(scores32, dtype);
+    SimpleRawBufferAllocator alloc(8);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
+    rt.set_output_slot_io_roles({false});
+
+    auto [loss, log_prob] = kernel(scores, labels, nullptr, "mean", false, 0, &rt);
+
+    EXPECT_EQ(loss.data_type, dtype);
+    EXPECT_FALSE(log_prob.has_allocation());
+    EXPECT_GE(alloc.PeakAllocatedSize(), 2 * scores_n_bytes + 3 * sizeof(float));
+    const Tensor promoted_loss = core::runtime::PromoteToFloat32(loss);
+    EXPECT_NEAR(promoted_loss.AsFloat()[0], std::log(64.0f), 0.03f);
+  }
+}
+
 TEST(KernelClass, AbsClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};

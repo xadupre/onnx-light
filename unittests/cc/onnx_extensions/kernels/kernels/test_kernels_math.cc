@@ -123,6 +123,50 @@ TEST(KernelClass, NativeLogSoftmaxLegacyDoubleAndHalfAccumulation) {
   EXPECT_THROW(current(empty, 2), std::invalid_argument);
 }
 
+TEST(KernelClass, SoftmaxCrossEntropyLossHalfPrecisionIgnoreIndexAndValidation) {
+  const KernelContext ctx{DefaultOpset(13)};
+  const onnx_kernels::kernel::SoftmaxCrossEntropyLoss kernel{ctx};
+  const Tensor scores32 = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 0.0f));
+  const Tensor weights32 = Tensor::FromFloat("", {2}, {2.0f, 4.0f});
+  const Tensor labels = Tensor::FromInt64("", {2, 2}, {0, -1, 1, 1});
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    const Tensor scores = core::runtime::DemoteFromFloat32(scores32, dtype);
+    const Tensor weights = core::runtime::DemoteFromFloat32(weights32, dtype);
+    for (const std::string reduction : {"none", "sum", "mean"}) {
+      auto [loss, log_prob] = kernel(scores, labels, &weights, reduction, true, -1);
+      EXPECT_EQ(loss.data_type, dtype);
+      EXPECT_EQ(log_prob.data_type, dtype);
+      EXPECT_EQ(log_prob.shape, scores.shape);
+      const Tensor promoted_loss = core::runtime::PromoteToFloat32(loss);
+      const float log_two = std::log(2.0f);
+      const std::vector<float> expected =
+          reduction == "none"  ? std::vector<float>{2 * log_two, 0, 4 * log_two, 4 * log_two}
+          : reduction == "sum" ? std::vector<float>{10 * log_two}
+                               : std::vector<float>{log_two};
+      ASSERT_EQ(loss.element_count(), static_cast<int64_t>(expected.size()));
+      EXPECT_EQ(loss.shape, reduction == "none" ? labels.shape : Shape{});
+      for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_NEAR(promoted_loss.AsFloat()[i], expected[i], 0.03f);
+      }
+      const Tensor promoted_log_prob = core::runtime::PromoteToFloat32(log_prob);
+      for (int64_t i = 0; i < log_prob.element_count(); ++i) {
+        EXPECT_NEAR(promoted_log_prob.AsFloat()[i], -log_two, 0.003f);
+      }
+    }
+    EXPECT_THROW(kernel(scores, labels, &weights32, "mean", true, -1), std::invalid_argument);
+    EXPECT_THROW(kernel(scores, labels, &weights, "invalid", true, -1), std::invalid_argument);
+    for (const auto invalid_label : {-2, 2}) {
+      const Tensor invalid_labels = Tensor::FromInt32("", {2, 2}, {0, invalid_label, 1, 1});
+      EXPECT_THROW(kernel(scores, invalid_labels, &weights, "mean", true, -1),
+                   std::invalid_argument);
+    }
+    const Tensor ignored_labels = Tensor::FromInt64("", {2, 2}, {-1, -1, -1, -1});
+    auto [ignored_loss, ignored_log_prob] =
+        kernel(scores, ignored_labels, nullptr, "mean", true, -1);
+    EXPECT_FLOAT_EQ(core::runtime::PromoteToFloat32(ignored_loss).AsFloat()[0], 0.0f);
+  }
+}
+
 TEST(KernelClass, AbsClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};

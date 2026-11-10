@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -50,8 +51,9 @@ void ComputeLogSoftmaxOverClassAxis(const float *scores, float *log_prob, int64_
 std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
     const Tensor &scores, const Tensor &labels, const Tensor *weights, const std::string &reduction,
     bool has_ignore_index, int64_t ignore_index, RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(scores.data_type == DataType::FLOAT,
-                      "kernel::SoftmaxCrossEntropyLoss only supports FLOAT scores.");
+  EXT_ENFORCE_INVALID(
+      scores.data_type == DataType::FLOAT || core::runtime::IsHalfPrecision(scores.data_type),
+      "kernel::SoftmaxCrossEntropyLoss only supports FLOAT, FLOAT16 and BFLOAT16 scores.");
   EXT_ENFORCE_INVALID(labels.data_type == DataType::INT32 || labels.data_type == DataType::INT64,
                       "kernel::SoftmaxCrossEntropyLoss labels must be INT32 or INT64.");
   EXT_ENFORCE_INVALID(scores.shape.size() >= 2,
@@ -74,8 +76,8 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
                       "with scores shape.");
 
   if (weights != nullptr) {
-    EXT_ENFORCE_INVALID(weights->data_type == DataType::FLOAT,
-                        "kernel::SoftmaxCrossEntropyLoss weights must be FLOAT.");
+    EXT_ENFORCE_INVALID(weights->data_type == scores.data_type,
+                        "kernel::SoftmaxCrossEntropyLoss weights dtype must match scores.");
     EXT_ENFORCE_INVALID(weights->shape.size() == 1 && weights->shape[0] == n_classes,
                         "kernel::SoftmaxCrossEntropyLoss weights must have shape (C).");
   }
@@ -86,6 +88,18 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const bool produce_log_prob =
       rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  if (core::runtime::IsHalfPrecision(scores.data_type)) {
+    const Tensor promoted_scores = core::runtime::PromoteToFloat32(scores, rt);
+    const Tensor promoted_weights =
+        weights != nullptr ? core::runtime::PromoteToFloat32(*weights, rt) : Tensor{};
+    auto [loss, log_prob] =
+        (*this)(promoted_scores, labels, weights != nullptr ? &promoted_weights : nullptr,
+                reduction, has_ignore_index, ignore_index);
+    return {core::runtime::DemoteFromFloat32(loss, scores.data_type, rt),
+            core::runtime::DemoteFromFloat32(log_prob, scores.data_type,
+                                             produce_log_prob ? rt : nullptr,
+                                             std::numeric_limits<int64_t>::max(), 1)};
+  }
   Tensor log_prob =
       rt ? (produce_log_prob
                 ? rt->MakeOutputTensor(1, DataType::FLOAT, scores.shape, log_prob_n_bytes)

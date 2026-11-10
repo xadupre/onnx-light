@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include <cmath>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -36,6 +39,26 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    const std::string suffix = dtype == DataType::FLOAT16 ? "float16" : "bfloat16";
+    Expect(registry, std::move(node), "test_cc_logsoftmax_many_classes_" + suffix,
+           {DefaultOpset(13)}, [dtype]() -> IoData {
+             constexpr int64_t classes = 65536;
+             Tensor input = core::runtime::DemoteFromFloat32(
+                 Tensor::FromFloat("", {1, classes}, std::vector<float>(classes, 0.0f)), dtype);
+             Tensor output = core::runtime::DemoteFromFloat32(
+                 Tensor::FromFloat(
+                     "", {1, classes},
+                     std::vector<float>(classes, -std::log(static_cast<float>(classes)))),
+                 dtype);
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
 
   {

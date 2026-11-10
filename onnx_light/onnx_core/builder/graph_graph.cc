@@ -2538,6 +2538,8 @@ RewritingProto GraphGraph::OptimizeImpl(
             utils::CopyWithSharedTensorStorage(replacement.rewriting.added_nodes());
         for (auto &node : snapshot.ref_node())
           builder_.MaterializeGraphReferences(node);
+        for (auto &node : replacement.rewriting.ref_added_nodes())
+          builder_.MaterializeGraphReferences(node);
         applied.push_back(std::move(replacement.rewriting));
         undo.edits.push_back(std::move(replacement.undo));
       }

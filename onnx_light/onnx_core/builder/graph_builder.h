@@ -1063,7 +1063,6 @@ private:
                       const std::string &name, const char *kind);
 
   std::string name_;
-  std::string graph_attribute_name_;
   bool is_local_function_ = false;
   std::string function_domain_;
   std::vector<std::string> function_attributes_;

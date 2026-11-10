@@ -775,6 +775,65 @@ TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
     EXPECT_NE(opset.domain(), "ai.onnx");
 }
 
+TEST(GraphBuilder, GraphReferenceProvenanceFollowsEachAttributeThroughCopies) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const char *name : {"body", "body_ref"}) {
+    auto &attribute = attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::GRAPH);
+    auto &graph = *attribute.mutable_g();
+    graph.set_name(std::string(name) + "_graph");
+    graph.add_node(MakeNode("Identity", {"x"}, {"branch_result"}));
+    graph.add_output()->set_name("branch_result");
+  }
+  builder.MakeNode("Custom", {"x"}, {"original"}, "custom", "", attributes);
+
+  const NodeProto original = builder.Nodes()[0];
+  ASSERT_EQ(original.attribute(0).name(), "body_ref_ref");
+  ASSERT_EQ(original.attribute(1).name(), "body_ref_ref_ref");
+  NodeProto copied;
+  copied.CopyFrom(original);
+  NodeProto shared = utils::CopyWithSharedTensorStorage(original);
+  NodeProto moved(std::move(shared));
+  builder.MakeNode("Custom", {"x"}, {"copied"}, "custom", "", copied.attribute());
+  builder.MakeNode("Custom", {"x"}, {"moved"}, "custom", "", moved.attribute());
+
+  AttributeProto copied_attribute;
+  copied_attribute.CopyFrom(original.attribute(0));
+  utils::RepeatedProtoField<AttributeProto> single;
+  single.push_back(copied_attribute);
+  builder.MakeNode("Custom", {"x"}, {"single"}, "custom", "", single);
+
+  copied_attribute.set_name("manual_ref");
+  single[0] = copied_attribute;
+  builder.MakeNode("Custom", {"x"}, {"renamed"}, "custom", "", single);
+
+  AttributeProto manual;
+  manual.set_name("body_ref_ref");
+  manual.set_type(AttributeProto::STRING);
+  manual.set_s(original.attribute(0).s().value());
+  single[0] = manual;
+  builder.MakeNode("Custom", {"x"}, {"manual"}, "custom", "", single);
+
+  copied_attribute = original.attribute(0);
+  ASSERT_TRUE(copied_attribute.ParseFromString(manual.SerializeAsString()));
+  single[0] = copied_attribute;
+  builder.MakeNode("Custom", {"x"}, {"parsed"}, "custom", "", single);
+
+  const GraphProto graph = builder.BuildGraph();
+  for (std::size_t i = 0; i < 3; ++i) {
+    ASSERT_EQ(graph.node(i).attribute().size(), 2u);
+    EXPECT_EQ(graph.node(i).attribute(0).name(), "body");
+    EXPECT_EQ(graph.node(i).attribute(1).name(), "body_ref");
+  }
+  EXPECT_EQ(graph.node(3).attribute(0).name(), "body");
+  EXPECT_EQ(graph.node(4).attribute(0).name(), "manual");
+  EXPECT_EQ(graph.node(5).attribute(0).name(), "body_ref");
+  EXPECT_EQ(graph.node(6).attribute(0).name(), "body_ref");
+}
+
 TEST(GraphBuilder, FunctionExportsIgnoreOpsetInsertionOrder) {
   std::vector<FunctionProto> functions;
   for (const bool reversed : {false, true}) {

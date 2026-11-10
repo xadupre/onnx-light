@@ -179,6 +179,26 @@ public:
   }
 };
 
+class MarkIf : public core::builder::PatternOptimization {
+public:
+  MarkIf() : PatternOptimization(1, "MarkIf") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.op_type() == "If" && candidate.name() != "marked"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(*matched[0]);
+    result[0].set_name("marked");
+    return result;
+  }
+};
+
 class ReplaceNestedNegWithScaler : public core::builder::PatternOptimization {
 public:
   ReplaceNestedNegWithScaler() : PatternOptimization(1, "ReplaceNestedNegWithScaler") {}
@@ -1715,6 +1735,53 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   EXPECT_TRUE(branch.Nodes().empty());
   EXPECT_THROW(branch.BuildGraph(), core::builder::BuilderError);
   EXPECT_THROW(builder.ToModel(), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, OptimizerPlansMaterializeGraphReferencesBeforeSerialization) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+  builder.MakeOutput("result");
+  const ModelProto original = builder.ToModel();
+
+  core::builder::GraphGraph optimizer(
+      builder,
+      std::vector<std::shared_ptr<core::builder::PatternOptimization>>{std::make_shared<MarkIf>()});
+  const RewritingProto plan = optimizer.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_EQ(plan.rewrites()[0].added_nodes().size(), 1u);
+  const NodeProto &added = plan.rewrites()[0].added_nodes()[0];
+  ASSERT_EQ(added.attribute().size(), 2u);
+  EXPECT_EQ(added.attribute(0).name(), "then_branch");
+  EXPECT_EQ(added.attribute(1).name(), "else_branch");
+  EXPECT_EQ(added.attribute(0).type(), AttributeProto::GRAPH);
+  EXPECT_EQ(added.attribute(1).type(), AttributeProto::GRAPH);
+
+  RewritingProto serialized;
+  ASSERT_TRUE(serialized.ParseFromString(plan.SerializeAsString()));
+  core::builder::GraphBuilder source(original, SchemaLookup());
+  const auto replayed = source.ApplyRewritings(serialized);
+  const auto replayed_graph = replayed.BuildGraph();
+  ASSERT_EQ(replayed_graph.node().size(), 1u);
+  ASSERT_EQ(replayed_graph.node(0).attribute().size(), 2u);
+  EXPECT_EQ(replayed_graph.node(0).attribute(0).name(), "then_branch");
+  EXPECT_EQ(replayed_graph.node(0).attribute(1).name(), "else_branch");
+  for (const auto &attribute : replayed_graph.node(0).attribute()) {
+    ASSERT_EQ(attribute.type(), AttributeProto::GRAPH);
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    EXPECT_EQ(attribute.g().node(0).op_type(), "Identity");
+  }
 }
 
 TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {

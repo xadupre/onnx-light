@@ -646,6 +646,69 @@ class TestModelDiff(ExtTestCase):
                     ],
                 )
 
+    def test_imported_branches_can_be_swapped_or_shared(self):
+        branches = {
+            op: oh.make_graph(
+                [oh.make_node(op, ["x"], ["branch_y"])],
+                op + "_branch",
+                [],
+                [oh.make_tensor_value_info("branch_y", TensorProto.FLOAT, [2])],
+            )
+            for op in ("Neg", "Relu")
+        }
+        base = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "If",
+                        ["condition"],
+                        ["y"],
+                        then_branch=branches["Neg"],
+                        else_branch=branches["Relu"],
+                    )
+                ],
+                "model",
+                [
+                    oh.make_tensor_value_info("condition", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, [2]),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        values = numpy.array([-2, 3], dtype=numpy.float32)
+        for else_branch in ("Neg", "Relu"):
+            with self.subTest(else_branch=else_branch):
+                builder = GraphBuilder(base)
+                builder.make_node(
+                    "If",
+                    ["condition"],
+                    ["selected"],
+                    attributes={
+                        "then_branch_ref": "Relu_branch",
+                        "else_branch_ref": else_branch + "_branch",
+                    },
+                )
+                builder.make_output("selected")
+                target = builder.to_model()
+                attributes = {
+                    a.name: a.g.node[0].op_type for a in target.graph.node[-1].attribute
+                }
+                self.assertEqual(attributes, {"then_branch": "Relu", "else_branch": else_branch})
+
+                result = ModelProto()
+                result.ParseFromString(target.SerializeToString())
+                for condition in (True, False):
+                    feeds = {"condition": numpy.array(condition), "x": values}
+                    expected = (
+                        numpy.maximum(values, 0)
+                        if condition or else_branch == "Relu"
+                        else -values
+                    )
+                    self.assertEqualArray(
+                        ReferenceEvaluator(result).run(None, feeds)[1], expected
+                    )
+
     def test_internal_subgraph_renaming_is_not_a_semantic_edit(self):
         for repeated, declared_reference in (
             (False, False),

@@ -1814,7 +1814,11 @@ void ValueInfoProto::PrintToStringStream(std::stringstream &ss,
 
 // AttributeProto
 
-IMPLEMENT_PROTO(AttributeProto)
+void AttributeProto::CopyFrom(const AttributeProto &proto) {
+  const auto origin = proto.graph_reference_origin;
+  CopyProtoFrom(*this, proto);
+  graph_reference_origin = origin;
+}
 SerializeSizeResult AttributeProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                   SerializeOptions &options) const {
   SerializeSizeResult size;
@@ -1860,6 +1864,7 @@ void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, type_protos)
 }
 bool AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  graph_reference_origin.reset();
   READ_BEGIN(options, stream, AttributeProto)               //
   READ_FIELD(options, stream, name)                         //
   READ_FIELD(options, stream, ref_attr_name)                //
@@ -1920,7 +1925,13 @@ void AttributeProto::PrintToStringStream(std::stringstream &ss,
 
 // NodeProto
 
-IMPLEMENT_PROTO(NodeProto)
+void NodeProto::CopyFrom(const NodeProto &proto) {
+  NodeProto copied;
+  CopyProtoFrom(copied, proto);
+  for (std::size_t i = 0; i < proto.attribute().size(); ++i)
+    copied.mutable_attribute(i)->graph_reference_origin = proto.attribute(i).graph_reference_origin;
+  *this = std::move(copied);
+}
 SerializeSizeResult NodeProto::SerializeSize(utils::BinaryWriteStream &stream,
                                              SerializeOptions &options) const {
   SerializeSizeResult size;
@@ -3988,7 +3999,8 @@ void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const vo
     COPY_PROTO_CASE(OperatorSetIdProto, OperatorSetIdProto)
     COPY_PROTO_CASE(ValueInfoProto, ValueInfoProto)
     COPY_PROTO_CASE(NodeProto, NodeProto)
-    COPY_PROTO_CASE(AttributeProto, AttributeProto)
+    COPY_PROTO_CASE(AttributeProto, AttributeProto,
+                    to.graph_reference_origin = from.graph_reference_origin;)
     COPY_PROTO_CASE(GraphProto, GraphProto)
     COPY_PROTO_CASE(TensorAnnotation, TensorAnnotation)
     COPY_PROTO_CASE(PersistentBindingProto, PersistentBindingProto)

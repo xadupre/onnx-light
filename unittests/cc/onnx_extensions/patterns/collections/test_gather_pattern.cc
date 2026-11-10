@@ -611,6 +611,21 @@ TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexOnConcreteReshapeEntry)
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(GatherUpstreamPropagationPattern, RejectsEmptyIndexThroughReshapeWithInferredDimension) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("idx", {0}, {}));
+  builder.MakeInitializer(MakeInitializerShape("shape", {2, -1}));
+  builder.MakeNode("Reshape", {"x", "shape"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(0));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherUpstreamPropagationPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
 TEST(GatherUpstreamPropagationPattern, RejectsCoincidentalMiddleReshapeDimension) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({4, 3, 5}));
@@ -679,13 +694,323 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughMatMulBatchDimension) {
   EXPECT_EQ(replacements[2].output()[0].value(), "y");
 }
 
-TEST(GatherUpstreamPropagationPattern, RejectsMatMulContractedAdjacentAxis) {
+TEST(GatherUpstreamPropagationPattern, PropagatesMatMulRowsWithVectorIndices) {
+  for (int64_t axis : {int64_t{1}, int64_t{-2}}) {
+    for (const std::vector<int64_t> &indices :
+         {std::vector<int64_t>{4}, std::vector<int64_t>{-1}, std::vector<int64_t>{4, 0, -2, 4},
+          std::vector<int64_t>{}}) {
+      SCOPED_TRACE(axis);
+      SCOPED_TRACE(indices.size());
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+      builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+      builder.MakeInitializer(
+          MakeInitializer<int64_t>("idx", {static_cast<int64_t>(indices.size())}, indices));
+      builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+      builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(axis));
+      builder.MakeOutput("y");
+
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::GatherUpstreamPropagationPattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[1]);
+      ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+      const auto replacements = pattern.Apply(graph, match.nodes);
+      ASSERT_EQ(replacements.size(), 2u);
+      EXPECT_EQ(replacements[0].op_type().value(), "Gather");
+      EXPECT_EQ(replacements[0].input()[0].value(), "a");
+      EXPECT_EQ(replacements[0].input()[1].value(), "idx");
+      EXPECT_EQ(AxisAttribute(replacements[0]), 1);
+      EXPECT_EQ(replacements[1].op_type().value(), "MatMul");
+      EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
+      EXPECT_EQ(replacements[1].input()[1].value(), "b");
+      EXPECT_EQ(replacements[1].output()[0].value(), "y");
+    }
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, ValidatesEmptyIndexStorage) {
+  for (int32_t type : {TensorProto::INT32, TensorProto::INT64}) {
+    for (int storage = 0; storage < 5; ++storage) {
+      SCOPED_TRACE(type);
+      SCOPED_TRACE(storage);
+      auto indices = MakeInitializer<int64_t>("idx", {0}, {});
+      indices.set_data_type(type);
+      if (storage == 1) {
+        indices.set_raw_data(std::string());
+      } else if (storage == 2) {
+        indices.set_raw_data(std::string(1, '\0'));
+      } else if (storage == 3) {
+        indices.mutable_int64_data()->push_back(0);
+      } else if (storage == 4) {
+        indices.set_data_location(TensorProto::EXTERNAL);
+        auto *location = indices.add_external_data();
+        location->set_key("location");
+        location->set_value("unavailable.bin");
+      }
+
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+      builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+      builder.MakeInitializer(std::move(indices));
+      builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+      builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(1));
+      builder.MakeOutput("y");
+
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::GatherUpstreamPropagationPattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[1]);
+      if (storage < 2) {
+        EXPECT_EQ(match.pattern, &pattern) << match.ToString();
+      } else {
+        EXPECT_EQ(match.pattern, nullptr) << match.ToString();
+      }
+    }
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, MatMulRowsPreserveBatchBroadcasting) {
+  struct Shapes {
+    std::vector<int64_t> lhs;
+    std::vector<int64_t> rhs;
+    int64_t lhs_axis;
+    std::vector<int64_t> output;
+  };
+  for (const auto &shapes :
+       {Shapes{{2, 6, 3}, {1, 3, 4}, 1, {2, 2, 4}}, Shapes{{2, 6, 3}, {2, 3, 4}, 1, {2, 2, 4}},
+        Shapes{{2, 6, 3}, {5, 2, 3, 4}, 1, {5, 2, 2, 4}}, Shapes{{6, 3}, {2, 3, 4}, 0, {2, 2, 4}},
+        Shapes{{1, 6, 3}, {2, 3, 4}, 1, {2, 2, 4}}, Shapes{{6, 3}, {3, 4}, 0, {2, 4}}}) {
+    SCOPED_TRACE(shapes.output.size());
+    SCOPED_TRACE(shapes.lhs_axis);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND(shapes.lhs));
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND(shapes.rhs));
+    builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {5, 0}));
+    builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+    builder.MakeOutput("y");
+
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::GatherUpstreamPropagationPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    ASSERT_FALSE(graph.Optimize().rewrites().empty());
+    ASSERT_EQ(builder.Nodes().size(), 2u);
+    EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Gather");
+    EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "a");
+    EXPECT_EQ(AxisAttribute(builder.Nodes()[0]), shapes.lhs_axis);
+    EXPECT_EQ(builder.Nodes()[1].op_type().value(), "MatMul");
+    EXPECT_EQ(builder.Nodes()[1].input()[0].value(), builder.Nodes()[0].output()[0].value());
+    EXPECT_EQ(builder.Nodes()[1].input()[1].value(), "b");
+    EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "y");
+    const auto &output_shape = builder.GetShape("y").Shape();
+    ASSERT_EQ(output_shape.Rank(), shapes.output.size());
+    for (std::size_t i = 0; i < shapes.output.size(); ++i) {
+      EXPECT_EQ(output_shape[i], core::symbolic::SymDim(shapes.output[i]));
+    }
+    EXPECT_TRUE(graph.Optimize().rewrites().empty());
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, PropagatesNegativeMatMulRowIndexWithSymbolicSequence) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  core::symbolic::SymShape lhs;
+  lhs.PushBack(core::symbolic::SymDim(2));
+  lhs.PushBack(core::symbolic::SymDim("sequence"));
+  lhs.PushBack(core::symbolic::SymDim(3));
+  builder.MakeInput("a", core::symbolic::TensorType::kFloat, lhs);
+  builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {-1}));
+  builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::GatherUpstreamPropagationPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  ASSERT_FALSE(graph.Optimize().rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Gather");
+  EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "a");
+  EXPECT_EQ(builder.Nodes()[0].input()[1].value(), "idx");
+  EXPECT_EQ(AxisAttribute(builder.Nodes()[0]), 1);
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "MatMul");
+  EXPECT_EQ(builder.Nodes()[1].input()[0].value(), builder.Nodes()[0].output()[0].value());
+  EXPECT_EQ(builder.Nodes()[1].input()[1].value(), "b");
+  EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "y");
+  EXPECT_EQ(builder.GetShape("y").Shape(), ShapeND({2, 1, 4}));
+  std::vector<int64_t> indices;
+  ASSERT_TRUE(ReadIntegerValues(*FindInitializer(builder, "idx"), indices));
+  EXPECT_EQ(indices, (std::vector<int64_t>{-1}));
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsNegativeDynamicIndicesOutsideMatMulVectorRows) {
+  for (const std::string variant : {"add", "scalar_row", "batch", "column"}) {
+    SCOPED_TRACE(variant);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    core::symbolic::SymShape lhs;
+    lhs.PushBack(core::symbolic::SymDim("batch"));
+    lhs.PushBack(core::symbolic::SymDim("sequence"));
+    lhs.PushBack(core::symbolic::SymDim(3));
+    core::symbolic::SymShape rhs;
+    rhs.PushBack(core::symbolic::SymDim(3));
+    rhs.PushBack(core::symbolic::SymDim("vocabulary"));
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat, lhs);
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat, rhs);
+    builder.MakeInitializer(MakeInitializer<int64_t>(
+        "idx", variant == "scalar_row" ? std::vector<int64_t>{} : std::vector<int64_t>{1}, {-1}));
+    if (variant == "add") {
+      builder.MakeNode("Add", {"a", "a"}, {"t"});
+    } else {
+      builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    }
+    const int64_t axis = variant == "batch" ? 0 : variant == "column" ? -1 : -2;
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(axis));
+    builder.MakeOutput("y");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GatherUpstreamPropagationPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsNegativeMatMulRowIndexWithZeroSequence) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 0, 3}));
+  builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {-1}));
+  builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherUpstreamPropagationPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsScalarMatMulRowIndices) {
+  for (const auto &rhs : {std::vector<int64_t>{3, 4}, std::vector<int64_t>{2, 3, 4}}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND(rhs));
+    builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {0}));
+    builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+    builder.MakeOutput("y");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GatherUpstreamPropagationPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsDynamicMatMulRowIndices) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+  builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+  builder.MakeInput("idx", core::symbolic::TensorType::kInt64, Shape1D(2));
+  builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherUpstreamPropagationPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsHigherRankMatMulRowIndices) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+  builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1, 1}, {0}));
+  builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherUpstreamPropagationPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsMatMulVectorOperands) {
+  for (bool lhs_vector : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat,
+                      lhs_vector ? Shape1D(3) : ShapeND({2, 6, 3}));
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat,
+                      lhs_vector ? ShapeND({2, 3, 4}) : Shape1D(3));
+    builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
+    builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+    builder.MakeOutput("y");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GatherUpstreamPropagationPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsOutOfRangeMatMulRowIndices) {
+  for (int64_t index : {int64_t{6}, int64_t{-7}}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+    builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {index}));
+    builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+    builder.MakeOutput("y");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GatherUpstreamPropagationPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsSharedExportedOrCapturedMatMulRows) {
+  for (const std::string use : {"shared", "output", "capture"}) {
+    SCOPED_TRACE(use);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+    builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+    builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
+    builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+    builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-2));
+    builder.MakeOutput("y");
+    if (use == "shared") {
+      builder.MakeNode("Identity", {"t"}, {"other"});
+      builder.MakeOutput("other");
+    } else if (use == "output") {
+      builder.MakeOutput("t");
+    } else {
+      auto &body = builder.MakeSubgraph("body");
+      body.MakeNode("Identity", {"t"}, {"captured"});
+      body.MakeOutput("captured");
+      utils::RepeatedProtoField<AttributeProto> attrs;
+      auto &attr = attrs.add();
+      attr.set_name("body_ref");
+      attr.set_type(AttributeProto::STRING);
+      attr.set_s("body");
+      builder.MakeNode("Carrier", {}, {"other"}, "", "", attrs);
+      builder.MakeOutput("other");
+    }
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::GatherUpstreamPropagationPattern pattern;
+    EXPECT_TRUE(graph.IsUsedMoreThanOnce("t"));
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, RejectsMatMulColumnAxis) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({8, 2, 3}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({8, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
   builder.MakeNode("MatMul", {"a", "b"}, {"t"});
-  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(1));
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(-1));
   builder.MakeOutput("y");
 
   core::builder::GraphGraph graph(builder);

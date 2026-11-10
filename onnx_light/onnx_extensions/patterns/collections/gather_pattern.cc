@@ -38,11 +38,20 @@ bool ReadIntTensor(const TensorProto &tensor, std::vector<int64_t> &values, int 
   if (dtype != TensorProto::DataType::INT64 && dtype != TensorProto::DataType::INT32) {
     return false;
   }
-  if (!ReadIntegerValues(tensor, values)) {
-    return false;
-  }
   rank = tensor.dims_size();
-  return true;
+  if (rank == 1 && tensor.dims(0) == 0) {
+    if (tensor.has_segment() || tensor.has_external_data() ||
+        (tensor.has_data_location() && tensor.data_location() != TensorProto::DEFAULT) ||
+        (tensor.is_raw_data() && !tensor.ref_raw_data().empty()) || !tensor.float_data().empty() ||
+        !tensor.int32_data().empty() || !tensor.int64_data().empty() ||
+        !tensor.double_data().empty() || !tensor.uint64_data().empty() ||
+        !tensor.string_data().empty()) {
+      return false;
+    }
+    values.clear();
+    return true;
+  }
+  return ReadIntegerValues(tensor, values);
 }
 
 // A fully resolved plan for rewriting a Gather with a safely representable
@@ -318,6 +327,10 @@ std::optional<ProducerPlan> PlanReshape(core::builder::GraphGraph &graph, const 
       shape_rank != 1 || axis >= static_cast<int64_t>(shape_values.size())) {
     return std::nullopt;
   }
+  if (!is_scalar && new_length == 0 &&
+      std::find(shape_values.begin(), shape_values.end(), int64_t{-1}) != shape_values.end()) {
+    return std::nullopt;
+  }
   const int64_t shape_axis_value = shape_values[static_cast<std::size_t>(axis)];
   if (shape_axis_value < 0) {
     // A negative (inferred) reshape dimension cannot be recomputed locally.
@@ -414,9 +427,19 @@ std::optional<ProducerPlan> PlanMatMul(core::builder::GraphGraph &graph, const N
   if (lhs_shape.Rank() < 2 || rhs_shape.Rank() < 2 || output_rank < 2) {
     return std::nullopt;
   }
+  if (axis == output_rank - 2) {
+    // Keep the row axis: dropping it could turn a batched matrix into a
+    // different matrix (or a vector), changing MatMul's batch broadcasting.
+    if (is_scalar ||
+        lhs_shape[lhs_shape.Rank() - 2] != output_shape[static_cast<std::size_t>(axis)]) {
+      return std::nullopt;
+    }
+    ProducerPlan plan;
+    plan.propagate.emplace_back(0, static_cast<int64_t>(lhs_shape.Rank()) - 2);
+    return plan;
+  }
   if (axis > output_rank - 3) {
-    // Only batch dimensions (strictly before the two trailing, contracted-
-    // adjacent matrix dimensions) are ever propagated.
+    // Column selection is not propagated.
     return std::nullopt;
   }
   const SymShape lhs_batch = DropLastTwo(lhs_shape);
@@ -911,8 +934,13 @@ GatherUpstreamPropagationPattern::Match(core::builder::GraphGraph &graph,
       }
     }
   } else {
+    // A row gather sees exactly the same dimension on both sides of MatMul,
+    // so negative indices retain their meaning (and their runtime bounds checks).
+    const bool preserves_matmul_rows =
+        !is_scalar && IsDefaultOp(*producer, "MatMul") && axis == rank - 2 &&
+        PlanMatMul(graph, *producer, axis, is_scalar, output_shape).has_value();
     for (int64_t value : index_values) {
-      if (value < 0) {
+      if (value < 0 && !preserves_matmul_rows) {
         return NoMatch(candidate,
                        "a negative Gather index cannot be proven safe on a dynamic axis");
       }

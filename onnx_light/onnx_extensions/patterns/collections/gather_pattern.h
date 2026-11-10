@@ -121,11 +121,18 @@ public:
  *     negative (``-1``, inferred) entry, or a scalar index paired with a
  *     non-``0`` entry, is rejected because the new dimension cannot be
  *     recomputed without re-deriving the whole reshape.
- *   - ``MatMul``: only a batch axis (strictly before the last two,
+ *   - ``MatMul``: a batch axis (strictly before the last two,
  *     contracted-adjacent dimensions) is propagated, using the same equal /
  *     broadcast / not-present rule as the pointwise operators, independently
- *     for each of the two inputs. The contracted dimension and the two
- *     matrix dimensions are never touched.
+ *     for each of the two inputs. A vector-index ``Gather`` on the output row
+ *     axis (output rank minus two) is propagated only to the left operand's
+ *     row axis (left rank minus two), leaving the right operand and all batch
+ *     dimensions untouched. Thus ``Gather(A @ B, indices, axis=-2)`` becomes
+ *     ``Gather(A, indices, axis=-2) @ B``, preserving batch broadcasting,
+ *     including ``[B,S,D] @ [D,V]``. Scalar row indices are rejected because
+ *     dropping a matrix axis can change ``MatMul`` semantics. Both operands
+ *     must have rank at least two; column and contracted dimensions are never
+ *     gathered.
  *   - ``Softmax``, ``LayerNormalization``: only a rank-preserving
  *     (vector-index) ``Gather`` strictly before the operator's own reduction
  *     ``axis`` is propagated to the (sole) data input; the reduction ``axis``
@@ -138,7 +145,10 @@ public:
  * would otherwise silently change a value some other part of the graph still
  * relies on at the original size. The ``Gather`` index must be a materialised
  * scalar or 1-D integer constant; a negative index is only accepted when the
- * sliced dimension is statically known and the normalised index is in range.
+ * sliced dimension is statically known and the normalised index is in range,
+ * except for vector-index ``MatMul`` row selection: its input and output row
+ * dimensions are provably identical, so negative indices also preserve their
+ * meaning and runtime bounds checks for a symbolic row dimension.
  */
 class GatherUpstreamPropagationPattern final : public core::builder::PatternOptimization {
 public:

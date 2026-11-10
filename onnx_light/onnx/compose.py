@@ -204,6 +204,7 @@ def merge_models(
         name: Optional name for the combined graph.
         doc_string: Optional doc-string for the combined graph.
         producer_name: Producer name for the combined model.
+                       Default: ``"onnx_light.onnx.compose.merge_models"``.
         producer_version: Producer version string.
         domain: Domain of the combined model.
         model_version: Version of the combined model.  Pass ``None`` to

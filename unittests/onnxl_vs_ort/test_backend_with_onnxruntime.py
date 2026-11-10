@@ -293,6 +293,8 @@ for _case_name in (
     "softmax_cross_entropy_loss_many_classes_bfloat16_sum_log_prob",
     "softmax_cross_entropy_loss_many_classes_bfloat16_sum_weighted",
     "softmax_cross_entropy_loss_many_classes_bfloat16_sum_weighted_log_prob",
+    "instancenorm_bfloat16_large_values",
+    "lrn_bfloat16_large_values",
     "supported_dtype_Acos_BFLOAT16",
     "supported_dtype_Acosh_BFLOAT16",
     "supported_dtype_Asin_BFLOAT16",

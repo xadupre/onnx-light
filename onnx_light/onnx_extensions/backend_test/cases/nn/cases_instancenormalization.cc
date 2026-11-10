@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -49,6 +52,29 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (bool bfloat : {false, true}) {
+    NodeProto node;
+    node.set_op_type("InstanceNormalization");
+    node.add_input("x");
+    node.add_input("s");
+    node.add_input("bias");
+    node.add_output("y");
+    const std::string dtype = bfloat ? "bfloat16" : "float16";
+    Expect(registry, std::move(node), "test_cc_instancenorm_" + dtype + "_large_values", {opset},
+           [bfloat]() -> IoData {
+             const auto make = bfloat ? MakeBfloat16Tensor : MakeFloat16Tensor;
+             std::vector<float> x(256), y(256);
+             // The population mean and variance of 0, 2, ..., 510 are 255 and 21845.
+             for (size_t i = 0; i < x.size(); ++i) {
+               x[i] = static_cast<float>(2 * i);
+               y[i] = (x[i] - 255.0f) / std::sqrt(21845.0f + 1e-5f);
+             }
+             return IoData{{make("", {1, 1, 256}, x, nullptr), make("", {1}, {1.0f}, nullptr),
+                            make("", {1}, {0.0f}, nullptr)},
+                           {make("", {1, 1, 256}, y, nullptr)}};
+           });
   }
 
   // ``instancenorm_example``: 1x2x1x3 input (N=1, C=2, H=1, W=3) with

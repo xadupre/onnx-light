@@ -246,14 +246,12 @@ Consequently, replacing one uncontended mutex is unlikely to change a large
 run from steady state, report whether workers spin or park, and include a small
 softmax case where dispatch overhead is measurable.
 
-Implementation references
--------------------------
+API and implementation references
+---------------------------------
 
 * ``onnx-light``:
-  `CPU executor
-  <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/runtime/tuning/cpu_executor.cc>`_,
-  `persistent thread pool
-  <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/runtime/kernels/parallel_for.cc>`_,
+  :doc:`CPU executor API <../../api/cpp/onnx_core/runtime/cpu_executor>`,
+  :doc:`persistent thread pool API <../../api/cpp/onnx_core/runtime/parallel_for>`,
   and
   :ref:`l-next-steps-session-execution-pools`.
 * ONNX Runtime:

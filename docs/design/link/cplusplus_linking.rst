@@ -6,7 +6,7 @@ Linking *onnx-light* in C++
 The installed CMake package exports small targets under the ``onnx_light::``
 namespace. Public dependencies are propagated, so a consumer links only the
 highest-level feature it needs. See :ref:`l-design-library-split` for the
-dependency graph and :epkg:`C++ onnx-light examples` for complete projects.
+dependency graph and :doc:`C++ onnx-light examples <../../examples_cc/index>` for complete projects.
 
 Install and consume the package
 -------------------------------

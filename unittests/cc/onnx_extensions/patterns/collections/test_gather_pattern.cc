@@ -698,7 +698,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesMatMulRowsWithVectorIndices) {
       core::builder::GraphGraph graph(builder);
       onnx_patterns::GatherUpstreamPropagationPattern pattern;
       const auto match = pattern.Match(graph, builder.Nodes()[1]);
-      ASSERT_EQ(match.pattern, &pattern);
+      ASSERT_EQ(match.pattern, &pattern) << match.ToString();
       const auto replacements = pattern.Apply(graph, match.nodes);
       ASSERT_EQ(replacements.size(), 2u);
       EXPECT_EQ(replacements[0].op_type().value(), "Gather");
@@ -709,6 +709,46 @@ TEST(GatherUpstreamPropagationPattern, PropagatesMatMulRowsWithVectorIndices) {
       EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
       EXPECT_EQ(replacements[1].input()[1].value(), "b");
       EXPECT_EQ(replacements[1].output()[0].value(), "y");
+    }
+  }
+}
+
+TEST(GatherUpstreamPropagationPattern, ValidatesEmptyIndexStorage) {
+  for (int32_t type : {TensorProto::INT32, TensorProto::INT64}) {
+    for (int storage = 0; storage < 5; ++storage) {
+      SCOPED_TRACE(type);
+      SCOPED_TRACE(storage);
+      auto indices = MakeInitializer<int64_t>("idx", {0}, {});
+      indices.set_data_type(type);
+      if (storage == 1) {
+        indices.set_raw_data(std::string());
+      } else if (storage == 2) {
+        indices.set_raw_data(std::string(1, '\0'));
+      } else if (storage == 3) {
+        indices.mutable_int64_data()->push_back(0);
+      } else if (storage == 4) {
+        indices.set_data_location(TensorProto::EXTERNAL);
+        auto *location = indices.add_external_data();
+        location->set_key("location");
+        location->set_value("unavailable.bin");
+      }
+
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({2, 6, 3}));
+      builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({3, 4}));
+      builder.MakeInitializer(std::move(indices));
+      builder.MakeNode("MatMul", {"a", "b"}, {"t"});
+      builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(1));
+      builder.MakeOutput("y");
+
+      core::builder::GraphGraph graph(builder);
+      onnx_patterns::GatherUpstreamPropagationPattern pattern;
+      const auto match = pattern.Match(graph, builder.Nodes()[1]);
+      if (storage < 2) {
+        EXPECT_EQ(match.pattern, &pattern) << match.ToString();
+      } else {
+        EXPECT_EQ(match.pattern, nullptr) << match.ToString();
+      }
     }
   }
 }

@@ -38,11 +38,20 @@ bool ReadIntTensor(const TensorProto &tensor, std::vector<int64_t> &values, int 
   if (dtype != TensorProto::DataType::INT64 && dtype != TensorProto::DataType::INT32) {
     return false;
   }
-  if (!ReadIntegerValues(tensor, values)) {
-    return false;
-  }
   rank = tensor.dims_size();
-  return true;
+  if (rank == 1 && tensor.dims(0) == 0) {
+    if (tensor.has_segment() || tensor.has_external_data() ||
+        (tensor.has_data_location() && tensor.data_location() != TensorProto::DEFAULT) ||
+        (tensor.is_raw_data() && !tensor.ref_raw_data().empty()) || !tensor.float_data().empty() ||
+        !tensor.int32_data().empty() || !tensor.int64_data().empty() ||
+        !tensor.double_data().empty() || !tensor.uint64_data().empty() ||
+        !tensor.string_data().empty()) {
+      return false;
+    }
+    values.clear();
+    return true;
+  }
+  return ReadIntegerValues(tensor, values);
 }
 
 // A fully resolved plan for rewriting a Gather with a safely representable

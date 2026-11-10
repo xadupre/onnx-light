@@ -728,6 +728,28 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(node_types(optimized), ["Gather", "Gather", "MatMul"])
         self.assert_equivalent(model, optimized, feeds)
 
+    def test_gather_upstream_propagation_empty_matmul_rows(self):
+        for index_type in (TensorProto.INT32, TensorProto.INT64):
+            with self.subTest(index_type=index_type):
+                model = make_model(
+                    [
+                        oh.make_node("MatMul", ["A", "B"], ["T"]),
+                        oh.make_node("Gather", ["T", "indices"], ["Y"], axis=1),
+                    ],
+                    [
+                        make_value_info("A", TensorProto.FLOAT, [2, 6, 3]),
+                        make_value_info("B", TensorProto.FLOAT, [3, 4]),
+                    ],
+                    [make_value_info("Y", TensorProto.FLOAT, [2, 0, 4])],
+                    [oh.make_tensor("indices", index_type, [0], [])],
+                )
+                optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+                self.assertEqual(len(rewrites), 1)
+                self.assertEqual(node_types(optimized), ["Gather", "MatMul"])
+                self.assert_equivalent(
+                    model, optimized, {"A": make_range(2, 6, 3), "B": make_range(3, 4)}
+                )
+
     def test_gather_upstream_propagation_softmax_before_reduction_axis(self):
         model = make_model(
             [

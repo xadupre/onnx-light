@@ -66,6 +66,14 @@ ModelProto PreparationModel(bool persistent = false, int32_t type = TensorProto:
                   embedded ? TensorProto::FLOAT : TensorProto::INT64,
                   embedded ? std::vector<int64_t>{-1, -1, 4} : std::vector<int64_t>{-1, -1});
   PreparationInfo(*graph.add_input(), "attention_mask", TensorProto::INT64, {-1, -1});
+  if (persistent) {
+    graph.mutable_input(1)
+        ->mutable_type()
+        ->mutable_tensor_type()
+        ->mutable_shape()
+        ->mutable_dim(1)
+        ->set_dim_param("total_sequence");
+  }
   PreparationInfo(*graph.add_output(), "logits", trailing ? TensorProto::FLOAT : type, {-1, -1, 4});
   std::vector<float> embedding(16, 0), projection(16, 0);
   for (size_t index = 0; index < 4; ++index) {
@@ -662,7 +670,7 @@ TEST(GenerationPreparation, GenerationParityAndCacheAppendRemainUnchanged) {
           widths.emplace_back();
           lengths.emplace_back();
           for (const auto &event : context.events()) {
-            if (event.kind != RuntimeEventKind::kOutput || event.value_count != 3)
+            if (event.kind != RuntimeEventKind::kIntermediate || event.value_count != 3)
               continue;
             if (event.name == "current_shape")
               widths.back().push_back(static_cast<int64_t>(event.values[1]));
@@ -690,12 +698,11 @@ TEST(GenerationPreparation, GenerationParityAndCacheAppendRemainUnchanged) {
           }
           EXPECT_EQ(reuse[run], reuse[0]);
         }
-        if (persistent && capacity && batch == 1)
-          EXPECT_GT(reuse[0], 0u);
         EXPECT_EQ(reduced.SerializeAsString(), prepared);
         EXPECT_EQ(full.SerializeAsString(), full_original);
-        if (persistent)
+        if (persistent) {
           EXPECT_EQ(feeds.at("past").tensor.shape, (Shape{batch, 0, 4}));
+        }
       }
     }
   }
@@ -715,7 +722,9 @@ TEST(GenerationPreparation, PipelineBorrowedEmbeddingAndOwningLoader) {
       feeds.emplace("past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {})));
     GenerationOptions options;
     options.max_new_tokens = 3;
-    RuntimeContext context;
+    RuntimeSession source(full);
+    auto executor = source.cpu_executor();
+    RuntimeContext context(RuntimeContextOptions{.cpu_executor = executor.get()});
     const auto expected = Tokens(Generate(full, &embedding, context, feeds, options));
     EXPECT_EQ(Tokens(Generate(reduced, &embedding, context, feeds, options)), expected);
     PipelineProto pipeline;

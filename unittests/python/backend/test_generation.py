@@ -17,8 +17,16 @@ runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 add_quantization_parameters = import_or_skip(
     "onnx_light.onnx_core.quantization", "add_quantization_parameters"
 )
-ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
-prepare_generation_model = import_or_skip("onnx_light.onnx.reference", "prepare_generation_model")
+reference = import_or_skip("onnx_light.onnx.reference")
+ReferenceEvaluator = reference.ReferenceEvaluator
+prepare_generation_model = reference.prepare_generation_model
+
+
+def _parse_model(data):
+    """Parses a serialized model."""
+    model = onnx.ModelProto()
+    model.ParseFromString(data)
+    return model
 
 
 def transition_model(dtype=numpy.float32):
@@ -103,19 +111,19 @@ class TestGeneration(ExtTestCase):
             ir_version=10,
         )
         original = model.SerializeToString()
-        reduced = onnx.load_model_from_string(original)
+        reduced = _parse_model(original)
         self.assertIsNone(prepare_generation_model(reduced))
         self.assertEqual(model.SerializeToString(), original)
         # Exercises the exported graph, rather than a runtime-only shortcut.
-        reduced = onnx.load_model_from_string(reduced.SerializeToString())
+        reduced = _parse_model(reduced.SerializeToString())
         self.assertEqual(reduced.graph.output[0].type.tensor_type.shape.dim[1].dim_value, 1)
         full_session = ReferenceEvaluator(model)
         reduced_session = ReferenceEvaluator(reduced)
-        alias_model = onnx.load_model_from_string(original)
+        alias_model = _parse_model(original)
         alias_model.opset_import[0].domain = "ai.onnx"
         prepare_generation_model(alias_model)
         alias_session = ReferenceEvaluator(alias_model)
-        conflicting = onnx.load_model_from_string(original)
+        conflicting = _parse_model(original)
         conflicting.opset_import.append(oh.make_opsetid("ai.onnx", 22))
         conflicting_original = conflicting.SerializeToString()
         with self.assertRaises(ValueError):

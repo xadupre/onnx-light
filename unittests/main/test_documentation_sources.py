@@ -27,6 +27,7 @@ class TestDocumentationSources(unittest.TestCase):
             "design/link/cplusplus_linking.rst",
             "design/proto/differences.rst",
             "md/pattern_optimization_comparison.md",
+            "misc/technical/thread_pools.rst",
         ):
             source = self.ROOT / "docs" / name
             text = source.read_text(encoding="utf-8")
@@ -41,9 +42,16 @@ class TestDocumentationSources(unittest.TestCase):
                         path = path.with_suffix(".rst")
                     self.assertTrue(path.is_file(), path)
 
+    def test_thread_pool_references_use_local_api(self):
+        source = self.ROOT / "docs/misc/technical/thread_pools.rst"
+        text = source.read_text(encoding="utf-8")
+        for name in ("cpu_executor", "parallel_for"):
+            self.assertIn(f"<../../api/cpp/onnx_core/runtime/{name}>`", text)
+        self.assertNotIn("https://github.com/xadupre/onnx-light/", text)
+
     def test_source_links_preserve_github_browsing(self):
         docs = self.ROOT / "docs"
-        sources = [docs / "quick_tour.rst", docs / "misc/technical/thread_pools.rst"]
+        sources = [docs / "quick_tour.rst"]
         for name in (
             "aidge_onnx_light",
             "build_save_load_onnx_proto",

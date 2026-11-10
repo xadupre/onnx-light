@@ -20,6 +20,7 @@ from onnx_light import __version__, onnx
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto
+from onnx_light.onnx.external_data_helper import load_external_data_for_model
 from onnx_light.onnx.reference import ReferenceEvaluator, prepare_generation_model
 
 
@@ -79,7 +80,8 @@ def synthetic_model():
 
 def load_artifacts(model_path, feeds_path):
     """Loads an exported model and explicit, pickle-free prefill inputs."""
-    model = onnx.load(model_path)
+    model = onnx.load(model_path, load_external_data=True)
+    load_external_data_for_model(model, os.path.dirname(os.path.abspath(model_path)))
     with numpy.load(feeds_path, allow_pickle=False) as archive:
         feeds = {name: archive[name] for name in archive.files}
     expected = {value.name for value in model.graph.input}
@@ -170,10 +172,15 @@ def head_cases(model, feeds, threads):
                     terminal.input[0], oh.np_dtype_to_tensor_dtype(values.dtype), values.shape
                 )
             ],
-            [clone_proto(logits)],
+            [
+                oh.make_tensor_value_info(
+                    "logits",
+                    logits.type.tensor_type.elem_type,
+                    [values.shape[0], values.shape[1], weight.shape[1]],
+                )
+            ],
             [head_weight],
         )
-        graph.output[0].type.tensor_type.shape.dim[1].dim_value = values.shape[1]
         head = oh.make_model(
             graph, opset_imports=list(model.opset_import), ir_version=model.ir_version
         )

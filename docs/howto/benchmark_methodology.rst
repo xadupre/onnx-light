@@ -85,12 +85,18 @@ in-memory copy:
 .. code-block:: python
 
     from onnx_light import onnx
+    from onnx_light.onnx.external_data_helper import load_external_data_for_model
     from onnx_light.onnx.reference import prepare_generation_model
 
-    full_model = onnx.load("export/model.onnx")
+    full_model = onnx.load("export/model.onnx", load_external_data=True)
+    load_external_data_for_model(full_model, "export")
     generation_model = onnx.ModelProto()
     generation_model.CopyFrom(full_model)
     prepare_generation_model(generation_model, logits_name="logits")
+
+Explicit external-data loading materializes modelbuilder's weight sidecars.
+The native external-data helper also removes external descriptors, making
+serialization self-contained for ORT sessions constructed from model bytes.
 
 The native API mutates that copy in place, selecting the last hidden-state
 position before the terminal rank-3 MatMul (including a supported trailing

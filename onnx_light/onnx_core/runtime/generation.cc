@@ -573,8 +573,13 @@ void PrepareGenerationModel(ModelProto &model, const std::string &logits_name) {
                       "PrepareGenerationModel: logits must have floating rank-three metadata.");
   int64_t opset = 0;
   for (const auto &import : model.opset_import())
-    if (import.domain().empty())
+    if (StandardDomain(import.domain())) {
+      EXT_ENFORCE_INVALID(import.version() >= 11,
+                          "PrepareGenerationModel: requires standard opset >= 11.");
+      EXT_ENFORCE_INVALID(opset == 0 || opset == import.version(),
+                          "PrepareGenerationModel: conflicting standard opset imports.");
       opset = import.version();
+    }
   EXT_ENFORCE_INVALID(opset >= 11, "PrepareGenerationModel: requires standard opset >= 11.");
   for (const auto &function : model.functions())
     EXT_ENFORCE_INVALID(

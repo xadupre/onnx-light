@@ -111,6 +111,16 @@ class TestGeneration(ExtTestCase):
         self.assertEqual(reduced.graph.output[0].type.tensor_type.shape.dim[1].dim_value, 1)
         full_session = ReferenceEvaluator(model)
         reduced_session = ReferenceEvaluator(reduced)
+        alias_model = onnx.load_model_from_string(original)
+        alias_model.opset_import[0].domain = "ai.onnx"
+        prepare_generation_model(alias_model)
+        alias_session = ReferenceEvaluator(alias_model)
+        conflicting = onnx.load_model_from_string(original)
+        conflicting.opset_import.append(oh.make_opsetid("ai.onnx", 22))
+        conflicting_original = conflicting.SerializeToString()
+        with self.assertRaises(ValueError):
+            prepare_generation_model(conflicting)
+        self.assertEqual(conflicting.SerializeToString(), conflicting_original)
         for tokens, mask in [
             ([[0, 1, 2]], [[1, 1, 1]]),
             ([[0, 0, 1], [1, 2, 0]], [[0, 1, 1], [1, 1, 1]]),
@@ -122,6 +132,9 @@ class TestGeneration(ExtTestCase):
             }
             self.assertEqualArray(
                 full_session.run(None, feeds)[0][:, -1:, :], reduced_session.run(None, feeds)[0]
+            )
+            self.assertEqualArray(
+                reduced_session.run(None, feeds)[0], alias_session.run(None, feeds)[0]
             )
             for _ in range(2):
                 self.assertEqualArray(

@@ -750,7 +750,7 @@ TEST(GenerationPreparation, NativeAttentionPrefillAndDecodeParity) {
     SCOPED_TRACE(test.name);
     auto &model = test.model();
     auto &graph = *model.mutable_graph();
-    graph.mutable_node(graph.node().size() - 1)->set_output(0, "attention_hidden");
+    *graph.mutable_node(graph.node().size() - 1)->mutable_output(0) = "attention_hidden";
     TensorProto &projection = *graph.add_initializer();
     projection.set_name("attention_projection");
     projection.set_data_type(TensorProto::FLOAT);
@@ -854,7 +854,7 @@ TEST(GenerationPreparation, RejectsUnsupportedAndSharedHeadsBeforeMutation) {
   reject(model, "missing");
   reject(model, "");
   model.mutable_graph()->mutable_output(0)->set_name("scores");
-  model.mutable_graph()->mutable_node(2)->set_output(0, "scores");
+  *model.mutable_graph()->mutable_node(2)->mutable_output(0) = "scores";
   PrepareGenerationModel(model, "scores");
   EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim(1).dim_value(), 1);
 }

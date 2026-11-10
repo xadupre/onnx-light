@@ -239,6 +239,9 @@ float Reconstructed(const Geometry &g, const std::array<const uint8_t *, 3> &dat
 
 void CheckReconstruction(const Geometry &g, const std::array<const uint8_t *, 3> &data,
                          bool native = false) {
+  // Validated finite FP16 parameters cannot overflow FLOAT with a 4-bit code.
+  if (g.fields[2].type == TensorProto::FLOAT16)
+    return;
   for (size_t n = 0; n < static_cast<size_t>(g.n); ++n)
     for (size_t k = 0; k < static_cast<size_t>(g.k); ++k)
       Reconstructed(g, data, n, k, native);

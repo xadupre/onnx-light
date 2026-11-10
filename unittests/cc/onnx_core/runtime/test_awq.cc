@@ -4,9 +4,11 @@
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
+#include <cmath>
 #include <cstring>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -269,6 +271,54 @@ TEST(AwqWeights, PreservesBfloat16AndChecksReconstructionOverflow) {
   (*malformed.mutable_raw_data())[scale_offset] = static_cast<char>(largest);
   (*malformed.mutable_raw_data())[scale_offset + 1] = static_cast<char>(largest >> 8);
   EXPECT_ANY_THROW(UnpackAwqCodes(malformed));
+  EXPECT_ANY_THROW(ExportAwqWeights(malformed));
+  EXPECT_ANY_THROW(ReconstructAwqWeights(malformed));
+}
+
+TEST(AwqWeights, ValidatesFloat16ParametersWithoutReconstructionPass) {
+  for (const std::string variant : {"gemm", "gemv", "gemv_fast", "llm-awq"}) {
+    SCOPED_TRACE(variant);
+    auto checkpoint = Fixture(variant);
+    auto &scales = checkpoint.tensors.at("scales");
+    const uint16_t largest = 0x7bff;
+    for (size_t i = 0; i < scales.size_bytes(); i += 2)
+      std::memcpy(scales.mutable_bytes() + i, &largest, 2);
+    const char *zero_name = variant == "llm-awq" ? "scaled_zeros" : "qzeros";
+    if (variant == "gemv_fast" || variant == "llm-awq") {
+      auto &zeros = checkpoint.tensors.at(zero_name);
+      const uint16_t smallest = 0xfbff;
+      for (size_t i = 0; i < zeros.size_bytes(); i += 2)
+        std::memcpy(zeros.mutable_bytes() + i, &smallest, 2);
+    }
+
+    auto encoded = ImportAwqWeights(checkpoint);
+    EXPECT_NO_THROW(ExportAwqWeights(encoded));
+    EXPECT_NO_THROW(UnpackAwqCodes(encoded));
+    const Tensor reconstructed = ReconstructAwqWeights(encoded);
+    for (size_t i = 0; i < reconstructed.size_bytes(); i += sizeof(float)) {
+      float value;
+      std::memcpy(&value, reconstructed.bytes() + i, sizeof(float));
+      EXPECT_TRUE(std::isfinite(value));
+    }
+
+    if (variant == "gemv_fast" || variant == "llm-awq") {
+      auto invalid_zero = encoded;
+      const size_t zero_offset = checkpoint.tensors.at("qweight").size_bytes();
+      (*invalid_zero.mutable_raw_data())[zero_offset] = 0;
+      (*invalid_zero.mutable_raw_data())[zero_offset + 1] = '\x7c';
+      EXPECT_THROW(ExportAwqWeights(invalid_zero), std::invalid_argument);
+      EXPECT_THROW(UnpackAwqCodes(invalid_zero), std::invalid_argument);
+      EXPECT_THROW(ReconstructAwqWeights(invalid_zero), std::invalid_argument);
+    }
+
+    const size_t scale_offset = checkpoint.tensors.at("qweight").size_bytes() +
+                                checkpoint.tensors.at(zero_name).size_bytes();
+    (*encoded.mutable_raw_data())[scale_offset] = 0;
+    (*encoded.mutable_raw_data())[scale_offset + 1] = '\x7c';
+    EXPECT_THROW(ExportAwqWeights(encoded), std::invalid_argument);
+    EXPECT_THROW(UnpackAwqCodes(encoded), std::invalid_argument);
+    EXPECT_THROW(ReconstructAwqWeights(encoded), std::invalid_argument);
+  }
 }
 
 TEST(AwqWeights, SupportsSmallGroupPaddingAndRejectsImpossiblePackingDimensions) {

@@ -16,6 +16,23 @@ HAS_KERNELS = importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is n
 
 class TestGraphBuilderKernelImport(ExtTestCase):
     @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
+    def test_runtime_tensor_reuses_backend_registration(self):
+        script = textwrap.dedent("""
+            from onnx_light.onnx_py._onnxpykernels import runtime
+            from onnx_light.onnx_py._onnxpybackend import backend_test
+
+            assert runtime.Tensor is backend_test.Tensor
+            assert isinstance(runtime.Tensor(), backend_test.Tensor)
+            """)
+        result = subprocess.run(
+            [sys.executable, "-W", "error::RuntimeWarning", "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
     def test_shape_concat_folds_without_evaluator_import(self):
         script = textwrap.dedent("""
             import importlib.abc

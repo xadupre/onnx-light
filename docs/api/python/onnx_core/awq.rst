@@ -1,5 +1,5 @@
 onnx_light.onnx_core.awq
-======================
+========================
 
 .. automodule:: onnx_light.onnx_core.awq
     :members:

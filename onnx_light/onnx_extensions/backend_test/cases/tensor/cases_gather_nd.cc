@@ -60,6 +60,19 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  {
+    Expect(registry, MakeGatherNDNode(1, true), "test_cc_gathernd_selected_kv_int32_indices",
+           {DefaultOpset(29)}, []() -> IoData {
+             Tensor data =
+                 Tensor::FromFloat("", {2, 4, 3}, {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+                                                   12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23});
+             Tensor indices = Tensor::FromInt32("", {2, 1, 2, 1}, {0, 2, 1, -1});
+             Tensor output =
+                 Tensor::FromFloat("", {2, 1, 2, 3}, {0, 1, 2, 6, 7, 8, 15, 16, 17, 21, 22, 23});
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
+  }
+
   // test_cc_gathernd_example_int32 — mirrors upstream
   // ``test_gathernd_example_int32`` (2x2 data with k_last == rank).
   {

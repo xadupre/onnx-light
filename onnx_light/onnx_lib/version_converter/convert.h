@@ -27,6 +27,7 @@
 #include "onnx_lib/version_converter/adapters/batch_normalization_13_14.h"
 #include "onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h"
 #include "onnx_lib/version_converter/adapters/broadcast_forward_compatibility.h"
+#include "onnx_lib/version_converter/adapters/cast_28_27.h"
 #include "onnx_lib/version_converter/adapters/cast_9_8.h"
 #include "onnx_lib/version_converter/adapters/clip_10_11.h"
 #include "onnx_lib/version_converter/adapters/compatible.h"
@@ -39,6 +40,7 @@
 #include "onnx_lib/version_converter/adapters/group_normalization_20_21.h"
 #include "onnx_lib/version_converter/adapters/group_normalization_21_20.h"
 #include "onnx_lib/version_converter/adapters/maxpool_8_7.h"
+#include "onnx_lib/version_converter/adapters/nd_indices_29_28.h"
 #include "onnx_lib/version_converter/adapters/no_previous_version.h"
 #include "onnx_lib/version_converter/adapters/optional_ops.h"
 #include "onnx_lib/version_converter/adapters/pad_10_11.h"
@@ -1178,6 +1180,7 @@ public:
         std::make_unique<ReduceLogSum_27_28>("ReduceLogSumExp", reduce_log_sum_28_unallowed_types));
 
     /******** 28 -> 27 ********/
+    registerAdapter(std::make_unique<Cast_28_27>());
     const std::vector<TensorProto_DataType> optional_28_unallowed_types = {
         TensorProto_DataType_BFLOAT16,       TensorProto_DataType_FLOAT8E4M3FN,
         TensorProto_DataType_FLOAT8E4M3FNUZ, TensorProto_DataType_FLOAT8E5M2,
@@ -1199,9 +1202,13 @@ public:
 
     /******** 28 -> 29 ********/
     registerAdapter(std::make_unique<CompatibleAdapter>("Gemm", OpSetID(28), OpSetID(29)));
+    registerAdapter(std::make_unique<CompatibleAdapter>("GatherND", OpSetID(28), OpSetID(29)));
+    registerAdapter(std::make_unique<CompatibleAdapter>("ScatterND", OpSetID(28), OpSetID(29)));
 
     /******** 29 -> 28 ********/
     registerAdapter(std::make_unique<Gemm_29_28>());
+    registerAdapter(std::make_unique<NDIndices_29_28>("GatherND"));
+    registerAdapter(std::make_unique<NDIndices_29_28>("ScatterND"));
   }
 
   ModelProto convert_version(const ModelProto &mp_in, const OpSetID &initial_version,

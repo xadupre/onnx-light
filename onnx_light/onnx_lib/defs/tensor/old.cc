@@ -20,6 +20,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+ONNX_OPERATOR_SET_SCHEMA(GatherND, 13, GatherNDSchema(false));
+ONNX_OPERATOR_SET_SCHEMA(ScatterND, 18, ScatterNDSchema(false));
+
 ONNX_OPERATOR_SET_SCHEMA(
     Cast, 25,
     OpSchema()

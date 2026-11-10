@@ -1505,6 +1505,10 @@ output = [
 }
 
 std::string MakeGatherNDDoc(int since_version) {
+  if (since_version >= 29) {
+    return MakeGatherNDDoc(13) +
+           "\nOpset 29 adds support for int32 indices; int64 indices remain supported.\n";
+  }
   if (since_version <= 11) {
     return R"DOC(
 Given `data` tensor of rank `r` >= 1, and `indices` tensor of rank `q` >= 1, this operator gathers
@@ -2232,6 +2236,10 @@ Example 2:
 }
 
 std::string MakeScatterNDDoc(int since_version) {
+  if (since_version >= 29) {
+    return MakeScatterNDDoc(18) +
+           "\nOpset 29 adds support for int32 indices; int64 indices remain supported.\n";
+  }
   if (since_version <= 13) {
     return R"DOC(
 ScatterND takes three inputs `data` tensor of rank r >= 1, `indices` tensor of rank q >= 1,

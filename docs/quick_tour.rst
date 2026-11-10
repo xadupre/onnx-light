@@ -125,16 +125,16 @@ Kernels
 
 Kernels are kept simple, with a dispatch mechanism to support all types.
 See the current implementation of a
-:download:`simple kernel <../onnx_light/onnx_extensions/kernels/kernels/logical/kernel_not.cc>`
+`simple kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/logical/kernel_not.cc>`_
 and a
-:download:`type-dispatching kernel <../onnx_light/onnx_extensions/kernels/kernels/math/kernel_elu.cc>`.
+`type-dispatching kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/math/kernel_elu.cc>`_.
 
 Backend tests
 +++++++++++++
 
 They are very similar to the existing ones, except they do not write any
 file. See the current
-:download:`Where backend tests <../onnx_light/onnx_extensions/backend_test/cases/logical/cases_where.cc>`.
+`Where backend tests <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/backend_test/cases/logical/cases_where.cc>`_.
 
 Running models
 ++++++++++++++
@@ -214,7 +214,7 @@ may differ.
     :alt: Symbolic expressions
 
 See the current
-:download:`symbolic-expression tests <../unittests/cc/onnx_extensions/shapes/test_expressions.cc>`.
+`symbolic-expression tests <https://github.com/xadupre/onnx-light/blob/main/unittests/cc/onnx_extensions/shapes/test_expressions.cc>`_.
 
 Next steps
 ++++++++++

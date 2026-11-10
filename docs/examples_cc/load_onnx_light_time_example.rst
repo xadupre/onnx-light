@@ -4,8 +4,7 @@ Standalone C++ example: load an ONNX file with onnx_light
 =========================================================
 
 This page documents ``examples/load_onnx_light_time``
-(:download:`source <../../examples/load_onnx_light_time/main.cc>`,
-:download:`CMake project <../../examples/load_onnx_light_time/CMakeLists.txt>`),
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/load_onnx_light_time>`_),
 a self-contained CMake
 project that demonstrates how to consume *onnx-light* as an installed C++
 library, repeatedly load an ONNX file, and print timing statistics together

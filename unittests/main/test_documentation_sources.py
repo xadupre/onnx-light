@@ -16,7 +16,7 @@ class TestDocumentationSources(unittest.TestCase):
             with self.subTest(source=source.relative_to(self.ROOT)):
                 text = source.read_text(encoding="utf-8")
                 self.assertNotRegex(
-                    text, r"https://github\.com/xadupre/onnx-light/(?:blob|tree)/main/"
+                    text, r"https://github\.com/xadupre/onnx-light/(?:blob|tree)/main/docs/"
                 )
                 self.assertNotIn(":epkg:`C++ onnx-light examples`", text)
 
@@ -41,7 +41,7 @@ class TestDocumentationSources(unittest.TestCase):
                         path = path.with_suffix(".rst")
                     self.assertTrue(path.is_file(), path)
 
-    def test_relative_source_downloads(self):
+    def test_source_links_preserve_github_browsing(self):
         docs = self.ROOT / "docs"
         sources = [docs / "quick_tour.rst", docs / "misc/technical/thread_pools.rst"]
         for name in (
@@ -57,19 +57,23 @@ class TestDocumentationSources(unittest.TestCase):
         ):
             source = docs / "examples_cc" / f"{name}_example.rst"
             text = source.read_text(encoding="utf-8")
-            for filename in ("main.cc", "CMakeLists.txt"):
-                self.assertIn(f"<../../examples/{name}/{filename}>`", text)
+            self.assertIn(
+                f"<https://github.com/xadupre/onnx-light/tree/main/examples/{name}>`_", text
+            )
             sources.append(source)
         for source in sources:
             text = source.read_text(encoding="utf-8")
-            targets = re.findall(r":download:`[^`<>]*<([^<>]+)>`", text)
+            self.assertNotIn(":download:", text)
+            targets = re.findall(
+                r"<https://github\.com/xadupre/onnx-light/(?:blob|tree)/main/([^<>]+)>`_", text
+            )
             self.assertTrue(targets, source)
             for target in targets:
                 with self.subTest(source=source.relative_to(docs), target=target):
                     self.assertFalse(Path(target).is_absolute())
-                    path = (source.parent / target).resolve()
+                    path = (self.ROOT / target).resolve()
                     self.assertTrue(path.is_relative_to(self.ROOT))
-                    self.assertTrue(path.is_file(), path)
+                    self.assertTrue(path.exists(), path)
 
     def test_api_heading_underlines(self):
         for source, title, adornment in [

@@ -4,8 +4,7 @@ Standalone C++ example: register a new kernel for an existing operator
 ======================================================================
 
 This page documents ``examples/register_custom_kernel``
-(:download:`source <../../examples/register_custom_kernel/main.cc>`,
-:download:`CMake project <../../examples/register_custom_kernel/CMakeLists.txt>`),
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/register_custom_kernel>`_),
 a self-contained CMake project that shows how to implement a brand-new C++
 kernel **class** for an operator that onnx-light already ships, install it into
 onnx-light's shared kernel dispatch table, run a model that uses that operator

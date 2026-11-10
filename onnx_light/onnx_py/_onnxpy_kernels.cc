@@ -1135,6 +1135,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   auto rt_mod = m.def_submodule("runtime");
   rt_mod.attr("Shape") =
       nb::module_::import_("onnx_light.onnx_py._onnxpycore").attr("shape_inference").attr("Shape");
+  rt_mod.attr("Tensor") =
+      nb::module_::import_("onnx_light.onnx_py._onnxpybackend").attr("backend_test").attr("Tensor");
 
   nb::class_<core::runtime::TensorStatistics>(rt_mod, "TensorStatistics",
                                               "Describes a numeric or quantized tensor.")

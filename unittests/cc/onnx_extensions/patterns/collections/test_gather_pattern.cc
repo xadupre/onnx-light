@@ -611,6 +611,21 @@ TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexOnConcreteReshapeEntry)
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(GatherUpstreamPropagationPattern, RejectsEmptyIndexThroughReshapeWithInferredDimension) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("idx", {0}, {}));
+  builder.MakeInitializer(MakeInitializerShape("shape", {2, -1}));
+  builder.MakeNode("Reshape", {"x", "shape"}, {"t"});
+  builder.MakeNode("Gather", {"t", "idx"}, {"y"}, "", "", AxisAttrs(0));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherUpstreamPropagationPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
 TEST(GatherUpstreamPropagationPattern, RejectsCoincidentalMiddleReshapeDimension) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({4, 3, 5}));

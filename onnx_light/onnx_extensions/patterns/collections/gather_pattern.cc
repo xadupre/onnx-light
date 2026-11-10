@@ -327,6 +327,10 @@ std::optional<ProducerPlan> PlanReshape(core::builder::GraphGraph &graph, const 
       shape_rank != 1 || axis >= static_cast<int64_t>(shape_values.size())) {
     return std::nullopt;
   }
+  if (!is_scalar && new_length == 0 &&
+      std::find(shape_values.begin(), shape_values.end(), int64_t{-1}) != shape_values.end()) {
+    return std::nullopt;
+  }
   const int64_t shape_axis_value = shape_values[static_cast<std::size_t>(axis)];
   if (shape_axis_value < 0) {
     // A negative (inferred) reshape dimension cannot be recomputed locally.

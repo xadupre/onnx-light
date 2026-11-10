@@ -280,6 +280,8 @@ for _case_name in (
     "maxunpool_export_4d",
     # These supported-dtype cases remain covered by the native runtime. ORT CPU
     # lacks the corresponding kernels, including primitives in schema functions.
+    "instancenorm_bfloat16_large_values",
+    "lrn_bfloat16_large_values",
     "supported_dtype_Acos_BFLOAT16",
     "supported_dtype_Acosh_BFLOAT16",
     "supported_dtype_Asin_BFLOAT16",

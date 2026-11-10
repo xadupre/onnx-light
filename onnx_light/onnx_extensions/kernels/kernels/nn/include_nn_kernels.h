@@ -415,14 +415,15 @@ public:
 
 /// Reference implementation of ``InstanceNormalization`` (opset 1, 6, 22).
 ///
-/// Normalizes a FLOAT input ``X`` of shape ``(N, C, D1, ..., Dk)`` (rank
+/// Normalizes a FLOAT, FLOAT16 or BFLOAT16 input ``X`` of shape ``(N, C, D1, ..., Dk)`` (rank
 /// >= 2) per-instance, per-channel:
 ///
 /// ``Y = scale * (X - mean) / sqrt(var + epsilon) + B``
 ///
 /// where ``mean`` and ``var`` are computed over the spatial dimensions
 /// ``D1, ..., Dk`` for every ``(n, c)`` pair. ``scale`` and ``B`` are 1-D
-/// FLOAT tensors of length ``C``.
+/// tensors of length ``C`` with the same element type as ``X``. Half-precision
+/// inputs are decoded to float32 before computing the statistics and affine transform.
 class InstanceNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:InstanceNormalization";
@@ -638,17 +639,18 @@ public:
 /// channel window
 /// ``i in [max(0, c - floor((size-1)/2)), min(C-1, c + ceil((size-1)/2))]``.
 ///
-/// The kernel accepts FLOAT inputs of rank ``>= 2`` laid out as
+/// The kernel accepts FLOAT, FLOAT16 or BFLOAT16 inputs of rank ``>= 2`` laid out as
 /// ``(N, C, D1, ..., Dk)``. ``size`` must be a strictly positive integer.
 /// ``alpha`` defaults to ``0.0001``, ``beta`` to ``0.75`` and ``bias`` to
-/// ``1.0`` (the ONNX defaults). The output shape matches the input shape.
+/// ``1.0`` (the ONNX defaults). The output shape and dtype match the input.
+/// Half-precision inputs are decoded to float32 before computing the sum of squares.
 class LRN : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LRN";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
-  /// Returns a FLOAT output tensor whose shape matches ``x``.
+  /// Returns an output tensor whose shape and dtype match ``x``.
   Tensor operator()(const Tensor &x, int64_t size, float alpha = 0.0001f, float beta = 0.75f,
                     float bias = 1.0f, RuntimeContext *rt = nullptr) const;
 

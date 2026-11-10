@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -21,18 +23,18 @@ namespace {
 
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
-// Validates that ``t`` is a 1-D FLOAT tensor of length ``c`` and returns its
-// data pointer. ``role`` identifies the parameter in error messages.
-const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::InstanceNormalization: ", role, " must be FLOAT.");
+// Validates a 1-D parameter of length ``c`` with the input element type.
+void CheckParameter(const Tensor &t, int32_t dtype, int64_t c, const char *role) {
+  EXT_ENFORCE_INVALID(t.data_type == dtype, "kernel::InstanceNormalization: ", role,
+                      " must have the same dtype as X.");
   EXT_ENFORCE_INVALID(t.shape.size() == 1u, "kernel::InstanceNormalization: ", role,
                       " must be rank 1.");
   EXT_ENFORCE_INVALID(t.shape[0] == c, "kernel::InstanceNormalization: ", role,
                       " size must equal X's channel dimension.");
-  return t.AsFloat();
 }
 
 } // namespace
@@ -45,22 +47,23 @@ ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(InstanceNormalization)
 
 Tensor InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                          float epsilon, RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::InstanceNormalization: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          IsHalfPrecision(x.data_type),
+                      "kernel::InstanceNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
   (*this)(x, scale, bias, out, epsilon);
   return out;
 }
 
 void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                        Tensor &output, float epsilon) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::InstanceNormalization: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::InstanceNormalization: output must be FLOAT.");
+  const bool half = IsHalfPrecision(x.data_type);
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) || half,
+                      "kernel::InstanceNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                      "kernel::InstanceNormalization: output must have the same dtype as X.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2u,
                       "kernel::InstanceNormalization: X must have rank >= 2.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -72,8 +75,8 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
   const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];
 
-  const float *p_scale = AsFloat1D(scale, C, "scale");
-  const float *p_bias = AsFloat1D(bias, C, "B");
+  CheckParameter(scale, x.data_type, C, "scale");
+  CheckParameter(bias, x.data_type, C, "B");
 
   // Number of elements per (n, c) slice.
   int64_t spatial = 1;
@@ -81,8 +84,16 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
     spatial *= x.shape[i];
   }
 
-  const float *px = x.AsFloat();
-  float *py = output.AsFloat();
+  const auto decode = x.data_type == static_cast<int32_t>(DataType::BFLOAT16) ? Bfloat16BitsToFloat
+                                                                              : Float16BitsToFloat;
+  const auto encode = x.data_type == static_cast<int32_t>(DataType::BFLOAT16) ? FloatToBfloat16Bits
+                                                                              : FloatToFloat16Bits;
+  const auto read = [&](const Tensor &t, int64_t i) {
+    return half ? decode(reinterpret_cast<const uint16_t *>(t.bytes())[i])
+                : reinterpret_cast<const float *>(t.bytes())[i];
+  };
+  float *py = half ? nullptr : output.AsFloat();
+  uint16_t *py_half = half ? reinterpret_cast<uint16_t *>(output.mutable_bytes()) : nullptr;
 
   // For each (n, c) slice compute mean / var across the spatial dims and
   // then ``y = scale[c] * (x - mean) / sqrt(var + epsilon) + bias[c]``.
@@ -98,13 +109,20 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
           const int64_t c = task % C;
           const int64_t base = task * spatial;
           const auto stats = statistics::Accumulate<double>(
-              spatial, [&](int64_t i) { return px[base + i]; }, tuning().parallel_minimum_elements);
+              spatial, [&](int64_t i) { return read(x, base + i); },
+              tuning().parallel_minimum_elements);
           const double mean = stats.mean;
           const double var = stats.Variance();
           const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
-          const float s = p_scale[c] * inv_std;
+          const float s = read(scale, c) * inv_std;
+          const float b = read(bias, c);
           for (int64_t i = 0; i < spatial; ++i) {
-            py[base + i] = (px[base + i] - static_cast<float>(mean)) * s + p_bias[c];
+            const float y = (read(x, base + i) - static_cast<float>(mean)) * s + b;
+            if (half) {
+              py_half[base + i] = encode(y);
+            } else {
+              py[base + i] = y;
+            }
           }
         }
       },

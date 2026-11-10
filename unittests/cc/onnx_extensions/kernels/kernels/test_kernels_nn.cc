@@ -1092,6 +1092,92 @@ TEST(KernelClass, DropoutRejectsInvalidRatio) {
   EXPECT_THROW(dropout(x, /*ratio=*/1.0f, /*training_mode=*/true, mask), std::invalid_argument);
 }
 
+TEST(KernelClass, InstanceNormalizationHalfPrecisionLargeValues) {
+  const KernelContext ctx{DefaultOpset(22)};
+  onnx_kernels::kernel::InstanceNormalization kernel{ctx};
+  for (bool bfloat : {false, true}) {
+    SCOPED_TRACE(bfloat);
+    const auto make = bfloat ? core::runtime::MakeBfloat16Tensor : core::runtime::MakeFloat16Tensor;
+    const auto encode =
+        bfloat ? core::runtime::FloatToBfloat16Bits : core::runtime::FloatToFloat16Bits;
+    std::vector<float> values(2 * 2 * 256);
+    for (size_t i = 0; i < values.size(); ++i)
+      values[i] = static_cast<float>(2 * (i % 256));
+    Tensor x = make("", {2, 2, 256}, values, nullptr);
+    const Tensor scale = make("", {2}, {1.5f, -0.5f}, nullptr);
+    const Tensor bias = make("", {2}, {0.25f, -1.0f}, nullptr);
+    const Tensor reference =
+        kernel(core::runtime::PromoteToFloat32(x), core::runtime::PromoteToFloat32(scale),
+               core::runtime::PromoteToFloat32(bias));
+    const Tensor y = kernel(x, scale, bias);
+    ASSERT_EQ(y.data_type, x.data_type);
+    ASSERT_EQ(y.shape, x.shape);
+    const auto *actual = reinterpret_cast<const uint16_t *>(y.bytes());
+    for (size_t i = 0; i < values.size(); ++i)
+      EXPECT_EQ(actual[i], encode(reference.AsFloat()[i])) << i;
+    EXPECT_NE(actual[0], encode(0.0f));
+
+    Tensor output = make("", x.shape, std::vector<float>(values.size(), 0.0f), nullptr);
+    kernel(x, scale, bias, output);
+    EXPECT_EQ(output.data, y.data);
+    kernel(x, scale, bias, x);
+    EXPECT_EQ(x.data, y.data);
+
+    const Tensor empty = make("", {1, 2, 0}, {}, nullptr);
+    EXPECT_EQ(kernel(empty, scale, bias).shape, empty.shape);
+  }
+}
+
+TEST(KernelClass, InstanceNormalizationHalfPrecisionRejectsInvalidInputs) {
+  const KernelContext ctx{DefaultOpset(22)};
+  onnx_kernels::kernel::InstanceNormalization kernel{ctx};
+  for (bool bfloat : {false, true}) {
+    const auto make = bfloat ? core::runtime::MakeBfloat16Tensor : core::runtime::MakeFloat16Tensor;
+    const Tensor x = make("", {1, 1, 2}, {0.0f, 510.0f}, nullptr);
+    const Tensor scale = make("", {1}, {1.0f}, nullptr);
+    const Tensor bias = make("", {1}, {0.0f}, nullptr);
+    const Tensor wrong_type = Tensor::FromFloat("", {1}, {1.0f});
+    EXPECT_THROW(kernel(x, wrong_type, bias), std::invalid_argument);
+    EXPECT_THROW(kernel(x, scale, wrong_type), std::invalid_argument);
+    EXPECT_THROW(kernel(x, make("", {}, {1.0f}, nullptr), bias), std::invalid_argument);
+    EXPECT_THROW(kernel(x, scale, make("", {2}, {0.0f, 0.0f}, nullptr)), std::invalid_argument);
+    EXPECT_THROW(kernel(scale, scale, bias), std::invalid_argument);
+    Tensor output = Tensor::FromFloat("", x.shape, {0.0f, 0.0f});
+    EXPECT_THROW(kernel(x, scale, bias, output), std::invalid_argument);
+    output = make("", {2}, {0.0f, 0.0f}, nullptr);
+    EXPECT_THROW(kernel(x, scale, bias, output), std::invalid_argument);
+  }
+}
+
+TEST(KernelClass, LRNHalfPrecisionLargeValues) {
+  const KernelContext ctx{DefaultOpset(13)};
+  const onnx_kernels::kernel::LRN kernel{ctx};
+  for (bool bfloat : {false, true}) {
+    SCOPED_TRACE(bfloat);
+    const auto make = bfloat ? core::runtime::MakeBfloat16Tensor : core::runtime::MakeFloat16Tensor;
+    const auto encode =
+        bfloat ? core::runtime::FloatToBfloat16Bits : core::runtime::FloatToFloat16Bits;
+    const std::vector<float> values(2 * 5 * 2, 300.0f);
+    const Tensor x = make("", {2, 5, 2}, values, nullptr);
+    for (int64_t size : {1, 2, 5, 8}) {
+      SCOPED_TRACE(size);
+      const Tensor reference = kernel(core::runtime::PromoteToFloat32(x), size);
+      const Tensor y = kernel(x, size);
+      ASSERT_EQ(y.data_type, x.data_type);
+      ASSERT_EQ(y.shape, x.shape);
+      const auto *actual = reinterpret_cast<const uint16_t *>(y.bytes());
+      for (size_t i = 0; i < values.size(); ++i) {
+        EXPECT_EQ(actual[i], encode(reference.AsFloat()[i])) << i;
+        EXPECT_GT(reference.AsFloat()[i], 0.0f);
+      }
+    }
+    EXPECT_THROW(kernel(x, 0), std::invalid_argument);
+    EXPECT_THROW(kernel(make("", {1}, {300.0f}, nullptr), 5), std::invalid_argument);
+    const Tensor empty = make("", {1, 5, 0}, {}, nullptr);
+    EXPECT_EQ(kernel(empty, 5).shape, empty.shape);
+  }
+}
+
 // ---- RMSNormalization -----------------------------------------------------
 
 TEST(KernelClass, NormalizationHalfPrecisionStashAndPreallocatedOutputs) {

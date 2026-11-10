@@ -1267,11 +1267,6 @@ class GraphProto;
 //   repeated SparseTensorProto sparse_tensors = 23;
 //   repeated TypeProto type_protos = 15;
 // }
-struct GraphAttributeReferenceOrigin {
-  std::string reference_name;
-  std::string attribute_name;
-};
-
 BEGIN_PROTO_NOINIT(
     AttributeProto,
     "A named attribute containing either singular float, integer, string, graph, and "
@@ -1393,8 +1388,6 @@ FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated t
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
 FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
-// Builder-only provenance for a generated reference whose name had to be disambiguated.
-std::shared_ptr<const GraphAttributeReferenceOrigin> graph_reference_origin;
 inline void Clear() {
   this->~AttributeProto();
   new (this) AttributeProto();

@@ -1765,9 +1765,6 @@ bool GraphBuilder::IsGraphReference(const NodeProto &node, const AttributeProto 
 
 std::string GraphBuilder::GraphAttributeName(const AttributeProto &attribute) const {
   const auto &name = attribute.name().value();
-  const auto &origin = attribute.graph_reference_origin;
-  if (origin && origin->reference_name == name)
-    return origin->attribute_name;
   return name.substr(0, name.size() - 4);
 }
 
@@ -1790,17 +1787,22 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
            graph.value_info().size() > 0 || !graph.extended_initializer().empty();
   };
+  std::unordered_set<std::string> reference_names;
+  for (const auto &attribute : node.attribute()) {
+    if (attribute.type() != AttributeProto::GRAPH && attribute.type() != AttributeProto::GRAPHS)
+      continue;
+    const std::string reference_name = attribute.name().value() + "_ref";
+    if (IsDeclaredAttribute(node, reference_name) || FindAttribute(node, reference_name.c_str()) ||
+        !reference_names.insert(reference_name).second) {
+      throw BuilderError("GraphBuilder::ImportAttributes: generated graph reference name '" +
+                         reference_name + "' collides with an existing attribute.");
+    }
+  }
   utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
   for (const auto &attribute : node.attribute()) {
     const std::string direct_reference_name = attribute.name().value() + "_ref";
-    std::string reference_name = direct_reference_name;
-    if (attribute.type() == AttributeProto::GRAPH || attribute.type() == AttributeProto::GRAPHS)
-      while (IsDeclaredAttribute(node, reference_name) ||
-             FindAttribute(node, reference_name.c_str()) ||
-             std::any_of(imported.begin(), imported.end(),
-                         [&](const auto &entry) { return entry.name() == reference_name; }))
-        reference_name += "_ref";
+    const std::string &reference_name = direct_reference_name;
     const bool has_single_graph_payload =
         (attribute.has_g() && has_graph_content(attribute.g())) ||
         (attribute.graphs().size() > 0 &&
@@ -1827,9 +1829,6 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       ref.set_name(reference_name);
       ref.set_type(AttributeProto::AttributeType::STRING);
       ref.set_s(subgraph_name);
-      if (reference_name != direct_reference_name)
-        ref.graph_reference_origin = std::make_shared<GraphAttributeReferenceOrigin>(
-            GraphAttributeReferenceOrigin{reference_name, attribute.name().value()});
       imported.push_back(std::move(ref));
       continue;
     }
@@ -1838,9 +1837,6 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       AttributeProto refs;
       refs.set_name(reference_name);
       refs.set_type(AttributeProto::AttributeType::STRINGS);
-      if (reference_name != direct_reference_name)
-        refs.graph_reference_origin = std::make_shared<GraphAttributeReferenceOrigin>(
-            GraphAttributeReferenceOrigin{reference_name, attribute.name().value()});
       const auto &graphs = attribute.graphs();
       for (std::size_t i = 0; i < graphs.size(); ++i) {
         const GraphProto &graph = graphs[static_cast<std::size_t>(i)];

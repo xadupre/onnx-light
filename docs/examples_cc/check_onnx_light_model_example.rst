@@ -4,7 +4,8 @@ Standalone C++ example: validate an ONNX model with onnx_light checker
 =======================================================================
 
 This page documents ``examples/check_onnx_light_model``
-(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/check_onnx_light_model>`_),
+(:download:`source <../../examples/check_onnx_light_model/main.cc>`,
+:download:`CMake project <../../examples/check_onnx_light_model/CMakeLists.txt>`),
 a self-contained
 CMake project that demonstrates linking with *onnx-light* and running
 :cpp:func:`onnx_light::checker::check_model` from C++. The same program also

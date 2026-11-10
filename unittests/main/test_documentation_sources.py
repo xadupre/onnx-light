@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -6,6 +7,69 @@ from pathlib import Path
 
 class TestDocumentationSources(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[2]
+
+    def test_internal_links_use_relative_paths(self):
+        docs = self.ROOT / "docs"
+        for source in sorted(docs.rglob("*")):
+            if source.suffix not in {".rst", ".md"}:
+                continue
+            with self.subTest(source=source.relative_to(self.ROOT)):
+                text = source.read_text(encoding="utf-8")
+                self.assertNotRegex(
+                    text, r"https://github\.com/xadupre/onnx-light/(?:blob|tree)/main/"
+                )
+                self.assertNotIn(":epkg:`C++ onnx-light examples`", text)
+
+    def test_relative_documentation_targets(self):
+        for name in (
+            "quick_tour.rst",
+            "getting_started.rst",
+            "design/link/cplusplus_linking.rst",
+            "design/proto/differences.rst",
+            "md/pattern_optimization_comparison.md",
+        ):
+            source = self.ROOT / "docs" / name
+            text = source.read_text(encoding="utf-8")
+            targets = re.findall(r":doc:`[^`<>]*<([^<>]+)>`", text)
+            targets.extend(re.findall(r"\]\(([^)]+\.rst)\)", text))
+            self.assertTrue(targets, source)
+            for target in targets:
+                with self.subTest(source=name, target=target):
+                    self.assertFalse(Path(target).is_absolute())
+                    path = source.parent / target
+                    if path.suffix != ".rst":
+                        path = path.with_suffix(".rst")
+                    self.assertTrue(path.is_file(), path)
+
+    def test_relative_source_downloads(self):
+        docs = self.ROOT / "docs"
+        sources = [docs / "quick_tour.rst", docs / "misc/technical/thread_pools.rst"]
+        for name in (
+            "aidge_onnx_light",
+            "build_save_load_onnx_proto",
+            "check_onnx_light_model",
+            "export_nnef",
+            "load_onnx_light_time",
+            "load_onnx_time",
+            "print_proto_debug",
+            "register_custom_kernel",
+            "run_backend_test_ort",
+        ):
+            source = docs / "examples_cc" / f"{name}_example.rst"
+            text = source.read_text(encoding="utf-8")
+            for filename in ("main.cc", "CMakeLists.txt"):
+                self.assertIn(f"<../../examples/{name}/{filename}>`", text)
+            sources.append(source)
+        for source in sources:
+            text = source.read_text(encoding="utf-8")
+            targets = re.findall(r":download:`[^`<>]*<([^<>]+)>`", text)
+            self.assertTrue(targets, source)
+            for target in targets:
+                with self.subTest(source=source.relative_to(docs), target=target):
+                    self.assertFalse(Path(target).is_absolute())
+                    path = (source.parent / target).resolve()
+                    self.assertTrue(path.is_relative_to(self.ROOT))
+                    self.assertTrue(path.is_file(), path)
 
     def test_api_heading_underlines(self):
         for source, title, adornment in [

@@ -26,7 +26,7 @@ dependency on protobuf at compile time or at runtime**.
   because it does not statically link any portion of ``libprotobuf``.
 * All parsing and serialization code lives in a single self-contained library
   that can be consumed by other C++ projects without installing protobuf
-  (see :epkg:`C++ onnx-light examples`).
+  (see :doc:`C++ onnx-light examples <../../examples_cc/index>`).
 * C++ projects that only need protobuf-compatible message types can link
   ``onnx_proto::lib_onnx_proto`` directly; ``onnx_light::lib_onnx_lib`` is only
   needed when features tied to operator notions are required (checker, schema

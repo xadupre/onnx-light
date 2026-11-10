@@ -250,10 +250,10 @@ Implementation references
 -------------------------
 
 * ``onnx-light``:
-  `CPU executor
-  <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/runtime/tuning/cpu_executor.cc>`_,
-  `persistent thread pool
-  <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/runtime/kernels/parallel_for.cc>`_,
+  :download:`CPU executor
+  <../../../onnx_threads/src/cpu_executor.cc>`,
+  :download:`persistent thread pool
+  <../../../onnx_threads/src/parallel_for.cc>`,
   and
   :ref:`l-next-steps-session-execution-pools`.
 * ONNX Runtime:

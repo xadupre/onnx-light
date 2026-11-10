@@ -4,7 +4,8 @@ Standalone C++ example: combine onnx-light with Eclipse Aidge
 =============================================================
 
 This page documents ``examples/aidge_onnx_light``
-(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/aidge_onnx_light>`_),
+(:download:`source <../../examples/aidge_onnx_light/main.cc>`,
+:download:`CMake project <../../examples/aidge_onnx_light/CMakeLists.txt>`),
 a self-contained CMake
 project that demonstrates how to use *onnx-light* together with the
 `Eclipse Aidge <https://projects.eclipse.org/projects/technology.aidge>`_

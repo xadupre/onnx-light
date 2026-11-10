@@ -4,7 +4,8 @@ Standalone C++ example: print a proto for debugging
 ===================================================
 
 This page documents ``examples/print_proto_debug``
-(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/print_proto_debug>`_),
+(:download:`source <../../examples/print_proto_debug/main.cc>`,
+:download:`CMake project <../../examples/print_proto_debug/CMakeLists.txt>`),
 a self-contained CMake project that demonstrates how to dump any ONNX proto as
 readable text from C++.
 

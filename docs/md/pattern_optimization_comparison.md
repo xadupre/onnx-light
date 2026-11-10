@@ -2,8 +2,8 @@
 
 onnx-light pattern application algorithm:
 
-* [class implementing the whole algorithm](https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/builder/graph_graph.h)
-* [patterns](https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/patterns)
+* [class implementing the whole algorithm](../api/cpp/onnx_core/builder/graph_graph.rst)
+* [patterns](../api/cpp/onnx_extensions/patterns/index.rst)
 
 onnx-light uses a pattern class (`match` / `apply`) and an algorithm that applies
 patterns and manages graph updates. Each application records the matched nodes

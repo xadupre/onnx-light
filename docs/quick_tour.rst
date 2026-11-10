@@ -111,30 +111,30 @@ Parsing and serializing options
   on GPU or any other memory.
 
 See the current
-`parsing options <https://github.com/xadupre/onnx-light/blob/main/onnx_proto/include/onnx_proto/serialize_options.h>`_.
+:doc:`parsing options <api/cpp/onnx_proto/serialize_options>`.
 
 .. image:: images/what_is_onnx_light/parsing_2.png
     :class: quick-tour-graph
     :alt: Parsing options
 
 See the current
-`serialization options <https://github.com/xadupre/onnx-light/blob/main/onnx_proto/include/onnx_proto/serialize_options.h>`_.
+:doc:`serialization options <api/cpp/onnx_proto/serialize_options>`.
 
 Kernels
 +++++++
 
 Kernels are kept simple, with a dispatch mechanism to support all types.
 See the current implementation of a
-`simple kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/logical/kernel_not.cc>`_
+:download:`simple kernel <../onnx_light/onnx_extensions/kernels/kernels/logical/kernel_not.cc>`
 and a
-`type-dispatching kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/math/kernel_elu.cc>`_.
+:download:`type-dispatching kernel <../onnx_light/onnx_extensions/kernels/kernels/math/kernel_elu.cc>`.
 
 Backend tests
 +++++++++++++
 
 They are very similar to the existing ones, except they do not write any
 file. See the current
-`Where backend tests <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/backend_test/cases/logical/cases_where.cc>`_.
+:download:`Where backend tests <../onnx_light/onnx_extensions/backend_test/cases/logical/cases_where.cc>`.
 
 Running models
 ++++++++++++++
@@ -214,7 +214,7 @@ may differ.
     :alt: Symbolic expressions
 
 See the current
-`symbolic-expression tests <https://github.com/xadupre/onnx-light/blob/main/unittests/cc/onnx_extensions/shapes/test_expressions.cc>`_.
+:download:`symbolic-expression tests <../unittests/cc/onnx_extensions/shapes/test_expressions.cc>`.
 
 Next steps
 ++++++++++

@@ -4,7 +4,8 @@ Standalone C++ example: run every backend test through onnxruntime
 ==================================================================
 
 This page documents ``examples/run_backend_test_ort``
-(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/run_backend_test_ort>`_),
+(:download:`source <../../examples/run_backend_test_ort/main.cc>`,
+:download:`CMake project <../../examples/run_backend_test_ort/CMakeLists.txt>`),
 a self-contained CMake
 project that demonstrates how to run **every** C++-generated backend test
 case (the same registry exposed by ``lib_onnx_backend_test`` and used by the

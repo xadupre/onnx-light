@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/quantization.h"
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
 #include <nanobind/stl/unordered_map.h>
@@ -19,6 +20,7 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::AwqWeights;
 using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
 using core::runtime::Exl3Weights;
@@ -130,6 +132,8 @@ int32_t NumpyType(nb::handle array) {
     return TensorProto::FLOAT;
   if (name == "float16")
     return TensorProto::FLOAT16;
+  if (name == "bfloat16")
+    return TensorProto::BFLOAT16;
   if (name == "float8_e4m3fn")
     return TensorProto::FLOAT8E4M3FN;
   EXT_THROW_INVALID("compressed-tensors: unsupported NumPy dtype ", name, ".");
@@ -200,6 +204,10 @@ nb::object ArrayFromTensor(const Tensor &tensor) {
   case TensorProto::FLOAT16:
     dtype = "float16";
     break;
+  case TensorProto::BFLOAT16:
+    nb::module_::import_("ml_dtypes");
+    dtype = "bfloat16";
+    break;
   case TensorProto::FLOAT8E4M3FN:
     dtype = "float8_e4m3fn";
     break;
@@ -223,6 +231,98 @@ nb::dict TensorDictionary(const CompressedTensorsWeights &checkpoint) {
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("awq_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_awq_weights",
+      [](const nb::dict &tensors, const std::string &variant, int64_t in_features,
+         int64_t out_features, int64_t group_size, uint32_t bits, int64_t group_axis,
+         const std::string &revision, size_t max_bytes) {
+        EXT_ENFORCE_INVALID(revision == kExl3Revision, "AWQ unsupported upstream revision.");
+        EXT_ENFORCE_INVALID(variant == "gemm" || variant == "gemv" || variant == "gemv_fast" ||
+                                variant == "llm-awq",
+                            "AWQ unsupported variant.");
+        EXT_ENFORCE_INVALID(bits == 4 && group_axis == 1 && in_features > 0 && out_features > 0 &&
+                                (group_size > 0 || group_size == -1) && max_bytes > 0,
+                            "AWQ invalid bits, axis, dimensions, group_size or max_bytes.");
+        EXT_ENFORCE_INVALID(tensors.size() == 3, "AWQ requires exactly three native tensors.");
+        AwqWeights weights;
+        weights.variant = variant;
+        weights.in_features = in_features;
+        weights.out_features = out_features;
+        weights.group_size = group_size;
+        weights.bits = bits;
+        weights.group_axis = group_axis;
+        weights.upstream_revision = revision;
+        nb::module_ numpy = nb::module_::import_("numpy");
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "AWQ tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "qweight" || name == "qzeros" || name == "scales" ||
+                                  name == "scaled_zeros",
+                              "AWQ unexpected side tensor.");
+          EXT_ENFORCE_INVALID(nb::isinstance(item.second, numpy.attr("ndarray")),
+                              "AWQ tensors must be loaded NumPy arrays.");
+          EXT_ENFORCE_INVALID(nb::cast<bool>(item.second.attr("flags").attr("c_contiguous")) &&
+                                  nb::cast<bool>(item.second.attr("dtype").attr("isnative")),
+                              "AWQ arrays must be C-contiguous with native byte order.");
+          const int32_t type = NumpyType(item.second);
+          nb::object storage = nb::borrow<nb::object>(item.second);
+          if (type == TensorProto::BFLOAT16)
+            storage = storage.attr("view")(numpy.attr("uint16"));
+          const auto array =
+              nb::cast<nb::ndarray<nb::numpy, nb::ro, nb::c_contig, nb::device::cpu>>(storage);
+          EXT_ENFORCE_INVALID(array.nbytes() <= max_bytes - total,
+                              "AWQ checkpoint exceeds max_bytes.");
+          Shape shape;
+          for (size_t i = 0; i < array.ndim(); ++i) {
+            EXT_ENFORCE_INVALID(array.shape(i) <=
+                                    static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+                                "AWQ dimension size overflow.");
+            shape.push_back(static_cast<int64_t>(array.shape(i)));
+          }
+          total += array.nbytes();
+          weights.tensors.emplace(name, Tensor::Borrow(name, type, std::move(shape),
+                                                       static_cast<const uint8_t *>(array.data()),
+                                                       array.nbytes()));
+        }
+        return core::runtime::ImportAwqWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("variant"), nb::arg("in_features"), nb::arg("out_features"),
+      nb::arg("group_size") = 128, nb::arg("bits") = 4, nb::arg("group_axis") = 1,
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_awq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportAwqWeights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["variant"] = weights.variant;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["group_size"] = weights.group_size;
+        result["bits"] = weights.bits;
+        result["group_axis"] = weights.group_axis;
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_awq_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackAwqCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_awq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructAwqWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("exl3_upstream_revision") = kExl3Revision;
   runtime.def(
       "import_exl3_weights",

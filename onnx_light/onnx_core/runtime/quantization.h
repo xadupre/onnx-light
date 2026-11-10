@@ -589,6 +589,31 @@ CompressedTensorsWeights ExportCompressedTensorsWeights(
     std::string upstream_revision = "eb058d630f7344099459b6795b1e3eeffdda4b40",
     size_t max_bytes = size_t{1} << 30);
 
+/** Carries a pinned native GPTQModel AWQ checkpoint, distinct from portable kAwq. */
+struct AwqWeights {
+  std::string variant;
+  int64_t in_features = 0, out_features = 0, group_size = 128;
+  uint32_t bits = 4;
+  int64_t group_axis = 1;
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports native AWQ tensors without repacking or requantization. */
+EncodedValueProto ImportAwqWeights(const AwqWeights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports the validated original AWQ tensors and metadata byte-for-byte. */
+AwqWeights ExportAwqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks native AWQ unsigned four-bit codes into UINT8 [N,K]. */
+Tensor UnpackAwqCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                      const StructTypeCatalogue &catalogue = {});
+
+/** Reconstructs FLOAT [N,K] weights without simulating accelerator arithmetic. */
+Tensor ReconstructAwqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                             const StructTypeCatalogue &catalogue = {});
+
 /**
  * Carries one GPTQModel EXL3 module, distinct from the portable kExl3 profile.
  *

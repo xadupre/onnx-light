@@ -34,6 +34,32 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Native GPTQModel AWQ weights
+----------------------------
+
+``AwqWeights`` in ``onnx_core/runtime/quantization.h`` describes one loaded
+module with an explicit ``variant``, input/output dimensions, group size,
+four-bit codes, and grouping axis 1 of the reconstructed ``[output,input]``
+matrix. See the :ref:`AWQ support matrix <l-awq-checkpoints>` for the pinned
+packing contracts. The portable ``kAwq`` profile remains unchanged.
+
+.. code-block:: cpp
+
+    AwqWeights checkpoint;
+    checkpoint.variant = "gemm";  // or gemv, gemv_fast, llm-awq
+    checkpoint.in_features = 128;
+    checkpoint.out_features = 128;
+    checkpoint.group_size = 128;
+    checkpoint.tensors = loaded_module_tensors;
+    auto encoded = ImportAwqWeights(checkpoint);
+    auto restored = ExportAwqWeights(encoded);  // exact native tensors and metadata
+    auto codes = UnpackAwqCodes(encoded);       // UINT8 [output,input]
+    auto weights = ReconstructAwqWeights(encoded);  // FLOAT [output,input]
+
+The adapters preserve original codes, scale bits, zero parameters and padding;
+they do not calibrate weights or implement GPU kernels. Generic dequantization
+also recognizes this schema.
+
 Native GPTQModel EXL3 weights
 -----------------------------
 

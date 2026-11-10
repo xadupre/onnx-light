@@ -4,6 +4,7 @@ onnx_light.onnx_core
 .. toctree::
     :maxdepth: 1
 
+    awq
     compressed_tensors
     exl3
     gguf

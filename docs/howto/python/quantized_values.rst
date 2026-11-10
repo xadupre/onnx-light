@@ -35,6 +35,126 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-awq-checkpoints:
+
+Native GPTQModel AWQ checkpoints
+--------------------------------
+
+``onnx_light.onnx_core.awq`` imports/exports **one module's loaded tensors**
+without quantization or calibration. Its C++ equivalents are ``AwqWeights``,
+``ImportAwqWeights``, ``ExportAwqWeights``, ``UnpackAwqCodes`` and
+``ReconstructAwqWeights`` in ``onnx_core/runtime/quantization.h``.
+This API leaves the portable ``awq``/``kAwq`` affine profile unchanged.
+
+All four native formats pin GPTQModel revision
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``. The authoritative sources are
+`gemm_awq.py <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/gemm_awq.py>`_,
+`gemv_awq.py <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/gemv_awq.py>`_,
+`gemv_fast_awq.py <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/gemv_fast_awq.py>`_,
+`packing_utils.py <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/quantization/awq/utils/packing_utils.py>`_
+and `calculate_zeros_width <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/gemv.py>`_.
+No GPTQModel, Torch, accelerator or native AWQ kernels are required.
+Version ``v1`` below names the onnx-light adapter schema, not a GPTQ checkpoint
+format flag; compatibility is pinned to the upstream revision above.
+
+Let ``K`` denote input width, ``N`` output width, ``G`` effective group size,
+and ``H=K/G``. Grouping is along input columns (``group_axis=1``) of the
+reconstructed PyTorch Linear matrix ``[N,K]``. Dimensions are positive and
+groups complete; ``group_size=-1`` means ``G=K``. Codes are unsigned four-bit
+integers 0--15. Multi-byte encoded payload words are little-endian; loaded
+runtime tensors and NumPy arrays use native byte order.
+
+.. list-table:: Supported native formats and versions
+   :header-rows: 1
+   :widths: 15 23 35 27
+
+   * - Format (case-sensitive)
+     - Version / groups
+     - Packed weights and parameters
+     - Reconstruction
+   * - ``gemm``
+     - v1; any positive divisor ``G`` of ``K``
+     - INT32 ``qweight[K,N/8]``, INT32 ``qzeros[H,N/8]``,
+       FP16 or BF16 ``scales[H,N]``; ``N`` divisible by 8
+     - ``(code-zero)*scale``; output-axis packing
+   * - ``gemv``
+     - v1; ``G=16,32,64`` or ``G>=128``
+     - INT32 ``qweight[N,K/8]``, INT32 ``qzeros[N,P/8]``,
+       FP16 ``scales[N,P]``; ``K`` divisible by 8
+     - ``(code-zero)*scale``; input-axis packing, output-major
+   * - ``gemv_fast``
+     - v1; ``G=16,32,64`` or ``G>=128``
+     - INT16 ``qweight[N/4,K]``, FP16 ``qzeros[P,N]`` and
+       ``scales[P,N]``; ``K`` divisible by 64, ``N`` by 4
+     - ``code*scale+qzeros``; stored zeros are already scaled negative offsets
+   * - ``llm-awq``
+     - v1; ``G=16,32,64`` or ``G>=128``
+     - Same INT16 interleaving as GEMV_FAST, with FP16
+       ``scaled_zeros[P,N]`` instead of ``qzeros``
+     - ``code*scale+scaled_zeros``; retains rounded scaled-zero bits
+
+For vector formats, ``m=1`` when ``G>=128``, otherwise ``m=128/G``, and
+``P=8*m*ceil(ceil(H/8)/m)``. This pads the **parameter group dimension**,
+not the reconstructed weight matrix. Padding bytes are retained on export.
+Scales and scaled zeros must be finite, including padding; used scales must
+be strictly positive. BF16 NumPy arrays use the existing ``ml_dtypes`` dependency.
+
+GEMM packs each eight output codes in the nibble order
+``[0,2,4,6,1,3,5,7]``, from low to high bits of an INT32 word. Its zero points
+use the same output order. GEMV packs eight consecutive input codes in
+natural order, low nibble first; its zero points pack eight consecutive groups
+in the same natural order. Neither convention subtracts one from stored zero
+points. Asymmetric and symmetric checkpoint parameters follow the same ABI.
+
+GEMV_FAST first reshapes each row's 32 codes to ``[4,4,2]`` and transposes
+to ``[4,4,2]`` with axes ``[1,0,2]``. It then applies the even/odd order
+``[0,2,4,6,1,3,5,7]`` within each eight-code chunk. Finally it reshapes to
+``[N/4,4,K/64,64]``, transposes to ``[N/4,K/64,4,64]``, reshapes to
+``[N/4,K/64,64,4]`` and places the last four entries in successive low-to-high
+nibbles of an INT16 word. A transpose alone cannot convert GEMM or GEMV to
+this layout. LLM_AWQ shares that native interleaving but requires its explicit
+``scaled_zeros`` checkpoint key. For both, the producer stores
+``-float16(float32(stored_scale)*integer_zero)``; reconstruction uses that stored
+offset directly, never dividing it by scale to recover and round a zero point.
+
+The versioned ``onnx_light.awq_weights.v1`` schema records variant, dimensions,
+group size, bit width, axis, revision and exact tensor types/shapes. Import/export
+retain original packed codes, parameters and padding byte-for-byte, with no dense
+weight reconstruction or scalar recoding. Export returns metadata and native
+tensors, not a converted layout. Other revisions, variants, bit widths, axes,
+side tensors (including bias and ``g_idx``), malformed extents and schemas are
+rejected. The compressed-tensors ``pack-quantized`` ABI is separate; MX/NV
+formats are unaffected.
+
+Reference reconstruction returns FLOAT32 ``[N,K]`` using FP32 arithmetic,
+not bit-identical accelerator inference or FP16 materialization. It rejects
+nonfinite results. ``max_bytes`` (default 1 GiB) bounds checkpoint payload and
+logical FP32 storage separately, not total process RSS. All entry points check
+dimensions, overflow, types, extents and metadata before allocating output
+buffers. Python import borrows C-contiguous, native-endian arrays during
+validation, then creates an owned snapshot; it never opens checkpoint files.
+The shape/group restrictions describe checkpoint packing, not GPU launch
+constraints or upstream class selection. In particular, the pinned native GEMV
+class accepts only effective groups 64/128 and output widths divisible by 64;
+the fast native kernels have further group-128 and tile restrictions. These
+restrictions do not prevent reference decoding of the serialized layouts.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.awq import (
+        import_awq_weights, export_awq_weights, reconstruct_awq_weights,
+    )
+
+    # tensors contains exactly qweight, qzeros and scales for GEMM.
+    encoded = import_awq_weights(
+        tensors, variant="gemm", in_features=128, out_features=128, group_size=32
+    )
+    checkpoint = export_awq_weights(encoded)  # metadata and original native tensors
+    assert import_awq_weights(**checkpoint).SerializeToString() == encoded.SerializeToString()
+    weight_out_in = reconstruct_awq_weights(encoded)  # NumPy float32 [N,K]
+    # unpack_awq_codes(encoded) returns UINT8 [N,K].
+    # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
+
 .. _l-exl3-checkpoints:
 
 Native GPTQModel EXL3 checkpoints

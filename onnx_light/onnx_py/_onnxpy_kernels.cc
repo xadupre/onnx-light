@@ -1136,6 +1136,55 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.attr("Shape") =
       nb::module_::import_("onnx_light.onnx_py._onnxpycore").attr("shape_inference").attr("Shape");
 
+  nb::class_<Tensor>(rt_mod, "Tensor",
+                     "A runtime tensor with raw little-endian row-major bytes.")
+      .def(nb::init<>())
+      .def_rw("name", &Tensor::name)
+      .def_rw("data_type", &Tensor::data_type)
+      .def_prop_rw(
+          "shape", [](const Tensor &t) -> std::vector<int64_t> { return t.shape; },
+          [](Tensor &t, std::vector<int64_t> s) { t.shape = std::move(s); },
+          "Tensor shape as a list of ``int64`` dimension values.")
+      .def("element_count", &Tensor::element_count)
+      .def("element_size", &Tensor::element_size)
+      .def(
+          "raw_data", [](const Tensor &t) { return nb::bytes(t.bytes(), t.size_bytes()); },
+          "Returns the raw element bytes as a Python ``bytes`` object.")
+      .def(
+          "string_data", [](const Tensor &t) { return t.string_data; },
+          "Returns the string element values (only populated when ``data_type == TensorProto::DataType::STRING``).")
+      .def(
+          "has_borrowed_data", [](const Tensor &t) { return t.is_borrowed(); },
+          "Returns whether the tensor is a non-owning (borrowed) view over external memory.")
+      .def(
+          "__dlpack__",
+          [](nb::handle self, nb::kwargs /*kwargs*/) {
+            const Tensor &t = nb::cast<const Tensor &>(self);
+            nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
+            std::vector<size_t> shape;
+            shape.reserve(t.shape.size());
+            for (size_t i = 0; i < t.shape.size(); ++i) {
+              int64_t dim = t.shape[i];
+              EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
+                                  " must be non-negative, got ", dim);
+              EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <= std::numeric_limits<size_t>::max(),
+                                  "Tensor.__dlpack__: shape dimension at index ", i,
+                                  " does not fit in size_t, got ", dim);
+              shape.push_back(static_cast<size_t>(dim));
+            }
+            nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), self,
+                                      /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);
+            return nb::cast(std::move(array));
+          },
+          "Returns a DLPack capsule sharing the tensor's element buffer (zero-copy).")
+      .def(
+          "__dlpack_device__",
+          [](const Tensor &t) {
+            DLPackDtypeFromOnnx(t.data_type);
+            return std::make_pair(static_cast<int>(nb::device::cpu::value), 0);
+          },
+          "Returns the ``(device_type, device_id)`` pair for the DLPack protocol.");
+
   nb::class_<core::runtime::TensorStatistics>(rt_mod, "TensorStatistics",
                                               "Describes a numeric or quantized tensor.")
       .def_ro("dtype", &core::runtime::TensorStatistics::dtype)

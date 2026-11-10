@@ -17,7 +17,16 @@ runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 add_quantization_parameters = import_or_skip(
     "onnx_light.onnx_core.quantization", "add_quantization_parameters"
 )
-ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+reference = import_or_skip("onnx_light.onnx.reference")
+ReferenceEvaluator = reference.ReferenceEvaluator
+prepare_generation_model = reference.prepare_generation_model
+
+
+def _parse_model(data):
+    """Parses a serialized model."""
+    model = onnx.ModelProto()
+    model.ParseFromString(data)
+    return model
 
 
 def transition_model(dtype=numpy.float32):
@@ -109,6 +118,113 @@ class TestGeneration(ExtTestCase):
                 feeds, max_new_tokens=24, temperature=2.0, seed=7, top_k=10, top_p=1.0
             ),
         )
+
+    def test_prepare_generation_model_export(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Gather", ["table", "input_ids"], ["hidden"]),
+                    oh.make_node("MatMul", ["hidden", "head"], ["logits"]),
+                ],
+                "generation_head",
+                [
+                    oh.make_tensor_value_info("input_ids", TensorProto.INT64, ["B", "S"]),
+                    oh.make_tensor_value_info("attention_mask", TensorProto.INT64, ["B", "S"]),
+                ],
+                [oh.make_tensor_value_info("logits", TensorProto.FLOAT, ["B", "S", 3])],
+                [
+                    onh.from_array(
+                        numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=numpy.float32),
+                        name="table",
+                    ),
+                    onh.from_array(numpy.eye(3, dtype=numpy.float32), name="head"),
+                ],
+                value_info=[
+                    oh.make_tensor_value_info("hidden", TensorProto.FLOAT, ["B", "S", 3])
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=10,
+        )
+        original = model.SerializeToString()
+        reduced = _parse_model(original)
+        self.assertIsNone(prepare_generation_model(reduced))
+        self.assertEqual(model.SerializeToString(), original)
+        # Exercises the exported graph, rather than a runtime-only shortcut.
+        reduced = _parse_model(reduced.SerializeToString())
+        self.assertEqual(reduced.graph.output[0].type.tensor_type.shape.dim[1].dim_value, 1)
+        full_session = ReferenceEvaluator(model)
+        reduced_session = ReferenceEvaluator(reduced)
+        alias_model = _parse_model(original)
+        alias_model.opset_import[0].domain = "ai.onnx"
+        prepare_generation_model(alias_model)
+        alias_session = ReferenceEvaluator(alias_model)
+        conflicting = _parse_model(original)
+        conflicting.opset_import.append(oh.make_opsetid("ai.onnx", 22))
+        conflicting_original = conflicting.SerializeToString()
+        with self.assertRaises(ValueError):
+            prepare_generation_model(conflicting)
+        self.assertEqual(conflicting.SerializeToString(), conflicting_original)
+        for tokens, mask in [
+            ([[0, 1, 2]], [[1, 1, 1]]),
+            ([[0, 0, 1], [1, 2, 0]], [[0, 1, 1], [1, 1, 1]]),
+            ([[1], [2]], [[1], [1]]),
+        ]:
+            feeds = {
+                "input_ids": numpy.array(tokens, dtype=numpy.int64),
+                "attention_mask": numpy.array(mask, dtype=numpy.int64),
+            }
+            self.assertEqualArray(
+                full_session.run(None, feeds)[0][:, -1:, :], reduced_session.run(None, feeds)[0]
+            )
+            self.assertEqualArray(
+                reduced_session.run(None, feeds)[0], alias_session.run(None, feeds)[0]
+            )
+            for _ in range(2):
+                self.assertEqualArray(
+                    full_session.generate(feeds, max_new_tokens=3),
+                    reduced_session.generate(feeds, max_new_tokens=3),
+                )
+        for tokens, mask in [([[]], [[]]), ([[0, 0]], [[0, 0]]), ([[0, 1]], [[1, 0]])]:
+            with self.subTest(tokens=tokens, mask=mask), self.assertRaises(ValueError):
+                reduced_session.generate(
+                    {
+                        "input_ids": numpy.array(tokens, dtype=numpy.int64),
+                        "attention_mask": numpy.array(mask, dtype=numpy.int64),
+                    }
+                )
+
+    def test_prepare_generation_model_ort(self):
+        InferenceSession = import_or_skip("onnxruntime", "InferenceSession")
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("MatMul", ["hidden", "head"], ["logits"])],
+                "projection",
+                [oh.make_tensor_value_info("hidden", TensorProto.FLOAT, ["B", "S", 3])],
+                [oh.make_tensor_value_info("logits", TensorProto.FLOAT, ["B", "S", 5])],
+                [
+                    onh.from_array(
+                        numpy.arange(15, dtype=numpy.float32).reshape(3, 5), name="head"
+                    )
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=10,
+        )
+        full_session = InferenceSession(
+            model.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        prepare_generation_model(model)
+        reduced_session = InferenceSession(
+            model.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        for shape in [(1, 128, 3), (2, 4, 3), (2, 1, 3)]:
+            feeds = {
+                "hidden": numpy.arange(numpy.prod(shape), dtype=numpy.float32).reshape(shape)
+            }
+            expected = full_session.run(None, feeds)[0][:, -1:, :]
+            self.assertEqualArray(expected, reduced_session.run(None, feeds)[0])
+            self.assertEqualArray(expected, ReferenceEvaluator(model).run(None, feeds)[0])
 
     def test_multiple_eos(self):
         model = transition_model()

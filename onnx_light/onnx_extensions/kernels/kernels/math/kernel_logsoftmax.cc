@@ -59,9 +59,9 @@ void LogSoftmaxTyped(const Tensor &x, Tensor &output, int64_t outer, int64_t axi
 
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 3> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
-                                                           static_cast<int32_t>(DataType::DOUBLE),
-                                                           static_cast<int32_t>(DataType::FLOAT16)};
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
 } // namespace
 
@@ -80,9 +80,10 @@ Tensor LogSoftmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt)
 }
 
 void LogSoftmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT || x.data_type == DataType::DOUBLE ||
-                          x.data_type == DataType::FLOAT16,
-                      "kernel::LogSoftmax only supports FLOAT, DOUBLE and FLOAT16 tensors.");
+  EXT_ENFORCE_INVALID(
+      x.data_type == DataType::FLOAT || x.data_type == DataType::DOUBLE ||
+          core::runtime::IsHalfPrecision(x.data_type),
+      "kernel::LogSoftmax only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.");
   EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                       "kernel::LogSoftmax preallocated output dtype must match input.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -120,7 +121,7 @@ void LogSoftmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const
   const int64_t grain = std::max<int64_t>(
       1, tuning().parallel_minimum_elements / axis_dim +
              static_cast<int64_t>(tuning().parallel_minimum_elements % axis_dim != 0));
-  if (x.data_type == DataType::FLOAT16) {
+  if (core::runtime::IsHalfPrecision(x.data_type)) {
     Tensor promoted = core::runtime::PromoteToFloat32(x);
     Tensor result = MakeOutputTensor(DataType::FLOAT, x.shape, n * sizeof(float), nullptr);
     LogSoftmaxTyped<float>(promoted, result, outer, axis_dim, inner, grain);

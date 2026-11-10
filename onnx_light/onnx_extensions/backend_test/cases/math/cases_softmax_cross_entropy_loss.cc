@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
 #include <numeric>
 #include <string>
@@ -158,6 +160,52 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
              return IoData{{std::move(scores), std::move(labels)}, {std::move(loss)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    for (const std::string reduction : {"none", "sum", "mean"}) {
+      for (bool weighted : {false, true}) {
+        for (bool with_log_prob : {false, true}) {
+          NodeProto node = BuildSCENode(weighted, with_log_prob, reduction, false, 0);
+          const std::string suffix = dtype == DataType::FLOAT16 ? "float16" : "bfloat16";
+          const std::string name = "test_cc_softmax_cross_entropy_loss_many_classes_" + suffix +
+                                   "_" + reduction + (weighted ? "_weighted" : "") +
+                                   (with_log_prob ? "_log_prob" : "");
+          Expect(registry, std::move(node), name, {DefaultOpset(13)},
+                 [dtype, reduction, weighted, with_log_prob]() -> IoData {
+                   constexpr int64_t classes = 65536;
+                   const float weight = weighted ? (reduction == "mean" ? 32768.0f : 0.5f) : 1.0f;
+                   const float log_classes = std::log(static_cast<float>(classes));
+                   Tensor scores = core::runtime::DemoteFromFloat32(
+                       Tensor::FromFloat("", {2, classes}, std::vector<float>(2 * classes, 0.0f)),
+                       dtype);
+                   std::vector<Tensor> inputs{std::move(scores),
+                                              Tensor::FromInt64("", {2}, {0, classes - 1})};
+                   if (weighted) {
+                     inputs.push_back(core::runtime::DemoteFromFloat32(
+                         Tensor::FromFloat("", {classes}, std::vector<float>(classes, weight)),
+                         dtype));
+                   }
+                   const float loss = reduction == "mean"  ? log_classes
+                                      : reduction == "sum" ? 2.0f * weight * log_classes
+                                                           : weight * log_classes;
+                   const std::vector<int64_t> shape =
+                       reduction == "none" ? std::vector<int64_t>{2} : std::vector<int64_t>{};
+                   std::vector<Tensor> outputs{core::runtime::DemoteFromFloat32(
+                       Tensor::FromFloat("", shape,
+                                         std::vector<float>(reduction == "none" ? 2 : 1, loss)),
+                       dtype)};
+                   if (with_log_prob) {
+                     outputs.push_back(core::runtime::DemoteFromFloat32(
+                         Tensor::FromFloat("", {2, classes},
+                                           std::vector<float>(2 * classes, -log_classes)),
+                         dtype));
+                   }
+                   return IoData{std::move(inputs), std::move(outputs)};
+                 });
+        }
+      }
+    }
   }
 
   // Independent expected values for the finite-gap regressions from ONNX #8423.

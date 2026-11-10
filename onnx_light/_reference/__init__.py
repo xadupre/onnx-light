@@ -14,5 +14,6 @@ delegating every operator evaluation to the static
 
 from __future__ import annotations
 
+from ..onnx_py._onnxpykernels.runtime import prepare_generation_model  # type: ignore[missing-import]
 from ._evaluator import ReferenceEvaluator
 from ._mixed_evaluator import MixedReferenceEvaluator

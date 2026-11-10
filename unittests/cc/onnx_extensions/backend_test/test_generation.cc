@@ -10,9 +10,12 @@
 #include "onnx_lib/common/scoped_resource.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <gtest/gtest.h>
 #include <limits>
+#include <random>
+#include <set>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -66,6 +69,31 @@ PipelineProto MakeGenerationPipeline(ModelProto &&prefill, ModelProto &&embeddin
   PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill));
   *pipeline.mutable_embedding() = std::move(embedding);
   return pipeline;
+}
+
+ModelProto SamplingModel(const Tensor &scores) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(23);
+  auto *graph = model.mutable_graph();
+  auto *input = graph->add_input();
+  input->set_name("input_ids");
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  auto *output = graph->add_output();
+  output->set_name("logits");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(scores.data_type);
+  auto *initializer = graph->add_initializer();
+  initializer->set_name("scores");
+  initializer->set_data_type(scores.data_type);
+  for (int64_t dim : scores.shape)
+    initializer->add_dims(dim);
+  initializer->set_raw_data(
+      std::string(reinterpret_cast<const char *>(scores.bytes()), scores.size_bytes()));
+  auto *node = graph->add_node();
+  node->set_op_type("Identity");
+  node->add_input("scores");
+  node->add_output("logits");
+  return model;
 }
 
 void AddPersistentState(ModelProto &model) {
@@ -1519,13 +1547,171 @@ TEST(Generation, PipelineUsesStoredOptionsAndRejectsUnsupportedSettings) {
   EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)).size(), 2u);
 
   pipeline.set_top_k(1);
-  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds)), (std::vector<int64_t>(9, 0)));
   pipeline.clear_top_k();
-  pipeline.set_top_p(0.9f);
-  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  pipeline.set_top_p(0.25f);
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds)), (std::vector<int64_t>(9, 0)));
   pipeline.clear_top_p();
   *pipeline.mutable_decode() = PipelineModel("Decode", {{"tokens", TensorProto::INT64}}, "scores");
   EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+}
+
+TEST(Generation, FiltersCandidatesWithStableTiesAndSeededSampling) {
+  onnx_kernels::RegisterKernelFunctions();
+  struct Case {
+    std::vector<float> logits;
+    double temperature;
+    int64_t k;
+    std::optional<double> p;
+    std::set<int64_t> allowed;
+  };
+  for (const auto &test : std::vector<Case>{
+           {{0, 0, 0, 0}, 1., 2, {}, {0, 1}},
+           {{0, 0, 0, 0}, 1., 0, .5, {0, 1}},
+           {{0, 0, 0, 0}, 1., 2, .5, {0}},
+           {{0, 0, 0, 0}, 1., 3, .5, {0, 1}},
+           {{0, 0, 0, 0}, 1., 1, {}, {0}},
+           {{0, 1, 2, 3}, 1., 0, .6, {3}},
+           {{0, 1, 2, 3}, 2., 0, .6, {2, 3}},
+           {{0, 1, 2, 3}, 1., 2, .7, {3}},
+           {{0, 0, 0, 0}, 1., 0, std::numeric_limits<double>::denorm_min(), {0}},
+           {{0, 0, 0, 0}, 1., 4, 1., {0, 1, 2, 3}},
+           {{0, 0, 0, 0}, 1., std::numeric_limits<int64_t>::max(), {}, {0, 1, 2, 3}}}) {
+    SCOPED_TRACE(test.k);
+    SCOPED_TRACE(test.p.value_or(1.));
+    auto model = SamplingModel(Tensor::FromFloat("", {1, 4}, test.logits));
+    RuntimeContext context;
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+    GenerationOptions options;
+    options.max_new_tokens = 96;
+    options.temperature = test.temperature;
+    options.top_k = test.k;
+    options.top_p = test.p;
+    options.seed = 7;
+    const auto first = Tokens(Generate(model, context, feeds, options));
+    EXPECT_EQ(first, Tokens(Generate(model, context, feeds, options)));
+    EXPECT_EQ(std::set<int64_t>(first.begin() + 1, first.end()), test.allowed);
+    PipelineProto pipeline;
+    *pipeline.mutable_prefill() = model;
+    pipeline.set_max_new_tokens(options.max_new_tokens);
+    pipeline.set_temperature(static_cast<float>(options.temperature));
+    pipeline.set_seed(7);
+    pipeline.set_top_k(test.k);
+    // Use exactly representable p for stored/explicit option comparisons.
+    if (test.p)
+      pipeline.set_top_p(static_cast<float>(*test.p));
+    if (!test.p || static_cast<double>(static_cast<float>(*test.p)) == *test.p)
+      EXPECT_EQ(first, Tokens(Generate(pipeline, context, feeds)));
+    EXPECT_EQ(first, Tokens(Generate(pipeline, context, feeds, options)));
+    EXPECT_EQ(first, Tokens(Generate(model, nullptr, context, feeds, options)));
+    options.temperature = 0.;
+    const auto greedy = Tokens(Generate(model, context, feeds, options));
+    const int64_t best = test.logits[3] > test.logits[0] ? 3 : 0;
+    EXPECT_EQ(std::set<int64_t>(greedy.begin() + 1, greedy.end()), (std::set<int64_t>{best}));
+  }
+}
+
+TEST(Generation, DisabledFiltersPreserveTemperatureSamplingSequence) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = SamplingModel(Tensor::FromDouble("", {1, 4}, {0, 1, 2, 3}));
+  RuntimeContext context;
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 32;
+  options.temperature = 2.;
+  options.seed = 7;
+  std::mt19937_64 random(7);
+  std::vector<double> weights;
+  for (double value : {0., 1., 2., 3.})
+    weights.push_back(std::exp((value - 3.) / options.temperature));
+  std::discrete_distribution<int64_t> distribution(weights.begin(), weights.end());
+  std::vector<int64_t> expected{0};
+  for (int step = 0; step < 32; ++step)
+    expected.push_back(distribution(random));
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), expected);
+  options.top_p = 1.;
+  for (int64_t k : {int64_t{0}, int64_t{4}, std::numeric_limits<int64_t>::max()}) {
+    options.top_k = k;
+    EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), expected);
+  }
+}
+
+TEST(Generation, ValidatesFiltersEvenForGreedyAndZeroTokens) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = SamplingModel(Tensor::FromFloat("", {1, 3}, {0, 1, 2}));
+  RuntimeContext context;
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  for (int64_t count : {0, 1}) {
+    GenerationOptions options;
+    options.max_new_tokens = count;
+    options.top_k = -1;
+    EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+    options.top_k = 0;
+    for (double p :
+         {0., -1., 1.01, std::numeric_limits<double>::infinity(),
+          -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+      options.top_p = p;
+      EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+      PipelineProto pipeline;
+      *pipeline.mutable_prefill() = model;
+      pipeline.set_max_new_tokens(count);
+      pipeline.set_top_p(static_cast<float>(p));
+      EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+    }
+    PipelineProto pipeline;
+    *pipeline.mutable_prefill() = model;
+    pipeline.set_max_new_tokens(count);
+    pipeline.set_top_k(-1);
+    EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  }
+}
+
+TEST(Generation, FilteringPreservesDtypesAndFinishedBatchRows) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (int32_t dtype : {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
+    Tensor scores = Tensor::FromFloat("", {2, 4}, {0, 4, 0, 0, 0, 0, 4, 0});
+    if (dtype == DataType::DOUBLE)
+      scores = Tensor::FromDouble("", {2, 4}, {0, 4, 0, 0, 0, 0, 4, 0});
+    else if (IsHalfPrecision(dtype))
+      scores = DemoteFromFloat32(scores, dtype);
+    auto model = SamplingModel(scores);
+    RuntimeContext context;
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 1}, {0, 0}))}};
+    GenerationOptions options;
+    options.max_new_tokens = 3;
+    options.temperature = 1.;
+    options.top_k = 1;
+    options.top_p = .5;
+    options.seed = 7;
+    options.eos_token_ids = {1};
+    options.pad_token_id = 3;
+    EXPECT_EQ(Tokens(Generate(model, context, feeds, options)),
+              (std::vector<int64_t>{0, 1, 3, 3, 0, 2, 2, 2}));
+  }
+}
+
+TEST(Generation, FilteringDoesNotHideNonfiniteLogits) {
+  onnx_kernels::RegisterKernelFunctions();
+  RuntimeContext context;
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+  options.top_k = 1;
+  options.top_p = .1;
+  for (double temperature : {0., 1.}) {
+    options.temperature = temperature;
+    for (float invalid :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+      auto model = SamplingModel(Tensor::FromFloat("", {1, 3}, {4, 0, invalid}));
+      EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+    }
+    const float negative_infinity = -std::numeric_limits<float>::infinity();
+    auto model = SamplingModel(
+        Tensor::FromFloat("", {1, 3}, {negative_infinity, negative_infinity, negative_infinity}));
+    EXPECT_THROW(Generate(model, context, feeds, options), std::invalid_argument);
+    model = SamplingModel(Tensor::FromFloat("", {1, 3}, {negative_infinity, 0, negative_infinity}));
+    EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), (std::vector<int64_t>{0, 1}));
+  }
 }
 
 TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {

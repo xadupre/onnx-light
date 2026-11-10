@@ -77,6 +77,10 @@ struct GenerationOptions {
   /// Requires decoder persistent bindings and explicit, nonscalar tensor feeds.
   /// Token, mask and position inputs cannot be listed. Other feeds remain fixed.
   std::vector<std::string> prefill_only_inputs;
+  /// Must be nonnegative. Zero disables top-k; otherwise retains min(top_k, vocabulary) candidates.
+  int64_t top_k = 0;
+  /// Unset or one disables nucleus filtering; otherwise must be finite in (0, 1].
+  std::optional<double> top_p;
 };
 
 /**
@@ -89,6 +93,12 @@ struct GenerationOptions {
  * to the maximum unmasked prefill coordinate plus the decode step.
  * Logits are FLOAT, DOUBLE, FLOAT16 or BFLOAT16 [batch, sequence, vocabulary]
  * or [batch, vocabulary]. The final position predicts the next token.
+ * Positive temperature scales logits before sampling. Top-k then retains the
+ * highest-scoring candidates, and top-p keeps the smallest descending-probability
+ * prefix reaching p of the remaining, renormalized probability mass (at least one
+ * token). Score ties favor lower token IDs, including at either cutoff. The final
+ * retained distribution is renormalized for sampling. Zero temperature ignores
+ * filtering and preserves greedy decoding; all option ranges are still validated.
  *
  * Without graph persistent_bindings, each iteration evaluates the full prefix
  * using an ordinary RuntimeSession. With bindings, initial cache values come
@@ -131,7 +141,7 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
  * Each feed is supplied once. It is routed to every model that declares the
  * corresponding graph input and model-local parameter references are resolved
  * against that model's catalogue.
- * A separate decode model and top-k/top-p sampling are not yet supported.
+ * A separate decode model is not yet supported.
  * The same lifetime requirements apply as for a single model.
  * Calls sharing a context must be serialized, including calls to the single-model
  * overload or other runtime execution on that context.

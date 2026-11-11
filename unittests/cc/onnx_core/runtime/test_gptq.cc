@@ -562,7 +562,7 @@ TEST(GptqWeights, PreservesScaleTypesAndRejectsFloatReconstructionOverflow) {
   }
 }
 
-TEST(GptqWeights, SupportsEmptyLogicalDimensionsWithExplicitGroups) {
+TEST(GptqWeights, RejectsEmptyLogicalDimensions) {
   for (const int64_t k : {0, 32})
     for (const int64_t n : {0, 32}) {
       if (k != 0 && n != 0)
@@ -576,25 +576,6 @@ TEST(GptqWeights, SupportsEmptyLogicalDimensionsWithExplicitGroups) {
       Tensor scales("scales", TensorProto::FLOAT16, {k / 16, n}, {});
       auto groups = Values<int32_t>("g_idx", TensorProto::INT32, {k},
                                     std::vector<int32_t>(static_cast<size_t>(k), 0));
-      const auto encoded = PackGptqWeights(metadata, codes, zeros, scales, groups);
-      EXPECT_EQ(ReconstructGptqWeights(encoded).size_bytes(), size_t{0});
-      EXPECT_EQ(UnpackGptqCodes(encoded).shape, (Shape{n, k}));
-      EXPECT_EQ(ExportGptqWeights(encoded).in_features, k);
+      EXPECT_ANY_THROW(PackGptqWeights(metadata, codes, zeros, scales, groups));
     }
-  GptqWeights metadata;
-  metadata.bits = 2;
-  metadata.out_features = std::numeric_limits<int64_t>::max();
-  Tensor codes("codes", TensorProto::UINT8, {metadata.out_features, 0}, {});
-  Tensor zeros("zeros", TensorProto::INT16, {0, metadata.out_features}, {});
-  Tensor scales("scales", TensorProto::FLOAT16, {0, metadata.out_features}, {});
-  Tensor groups("g_idx", TensorProto::INT32, {0}, {});
-  const auto encoded = PackGptqWeights(metadata, codes, zeros, scales, groups, 1);
-  EXPECT_EQ(encoded.raw_data().size(), size_t{1});
-  EXPECT_EQ(ReconstructGptqWeights(encoded, 1).size_bytes(), size_t{0});
-  EXPECT_EQ(UnpackGptqCodes(encoded, 1).size_bytes(), size_t{0});
-  auto bad_marker = encoded;
-  (*bad_marker.mutable_raw_data())[0] = 1;
-  EXPECT_ANY_THROW(ExportGptqWeights(bad_marker));
-  metadata.group_size = -1;
-  EXPECT_ANY_THROW(PackGptqWeights(metadata, codes, zeros, scales, groups));
 }

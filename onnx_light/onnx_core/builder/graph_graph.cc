@@ -96,6 +96,87 @@ std::string RewriteDomain(const std::string &domain) {
   return domain.empty() || domain == "onnx.ai" ? "ai.onnx" : domain;
 }
 
+// Renders a tensor value type such as FLOAT[batch,4], or an empty string for other types.
+std::string TensorTypeDescription(const ValueInfoProto &value) {
+  if (!value.has_type() || !value.type().has_tensor_type())
+    return {};
+  const auto &tensor = value.type().tensor_type();
+  std::string result = TensorProto::DataType_Name(static_cast<int>(tensor.elem_type()));
+  if (!tensor.has_shape())
+    return result;
+  result += "[";
+  for (std::size_t i = 0; i < tensor.shape().dim().size(); ++i) {
+    const auto &dim = tensor.shape().dim()[i];
+    result += i == 0 ? "" : ",";
+    result += dim.has_dim_value()   ? std::to_string(dim.dim_value())
+              : dim.has_dim_param() ? dim.dim_param().value()
+                                    : "?";
+  }
+  return result + "]";
+}
+
+// Lists differing graph inputs or outputs by name, with tensor types when they differ.
+void AppendInterfaceDifferences(const char *kind,
+                                const utils::RepeatedProtoField<ValueInfoProto> &source,
+                                const utils::RepeatedProtoField<ValueInfoProto> &target,
+                                std::vector<std::string> &differences) {
+  if (source.size() != target.size()) {
+    differences.push_back(std::string(kind) + " count (source " + std::to_string(source.size()) +
+                          ", target " + std::to_string(target.size()) + ")");
+    return;
+  }
+  for (std::size_t i = 0; i < source.size(); ++i) {
+    std::string difference;
+    if (source[i].Equals(target[i], &difference))
+      continue;
+    const auto left = TensorTypeDescription(source[i]);
+    const auto right = TensorTypeDescription(target[i]);
+    differences.push_back(
+        std::string(kind) + " '" + source[i].name().value() + "' " +
+        (left != right ? "(source " + left + ", target " + right + ")" : "(" + difference + ")"));
+  }
+}
+
+// Lists every model-level declaration that differs, with source and target values when scalar.
+std::vector<std::string> ModelDeclarationDifferences(ModelProto source, ModelProto target) {
+  std::vector<std::string> differences;
+  const auto describe_int = [](bool present, int64_t value) {
+    return present ? std::to_string(value) : std::string("unset");
+  };
+  const auto describe_string = [](bool present, const std::string &value) {
+    return present ? "'" + value + "'" : std::string("unset");
+  };
+  const auto scalar = [&](const char *name, const std::string &left, const std::string &right) {
+    if (left != right)
+      differences.push_back(std::string(name) + " (source " + left + ", target " + right + ")");
+  };
+  scalar("ir_version", describe_int(source.has_ir_version(), source.ir_version()),
+         describe_int(target.has_ir_version(), target.ir_version()));
+  scalar("domain", describe_string(source.has_domain(), source.domain().value()),
+         describe_string(target.has_domain(), target.domain().value()));
+  scalar("model_version", describe_int(source.has_model_version(), source.model_version()),
+         describe_int(target.has_model_version(), target.model_version()));
+  source.ir_version_optional() = target.ir_version_optional();
+  source.ref_domain() = target.domain();
+  source.model_version_optional() = target.model_version_optional();
+  const auto repeated = [&](const auto &field) {
+    ModelProto left, right;
+    field(left) = field(source);
+    field(right) = field(target);
+    std::string difference;
+    if (!left.Equals(right, &difference))
+      differences.push_back(difference);
+    field(source) = field(target);
+  };
+  repeated([](ModelProto &model) -> auto & { return model.ref_metadata_props(); });
+  repeated([](ModelProto &model) -> auto & { return model.ref_configuration(); });
+  repeated([](ModelProto &model) -> auto & { return model.ref_struct_types(); });
+  std::string difference;
+  if (!source.Equals(target, &difference))
+    differences.push_back(difference);
+  return differences;
+}
+
 using FunctionKey = std::tuple<std::string, std::string, std::string>;
 
 FunctionKey Identity(const FunctionProto &function) {
@@ -2538,6 +2619,8 @@ RewritingProto GraphGraph::OptimizeImpl(
             utils::CopyWithSharedTensorStorage(replacement.rewriting.added_nodes());
         for (auto &node : snapshot.ref_node())
           builder_.MaterializeGraphReferences(node);
+        for (auto &node : replacement.rewriting.ref_added_nodes())
+          builder_.MaterializeGraphReferences(node);
         applied.push_back(std::move(replacement.rewriting));
         undo.edits.push_back(std::move(replacement.undo));
       }
@@ -3058,6 +3141,8 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
         retired_outputs.erase(output.value());
   // Nested inference must see replacement capture values, not the retired initializers.
   initializers = std::move(rebuilt_initializers);
+  for (const auto &initializer : initializers)
+    retired_outputs.erase(initializer.name().value());
   if (!removed_extended.empty())
     extended_initializers_ = std::move(rebuilt_extended_initializers);
   for (const auto &addition : added_initializers) {
@@ -3070,15 +3155,17 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
       compute_.SeedConstant(initializer.name().value());
     }
   }
+  std::unordered_map<NodeProto *, std::unordered_set<std::string>> nested_imports;
   std::size_t original_position = 0;
   for (std::size_t position = 0; position < final_node_count; ++position) {
     if (nodes_by_position[position] != nullptr) {
       rebuilt.push_back(utils::CopyWithSharedTensorStorage(*nodes_by_position[position]));
       NodeProto &node = rebuilt.back();
-      std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
-      if (NodeCarriesSubgraph(node))
+      if (NodeCarriesSubgraph(node)) {
+        std::unordered_set<std::string> excluded(node.output().begin(), node.output().end());
         excluded.insert(retired_outputs.begin(), retired_outputs.end());
-      node.ref_attribute() = ImportAttributes(node, excluded);
+        nested_imports.emplace(&node, std::move(excluded));
+      }
       old_indices.push_back(nodes.size());
       for (const auto &output : node.output()) {
         if (!output.empty()) {
@@ -3109,6 +3196,29 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
   nodes = std::move(rebuilt);
   PruneValueInfos();
   RefreshAfterRewriting(old_indices, std::move(affected_values));
+  // Import children only after enclosing producers publish their target values and descriptors.
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    auto &node = nodes[index];
+    const auto pending = nested_imports.find(&node);
+    if (pending == nested_imports.end())
+      continue;
+    for (std::size_t later = index + 1; later < nodes.size(); ++later)
+      for (const auto &output : nodes[later].output())
+        if (!output.empty())
+          pending->second.insert(output.value());
+    node.ref_attribute() = ImportAttributes(node, pending->second);
+    for (const auto &attribute : node.attribute()) {
+      if (IsGraphReference(node, attribute) && attribute.type() == AttributeProto::STRING) {
+        const auto attribute_name = GraphAttributeName(attribute);
+        if (Shapes().HasSubgraphContext(static_cast<int64_t>(index), attribute_name)) {
+          auto &child = Subgraph(attribute.s().value());
+          AncestorRefreshGuard guard(child);
+          child.RefreshInferredInputsFrom(
+              Shapes().GetSubgraphContext(static_cast<int64_t>(index), attribute_name), {});
+        }
+      }
+    }
+  }
 }
 
 void GraphBuilder::AddRewriting(const std::string &name, const RewritingProto &rewrites) {
@@ -3307,14 +3417,22 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   }
   before_header.ref_struct_types() = Shapes().StructTypes();
   after_header.ref_struct_types() = target.Shapes().StructTypes();
-  if (!before_header.Equals(after_header))
-    throw BuilderError("DiffRewritings: incompatible model declarations.");
-  RewritingProto plan;
+  auto differences = ModelDeclarationDifferences(before_header, after_header);
   for (const auto &[domain, version] : opsets_) {
     const auto found = target.opsets_.find(domain);
     if (found == target.opsets_.end() || found->second != version)
-      throw BuilderError("DiffRewritings: removing or changing an existing opset is unsupported.");
+      differences.push_back(
+          "opset '" + RewriteDomain(domain) + "' (source " + std::to_string(version) + ", target " +
+          (found == target.opsets_.end() ? "absent" : std::to_string(found->second)) +
+          "); removing or changing an existing opset is unsupported");
   }
+  if (!differences.empty()) {
+    std::string message = "DiffRewritings: incompatible model declarations: ";
+    for (std::size_t i = 0; i < differences.size(); ++i)
+      message += (i == 0 ? "" : "; ") + differences[i];
+    throw BuilderError(message + ".");
+  }
+  RewritingProto plan;
   for (const auto &[domain, version] : target.opsets_) {
     if (opsets_.count(domain) == 0) {
       auto *opset = plan.add_required_opset_imports();
@@ -3531,20 +3649,27 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     return tensors;
   };
   const auto same_message = [&](const auto &left, const auto &right, const std::string &left_dir,
-                                const std::string &right_dir) {
+                                const std::string &right_dir, std::string *difference = nullptr) {
     auto a = utils::CopyWithSharedTensorStorage(left);
     auto b = utils::CopyWithSharedTensorStorage(right);
     const auto left_tensors = tensor_fields(a);
     const auto right_tensors = tensor_fields(b);
-    if (left_tensors.size() != right_tensors.size())
+    if (left_tensors.size() != right_tensors.size()) {
+      if (difference != nullptr)
+        *difference = "tensor count differs (" + std::to_string(left_tensors.size()) +
+                      " != " + std::to_string(right_tensors.size()) + ")";
       return false;
+    }
     for (std::size_t i = 0; i < left_tensors.size(); ++i) {
-      if (!same_tensor(*left_tensors[i], *right_tensors[i], left_dir, right_dir))
+      if (!same_tensor(*left_tensors[i], *right_tensors[i], left_dir, right_dir)) {
+        if (difference != nullptr)
+          *difference = "tensor '" + left_tensors[i]->name().value() + "' differs";
         return false;
+      }
       *left_tensors[i] = TensorProto();
       *right_tensors[i] = TensorProto();
     }
-    return a.Equals(b);
+    return a.Equals(b, difference);
   };
   const auto copy_message = [&](const auto &message) {
     auto result = utils::CopyWithSharedTensorStorage(message);
@@ -3560,19 +3685,27 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     return node.name().empty() ? "position:" + std::to_string(position)
                                : "name:" + node.name().value();
   };
-  const auto skeleton = [&](const NodeProto &node) {
+  const auto skeleton = [&](const GraphBuilder &scope, const NodeProto &node) {
     auto result = utils::CopyWithSharedTensorStorage(node);
     result.set_name("");
     result.set_doc_string("");
     strip_annotations(result);
     for (auto &attribute : result.ref_attribute()) {
       attribute.set_doc_string("");
-      if (HasGraphReferenceSuffix(attribute.name().value())) {
-        if (attribute.type() == AttributeProto::STRING)
-          attribute.set_s("");
-        else if (attribute.type() == AttributeProto::STRINGS)
-          for (auto &name : attribute.ref_strings())
-            name = "";
+      if (scope.IsGraphReference(node, attribute)) {
+        const auto name = scope.GraphAttributeName(attribute);
+        const bool single = attribute.type() == AttributeProto::STRING;
+        const auto count = attribute.strings().size();
+        attribute = AttributeProto();
+        attribute.set_name(name);
+        if (single) {
+          attribute.set_type(AttributeProto::GRAPH);
+          attribute.mutable_g();
+        } else {
+          attribute.set_type(AttributeProto::GRAPHS);
+          for (std::size_t i = 0; i < count; ++i)
+            attribute.add_graphs();
+        }
       }
     }
     return result;
@@ -3596,18 +3729,28 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   };
   collect(collect, *this, source_functions, base_dir);
   collect(collect, target, target_functions, target_dir);
+  const auto function_name = [](const FunctionKey &key) {
+    const auto &[domain, name, overload] = key;
+    return "'" + domain + ":" + name + (overload.empty() ? "" : ":" + overload) + "'";
+  };
   for (const auto &[key, function] : target_functions) {
     const auto found = source_functions.find(key);
     if (found != source_functions.end()) {
-      if (!same_message(found->second, function, base_dir, target_dir))
-        throw BuilderError("DiffRewritings: conflicting local function definitions.");
+      std::string difference;
+      if (!same_message(found->second, function, base_dir, target_dir, &difference))
+        throw BuilderError("DiffRewritings: conflicting local function definitions for " +
+                           function_name(key) + ": " + difference + ".");
     } else {
       plan.ref_added_functions().push_back(copy_message(function));
     }
   }
+  std::string removed_functions;
   for (const auto &[key, function] : source_functions)
     if (target_functions.count(key) == 0)
-      throw BuilderError("DiffRewritings: removing local functions is unsupported.");
+      removed_functions += (removed_functions.empty() ? "" : ", ") + function_name(key);
+  if (!removed_functions.empty())
+    throw BuilderError(
+        "DiffRewritings: removing local functions is unsupported: " + removed_functions + ".");
   // Express initializer permutations through an ordinary local-function preparation recipe.
   std::string forwarding_name;
   const auto forwarding_call = [&](const std::string &name) {
@@ -3679,13 +3822,33 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         if (!entry.metadata_props().empty())
           metadata.emplace(entry.name().value(), std::move(entry));
       }
-      GraphProto header;
-      for (const auto &[name, value] : metadata)
-        header.ref_value_info().push_back(value);
-      return header;
+      return metadata;
     };
-    if (!value_metadata(source).Equals(value_metadata(destination)))
-      throw BuilderError("DiffRewritings: changing internal value metadata is unsupported.");
+    const auto source_metadata = value_metadata(source);
+    const auto target_metadata = value_metadata(destination);
+    std::set<std::string> changed_metadata;
+    for (const auto &[name, value] : source_metadata) {
+      const auto found = target_metadata.find(name);
+      if (found == target_metadata.end() || !value.Equals(found->second))
+        changed_metadata.insert(name);
+    }
+    for (const auto &[name, value] : target_metadata)
+      if (source_metadata.count(name) == 0)
+        changed_metadata.insert(name);
+    if (!changed_metadata.empty()) {
+      constexpr std::size_t kMaxReportedNames = 10;
+      std::string names;
+      std::size_t reported = 0;
+      for (const auto &name : changed_metadata) {
+        if (reported++ == kMaxReportedNames)
+          break;
+        names += (names.empty() ? "'" : ", '") + name + "'";
+      }
+      if (changed_metadata.size() > kMaxReportedNames)
+        names += " and " + std::to_string(changed_metadata.size() - kMaxReportedNames) + " more";
+      throw BuilderError(
+          "DiffRewritings: changing internal value metadata is unsupported: " + names + ".");
+    }
     a.ref_extended_initializer() =
         utils::CopyWithSharedTensorStorage(source.extended_initializers_);
     b.ref_extended_initializer() =
@@ -3702,9 +3865,23 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         validate_extended_storage(*header);
       }
     }
-    if (!same_message(a, b, base_dir, target_dir))
-      throw BuilderError(
-          "DiffRewritings: incompatible graph interface or persistent declarations.");
+    std::vector<std::string> interface_differences;
+    AppendInterfaceDifferences("input", a.input(), b.input(), interface_differences);
+    AppendInterfaceDifferences("output", a.output(), b.output(), interface_differences);
+    std::string difference;
+    if (interface_differences.empty() && !same_message(a, b, base_dir, target_dir, &difference))
+      interface_differences.push_back(difference);
+    if (!interface_differences.empty()) {
+      constexpr std::size_t kMaxReportedDifferences = 10;
+      std::string message =
+          "DiffRewritings: incompatible graph interface or persistent declarations: ";
+      for (std::size_t i = 0; i < interface_differences.size() && i < kMaxReportedDifferences; ++i)
+        message += (i == 0 ? "" : "; ") + interface_differences[i];
+      if (interface_differences.size() > kMaxReportedDifferences)
+        message += "; and " +
+                   std::to_string(interface_differences.size() - kMaxReportedDifferences) + " more";
+      throw BuilderError(message + ".");
+    }
     for (const auto &initializer : source.initializers_)
       validate_tensor(initializer);
     for (const auto &initializer : destination.initializers_)
@@ -3772,6 +3949,13 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       reorder.ref_initializer_calls().push_back(forwarding_call(name));
       reorder.add_computed_initializer_positions(i);
     }
+    std::unordered_set<std::string> changed_values;
+    for (const auto position : edit.removed_initializers())
+      changed_values.insert(source.initializers_[position].name().value());
+    for (const auto &initializer : edit.added_initializers())
+      changed_values.insert(initializer.name().value());
+    for (const auto &initializer : additions.added_initializers())
+      changed_values.insert(initializer.name().value());
     // New captures must be visible before descendant edits; old captures
     // remain available until the parent edit retires them.
     if (!additions.added_initializers().empty())
@@ -3786,17 +3970,24 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     for (std::size_t i = 0; i < destination.nodes_.size(); ++i) {
       const auto &node = destination.nodes_[i];
       const auto found = nodes.find(node_key(node, i));
-      bool retained = found != nodes.end() && same_message(skeleton(source.nodes_[found->second]),
-                                                           skeleton(node), base_dir, target_dir);
+      bool retained =
+          found != nodes.end() && same_message(skeleton(source, source.nodes_[found->second]),
+                                               skeleton(destination, node), base_dir, target_dir);
+      std::vector<std::string> references;
+      destination.CollectNodeReferences(node, references);
+      const bool consumes_changed =
+          std::any_of(references.begin(), references.end(),
+                      [&](const auto &name) { return changed_values.count(name) != 0; });
       if (retained && !destination.ReferencedSubgraphs(node).empty()) {
-        std::vector<std::string> references;
-        destination.CollectNodeReferences(node, references);
-        retained = std::all_of(references.begin(), references.end(), [&](const auto &name) {
-          const auto initializer = initializers.find(name);
-          return source.HasName(name) && (initializer == initializers.end() ||
-                                          kept_initializers.count(initializer->second) != 0);
-        });
+        retained =
+            !consumes_changed &&
+            std::all_of(references.begin(), references.end(), [&](const auto &name) {
+              const auto initializer = initializers.find(name);
+              return source.HasName(name) && (initializer == initializers.end() ||
+                                              kept_initializers.count(initializer->second) != 0);
+            });
       }
+      const auto rewrites_before = plan.rewrites().size();
       if (retained) {
         for (const auto &output : node.output()) {
           if (output.empty())
@@ -3826,6 +4017,10 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         edit.ref_added_nodes().push_back(copy_message(materialized));
         edit.add_added_nodes_positions(i);
       }
+      if (!retained || consumes_changed || plan.rewrites().size() != rewrites_before)
+        for (const auto &output : node.output())
+          if (!output.empty())
+            changed_values.insert(output.value());
     }
     for (std::size_t i = 0; i < source.nodes_.size(); ++i)
       if (kept_nodes.count(i) == 0)
@@ -3875,6 +4070,22 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   reconstructed.ApplyNodeMoves(plan.moved_nodes());
   hashes.second = reconstructed.RewritingHash();
   // Verify target structure, tags, and actual weight contents before recording replay hashes.
+  const auto verified_node = [&](const GraphBuilder &scope, const NodeProto &node) {
+    auto result = utils::CopyWithSharedTensorStorage(node);
+    scope.MaterializeGraphReferences(result, true);
+    result.set_name("");
+    result.set_doc_string("");
+    strip_annotations(result);
+    for (auto &attribute : result.ref_attribute()) {
+      attribute.set_doc_string("");
+      // Nested bodies are verified recursively; semantic strings remain exact.
+      if (attribute.has_g())
+        attribute.ref_g() = GraphProto();
+      for (auto &graph : attribute.ref_graphs())
+        graph = GraphProto();
+    }
+    return result;
+  };
   const auto verify_result = [&](const auto &self, const GraphBuilder &actual,
                                  const GraphBuilder &expected) -> void {
     if (actual.Compute().ValueTags() != expected.Compute().ValueTags() ||
@@ -3891,8 +4102,8 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
       if (!same_tensor(actual.initializers_[i], expected.initializers_[i], base_dir, target_dir))
         throw BuilderError("DiffRewritings: reconstructed initializer differs from the target.");
     for (std::size_t i = 0; i < actual.nodes_.size(); ++i) {
-      if (!same_message(skeleton(actual.nodes_[i]), skeleton(expected.nodes_[i]), base_dir,
-                        target_dir))
+      if (!same_message(verified_node(actual, actual.nodes_[i]),
+                        verified_node(expected, expected.nodes_[i]), base_dir, target_dir))
         throw BuilderError("DiffRewritings: reconstructed node differs from the target.");
       const auto children = actual.ReferencedSubgraphs(actual.nodes_[i]);
       const auto targets = expected.ReferencedSubgraphs(expected.nodes_[i]);
@@ -4249,10 +4460,10 @@ GraphBuilder GraphBuilder::ReplayRewritings(const RewritingProto &rewrites,
         if (retained == nullptr)
           continue;
         for (const auto &attribute : node.attribute()) {
-          if (!HasGraphReferenceSuffix(attribute.name().value()))
+          if (!source.IsGraphReference(node, attribute))
             continue;
           const auto *replacement = FindAttribute(*retained, attribute.name().value().c_str());
-          if (replacement == nullptr)
+          if (replacement == nullptr || !reconstructed.IsGraphReference(*retained, *replacement))
             continue;
           const auto originals = attribute_graphs(source_children, attribute);
           const auto children = attribute_graphs(reconstructed_children, *replacement);

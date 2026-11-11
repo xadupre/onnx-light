@@ -79,8 +79,8 @@ transfers first, then known transfer bytes, and finally ungrouped nodes.
 Unknown sizes are not replaced by zero bytes or invented dimension values.
 Constants and non-overridable initializers cost no transfer bytes.
 
-Each partition may consume at most **5% of the model's weights**, counted as
-distinct constant inputs, not bytes or elements. The command counts declared
+By default, each partition may consume at most **5% of the model's weights**,
+counted as distinct constant inputs, not bytes or elements. The command counts declared
 non-overridable dense, sparse and extended initializers and standard ``Constant``
 outputs across model scopes before optimization. A shared weight counts once
 per partition. The limit is rounded down and checked before small constants
@@ -88,6 +88,12 @@ are internalized, so embedding them cannot bypass it. The selection summary
 prints the model weight count and the resulting per-partition limit.
 Operators that cannot satisfy the limit remain outside extracted functions;
 for fewer than 20 weights, weighted partitions are therefore not extracted.
+
+Pass ``--max-constant-inputs N`` to override this default with an absolute
+limit on distinct constant inputs per partition. For example,
+``--max-constant-inputs 4`` allows up to four weights per partition regardless
+of the model's total weight count. Zero excludes partitions with constant inputs.
+This limit is also checked before small constants are internalized.
 
 For static boundaries, optionally pass ``--max-boundary-bytes BYTES`` to require
 each group's combined input/output bytes to fit that cap. An explicit cap

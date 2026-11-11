@@ -38,14 +38,14 @@ Owning pipelines
 ----------------
 
 ``LoadedRuntimePipeline(path, context, session_options, load_options)`` loads a
-``PipelineProto`` with a required prefill model and an optional embedding model.
-A separate decode model is rejected, matching native ``Generate`` support.
-The owner retains both models and their prepared stage sessions. It exposes
+``PipelineProto`` with a required prefill model and optional embedding and decode
+models. The owner retains all models and their prepared stage sessions. It exposes
 ``pipeline()`` for read-only inspection, ``prefill_session()`` and the nullable
-``embedding_session()`` for direct stage access.
+``embedding_session()`` and ``decode_session()`` for direct stage access.
 
 All stages are inspected and their combined payload reservation is admitted
-before any external read. Stages then load sequentially, embedding first, using
+before any external read. Stages then load sequentially, embedding first (when
+present), followed by prefill and decode (when present), using
 the same bounded reader/preparation machinery as single models. At most one
 I/O worker and one queued root tensor exist across the pipeline. Serial mode
 reads a stage's payloads before preparing that stage. The shared memory limit

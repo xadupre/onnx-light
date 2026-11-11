@@ -240,6 +240,51 @@ class TestMainPartition(ExtTestCase):
             self.assertFalse(any(function.domain == "ai.rt" for function in result.functions))
             self.assertEqual(sum(node.op_type == "MatMul" for node in result.graph.node), 3)
 
+    def test_mincut_overrides_constant_input_limit(self):
+        for limit in (0, 1, 2, (1 << 64) - 1):
+            with self.subTest(limit=limit), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                source = self._save_external(directory, layers=4)
+                model = load(source, load_external_data=False)
+                model.graph.CopyFrom(
+                    oh.make_graph(
+                        list(model.graph.node)[1:],
+                        "weighted_pairs",
+                        [oh.make_tensor_value_info("flat", TensorProto.FLOAT, [1, 16])],
+                        list(model.graph.output),
+                        list(model.graph.initializer)[1:],
+                    )
+                )
+                save(model, source)
+                (directory / "weights.bin").unlink()
+                output = directory / "partition.onnx"
+                text = StringIO()
+                with redirect_stdout(text):
+                    main(
+                        [
+                            "partition",
+                            "mincut",
+                            str(source),
+                            "-o",
+                            str(output),
+                            "--max-constant-inputs",
+                            str(limit),
+                            "--max-group-nodes",
+                            "4",
+                        ]
+                    )
+                self.assertIn(
+                    f"constant inputs <= {limit} (explicit limit, before internalization)",
+                    text.getvalue(),
+                )
+                self.assertNotIn("5% of", text.getvalue())
+                result = load(output, load_external_data=False)
+                calls = [node for node in result.graph.node if node.domain == "ai.rt"]
+                self.assertEqual(len(calls), 0 if limit == 0 else 4 if limit == 1 else 2)
+                for call in calls:
+                    self.assertLessEqual(sum(name.startswith("W") for name in call.input), limit)
+                self.assertTrue(all(len(function.node) <= 4 for function in result.functions))
+
     def test_mincut_partitions_symbolic_and_large_boundaries_without_a_default_byte_cap(self):
         ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         for symbolic in (False, True):
@@ -281,6 +326,7 @@ class TestMainPartition(ExtTestCase):
             (["--max-boundary-bytes", "127"], 0),
             (["--max-boundary-bytes", "128"], 1),
             (["--min-group-nodes", "2", "--max-group-nodes", "2"], 1),
+            (["--max-constant-inputs", "0"], 0),
         ):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
@@ -315,6 +361,7 @@ class TestMainPartition(ExtTestCase):
             ["--min-group-nodes", "4", "--max-group-nodes", "3"],
             ["--max-boundary-bytes", str(1 << 64)],
             ["--max-group-nodes", str(1 << 64)],
+            ["--max-constant-inputs", str(1 << 64)],
         ):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
@@ -576,6 +623,25 @@ class TestMainPartition(ExtTestCase):
                     self.assertRaises(SystemExit),
                 ):
                     _build_parser().parse_args(["partition", method, *arguments])
+
+    def test_parser_rejects_invalid_constant_input_limits(self):
+        for value in ("-1", "1.5", "invalid"):
+            with (
+                self.subTest(value=value),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                _build_parser().parse_args(
+                    [
+                        "partition",
+                        "mincut",
+                        "model.onnx",
+                        "-o",
+                        "output.onnx",
+                        "--max-constant-inputs",
+                        value,
+                    ]
+                )
 
 
 if __name__ == "__main__":

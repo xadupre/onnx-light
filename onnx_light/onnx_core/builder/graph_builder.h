@@ -1040,6 +1040,11 @@ private:
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);
 
+  // Recognizes internal references, excluding declared semantic attributes.
+  bool IsGraphReference(const NodeProto &node, const AttributeProto &attribute) const;
+  bool IsDeclaredAttribute(const NodeProto &node, const std::string &name) const;
+  std::string GraphAttributeName(const AttributeProto &attribute) const;
+
   // Returns ``true`` when ``node`` carries a control-flow subgraph, either
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);

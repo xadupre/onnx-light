@@ -376,6 +376,49 @@ TEST_F(RuntimeSessionLoading, PipelineInfersExternalLengthsBeforeReadingEitherSt
   }
 }
 
+TEST_F(RuntimeSessionLoading, SeparateDecodeReusesRealPackedWeightsAcrossRequests) {
+  auto pipeline = MakePipeline(false);
+  auto &graph = *pipeline.mutable_prefill()->mutable_graph();
+  for (auto *value : {graph.mutable_input(0), graph.mutable_output(0)}) {
+    auto *shape = value->mutable_type()->mutable_tensor_type()->mutable_shape();
+    shape->add_dim()->set_dim_param("batch");
+    if (value->name() == "input_ids")
+      shape->add_dim()->set_dim_param("sequence");
+    else
+      shape->add_dim()->set_dim_value(3);
+  }
+  *pipeline.mutable_decode() = pipeline.prefill();
+  SavePipeline(pipeline);
+  for (bool overlap : {false, true}) {
+    SCOPED_TRACE(overlap);
+    RuntimeContext context;
+    RuntimeLoadOptions loading;
+    loading.overlap_preparation = overlap;
+    size_t reads = 0;
+    loading.trace = [&](const RuntimeLoadEvent &event) {
+      if (event.phase == RuntimeLoadPhase::kReadFinished)
+        ++reads;
+    };
+    LoadedRuntimePipeline loaded(PipelinePath(), context, {}, loading);
+    ASSERT_NE(loaded.decode_session(), nullptr);
+    EXPECT_EQ(reads, 2u);
+    EXPECT_EQ(loaded.statistics().external_tensors, 2u);
+    const auto &store = *loaded.session_options().value_store;
+    const size_t prepared = store.prepared_bytes(), slots = store.slot_count();
+    EXPECT_GT(prepared, 0u);
+    EXPECT_GT(slots, 0u);
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {1, 1}))}};
+    for (size_t request = 0; request < 2; ++request) {
+      const auto output = Generate(loaded, context, feeds);
+      EXPECT_EQ((std::vector<int64_t>{output.AsInt64(), output.AsInt64() + output.element_count()}),
+                (std::vector<int64_t>{1, 1, 2, 2}));
+      EXPECT_EQ(store.prepared_bytes(), prepared);
+      EXPECT_EQ(store.slot_count(), slots);
+      EXPECT_EQ(reads, 2u);
+    }
+  }
+}
+
 TEST_F(RuntimeSessionLoading, PipelineGenerationHonorsCpuPolicyAndRestoresCallerExecutor) {
   SavePipeline(MakePipeline());
   CpuExecutionPolicy caller_policy;
@@ -545,7 +588,7 @@ TEST_F(RuntimeSessionLoading, PipelineValidatesEveryStageBeforePayloadReads) {
     if (invalid == 0)
       pipeline = PipelineProto{};
     else if (invalid == 1)
-      *pipeline.mutable_decode() = ReadModel();
+      *pipeline.mutable_decode() = ModelProto{};
     else if (invalid == 2)
       *pipeline.mutable_prefill() = ModelProto{};
     else

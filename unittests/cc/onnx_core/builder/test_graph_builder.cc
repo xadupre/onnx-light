@@ -775,6 +775,96 @@ TEST(GraphBuilder, ToFunctionNormalizesAiOnnxDomainsInNestedGraphAttributes) {
     EXPECT_NE(opset.domain(), "ai.onnx");
 }
 
+TEST(GraphBuilder, GraphReferenceNameCollisionsUseInternalAliases) {
+  for (const bool declared_default : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"custom", 1}});
+    if (declared_default) {
+      FunctionProto function;
+      function.set_name("Custom");
+      function.set_domain("custom");
+      function.add_input("x");
+      function.add_output("y");
+      function.add_opset("", 18);
+      function.add_node(MakeNode("Identity", {"x"}, {"y"}));
+      AttributeProto default_attribute;
+      default_attribute.set_name("body_ref");
+      default_attribute.set_type(AttributeProto::INT);
+      default_attribute.set_i(1);
+      function.add_attribute_proto(default_attribute);
+      builder.MakeLocalFunction(function);
+    }
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &body = attributes.add();
+    body.set_name("body");
+    body.set_type(AttributeProto::GRAPH);
+    auto &graph = *body.mutable_g();
+    graph.set_name("body_graph");
+    graph.add_node(MakeNode("Identity", {"x"}, {"branch_result"}));
+    graph.add_output()->set_name("branch_result");
+    if (!declared_default) {
+      auto &semantic_attribute = attributes.add();
+      semantic_attribute.set_name("body_ref");
+      semantic_attribute.set_type(AttributeProto::STRING);
+      semantic_attribute.set_s("semantic");
+    }
+    builder.MakeNode("Custom", {"x"}, {"y"}, "custom", "", attributes);
+
+    const GraphProto imported = builder.BuildGraph();
+    ASSERT_EQ(imported.node().size(), 1u);
+    ASSERT_EQ(imported.node()[0].attribute().size(), declared_default ? 1u : 2u);
+    EXPECT_EQ(imported.node()[0].attribute()[0].name(), "body");
+    ASSERT_TRUE(imported.node()[0].attribute()[0].has_g());
+    EXPECT_EQ(imported.node()[0].attribute()[0].g().name(), "body_graph");
+    if (!declared_default) {
+      EXPECT_EQ(imported.node()[0].attribute()[1].name(), "body_ref");
+      EXPECT_EQ(imported.node()[0].attribute()[1].s(), "semantic");
+    }
+  }
+}
+
+TEST(GraphBuilder, LiteralGraphReferenceAliasMarkerPreservesAttributeName) {
+  const std::string attribute_name = "body_ref__onnx_light_graph_reference_0";
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("custom", 1);
+  auto &function = *model.add_functions();
+  function.set_name("Custom");
+  function.set_domain("custom");
+  function.add_input("x");
+  function.add_output("y");
+  function.add_opset("", 18);
+  function.add_attribute(attribute_name);
+  function.add_node(MakeNode("Identity", {"x"}, {"y"}));
+
+  auto &graph = *model.mutable_graph();
+  graph.set_name("g");
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  auto &node = *graph.add_node();
+  node.set_op_type("Custom");
+  node.set_domain("custom");
+  node.add_input("x");
+  node.add_output("y");
+  auto &body = *node.add_attribute();
+  body.set_name(attribute_name);
+  body.set_type(AttributeProto::GRAPH);
+  body.mutable_g()->set_name("body_graph");
+  body.mutable_g()->add_node(MakeNode("Identity", {"x"}, {"z"}));
+  body.mutable_g()->add_output()->set_name("z");
+
+  const auto exported = core::builder::GraphBuilder(model, SchemaLookup()).ToModel();
+  ASSERT_EQ(exported.graph().node().size(), 1u);
+  ASSERT_EQ(exported.graph().node()[0].attribute().size(), 1u);
+  EXPECT_EQ(exported.graph().node()[0].attribute()[0].name(), attribute_name);
+  EXPECT_EQ(exported.graph().node()[0].attribute()[0].type(), AttributeProto::GRAPH);
+
+  const auto reimported = core::builder::GraphBuilder(exported, SchemaLookup()).ToModel();
+  ASSERT_EQ(reimported.graph().node().size(), 1u);
+  ASSERT_EQ(reimported.graph().node()[0].attribute().size(), 1u);
+  EXPECT_EQ(reimported.graph().node()[0].attribute()[0].name(), attribute_name);
+}
+
 TEST(GraphBuilder, FunctionExportsIgnoreOpsetInsertionOrder) {
   std::vector<FunctionProto> functions;
   for (const bool reversed : {false, true}) {

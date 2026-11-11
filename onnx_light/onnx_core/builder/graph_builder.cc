@@ -1078,7 +1078,9 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
                                          std::unordered_set<std::string> affected_values) {
   compute::ComputeContext::ValueTagPreservationGuard preserve_tags(compute_);
   std::unordered_set<GraphBuilder *> referenced_subgraphs;
+  std::unordered_set<std::string> output_names;
   for (const auto &node : nodes_) {
+    output_names.insert(node.output().begin(), node.output().end());
     for (GraphBuilder *child : ReferencedSubgraphs(node)) {
       referenced_subgraphs.insert(child);
     }
@@ -1087,7 +1089,8 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
                                   [&](const auto &child) {
                                     if (referenced_subgraphs.count(child.get()) != 0)
                                       return false;
-                                    names_.erase(child->name());
+                                    if (output_names.count(child->name()) == 0)
+                                      names_.erase(child->name());
                                     return true;
                                   }),
                    subgraphs_.end());

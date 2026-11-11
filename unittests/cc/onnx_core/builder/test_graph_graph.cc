@@ -1705,6 +1705,71 @@ TEST(GraphGraph, CleanupReplaysDuplicateEncodedInitializers) {
             canonical.SerializeAsString());
 }
 
+TEST(GraphGraph, ReplayPreservesLiveOutputReservationWhenPruningSameNamedSubgraph) {
+  for (const bool capture : {false, true}) {
+    SCOPED_TRACE(capture);
+    core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+    source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const auto &[attribute_name, child_name] :
+         {std::pair{"then_branch", "shape"}, std::pair{"else_branch", "retired_else"}}) {
+      auto &branch = source.MakeSubgraph(child_name);
+      branch.MakeNode("Identity", {"X"}, {"branch_result"});
+      branch.MakeOutput("branch_result");
+      auto &reference = attributes.add();
+      reference.set_name(std::string(attribute_name) + "_ref");
+      reference.set_type(AttributeProto::STRING);
+      reference.set_s(child_name);
+    }
+    source.MakeNode("If", {"condition"}, {"Y"}, "", "", attributes);
+    source.MakeOutput("Y");
+    EXPECT_THROW(source.MakeSubgraph("shape"), core::builder::BuilderError);
+    EXPECT_THROW(source.MakeNode("Identity", {"X"}, {"shape"}), core::builder::BuilderError);
+
+    RewritingProto plan;
+    auto &rewrite = *plan.add_rewrites();
+    rewrite.add_matched_nodes(0);
+    rewrite.add_added_nodes(MakeNode("Identity", {"X"}, {"shape"}));
+    rewrite.add_added_nodes_positions(0);
+    NodeProto consumer = MakeNode("Identity", {"shape"}, {"Y"});
+    if (capture) {
+      consumer = MakeNode("If", {"condition"}, {"Y"});
+      for (const char *name : {"then_branch", "else_branch"}) {
+        auto &attribute = *consumer.add_attribute();
+        attribute.set_name(name);
+        attribute.set_type(AttributeProto::GRAPH);
+        auto &branch = *attribute.mutable_g();
+        branch.set_name(std::string("replacement_") + name);
+        branch.add_node(MakeNode("Identity", {"shape"}, {"branch_result"}));
+        branch.add_output()->set_name("branch_result");
+      }
+    }
+    rewrite.add_added_nodes(consumer);
+    rewrite.add_added_nodes_positions(1);
+
+    const auto check_replay = [&]() {
+      const auto captured = source.CaptureRewritings(plan);
+      RewritingProto loaded;
+      ASSERT_TRUE(loaded.ParseFromString(captured.SerializeAsString()));
+      auto replayed = source.ApplyRewritings(loaded);
+      EXPECT_TRUE(replayed.HasName("shape"));
+      EXPECT_TRUE(replayed.HasShape("shape"));
+      EXPECT_EQ(replayed.GetShape("shape").Shape(), MakeShape({2}));
+      EXPECT_FALSE(replayed.HasSubgraph("shape"));
+      EXPECT_FALSE(replayed.HasSubgraph("retired_else"));
+      EXPECT_FALSE(replayed.HasName("retired_else"));
+      replayed.MakeNode("Identity", {"shape"}, {"retired_else"});
+      replayed.MakeOutput("retired_else");
+      EXPECT_EQ(replayed.GetShape("retired_else").Shape(), MakeShape({2}));
+      EXPECT_THROW(replayed.MakeSubgraph("shape"), core::builder::BuilderError);
+      EXPECT_THROW(replayed.MakeNode("Identity", {"X"}, {"shape"}), core::builder::BuilderError);
+      EXPECT_NO_THROW(VerifyModel(replayed.ToModel()));
+    };
+    EXPECT_NO_THROW(check_replay());
+  }
+}
+
 TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("source", core::symbolic::TensorType::kFloat, MakeShape({2}));

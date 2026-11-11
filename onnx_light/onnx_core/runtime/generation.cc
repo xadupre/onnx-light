@@ -1534,6 +1534,29 @@ Tensor ContinueGeneration(GenerationExecution &state, const GenerationOptions &o
     EXT_ENFORCE_INVALID(execution_allocator == context.execution_allocator() &&
                             io_allocator == context.io_allocator(),
                         "GenerationState: incompatible context allocators.");
+    if (options.max_new_tokens > 0 &&
+        !std::all_of(finished.begin(), finished.end(), [](bool value) { return value; })) {
+      const bool decode = persistent || split;
+      for (const auto *stage : {split ? pipeline.decode : pipeline.prefill, pipeline.embedding}) {
+        if (stage == nullptr)
+          continue;
+        for (const auto &name :
+             {options.input_ids_name, options.attention_mask_name, options.position_ids_name}) {
+          if (!HasInput(*stage, name))
+            continue;
+          const bool mask_input = name == options.attention_mask_name;
+          const bool position = name == options.position_ids_name;
+          const int sequence_axis = position && multi_axis ? 2 : 1;
+          const int64_t width = mask_input || !decode ? length : 1;
+          const Shape shape =
+              position && multi_axis ? Shape{axes, batch, width} : Shape{batch, width};
+          const bool grows = mask_input || !decode;
+          ValidateGenerationTensor(GenerationValue(stage->graph().input(), name),
+                                   TensorProto::INT64, shape, grows ? sequence_axis : -1,
+                                   grows ? max_length - 1 : -1);
+        }
+      }
+    }
   }
   const ModelProto &model = *pipeline.prefill;
   size_t remaining_logit_bytes = options.max_logit_bytes;

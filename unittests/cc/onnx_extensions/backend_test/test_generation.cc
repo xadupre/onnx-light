@@ -2693,7 +2693,7 @@ TEST(GenerationState, SplitCallsPreserveCachesPendingTokensAndSampling) {
         options.seed = 7;
         options.top_k = 3;
         options.top_p = 0.9;
-        RuntimeContext uninterrupted;
+        RuntimeContext uninterrupted(RuntimeContextOptions{.events_enabled = true});
         const auto expected = Tokens(Generate(model, uninterrupted, feeds, options, settings));
         RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
         GenerationState state(model, context, feeds, options, settings);
@@ -2728,6 +2728,8 @@ TEST(GenerationState, SplitCallsPreserveCachesPendingTokensAndSampling) {
                                       : std::vector<int64_t>{3, 4, 5, 6, 7, 8, 9, 10}));
         EXPECT_EQ(lengths, (persistent ? std::vector<int64_t>{3, 4, 5, 6, 7, 8, 9, 10}
                                        : std::vector<int64_t>{}));
+        EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_reuse_count),
+                  StorageTotal(uninterrupted.events(), &RuntimeEvent::storage_reuse_count));
         state.Reset();
         EXPECT_EQ(Tokens(state.Generate(8)), expected);
       }
@@ -2777,7 +2779,7 @@ TEST(GenerationState, RetainsLeftPaddingAndMultiAxisPositions) {
   int64_t observed = 0;
   const auto observe = [&](const GenerationStep &step) {
     EXPECT_EQ(step.index, observed++);
-    const auto &positions = context.Get("seen_positions");
+    const auto &positions = context.Get("position_ids");
     const auto &mask = context.Get("attention_mask");
     std::vector<int64_t> expected_mask{0, 1, 1};
     expected_mask.insert(expected_mask.end(), static_cast<size_t>(step.index), 1);
@@ -2897,10 +2899,39 @@ TEST(GenerationState, RejectsChangedContextAllocatorsBeforeContinuing) {
   RuntimeContext context;
   GenerationState state(model, context, feeds);
   state.Generate(1);
+  EXPECT_THROW(state.Generate(-1), std::invalid_argument);
+  EXPECT_THROW(state.Generate(std::numeric_limits<int64_t>::max()), std::invalid_argument);
+  EXPECT_EQ(Tokens(state.Generate(0)), (std::vector<int64_t>{0, 1, 2}));
   const auto *allocator = context.execution_allocator();
   context.BindExecutionPlan(context.GetExecutionPlan(larger));
   ASSERT_NE(context.execution_allocator(), allocator);
   EXPECT_THROW(state.Generate(1), std::invalid_argument);
   state.Reset();
   EXPECT_EQ(Tokens(state.Generate(2)), (std::vector<int64_t>{0, 1, 2, 3}));
+}
+
+TEST(GenerationState, ResumeValidatesConcreteDecodeMaskBeforeExecution) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true);
+  *pipeline.mutable_decode() = PreparationModel(true);
+  pipeline.mutable_decode()
+      ->mutable_graph()
+      ->mutable_input(1)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(1)
+      ->set_dim_value(3);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
+  GenerationState state(pipeline, context, feeds, {});
+  const auto tokens = Tokens(state.Generate(2));
+  const auto events = context.events().size();
+  EXPECT_THROW(state.Generate(1), std::invalid_argument);
+  EXPECT_EQ(context.events().size(), events);
+  EXPECT_EQ(Tokens(state.Generate(0)), tokens);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(2)), tokens);
 }

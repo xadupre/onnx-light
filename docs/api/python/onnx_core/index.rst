@@ -8,6 +8,7 @@ onnx_light.onnx_core
     compressed_tensors
     exl3
     gguf
+    gptq
     expressions
     gradient
     graph_builder

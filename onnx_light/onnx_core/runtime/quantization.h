@@ -589,6 +589,41 @@ CompressedTensorsWeights ExportCompressedTensorsWeights(
     std::string upstream_revision = "eb058d630f7344099459b6795b1e3eeffdda4b40",
     size_t max_bytes = size_t{1} << 30);
 
+/** Carries a pinned native GPTQModel checkpoint, distinct from portable kGptq. */
+struct GptqWeights {
+  std::string format = "gptq_v2";
+  int64_t in_features = 0, out_features = 0, group_size = 128;
+  uint32_t bits = 4;
+  int64_t group_axis = 1;
+  int32_t word_dtype = TensorProto::INT32;
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports native GPTQ tensors without repacking, preserving padding bytes. */
+EncodedValueProto ImportGptqWeights(const GptqWeights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated native GPTQ tensors, rejecting portable quantization schemas. */
+GptqWeights ExportGptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks native GPTQ unsigned codes into UINT8 [N,K]. */
+Tensor UnpackGptqCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                       const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks INT16 [G,N] zeros; rejects ambiguous GPTQ v1 all-ones fields. */
+Tensor UnpackGptqZeros(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                       const StructTypeCatalogue &catalogue = {});
+
+/** Reconstructs FLOAT [N,K] weights without simulating accelerator arithmetic. */
+Tensor ReconstructGptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/** Packs exact logical codes and zeros; requires metadata.tensors to be empty. */
+EncodedValueProto PackGptqWeights(const GptqWeights &metadata, const Tensor &codes,
+                                  const Tensor &zeros, const Tensor &scales, const Tensor &g_idx,
+                                  size_t max_bytes = size_t{1} << 30);
+
 /** Carries a pinned native GPTQModel AWQ checkpoint, distinct from portable kAwq. */
 struct AwqWeights {
   std::string variant;

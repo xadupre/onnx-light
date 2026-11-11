@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_lib/common/scoped_resource.h"
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -767,8 +768,9 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
   return options;
 }
 
-Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
-                              const RuntimeValueMap &feeds, const GenerationOptions *options) {
+template <typename Request>
+Tensor WithPipelineExecutor(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                            Request &&request) {
   const auto &session_options = pipeline.session_options();
   CpuExecutor *previous = context.cpu_executor();
   const auto executor =
@@ -780,10 +782,45 @@ Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeCont
   context.set_cpu_executor(executor ? executor.get() : previous);
   if (session_options.cpu_execution_counters)
     context.cpu_executor()->EnableCounters();
-  return options == nullptr
-             ? Generate(pipeline.pipeline(), context, feeds, session_options)
-             : Generate(pipeline.pipeline(), context, feeds, *options, session_options);
+  return request();
 }
+
+Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                              const RuntimeValueMap &feeds, const GenerationOptions *options) {
+  return WithPipelineExecutor(pipeline, context, [&]() {
+    return options == nullptr
+               ? Generate(pipeline.pipeline(), context, feeds, pipeline.session_options())
+               : Generate(pipeline.pipeline(), context, feeds, *options,
+                          pipeline.session_options());
+  });
+}
+
+} // namespace
+
+namespace {
+
+struct GenerationExecution {
+  GenerationPipelineView pipeline;
+  RuntimeContext &context;
+  RuntimeSessionOptions session_options;
+  bool split, embedded, persistent, has_mask, has_positions, multi_axis;
+  int64_t batch, axes, length;
+  std::unordered_set<int64_t> eos_token_ids;
+  int64_t largest_eos_token_id;
+  std::optional<int64_t> pad_token_id;
+  std::vector<int64_t> tokens, mask, positions;
+  RuntimeValueMap current, embedding_current, decode_current;
+  std::unique_ptr<RuntimeSession> embedding_session, session, decode_session;
+  std::mt19937_64 random;
+  std::vector<bool> finished;
+  std::vector<int64_t> next, next_positions, next_mask;
+  int64_t step = 0;
+  bool failed = false;
+  RawBufferAllocator *execution_allocator = nullptr;
+  RawBufferAllocator *io_allocator = nullptr;
+};
+
+Tensor ContinueGeneration(GenerationExecution &state, const GenerationOptions &options);
 
 } // namespace
 
@@ -792,11 +829,15 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                            const RuntimeValueMap &decode_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
                            RuntimeSessionOptions session_options,
-                           const RuntimeValueMap &unscoped_feeds);
+                           const RuntimeValueMap &unscoped_feeds,
+                           std::unique_ptr<GenerationExecution> *retained = nullptr);
 
 static Tensor GeneratePipeline(const GenerationPipelineView &pipeline, RuntimeContext &context,
                                const RuntimeValueMap &feeds, const GenerationOptions &options,
-                               RuntimeSessionOptions session_options) {
+                               RuntimeSessionOptions session_options,
+                               std::unique_ptr<GenerationExecution> *retained = nullptr) {
+  if (retained && *retained)
+    return ContinueGeneration(**retained, options);
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   RuntimeValueMap prefill_feeds = ScopeFeeds(*pipeline.prefill, feeds);
   RuntimeValueMap decode_feeds =
@@ -810,7 +851,7 @@ static Tensor GeneratePipeline(const GenerationPipelineView &pipeline, RuntimeCo
                         "Generate: unknown feed '", name, "'.");
   }
   return GenerateImpl(pipeline, context, prefill_feeds, decode_feeds, embedding_feeds, options,
-                      std::move(session_options), feeds);
+                      std::move(session_options), feeds, retained);
 }
 
 void PrepareGenerationModel(ModelProto &model, const std::string &logits_name) {
@@ -1079,7 +1120,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                            const RuntimeValueMap &decode_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
                            RuntimeSessionOptions session_options,
-                           const RuntimeValueMap &unscoped_feeds) {
+                           const RuntimeValueMap &unscoped_feeds,
+                           std::unique_ptr<GenerationExecution> *retained) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
   const bool split = pipeline.decode != nullptr;
@@ -1406,7 +1448,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       decode_current.erase(name);
     }
   }
-  RuntimeSession session(model, std::move(initial), session_options);
+  auto session = std::make_unique<RuntimeSession>(model, std::move(initial), session_options);
   std::unique_ptr<RuntimeSession> decode_session;
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
@@ -1424,14 +1466,88 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     }
   }
   std::vector<int64_t> next_mask(static_cast<size_t>(batch));
+  auto state =
+      std::make_unique<GenerationExecution>(GenerationExecution{pipeline,
+                                                                context,
+                                                                std::move(session_options),
+                                                                split,
+                                                                embedded,
+                                                                persistent,
+                                                                has_mask,
+                                                                has_positions,
+                                                                multi_axis,
+                                                                batch,
+                                                                axes,
+                                                                prompt_length,
+                                                                std::move(eos_token_ids),
+                                                                largest_eos_token_id,
+                                                                pad_token_id,
+                                                                std::move(tokens),
+                                                                std::move(mask),
+                                                                std::move(positions),
+                                                                std::move(current),
+                                                                std::move(embedding_current),
+                                                                std::move(decode_current),
+                                                                std::move(embedding_session),
+                                                                std::move(session),
+                                                                std::move(decode_session),
+                                                                std::move(random),
+                                                                std::move(finished),
+                                                                std::move(next),
+                                                                std::move(next_positions),
+                                                                std::move(next_mask)});
+  if (retained) {
+    *retained = std::move(state);
+    return ContinueGeneration(**retained, options);
+  }
+  return ContinueGeneration(*state, options);
+}
+
+namespace {
+
+Tensor ContinueGeneration(GenerationExecution &state, const GenerationOptions &options) {
+  auto &[pipeline, context, session_options, split, embedded, persistent, has_mask, has_positions,
+         multi_axis, batch, axes, length, eos_token_ids, largest_eos_token_id, pad_token_id, tokens,
+         mask, positions, current, embedding_current, decode_current, embedding_session, session,
+         decode_session, random, finished, next, next_positions, next_mask, step, failed,
+         execution_allocator, io_allocator] = state;
+  EXT_ENFORCE_INVALID(!failed, "GenerationState: failed execution requires Reset.");
+  EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
+  EXT_ENFORCE_INVALID(options.max_logit_bytes == 0 || options.on_step,
+                      "Generate: raw-logit capture requires an on_step callback.");
+  EXT_ENFORCE_INVALID(options.max_new_tokens <= std::numeric_limits<int64_t>::max() - length,
+                      "Generate: requested sequence length overflows.");
+  const int64_t max_length = length + options.max_new_tokens;
+  EXT_ENFORCE_INVALID(max_length <= std::numeric_limits<int64_t>::max() / batch &&
+                          static_cast<uint64_t>(max_length) <=
+                              std::numeric_limits<size_t>::max() / sizeof(int64_t) / batch,
+                      "Generate: requested output size overflows.");
+  EXT_ENFORCE_INVALID(!multi_axis ||
+                          (axes <= std::numeric_limits<int64_t>::max() / batch / max_length &&
+                           static_cast<uint64_t>(axes) <= std::numeric_limits<size_t>::max() /
+                                                              sizeof(int64_t) / batch / max_length),
+                      "Generate: requested position size overflows.");
+  for (const auto position : next_positions)
+    EXT_ENFORCE_INVALID(position <= std::numeric_limits<int64_t>::max() - options.max_new_tokens,
+                        "Generate: overflowing position ID.");
+  if (step > 0) {
+    EXT_ENFORCE_INVALID(execution_allocator == context.execution_allocator() &&
+                            io_allocator == context.io_allocator(),
+                        "GenerationState: incompatible context allocators.");
+  }
+  const ModelProto &model = *pipeline.prefill;
   size_t remaining_logit_bytes = options.max_logit_bytes;
-  int64_t length = prompt_length;
-  for (int64_t step = 0; step < options.max_new_tokens; ++step) {
+  for (int64_t emitted = 0; emitted < options.max_new_tokens &&
+                            !std::all_of(
+                                finished.begin(), finished.end(), [](bool value) { return value; });
+       ++emitted) {
+    // A runtime run can succeed before sampling fails. Such a request cannot be retried.
+    failed = true;
     if (split && step == 1) {
       if (persistent) {
         decode_session = std::make_unique<RuntimeSession>(
-            *pipeline.decode, session.persistent_state().Values(), session_options);
-        decode_session->persistent_state().TransferFrom(session.persistent_state());
+            *pipeline.decode, session->persistent_state().Values(), session_options);
+        decode_session->persistent_state().TransferFrom(session->persistent_state());
       } else
         decode_session = std::make_unique<RuntimeSession>(*pipeline.decode, session_options);
       current.clear();
@@ -1447,7 +1563,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     RuntimeValueMap &active_current = split && step > 0 ? decode_current : current;
     if (step == 1) {
       for (const auto &name : options.prefill_only_inputs) {
-        const auto &prefill = embedding_feeds.at(name).tensor;
+        const auto &prefill = embedding_current.at(name).tensor;
         Shape empty_shape = prefill.shape;
         empty_shape[0] = 0;
         embedding_current.insert_or_assign(
@@ -1492,7 +1608,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
         if (found != active_current.end())
           model_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = (split && step > 0 ? *decode_session : session).Run(context, model_feeds);
+      auto outputs = (split && step > 0 ? *decode_session : *session).Run(context, model_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");
@@ -1522,7 +1638,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
           context.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
         }
       }
-      (split && step > 0 ? *decode_session : session).Run(context);
+      (split && step > 0 ? *decode_session : *session).Run(context);
       EXT_ENFORCE_INVALID(context.Has(options.logits_name), "Generate: missing logits tensor.");
       logits = std::move(context.Get(options.logits_name)).RetainStorage();
     }
@@ -1575,10 +1691,14 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     }
     AppendColumn(tokens, next);
     ++length;
+    ++step;
+    execution_allocator = context.execution_allocator();
+    io_allocator = context.io_allocator();
+    failed = false;
     if (options.on_step) {
       GenerationStep observation;
-      observation.index = step;
-      observation.phase = step == 0 ? GenerationPhase::kPrefill : GenerationPhase::kDecode;
+      observation.index = step - 1;
+      observation.phase = step == 1 ? GenerationPhase::kPrefill : GenerationPhase::kDecode;
       observation.started_at = started_at;
       observation.completed_at = std::chrono::steady_clock::now();
       observation.token_ids = next;
@@ -1600,11 +1720,82 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       if (!options.on_step(observation))
         break;
     }
-    if (std::all_of(finished.begin(), finished.end(), [](bool value) { return value; }) ||
-        step + 1 == options.max_new_tokens)
-      break;
   }
   return Tensor::From<int64_t>(options.input_ids_name, {batch, length}, tokens);
+}
+
+} // namespace
+
+struct GenerationState::Impl {
+  GenerationPipelineView pipeline;
+  RuntimeContext &context;
+  RuntimeValueMap feeds;
+  GenerationOptions options;
+  RuntimeSessionOptions session_options;
+  std::unique_ptr<GenerationExecution> execution;
+  const LoadedRuntimePipeline *loaded = nullptr;
+  std::atomic_flag busy = ATOMIC_FLAG_INIT;
+
+  Impl(GenerationPipelineView pipeline, RuntimeContext &context, const RuntimeValueMap &initial,
+       const GenerationOptions &options, RuntimeSessionOptions session_options)
+      : pipeline(pipeline), context(context), options(options),
+        session_options(std::move(session_options)) {
+    EXT_ENFORCE_INVALID(!this->session_options.consume_initializers,
+                        "GenerationState: cannot consume borrowed model initializers.");
+    this->options.on_step = {};
+    for (const auto &[name, value] : initial)
+      feeds.emplace(name, value.DeepCopy());
+  }
+};
+
+GenerationState::GenerationState(const ModelProto &model, RuntimeContext &context,
+                                 const RuntimeValueMap &feeds, const GenerationOptions &options,
+                                 RuntimeSessionOptions session_options, const ModelProto *embedding)
+    : impl_(
+          std::make_unique<Impl>(GenerationPipelineView{.prefill = &model, .embedding = embedding},
+                                 context, feeds, options, std::move(session_options))) {}
+
+GenerationState::GenerationState(const PipelineProto &pipeline, RuntimeContext &context,
+                                 const RuntimeValueMap &feeds, const GenerationOptions &options,
+                                 RuntimeSessionOptions session_options)
+    : impl_(std::make_unique<Impl>(
+          GenerationPipelineView{.prefill = pipeline.has_prefill() ? &pipeline.prefill() : nullptr,
+                                 .embedding =
+                                     pipeline.has_embedding() ? &pipeline.embedding() : nullptr,
+                                 .decode = pipeline.has_decode() ? &pipeline.decode() : nullptr},
+          context, feeds, options, std::move(session_options))) {}
+
+GenerationState::~GenerationState() = default;
+
+GenerationState::GenerationState(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                                 const RuntimeValueMap &feeds)
+    : GenerationState(pipeline, context, feeds, PipelineOptions(pipeline.pipeline())) {}
+
+GenerationState::GenerationState(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                                 const RuntimeValueMap &feeds, const GenerationOptions &options)
+    : GenerationState(pipeline.pipeline(), context, feeds, options, pipeline.session_options()) {
+  impl_->loaded = &pipeline;
+}
+
+Tensor GenerationState::Generate(int64_t max_new_tokens, GenerationStepCallback on_step,
+                                 size_t max_logit_bytes) {
+  EXT_ENFORCE_INVALID(!impl_->busy.test_and_set(), "GenerationState: exclusive use required.");
+  const ScopeExit idle([this]() noexcept { impl_->busy.clear(); });
+  GenerationOptions options = impl_->options;
+  options.max_new_tokens = max_new_tokens;
+  options.on_step = std::move(on_step);
+  options.max_logit_bytes = max_logit_bytes;
+  const auto request = [&]() {
+    return GeneratePipeline(impl_->pipeline, impl_->context, impl_->feeds, options,
+                            impl_->session_options, &impl_->execution);
+  };
+  return impl_->loaded ? WithPipelineExecutor(*impl_->loaded, impl_->context, request) : request();
+}
+
+void GenerationState::Reset() {
+  EXT_ENFORCE_INVALID(!impl_->busy.test_and_set(), "GenerationState: exclusive use required.");
+  const ScopeExit idle([this]() noexcept { impl_->busy.clear(); });
+  impl_->execution.reset();
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

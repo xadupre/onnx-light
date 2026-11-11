@@ -1153,6 +1153,12 @@ TEST(Generation, LoadedSeparateDecodeReusesBothStagePreparations) {
     EXPECT_EQ(Tokens(Generate(loaded, context, feeds)), (std::vector<int64_t>{0, 1, 2, 3, 0, 1}));
     EXPECT_EQ(loaded.session_options().value_store->prepared_bytes(), prepared);
   }
+  GenerationState state(loaded, context, feeds);
+  state.Generate(1);
+  EXPECT_EQ(Tokens(state.Generate(3)), (std::vector<int64_t>{0, 1, 2, 3, 0, 1}));
+  EXPECT_EQ(loaded.session_options().value_store->prepared_bytes(), prepared);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(4)), (std::vector<int64_t>{0, 1, 2, 3, 0, 1}));
   EXPECT_EQ(completed, 1u);
   EXPECT_EQ(declarations, 3u);
 }
@@ -2662,4 +2668,239 @@ TEST(Generation, RetainsOwnedInitialCounterWithoutChangingCaller) {
   EXPECT_EQ(Tokens(Generate(model, context, feeds, options)),
             (std::vector<int64_t>{0, 1, 1, 1, 1}));
   EXPECT_EQ(feeds.at("counter").tensor.AsInt64()[0], 0);
+}
+
+TEST(GenerationState, SplitCallsPreserveCachesPendingTokensAndSampling) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (bool persistent : {false, true}) {
+    for (double temperature : {0., 2.}) {
+      for (size_t capacity : {size_t{0}, size_t{32}}) {
+        SCOPED_TRACE(persistent);
+        SCOPED_TRACE(temperature);
+        SCOPED_TRACE(capacity);
+        auto model = PreparationModel(persistent);
+        RuntimeValueMap feeds{
+            {"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 2, 0, 0, 3}))},
+            {"attention_mask", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 1, 0, 0, 1}))}};
+        if (persistent)
+          feeds.emplace("past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {})));
+        RuntimeSessionOptions settings;
+        settings.check_shapes = true;
+        settings.persistent_tensor_initial_capacity = capacity;
+        GenerationOptions options;
+        options.max_new_tokens = 8;
+        options.temperature = temperature;
+        options.seed = 7;
+        options.top_k = 3;
+        options.top_p = 0.9;
+        RuntimeContext uninterrupted;
+        const auto expected = Tokens(Generate(model, uninterrupted, feeds, options, settings));
+        RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
+        GenerationState state(model, context, feeds, options, settings);
+        EXPECT_EQ(Tokens(state.Generate(0)), Tokens(feeds.at("input_ids").tensor));
+        EXPECT_TRUE(context.events().empty());
+        std::vector<int64_t> observed;
+        const auto observe = [&](const GenerationStep &step) {
+          EXPECT_EQ(step.index, static_cast<int64_t>(observed.size()));
+          EXPECT_EQ(step.phase,
+                    observed.empty() ? GenerationPhase::kPrefill : GenerationPhase::kDecode);
+          EXPECT_TRUE(step.raw_logits.has_value());
+          observed.push_back(step.index);
+          return true;
+        };
+        EXPECT_EQ(state.Generate(1, observe, 4096).shape, (Shape{2, 4}));
+        const auto event_count = context.events().size();
+        EXPECT_EQ(state.Generate(0).shape, (Shape{2, 4}));
+        EXPECT_EQ(context.events().size(), event_count);
+        EXPECT_EQ(state.Generate(1, observe, 4096).shape, (Shape{2, 5}));
+        EXPECT_EQ(Tokens(state.Generate(6, observe, 4096)), expected);
+        EXPECT_EQ(observed.size(), 8u);
+        std::vector<int64_t> widths, lengths;
+        for (const auto &event : context.events()) {
+          if (event.kind != RuntimeEventKind::kIntermediate || event.value_count != 3)
+            continue;
+          if (event.name == "current_shape")
+            widths.push_back(static_cast<int64_t>(event.values[1]));
+          if (event.name == "cache_shape")
+            lengths.push_back(static_cast<int64_t>(event.values[1]));
+        }
+        EXPECT_EQ(widths, (persistent ? std::vector<int64_t>{3, 1, 1, 1, 1, 1, 1, 1}
+                                      : std::vector<int64_t>{3, 4, 5, 6, 7, 8, 9, 10}));
+        EXPECT_EQ(lengths, (persistent ? std::vector<int64_t>{3, 4, 5, 6, 7, 8, 9, 10}
+                                       : std::vector<int64_t>{}));
+        state.Reset();
+        EXPECT_EQ(Tokens(state.Generate(8)), expected);
+      }
+    }
+  }
+}
+
+TEST(GenerationState, IndependentConversationsRetainRealAttentionCaches) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto cases =
+      core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_persistent$");
+  ASSERT_EQ(cases.size(), 1u);
+  RuntimeValueMap feeds;
+  for (const auto &input : cases[0].data_sets()[0].inputs)
+    feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
+  GenerationOptions options;
+  options.max_new_tokens = 12;
+  options.temperature = 2.;
+  options.seed = 7;
+  RuntimeContext full, first_context, second_context;
+  const auto expected = Tokens(Generate(cases[0].model(), full, feeds, options));
+  GenerationState first(cases[0].model(), first_context, feeds, options);
+  GenerationState second(cases[0].model(), second_context, feeds, options);
+  first.Generate(1);
+  second.Generate(4);
+  first.Generate(3);
+  EXPECT_EQ(Tokens(first.Generate(8)), expected);
+  EXPECT_EQ(Tokens(second.Generate(8)), expected);
+  for (const auto &input : cases[0].data_sets()[0].inputs)
+    EXPECT_EQ(feeds.at(input.name).tensor.shape, input.shape);
+}
+
+TEST(GenerationState, RetainsLeftPaddingAndMultiAxisPositions) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = PreparationModel(true);
+  auto &graph = *model.mutable_graph();
+  PreparationInfo(*graph.add_input(), "position_ids", TensorProto::INT64, {2, 1, -1});
+  PreparationInfo(*graph.add_output(), "seen_positions", TensorProto::INT64, {2, 1, -1});
+  PreparationNode(graph, "Identity", {"position_ids"}, "seen_positions");
+  RuntimeValueMap feeds{
+      {"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 2}))},
+      {"attention_mask", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 1}))},
+      {"position_ids", RuntimeValue(Tensor::FromInt64("", {2, 1, 3}, {0, 7, 8, 0, 17, 18}))},
+      {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  RuntimeContext context;
+  GenerationState state(model, context, feeds);
+  int64_t observed = 0;
+  const auto observe = [&](const GenerationStep &step) {
+    EXPECT_EQ(step.index, observed++);
+    const auto &positions = context.Get("seen_positions");
+    const auto &mask = context.Get("attention_mask");
+    std::vector<int64_t> expected_mask{0, 1, 1};
+    expected_mask.insert(expected_mask.end(), static_cast<size_t>(step.index), 1);
+    EXPECT_EQ(Tokens(mask), expected_mask);
+    if (step.index == 0) {
+      EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{0, 7, 8, 0, 17, 18}));
+    } else {
+      EXPECT_EQ(positions.shape, (Shape{2, 1, 1}));
+      EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{18 + step.index, 18 + step.index}));
+    }
+    return true;
+  };
+  state.Generate(1, observe);
+  state.Generate(1, observe);
+  state.Generate(2, observe);
+  EXPECT_EQ(observed, 4);
+}
+
+TEST(GenerationState, ObserverStopsAndExceptionsCommitTheEmittedToken) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = PreparationModel(true);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  RuntimeContext context, full;
+  GenerationOptions options;
+  options.max_new_tokens = 5;
+  const auto expected = Tokens(Generate(model, full, feeds, options));
+  GenerationState state(model, context, feeds);
+  EXPECT_EQ(state
+                .Generate(10,
+                          [&](const GenerationStep &step) {
+                            EXPECT_EQ(step.index, 0);
+                            EXPECT_THROW(state.Generate(1), std::invalid_argument);
+                            EXPECT_THROW(state.Reset(), std::invalid_argument);
+                            return false;
+                          })
+                .shape,
+            (Shape{1, 3}));
+  EXPECT_THROW(state.Generate(10,
+                              [](const GenerationStep &step) -> bool {
+                                EXPECT_EQ(step.index, 1);
+                                throw std::runtime_error("observer failure");
+                              }),
+               std::runtime_error);
+  EXPECT_EQ(Tokens(state.Generate(3)), expected);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(5)), expected);
+}
+
+TEST(GenerationState, EosFinishedRowsRemainFinishedAcrossCalls) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = PreparationModel(true);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 1}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {}))}};
+  GenerationOptions options;
+  options.eos_token_ids = {2};
+  options.pad_token_id = 0;
+  options.max_new_tokens = 10;
+  RuntimeContext full, context(RuntimeContextOptions{.events_enabled = true});
+  const auto expected = Tokens(Generate(model, full, feeds, options));
+  GenerationState state(model, context, feeds, options);
+  EXPECT_EQ(Tokens(state.Generate(1)), (std::vector<int64_t>{0, 1, 1, 2}));
+  EXPECT_EQ(Tokens(state.Generate(10)), expected);
+  const auto count = context.events().size();
+  EXPECT_EQ(Tokens(state.Generate(1)), expected);
+  EXPECT_EQ(Tokens(state.Generate(0)), expected);
+  EXPECT_EQ(context.events().size(), count);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(10)), expected);
+}
+
+TEST(GenerationState, SplitPipelineTransfersPendingPrefillStateOnlyOnce) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true);
+  *pipeline.mutable_decode() = PreparationModel(true);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 2}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 5;
+  RuntimeContext full, context;
+  const auto expected = Tokens(Generate(pipeline, full, feeds, options));
+  GenerationState state(pipeline, context, feeds, options);
+  state.Generate(1);
+  state.Generate(1);
+  EXPECT_EQ(Tokens(state.Generate(3)), expected);
+}
+
+TEST(GenerationState, RejectsIncompatibleSettingsAndRequiresResetAfterFailure) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model =
+      SamplingModel(Tensor::FromFloat("", {1, 2}, {0, std::numeric_limits<float>::quiet_NaN()}));
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  RuntimeContext context;
+  RuntimeSessionOptions settings;
+  settings.consume_initializers = true;
+  EXPECT_THROW(GenerationState(model, context, feeds, {}, settings), std::invalid_argument);
+  GenerationState state(model, context, feeds);
+  EXPECT_THROW(state.Generate(-1), std::invalid_argument);
+  EXPECT_EQ(Tokens(state.Generate(0)), (std::vector<int64_t>{0}));
+  EXPECT_THROW(state.Generate(1), std::invalid_argument);
+  EXPECT_THROW(state.Generate(0), std::invalid_argument);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(0)), (std::vector<int64_t>{0}));
+  EXPECT_THROW(state.Generate(1), std::invalid_argument);
+}
+
+TEST(GenerationState, RejectsChangedContextAllocatorsBeforeContinuing) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto model = PreparationModel(true);
+  auto larger = PreparationModel(true);
+  for (int index = 0; index < 100; ++index)
+    PreparationNode(*larger.mutable_graph(), "Identity", {"input_ids"},
+                    "extra_" + std::to_string(index));
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  RuntimeContext context;
+  GenerationState state(model, context, feeds);
+  state.Generate(1);
+  const auto *allocator = context.execution_allocator();
+  context.BindExecutionPlan(context.GetExecutionPlan(larger));
+  ASSERT_NE(context.execution_allocator(), allocator);
+  EXPECT_THROW(state.Generate(1), std::invalid_argument);
+  state.Reset();
+  EXPECT_EQ(Tokens(state.Generate(2)), (std::vector<int64_t>{0, 1, 2, 3}));
 }

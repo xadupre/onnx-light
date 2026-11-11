@@ -685,7 +685,9 @@ class TestModelDiff(ExtTestCase):
             return model
 
         base, target = make("Neg"), make("Relu")
-        with self.assertRaisesRegex(ValueError, "conflicting local function"):
+        with self.assertRaisesRegex(
+            ValueError, "conflicting local function definitions for 'local:F'"
+        ):
             diff_models(base, target)
         self.assertEquivalent(base, apply_rewritings_to_model(base, diff_models(base, base)))
         no_functions = _model()
@@ -693,8 +695,22 @@ class TestModelDiff(ExtTestCase):
         plan = diff_models(no_functions, target)
         self.assertFalse(plan.replaced_function_ids)
         self.assertEquivalent(target, apply_rewritings_to_model(no_functions, plan))
-        with self.assertRaisesRegex(ValueError, "removing local functions"):
+        with self.assertRaisesRegex(
+            ValueError, "removing local functions is unsupported: 'local:F'"
+        ):
             diff_models(base, no_functions)
+
+    def test_lists_incompatible_model_declarations(self):
+        target = _model("Mul")
+        target.ir_version = 9
+        target.model_version = 3
+        target.opset_import[0].version = 19
+        with self.assertRaises(ValueError) as context:
+            diff_models(_model(), target)
+        message = str(context.exception)
+        self.assertIn(f"ir_version (source {_model().ir_version}, target 9)", message)
+        self.assertIn("model_version (source unset, target 3)", message)
+        self.assertIn("opset 'ai.onnx' (source 18, target 19)", message)
 
     def test_rejects_incompatible_interfaces_and_corrupt_hashes(self):
         base = _model()
@@ -703,6 +719,14 @@ class TestModelDiff(ExtTestCase):
             getattr(target.graph, field)[0].type.tensor_type.elem_type = TensorProto.FLOAT16
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "incompatible"):
                 diff_models(base, target)
+        target = _model("Mul")
+        target.graph.input[0].CopyFrom(
+            oh.make_tensor_value_info("x", TensorProto.FLOAT, ["batch"])
+        )
+        with self.assertRaisesRegex(
+            ValueError, r"input 'x' \(source FLOAT\[2\], target FLOAT\[batch\]\)"
+        ):
+            diff_models(base, target)
         plan = diff_models(base, _model("Mul"))
         plan.hash_after ^= 1
         with self.assertRaisesRegex(ValueError, "final structural hash mismatch"):

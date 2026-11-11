@@ -96,6 +96,87 @@ std::string RewriteDomain(const std::string &domain) {
   return domain.empty() || domain == "onnx.ai" ? "ai.onnx" : domain;
 }
 
+// Renders a tensor value type such as FLOAT[batch,4], or an empty string for other types.
+std::string TensorTypeDescription(const ValueInfoProto &value) {
+  if (!value.has_type() || !value.type().has_tensor_type())
+    return {};
+  const auto &tensor = value.type().tensor_type();
+  std::string result = TensorProto::DataType_Name(static_cast<int>(tensor.elem_type()));
+  if (!tensor.has_shape())
+    return result;
+  result += "[";
+  for (std::size_t i = 0; i < tensor.shape().dim().size(); ++i) {
+    const auto &dim = tensor.shape().dim()[i];
+    result += i == 0 ? "" : ",";
+    result += dim.has_dim_value()   ? std::to_string(dim.dim_value())
+              : dim.has_dim_param() ? dim.dim_param().value()
+                                    : "?";
+  }
+  return result + "]";
+}
+
+// Lists differing graph inputs or outputs by name, with tensor types when they differ.
+void AppendInterfaceDifferences(const char *kind,
+                                const utils::RepeatedProtoField<ValueInfoProto> &source,
+                                const utils::RepeatedProtoField<ValueInfoProto> &target,
+                                std::vector<std::string> &differences) {
+  if (source.size() != target.size()) {
+    differences.push_back(std::string(kind) + " count (source " + std::to_string(source.size()) +
+                          ", target " + std::to_string(target.size()) + ")");
+    return;
+  }
+  for (std::size_t i = 0; i < source.size(); ++i) {
+    std::string difference;
+    if (source[i].Equals(target[i], &difference))
+      continue;
+    const auto left = TensorTypeDescription(source[i]);
+    const auto right = TensorTypeDescription(target[i]);
+    differences.push_back(
+        std::string(kind) + " '" + source[i].name().value() + "' " +
+        (left != right ? "(source " + left + ", target " + right + ")" : "(" + difference + ")"));
+  }
+}
+
+// Lists every model-level declaration that differs, with source and target values when scalar.
+std::vector<std::string> ModelDeclarationDifferences(ModelProto source, ModelProto target) {
+  std::vector<std::string> differences;
+  const auto describe_int = [](bool present, int64_t value) {
+    return present ? std::to_string(value) : std::string("unset");
+  };
+  const auto describe_string = [](bool present, const std::string &value) {
+    return present ? "'" + value + "'" : std::string("unset");
+  };
+  const auto scalar = [&](const char *name, const std::string &left, const std::string &right) {
+    if (left != right)
+      differences.push_back(std::string(name) + " (source " + left + ", target " + right + ")");
+  };
+  scalar("ir_version", describe_int(source.has_ir_version(), source.ir_version()),
+         describe_int(target.has_ir_version(), target.ir_version()));
+  scalar("domain", describe_string(source.has_domain(), source.domain().value()),
+         describe_string(target.has_domain(), target.domain().value()));
+  scalar("model_version", describe_int(source.has_model_version(), source.model_version()),
+         describe_int(target.has_model_version(), target.model_version()));
+  source.ir_version_optional() = target.ir_version_optional();
+  source.ref_domain() = target.domain();
+  source.model_version_optional() = target.model_version_optional();
+  const auto repeated = [&](const auto &field) {
+    ModelProto left, right;
+    field(left) = field(source);
+    field(right) = field(target);
+    std::string difference;
+    if (!left.Equals(right, &difference))
+      differences.push_back(difference);
+    field(source) = field(target);
+  };
+  repeated([](ModelProto &model) -> auto & { return model.ref_metadata_props(); });
+  repeated([](ModelProto &model) -> auto & { return model.ref_configuration(); });
+  repeated([](ModelProto &model) -> auto & { return model.ref_struct_types(); });
+  std::string difference;
+  if (!source.Equals(target, &difference))
+    differences.push_back(difference);
+  return differences;
+}
+
 using FunctionKey = std::tuple<std::string, std::string, std::string>;
 
 FunctionKey Identity(const FunctionProto &function) {
@@ -3307,14 +3388,22 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   }
   before_header.ref_struct_types() = Shapes().StructTypes();
   after_header.ref_struct_types() = target.Shapes().StructTypes();
-  if (!before_header.Equals(after_header))
-    throw BuilderError("DiffRewritings: incompatible model declarations.");
-  RewritingProto plan;
+  auto differences = ModelDeclarationDifferences(before_header, after_header);
   for (const auto &[domain, version] : opsets_) {
     const auto found = target.opsets_.find(domain);
     if (found == target.opsets_.end() || found->second != version)
-      throw BuilderError("DiffRewritings: removing or changing an existing opset is unsupported.");
+      differences.push_back(
+          "opset '" + RewriteDomain(domain) + "' (source " + std::to_string(version) + ", target " +
+          (found == target.opsets_.end() ? "absent" : std::to_string(found->second)) +
+          "); removing or changing an existing opset is unsupported");
   }
+  if (!differences.empty()) {
+    std::string message = "DiffRewritings: incompatible model declarations: ";
+    for (std::size_t i = 0; i < differences.size(); ++i)
+      message += (i == 0 ? "" : "; ") + differences[i];
+    throw BuilderError(message + ".");
+  }
+  RewritingProto plan;
   for (const auto &[domain, version] : target.opsets_) {
     if (opsets_.count(domain) == 0) {
       auto *opset = plan.add_required_opset_imports();
@@ -3531,20 +3620,27 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     return tensors;
   };
   const auto same_message = [&](const auto &left, const auto &right, const std::string &left_dir,
-                                const std::string &right_dir) {
+                                const std::string &right_dir, std::string *difference = nullptr) {
     auto a = utils::CopyWithSharedTensorStorage(left);
     auto b = utils::CopyWithSharedTensorStorage(right);
     const auto left_tensors = tensor_fields(a);
     const auto right_tensors = tensor_fields(b);
-    if (left_tensors.size() != right_tensors.size())
+    if (left_tensors.size() != right_tensors.size()) {
+      if (difference != nullptr)
+        *difference = "tensor count differs (" + std::to_string(left_tensors.size()) +
+                      " != " + std::to_string(right_tensors.size()) + ")";
       return false;
+    }
     for (std::size_t i = 0; i < left_tensors.size(); ++i) {
-      if (!same_tensor(*left_tensors[i], *right_tensors[i], left_dir, right_dir))
+      if (!same_tensor(*left_tensors[i], *right_tensors[i], left_dir, right_dir)) {
+        if (difference != nullptr)
+          *difference = "tensor '" + left_tensors[i]->name().value() + "' differs";
         return false;
+      }
       *left_tensors[i] = TensorProto();
       *right_tensors[i] = TensorProto();
     }
-    return a.Equals(b);
+    return a.Equals(b, difference);
   };
   const auto copy_message = [&](const auto &message) {
     auto result = utils::CopyWithSharedTensorStorage(message);
@@ -3596,18 +3692,28 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
   };
   collect(collect, *this, source_functions, base_dir);
   collect(collect, target, target_functions, target_dir);
+  const auto function_name = [](const FunctionKey &key) {
+    const auto &[domain, name, overload] = key;
+    return "'" + domain + ":" + name + (overload.empty() ? "" : ":" + overload) + "'";
+  };
   for (const auto &[key, function] : target_functions) {
     const auto found = source_functions.find(key);
     if (found != source_functions.end()) {
-      if (!same_message(found->second, function, base_dir, target_dir))
-        throw BuilderError("DiffRewritings: conflicting local function definitions.");
+      std::string difference;
+      if (!same_message(found->second, function, base_dir, target_dir, &difference))
+        throw BuilderError("DiffRewritings: conflicting local function definitions for " +
+                           function_name(key) + ": " + difference + ".");
     } else {
       plan.ref_added_functions().push_back(copy_message(function));
     }
   }
+  std::string removed_functions;
   for (const auto &[key, function] : source_functions)
     if (target_functions.count(key) == 0)
-      throw BuilderError("DiffRewritings: removing local functions is unsupported.");
+      removed_functions += (removed_functions.empty() ? "" : ", ") + function_name(key);
+  if (!removed_functions.empty())
+    throw BuilderError(
+        "DiffRewritings: removing local functions is unsupported: " + removed_functions + ".");
   // Express initializer permutations through an ordinary local-function preparation recipe.
   std::string forwarding_name;
   const auto forwarding_call = [&](const std::string &name) {
@@ -3679,13 +3785,33 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         if (!entry.metadata_props().empty())
           metadata.emplace(entry.name().value(), std::move(entry));
       }
-      GraphProto header;
-      for (const auto &[name, value] : metadata)
-        header.ref_value_info().push_back(value);
-      return header;
+      return metadata;
     };
-    if (!value_metadata(source).Equals(value_metadata(destination)))
-      throw BuilderError("DiffRewritings: changing internal value metadata is unsupported.");
+    const auto source_metadata = value_metadata(source);
+    const auto target_metadata = value_metadata(destination);
+    std::set<std::string> changed_metadata;
+    for (const auto &[name, value] : source_metadata) {
+      const auto found = target_metadata.find(name);
+      if (found == target_metadata.end() || !value.Equals(found->second))
+        changed_metadata.insert(name);
+    }
+    for (const auto &[name, value] : target_metadata)
+      if (source_metadata.count(name) == 0)
+        changed_metadata.insert(name);
+    if (!changed_metadata.empty()) {
+      constexpr std::size_t kMaxReportedNames = 10;
+      std::string names;
+      std::size_t reported = 0;
+      for (const auto &name : changed_metadata) {
+        if (reported++ == kMaxReportedNames)
+          break;
+        names += (names.empty() ? "'" : ", '") + name + "'";
+      }
+      if (changed_metadata.size() > kMaxReportedNames)
+        names += " and " + std::to_string(changed_metadata.size() - kMaxReportedNames) + " more";
+      throw BuilderError(
+          "DiffRewritings: changing internal value metadata is unsupported: " + names + ".");
+    }
     a.ref_extended_initializer() =
         utils::CopyWithSharedTensorStorage(source.extended_initializers_);
     b.ref_extended_initializer() =
@@ -3702,9 +3828,23 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
         validate_extended_storage(*header);
       }
     }
-    if (!same_message(a, b, base_dir, target_dir))
-      throw BuilderError(
-          "DiffRewritings: incompatible graph interface or persistent declarations.");
+    std::vector<std::string> interface_differences;
+    AppendInterfaceDifferences("input", a.input(), b.input(), interface_differences);
+    AppendInterfaceDifferences("output", a.output(), b.output(), interface_differences);
+    std::string difference;
+    if (interface_differences.empty() && !same_message(a, b, base_dir, target_dir, &difference))
+      interface_differences.push_back(difference);
+    if (!interface_differences.empty()) {
+      constexpr std::size_t kMaxReportedDifferences = 10;
+      std::string message =
+          "DiffRewritings: incompatible graph interface or persistent declarations: ";
+      for (std::size_t i = 0; i < interface_differences.size() && i < kMaxReportedDifferences; ++i)
+        message += (i == 0 ? "" : "; ") + interface_differences[i];
+      if (interface_differences.size() > kMaxReportedDifferences)
+        message += "; and " +
+                   std::to_string(interface_differences.size() - kMaxReportedDifferences) + " more";
+      throw BuilderError(message + ".");
+    }
     for (const auto &initializer : source.initializers_)
       validate_tensor(initializer);
     for (const auto &initializer : destination.initializers_)

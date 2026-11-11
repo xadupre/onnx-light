@@ -807,6 +807,25 @@ TEST(PersistentValueState, IncompatibleTransferLeavesBothStatesUsable) {
   }
 }
 
+TEST(PersistentValueState, RejectsTransferBetweenDifferentCapturedAllocators) {
+  const ModelProto model = Model();
+  SimpleRawBufferAllocator source_allocator(8), target_allocator(8);
+  RuntimeContext source_context(RuntimeContextOptions{.allocator = &source_allocator});
+  RuntimeContext target_context(RuntimeContextOptions{.allocator = &target_allocator});
+  RegisterStep(source_context);
+  RegisterStep(target_context);
+  RuntimeSession source(model, RuntimeValueMap{{"past", Number(2)}});
+  RuntimeSession target(model, RuntimeValueMap{{"past", Number(9)}});
+  (void)source.Run(source_context, {{"tokens", Number(1)}});
+  (void)target.Run(target_context, {{"tokens", Number(1)}});
+  EXPECT_THROW(target.persistent_state().TransferFrom(source.persistent_state()),
+               std::invalid_argument);
+  EXPECT_FLOAT_EQ(Number(source.persistent_state().Values().at("past")), 3);
+  EXPECT_FLOAT_EQ(Number(target.persistent_state().Values().at("past")), 10);
+  EXPECT_FLOAT_EQ(Number(source.Run(source_context, {{"tokens", Number(1)}}).at("present")), 4);
+  EXPECT_FLOAT_EQ(Number(target.Run(target_context, {{"tokens", Number(1)}}).at("present")), 11);
+}
+
 TEST(PersistentValueState, MovesOwnedInitialMapsWithoutMutatingConstViews) {
   ModelProto model = Model();
   RuntimeValueMap initial;

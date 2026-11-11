@@ -671,7 +671,7 @@ TEST(GroupedMatMulPattern, ValidatesConstantProducersInTheirDefiningScope) {
 
 TEST(GroupedMatMulPattern, LoopRejectsTripConditionsStateAndExtraOperations) {
   for (int guard = 0; guard < 15; ++guard) {
-    GraphBuilder builder("g", Schemas(), {{"", 29}});
+    GraphBuilder builder("g", Schemas(), {{"", 29}, {"foreign", 1}});
     Loop(builder, true);
     auto &loop = Last(builder);
     auto &body = builder.Subgraph("body");

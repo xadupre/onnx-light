@@ -34,6 +34,30 @@ root ``GraphBuilder``. The native builder overload compares both existing
 builders directly without exporting and reimporting the target, and preserves
 both builders.
 
+**Nested rewrites and reference attributes.**
+
+Nested inference must observe enclosing target values and descriptors together.
+The previously fixed parent-initializer/If case remains covered by
+``test_nested_edits_use_replaced_parent_initializer_values``. The additional
+``test_deep_captures_use_replaced_values_and_descriptors`` regression covers two
+If levels, multiple captures, graph-input defaults, unchanged consumers, and
+rewritten enclosing producers. Constant replacement and Constant-to-initializer
+replacement reproduced stale captured shapes; affected enclosing nodes are now
+replaced atomically, and nested builders are imported after the existing
+incremental refresh publishes the target producer state. Loop body inputs retain
+their inferred descriptors as well. Source and target builders remain unchanged.
+
+Only resolved internal subgraph references are normalized during matching.
+Declared semantic STRING/STRINGS attributes remain exact, including Quantize's
+``parameter_ref``; generated internal aliases avoid semantic attribute names.
+Harmless GRAPH/GRAPHS renaming is still supported. Structural compatibility
+hashes intentionally omit ordinary attribute payloads, so equal hashes do not
+establish semantic equivalence. Final verification compares materialized node
+attributes independently of the matching skeleton. The numerical
+``test_model_diff_preserves_semantic_parameter_reference`` regression uses two
+valid parameter sets with different scales: the previously empty diff must now
+reconstruct the target reference and its different numerical result.
+
 Named plans use the existing ``ModelProto.rewritings`` representation:
 
 .. code-block:: python

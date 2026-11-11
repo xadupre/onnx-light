@@ -40,6 +40,8 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
+constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
+
 bool HasUnloadedExternalData(const TensorProto &tensor) {
   return !tensor.has_raw_data() && (tensor.has_external_data() ||
                                     tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
@@ -1029,10 +1031,9 @@ bool GraphBuilder::RefreshDependentNodes(
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
       for (const auto &attribute : stored.attribute()) {
-        if (HasGraphReferenceSuffix(attribute.name().value()) &&
+        if (IsGraphReference(stored, attribute) &&
             attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
-          const std::string attribute_name =
-              attribute.name().value().substr(0, attribute.name().value().size() - 4);
+          const std::string attribute_name = GraphAttributeName(attribute);
           if (compute_.Shapes().HasSubgraphContext(static_cast<int64_t>(index), attribute_name)) {
             NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph")
                 .RefreshInferredInputsFrom(compute_.Shapes().GetSubgraphContext(
@@ -1084,7 +1085,10 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   }
   subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
                                   [&](const auto &child) {
-                                    return referenced_subgraphs.count(child.get()) == 0;
+                                    if (referenced_subgraphs.count(child.get()) != 0)
+                                      return false;
+                                    names_.erase(child->name());
+                                    return true;
                                   }),
                    subgraphs_.end());
   std::unordered_set<std::string> available = inherited_names_;
@@ -1731,6 +1735,55 @@ bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
          name.compare(name.size() - suffix_len, suffix_len, kSuffix) == 0;
 }
 
+bool GraphBuilder::IsDeclaredAttribute(const NodeProto &node, const std::string &name) const {
+  const auto *schema = FindSchema(node.op_type(), node.domain(), node.overload());
+  if (schema != nullptr) {
+    for (const auto &declared : schema->attributes())
+      if (declared.name == name)
+        return true;
+  } else {
+    const auto *function = Shapes().GetLocalFunction(
+        ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload()));
+    if (function != nullptr) {
+      for (const auto &declared : function->attribute())
+        if (declared == name)
+          return true;
+      for (const auto &declared : function->attribute_proto())
+        if (declared.name() == name)
+          return true;
+    }
+  }
+  return false;
+}
+
+bool GraphBuilder::IsGraphReference(const NodeProto &node, const AttributeProto &attribute) const {
+  if (!HasGraphReferenceSuffix(attribute.name().value()) ||
+      IsDeclaredAttribute(node, attribute.name().value()))
+    return false;
+  if (attribute.type() == AttributeProto::STRING)
+    return attribute.has_s() && HasSubgraph(attribute.s().value());
+  if (attribute.type() == AttributeProto::STRINGS && !attribute.strings().empty())
+    return std::all_of(attribute.strings().begin(), attribute.strings().end(),
+                       [&](const auto &name) { return HasSubgraph(name); });
+  return false;
+}
+
+std::string GraphBuilder::GraphAttributeName(const AttributeProto &attribute) const {
+  const auto &name = attribute.name().value();
+  const std::string marker = kGraphReferenceAliasMarker;
+  const std::size_t marker_pos = name.rfind(marker);
+  if (marker_pos != std::string::npos) {
+    const std::size_t suffix_pos = marker_pos + marker.size();
+    const std::size_t suffix_size = name.size() - suffix_pos;
+    if (suffix_size > 4 && name.compare(name.size() - 4, 4, "_ref") == 0 &&
+        std::all_of(name.begin() + static_cast<std::ptrdiff_t>(suffix_pos), name.end() - 4,
+                    [](unsigned char c) { return c >= '0' && c <= '9'; })) {
+      return name.substr(0, marker_pos);
+    }
+  }
+  return name.substr(0, name.size() - 4);
+}
+
 bool GraphBuilder::NodeCarriesSubgraph(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (attribute.type() == AttributeProto::AttributeType::GRAPH ||
@@ -1750,6 +1803,26 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
            graph.value_info().size() > 0 || !graph.extended_initializer().empty();
   };
+  std::unordered_set<std::string> occupied_names;
+  for (const auto &attribute : node.attribute()) {
+    occupied_names.insert(attribute.name().value());
+  }
+  std::size_t alias_index = 0;
+  const auto reference_name_for = [&](const AttributeProto &attribute) {
+    const std::string direct_name = attribute.name().value() + "_ref";
+    if (attribute.name().value().find(kGraphReferenceAliasMarker) == std::string::npos &&
+        !IsDeclaredAttribute(node, direct_name) && occupied_names.count(direct_name) == 0) {
+      occupied_names.insert(direct_name);
+      return direct_name;
+    }
+    std::string alias;
+    do {
+      alias = attribute.name().value() + kGraphReferenceAliasMarker +
+              std::to_string(alias_index++) + "_ref";
+    } while (IsDeclaredAttribute(node, alias) || occupied_names.count(alias) != 0);
+    occupied_names.insert(alias);
+    return alias;
+  };
   utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
   for (const auto &attribute : node.attribute()) {
@@ -1758,6 +1831,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
         (attribute.graphs().size() > 0 &&
          has_graph_content(attribute.graphs()[static_cast<std::size_t>(0)]));
     if (attribute.type() == AttributeProto::AttributeType::GRAPH && has_single_graph_payload) {
+      const std::string reference_name = reference_name_for(attribute);
       const GraphProto &graph =
           attribute.has_g() ? attribute.g() : attribute.graphs()[static_cast<std::size_t>(0)];
       std::string base = graph.name().empty() ? attribute.name().value() : graph.name().value();
@@ -1776,7 +1850,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       }
       subgraph.ImportGraph(graph);
       AttributeProto ref;
-      ref.set_name(attribute.name().value() + "_ref");
+      ref.set_name(reference_name);
       ref.set_type(AttributeProto::AttributeType::STRING);
       ref.set_s(subgraph_name);
       imported.push_back(std::move(ref));
@@ -1784,8 +1858,9 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
     }
     if (attribute.type() == AttributeProto::AttributeType::GRAPHS &&
         attribute.graphs().size() > 0) {
+      const std::string reference_name = reference_name_for(attribute);
       AttributeProto refs;
-      refs.set_name(attribute.name().value() + "_ref");
+      refs.set_name(reference_name);
       refs.set_type(AttributeProto::AttributeType::STRINGS);
       const auto &graphs = attribute.graphs();
       for (std::size_t i = 0; i < graphs.size(); ++i) {
@@ -1963,11 +2038,10 @@ compute::NodeMaterializerFn GraphBuilder::MemoryNodeMaterializer() const {
 
 void GraphBuilder::MaterializeGraphReferences(NodeProto &node, bool share_initializers) const {
   for (auto &attribute : node.ref_attribute()) {
-    if (!HasGraphReferenceSuffix(attribute.name().value())) {
+    if (!IsGraphReference(node, attribute)) {
       continue;
     }
-    const std::string base_name =
-        attribute.name().value().substr(0, attribute.name().value().size() - 4);
+    const std::string base_name = GraphAttributeName(attribute);
     if (attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
       const std::string ref_name = attribute.s().value();
       if (HasSubgraph(ref_name)) {
@@ -2282,7 +2356,7 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
   for (const std::string &output : resolved_outputs) {
     node.add_output(output);
   }
-  NodeProto attribute_source;
+  NodeProto attribute_source = node;
   for (const AttributeProto &attribute : attributes) {
     attribute_source.ref_attribute().push_back(utils::CopyWithSharedTensorStorage(attribute));
   }
@@ -2337,10 +2411,9 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
   stored = std::move(node);
   const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
   for (const auto &attribute : stored.attribute()) {
-    if (HasGraphReferenceSuffix(attribute.name().value()) &&
+    if (IsGraphReference(stored, attribute) &&
         attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
-      const std::string attribute_name =
-          attribute.name().value().substr(0, attribute.name().value().size() - 4);
+      const std::string attribute_name = GraphAttributeName(attribute);
       if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
         NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph")
             .CopyInferredValuesFrom(compute_.Shapes().GetSubgraphContext(index, attribute_name));
@@ -2369,7 +2442,7 @@ GraphBuilder::MakeNodeImpl(const std::string &op_type, const std::vector<std::st
 std::vector<GraphBuilder *> GraphBuilder::ReferencedSubgraphs(const NodeProto &node) const {
   std::vector<GraphBuilder *> referenced;
   for (const auto &attribute : node.attribute()) {
-    if (!HasGraphReferenceSuffix(attribute.name().value())) {
+    if (!IsGraphReference(node, attribute)) {
       continue;
     }
     if (attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
@@ -4356,10 +4429,10 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
     for (const auto &ref : nodes_[i].attribute()) {
-      if (!HasGraphReferenceSuffix(ref.name().value())) {
+      if (!IsGraphReference(nodes_[i], ref)) {
         continue;
       }
-      const std::string name = ref.name().value().substr(0, ref.name().value().size() - 4);
+      const std::string name = GraphAttributeName(ref);
       for (auto &attribute : node.ref_attribute()) {
         if (attribute.name().value() != name) {
           continue;

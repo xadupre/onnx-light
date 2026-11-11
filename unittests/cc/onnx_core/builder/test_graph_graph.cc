@@ -12,6 +12,7 @@
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_verify.h"
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <map>
 #include <unordered_map>
@@ -175,6 +176,26 @@ public:
     utils::RepeatedProtoField<NodeProto> result;
     result.push_back(
         MakeNode("Identity", {matched[0]->input(0).value()}, {matched[0]->output(0).value()}));
+    return result;
+  }
+};
+
+class MarkIf : public core::builder::PatternOptimization {
+public:
+  MarkIf() : PatternOptimization(1, "MarkIf") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.op_type() == "If" && candidate.name() != "marked"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
+    utils::RepeatedProtoField<NodeProto> result;
+    result.push_back(*matched[0]);
+    result[0].set_name("marked");
     return result;
   }
 };
@@ -1715,6 +1736,66 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   EXPECT_TRUE(branch.Nodes().empty());
   EXPECT_THROW(branch.BuildGraph(), core::builder::BuilderError);
   EXPECT_THROW(builder.ToModel(), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, OptimizerPlansMaterializeGraphReferencesBeforeSerialization) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const char *name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"x"}, {"newtmp"});
+    branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    branch.MakeNode("Shape", {"newtmp"}, {"branch_shape"});
+    branch.MakeOutput("branch_result");
+    branch.MakeOutput("branch_shape");
+    auto &reference = attributes.add();
+    reference.set_name(std::string(name) + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected", "selected_shape"}, "", "", attributes);
+  builder.MakeNode("Identity", {"selected"}, {"newtmp"});
+  builder.MakeNode("Identity", {"newtmp"}, {"result"});
+  builder.MakeOutput("result");
+  builder.MakeOutput("selected_shape");
+  const ModelProto original = builder.ToModel();
+
+  core::builder::GraphGraph optimizer(
+      builder,
+      std::vector<std::shared_ptr<core::builder::PatternOptimization>>{std::make_shared<MarkIf>()});
+  const RewritingProto plan = optimizer.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_FALSE(plan.moved_nodes().empty());
+  EXPECT_TRUE(std::any_of(plan.moved_nodes().begin(), plan.moved_nodes().end(),
+                          [](const auto &move) { return !move.graph_path().empty(); }));
+  ASSERT_EQ(plan.rewrites()[0].added_nodes().size(), 1u);
+  const NodeProto &added = plan.rewrites()[0].added_nodes()[0];
+  ASSERT_EQ(added.attribute().size(), 2u);
+  EXPECT_EQ(added.attribute(0).name(), "then_branch");
+  EXPECT_EQ(added.attribute(1).name(), "else_branch");
+  EXPECT_EQ(added.attribute(0).type(), AttributeProto::GRAPH);
+  EXPECT_EQ(added.attribute(1).type(), AttributeProto::GRAPH);
+
+  RewritingProto serialized;
+  ASSERT_TRUE(serialized.ParseFromString(plan.SerializeAsString()));
+  core::builder::GraphBuilder source(original, SchemaLookup());
+  const auto replayed = source.ApplyRewritings(serialized);
+  const auto replayed_graph = replayed.BuildGraph();
+  const auto if_node = std::find_if(replayed_graph.node().begin(), replayed_graph.node().end(),
+                                    [](const auto &node) { return node.op_type() == "If"; });
+  ASSERT_NE(if_node, replayed_graph.node().end());
+  ASSERT_EQ(if_node->attribute().size(), 2u);
+  EXPECT_EQ(if_node->attribute(0).name(), "then_branch");
+  EXPECT_EQ(if_node->attribute(1).name(), "else_branch");
+  for (const auto &attribute : if_node->attribute()) {
+    ASSERT_EQ(attribute.type(), AttributeProto::GRAPH);
+    ASSERT_EQ(attribute.g().node().size(), 3u);
+    EXPECT_EQ(attribute.g().node(0).op_type(), "Identity");
+    EXPECT_EQ(attribute.g().node(1).op_type(), "Shape");
+    EXPECT_EQ(attribute.g().node(2).op_type(), "Identity");
+  }
 }
 
 TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {

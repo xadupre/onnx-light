@@ -348,6 +348,15 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
                                              TestMode mode = TestMode::TEST);
 
+/// Registers compact Whisper-style models with four encoder and four decoder
+/// layers and deterministic random weights, with explicit (opset 20) or fused
+/// (opset 23) attention. Includes the convolutional audio frontend, positional
+/// embeddings, causal decoder self-attention, encoder cross-attention and logits.
+/// Cases have symbolic batch/target lengths and no runtime datasets.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterWhisper4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
+                                              TestMode mode = TestMode::TEST);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 /// @param include_big When ``false`` (the default), test cases whose name

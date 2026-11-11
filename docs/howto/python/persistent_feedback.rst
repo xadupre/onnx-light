@@ -227,7 +227,9 @@ Structured sequence inputs retain their runtime representation rather than
 being converted to dense tensor sequences.
 
 C++ callers pass a ``PipelineProto`` containing the prefill model and optional
-embedding model to ``Generate``. Generation settings may be stored directly in
+embedding and decode models to ``Generate``. See
+:doc:`../../api/protos/pipeline_proto` for the native interface compatibility and
+weight memory rules. Generation settings may be stored directly in
 the pipeline or supplied explicitly with ``GenerationOptions``. The single feed
 map and ``RuntimeContext`` are passed as separate arguments; callers never need
 to duplicate or manually separate feeds by model.
@@ -237,7 +239,7 @@ constructs, validates, and saves a ``PipelineProto``, then generates tokens from
 its reloaded models. Python does not yet expose the C++ ``Generate(PipelineProto,
 ...)`` overload: use ``ReferenceEvaluator.generate`` with the individual models
 and explicitly forward the supported settings. A separate ``decode`` model and
-top-k/top-p filtering are not currently supported by generation.
+top-k/top-p filtering are not currently supported by Python generation.
 
 A basic feedback loop
 ---------------------

@@ -98,7 +98,7 @@ private:
 /**
  * Owns a pipeline, its prepared stage sessions and their shared static store.
  *
- * Supports the prefill and optional embedding stages accepted by Generate.
+ * Supports the prefill and optional embedding and decode stages accepted by Generate.
  * The loading budget and statistics cover all stages together. Stages load
  * sequentially, with at most one bounded I/O worker overlapping preparation.
  * Generate overloads retain these session settings and reuse the static store,
@@ -123,6 +123,8 @@ public:
   const RuntimeSession &prefill_session() const noexcept { return *prefill_session_; }
   RuntimeSession *embedding_session() noexcept { return embedding_session_.get(); }
   const RuntimeSession *embedding_session() const noexcept { return embedding_session_.get(); }
+  RuntimeSession *decode_session() noexcept { return decode_session_.get(); }
+  const RuntimeSession *decode_session() const noexcept { return decode_session_.get(); }
   const RuntimeSessionOptions &session_options() const noexcept { return session_options_; }
   const RuntimeLoadStatistics &statistics() const noexcept { return statistics_; }
 
@@ -131,6 +133,7 @@ private:
   RuntimeSessionOptions session_options_;
   std::unique_ptr<RuntimeSession> embedding_session_;
   std::unique_ptr<RuntimeSession> prefill_session_;
+  std::unique_ptr<RuntimeSession> decode_session_;
   RuntimeLoadStatistics statistics_;
 };
 

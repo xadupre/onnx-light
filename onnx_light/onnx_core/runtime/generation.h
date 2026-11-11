@@ -138,19 +138,45 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
 /**
  * Generates tokens using the models and generation settings stored in a pipeline.
  *
- * Prefill is a prompt-processing phase, not a separate model: pipeline.prefill
- * also runs for subsequent tokens. The embedding model consumes input_ids before
- * each language-model invocation. Graphs connect through declared input/output
- * names, without additional mappings. Both models use the supplied context,
- * sharing its custom kernels, allocators and installed CPU executor.
- * Top-level graph inputs and outputs may share names, including an
- * initializer-backed embedding output connected to a language-model input.
- * Private initializer and intermediate names must be unique across the two
- * models; conflicts are rejected before either model executes.
- * Each feed is supplied once. It is routed to every model that declares the
- * corresponding graph input and model-local parameter references are resolved
- * against that model's catalogue.
- * A separate decode model and top-k/top-p sampling are not yet supported.
+ * Runs pipeline.prefill on the prompt. When pipeline.decode is present, it runs
+ * all subsequent iterations with one token per row; otherwise prefill also runs
+ * subsequent iterations, preserving the single-model behavior. The embedding
+ * model consumes input_ids before each language-model invocation. Graphs connect
+ * through declared input/output names, without additional mappings. Models use the supplied
+ * context, sharing its custom kernels, allocators and installed CPU executor. Top-level graph
+ * inputs and outputs may share names, including an initializer-backed embedding output connected to
+ * a language-model input. Private initializer and intermediate names must be unique between
+ * embedding and each language model; conflicts are rejected before execution. Prefill and decode
+ * may share all names, including private names and weights. Each feed is supplied once. It is
+ * routed to every model that declares the corresponding graph input and model-local parameter
+ * references are resolved against that model's catalogue. A separate decode model requires
+ * persistent bindings with identical input/output name pairs in both models; both sets may be
+ * empty. Without bindings, explicit decode still runs on one token, rather than recomputing the
+ * prompt. Initial state comes only from prefill feeds or paged-cache initializers. Retained prefill
+ * values and append reservations are transferred to the decode session without copying cache
+ * payloads or losing reserved capacity; ordinary append/growth allocation rules still apply.
+ * Fixed feeds are routed independently, including
+ * decode-only inputs. Embedding outputs must connect compatibly to both language models.
+ *
+ * Both language-model contracts are validated before execution, even when zero
+ * tokens are requested. Tensor dtypes and declared ranks must agree. Missing
+ * shapes and symbolic or unspecified dimensions are wildcards; symbol spelling
+ * does not establish cross-model equality. Conflicting concrete dimensions are
+ * rejected except for sequence specialization: token/position inputs accept the
+ * prompt length in prefill and length one in decode; masks cover the full prefix.
+ * Embedding-connected language inputs of rank three or greater use
+ * [batch, sequence, ...] and the same prompt/one sequence specialization.
+ * The embedding output declarations must be compatible with both stages.
+ * Logits may specialize their sequence dimension to prompt length or one in
+ * prefill and one in decode; batch and vocabulary dimensions must agree.
+ * Concrete control dimensions must fit the supplied request. Persistent types,
+ * including tensor leaves in sequences and structures, do not receive sequence
+ * specialization. Wildcards are checked against actual values by execution.
+ *
+ * All invocation sessions reuse session_options.value_store when supplied.
+ * Model-owned initializer payloads are borrowed. Distinct model preparations
+ * may still own separate transformed weights; equal names alone do not deduplicate
+ * preparations or payloads. Top-k/top-p sampling is not yet supported.
  * The same lifetime requirements apply as for a single model.
  * Calls sharing a context must be serialized, including calls to the single-model
  * overload or other runtime execution on that context.

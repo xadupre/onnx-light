@@ -34,6 +34,38 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Native GPTQModel GPTQ weights
+-----------------------------
+
+``GptqWeights`` in ``onnx_core/runtime/quantization.h`` describes a pinned
+native ``gptq``, ``gptq_v2`` or ``gptq_p`` checkpoint, separate from the
+unchanged portable ``kGptq`` profile. See
+:ref:`the checkpoint support rules <l-gptq-checkpoints>` for packing,
+storage dtypes, dimensions and legacy zero-point conversion limits.
+
+.. code-block:: cpp
+
+    GptqWeights checkpoint;
+    checkpoint.format = "gptq_v2";
+    checkpoint.in_features = 128;
+    checkpoint.out_features = 128;
+    checkpoint.group_size = 128;
+    checkpoint.bits = 4;
+    checkpoint.word_dtype = TensorProto::INT32;
+    checkpoint.tensors = loaded_module_tensors;  // qweight, qzeros, scales, g_idx
+    auto encoded = ImportGptqWeights(checkpoint);
+    auto restored = ExportGptqWeights(encoded);  // exact tensors and metadata
+    auto codes = UnpackGptqCodes(encoded);       // UINT8 [N,K]
+    auto zeros = UnpackGptqZeros(encoded);       // INT16 [H,N], true zeros
+    auto weights = ReconstructGptqWeights(encoded);  // FLOAT [N,K]
+
+``PackGptqWeights(metadata, codes, zeros, scales, g_idx, max_bytes)``
+encodes already-quantized tensors into an explicitly requested layout;
+``metadata.tensors`` must be empty. It rejects out-of-range codes and
+unrepresentable zero points, rather than wrapping, clipping or requantizing.
+Import/export preserves padding; repacking creates canonical padding.
+Generic dequantization also recognizes the native encoded schema.
+
 Native GPTQModel AWQ weights
 ----------------------------
 

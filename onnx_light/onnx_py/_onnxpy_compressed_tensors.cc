@@ -24,6 +24,7 @@ using core::runtime::AwqWeights;
 using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
 using core::runtime::Exl3Weights;
+using core::runtime::GptqWeights;
 using core::runtime::Shape;
 using core::runtime::Tensor;
 using ONNX_LIGHT_NAMESPACE::EncodedValueProto;
@@ -228,9 +229,139 @@ nb::dict TensorDictionary(const CompressedTensorsWeights &checkpoint) {
   return result;
 }
 
+GptqWeights GptqMetadata(const std::string &format, int64_t in_features, int64_t out_features,
+                         int64_t group_size, uint32_t bits, int64_t group_axis, int32_t word_dtype,
+                         const std::string &revision, size_t max_bytes) {
+  EXT_ENFORCE_INVALID(revision == kExl3Revision, "GPTQModel unsupported upstream revision.");
+  EXT_ENFORCE_INVALID(format == "gptq" || format == "gptq_v2" || format == "gptq_p",
+                      "GPTQModel unsupported format.");
+  EXT_ENFORCE_INVALID(max_bytes > 0, "GPTQModel max_bytes must be positive.");
+  GptqWeights result;
+  result.format = format;
+  result.in_features = in_features;
+  result.out_features = out_features;
+  result.group_size = group_size;
+  result.bits = bits;
+  result.group_axis = group_axis;
+  result.word_dtype = word_dtype;
+  result.upstream_revision = revision;
+  return result;
+}
+
+Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total, size_t max_bytes) {
+  nb::module_ numpy = nb::module_::import_("numpy");
+  EXT_ENFORCE_INVALID(nb::isinstance(value, numpy.attr("ndarray")),
+                      "GPTQModel tensors must be loaded NumPy arrays.");
+  EXT_ENFORCE_INVALID(nb::cast<bool>(value.attr("flags").attr("c_contiguous")) &&
+                          nb::cast<bool>(value.attr("dtype").attr("isnative")),
+                      "GPTQModel arrays must be C-contiguous with native byte order.");
+  const int32_t type = NumpyType(value);
+  nb::object storage = nb::borrow<nb::object>(value);
+  if (type == TensorProto::BFLOAT16)
+    storage = storage.attr("view")(numpy.attr("uint16"));
+  const auto array =
+      nb::cast<nb::ndarray<nb::numpy, nb::ro, nb::c_contig, nb::device::cpu>>(storage);
+  EXT_ENFORCE_INVALID(total <= max_bytes && array.nbytes() <= max_bytes - total,
+                      "GPTQModel tensors exceed max_bytes.");
+  Shape shape;
+  for (size_t i = 0; i < array.ndim(); ++i) {
+    EXT_ENFORCE_INVALID(array.shape(i) <=
+                            static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+                        "GPTQModel dimension size overflow.");
+    shape.push_back(static_cast<int64_t>(array.shape(i)));
+  }
+  total += array.nbytes();
+  return Tensor::Borrow(name, type, std::move(shape), static_cast<const uint8_t *>(array.data()),
+                        array.nbytes());
+}
+
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("gptqmodel_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_gptq_weights",
+      [](const nb::dict &tensors, const std::string &format, int64_t in_features,
+         int64_t out_features, int64_t group_size, uint32_t bits, int64_t group_axis,
+         int32_t word_dtype, const std::string &revision, size_t max_bytes) {
+        auto weights = GptqMetadata(format, in_features, out_features, group_size, bits, group_axis,
+                                    word_dtype, revision, max_bytes);
+        EXT_ENFORCE_INVALID(tensors.size() == 4,
+                            "GPTQModel requires qweight, qzeros, scales and g_idx.");
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "GPTQModel tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "qweight" || name == "qzeros" || name == "scales" ||
+                                  name == "g_idx",
+                              "GPTQModel unexpected side tensor.");
+          weights.tensors.emplace(name, BorrowGptqArray(name, item.second, total, max_bytes));
+        }
+        return core::runtime::ImportGptqWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("format"), nb::arg("in_features"), nb::arg("out_features"),
+      nb::arg("group_size") = 128, nb::arg("bits") = 4, nb::arg("group_axis") = 1,
+      nb::arg("word_dtype") = static_cast<int32_t>(TensorProto::INT32),
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "pack_gptq_weights",
+      [](nb::handle codes, nb::handle zeros, nb::handle scales, nb::handle g_idx,
+         const std::string &format, int64_t in_features, int64_t out_features, int64_t group_size,
+         uint32_t bits, int64_t group_axis, int32_t word_dtype, const std::string &revision,
+         size_t max_bytes) {
+        const auto metadata = GptqMetadata(format, in_features, out_features, group_size, bits,
+                                           group_axis, word_dtype, revision, max_bytes);
+        size_t total = 0;
+        const auto c = BorrowGptqArray("codes", codes, total, max_bytes);
+        const auto z = BorrowGptqArray("zeros", zeros, total, max_bytes);
+        const auto s = BorrowGptqArray("scales", scales, total, max_bytes);
+        const auto g = BorrowGptqArray("g_idx", g_idx, total, max_bytes);
+        return core::runtime::PackGptqWeights(metadata, c, z, s, g, max_bytes);
+      },
+      nb::arg("codes"), nb::arg("zeros"), nb::arg("scales"), nb::arg("g_idx"), nb::arg("format"),
+      nb::arg("in_features"), nb::arg("out_features"), nb::arg("group_size") = 128,
+      nb::arg("bits") = 4, nb::arg("group_axis") = 1,
+      nb::arg("word_dtype") = static_cast<int32_t>(TensorProto::INT32),
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_gptq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportGptqWeights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["format"] = weights.format;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["group_size"] = weights.group_size;
+        result["bits"] = weights.bits;
+        result["group_axis"] = weights.group_axis;
+        result["word_dtype"] = weights.word_dtype;
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_gptq_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackGptqCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_gptq_zeros",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackGptqZeros(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_gptq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructGptqWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("awq_upstream_revision") = kExl3Revision;
   runtime.def(
       "import_awq_weights",

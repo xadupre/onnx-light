@@ -35,6 +35,116 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+.. _l-gptq-checkpoints:
+
+Native GPTQModel GPTQ checkpoints
+---------------------------------
+
+``onnx_light.onnx_core.gptq`` handles one module's loaded ``qweight``,
+``qzeros``, ``scales`` and ``g_idx`` tensors. The explicit checkpoint formats
+``gptq``, ``gptq_v2`` and ``gptq_p`` are **not** the portable
+``QuantizationFormat.GPTQ`` profile, whose serialized contract is unchanged.
+The adapter does not implement GPTQ optimization, calibration, bias, a model
+loader or accelerated inference.
+
+Compatibility pins GPTQModel revision
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``, not arbitrary releases.
+The configuration reference is
+`config.py <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/quantization/config.py>`_.
+Implementation-level references are the
+`packed-storage base and pack_original <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/__init__.py>`_,
+`planar helpers <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/planar_packing.py>`_
+and `tail tests <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/tests/test_pack_tails.py>`_.
+No GPTQModel or Torch installation is required.
+
+.. list-table:: Supported checkpoint layouts
+   :header-rows: 1
+
+   * - Format
+     - Bits
+     - Packed word dtype
+     - Packing
+   * - ``gptq``, ``gptq_v2``
+     - 2, 4, 8
+     - INT8, INT16, INT32, INT64
+     - Continuous, least-significant field first; partial words allowed
+   * - ``gptq``, ``gptq_v2``
+     - 3
+     - INT32
+     - Continuous 96-bit streams per 32 codes; codes 10 and 21 cross words
+   * - ``gptq_p``
+     - 2 through 8
+     - INT32
+     - Per-32-code planes; low planes precede high planes within each block
+
+``word_dtype`` is an ONNX element-type integer (default INT32); it applies
+to both packed tensors, not to the unsigned logical codes. INT64 uses the
+upstream generic storage algorithm; it does not imply Torch kernel support.
+For planar widths 3/5/6/7 and continuous three-bit storage,
+both ``K`` and ``N`` must be multiples of 32. The 2/4/8-bit single-plane
+case has the same word arrangement as continuous packing.
+
+For continuous packing, ``qweight`` is
+``[ceil(K*bits/word_bits),N]`` and ``qzeros`` is
+``[H,ceil(N*bits/word_bits)]``. Packing runs down the input axis of each
+weight column and across the output axis of each zero-point row, never
+across a flattened weight matrix or restarting at group boundaries.
+``H=ceil(K/G)`` with ``G=group_size`` (or ``K`` for ``group_size=-1``);
+the final group may be partial. Packed codes are unsigned ``0..2**bits-1``.
+Both logical dimensions must be positive; empty matrices, invalid group
+indices, nonfinite/nonpositive scales and unsupported layouts are rejected.
+
+Logical codes are UINT8 ``[N,K]`` (output, input). Grouping uses input
+columns, ``group_axis=1``; ``g_idx[k]`` selects the parameter row for input
+``k``, rather than permuting codes or assuming contiguous groups. Scales
+and unpacked true zero points have shape ``[H,N]``. Zero points unpack as
+INT16, independently of the checkpoint's packed storage-word dtype.
+Scales retain FLOAT16, BFLOAT16 or FLOAT32 storage exactly; explicit packing
+does not cast them to the upstream producer's default FLOAT16.
+Reconstruction returns FLOAT32 ``(code-zero)*scale`` in ``[N,K]`` order,
+without promising accelerator arithmetic equivalence.
+
+Imports retain an independent, versioned encoded snapshot. Exports validate
+the schema, dimensions, parameters, group map and exact payload extents before
+returning the original native tensors byte-for-byte, including padding.
+Loaded arrays must be C-contiguous and native-endian; encoded multi-byte
+words are little-endian. ``max_bytes`` bounds payloads and logical workspace
+before allocation; it defaults to 1 GiB.
+
+``pack_gptq_weights`` packs already-quantized codes and parameters, without
+requantization or floating-point rounding. GPTQ v1 stores ``zero-1``;
+the validated v1 domain is true zeros ``1..2**bits-1``. V2 and planar
+store true zeros ``0..2**bits-1``. V2 zero ``0`` cannot be converted
+losslessly to the legacy field convention. The all-ones stored v1 field
+is rejected: upstream's packed-word correction and per-field correction
+disagree at this extremum, and an unmasked field increment would yield
+``2**bits`` outside the unsigned zero-point domain. Neither import nor
+packing guesses which interpretation was intended.
+Such requests fail explicitly. Export does not silently change layouts;
+conversion requires unpacking codes/zeros and explicitly repacking them
+with the desired format, retaining the original scales and group map.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.gptq import (
+        import_gptq_weights, export_gptq_weights, pack_gptq_weights,
+        unpack_gptq_codes, unpack_gptq_zeros, reconstruct_gptq_weights,
+    )
+
+    encoded = import_gptq_weights(
+        tensors, format="gptq_v2", in_features=K, out_features=N,
+        group_size=128, bits=4,
+    )
+    checkpoint = export_gptq_weights(encoded)
+    codes = unpack_gptq_codes(encoded)       # uint8 [N,K]
+    zeros = unpack_gptq_zeros(encoded)       # int16 [H,N], true zeros
+    weights = reconstruct_gptq_weights(encoded)
+    converted = pack_gptq_weights(
+        codes, zeros, checkpoint["tensors"]["scales"],
+        checkpoint["tensors"]["g_idx"],
+        format="gptq", in_features=K, out_features=N, group_size=128, bits=4,
+    )  # rejects any unrepresentable zero rather than wrapping it
+
 .. _l-awq-checkpoints:
 
 Native GPTQModel AWQ checkpoints

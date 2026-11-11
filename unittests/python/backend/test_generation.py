@@ -83,6 +83,42 @@ def _shared_encoded(model, name, values):
 
 
 class TestGeneration(ExtTestCase):
+    def test_sampling_filters(self):
+        model = transition_model()
+        evaluator = ReferenceEvaluator(model)
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}
+        expected = numpy.array([[0, 1, 2, 0, 1], [1, 2, 0, 1, 2]], dtype=numpy.int64)
+        options = runtime.GenerationOptions()
+        self.assertEqual(options.top_k, 0)
+        self.assertIsNone(options.top_p)
+        options.max_new_tokens = 4
+        options.temperature = 1.0
+        options.seed = 7
+        for k, p in [(1, None), (0, 0.5), (2, 0.5)]:
+            with self.subTest(k=k, p=p):
+                options.top_k = k
+                options.top_p = p
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(runtime.generate(model, context, feeds, options)), expected
+                )
+                numpy.testing.assert_array_equal(
+                    evaluator.generate(
+                        feeds, max_new_tokens=4, temperature=1.0, seed=7, top_k=k, top_p=p
+                    ),
+                    expected,
+                )
+        for k, p in [(-1, None), (0, 0.0), (0, 1.1), (0, float("nan")), (0, float("inf"))]:
+            with self.subTest(k=k, p=p), self.assertRaises(ValueError):
+                evaluator.generate(feeds, max_new_tokens=0, top_k=k, top_p=p)
+        unfiltered = evaluator.generate(feeds, max_new_tokens=24, temperature=2.0, seed=7)
+        numpy.testing.assert_array_equal(
+            unfiltered,
+            evaluator.generate(
+                feeds, max_new_tokens=24, temperature=2.0, seed=7, top_k=10, top_p=1.0
+            ),
+        )
+
     def test_prepare_generation_model_export(self):
         model = oh.make_model(
             oh.make_graph(

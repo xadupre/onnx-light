@@ -76,9 +76,12 @@ prefill = oh.make_model(
 #
 # Zero temperature selects deterministic greedy decoding. The seed would control
 # sampling at positive temperatures. EOS ends generation early; padding applies
-# to already-finished rows in a batch. Top-k and top-p filtering are not currently
-# implemented by the runtime: top_k may be zero, but top_p must remain unset
-# (even top_p=1.0 is rejected by the C++ container execution API).
+# to already-finished rows in a batch. At positive temperature, logits are scaled
+# first, then top-k retains at most k tokens, then top-p keeps the smallest prefix
+# reaching p of the remaining, renormalized probability mass. Ties favor lower
+# token IDs. Zero k disables top-k; k above the vocabulary retains all tokens.
+# Unset top-p or top-p=1 disables nucleus filtering; otherwise p must be in (0, 1].
+# Greedy decoding ignores valid filters, but invalid settings are still rejected.
 #
 # ReferenceEvaluator.generate uses the standard interface names shown here.
 # The optional mask and position names do not add inputs to these tiny graphs.
@@ -162,6 +165,8 @@ tokens = evaluator.generate(
     embedding=embedding_evaluator,
     max_new_tokens=restored.max_new_tokens,
     temperature=restored.temperature,
+    top_k=restored.top_k,
+    top_p=restored.top_p if restored.HasField("top_p") else None,
     seed=restored.seed,
     eos_token_ids=list(restored.eos_token_ids),
     pad_token_id=restored.pad_token_id,

@@ -142,6 +142,14 @@ sampling repeatable within the same runtime implementation. Generation stops
 at the token limit or when every row emits EOS; finished rows are padded with
 ``pad_token_id`` (EOS by default).
 
+Optional ``top_k`` and ``top_p`` restrict sampling after temperature scaling.
+Top-k retains the k highest-scoring tokens; zero disables it, and k greater than
+the vocabulary retains all tokens. Top-p then keeps the smallest descending
+probability prefix reaching p of the remaining, renormalized mass, including
+the crossing token. Ties favor lower token IDs at either cutoff. Top-p must
+be finite in ``(0, 1]``; ``None`` or one disables it. Negative k is rejected.
+Greedy decoding ignores valid filters, but invalid options are always rejected.
+
 Models without ``persistent_bindings`` use an ordinary ``RuntimeSession`` and
 evaluate the full growing prefix. No persistent state is created, and no cache
 bindings are guessed from operator or tensor names. Models with bindings use
@@ -238,8 +246,8 @@ See :ref:`l-example-pipeline-proto` for a runnable, download-free example that
 constructs, validates, and saves a ``PipelineProto``, then generates tokens from
 its reloaded models. Python does not yet expose the C++ ``Generate(PipelineProto,
 ...)`` overload: use ``ReferenceEvaluator.generate`` with the individual models
-and explicitly forward the supported settings. A separate ``decode`` model and
-top-k/top-p filtering are not currently supported by Python generation.
+and explicitly forward the supported settings, including ``top_k`` and ``top_p``.
+A separate ``decode`` model is not supported by ``ReferenceEvaluator.generate``.
 
 A basic feedback loop
 ---------------------

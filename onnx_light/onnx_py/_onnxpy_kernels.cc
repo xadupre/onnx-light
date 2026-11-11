@@ -2339,6 +2339,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("max_new_tokens", &core::runtime::GenerationOptions::max_new_tokens)
       .def_rw("temperature", &core::runtime::GenerationOptions::temperature)
+      .def_rw("top_k", &core::runtime::GenerationOptions::top_k)
+      .def_rw("top_p", &core::runtime::GenerationOptions::top_p)
       .def_rw("seed", &core::runtime::GenerationOptions::seed)
       .def_rw("eos_token_ids", &core::runtime::GenerationOptions::eos_token_ids)
       .def_rw("pad_token_id", &core::runtime::GenerationOptions::pad_token_id)

@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <numeric>
 #include <random>
 #include <string_view>
 #include <unordered_map>
@@ -194,8 +195,9 @@ void AppendColumn(std::vector<int64_t> &matrix, const std::vector<int64_t> &colu
   matrix.swap(next);
 }
 
-int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double temperature,
-               std::mt19937_64 &random) {
+int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary,
+               const GenerationOptions &options, std::mt19937_64 &random) {
+  const double temperature = options.temperature;
   int64_t best = 0;
   double maximum = -std::numeric_limits<double>::infinity();
   if (temperature == 0.) {
@@ -226,8 +228,34 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
     }
   }
   EXT_ENFORCE_INVALID(std::isfinite(maximum), "Generate: all logits are negative infinity.");
+  std::vector<int64_t> candidates;
+  if ((options.top_k > 0 && options.top_k < vocabulary) || (options.top_p && *options.top_p < 1.)) {
+    candidates.resize(static_cast<size_t>(vocabulary));
+    std::iota(candidates.begin(), candidates.end(), int64_t{0});
+    std::sort(candidates.begin(), candidates.end(), [&](int64_t left, int64_t right) {
+      return weights[left] > weights[right] || (weights[left] == weights[right] && left < right);
+    });
+  }
   for (double &value : weights)
     value = std::exp((value - maximum) / temperature);
+  if (!candidates.empty()) {
+    size_t retained = options.top_k > 0 ? static_cast<size_t>(std::min(options.top_k, vocabulary))
+                                        : candidates.size();
+    if (options.top_p && *options.top_p < 1.) {
+      double total = 0.;
+      for (size_t index = 0; index < retained; ++index)
+        total += weights[candidates[index]];
+      const double threshold = *options.top_p * total;
+      double cumulative = 0.;
+      size_t nucleus = 0;
+      do {
+        cumulative += weights[candidates[nucleus++]];
+      } while (nucleus < retained && cumulative < threshold);
+      retained = nucleus;
+    }
+    for (size_t index = retained; index < candidates.size(); ++index)
+      weights[candidates[index]] = 0.;
+  }
   std::discrete_distribution<int64_t> distribution(weights.begin(), weights.end());
   return distribution(random);
 }
@@ -724,9 +752,10 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
   options.eos_token_ids.assign(pipeline.eos_token_ids().begin(), pipeline.eos_token_ids().end());
   if (pipeline.has_pad_token_id())
     options.pad_token_id = pipeline.pad_token_id();
-  EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.top_k() == 0,
-                      "Generate: top-k sampling is not supported.");
-  EXT_ENFORCE_INVALID(!pipeline.has_top_p(), "Generate: top-p sampling is not supported.");
+  if (pipeline.has_top_k())
+    options.top_k = pipeline.top_k();
+  if (pipeline.has_top_p())
+    options.top_p = pipeline.top_p();
   if (pipeline.has_input_ids_name())
     options.input_ids_name = pipeline.input_ids_name();
   if (pipeline.has_logits_name())
@@ -1059,6 +1088,10 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                       "Generate: raw-logit capture requires an on_step callback.");
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
+  EXT_ENFORCE_INVALID(options.top_k >= 0, "Generate: top_k must be nonnegative.");
+  EXT_ENFORCE_INVALID(!options.top_p || (std::isfinite(*options.top_p) && *options.top_p > 0. &&
+                                         *options.top_p <= 1.),
+                      "Generate: top_p must be finite and in (0, 1].");
   std::unordered_set<int64_t> eos_token_ids;
   if (!options.eos_token_ids.empty())
     eos_token_ids.reserve(options.eos_token_ids.size());
@@ -1529,8 +1562,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                     "Generate: a finished batch row requires a padding token.");
         next[row] = *pad_token_id;
       } else {
-        next[row] = Sample(logits, (row + 1) * stride - vocabulary, vocabulary, options.temperature,
-                           random);
+        next[row] = Sample(logits, (row + 1) * stride - vocabulary, vocabulary, options, random);
       }
       if (multi_axis) {
         for (int64_t axis = 0; axis < axes; ++axis)

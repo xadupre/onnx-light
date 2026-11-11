@@ -857,6 +857,8 @@ class ReferenceEvaluator:
         embedding: ReferenceEvaluator | None = None,
         position_axes: int = 0,
         prefill_only_inputs: list[str] | None = None,
+        top_k: int = 0,
+        top_p: float | None = None,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -872,8 +874,14 @@ class ReferenceEvaluator:
         unmasked prefill coordinate plus one on all axes.
 
         Zero temperature selects greedy decoding. Positive temperature samples
-        softmax-scaled logits, reproducibly when ``seed`` is supplied. Generation
-        stops at ``max_new_tokens`` or when every row emits a token in ``eos_token_ids``.
+        softmax-scaled logits, reproducibly when ``seed`` is supplied. ``top_k`` retains
+        the highest-scoring tokens (zero disables it; k above the vocabulary retains all).
+        Then ``top_p`` retains the smallest probability-ranked prefix reaching p of the
+        remaining, renormalized mass, including the crossing token. Ties favor lower
+        token IDs. ``top_p`` must be in (0, 1]; None or one disables it. Negative k and
+        nonfinite p are invalid, even for greedy decoding, which ignores valid filters.
+        Generation stops at ``max_new_tokens`` or when every row emits a token in
+        ``eos_token_ids``.
         An empty list or None disables EOS stopping. Finished rows receive ``pad_token_id``
         (the first EOS ID by default). Each call starts fresh state and does not modify
         the supplied feeds.
@@ -905,6 +913,8 @@ class ReferenceEvaluator:
         options = _runtime.GenerationOptions()
         options.max_new_tokens = max_new_tokens
         options.temperature = temperature
+        options.top_k = top_k
+        options.top_p = top_p
         options.eos_token_ids = [] if eos_token_ids is None else eos_token_ids
         options.pad_token_id = pad_token_id
         options.seed = seed

@@ -96,6 +96,10 @@ struct GenerationOptions {
   /// Requires decoder persistent bindings and explicit, nonscalar tensor feeds.
   /// Token, mask and position inputs cannot be listed. Other feeds remain fixed.
   std::vector<std::string> prefill_only_inputs;
+  /// Must be nonnegative. Zero disables top-k; otherwise retains min(top_k, vocabulary) candidates.
+  int64_t top_k = 0;
+  /// Unset or one disables nucleus filtering; otherwise must be finite in (0, 1].
+  std::optional<double> top_p;
 };
 
 /**
@@ -108,6 +112,12 @@ struct GenerationOptions {
  * to the maximum unmasked prefill coordinate plus the decode step.
  * Logits are FLOAT, DOUBLE, FLOAT16 or BFLOAT16 [batch, sequence, vocabulary]
  * or [batch, vocabulary]. The final position predicts the next token.
+ * Positive temperature scales logits before sampling. Top-k then retains the
+ * highest-scoring candidates, and top-p keeps the smallest descending-probability
+ * prefix reaching p of the remaining, renormalized probability mass (at least one
+ * token). Score ties favor lower token IDs, including at either cutoff. The final
+ * retained distribution is renormalized for sampling. Zero temperature ignores
+ * filtering and preserves greedy decoding; all option ranges are still validated.
  *
  * Without graph persistent_bindings, each iteration evaluates the full prefix
  * using an ordinary RuntimeSession. With bindings, initial cache values come
@@ -176,7 +186,8 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
  * All invocation sessions reuse session_options.value_store when supplied.
  * Model-owned initializer payloads are borrowed. Distinct model preparations
  * may still own separate transformed weights; equal names alone do not deduplicate
- * preparations or payloads. Top-k/top-p sampling is not yet supported.
+ * preparations or payloads. Top-k/top-p sampling is supported through
+ * GenerationOptions or the settings stored in the pipeline.
  * The same lifetime requirements apply as for a single model.
  * Calls sharing a context must be serialized, including calls to the single-model
  * overload or other runtime execution on that context.

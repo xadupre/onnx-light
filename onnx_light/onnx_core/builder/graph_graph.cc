@@ -3121,6 +3121,10 @@ void GraphBuilder::ApplyRewriting(const LocalRewritingProto &rewrite,
     const auto pending = nested_imports.find(&node);
     if (pending == nested_imports.end())
       continue;
+    for (std::size_t later = index + 1; later < nodes.size(); ++later)
+      for (const auto &output : nodes[later].output())
+        if (!output.empty())
+          pending->second.insert(output.value());
     node.ref_attribute() = ImportAttributes(node, pending->second);
     for (const auto &attribute : node.attribute()) {
       if (IsGraphReference(node, attribute) && attribute.type() == AttributeProto::STRING) {

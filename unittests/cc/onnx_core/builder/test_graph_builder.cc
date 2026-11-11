@@ -823,6 +823,48 @@ TEST(GraphBuilder, GraphReferenceNameCollisionsUseInternalAliases) {
   }
 }
 
+TEST(GraphBuilder, LiteralGraphReferenceAliasMarkerPreservesAttributeName) {
+  const std::string attribute_name = "body_ref__onnx_light_graph_reference_0";
+  ModelProto model;
+  model.add_opset("", 18);
+  model.add_opset("custom", 1);
+  auto &function = *model.add_functions();
+  function.set_name("Custom");
+  function.set_domain("custom");
+  function.add_input("x");
+  function.add_output("y");
+  function.add_opset("", 18);
+  function.add_attribute(attribute_name);
+  function.add_node(MakeNode("Identity", {"x"}, {"y"}));
+
+  auto &graph = *model.mutable_graph();
+  graph.set_name("g");
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  auto &node = *graph.add_node();
+  node.set_op_type("Custom");
+  node.set_domain("custom");
+  node.add_input("x");
+  node.add_output("y");
+  auto &body = *node.add_attribute();
+  body.set_name(attribute_name);
+  body.set_type(AttributeProto::GRAPH);
+  body.mutable_g()->set_name("body_graph");
+  body.mutable_g()->add_node(MakeNode("Identity", {"x"}, {"z"}));
+  body.mutable_g()->add_output()->set_name("z");
+
+  const auto exported = core::builder::GraphBuilder(model, SchemaLookup()).ToModel();
+  ASSERT_EQ(exported.graph().node().size(), 1u);
+  ASSERT_EQ(exported.graph().node()[0].attribute().size(), 1u);
+  EXPECT_EQ(exported.graph().node()[0].attribute()[0].name(), attribute_name);
+  EXPECT_EQ(exported.graph().node()[0].attribute()[0].type(), AttributeProto::GRAPH);
+
+  const auto reimported = core::builder::GraphBuilder(exported, SchemaLookup()).ToModel();
+  ASSERT_EQ(reimported.graph().node().size(), 1u);
+  ASSERT_EQ(reimported.graph().node()[0].attribute().size(), 1u);
+  EXPECT_EQ(reimported.graph().node()[0].attribute()[0].name(), attribute_name);
+}
+
 TEST(GraphBuilder, FunctionExportsIgnoreOpsetInsertionOrder) {
   std::vector<FunctionProto> functions;
   for (const bool reversed : {false, true}) {

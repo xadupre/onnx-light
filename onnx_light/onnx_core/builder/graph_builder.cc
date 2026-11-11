@@ -1085,7 +1085,10 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   }
   subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
                                   [&](const auto &child) {
-                                    return referenced_subgraphs.count(child.get()) == 0;
+                                    if (referenced_subgraphs.count(child.get()) != 0)
+                                      return false;
+                                    names_.erase(child->name());
+                                    return true;
                                   }),
                    subgraphs_.end());
   std::unordered_set<std::string> available = inherited_names_;
@@ -1807,7 +1810,8 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
   std::size_t alias_index = 0;
   const auto reference_name_for = [&](const AttributeProto &attribute) {
     const std::string direct_name = attribute.name().value() + "_ref";
-    if (!IsDeclaredAttribute(node, direct_name) && occupied_names.count(direct_name) == 0) {
+    if (attribute.name().value().find(kGraphReferenceAliasMarker) == std::string::npos &&
+        !IsDeclaredAttribute(node, direct_name) && occupied_names.count(direct_name) == 0) {
       occupied_names.insert(direct_name);
       return direct_name;
     }

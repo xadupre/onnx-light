@@ -12,6 +12,7 @@
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_verify.h"
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <map>
 #include <unordered_map>
@@ -1744,15 +1745,21 @@ TEST(GraphGraph, OptimizerPlansMaterializeGraphReferencesBeforeSerialization) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const char *name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"x"}, {"newtmp"});
     branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    branch.MakeNode("Shape", {"newtmp"}, {"branch_shape"});
     branch.MakeOutput("branch_result");
+    branch.MakeOutput("branch_shape");
     auto &reference = attributes.add();
     reference.set_name(std::string(name) + "_ref");
     reference.set_type(AttributeProto::STRING);
     reference.set_s(name);
   }
-  builder.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+  builder.MakeNode("If", {"condition"}, {"selected", "selected_shape"}, "", "", attributes);
+  builder.MakeNode("Identity", {"selected"}, {"newtmp"});
+  builder.MakeNode("Identity", {"newtmp"}, {"result"});
   builder.MakeOutput("result");
+  builder.MakeOutput("selected_shape");
   const ModelProto original = builder.ToModel();
 
   core::builder::GraphGraph optimizer(
@@ -1760,6 +1767,9 @@ TEST(GraphGraph, OptimizerPlansMaterializeGraphReferencesBeforeSerialization) {
       std::vector<std::shared_ptr<core::builder::PatternOptimization>>{std::make_shared<MarkIf>()});
   const RewritingProto plan = optimizer.Optimize();
   ASSERT_EQ(plan.rewrites().size(), 1u);
+  ASSERT_FALSE(plan.moved_nodes().empty());
+  EXPECT_TRUE(std::any_of(plan.moved_nodes().begin(), plan.moved_nodes().end(),
+                          [](const auto &move) { return !move.graph_path().empty(); }));
   ASSERT_EQ(plan.rewrites()[0].added_nodes().size(), 1u);
   const NodeProto &added = plan.rewrites()[0].added_nodes()[0];
   ASSERT_EQ(added.attribute().size(), 2u);
@@ -1773,14 +1783,18 @@ TEST(GraphGraph, OptimizerPlansMaterializeGraphReferencesBeforeSerialization) {
   core::builder::GraphBuilder source(original, SchemaLookup());
   const auto replayed = source.ApplyRewritings(serialized);
   const auto replayed_graph = replayed.BuildGraph();
-  ASSERT_EQ(replayed_graph.node().size(), 1u);
-  ASSERT_EQ(replayed_graph.node(0).attribute().size(), 2u);
-  EXPECT_EQ(replayed_graph.node(0).attribute(0).name(), "then_branch");
-  EXPECT_EQ(replayed_graph.node(0).attribute(1).name(), "else_branch");
-  for (const auto &attribute : replayed_graph.node(0).attribute()) {
+  const auto if_node = std::find_if(replayed_graph.node().begin(), replayed_graph.node().end(),
+                                    [](const auto &node) { return node.op_type() == "If"; });
+  ASSERT_NE(if_node, replayed_graph.node().end());
+  ASSERT_EQ(if_node->attribute().size(), 2u);
+  EXPECT_EQ(if_node->attribute(0).name(), "then_branch");
+  EXPECT_EQ(if_node->attribute(1).name(), "else_branch");
+  for (const auto &attribute : if_node->attribute()) {
     ASSERT_EQ(attribute.type(), AttributeProto::GRAPH);
-    ASSERT_EQ(attribute.g().node().size(), 1u);
+    ASSERT_EQ(attribute.g().node().size(), 3u);
     EXPECT_EQ(attribute.g().node(0).op_type(), "Identity");
+    EXPECT_EQ(attribute.g().node(1).op_type(), "Shape");
+    EXPECT_EQ(attribute.g().node(2).op_type(), "Identity");
   }
 }
 

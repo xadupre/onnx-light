@@ -2090,8 +2090,9 @@ TEST(Generation, FiltersCandidatesWithStableTiesAndSeededSampling) {
     // Use exactly representable p for stored/explicit option comparisons.
     if (test.p)
       pipeline.set_top_p(static_cast<float>(*test.p));
-    if (!test.p || static_cast<double>(static_cast<float>(*test.p)) == *test.p)
+    if (!test.p || static_cast<double>(static_cast<float>(*test.p)) == *test.p) {
       EXPECT_EQ(first, Tokens(Generate(pipeline, context, feeds)));
+    }
     EXPECT_EQ(first, Tokens(Generate(pipeline, context, feeds, options)));
     EXPECT_EQ(first, Tokens(Generate(model, nullptr, context, feeds, options)));
     options.temperature = 0.;

@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.8] – Unreleased
 
+### Bug Fixes
+
+- `diff_models` and `GraphBuilder::DiffRewritings` now report every incompatible model declaration (IR version, domain, model version, metadata and existing opset versions with source and target values), name each mismatched graph input or output with its source and target tensor types, and name removed or conflicting local functions and changed internal value metadata instead of raising generic errors.
+
 ### Documentation & CI
 
 - Bumped the release version to `0.2.8`.

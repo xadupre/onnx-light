@@ -77,7 +77,9 @@ external sparse, encoded and paged-cache declarations additionally require
 matching source storage directories during diff construction.
 New required domains are added to the plan. Unsupported differences raise
 explicit errors rather than adapting interfaces (in particular, no implicit
-FP32/FP16 conversion). Producer strings, graph/node names and documentation,
+FP32/FP16 conversion). Model-declaration errors list every differing
+declaration and opset with its source and target values; interface errors name
+each mismatched input or output with both tensor types. Producer strings, graph/node names and documentation,
 inferred intermediate value-info shapes, and regenerated lifetime, constant,
 in-place and peak-memory annotations are nonsemantic diagnostics. Effective
 value tags are compared, not ignored. Changes to other intermediate value

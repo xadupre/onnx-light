@@ -74,7 +74,8 @@ struct Geometry {
                         "GPTQ invalid dimensions, bits or group axis.");
     EXT_ENFORCE_INVALID(group == -1 || group > 0, "GPTQ invalid group size.");
     EXT_ENFORCE_INVALID(storage_type == TensorProto::INT8 || storage_type == TensorProto::INT16 ||
-                            storage_type == TensorProto::INT32 || storage_type == TensorProto::INT64,
+                            storage_type == TensorProto::INT32 ||
+                            storage_type == TensorProto::INT64,
                         "GPTQ unsupported packed word dtype.");
     width = storage_type == TensorProto::INT8    ? 1
             : storage_type == TensorProto::INT16 ? 2
@@ -273,10 +274,9 @@ Geometry Validate(const EncodedValueProto &value, size_t limit,
                           value.has_logical_type() && value.logical_type().has_tensor_type(),
                       "GPTQ requires an independent encoded tensor.");
   const auto &type = catalogue.Resolve(value.struct_type());
-  EXT_ENFORCE_INVALID(
-      type.name().value() == kName && type.has_structure() &&
-          type.structure().field_size() == 12,
-      "GPTQ unsupported schema or version (portable GPTQ is not a checkpoint).");
+  EXT_ENFORCE_INVALID(type.name().value() == kName && type.has_structure() &&
+                          type.structure().field_size() == 12,
+                      "GPTQ unsupported schema or version (portable GPTQ is not a checkpoint).");
   auto number = [&](int index) {
     const auto &field = type.structure().field(index);
     EXT_ENFORCE_INVALID(field.has_constant() && field.constant().int64_data_size() == 1,
@@ -316,7 +316,9 @@ EncodedValueProto EmptyEncoded(const Geometry &g) {
   logical->set_elem_type(TensorProto::FLOAT);
   logical->mutable_shape()->add_dim()->set_dim_value(g.n);
   logical->mutable_shape()->add_dim()->set_dim_value(g.k);
-  result.mutable_raw_data()->resize(g.total);
+  auto *data = result.mutable_raw_data();
+  data->resize(g.total);
+  std::fill(data->data(), data->data() + data->size(), uint8_t{0});
   return result;
 }
 

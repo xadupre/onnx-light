@@ -1,5 +1,5 @@
 onnx_light.onnx_core.gptq
-========================
+=========================
 
 .. automodule:: onnx_light.onnx_core.gptq
     :members:

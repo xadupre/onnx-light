@@ -423,7 +423,10 @@ TEST_F(RuntimeSessionLoading, PipelinePrefillOnlyUsesStoredAndExplicitOptions) {
   LoadedRuntimePipeline loaded(PipelinePath(), rt);
   RuntimeValueMap feeds;
   feeds.emplace("input_ids", Tensor::From<int64_t>("input_ids", {1, 1}, {1}));
-  EXPECT_THROW(Generate(loaded, rt, feeds), std::invalid_argument);
+  const auto stored_tokens = Generate(loaded, rt, feeds);
+  EXPECT_EQ((std::vector<int64_t>{stored_tokens.AsInt64(),
+                                  stored_tokens.AsInt64() + stored_tokens.element_count()}),
+            (std::vector<int64_t>{1, 2, 2}));
   GenerationOptions options;
   options.logits_name = "A";
   options.max_new_tokens = 2;

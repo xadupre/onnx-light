@@ -1828,7 +1828,12 @@ def _cmd_partition(args: argparse.Namespace) -> None:
         function_prefix = "Layer"
         function_kind = "layer"
     elif args.partition_method == "mincut":
-        limits = (args.max_boundary_bytes, args.min_group_nodes, args.max_group_nodes)
+        limits = (
+            args.max_boundary_bytes,
+            args.min_group_nodes,
+            args.max_group_nodes,
+            args.max_constant_inputs,
+        )
         if any(value is not None and (value < 0 or value > (1 << 64) - 1) for value in limits):
             raise ValueError("Partition limits must fit in an unsigned 64-bit integer.")
         if not 2 <= args.min_group_nodes <= args.max_group_nodes:
@@ -1859,7 +1864,9 @@ def _cmd_partition(args: argparse.Namespace) -> None:
         )
     else:
         weight_count = count_constant_inputs(model)
-        weight_limit = weight_count // 20
+        weight_limit = (
+            weight_count // 20 if args.max_constant_inputs is None else args.max_constant_inputs
+        )
         pattern = PartitionGroupPattern(
             max_boundary_bytes=args.max_boundary_bytes,
             min_group_nodes=args.min_group_nodes,
@@ -1867,12 +1874,17 @@ def _cmd_partition(args: argparse.Namespace) -> None:
             max_constant_inputs=weight_limit,
         )
         byte_cap = args.max_boundary_bytes if args.max_boundary_bytes is not None else "none"
+        weight_policy = (
+            f"5% of {weight_count} model weights, rounded down, before internalization"
+            if args.max_constant_inputs is None
+            else "explicit limit, before internalization"
+        )
         selection = (
             "interval dynamic programming; minimizes unknown-size "
             "transfers, then known bytes, then ungrouped nodes; "
             f"source group size={args.min_group_nodes}..{args.max_group_nodes}; "
             f"byte cap={byte_cap}; constant inputs <= {weight_limit} "
-            f"(5% of {weight_count} model weights, rounded down, before internalization)"
+            f"({weight_policy})"
         )
     if args.verbose:
         print(f"[{command}] apply {pattern.name}")
@@ -2359,6 +2371,16 @@ def _build_parser() -> argparse.ArgumentParser:
                 default=128,
                 metavar="N",
                 help="Maximum nodes per group, at least --min-group-nodes (default: 128).",
+            )
+            method_parser.add_argument(
+                "--max-constant-inputs",
+                type=_parse_non_negative_int,
+                default=None,
+                metavar="N",
+                help=(
+                    "Maximum distinct constant inputs per group before internalization "
+                    "(default: 5%% of model weights, rounded down)."
+                ),
             )
 
     # --- fillshape -----------------------------------------------------------

@@ -2626,6 +2626,148 @@ ModelProto DeepCopyModel(const ModelProto &src, const std::string &tc_name) {
 
 } // namespace
 
+TEST(BackendTestCaseShapeInference, WhisperCasesHaveFourEncoderAndDecoderLayers) {
+  for (const TestCase &tc : CollectTestCases("shape")) {
+    EXPECT_EQ(tc.name.find("test_cc_shape_inference_big_whisper"), std::string::npos);
+  }
+  std::vector<TestCase> cases = CollectTestCases("shape", /*include_big=*/true);
+  size_t checked = 0;
+  std::unordered_map<std::string, std::vector<float>> weights;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_big_whisper_4_layers_like") != 0)
+      continue;
+    TestCaseUnloadGuard unload_guard(tc);
+    SCOPED_TRACE(tc.name);
+    const auto &model = tc.model();
+    const auto &graph = model.graph();
+    ASSERT_NO_THROW(VerifyModel(model));
+    ASSERT_NO_THROW(checker::check_model(model));
+    const bool fused = tc.name.ends_with("_fused");
+    EXPECT_EQ(model.opset_import(0).version(), fused ? 23 : 20);
+    ASSERT_EQ(graph.input_size(), 3);
+    ASSERT_EQ(graph.output_size(), 2);
+    EXPECT_EQ(graph.output(0).name(), "encoder.layer_norm");
+    EXPECT_EQ(graph.output(1).name(), "logits");
+
+    size_t conv_count = 0, attention_count = 0, softmax_count = 0, layer_count = 0;
+    size_t causal_count = 0, cross_count = 0;
+    for (const auto &node : graph.node()) {
+      conv_count += node.op_type() == "Conv";
+      softmax_count += node.op_type() == "Softmax";
+      cross_count += node.output(0).ends_with(".encoder_attn.attention");
+      if (node.output(0).ends_with(".masked")) {
+        EXPECT_EQ(node.op_type(), "Add");
+        ASSERT_EQ(node.input_size(), 2);
+        EXPECT_EQ(node.input(1), "causal_mask");
+        ++causal_count;
+      }
+      if (node.op_type() == "Attention") {
+        ++attention_count;
+        const bool decoder_self = node.output(0).find("decoder.layers.") == 0 &&
+                                  node.output(0).find(".self_attn.") != std::string::npos;
+        for (const auto &attr : node.attribute()) {
+          if (attr.name() == "is_causal") {
+            EXPECT_EQ(attr.i(), decoder_self ? 1 : 0);
+            causal_count += attr.i() == 1;
+          }
+        }
+      }
+      if (node.output(0).ends_with(".output"))
+        ++layer_count;
+    }
+    EXPECT_EQ(conv_count, 2u);
+    EXPECT_EQ(layer_count, 8u);
+    EXPECT_EQ(attention_count, fused ? 12u : 0u);
+    EXPECT_EQ(softmax_count, fused ? 0u : 12u);
+    EXPECT_EQ(causal_count, 4u);
+    EXPECT_EQ(cross_count, 4u);
+    for (int layer = 0; layer < 4; ++layer) {
+      for (const char *stack : {"encoder", "decoder"}) {
+        const std::string name =
+            std::string(stack) + ".layers." + std::to_string(layer) + ".output";
+        bool found = false;
+        for (const auto &vi : graph.value_info())
+          found |= vi.name() == name;
+        EXPECT_TRUE(found) << name;
+      }
+    }
+    for (const auto &weight : graph.initializer()) {
+      if (!weight.name().sv().ends_with(".weight"))
+        continue;
+      ASSERT_GT(weight.float_data_size(), 0) << weight.name();
+      std::vector<float> data(weight.float_data().begin(), weight.float_data().end());
+      if (!fused)
+        weights.emplace(weight.name(), data);
+      else {
+        ASSERT_TRUE(weights.contains(weight.name())) << weight.name();
+        EXPECT_EQ(data, weights.at(weight.name())) << weight.name();
+      }
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 2u);
+}
+
+TEST(BackendTestCaseShapeInference, WhisperCasesInferSymbolicAndConcreteShapes) {
+  std::vector<TestCase> cases = CollectTestCases("shape", /*include_big=*/true);
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_big_whisper_4_layers_like") != 0)
+      continue;
+    TestCaseUnloadGuard unload_guard(tc);
+    SCOPED_TRACE(tc.name);
+    for (bool native : {false, true}) {
+      for (int64_t length : {0, 1, 5, 16}) {
+        SCOPED_TRACE(native);
+        SCOPED_TRACE(length);
+        ModelProto model = DeepCopyModel(tc.model(), tc.name);
+        auto &graph = *model.mutable_graph();
+        if (length != 0) {
+          for (auto &input : graph.ref_input()) {
+            auto *shape = input.mutable_type()->mutable_tensor_type()->mutable_shape();
+            shape->mutable_dim(0)->clear_dim_param();
+            shape->mutable_dim(0)->set_dim_value(input.name() == "decoder_position_ids" ? length
+                                                                                        : 2);
+            if (input.name() == "decoder_input_ids") {
+              shape->mutable_dim(1)->clear_dim_param();
+              shape->mutable_dim(1)->set_dim_value(length);
+            }
+          }
+        }
+        SnapshotAndStripOutputs(model);
+        const auto expected = SnapshotAndStripValueInfo(model);
+        graph.clear_value_info();
+        if (native)
+          ASSERT_NO_THROW(core::shapes::InferShapesModel(model));
+        else
+          ASSERT_NO_THROW(shape_inference::InferShapes(model));
+        ASSERT_NO_THROW(VerifyModel(model));
+        CheckValueInfoMatchesExpected(graph, expected);
+        for (int output = 0; output < 2; ++output) {
+          const auto &shape = graph.output(output).type().tensor_type().shape();
+          ASSERT_EQ(shape.dim_size(), 3);
+          if (length == 0)
+            EXPECT_EQ(shape.dim(0).dim_param(), "batch_size");
+          else
+            EXPECT_EQ(shape.dim(0).dim_value(), 2);
+          // The ONNX-compatible engine may lose the target dimension through
+          // the Range-based causal mask; native inference must preserve it.
+          if (output == 1 && !native && !tc.name.ends_with("_fused") &&
+              !shape.dim(1).has_dim_value())
+            EXPECT_TRUE(shape.dim(1).has_dim_param());
+          else if (output == 1 && length == 0)
+            EXPECT_EQ(shape.dim(1).dim_param(), "sequence_length");
+          else
+            EXPECT_EQ(shape.dim(1).dim_value(), output == 0 ? 16 : length);
+          EXPECT_EQ(shape.dim(2).dim_value(), output == 0 ? 16 : 32);
+        }
+      }
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 2u);
+}
+
 TEST(BackendTestCaseShapeInference, Qwen3ModelsVerifyAfterShapeAndMetadataRefresh) {
   std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   size_t checked = 0;

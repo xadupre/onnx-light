@@ -331,6 +331,8 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
                                     const TaskCompletion *completion) {
   PersistentValueState &state = persistent_state();
   const Operation operation(state.busy_);
+  EXT_ENFORCE_INVALID(state.values_.size() == state.bindings_.size(),
+                      "PersistentValueState: transferred state requires Reset before Run.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
       "PersistentValueState: invocation was cancelled or completion is not pending.");
@@ -489,10 +491,53 @@ void PersistentValueState::Reset(RuntimeValueMap initial) {
 
 RuntimeValueMap PersistentValueState::Values() const {
   const Operation operation(busy_);
+  EXT_ENFORCE_INVALID(values_.size() == bindings_.size(),
+                      "PersistentValueState: transferred state requires Reset before Values.");
   RuntimeValueMap snapshot;
   for (size_t i = 0; i < bindings_.size(); ++i)
     snapshot.emplace(bindings_[i].input, values_[i].BorrowView());
   return snapshot;
+}
+
+void PersistentValueState::TransferFrom(PersistentValueState &source) {
+  EXT_ENFORCE_INVALID(this != &source, "PersistentValueState: cannot transfer a state to itself.");
+  const Operation operation(busy_);
+  const Operation source_operation(source.busy_);
+  EXT_ENFORCE_INVALID(source.values_.size() == source.bindings_.size() &&
+                          bindings_.size() == source.bindings_.size(),
+                      "PersistentValueState: transfer requires matching initialized bindings.");
+  EXT_ENFORCE_INVALID(!allocators_captured_ || !source.allocators_captured_ ||
+                          (execution_allocator_ == source.execution_allocator_ &&
+                           io_allocator_ == source.io_allocator_),
+                      "PersistentValueState: transfer allocators differ.");
+  std::vector<size_t> indices;
+  indices.reserve(bindings_.size());
+  {
+    RuntimeValueMap initial;
+    for (const auto &binding : bindings_) {
+      const auto found =
+          std::find_if(source.bindings_.begin(), source.bindings_.end(), [&](const auto &other) {
+            return binding.input == other.input && binding.output == other.output;
+          });
+      EXT_ENFORCE_INVALID(found != source.bindings_.end(),
+                          "PersistentValueState: transfer binding names differ.");
+      const size_t index = static_cast<size_t>(found - source.bindings_.begin());
+      indices.push_back(index);
+      initial.emplace(binding.input, source.values_[index].BorrowView());
+    }
+    (void)ValidateInitial(std::move(initial));
+  }
+  std::vector<PersistentValue> transferred;
+  transferred.reserve(indices.size());
+  for (const auto index : indices)
+    transferred.push_back(std::move(source.values_[index]));
+  values_.swap(transferred);
+  source.values_.clear();
+  if (source.allocators_captured_) {
+    allocators_captured_ = true;
+    execution_allocator_ = source.execution_allocator_;
+    io_allocator_ = source.io_allocator_;
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

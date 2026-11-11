@@ -221,7 +221,10 @@ Structured sequence inputs retain their runtime representation rather than
 being converted to dense tensor sequences.
 
 C++ callers pass a ``PipelineProto`` containing the prefill model and optional
-embedding model to ``Generate``. Generation settings may be stored directly in
+embedding and decode models to ``Generate``. A separate decode model runs only
+after the prompt, borrowing the prefill stage's persistent state. See
+:doc:`../../api/protos/pipeline_proto` for interface compatibility and weight
+memory rules. Generation settings may be stored directly in
 the pipeline or supplied explicitly with ``GenerationOptions``. The single feed
 map and ``RuntimeContext`` are passed as separate arguments; callers never need
 to duplicate or manually separate feeds by model.

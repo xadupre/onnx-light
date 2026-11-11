@@ -586,18 +586,19 @@ LoadedRuntimePipeline::LoadedRuntimePipeline(const std::string &path, RuntimeCon
     throw std::invalid_argument("Runtime pipeline loader failed to parse pipeline.");
   if (!pipeline_.has_prefill())
     throw std::invalid_argument("Runtime pipeline loader requires a prefill model.");
-  if (pipeline_.has_decode())
-    throw std::invalid_argument(
-        "Runtime pipeline loader does not support a separate decode model.");
   if (!session_options_.value_store)
     session_options_.value_store = std::make_shared<ValueStore>();
   std::vector<ModelProto *> models;
   if (pipeline_.has_embedding())
     models.push_back(pipeline_.mutable_embedding());
   models.push_back(pipeline_.mutable_prefill());
+  if (pipeline_.has_decode())
+    models.push_back(pipeline_.mutable_decode());
   auto sessions = LoadSessions(std::span<ModelProto *>{models}, path, rt, session_options_,
                                load_options, statistics_);
-  prefill_session_ = std::move(sessions.back());
+  prefill_session_ = std::move(sessions[pipeline_.has_embedding() ? 1 : 0]);
+  if (pipeline_.has_decode())
+    decode_session_ = std::move(sessions.back());
   if (pipeline_.has_embedding())
     embedding_session_ = std::move(sessions.front());
 }

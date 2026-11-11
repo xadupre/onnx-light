@@ -715,6 +715,98 @@ TEST(PersistentValueState, TransfersOwnedTensorOutputsWithoutCopying) {
   EXPECT_EQ(Number(second.at("present")), 3);
 }
 
+TEST(PersistentValueState, TransfersBetweenModelsWithReorderedBindings) {
+  ModelProto model = Model();
+  auto &graph = *model.mutable_graph();
+  auto &other = *graph.add_input();
+  other.set_name("other");
+  *other.mutable_type() = FloatType();
+  auto &output = *graph.add_output();
+  output.set_name("other_present");
+  *output.mutable_type() = FloatType();
+  graph.mutable_node(0)->add_input("other");
+  graph.mutable_node(0)->add_output("other_present");
+  Bind(model, "other", "other_present");
+  ModelProto reordered = model;
+  reordered.mutable_graph()->mutable_persistent_bindings()->SwapElements(0, 1);
+  RuntimeContext context;
+  context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
+    const float token = rt.Get("tokens").AsFloat()[0];
+    rt.Put("present",
+           Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + token}, rt.allocator()));
+    rt.Put("other_present",
+           Tensor::FromFloat("", {1}, {rt.Get("other").AsFloat()[0] + 2 * token}, rt.allocator()));
+  });
+  RuntimeSession source(model, RuntimeValueMap{{"past", Number(2)}, {"other", Number(7)}});
+  RuntimeSession target(reordered, RuntimeValueMap{{"past", Number(0)}, {"other", Number(0)}});
+  (void)source.Run(context, {{"tokens", Number(1)}});
+  const uint8_t *past = source.persistent_state().Values().at("past").tensor.bytes();
+  const uint8_t *other_payload = source.persistent_state().Values().at("other").tensor.bytes();
+  target.persistent_state().TransferFrom(source.persistent_state());
+  EXPECT_EQ(target.persistent_state().Values().at("past").tensor.bytes(), past);
+  EXPECT_EQ(target.persistent_state().Values().at("other").tensor.bytes(), other_payload);
+  const auto result = target.Run(context, {{"tokens", Number(1)}});
+  EXPECT_FLOAT_EQ(Number(result.at("present")), 4);
+  EXPECT_FLOAT_EQ(Number(result.at("other_present")), 11);
+}
+
+TEST(PersistentValueState, TransferredSourceRejectsRunsAndValuesUntilReset) {
+  const ModelProto model = Model();
+  RuntimeContext context;
+  RegisterStep(context);
+  RuntimeSession source(model, RuntimeValueMap{{"past", Number(2)}});
+  RuntimeSession target(model, RuntimeValueMap{{"past", Number(0)}});
+  target.persistent_state().TransferFrom(source.persistent_state());
+  EXPECT_THROW(source.persistent_state().Values(), std::invalid_argument);
+  EXPECT_THROW(source.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+  EXPECT_FLOAT_EQ(Number(target.persistent_state().Values().at("past")), 2);
+  source.Reset({{"past", Number(5)}});
+  EXPECT_FLOAT_EQ(Number(source.persistent_state().Values().at("past")), 5);
+  EXPECT_FLOAT_EQ(Number(source.Run(context, {{"tokens", Number(1)}}).at("present")), 6);
+  EXPECT_FLOAT_EQ(Number(target.persistent_state().Values().at("past")), 2);
+}
+
+TEST(PersistentValueState, IncompatibleTransferLeavesBothStatesUsable) {
+  for (int variant = 0; variant < 3; ++variant) {
+    SCOPED_TRACE(variant);
+    const ModelProto model = Model();
+    ModelProto incompatible = Model();
+    auto &graph = *incompatible.mutable_graph();
+    std::string input = "past";
+    RuntimeValue initial = Number(99);
+    if (variant == 0) {
+      input = "renamed";
+      graph.mutable_input(0)->set_name(input);
+      *graph.mutable_node(0)->mutable_input(0) = input;
+      graph.mutable_persistent_bindings(0)->set_input_name(input);
+    } else if (variant == 1) {
+      graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::DOUBLE);
+      graph.mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::DOUBLE);
+      initial = RuntimeValue(Tensor::From<double>("", {1}, {99}));
+    } else {
+      *graph.mutable_input(0)->mutable_type() = FloatType(2);
+      *graph.mutable_output(0)->mutable_type() = FloatType(2);
+      initial = RuntimeValue(Tensor::FromFloat("", {2}, {99, 100}));
+    }
+    RuntimeContext context;
+    RegisterStep(context);
+    RuntimeSession source(model, RuntimeValueMap{{"past", Number(2)}});
+    RuntimeValueMap target_initial;
+    target_initial.emplace(input, std::move(initial));
+    RuntimeSession target(incompatible, std::move(target_initial));
+    const uint8_t *payload = target.persistent_state().Values().at(input).tensor.bytes();
+    EXPECT_THROW(target.persistent_state().TransferFrom(source.persistent_state()),
+                 std::invalid_argument);
+    EXPECT_EQ(target.persistent_state().Values().at(input).tensor.bytes(), payload);
+    EXPECT_FLOAT_EQ(Number(source.persistent_state().Values().at("past")), 2);
+    EXPECT_THROW(source.persistent_state().TransferFrom(source.persistent_state()),
+                 std::invalid_argument);
+    EXPECT_FLOAT_EQ(Number(source.Run(context, {{"tokens", Number(3)}}).at("present")), 5);
+  }
+}
+
 TEST(PersistentValueState, MovesOwnedInitialMapsWithoutMutatingConstViews) {
   ModelProto model = Model();
   RuntimeValueMap initial;

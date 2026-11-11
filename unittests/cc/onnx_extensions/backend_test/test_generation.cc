@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_lib/common/scoped_resource.h"
@@ -784,6 +785,348 @@ TEST(GenerationPreparation, NativeAttentionPrefillAndDecodeParity) {
     for (size_t index = 1; index < graph.output().size(); ++index)
       EXPECT_EQ(graph.output(index).SerializeAsString(), cache_outputs[index - 1]);
   }
+}
+
+TEST(Generation, SeparateDecodeMatchesSingleModelWithRealGraphs) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (bool embedded : {false, true}) {
+    for (double temperature : {0., 0.7}) {
+      for (int64_t count : {0, 1, 5}) {
+        SCOPED_TRACE(embedded);
+        SCOPED_TRACE(temperature);
+        SCOPED_TRACE(count);
+        PipelineProto pipeline;
+        *pipeline.mutable_prefill() = PreparationModel(true, TensorProto::FLOAT, false, embedded);
+        *pipeline.mutable_decode() = PreparationModel(true, TensorProto::FLOAT, false, embedded);
+        auto *sequence = pipeline.mutable_decode()
+                             ->mutable_graph()
+                             ->mutable_input(0)
+                             ->mutable_type()
+                             ->mutable_tensor_type()
+                             ->mutable_shape()
+                             ->mutable_dim(1);
+        sequence->clear_dim_param();
+        sequence->set_dim_value(1);
+        if (embedded)
+          *pipeline.mutable_embedding() = PreparationEmbedding();
+        RuntimeValueMap feeds{
+            {"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 2, 0, 0, 3}))},
+            {"attention_mask", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 1, 0, 0, 1}))},
+            {"past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {}))}};
+        RuntimeSession source(pipeline.prefill());
+        RuntimeContext context(RuntimeContextOptions{.events_enabled = true,
+                                                     .cpu_executor = source.cpu_executor().get()});
+        RuntimeSessionOptions settings;
+        settings.check_shapes = true;
+        settings.persistent_tensor_initial_capacity = 32;
+        GenerationOptions options;
+        options.max_new_tokens = count;
+        options.temperature = temperature;
+        options.seed = 17;
+        const auto expected =
+            Tokens(Generate(pipeline.prefill(), embedded ? &pipeline.embedding() : nullptr, context,
+                            feeds, options, settings));
+        const auto expected_reuse =
+            StorageTotal(context.events(), &RuntimeEvent::storage_reuse_count);
+        const auto expected_copies =
+            StorageTotal(context.events(), &RuntimeEvent::storage_prefix_copied_bytes);
+        context.ClearEvents();
+        std::vector<GenerationPhase> phases;
+        options.on_step = [&](const GenerationStep &step) {
+          phases.push_back(step.phase);
+          return true;
+        };
+        EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, settings)), expected);
+        EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_reuse_count),
+                  expected_reuse);
+        EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_prefix_copied_bytes),
+                  expected_copies);
+        ASSERT_EQ(phases.size(), static_cast<size_t>(count));
+        for (size_t step = 0; step < phases.size(); ++step)
+          EXPECT_EQ(phases[step], step == 0 ? GenerationPhase::kPrefill : GenerationPhase::kDecode);
+        std::vector<int64_t> widths, lengths;
+        for (const auto &event : context.events()) {
+          if (event.kind != RuntimeEventKind::kIntermediate || event.value_count != 3)
+            continue;
+          if (event.name == "current_shape")
+            widths.push_back(static_cast<int64_t>(event.values[1]));
+          if (event.name == "cache_shape")
+            lengths.push_back(static_cast<int64_t>(event.values[1]));
+        }
+        ASSERT_EQ(widths.size(), static_cast<size_t>(count));
+        ASSERT_EQ(lengths.size(), static_cast<size_t>(count));
+        for (int64_t step = 0; step < count; ++step) {
+          EXPECT_EQ(widths[step], step == 0 ? 3 : 1);
+          EXPECT_EQ(lengths[step], 3 + step);
+        }
+        EXPECT_EQ(feeds.at("past").tensor.shape, (Shape{2, 0, 4}));
+      }
+    }
+  }
+}
+
+TEST(Generation, SeparateDecodePreservesEosPaddingAndCancellation) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true);
+  *pipeline.mutable_decode() = PreparationModel(true);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 2}, {0, 1, 1, 2}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {2, 0, 4}, {}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 8;
+  options.eos_token_ids = {3};
+  options.pad_token_id = 0;
+  RuntimeContext context;
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)),
+            (std::vector<int64_t>{0, 1, 2, 3, 1, 2, 3, 0}));
+  size_t calls = 0;
+  options.eos_token_ids.clear();
+  options.on_step = [&](const GenerationStep &step) {
+    ++calls;
+    return step.index < 1;
+  };
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)),
+            (std::vector<int64_t>{0, 1, 2, 3, 1, 2, 3, 0}));
+  EXPECT_EQ(calls, 2u);
+}
+
+TEST(Generation, SeparateDecodeTransfersAppendCapacityWithoutCopyingCaches) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto cases = core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_");
+  ASSERT_EQ(cases.size(), 2u);
+  size_t cached = 0;
+  for (auto &test : cases) {
+    if (test.model().graph().persistent_bindings().empty())
+      continue;
+    ++cached;
+    PipelineProto pipeline;
+    *pipeline.mutable_prefill() = test.model();
+    *pipeline.mutable_decode() = test.model();
+    RuntimeValueMap feeds;
+    for (const auto &input : test.data_sets()[0].inputs)
+      feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
+    GenerationOptions options;
+    options.max_new_tokens = 5;
+    RuntimeSessionOptions settings;
+    settings.check_shapes = true;
+    settings.persistent_tensor_initial_capacity = 32;
+    RuntimeContext single(RuntimeContextOptions{.events_enabled = true});
+    RuntimeContext split(RuntimeContextOptions{.events_enabled = true});
+    EXPECT_EQ(Tokens(Generate(pipeline, split, feeds, options, settings)),
+              Tokens(Generate(pipeline.prefill(), single, feeds, options, settings)));
+    const auto reused = StorageTotal(single.events(), &RuntimeEvent::storage_reuse_count);
+    ASSERT_GT(reused, 0u);
+    EXPECT_EQ(StorageTotal(split.events(), &RuntimeEvent::storage_reuse_count), reused);
+    EXPECT_EQ(StorageTotal(split.events(), &RuntimeEvent::storage_prefix_copied_bytes),
+              StorageTotal(single.events(), &RuntimeEvent::storage_prefix_copied_bytes));
+  }
+  ASSERT_EQ(cached, 1u);
+}
+
+TEST(Generation, SeparateDecodeExecutesTheSpecializedStage) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true);
+  *pipeline.mutable_decode() = PreparationModel(true);
+  for (auto *stage : {pipeline.mutable_prefill(), pipeline.mutable_decode()}) {
+    auto *sequence = stage->mutable_graph()
+                         ->mutable_input(0)
+                         ->mutable_type()
+                         ->mutable_tensor_type()
+                         ->mutable_shape()
+                         ->mutable_dim(1);
+    sequence->clear_dim_param();
+    sequence->set_dim_value(stage == pipeline.mutable_prefill() ? 3 : 1);
+  }
+  auto *projection = pipeline.mutable_decode()->mutable_graph()->mutable_initializer(1);
+  projection->clear_raw_data();
+  for (size_t index = 0; index < 16; ++index)
+    projection->add_float_data(index % 5 == 0 ? 2 : 0);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 2}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  RuntimeContext context;
+  RuntimeSessionOptions settings;
+  settings.check_shapes = true;
+  GenerationOptions options;
+  options.max_new_tokens = 3;
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, settings)),
+            (std::vector<int64_t>{0, 1, 2, 3, 3, 3}));
+}
+
+TEST(Generation, SeparateDecodePreservesAttentionCacheContents) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto cases = core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_");
+  ASSERT_EQ(cases.size(), 2u);
+  for (auto &test : cases) {
+    SCOPED_TRACE(test.name);
+    auto &model = test.model();
+    if (model.graph().persistent_bindings().empty())
+      continue;
+    RuntimeValueMap feeds;
+    for (const auto &input : test.data_sets()[0].inputs)
+      feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
+    PipelineProto pipeline;
+    *pipeline.mutable_prefill() = model;
+    *pipeline.mutable_decode() = model;
+    GenerationOptions options;
+    options.max_new_tokens = 5;
+    options.seed = 13;
+    for (double temperature : {0., 0.8}) {
+      options.temperature = temperature;
+      RuntimeContext reference, split;
+      EXPECT_EQ(Tokens(Generate(pipeline, split, feeds, options)),
+                Tokens(Generate(model, reference, feeds, options)));
+    }
+  }
+}
+
+TEST(Generation, SeparateDecodeKeepsEmbeddingPrefillOnlyInputsEmptyAfterPrompt) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true, TensorProto::FLOAT, false, true);
+  *pipeline.mutable_decode() = PreparationModel(true, TensorProto::FLOAT, false, true);
+  *pipeline.mutable_embedding() = PreparationEmbedding();
+  auto &embedding = *pipeline.mutable_embedding()->mutable_graph();
+  PreparationInfo(*embedding.add_input(), "auxiliary", TensorProto::FLOAT, {-1, 4});
+  embedding.mutable_input(1)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_param("auxiliary_count");
+  *embedding.mutable_node(0)->mutable_output(0) = "raw_embeds";
+  PreparationNode(embedding, "Size", {"auxiliary"}, "aux_size");
+  PreparationInteger(PreparationNode(embedding, "Cast", {"aux_size"}, "aux_float"), "to",
+                     TensorProto::FLOAT);
+  auto &zero = *embedding.add_initializer();
+  zero.set_name("aux_zero");
+  zero.set_data_type(TensorProto::FLOAT);
+  zero.add_float_data(0);
+  PreparationNode(embedding, "Mul", {"aux_float", "aux_zero"}, "aux_offset");
+  PreparationNode(embedding, "Add", {"raw_embeds", "aux_offset"}, "inputs_embeds");
+  RuntimeSession source(pipeline.prefill());
+  RuntimeContext context(
+      RuntimeContextOptions{.events_enabled = true, .cpu_executor = source.cpu_executor().get()});
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))},
+                        {"auxiliary", RuntimeValue(Tensor::FromFloat("", {1, 4}, {1, 2, 3, 4}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 3;
+  options.prefill_only_inputs = {"auxiliary"};
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)),
+            (std::vector<int64_t>{0, 1, 2, 3, 0}));
+  std::vector<int64_t> sizes;
+  for (const auto &event : context.events())
+    if (event.kind == RuntimeEventKind::kIntermediate && event.name == "aux_size" &&
+        event.value_count == 1)
+      sizes.push_back(static_cast<int64_t>(event.values[0]));
+  EXPECT_EQ(sizes, (std::vector<int64_t>{4, 0, 0}));
+  EXPECT_EQ(feeds.at("auxiliary").tensor.shape, (Shape{1, 4}));
+}
+
+TEST(Generation, SeparateDecodeRejectsIncompatibleGraphsBeforeExecution) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (int variant = 0; variant < 9; ++variant) {
+    for (int64_t count : {0, 3}) {
+      SCOPED_TRACE(variant);
+      SCOPED_TRACE(count);
+      PipelineProto pipeline;
+      *pipeline.mutable_prefill() = PreparationModel(true);
+      *pipeline.mutable_decode() = PreparationModel(true);
+      auto &graph = *pipeline.mutable_decode()->mutable_graph();
+      switch (variant) {
+      case 0:
+        graph.clear_persistent_bindings();
+        break;
+      case 1:
+        graph.mutable_persistent_bindings(0)->set_input_name("renamed");
+        break;
+      case 2:
+        graph.mutable_input(2)->mutable_type()->mutable_tensor_type()->set_elem_type(
+            TensorProto::DOUBLE);
+        break;
+      case 3:
+        graph.mutable_output(0)->set_name("missing_logits");
+        break;
+      case 4:
+        graph.mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+            TensorProto::INT32);
+        break;
+      case 5:
+        graph.mutable_input(1)->set_name("renamed_mask");
+        break;
+      case 6:
+        graph.mutable_input(2)
+            ->mutable_type()
+            ->mutable_tensor_type()
+            ->mutable_shape()
+            ->mutable_dim(2)
+            ->set_dim_value(5);
+        break;
+      case 7:
+        graph.mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+            TensorProto::DOUBLE);
+        break;
+      case 8:
+        graph.mutable_persistent_bindings(0)->set_output_name("renamed");
+        break;
+      }
+      RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                            {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+      RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
+      GenerationOptions options;
+      options.max_new_tokens = count;
+      EXPECT_THROW(Generate(pipeline, context, feeds, options), std::invalid_argument);
+      EXPECT_TRUE(context.events().empty());
+    }
+  }
+}
+
+TEST(Generation, LoadedSeparateDecodeReusesBothStagePreparations) {
+  onnx_kernels::RegisterKernelFunctions();
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = PreparationModel(true, TensorProto::FLOAT, false, true);
+  *pipeline.mutable_decode() = PreparationModel(true, TensorProto::FLOAT, false, true);
+  *pipeline.mutable_embedding() = PreparationEmbedding();
+  pipeline.set_max_new_tokens(4);
+  const std::string path =
+      (std::filesystem::temp_directory_path() /
+       ("generation-split-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx"))
+          .string();
+  ScopeExit cleanup([&]() noexcept {
+    std::error_code error;
+    std::filesystem::remove(path, error);
+  });
+  {
+    std::ofstream output(path, std::ios::binary);
+    const auto bytes = pipeline.SerializeAsString();
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    ASSERT_TRUE(output.good());
+  }
+  RuntimeContext context;
+  size_t completed = 0, declarations = 0;
+  RuntimeLoadOptions loading;
+  loading.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kComplete)
+      ++completed;
+    if (event.phase == RuntimeLoadPhase::kDeclared)
+      ++declarations;
+  };
+  LoadedRuntimePipeline loaded(path, context, {}, loading);
+  ASSERT_NE(loaded.embedding_session(), nullptr);
+  ASSERT_NE(loaded.decode_session(), nullptr);
+  EXPECT_EQ(completed, 1u);
+  EXPECT_EQ(declarations, 3u);
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                        {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
+  const auto prepared = loaded.session_options().value_store->prepared_bytes();
+  for (int call = 0; call < 2; ++call) {
+    EXPECT_EQ(Tokens(Generate(loaded, context, feeds)), (std::vector<int64_t>{0, 1, 2, 3, 0, 1}));
+    EXPECT_EQ(loaded.session_options().value_store->prepared_bytes(), prepared);
+  }
+  EXPECT_EQ(completed, 1u);
+  EXPECT_EQ(declarations, 3u);
 }
 
 TEST(GenerationPreparation, RejectsUnsupportedAndSharedHeadsBeforeMutation) {

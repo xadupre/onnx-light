@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_lib/common/scoped_resource.h"
@@ -279,11 +280,13 @@ void RunGraph(const ModelProto &model, RuntimeContext &invocation, RuntimeValueM
   }
 }
 
-void ValidateGraph(const ModelProto &model) {
+void ValidateGraph(const ModelProto &model, bool persistent_values = false) {
   std::unordered_set<std::string> destinations;
   for (const auto &output : model.graph().output()) {
     EXT_ENFORCE_INVALID(!output.name().empty() &&
                             (output.type().has_tensor_type() ||
+                             (persistent_values && (output.type().has_struct_type() ||
+                                                    output.type().has_sequence_type())) ||
                              (output.type().has_sequence_type() &&
                               output.type().sequence_type().elem_type().has_tensor_type())),
                         "Generate: unsupported graph output '", output.name(), "'.");
@@ -445,7 +448,224 @@ void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &l
 struct GenerationPipelineView {
   const ModelProto *prefill = nullptr;
   const ModelProto *embedding = nullptr;
+  const ModelProto *decode = nullptr;
 };
+
+const ValueInfoProto &GenerationValue(const utils::RepeatedProtoField<ValueInfoProto> &values,
+                                      const std::string &name) {
+  const ValueInfoProto *found = nullptr;
+  for (const auto &value : values)
+    if (value.name() == name) {
+      EXT_ENFORCE_INVALID(found == nullptr, "Generate: duplicate graph value '", name, "'.");
+      found = &value;
+    }
+  EXT_ENFORCE_INVALID(found != nullptr, "Generate: missing graph value '", name, "'.");
+  return *found;
+}
+
+bool CompatibleGenerationTypes(const TypeProto &left, const TypeProto &right,
+                               const StructTypeCatalogue &left_types,
+                               const StructTypeCatalogue &right_types, int sequence_axis = -1,
+                               size_t depth = 0) {
+  if (depth > RuntimeValue::kMaxDepth || left.value_case() != right.value_case())
+    return false;
+  if (left.has_tensor_type()) {
+    const auto &a = left.tensor_type();
+    const auto &b = right.tensor_type();
+    if (a.elem_type() != b.elem_type())
+      return false;
+    for (const auto *tensor : {&a, &b})
+      for (const auto &dim : tensor->shape().dim())
+        if (dim.has_dim_value() && dim.dim_value() < 0)
+          return false;
+    if (!a.has_shape() || !b.has_shape())
+      return true;
+    if (a.shape().dim_size() != b.shape().dim_size())
+      return false;
+    for (size_t i = 0; i < a.shape().dim().size(); ++i)
+      if (static_cast<int>(i) != sequence_axis && a.shape().dim(i).has_dim_value() &&
+          b.shape().dim(i).has_dim_value() &&
+          a.shape().dim(i).dim_value() != b.shape().dim(i).dim_value())
+        return false;
+    return true;
+  }
+  if (left.has_sequence_type())
+    return CompatibleGenerationTypes(left.sequence_type().elem_type(),
+                                     right.sequence_type().elem_type(), left_types, right_types, -1,
+                                     depth + 1);
+  if (!left.has_struct_type())
+    return false;
+  StructTypeProto a = left_types.Resolve(left.struct_type());
+  StructTypeProto b = right_types.Resolve(right.struct_type());
+  if (a.type_id() != b.type_id() || a.kind_case() != b.kind_case())
+    return false;
+  if (a.has_structure()) {
+    if (a.structure().field_size() != b.structure().field_size())
+      return false;
+    for (size_t i = 0; i < a.structure().field().size(); ++i) {
+      const auto &af = a.structure().field(i);
+      const auto &bf = b.structure().field(i);
+      if (af.has_type() != bf.has_type() ||
+          (af.has_type() && !CompatibleGenerationTypes(af.type(), bf.type(), left_types,
+                                                       right_types, -1, depth + 1)))
+        return false;
+      if (af.has_type()) {
+        a.mutable_structure()->mutable_field(static_cast<int>(i))->clear_type();
+        b.mutable_structure()->mutable_field(static_cast<int>(i))->clear_type();
+      }
+    }
+  } else if (a.has_array()) {
+    if (!CompatibleGenerationTypes(a.array().element_type(), b.array().element_type(), left_types,
+                                   right_types, -1, depth + 1))
+      return false;
+    a.mutable_array()->clear_element_type();
+    b.mutable_array()->clear_element_type();
+  }
+  return a.Equals(b);
+}
+
+void ValidateGenerationTensor(const ValueInfoProto &value, int64_t type, const Shape &shape,
+                              int varying_axis = -1, int64_t final_length = -1) {
+  EXT_ENFORCE_INVALID(value.type().has_tensor_type(), "Generate: '", value.name(),
+                      "' must be a tensor.");
+  const auto &tensor = value.type().tensor_type();
+  EXT_ENFORCE_INVALID(tensor.elem_type() == type, "Generate: dtype mismatch for '", value.name(),
+                      "'.");
+  if (!tensor.has_shape())
+    return;
+  EXT_ENFORCE_INVALID(static_cast<size_t>(tensor.shape().dim_size()) == shape.size(),
+                      "Generate: rank mismatch for '", value.name(), "'.");
+  for (size_t i = 0; i < shape.size(); ++i) {
+    const auto &dim = tensor.shape().dim(i);
+    EXT_ENFORCE_INVALID(!dim.has_dim_value() ||
+                            (dim.dim_value() == shape[i] &&
+                             (static_cast<int>(i) != varying_axis || final_length == shape[i])),
+                        "Generate: shape mismatch for '", value.name(), "'.");
+  }
+}
+
+void ValidateSplitGeneration(const GenerationPipelineView &pipeline,
+                             const GenerationOptions &options, int64_t batch, int64_t prompt_length,
+                             int64_t axes, int64_t largest_eos_token_id) {
+  const auto &prefill = *pipeline.prefill;
+  const auto &decode = *pipeline.decode;
+  StructTypeCatalogue prefill_types, decode_types;
+  prefill_types.Build(prefill);
+  decode_types.Build(decode);
+  VerifyPersistentBindings(&prefill_types, prefill.graph());
+  VerifyPersistentBindings(&decode_types, decode.graph());
+  EXT_ENFORCE_INVALID(prefill.graph().persistent_bindings().size() ==
+                          decode.graph().persistent_bindings().size(),
+                      "Generate: prefill and decode require matching persistent bindings.");
+  for (const auto &binding : prefill.graph().persistent_bindings()) {
+    EXT_ENFORCE_INVALID(std::any_of(decode.graph().persistent_bindings().begin(),
+                                    decode.graph().persistent_bindings().end(),
+                                    [&](const auto &other) {
+                                      return binding.input_name() == other.input_name() &&
+                                             binding.output_name() == other.output_name();
+                                    }),
+                        "Generate: prefill and decode persistent binding names differ.");
+    for (const auto *values : {&prefill.graph().input(), &prefill.graph().output()}) {
+      const bool input = values == &prefill.graph().input();
+      const std::string &name = input ? binding.input_name() : binding.output_name();
+      const auto &a = GenerationValue(*values, name).type();
+      const auto &b =
+          GenerationValue(input ? decode.graph().input() : decode.graph().output(), name).type();
+      EXT_ENFORCE_INVALID(CompatibleGenerationTypes(a, b, prefill_types, decode_types),
+                          "Generate: incompatible persistent binding type for '", name, "'.");
+    }
+    EXT_ENFORCE_INVALID(binding.input_name() != options.input_ids_name &&
+                            binding.input_name() != options.attention_mask_name &&
+                            binding.input_name() != options.position_ids_name,
+                        "Generate: token, mask and position inputs cannot be persistent.");
+    EXT_ENFORCE_INVALID(CompatibleGenerationTypes(
+                            GenerationValue(prefill.graph().output(), binding.output_name()).type(),
+                            GenerationValue(decode.graph().input(), binding.input_name()).type(),
+                            prefill_types, decode_types),
+                        "Generate: prefill persistent output is incompatible with decode input.");
+  }
+  ValidateGraph(prefill, true);
+  ValidateGraph(decode, true);
+  for (const auto &name :
+       {options.input_ids_name, options.attention_mask_name, options.position_ids_name}) {
+    EXT_ENFORCE_INVALID(HasInput(prefill, name) == HasInput(decode, name),
+                        "Generate: prefill and decode generated input names differ: '", name, "'.");
+    if (!HasInput(prefill, name))
+      continue;
+    const bool positions = name == options.position_ids_name;
+    const bool mask = name == options.attention_mask_name;
+    const Shape prefill_shape =
+        positions && axes > 0 ? Shape{axes, batch, prompt_length} : Shape{batch, prompt_length};
+    const Shape decode_shape =
+        positions && axes > 0 ? Shape{axes, batch, 1} : Shape{batch, mask ? prompt_length + 1 : 1};
+    const int sequence_axis = positions && axes > 0 ? 2 : 1;
+    const auto &a = GenerationValue(prefill.graph().input(), name);
+    const auto &b = GenerationValue(decode.graph().input(), name);
+    EXT_ENFORCE_INVALID(
+        CompatibleGenerationTypes(a.type(), b.type(), prefill_types, decode_types, sequence_axis),
+        "Generate: incompatible generated input '", name, "'.");
+    ValidateGenerationTensor(a, TensorProto::INT64, prefill_shape);
+    ValidateGenerationTensor(b, TensorProto::INT64, decode_shape, mask ? sequence_axis : -1,
+                             prompt_length + std::max<int64_t>(1, options.max_new_tokens - 1));
+  }
+  if (pipeline.embedding != nullptr)
+    for (const auto &output : pipeline.embedding->graph().output()) {
+      const auto &a = GenerationValue(prefill.graph().input(), output.name());
+      const auto &b = GenerationValue(decode.graph().input(), output.name());
+      const auto has_sequence = [](const ValueInfoProto &value) {
+        return value.type().has_tensor_type() && value.type().tensor_type().has_shape() &&
+               value.type().tensor_type().shape().dim_size() >= 3;
+      };
+      const bool sequence = has_sequence(a) || has_sequence(b);
+      EXT_ENFORCE_INVALID(CompatibleGenerationTypes(a.type(), b.type(), prefill_types, decode_types,
+                                                    sequence ? 1 : -1),
+                          "Generate: incompatible embedding-connected language inputs '",
+                          output.name(), "'.");
+      for (const auto *value : {&a, &b}) {
+        if (!sequence || !value->type().tensor_type().has_shape())
+          continue;
+        const auto &shape = value->type().tensor_type().shape();
+        EXT_ENFORCE_INVALID((!shape.dim(0).has_dim_value() || shape.dim(0).dim_value() == batch) &&
+                                (!shape.dim(1).has_dim_value() ||
+                                 shape.dim(1).dim_value() == (value == &a ? prompt_length : 1)),
+                            "Generate: invalid embedding-connected input sequence specialization.");
+      }
+    }
+  const auto &prefill_logits = GenerationValue(prefill.graph().output(), options.logits_name);
+  const auto &decode_logits = GenerationValue(decode.graph().output(), options.logits_name);
+  const int logits_sequence_axis =
+      prefill_logits.type().has_tensor_type() && prefill_logits.type().tensor_type().has_shape() &&
+              prefill_logits.type().tensor_type().shape().dim_size() == 3
+          ? 1
+          : -1;
+  EXT_ENFORCE_INVALID(CompatibleGenerationTypes(prefill_logits.type(), decode_logits.type(),
+                                                prefill_types, decode_types, logits_sequence_axis),
+                      "Generate: incompatible prefill and decode logits.");
+  for (const auto *value : {&prefill_logits, &decode_logits}) {
+    EXT_ENFORCE_INVALID(value->type().has_tensor_type() &&
+                            GenerationFloat(value->type().tensor_type().elem_type()),
+                        "Generate: logits must have a floating-point tensor type.");
+    const auto &type = value->type().tensor_type();
+    if (!type.has_shape())
+      continue;
+    const auto &shape = type.shape();
+    EXT_ENFORCE_INVALID(shape.dim_size() == 2 || shape.dim_size() == 3,
+                        "Generate: logits must have rank 2 or 3.");
+    EXT_ENFORCE_INVALID(!shape.dim(0).has_dim_value() || shape.dim(0).dim_value() == batch,
+                        "Generate: logits batch mismatch.");
+    const auto &vocab = shape.dim(shape.dim_size() - 1);
+    EXT_ENFORCE_INVALID(!vocab.has_dim_value() ||
+                            (vocab.dim_value() > 0 && largest_eos_token_id < vocab.dim_value() &&
+                             (!options.pad_token_id || *options.pad_token_id < vocab.dim_value())),
+                        "Generate: invalid logits vocabulary or token ID.");
+    if (shape.dim_size() == 3) {
+      const auto &sequence = shape.dim(1);
+      EXT_ENFORCE_INVALID(!sequence.has_dim_value() || sequence.dim_value() == 1 ||
+                              (value == &prefill_logits && sequence.dim_value() == prompt_length),
+                          "Generate: invalid logits sequence specialization.");
+    }
+  }
+}
 
 void BindParameterReferences(RuntimeValue &value, const ModelProto &model,
                              const StructTypeCatalogue &types,
@@ -470,13 +690,19 @@ void BindParameterReferences(RuntimeValue &value, const ModelProto &model,
   });
 }
 
-RuntimeValueMap ScopeFeeds(const ModelProto &model, const RuntimeValueMap &feeds) {
+RuntimeValueMap ScopeFeeds(const ModelProto &model, const RuntimeValueMap &feeds,
+                           bool include_persistent_inputs = true) {
   StructTypeCatalogue types;
   types.Build(model);
   std::shared_ptr<const QuantizationParameterCatalogue> parameters;
   RuntimeValueMap result;
   for (const auto &[name, value] : feeds) {
     if (!HasInput(model, name))
+      continue;
+    if (!include_persistent_inputs &&
+        std::any_of(model.graph().persistent_bindings().begin(),
+                    model.graph().persistent_bindings().end(),
+                    [&](const auto &binding) { return binding.input_name() == name; }))
       continue;
     RuntimeValue scoped = value.BorrowView();
     BindParameterReferences(scoped, model, types, parameters);
@@ -534,6 +760,7 @@ Tensor GenerateLoadedPipeline(const LoadedRuntimePipeline &pipeline, RuntimeCont
 
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
+                           const RuntimeValueMap &decode_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
                            RuntimeSessionOptions session_options,
                            const RuntimeValueMap &unscoped_feeds);
@@ -543,14 +770,17 @@ static Tensor GeneratePipeline(const GenerationPipelineView &pipeline, RuntimeCo
                                RuntimeSessionOptions session_options) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   RuntimeValueMap prefill_feeds = ScopeFeeds(*pipeline.prefill, feeds);
+  RuntimeValueMap decode_feeds =
+      pipeline.decode == nullptr ? RuntimeValueMap{} : ScopeFeeds(*pipeline.decode, feeds, false);
   RuntimeValueMap embedding_feeds =
       pipeline.embedding == nullptr ? RuntimeValueMap{} : ScopeFeeds(*pipeline.embedding, feeds);
   for (const auto &[name, value] : feeds) {
     (void)value;
-    EXT_ENFORCE_INVALID(prefill_feeds.contains(name) || embedding_feeds.contains(name),
+    EXT_ENFORCE_INVALID(prefill_feeds.contains(name) || decode_feeds.contains(name) ||
+                            embedding_feeds.contains(name),
                         "Generate: unknown feed '", name, "'.");
   }
-  return GenerateImpl(pipeline, context, prefill_feeds, embedding_feeds, options,
+  return GenerateImpl(pipeline, context, prefill_feeds, decode_feeds, embedding_feeds, options,
                       std::move(session_options), feeds);
 }
 
@@ -791,11 +1021,10 @@ Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
                 const RuntimeValueMap &feeds, const GenerationOptions &options,
                 RuntimeSessionOptions session_options) {
   EXT_ENFORCE_INVALID(pipeline.has_prefill(), "Generate: prefill model is required.");
-  EXT_ENFORCE_INVALID(!pipeline.has_decode(),
-                      "Generate: a separate decode model is not supported.");
   const GenerationPipelineView view{.prefill = &pipeline.prefill(),
                                     .embedding =
-                                        pipeline.has_embedding() ? &pipeline.embedding() : nullptr};
+                                        pipeline.has_embedding() ? &pipeline.embedding() : nullptr,
+                                    .decode = pipeline.has_decode() ? &pipeline.decode() : nullptr};
   return GeneratePipeline(view, context, feeds, options, std::move(session_options));
 }
 
@@ -818,11 +1047,13 @@ Tensor Generate(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
 
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
+                           const RuntimeValueMap &decode_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
                            RuntimeSessionOptions session_options,
                            const RuntimeValueMap &unscoped_feeds) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
+  const bool split = pipeline.decode != nullptr;
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
   EXT_ENFORCE_INVALID(options.max_logit_bytes == 0 || options.on_step,
                       "Generate: raw-logit capture requires an on_step callback.");
@@ -866,16 +1097,21 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     for (const auto &output : pipeline.embedding->graph().output()) {
       EXT_ENFORCE_INVALID(HasInput(model, output.name()),
                           "Generate: embedding output must name a decoder input.");
+      if (split)
+        EXT_ENFORCE_INVALID(HasInput(*pipeline.decode, output.name()),
+                            "Generate: embedding output must name a decode input.");
     }
     ValidatePipelineValueNames(*pipeline.embedding, model, context);
+    if (split)
+      ValidatePipelineValueNames(*pipeline.embedding, *pipeline.decode, context);
   }
-  for (const auto &binding : model.graph().persistent_bindings()) {
-    if (embedded)
-      for (const auto &output : pipeline.embedding->graph().output()) {
-        EXT_ENFORCE_INVALID(output.name() != binding.input_name(),
-                            "Generate: embedding output cannot replace a persistent input.");
-      }
-  }
+  for (const auto *stage : {&model, pipeline.decode})
+    if (stage != nullptr)
+      for (const auto &binding : stage->graph().persistent_bindings())
+        if (embedded)
+          for (const auto &output : pipeline.embedding->graph().output())
+            EXT_ENFORCE_INVALID(output.name() != binding.input_name(),
+                                "Generate: embedding output cannot replace a persistent input.");
   for (const auto &[name, value] : prefill_feeds) {
     (void)value;
     EXT_ENFORCE_INVALID(HasInput(model, name), "Generate: unknown feed '", name,
@@ -892,7 +1128,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                         "Generate: prefill_only_inputs requires an embedding model and cached "
                         "decoding with persistent bindings.");
     EXT_ENFORCE_INVALID(name != options.input_ids_name && name != options.attention_mask_name &&
-                            name != options.position_ids_name && !HasInput(model, name),
+                            name != options.position_ids_name && !HasInput(model, name) &&
+                            (!split || !HasInput(*pipeline.decode, name)),
                         "Generate: prefill-only input '", name,
                         "' must be an embedding-only auxiliary input.");
     const auto found = embedding_feeds.find(name);
@@ -905,6 +1142,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   const RuntimeValueMap &prompt_feeds = embedded ? embedding_feeds : prefill_feeds;
   const Tensor &prompt = IntMatrix(prompt_feeds, options.input_ids_name);
   const int64_t batch = prompt.shape[0], prompt_length = prompt.shape[1];
+  EXT_ENFORCE_INVALID(!split || prompt_length < std::numeric_limits<int64_t>::max(),
+                      "Generate: decode attention prefix length overflows.");
   EXT_ENFORCE_INVALID(options.max_new_tokens <= std::numeric_limits<int64_t>::max() - prompt_length,
                       "Generate: requested sequence length overflows.");
   const int64_t max_length = prompt_length + options.max_new_tokens;
@@ -916,8 +1155,10 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   EXT_ENFORCE_INVALID(std::all_of(tokens.begin(), tokens.end(), [](auto id) { return id >= 0; }),
                       "Generate: token IDs must be nonnegative.");
   const bool has_mask = HasInput(model, options.attention_mask_name) ||
+                        (split && HasInput(*pipeline.decode, options.attention_mask_name)) ||
                         (embedded && HasInput(*pipeline.embedding, options.attention_mask_name));
   const bool has_positions = HasInput(model, options.position_ids_name) ||
+                             (split && HasInput(*pipeline.decode, options.position_ids_name)) ||
                              (embedded && HasInput(*pipeline.embedding, options.position_ids_name));
   EXT_ENFORCE_INVALID(options.position_axes >= 0,
                       "Generate: position axis count must be nonnegative.");
@@ -925,6 +1166,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   if (has_positions) {
     bool rank2 = false, rank3 = false;
     axes = PositionAxes(model, options.position_ids_name, axes, rank2, rank3);
+    if (split)
+      axes = PositionAxes(*pipeline.decode, options.position_ids_name, axes, rank2, rank3);
     if (embedded)
       axes = PositionAxes(*pipeline.embedding, options.position_ids_name, axes, rank2, rank3);
     EXT_ENFORCE_INVALID(!rank2 || !rank3, "Generate: conflicting position input ranks.");
@@ -993,6 +1236,85 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     EXT_ENFORCE_INVALID(position >= 0 && position <= std::numeric_limits<int64_t>::max() -
                                                          options.max_new_tokens,
                         "Generate: invalid or overflowing position ID.");
+  if (split) {
+    ValidateSplitGeneration(pipeline, options, batch, prompt_length, axes, largest_eos_token_id);
+    StructTypeCatalogue embedding_types;
+    if (embedded)
+      embedding_types.Build(*pipeline.embedding);
+    for (const auto *stage : {&model, pipeline.decode, pipeline.embedding}) {
+      if (stage == nullptr)
+        continue;
+      StructTypeCatalogue types;
+      types.Build(*stage);
+      const auto &stage_feeds = stage == &model            ? prefill_feeds
+                                : stage == pipeline.decode ? decode_feeds
+                                                           : embedding_feeds;
+      for (const auto &input : stage->graph().input()) {
+        const auto &name = input.name();
+        const bool generated = name == options.input_ids_name ||
+                               name == options.attention_mask_name ||
+                               name == options.position_ids_name;
+        const bool retained =
+            std::any_of(stage->graph().persistent_bindings().begin(),
+                        stage->graph().persistent_bindings().end(),
+                        [&](const auto &binding) { return binding.input_name() == name; });
+        const ValueInfoProto *connection = nullptr;
+        if (embedded && stage != pipeline.embedding)
+          for (const auto &output : pipeline.embedding->graph().output())
+            if (output.name() == name)
+              connection = &output;
+        if (connection != nullptr) {
+          EXT_ENFORCE_INVALID(
+              CompatibleGenerationTypes(connection->type(), input.type(), embedding_types, types),
+              "Generate: incompatible embedding connection '", name, "'.");
+          continue;
+        }
+        if (generated || retained)
+          continue;
+        const auto feed = stage_feeds.find(name);
+        const bool initialized =
+            std::any_of(stage->graph().initializer().begin(), stage->graph().initializer().end(),
+                        [&](const auto &value) { return value.name() == name; }) ||
+            std::any_of(stage->graph().extended_initializer().begin(),
+                        stage->graph().extended_initializer().end(),
+                        [&](const auto &value) { return value.name() == name; });
+        EXT_ENFORCE_INVALID(feed != stage_feeds.end() || initialized,
+                            "Generate: missing graph feed '", name, "'.");
+        if (feed != stage_feeds.end() && input.type().has_tensor_type()) {
+          EXT_ENFORCE_INVALID(feed->second.kind == RuntimeValue::Kind::kTensor,
+                              "Generate: expected tensor feed '", name, "'.");
+          const auto &tensor = feed->second.tensor;
+          ValidateStorage(tensor);
+          ValidateGenerationTensor(input, static_cast<int64_t>(tensor.data_type), tensor.shape);
+          if (stage == pipeline.embedding &&
+              std::find(options.prefill_only_inputs.begin(), options.prefill_only_inputs.end(),
+                        name) != options.prefill_only_inputs.end()) {
+            Shape empty = tensor.shape;
+            empty[0] = 0;
+            ValidateGenerationTensor(input, static_cast<int64_t>(tensor.data_type), empty);
+          }
+        }
+      }
+    }
+    if (embedded) {
+      for (const auto &name :
+           {options.input_ids_name, options.attention_mask_name, options.position_ids_name}) {
+        if (!HasInput(*pipeline.embedding, name))
+          continue;
+        const auto &input = GenerationValue(pipeline.embedding->graph().input(), name);
+        const bool position = name == options.position_ids_name;
+        const bool mask_input = name == options.attention_mask_name;
+        const Shape prompt_shape =
+            position && axes > 0 ? Shape{axes, batch, prompt_length} : Shape{batch, prompt_length};
+        const Shape decode_shape = position && axes > 0
+                                       ? Shape{axes, batch, 1}
+                                       : Shape{batch, mask_input ? prompt_length + 1 : 1};
+        ValidateGenerationTensor(input, TensorProto::INT64, prompt_shape);
+        ValidateGenerationTensor(input, TensorProto::INT64, decode_shape, mask_input ? 1 : -1,
+                                 prompt_length + std::max<int64_t>(1, options.max_new_tokens - 1));
+      }
+    }
+  }
   if (options.max_new_tokens == 0)
     return Tensor::From<int64_t>(options.input_ids_name, prompt.shape, tokens);
 
@@ -1002,6 +1324,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     if (session_options.cpu_execution_counters)
       context.cpu_executor()->EnableCounters();
     session_options.cpu_execution.reset();
+  }
+  if (embedded || split) {
     // Sizes the shared arena before any session captures its allocator.
     const ExecutionPlan *largest = &context.GetExecutionPlan(model);
     const auto include_plan = [&](const ModelProto &graph_model) {
@@ -1009,7 +1333,10 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
       if (plan.arena_capacity() > largest->arena_capacity())
         largest = &plan;
     };
-    include_plan(*pipeline.embedding);
+    if (embedded)
+      include_plan(*pipeline.embedding);
+    if (split)
+      include_plan(*pipeline.decode);
     context.BindExecutionPlan(*largest);
   }
   RuntimeValueMap current;
@@ -1018,6 +1345,9 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   RuntimeValueMap embedding_current;
   for (const auto &[name, value] : embedding_feeds)
     embedding_current.emplace(name, value.BorrowView());
+  RuntimeValueMap decode_current;
+  for (const auto &[name, value] : decode_feeds)
+    decode_current.emplace(name, value.BorrowView());
   std::unique_ptr<RuntimeSession> embedding_session;
   if (embedded) {
     embedding_session = std::make_unique<RuntimeSession>(*pipeline.embedding, session_options);
@@ -1040,9 +1370,11 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
         initial.emplace(name, scoped.DeepCopy());
       }
       current.erase(name);
+      decode_current.erase(name);
     }
   }
   RuntimeSession session(model, std::move(initial), session_options);
+  std::unique_ptr<RuntimeSession> decode_session;
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
   std::vector<int64_t> next(static_cast<size_t>(batch));
@@ -1062,13 +1394,23 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   size_t remaining_logit_bytes = options.max_logit_bytes;
   int64_t length = prompt_length;
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
+    if (split && step == 1) {
+      if (persistent) {
+        decode_session = std::make_unique<RuntimeSession>(
+            *pipeline.decode, session.persistent_state().Values(), session_options);
+        decode_session->persistent_state().TransferFrom(session.persistent_state());
+      } else
+        decode_session = std::make_unique<RuntimeSession>(*pipeline.decode, session_options);
+    }
     const auto started_at = options.on_step ? std::chrono::steady_clock::now()
                                             : std::chrono::steady_clock::time_point{};
     if (step > 0) {
       AppendColumn(mask, next_mask);
       AppendColumn(positions, next_positions);
     }
-    const bool decode = persistent && step > 0;
+    const bool decode = (persistent || split) && step > 0;
+    const ModelProto &active_model = split && step > 0 ? *pipeline.decode : model;
+    RuntimeValueMap &active_current = split && step > 0 ? decode_current : current;
     if (step == 1) {
       for (const auto &name : options.prefill_only_inputs) {
         const auto &prefill = embedding_feeds.at(name).tensor;
@@ -1080,8 +1422,8 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     }
     const Shape shape{batch, decode ? 1 : length};
     const auto put_control = [&](const std::string &name, RuntimeValue value) {
-      if (HasInput(model, name))
-        current.insert_or_assign(name, value.BorrowView());
+      if (HasInput(active_model, name))
+        active_current.insert_or_assign(name, value.BorrowView());
       if (embedded && HasInput(*pipeline.embedding, name))
         embedding_current.insert_or_assign(name, value.BorrowView());
     };
@@ -1103,26 +1445,29 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
     if (embedded) {
       RunGraph(*pipeline.embedding, context, embedding_current, *embedding_session);
       for (const ValueInfoProto &output : pipeline.embedding->graph().output())
-        current.insert_or_assign(output.name(), embedding_current.at(output.name()).BorrowView());
+        active_current.insert_or_assign(output.name(),
+                                        embedding_current.at(output.name()).BorrowView());
     }
     Tensor logits;
     if (persistent) {
+      if (split)
+        context.ResetInvocation();
       RuntimeValueMap model_feeds;
-      for (const auto &input : model.graph().input()) {
-        const auto found = current.find(input.name());
-        if (found != current.end())
+      for (const auto &input : active_model.graph().input()) {
+        const auto found = active_current.find(input.name());
+        if (found != active_current.end())
           model_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = session.Run(context, model_feeds);
+      auto outputs = (split && step > 0 ? *decode_session : session).Run(context, model_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");
       logits = std::move(it->second.tensor);
     } else {
       context.ResetInvocation();
-      for (const auto &input : model.graph().input()) {
-        const auto found = current.find(input.name());
-        if (found == current.end())
+      for (const auto &input : active_model.graph().input()) {
+        const auto found = active_current.find(input.name());
+        if (found == active_current.end())
           continue;
         const auto &value = found->second;
         if (input.type().has_sequence_type() &&
@@ -1143,7 +1488,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
           context.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
         }
       }
-      session.Run(context);
+      (split && step > 0 ? *decode_session : session).Run(context);
       EXT_ENFORCE_INVALID(context.Has(options.logits_name), "Generate: missing logits tensor.");
       logits = std::move(context.Get(options.logits_name)).RetainStorage();
     }

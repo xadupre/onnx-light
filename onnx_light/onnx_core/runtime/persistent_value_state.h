@@ -45,6 +45,17 @@ public:
                        RuntimeSessionOptions options = {});
   /** Replaces retained values with explicitly transferred initial contents. */
   void Reset(RuntimeValueMap initial);
+  /**
+   * Transfers compatible retained values and append reservations from another state.
+   *
+   * Validates matching input/output binding pairs and values before either state changes.
+   * Payloads and append-capacity metadata move without copying. Captured allocators must
+   * agree; an uncaptured destination inherits the source's allocator identity.
+   * The source rejects retained-state Run and Values until Reset or another transfer restores
+   * its values. Both states must be idle.
+   * Source model and allocator owners must outlive any transferred initializer-backed views.
+   */
+  void TransferFrom(PersistentValueState &source);
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
   /** Returns the immutable model. */

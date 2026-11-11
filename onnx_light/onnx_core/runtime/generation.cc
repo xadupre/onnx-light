@@ -1401,6 +1401,7 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
         decode_session->persistent_state().TransferFrom(session.persistent_state());
       } else
         decode_session = std::make_unique<RuntimeSession>(*pipeline.decode, session_options);
+      current.clear();
     }
     const auto started_at = options.on_step ? std::chrono::steady_clock::now()
                                             : std::chrono::steady_clock::time_point{};

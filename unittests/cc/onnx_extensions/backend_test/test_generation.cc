@@ -2768,28 +2768,39 @@ TEST(GenerationState, RetainsLeftPaddingAndMultiAxisPositions) {
   auto &graph = *model.mutable_graph();
   PreparationInfo(*graph.add_input(), "position_ids", TensorProto::INT64, {2, 1, -1});
   PreparationInfo(*graph.add_output(), "seen_positions", TensorProto::INT64, {2, 1, -1});
-  PreparationNode(graph, "Identity", {"position_ids"}, "seen_positions");
+  PreparationNode(graph, "InspectControls", {"position_ids", "attention_mask"}, "seen_positions")
+      .set_domain("test.pipeline");
+  auto *opset = model.add_opset_import();
+  opset->set_domain("test.pipeline");
+  opset->set_version(1);
   RuntimeValueMap feeds{
       {"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 2}))},
       {"attention_mask", RuntimeValue(Tensor::FromInt64("", {1, 3}, {0, 1, 1}))},
       {"position_ids", RuntimeValue(Tensor::FromInt64("", {2, 1, 3}, {0, 7, 8, 0, 17, 18}))},
       {"past", RuntimeValue(Tensor::FromFloat("", {1, 0, 4}, {}))}};
   RuntimeContext context;
+  int64_t inspected = 0, observed = 0;
+  // Persistent sessions remove control feeds before invoking the generation observer.
+  context.RegisterCustomKernel(
+      "test.pipeline", "InspectControls", [&](const NodeProto &node, RuntimeContext &rt) {
+        const auto index = inspected++;
+        const auto &positions = rt.Get("position_ids");
+        const auto &mask = rt.Get("attention_mask");
+        std::vector<int64_t> expected_mask{0, 1, 1};
+        expected_mask.insert(expected_mask.end(), static_cast<size_t>(index), 1);
+        EXPECT_EQ(Tokens(mask), expected_mask);
+        if (index == 0) {
+          EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{0, 7, 8, 0, 17, 18}));
+        } else {
+          EXPECT_EQ(positions.shape, (Shape{2, 1, 1}));
+          EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{18 + index, 18 + index}));
+        }
+        rt.Put(node.output(0), positions.BorrowView());
+      });
   GenerationState state(model, context, feeds);
-  int64_t observed = 0;
   const auto observe = [&](const GenerationStep &step) {
     EXPECT_EQ(step.index, observed++);
-    const auto &positions = context.Get("position_ids");
-    const auto &mask = context.Get("attention_mask");
-    std::vector<int64_t> expected_mask{0, 1, 1};
-    expected_mask.insert(expected_mask.end(), static_cast<size_t>(step.index), 1);
-    EXPECT_EQ(Tokens(mask), expected_mask);
-    if (step.index == 0) {
-      EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{0, 7, 8, 0, 17, 18}));
-    } else {
-      EXPECT_EQ(positions.shape, (Shape{2, 1, 1}));
-      EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{18 + step.index, 18 + step.index}));
-    }
+    EXPECT_EQ(inspected, observed);
     return true;
   };
   state.Generate(1, observe);
@@ -2808,16 +2819,13 @@ TEST(GenerationState, ObserverStopsAndExceptionsCommitTheEmittedToken) {
   options.max_new_tokens = 5;
   const auto expected = Tokens(Generate(model, full, feeds, options));
   GenerationState state(model, context, feeds);
-  EXPECT_EQ(state
-                .Generate(10,
-                          [&](const GenerationStep &step) {
-                            EXPECT_EQ(step.index, 0);
-                            EXPECT_THROW(state.Generate(1), std::invalid_argument);
-                            EXPECT_THROW(state.Reset(), std::invalid_argument);
-                            return false;
-                          })
-                .shape,
-            (Shape{1, 3}));
+  const auto stop = [&](const GenerationStep &step) {
+    EXPECT_EQ(step.index, 0);
+    EXPECT_THROW(state.Generate(1), std::invalid_argument);
+    EXPECT_THROW(state.Reset(), std::invalid_argument);
+    return false;
+  };
+  EXPECT_EQ(state.Generate(10, stop).shape, (Shape{1, 3}));
   EXPECT_THROW(state.Generate(10,
                               [](const GenerationStep &step) -> bool {
                                 EXPECT_EQ(step.index, 1);

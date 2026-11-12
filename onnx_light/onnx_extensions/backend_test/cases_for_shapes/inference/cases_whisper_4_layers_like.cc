@@ -134,7 +134,7 @@ void RegisterWhisper4LayersLikeShapeInferenceCases(std::vector<TestCase> &regist
 
     std::string audio = "input_features";
     for (int64_t conv = 1; conv <= 2; ++conv) {
-      const std::string prefix = "encoder.conv" + std::to_string(conv);
+      const std::string prefix = std::string("encoder.conv") + std::to_string(conv);
       builder.Weight(prefix + ".weight", {kHidden, conv == 1 ? kMelBins : kHidden, 3});
       builder.Weight(prefix + ".bias", {kHidden});
       auto &node = AddNode(graph, "Conv", {audio, prefix + ".weight", prefix + ".bias"}, {prefix});
@@ -179,7 +179,8 @@ void RegisterWhisper4LayersLikeShapeInferenceCases(std::vector<TestCase> &regist
 
     std::string encoder = "encoder.hidden";
     for (int layer = 0; layer < 4; ++layer)
-      encoder = builder.Layer(encoder, "", "encoder.layers." + std::to_string(layer), false);
+      encoder =
+          builder.Layer(encoder, "", std::string("encoder.layers.") + std::to_string(layer), false);
     encoder = builder.Norm(encoder, "encoder.layer_norm");
 
     builder.Weight("decoder.embed_tokens.weight", {kVocab, kHidden});
@@ -191,7 +192,8 @@ void RegisterWhisper4LayersLikeShapeInferenceCases(std::vector<TestCase> &regist
     AddNode(graph, "Add", {"decoder.tokens", "decoder.positions"}, {"decoder.hidden"});
     std::string decoder = "decoder.hidden";
     for (int layer = 0; layer < 4; ++layer)
-      decoder = builder.Layer(decoder, encoder, "decoder.layers." + std::to_string(layer), true);
+      decoder = builder.Layer(decoder, encoder,
+                              std::string("decoder.layers.") + std::to_string(layer), true);
     decoder = builder.Norm(decoder, "decoder.layer_norm");
     auto &head = AddNode(graph, "Transpose", {"decoder.embed_tokens.weight"}, {"proj_out.weight"});
     AddAttribute(head, "perm", std::vector<int64_t>{1, 0});

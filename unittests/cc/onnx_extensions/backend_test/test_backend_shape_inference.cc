@@ -2706,6 +2706,15 @@ TEST(BackendTestCaseShapeInference, WhisperCasesHaveFourEncoderAndDecoderLayers)
     ++checked;
   }
   EXPECT_EQ(checked, 2u);
+  EXPECT_TRUE(weights.contains("encoder.conv1.weight"));
+  EXPECT_TRUE(weights.contains("encoder.conv2.weight"));
+  for (int layer = 0; layer < 4; ++layer) {
+    for (const char *stack : {"encoder", "decoder"}) {
+      const std::string name =
+          std::string(stack) + ".layers." + std::to_string(layer) + ".self_attn.q_proj.weight";
+      EXPECT_TRUE(weights.contains(name)) << name;
+    }
+  }
 }
 
 TEST(BackendTestCaseShapeInference, WhisperCasesInferSymbolicAndConcreteShapes) {

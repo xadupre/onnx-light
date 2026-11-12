@@ -83,6 +83,30 @@ def _shared_encoded(model, name, values):
 
 
 class TestGeneration(ExtTestCase):
+    def test_retained_native_generation(self):
+        model = transition_model()
+        evaluator = ReferenceEvaluator(model)
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}
+        options = runtime.GenerationOptions()
+        options.temperature = 2.0
+        options.seed = 7
+        expected = evaluator.generate(feeds, max_new_tokens=8, temperature=2.0, seed=7)
+        state = runtime.GenerationState(model, context, feeds, options)
+        numpy.testing.assert_array_equal(numpy.from_dlpack(state.generate(0)), feeds["input_ids"])
+        state.generate(1)
+        state.generate(1)
+        numpy.testing.assert_array_equal(numpy.from_dlpack(state.generate(6)), expected)
+        numpy.testing.assert_array_equal(numpy.from_dlpack(state.generate(0)), expected)
+        with self.assertRaises(TypeError):
+            state.generate(1, feeds)
+        state.reset()
+        numpy.testing.assert_array_equal(numpy.from_dlpack(state.generate(8)), expected)
+        state.reset()
+        feeds["input_ids"][:] = 2
+        del model, context, evaluator
+        numpy.testing.assert_array_equal(numpy.from_dlpack(state.generate(8)), expected)
+
     def test_sampling_filters(self):
         model = transition_model()
         evaluator = ReferenceEvaluator(model)

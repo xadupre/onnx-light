@@ -2351,6 +2351,37 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("position_axes", &core::runtime::GenerationOptions::position_axes)
       .def_rw("prefill_only_inputs", &core::runtime::GenerationOptions::prefill_only_inputs);
 
+  nb::class_<core::runtime::GenerationState>(
+      rt_mod, "GenerationState",
+      "Retains an exclusive generation request. Models, context and allocator owners must "
+      "remain unchanged. Resume accepts only a token budget, never replacement prompt feeds. "
+      "Execution failures require reset; EOS remains finished until reset.")
+      .def(
+          "__init__",
+          [](core::runtime::GenerationState *self, const ModelProto &model, RuntimeContext &context,
+             nb::dict feeds, const core::runtime::GenerationOptions &options,
+             RuntimeSessionOptions session_options) {
+            auto inputs = FeedbackValuesFromPython(feeds, &model);
+            nb::gil_scoped_release release;
+            new (self) core::runtime::GenerationState(model, context, inputs, options,
+                                                      std::move(session_options));
+          },
+          nb::arg("model"), nb::arg("context"), nb::arg("feeds"),
+          nb::arg("options") = core::runtime::GenerationOptions{},
+          nb::arg("session_options") = RuntimeSessionOptions{}, nb::keep_alive<1, 2>(),
+          nb::keep_alive<1, 3>())
+      .def(
+          "generate",
+          [](core::runtime::GenerationState &self, int64_t max_new_tokens) {
+            nb::gil_scoped_release release;
+            return self.Generate(max_new_tokens);
+          },
+          nb::arg("max_new_tokens"),
+          "Appends up to this many tokens and returns the complete sequence. Zero performs no "
+          "model invocation. RNG and pending tokens continue from the preceding call.")
+      .def("reset", &core::runtime::GenerationState::Reset,
+           "Discards progress and restarts the original prompt and seed.");
+
   rt_mod.def(
       "generate",
       [](const ModelProto &model, RuntimeContext &context, nb::dict feeds,

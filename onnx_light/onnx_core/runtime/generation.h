@@ -231,4 +231,70 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &prefill, const ModelProto 
                                     const GenerationOptions &options = {},
                                     RuntimeSessionOptions session_options = {});
 
+/**
+ * Retains one generation request across calls, including sessions, persistent caches,
+ * masks, positions, finished rows, the pending token and the sampling RNG.
+ *
+ * Models and context are borrowed and must remain alive until destruction. Models and
+ * context registrations/allocator configuration must remain unchanged.
+ * Allocator owners must also outlive the state. Initial feeds are copied once; no cache
+ * payload is copied merely to pause or resume. Sessions are prepared lazily.
+ * Calls on this state (including Reset) are exclusive; reentrant use is rejected.
+ * Other execution sharing its context or preparation store must also be serialized.
+ *
+ * The request is permanently bound to its models, context and settings. There is no
+ * continuation overload accepting replacement feeds or another model/context. Appending
+ * conversation-turn prompt suffixes is not supported: construct a new state for a new
+ * prompt. Reset restarts the original prompt, empty-prefix caches and RNG seed.
+ * Initial caches must represent an empty prefix, just as for stateless Generate.
+ *
+ * EOS-finished rows remain finished across calls. An observer returning false or throwing
+ * leaves the just-emitted token committed and resumable. An execution, sampling or internal
+ * bookkeeping failure invalidates continuation until Reset, even though each runtime run
+ * still publishes persistent values only on success. Reset discards all such state.
+ * Separate states never share their mutable caches. Without persistent bindings, a single
+ * model still evaluates the full prefix; retaining state does not invent a cache contract.
+ */
+class ONNX_LIGHT_CORE_API GenerationState {
+public:
+  /** Captures a single-model request, optionally with a separate embedding model. */
+  GenerationState(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
+                  const GenerationOptions &options = {}, RuntimeSessionOptions session_options = {},
+                  const ModelProto *embedding = nullptr);
+  /** Captures a pipeline request with explicit generation settings. */
+  GenerationState(const PipelineProto &pipeline, RuntimeContext &context,
+                  const RuntimeValueMap &feeds, const GenerationOptions &options,
+                  RuntimeSessionOptions session_options = {});
+  /**
+   * Captures a loaded pipeline, reusing its preparation store and stored settings.
+   * The loaded owner must outlive the state. Each call installs its selected CPU executor.
+   */
+  GenerationState(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                  const RuntimeValueMap &feeds);
+  /** Captures a loaded pipeline with explicit generation settings. */
+  GenerationState(const LoadedRuntimePipeline &pipeline, RuntimeContext &context,
+                  const RuntimeValueMap &feeds, const GenerationOptions &options);
+  ~GenerationState();
+  GenerationState(const GenerationState &) = delete;
+  GenerationState &operator=(const GenerationState &) = delete;
+
+  /**
+   * Appends at most max_new_tokens and returns the complete prompt and emitted tokens.
+   *
+   * Zero returns the current sequence without a runtime invocation. Observation indices
+   * count from the original prefill, not from each call. The observation byte budget is
+   * per call. Sampling/EOS settings are those captured at construction; the constructor's
+   * max_new_tokens, on_step and max_logit_bytes are replaced by these arguments.
+   * Validation errors before execution leave the request reusable.
+   */
+  Tensor Generate(int64_t max_new_tokens, GenerationStepCallback on_step = {},
+                  size_t max_logit_bytes = 0);
+  /** Discards progress and restarts the original request on the next Generate call. */
+  void Reset();
+
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

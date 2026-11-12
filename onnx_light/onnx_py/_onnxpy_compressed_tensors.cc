@@ -278,12 +278,14 @@ Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total,
                         array.nbytes());
 }
 
-void SwapTensorWords(Tensor &tensor) {
-  const size_t width = tensor.element_size();
-  if (width == 1)
-    return;
-  for (size_t offset = 0; offset < tensor.size_bytes(); offset += width)
-    std::reverse(tensor.mutable_bytes() + offset, tensor.mutable_bytes() + offset + width);
+void ConvertNativeLittleEndianWords(Tensor &tensor) {
+  if constexpr (std::endian::native == std::endian::big) {
+    const size_t width = tensor.element_size();
+    if (width == 1)
+      return;
+    for (size_t offset = 0; offset < tensor.size_bytes(); offset += width)
+      std::reverse(tensor.mutable_bytes() + offset, tensor.mutable_bytes() + offset + width);
+  }
 }
 
 Tensor BitsAndBytesArray(const std::string &name, nb::handle value, size_t &total,
@@ -292,15 +294,14 @@ Tensor BitsAndBytesArray(const std::string &name, nb::handle value, size_t &tota
   if constexpr (std::endian::native == std::endian::big) {
     if (tensor.element_size() > 1) {
       tensor = tensor.ToOwned();
-      SwapTensorWords(tensor);
+      ConvertNativeLittleEndianWords(tensor);
     }
   }
   return tensor;
 }
 
 nb::object ArrayFromLittleEndianTensor(Tensor tensor) {
-  if constexpr (std::endian::native == std::endian::big)
-    SwapTensorWords(tensor);
+  ConvertNativeLittleEndianWords(tensor);
   return ArrayFromTensor(tensor);
 }
 

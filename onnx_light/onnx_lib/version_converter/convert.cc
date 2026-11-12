@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -205,6 +206,56 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
     convert_graph(function_graph, OpSetID(default_opset->version()), target_version);
     ModelProto converted_function;
     ExportModelProto(&converted_function, function_graph);
+
+    auto convert_default_graph = [&](GraphProto *graph_proto) {
+      ModelProto default_model;
+      default_model.set_ir_version(mp_in.ir_version());
+      default_model.opset_import().extend(imports);
+      default_model.mutable_graph()->CopyFrom(*graph_proto);
+      std::shared_ptr<Graph> default_graph(ImportModelProto(default_model));
+      convert_graph(default_graph, OpSetID(default_opset->version()), target_version);
+      ModelProto converted_default;
+      ExportModelProto(&converted_default, default_graph);
+      graph_proto->CopyFrom(converted_default.graph());
+    };
+    for (auto &attribute : *function.mutable_attribute_proto()) {
+      if (attribute.has_g())
+        convert_default_graph(attribute.mutable_g());
+      for (auto &attribute_graph : *attribute.mutable_graphs())
+        convert_default_graph(&attribute_graph);
+    }
+
+    std::unordered_map<std::string, ValueInfoProto> previous_value_info;
+    for (const auto &value_info : function.value_info())
+      previous_value_info.emplace(value_info.name(), value_info);
+    function.clear_value_info();
+    std::unordered_set<std::string> value_info_names;
+    auto append_value_info = [&](const ValueInfoProto &value_info) {
+      auto previous = previous_value_info.find(value_info.name());
+      const auto &type = value_info.type();
+      const bool has_type_info = value_info.has_type() && type.has_type() &&
+                                 (!type.has_tensor_type() || type.tensor_type().has_elem_type() ||
+                                  type.tensor_type().has_shape());
+      if (!has_type_info &&
+          (previous == previous_value_info.end() ||
+           (!previous->second.has_doc_string() && previous->second.metadata_props().empty())))
+        return;
+      if (!value_info_names.insert(value_info.name()).second)
+        return;
+      auto *converted_value_info = function.add_value_info();
+      converted_value_info->CopyFrom(value_info);
+      if (previous != previous_value_info.end()) {
+        if (previous->second.has_doc_string())
+          converted_value_info->set_doc_string(previous->second.doc_string());
+        converted_value_info->mutable_metadata_props()->extend(previous->second.metadata_props());
+      }
+    };
+    for (const auto &value_info : converted_function.graph().input())
+      append_value_info(value_info);
+    for (const auto &value_info : converted_function.graph().output())
+      append_value_info(value_info);
+    for (const auto &value_info : converted_function.graph().value_info())
+      append_value_info(value_info);
 
     function.node().clear();
     // Functions have no initializers; adapters' constants must be represented as nodes.

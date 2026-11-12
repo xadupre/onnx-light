@@ -289,7 +289,7 @@ TEST(QuantizedValueKernels, SchemasAndBackendCases) {
     EXPECT_EQ(schemas[0].domain(), "ai.rt");
     EXPECT_EQ(schemas[0].since_version(), 1);
     const auto cases = core::backend_test::CollectTestCases(op);
-    ASSERT_EQ(cases.size(), 4);
+    ASSERT_EQ(cases.size(), op == "Quantize" ? 4 : 9);
     for (const auto &test : cases) {
       SCOPED_TRACE(test.name);
       const auto &model = test.model();

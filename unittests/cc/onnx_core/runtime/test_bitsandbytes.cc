@@ -46,8 +46,10 @@ BitsAndBytesWeights Fixture(bool nested = false) {
   weights.tensors.emplace("weight",
                           Tensor("weight", TensorProto::UINT8, {17, 1}, std::move(codes)));
   const auto table = MakeQuantizationPlan(QuantizationFormat::kNf4, 16).runs[0].blocks[0].codebook;
-  weights.tensors.emplace("weight_quant_map",
-                          FloatTensor("map", {16}, std::vector<float>(table.begin(), table.end())));
+  std::vector<float> quant_map(table.size());
+  for (size_t i = 0; i < table.size(); ++i)
+    quant_map[i] = static_cast<float>(table[i]);
+  weights.tensors.emplace("weight_quant_map", FloatTensor("map", {16}, quant_map));
   std::string json = R"({"quant_type":"nf4","blocksize":32,"dtype":"float16","shape":[3,11])";
   if (nested) {
     json += R"(,"nested_blocksize":256,"nested_dtype":"float32","nested_offset":2.0)";

@@ -735,6 +735,24 @@ TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 // Quantization kernels.
 TEST(BackendRunModel, Dequantize) { RunBackendCasesFor("Dequantize"); }
 
+TEST(BackendRunModel, BitsAndBytesDequantize) {
+  std::set<std::string> executed;
+  RunBackendCasesFor(
+      "Dequantize",
+      [&executed](const TestCase &tc) {
+        if (!tc.name.starts_with("test_cc_dequantize_bitsandbytes_"))
+          return false;
+        executed.insert(tc.name);
+        return true;
+      },
+      [](const DataSet &) { return true; });
+  EXPECT_EQ(executed, (std::set<std::string>{"test_cc_dequantize_bitsandbytes_nf4",
+                                             "test_cc_dequantize_bitsandbytes_nf4_nested",
+                                             "test_cc_dequantize_bitsandbytes_fp4",
+                                             "test_cc_dequantize_bitsandbytes_fp4_nested",
+                                             "test_cc_dequantize_bitsandbytes_int8"}));
+}
+
 // The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
 // per-axis quantization with FLOAT or FLOAT16 inputs and scales, covering
 // integer (UINT8/INT8/UINT16/INT16), float8, and sub-byte

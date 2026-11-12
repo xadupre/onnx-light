@@ -4,7 +4,6 @@
 #include <charconv>
 #include <filesystem>
 #include <limits>
-#include <mutex>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -16,12 +15,6 @@ struct DeferredWeightSource {
   int64_t offset;
   int64_t length;
   int64_t alignment;
-};
-
-struct DeferredWeightCache {
-  std::mutex mutex;
-  utils::ByteSpan payload;
-  bool loaded = false;
 };
 
 namespace {
@@ -183,6 +176,11 @@ void FinishDeferredWeight(TensorProto &tensor, BinaryStream &stream, const Parse
                           tensor.deferred_weight_source->length <= options.max_tensor_size_bytes,
                       "Deferred weight exceeds max_tensor_size_bytes.");
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
+    // Small external payloads stay loaded, like small inline payloads.
+    if (tensor.data_location() == TensorProto::EXTERNAL &&
+        tensor.deferred_weight_source->length > 0 &&
+        tensor.deferred_weight_source->length < options.raw_data_threshold)
+      tensor.LoadDeferredWeight();
   }
 }
 
@@ -198,36 +196,12 @@ bool HaveSameDeferredWeightSource(const TensorProto &left, const TensorProto &ri
   return a.identity == b.identity && a.offset == b.offset && a.length == b.length;
 }
 
-int64_t TensorProto::DeferredWeightSize() const {
+bool TensorProto::LoadDeferredWeight() {
   EXT_ENFORCE(HasDeferredWeight(), "Weight '", str_name(), "' has no recoverable backing source.");
-  return deferred_weight_source->length;
-}
-
-void TensorProto::EnableOnDemandWeight() {
-  EXT_ENFORCE(HasDeferredWeight(), "Weight '", str_name(), "' has no recoverable backing source.");
-  if (!deferred_weight_cache)
-    deferred_weight_cache = std::make_shared<DeferredWeightCache>();
-}
-
-bool TensorProto::is_raw_data() const {
-  if (HasOnDemandWeight())
-    LoadDeferredWeightForRead();
-  return has_raw_data();
-}
-
-bool TensorProto::LoadDeferredWeightForRead() const {
-  EXT_ENFORCE(HasDeferredWeight(), "Weight '", str_name(), "' has no recoverable backing source.");
-  std::unique_lock<std::mutex> lock;
-  if (deferred_weight_cache)
-    lock = std::unique_lock<std::mutex>(deferred_weight_cache->mutex);
   if (has_raw_data())
     return false;
   const auto &source = *deferred_weight_source;
   ValidatePayload(*this, source.length);
-  if (deferred_weight_cache && deferred_weight_cache->loaded) {
-    raw_data_ = deferred_weight_cache->payload.SharedCopy();
-    return true;
-  }
   const auto file = OpenExternalDataFile(source.base_dir, source.location);
   EXT_ENFORCE(ExternalDataFileIdentity(*file) == source.identity,
               "Deferred weight backing file changed: ", source.location);
@@ -241,26 +215,13 @@ bool TensorProto::LoadDeferredWeightForRead() const {
   EXT_ENFORCE(ExternalDataFileIdentity(*file) == source.identity,
               "Deferred weight backing file changed while reading: ", source.location);
   raw_data_ = std::move(payload);
-  if (deferred_weight_cache) {
-    deferred_weight_cache->payload = raw_data_.SharedCopy();
-    deferred_weight_cache->loaded = true;
-  }
   return true;
 }
 
-bool TensorProto::LoadDeferredWeight() { return LoadDeferredWeightForRead(); }
-
 bool TensorProto::UnloadDeferredWeight() {
   EXT_ENFORCE(HasDeferredWeight(), "Weight '", str_name(), "' has no recoverable backing source.");
-  std::unique_lock<std::mutex> lock;
-  if (deferred_weight_cache)
-    lock = std::unique_lock<std::mutex>(deferred_weight_cache->mutex);
   const bool loaded = has_raw_data();
   raw_data_ = utils::ByteSpan{};
-  if (deferred_weight_cache) {
-    deferred_weight_cache->payload = utils::ByteSpan{};
-    deferred_weight_cache->loaded = false;
-  }
   return loaded;
 }
 
@@ -277,16 +238,7 @@ bool ModelProto::HasDeferredWeights() const {
   while (iterator.next())
     if (iterator->HasDeferredWeight())
       return true;
-  return HasDeferredValueInfoBounds();
-}
-
-ModelProto ModelProto::CopyWithOnDemandWeights() const {
-  ModelProto result = utils::CopyWithSharedTensorStorage(*this);
-  IteratorTensorProto iterator(&result);
-  while (iterator.next())
-    if (iterator->HasDeferredWeight())
-      iterator->EnableOnDemandWeight();
-  return result;
+  return false;
 }
 
 bool ModelProto::IsWeightLoaded(const std::string &name) const {
@@ -310,7 +262,6 @@ size_t ModelProto::LoadWeights() {
   while (iterator.next())
     if (iterator->HasDeferredWeight())
       loaded += iterator->LoadDeferredWeight();
-  ResolveDeferredValueInfoBounds();
   return loaded;
 }
 
@@ -324,8 +275,6 @@ size_t ModelProto::UnloadWeights() {
 }
 
 void ModelProto::ValidateWeightSavePath(const std::string &path) const {
-  EXT_ENFORCE(!HasDeferredValueInfoBounds(),
-              "Cannot serialize unresolved deferred value bounds. Call LoadWeights() first.");
   IteratorTensorProto iterator(const_cast<ModelProto *>(this));
   while (iterator.next()) {
     if (!iterator->HasDeferredWeight())

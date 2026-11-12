@@ -15,19 +15,9 @@
 #include "stream.h"
 #include "stream_class.h"
 
-#include <mutex>
-#include <optional>
-
 namespace ONNX_LIGHT_NAMESPACE {
 
 struct DeferredWeightSource;
-struct DeferredWeightCache;
-
-/** Computes inferred value bounds only when a consumer needs them. */
-struct DeferredNumericBounds {
-  virtual ~DeferredNumericBounds() = default;
-  virtual std::pair<std::optional<double>, std::optional<double>> Get() const = 0;
-};
 
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus : int { EXPERIMENTAL = 0, STABLE = 1 };
@@ -530,7 +520,7 @@ FIELD_REPEATED_STR(utils::String, string_data, 6,
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")
-FIELD_MUTABLE_BYTES(
+FIELD_BYTES(
     raw_data, 9,
     "Serializations can either use one of the fields above, or use this raw bytes field. The "
     "only exception is the string case, where one is required to store the content in the "
@@ -591,8 +581,8 @@ inline void set_raw_data(const void *data, size_t size) { raw_data_.assign(data,
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
 inline void clear_raw_data() { raw_data_.clear(); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
-/** Returns whether raw_data is available, loading it for an on-demand tensor if needed. */
-bool is_raw_data() const;
+/** Returns whether raw_data is present, including an explicitly set empty value. */
+inline bool is_raw_data() const { return has_raw_data(); }
 /**
  * Sets the tensor raw data to a borrowed view of an external buffer and attaches
  * a custom deleter called when all references to that buffer are dropped.
@@ -651,23 +641,13 @@ template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&delete
 void LoadExternalData(const std::string &base_dir = "");
 /** Retains a non-serialized, immutable backing-file range for deferred raw tensor data. */
 std::shared_ptr<const DeferredWeightSource> deferred_weight_source;
-/** Shared, non-serialized cache enabled only by the explicit on-demand model copy. */
-std::shared_ptr<DeferredWeightCache> deferred_weight_cache;
 /** Returns whether this tensor retains a recoverable backing source. */
 bool HasDeferredWeight() const { return deferred_weight_source != nullptr; }
-/** Returns whether value reads may load this tensor's deferred payload. */
-bool HasOnDemandWeight() const { return deferred_weight_cache != nullptr; }
-/** Returns the deferred payload size; requires a recoverable source. */
-int64_t DeferredWeightSize() const;
-/** Enables on-demand reads for this tensor without changing other tensor copies. */
-void EnableOnDemandWeight();
 /** Loads this tensor's deferred bytes; returns false if already loaded. */
 bool LoadDeferredWeight();
 /** Releases this tensor's payload ownership; returns false if already unloaded.
  *  Existing owning views or consumers may keep their copies alive. */
 bool UnloadDeferredWeight();
-/** Loads deferred bytes for a const value read. */
-bool LoadDeferredWeightForRead() const;
 /** Writes the external payload after validating its metadata, offset, and padding. */
 void WriteExternalData(utils::BinaryWriteStream &stream, const SerializeOptions &options) const;
 /**
@@ -1241,64 +1221,8 @@ FIELD_OPTIONAL(TypeProto, type, 2,
                "This field MUST be present in this version of the IR for inputs and outputs of "
                "the top-level graph.")
 FIELD_STR(doc_string, 3, "A human-readable documentation for this tensor. Markdown is allowed.")
-/** Retains inferred bounds without forcing a deferred tensor during graph analysis. */
-void SetDeferredBounds(std::shared_ptr<const DeferredNumericBounds> bounds);
-/** Returns the unresolved bounds, if any, without reading their tensor. */
-std::shared_ptr<const DeferredNumericBounds> GetDeferredBounds() const;
-/** Removes unresolved bounds without materializing them. */
-void DiscardDeferredBounds();
-/** Materializes unresolved bounds into metadata_props. */
-void ResolveDeferredBounds() const;
-inline utils::RepeatedProtoField<StringStringEntryProto> &ref_metadata_props() {
-  ResolveDeferredBounds();
-  return metadata_props_;
-}
-inline const utils::RepeatedProtoField<StringStringEntryProto> &ref_metadata_props() const {
-  ResolveDeferredBounds();
-  return metadata_props_;
-}
-inline utils::RepeatedProtoField<StringStringEntryProto> &metadata_props() {
-  return ref_metadata_props();
-}
-inline const utils::RepeatedProtoField<StringStringEntryProto> &metadata_props() const {
-  return ref_metadata_props();
-}
-inline const StringStringEntryProto &metadata_props(size_t i) const {
-  return ref_metadata_props()[i];
-}
-inline utils::RepeatedProtoField<StringStringEntryProto> *mutable_metadata_props() {
-  return &ref_metadata_props();
-}
-inline StringStringEntryProto *mutable_metadata_props(size_t i) { return &ref_metadata_props()[i]; }
-inline const utils::RepeatedProtoField<StringStringEntryProto> *ptr_metadata_props() const {
-  return &ref_metadata_props();
-}
-inline StringStringEntryProto *add_metadata_props() { return &ref_metadata_props().add(); }
-inline StringStringEntryProto *add_metadata_props(StringStringEntryProto &&value) {
-  ref_metadata_props().push_back(std::move(value));
-  return &metadata_props_.back();
-}
-inline StringStringEntryProto *add_metadata_props(const StringStringEntryProto &value) {
-  ref_metadata_props().push_back(value);
-  return &metadata_props_.back();
-}
-inline bool has_metadata_props() const { return !ref_metadata_props().empty(); }
-inline int order_metadata_props() const { return 4; }
-inline void clr_metadata_props() {
-  DiscardDeferredBounds();
-  metadata_props_.clear();
-}
-inline void clear_metadata_props() { clr_metadata_props(); }
-inline int metadata_props_size() const { return static_cast<int>(ref_metadata_props().size()); }
-static inline constexpr const char *DOC_metadata_props =
-    "Named metadata values; keys should be distinct.";
-static inline constexpr const char *_name_metadata_props = "metadata_props";
-inline bool packed_metadata_props() const { return false; }
-mutable utils::RepeatedProtoField<StringStringEntryProto> metadata_props_;
-using metadata_props_t = StringStringEntryProto;
-mutable std::shared_ptr<const DeferredNumericBounds> deferred_bounds_;
-mutable size_t deferred_bounds_metadata_prefix_size_ = 0;
-std::shared_ptr<std::mutex> deferred_bounds_mutex_;
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 4,
+                     "Named metadata values; keys should be distinct.")
 END_PROTO()
 
 // AttributeProto
@@ -1836,12 +1760,6 @@ uint64_t RewritingHash() const;
 std::vector<std::string> WeightNames() const;
 /** Returns whether any tensor retains a deferred backing source. */
 bool HasDeferredWeights() const;
-/** Returns whether inferred value metadata still depends on a deferred source. */
-bool HasDeferredValueInfoBounds() const;
-/** Resolves inferred value metadata across graphs, functions and rewrite plans. */
-void ResolveDeferredValueInfoBounds() const;
-/** Returns an independent model copy whose deferred tensor values load on demand. */
-ModelProto CopyWithOnDemandWeights() const;
 /** Returns whether the uniquely named tensor has a materialized payload. */
 bool IsWeightLoaded(const std::string &name) const;
 /** Loads one uniquely named deferred tensor without materializing other weights. */

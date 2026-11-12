@@ -42,14 +42,13 @@ namespace {
 
 constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
 
-bool HasUnloadedExternalData(const TensorProto &tensor) {
-  return !tensor.has_raw_data() && !tensor.HasOnDemandWeight() &&
-         (tensor.has_external_data() ||
-          tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
+bool HasUnloadedTensorData(const TensorProto &tensor) {
+  return !tensor.has_raw_data() && (tensor.HasDeferredWeight() || tensor.has_external_data() ||
+                                    tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
 }
 
 template <typename Proto> std::string DeclaredValueTag(const Proto &value) {
-  for (const auto &entry : value.metadata_props_) {
+  for (const auto &entry : value.metadata_props()) {
     if (entry.key() == core::compute::kValueTagMetadataKey) {
       return entry.value();
     }
@@ -107,8 +106,6 @@ bool SameExternalData(const TensorProto &lhs, const TensorProto &rhs) {
 }
 
 bool HasComparableInitializerContent(const TensorProto &tensor) {
-  if (tensor.HasOnDemandWeight())
-    return true;
   if (!tensor.raw_data().empty() || !tensor.float_data().empty() || !tensor.int32_data().empty() ||
       !tensor.int64_data().empty() || !tensor.double_data().empty() ||
       !tensor.uint64_data().empty() || !tensor.string_data().empty())
@@ -136,17 +133,8 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
   if (lhs_location != rhs_location) {
     return false;
   }
-  const bool same_unloaded_source = lhs.HasOnDemandWeight() && rhs.HasOnDemandWeight() &&
-                                    !lhs.has_raw_data() && !rhs.has_raw_data() &&
-                                    HaveSameDeferredWeightSource(lhs, rhs);
-  if (!same_unloaded_source) {
-    if (lhs.HasOnDemandWeight())
-      lhs.is_raw_data();
-    if (rhs.HasOnDemandWeight())
-      rhs.is_raw_data();
-    if (lhs.raw_data() != rhs.raw_data()) {
-      return false;
-    }
+  if (lhs.raw_data() != rhs.raw_data()) {
+    return false;
   }
   if (!SamePackedData(lhs.float_data(), rhs.float_data()) ||
       !SamePackedData(lhs.int32_data(), rhs.int32_data()) ||
@@ -3536,15 +3524,15 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
            excluded_ops.count({std::string(), std::string()}) != 0;
   };
 
-  // Constant tensors already materialized: the graph initializers plus every
-  // output folded so far in this pass. The initializer pointers stay valid
+  // Available constants: the graph initializers plus every output folded so
+  // far in this pass. The initializer pointers stay valid
   // because ``initializers_`` is only appended to at the very end; the folded
   // outputs live in ``folded``, whose element addresses are stable across
   // inserts because ``std::unordered_map`` never invalidates pointers or
   // references to existing elements (only iterators) on rehash.
   std::unordered_map<std::string, const TensorProto *> const_tensors;
   for (const TensorProto &initializer : initializers_) {
-    if (!HasUnloadedExternalData(initializer)) {
+    if (initializer.HasDeferredWeight() || !HasUnloadedTensorData(initializer)) {
       const_tensors.emplace(initializer.name().value(), &initializer);
     }
   }
@@ -3587,13 +3575,12 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     }
     if (candidate) {
       const auto has_unloaded_sparse_data = [](const SparseTensorProto &tensor) {
-        return HasUnloadedExternalData(tensor.values()) ||
-               HasUnloadedExternalData(tensor.indices());
+        return HasUnloadedTensorData(tensor.values()) || HasUnloadedTensorData(tensor.indices());
       };
       for (const AttributeProto &attribute : node.attribute()) {
-        if ((attribute.has_t() && HasUnloadedExternalData(attribute.t())) ||
+        if ((attribute.has_t() && HasUnloadedTensorData(attribute.t())) ||
             std::any_of(attribute.tensors().begin(), attribute.tensors().end(),
-                        HasUnloadedExternalData) ||
+                        HasUnloadedTensorData) ||
             (attribute.has_sparse_tensor() &&
              has_unloaded_sparse_data(attribute.sparse_tensor())) ||
             std::any_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
@@ -3603,9 +3590,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
         }
       }
     }
-    // Every non-empty input must already be available as a materialized
-    // constant; otherwise the data needed to evaluate the node is missing (for
-    // example a predecessor that was left unfolded).
+    // Every non-empty input must be available as a constant or a deferred
+    // source; an unfolded predecessor, for example, leaves it unavailable.
     if (candidate) {
       for (std::size_t i = 0; i < node.input().size(); ++i) {
         const std::string input(node.input(static_cast<std::size_t>(i)));
@@ -3665,6 +3651,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 
     // Evaluate the node in isolation: seed its inputs from the materialized
     // constants and run the registered kernel.
+    std::unordered_map<std::string, TensorProto> loaded_deferred_tensors;
     const int opset = OpsetVersion(domain);
     core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
                                          opset > 0 ? static_cast<int64_t>(opset) : 0)),
@@ -3678,6 +3665,16 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
         continue;
       }
       const auto *source = const_tensors.at(input);
+      if (source->HasDeferredWeight() && !source->has_raw_data()) {
+        auto loaded = loaded_deferred_tensors.find(input);
+        if (loaded == loaded_deferred_tensors.end()) {
+          // Keep the builder's initializer and its derived metadata unchanged.
+          TensorProto tensor(*source);
+          tensor.LoadDeferredWeight();
+          loaded = loaded_deferred_tensors.emplace(input, std::move(tensor)).first;
+        }
+        source = &loaded->second;
+      }
       auto tensor = core::runtime::TensorFromProto(*source);
       if (forwarding_identity && source->is_raw_data() &&
           tensor.data_type != TensorProto::DataType::STRING) {
@@ -4675,12 +4672,12 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];
     auto tag = std::find_if(
-        input.metadata_props_.begin(), input.metadata_props_.end(),
+        input.ref_metadata_props().begin(), input.ref_metadata_props().end(),
         [](const auto &entry) { return entry.key() == core::compute::kValueTagMetadataKey; });
-    if (tag == input.metadata_props_.end()) {
-      auto &entry = input.metadata_props_.add();
-      entry.set_key(core::compute::kValueTagMetadataKey);
-      entry.set_value("weight");
+    if (tag == input.ref_metadata_props().end()) {
+      auto *entry = input.add_metadata_props();
+      entry->set_key(core::compute::kValueTagMetadataKey);
+      entry->set_value("weight");
     } else if (tag->value().empty()) {
       tag->set_value("weight");
     }

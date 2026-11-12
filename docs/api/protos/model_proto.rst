@@ -6,13 +6,16 @@ Deferred weights
 ----------------
 
 ``load(path, defer_weights=True)`` reads binary ONNX structure without materializing
-raw tensor payloads. Unlike ``skip_raw_data``, it retains a non-serialized immutable
-source range for every inline ``raw_data`` field and ordinary external tensor.
+large raw tensor payloads. Unlike ``skip_raw_data``, it retains a non-serialized
+immutable source range for every inline ``raw_data`` field and ordinary external tensor.
 External locations remain relative to the original model directory, including
-when several tensors share one weights file. The raw-data threshold is ignored.
+when several tensors share one weights file. Non-empty payloads smaller than
+``raw_data_threshold`` (1024 bytes in Python, 64 bytes by default in C++) are
+loaded during parsing while keeping their source, so they can still be unloaded;
+pass ``raw_data_threshold=0`` to defer every payload.
 The main model file is memory-mapped through its securely pinned descriptor:
-metadata decoding does not issue a system call per varint byte. Parsing accesses
-only metadata and skips raw payload ranges without copying or explicitly reading
+metadata decoding does not issue a system call per varint byte. Parsing reads small
+payloads but skips large raw payload ranges without copying or explicitly reading
 them. Mapping reserves virtual address space, not a resident copy of the weights;
 the operating system may still fetch neighboring bytes at page granularity.
 
@@ -65,57 +68,13 @@ extensions are rejected during weight traversal and before export destination I/
 even when those tensors are loaded.
 Existing eager parsing and ``skip_raw_data`` behavior are unchanged.
 
-On-demand optimization
-^^^^^^^^^^^^^^^^^^^^^^
-
-The manual deferred model above never loads a weight just because an optimizer
-asks for its value. To opt in to value-dependent rewrites while leaving
-unrelated weights unloaded, create a separate on-demand copy:
-
-.. code-block:: python
-
-    from onnx_light.onnx import load, save
-    from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph
-
-    source = load("model.onnx", defer_weights=True)
-    builder = GraphBuilder(source.copy_with_on_demand_weights())
-    plan = GraphGraph(builder, ["Sub1Mul"]).optimize()
-    optimized = builder.to_model()
-    optimized.load_weights()
-    save(optimized, "optimized.onnx")
-
-The native equivalent is ``model.CopyWithOnDemandWeights()``. The original
-model keeps its manual loading behavior. The copy and builder descendants
-retain their sources and share a per-tensor, copy-on-write payload cache.
-Native optimizer value reads load a deferred payload only when needed; copies
-that have not themselves acquired the payload may still report it as unloaded.
-In particular, ``has_raw_data()`` reports physical presence, while the native
-``is_raw_data()`` value-read check loads an on-demand tensor. Python
-``numpy_helper.to_array`` and runtime preparation still require explicitly
-loaded tensors.
-
-Shape inference may load small integer shape tensors, and a pattern, constant
-fold, exact content comparison or function-range comparison may require a
-larger payload. Inferred numeric bounds otherwise remain deferred until queried
-or serialized. Consequently, grouping several structurally similar functions
-may need to read a weight to decide whether their value ranges permit reuse.
-Parallel optimizer matching can share cached reads; concurrent mutation or
-unloading of the same model while it is being optimized is unsupported.
-
-The first uncached read validates the original source and retains its snapshot
-for subsequent copies. A cached snapshot can be reused without reopening the
-file. Explicit unload clears the shared cache, but existing owning copies and
-undo history can still retain their payloads. Treat backing files as immutable
-until all required reads and reloads are complete.
-
-``has_deferred_weights()`` also reports unresolved inferred bounds retained by
-graphs, nested graphs, functions or rewrite plans, even when their original
-tensor has been removed. ``load_weights()`` resolves those bounds as well as
-loading remaining tensors; its return value counts tensors loaded, not
-metadata-only reads. File, descriptor and stream exports require these bounds
-to be resolved before opening or writing a destination. Standalone
-submessage exports containing unresolved bounds are rejected, just like
-submessages retaining deferred tensors.
+``GraphBuilder`` and ``GraphGraph`` accept deferred models directly. Loaded small
+constants behave as in an eager model, so value-dependent rewrites still apply.
+Large unloaded weights have unknown numeric bounds, and value-dependent patterns
+may not apply. Explicitly load such weights before optimization when their
+values are required. Constant folding loads a temporary copy of a deferred
+initializer with ``LoadDeferredWeight`` only when it evaluates a node consuming
+it. The original initializer and other weights remain unloaded.
 
 Keep all backing files immutable and available until reloading is no longer
 needed. File identity, size and modification metadata are checked on reload;
@@ -131,9 +90,8 @@ consumers may retain their own storage: unloading a proto does **not** unload
 weights already retained by a runtime session. Runtime preparation rejects
 unloaded deferred initializers; load them before preparing a new context.
 Ordinary tensor/model copies and
-``CopyFrom`` retain recoverable sources; serialization does not.
-``ValueInfoProto.CopyFrom`` also retains unresolved inferred bounds. Other
-subproto ``CopyFrom`` operations use serialization and reject unloaded deferred tensors.
+``CopyFrom`` retain recoverable sources; serialization does not. Other subproto
+``CopyFrom`` operations use serialization and reject unloaded deferred tensors.
 Serialization node callbacks preserve deferred sources in tensor attributes and
 nested graphs, including when callback changes are restored afterwards.
 
@@ -205,9 +163,8 @@ bytes and 1,442,324 ``.text`` bytes.
 Exceeding either limit still fails CI. The error reports the reference, margin and effective limit,
 and explains that new proto fields, native code or compiler/build changes can
 increase binary size. Review those changes before updating a reference.
-The strict symbol limit is 942: the existing 926-symbol budget plus twelve
-on-demand proto entry points and four standard-library/RTTI symbols measured
-in a GCC 13.2 Release build.
+The strict symbol limit is 914: the CI measurement plus the pipeline and
+recursive-submessage deferred-export validators.
 The shared-library dependency allowlist is unchanged.
 
 .. autoclass:: onnx_light.onnx.ModelProto

@@ -72,13 +72,13 @@ GraphProto AnalysisGraph(GraphGraph &graph) {
     const auto tag = tags.find(name);
     if (tag != tags.end()) {
       StringStringEntryProto *metadata = nullptr;
-      for (auto &entry : value.metadata_props_)
+      for (auto &entry : value.ref_metadata_props())
         if (entry.key() == core::compute::kValueTagMetadataKey) {
           metadata = &entry;
           break;
         }
       if (metadata == nullptr) {
-        metadata = &value.metadata_props_.add();
+        metadata = value.add_metadata_props();
         metadata->set_key(core::compute::kValueTagMetadataKey);
       }
       metadata->set_value(tag->second);

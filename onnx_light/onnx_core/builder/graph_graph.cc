@@ -3571,7 +3571,6 @@ RewritingProto GraphBuilder::DiffRewritings(const GraphBuilder &target, const st
     if (deferred) {
       result.LoadDeferredWeight();
       result.deferred_weight_source.reset();
-      result.deferred_weight_cache.reset();
     }
     if (deferred || (!same_storage_directory && result.data_location() == TensorProto::EXTERNAL)) {
       if (!deferred && result.raw_data().empty())

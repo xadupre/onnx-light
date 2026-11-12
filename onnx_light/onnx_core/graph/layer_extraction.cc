@@ -287,8 +287,6 @@ bool GraphSignature(const GraphProto &graph, std::string &signature, SignatureNa
 }
 
 bool HasComparableLayerTensorContent(const TensorProto &tensor) {
-  if (tensor.HasOnDemandWeight())
-    tensor.is_raw_data();
   if (!tensor.raw_data().empty() || !tensor.float_data().empty() || !tensor.int32_data().empty() ||
       !tensor.int64_data().empty() || !tensor.double_data().empty() ||
       !tensor.uint64_data().empty() || !tensor.string_data().empty())
@@ -304,9 +302,6 @@ bool AttributeSignature(const AttributeProto &attribute, std::string &signature,
   // Tensor attribute values constrain matching exactly, without serializing
   // unbounded parameter payloads. Top-level Constant producers stay external.
   auto bounded_tensor = [](const TensorProto &tensor) {
-    if (tensor.HasOnDemandWeight() && !tensor.has_raw_data() &&
-        static_cast<uint64_t>(tensor.DeferredWeightSize()) > kMaxSignatureBytes)
-      return false;
     if (!HasComparableLayerTensorContent(tensor) || tensor.raw_data().size() > kMaxSignatureBytes ||
         tensor.float_data().size() > kMaxSignatureBytes / sizeof(float) ||
         tensor.double_data().size() > kMaxSignatureBytes / sizeof(double) ||
@@ -1263,14 +1258,14 @@ ValueInfoProto ValueInfo(Index &index, const std::string &name) {
   const auto tag = tags.find(name);
   if (tag != tags.end()) {
     StringStringEntryProto *metadata = nullptr;
-    for (auto &entry : value.metadata_props_) {
+    for (auto &entry : *value.mutable_metadata_props()) {
       if (entry.key().value() == core::compute::kValueTagMetadataKey) {
         metadata = &entry;
         break;
       }
     }
     if (metadata == nullptr) {
-      metadata = &value.metadata_props_.add();
+      metadata = value.add_metadata_props();
       metadata->set_key(core::compute::kValueTagMetadataKey);
     }
     metadata->set_value(tag->second);
@@ -1283,8 +1278,7 @@ void ClearLayerAnalysis(GraphProto &scope,
   const auto clear_range = [&](ValueInfoProto &value) {
     if (literal_values.contains(value.name().value()))
       return;
-    value.DiscardDeferredBounds();
-    auto &metadata = value.metadata_props_;
+    auto &metadata = value.ref_metadata_props();
     for (auto it = metadata.begin(); it != metadata.end();) {
       if (it->key() == core::symbolic::kValueInfoMinMetadataKey ||
           it->key() == core::symbolic::kValueInfoMaxMetadataKey)

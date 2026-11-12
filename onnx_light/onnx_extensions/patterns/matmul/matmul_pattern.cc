@@ -299,9 +299,6 @@ bool IsFloatingType(TensorProto::DataType type) {
 bool ReadFloatingTensor(const TensorProto &tensor, std::vector<double> &values) {
   const auto type = static_cast<TensorProto::DataType>(tensor.data_type());
   if (type == TensorProto::DataType::FLOAT16 || type == TensorProto::DataType::BFLOAT16) {
-    if (tensor.HasOnDemandWeight()) {
-      tensor.is_raw_data();
-    }
     const std::size_t count = !tensor.int32_data().empty() ? tensor.int32_data().size()
                                                            : tensor.ref_raw_data().size() / 2;
     if (count == 0) {

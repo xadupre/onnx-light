@@ -1,6 +1,7 @@
 #include "external_data_internal.h"
 #include "onnx_helper.h"
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -43,13 +44,19 @@ protected:
     return model;
   }
 
-  ModelProto Load(ParseOptions options = {}) {
+  ModelProto Load(ParseOptions options) {
     options.defer_weights = true;
     options.num_threads = 1;
     ModelProto model;
     utils::FileStream stream(path);
     EXPECT_TRUE(model.ParseFromStream(stream, options));
     return model;
+  }
+
+  ModelProto Load() {
+    ParseOptions options;
+    options.raw_data_threshold = 0;
+    return Load(options);
   }
 };
 
@@ -72,66 +79,6 @@ public:
     utils::FileStream::skip_bytes(size);
   }
 };
-
-class CountingBounds : public DeferredNumericBounds {
-public:
-  std::pair<std::optional<double>, std::optional<double>> Get() const override {
-    ++calls;
-    return {1.0, 3.0};
-  }
-  mutable int calls = 0;
-};
-
-TEST_F(DeferredWeights, PendingBoundsInNestedGraphsFunctionsAndPlansAreTrackedBeforeExport) {
-  ASSERT_TRUE(MakeModel().SerializeToFile(path));
-  auto bounds = std::make_shared<CountingBounds>();
-  ModelProto model;
-  auto &nested = model.ref_graph().add_node()->add_attribute()->ref_g().ref_value_info().add();
-  nested.SetDeferredBounds(bounds);
-  auto &function = model.ref_functions().add().ref_value_info().add();
-  function.SetDeferredBounds(bounds);
-  auto &plan = model.ref_rewritings()["pending"];
-  auto &planned = plan.ref_added_functions().add().ref_value_info().add();
-  planned.SetDeferredBounds(bounds);
-
-  EXPECT_TRUE(model.WeightNames().empty());
-  EXPECT_TRUE(model.HasDeferredWeights());
-  EXPECT_EQ(bounds->calls, 0);
-  EXPECT_THROW(model.SerializeToFile(path), std::runtime_error);
-  std::ostringstream stream;
-  EXPECT_THROW(plan.SerializeToOstream(&stream), std::runtime_error);
-  EXPECT_THROW(nested.SerializeToOstream(&stream), std::runtime_error);
-  EXPECT_TRUE(stream.str().empty());
-  EXPECT_EQ(bounds->calls, 0);
-
-  EXPECT_EQ(model.LoadWeights(), 0);
-  EXPECT_FALSE(model.HasDeferredWeights());
-  EXPECT_EQ(bounds->calls, 3);
-  EXPECT_EQ(nested.metadata_props().size(), 2);
-  EXPECT_EQ(function.metadata_props().size(), 2);
-  EXPECT_EQ(planned.metadata_props().size(), 2);
-  const auto output = (directory / "materialized.onnx").string();
-  EXPECT_TRUE(model.SerializeToFile(output));
-}
-
-TEST_F(DeferredWeights, OnDemandCopiesSharePayloadWithoutDetachingOnPresenceChecks) {
-  ASSERT_TRUE(MakeModel().SerializeToFile(path));
-  auto manual = Load();
-  auto first = manual.CopyWithOnDemandWeights();
-  auto second = utils::CopyWithSharedTensorStorage(first);
-  const auto &left = first.graph().initializer(0);
-  const auto &right = second.graph().initializer(0);
-
-  ASSERT_TRUE(left.is_raw_data());
-  ASSERT_TRUE(right.is_raw_data());
-  const auto *payload = left.raw_data().data();
-  ASSERT_EQ(payload, right.raw_data().data());
-  auto guard = left.raw_data().acquire_export_guard();
-  EXPECT_TRUE(left.has_raw_data());
-  EXPECT_EQ(payload, left.raw_data().data());
-  EXPECT_EQ(payload, right.raw_data().data());
-  EXPECT_FALSE(manual.IsWeightLoaded("A"));
-}
 
 TEST_F(DeferredWeights, PinnedMetadataReadsDoNotRequireDescriptorReads) {
   const std::string metadata = "metadata spanning multiple read operations";
@@ -202,7 +149,7 @@ TEST_F(DeferredWeights, InlineRangesAreIndependentAndReloadableWithoutPayloadRea
   ParseOptions options;
   options.defer_weights = true;
   options.num_threads = 1;
-  options.raw_data_threshold = 1 << 20;
+  options.raw_data_threshold = 0;
   ModelProto model;
   ASSERT_TRUE(model.ParseFromStream(stream, options));
   EXPECT_LT(stream.bytes_read, 1000);
@@ -246,6 +193,64 @@ TEST_F(DeferredWeights, InlineRangesAreIndependentAndReloadableWithoutPayloadRea
   EXPECT_FALSE(model.IsWeightLoaded("B"));
   EXPECT_THROW(model.LoadWeight("missing"), std::runtime_error);
   EXPECT_THROW(original.UnloadWeight("A"), std::runtime_error);
+}
+
+TEST_F(DeferredWeights, ThresholdLoadsSmallInlineAndExternalPayloads) {
+  for (const bool external : {false, true}) {
+    SCOPED_TRACE(external);
+    auto original = MakeModel();
+    if (external) {
+      utils::TwoFilesWriteStream output(path, (directory / "weights.bin").string());
+      SerializeOptions options;
+      options.raw_data_threshold = 0;
+      options.num_threads = 1;
+      ASSERT_TRUE(SerializeModelProtoToStream(original, output, options));
+    } else {
+      ASSERT_TRUE(original.SerializeToFile(path));
+    }
+    for (const int64_t threshold : {0, 4, 5}) {
+      SCOPED_TRACE(threshold);
+      ParseOptions options;
+      options.raw_data_threshold = threshold;
+      options.alignment = 64;
+      auto model = Load(options);
+      EXPECT_FALSE(model.IsWeightLoaded("A"));
+      EXPECT_FALSE(model.IsWeightLoaded("empty"));
+      EXPECT_EQ(model.IsWeightLoaded("B"), threshold == 5);
+      if (threshold == 5) {
+        const auto &raw = model.graph().initializer()[1].raw_data();
+        ASSERT_NE(raw.data(), nullptr);
+        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(raw.data()) % 64, 0);
+        EXPECT_EQ(raw.data()[0], 0xCD);
+        EXPECT_TRUE(model.UnloadWeight("B"));
+        EXPECT_TRUE(model.LoadWeight("B"));
+        EXPECT_EQ(model.graph().initializer()[1].raw_data().data()[0], 0xCD);
+      }
+    }
+  }
+}
+
+TEST_F(DeferredWeights, SmallPayloadStillRequiresAValidShape) {
+  for (const bool external : {false, true}) {
+    SCOPED_TRACE(external);
+    auto original = MakeModel();
+    original.ref_graph().ref_initializer()[1].ref_dims()[0] = 2;
+    if (external) {
+      utils::TwoFilesWriteStream output(path, (directory / "weights.bin").string());
+      SerializeOptions options;
+      options.raw_data_threshold = 0;
+      options.num_threads = 1;
+      ASSERT_TRUE(SerializeModelProtoToStream(original, output, options));
+    } else {
+      ASSERT_TRUE(original.SerializeToFile(path));
+    }
+    for (const int64_t threshold : {0, 5}) {
+      SCOPED_TRACE(threshold);
+      ParseOptions options;
+      options.raw_data_threshold = threshold;
+      EXPECT_THROW(Load(options), std::runtime_error);
+    }
+  }
 }
 
 TEST_F(DeferredWeights, SharedExternalRangesRetainMetadataAndSupportSingleFileExport) {

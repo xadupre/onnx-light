@@ -32,7 +32,7 @@ bool IsDefaultConstant(const NodeProto &node) {
 // encoding with the folder, so they are copied unchanged.
 TensorProto CanonicaliseInitializer(const TensorProto &value, const std::string &name) {
   if (static_cast<TensorProto::DataType>(value.data_type()) == TensorProto::DataType::STRING ||
-      value.has_raw_data() || value.HasOnDemandWeight()) {
+      value.has_raw_data()) {
     TensorProto proto = utils::CopyWithSharedTensorStorage(value);
     proto.set_name(name);
     return proto;
@@ -58,9 +58,9 @@ core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::Gr
     return NoMatch(candidate, "candidate is not a default-domain Constant");
   }
   const TensorProto *value = graph.GetComputedConstant(candidate.output()[0].value());
-  if (value == nullptr || (!value->has_raw_data() && !value->HasOnDemandWeight() &&
-                           (value->has_external_data() ||
-                            value->data_location() == TensorProto::DataLocation::EXTERNAL))) {
+  if (value == nullptr ||
+      (!value->has_raw_data() && (value->HasDeferredWeight() || value->has_external_data() ||
+                                  value->data_location() == TensorProto::DataLocation::EXTERNAL))) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};

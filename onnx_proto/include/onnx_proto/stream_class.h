@@ -178,9 +178,7 @@ public:                                                                         
  *  and could not preserve alignment or borrowed semantics.  ``name()``/``mutable_##name()`` are   \
  *  kept but now return ``utils::ByteSpan``, equivalent to ref_##name(); use the ByteSpan API      \
  *  (data()/size()/assign()/...) to read or mutate bytes. */
-#define FIELD_BYTES(name, order, doc) FIELD_BYTES_STORAGE(name, order, doc, )
-#define FIELD_MUTABLE_BYTES(name, order, doc) FIELD_BYTES_STORAGE(name, order, doc, mutable)
-#define FIELD_BYTES_STORAGE(name, order, doc, storage_qualifier)                                   \
+#define FIELD_BYTES(name, order, doc)                                                              \
 public:                                                                                            \
   inline utils::ByteSpan &ref_##name() { return name##_; }                                         \
   inline const utils::ByteSpan &ref_##name() const { return name##_; }                             \
@@ -189,7 +187,7 @@ public:                                                                         
   /** Compatibility accessor - equivalent to ref_##name() const; returns a ByteSpan. */            \
   inline const utils::ByteSpan &name() const { return name##_; }                                   \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
-  inline bool has_##name() const { return std::as_const(name##_).data() != nullptr; }              \
+  inline bool has_##name() const { return name##_.data() != nullptr; }                             \
   inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
   /** Compatibility accessor returning a mutable pointer to the ByteSpan field. */                 \
   inline utils::ByteSpan *mutable_##name() {                                                       \
@@ -199,7 +197,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \
-  storage_qualifier utils::ByteSpan name##_;                                                       \
+  utils::ByteSpan name##_;                                                                         \
   using name##_t = utils::ByteSpan;
 
 #define FIELD_DEFAULT(type, name, order, default_value, doc)                                       \
@@ -536,9 +534,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace utils::detail {
 /** Rejects standalone exports containing deferred tensor sources, including nested fields. */
 ONNX_LIGHT_PROTO_API void ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id);
-/** Allows internal tensor traversal to defer checking value-info bounds. */
-ONNX_LIGHT_PROTO_API void ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id,
-                                                           bool include_deferred_bounds);
 } // namespace utils::detail
 
 using utils::offset_t;

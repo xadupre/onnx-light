@@ -41,7 +41,7 @@ IteratorTensorProto::IteratorTensorProto(ModelProto *model) : tp_(nullptr) {
     for (size_t i = functions.size(); i > 0; --i) {
       auto &function = functions[i - 1];
       for (const auto &value : function.value_info())
-        utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id, false);
+        utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id);
       Position layouts;
       for (auto &value : function.ref_value_info())
         utils::detail::CollectLayoutTensors(&value, ValueInfoProto::proto_id,
@@ -83,7 +83,7 @@ bool IteratorTensorProto::next() {
       for (const auto *values :
            {&pos.graph->input(), &pos.graph->output(), &pos.graph->value_info()})
         for (const auto &value : *values)
-          utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id, false);
+          utils::detail::ValidateDeferredSubmessageExport(&value, ValueInfoProto::proto_id);
       pos.validated_extensions = true;
     }
     // loops over nodes

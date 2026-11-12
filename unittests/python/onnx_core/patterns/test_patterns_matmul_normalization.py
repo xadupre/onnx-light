@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import unittest
 from itertools import product
-import tempfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -752,8 +752,13 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         expected_alpha, self._attribute(optimized.graph.node[0], "alpha", 1.0)
                     )
 
-    def test_matmul_fusions_with_deferred_half_precision_weights(self):
+    def test_matmul_fusions_with_small_deferred_half_precision_weights(self):
         for data_type in (TensorProto.FLOAT16, TensorProto.BFLOAT16):
+            weight = self._half_initializer(
+                "W", np.arange(12, dtype=np.float32).reshape(3, 4) / 10, data_type
+            )
+            scale = self._half_initializer("scale", [0.5, 1.0, 1.5, 2.0], data_type)
+            scalar = self._half_initializer("scale", np.array(2.0), data_type)
             for pattern, nodes, initializers in (
                 (
                     "MatMulScaleFusion",
@@ -761,12 +766,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         oh.make_node("MatMul", ["X", "W"], ["M"]),
                         oh.make_node("Mul", ["M", "scale"], ["Y"]),
                     ],
-                    [
-                        self._half_initializer(
-                            "W", np.arange(12, dtype=np.float32).reshape(3, 4) / 10, data_type
-                        ),
-                        self._half_initializer("scale", [0.5, 1.0, 1.5, 2.0], data_type),
-                    ],
+                    [weight, scalar],
                 ),
                 (
                     "MatMulBatchNormalizationFusion",
@@ -780,35 +780,31 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         ),
                     ],
                     [
-                        self._half_initializer(
-                            "W", np.arange(12, dtype=np.float32).reshape(3, 4) / 10, data_type
-                        ),
-                        self._half_initializer("scale", [0.5, 1.0, 1.5, 2.0], data_type),
+                        weight,
+                        scale,
                         self._half_initializer("bias", [0.1, -0.2, 0.4, 0.8], data_type),
                         self._half_initializer("mean", [-0.3, 0.2, 0.5, -0.1], data_type),
                         self._half_initializer("variance", [0.7, 1.4, 0.3, 2.0], data_type),
                     ],
                 ),
             ):
-                with self.subTest(data_type=data_type, pattern=pattern):
+                with (
+                    self.subTest(data_type=data_type, pattern=pattern),
+                    TemporaryDirectory() as d,
+                ):
                     model = self._make_model(
                         nodes,
                         [("X", data_type, [2, 3])],
                         [("Y", data_type, [2, 4])],
                         initializers,
                     )
-                    with tempfile.TemporaryDirectory() as directory:
-                        path = Path(directory) / "model.onnx"
-                        save(model, path)
-                        eager = load(path)
-                        deferred = load(path, defer_weights=True).copy_with_on_demand_weights()
-                        self.assertFalse(deferred.is_weight_loaded("W"))
-
-                        eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
-                        deferred_optimized, deferred_rewrites, _ = self._optimize(
-                            deferred, [pattern]
-                        )
-
+                    path = Path(d) / "model.onnx"
+                    save(model, path)
+                    eager = load(path)
+                    deferred = load(path, defer_weights=True)
+                    self.assertTrue(deferred.is_weight_loaded("W"))
+                    eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
+                    deferred_optimized, deferred_rewrites, _ = self._optimize(deferred, [pattern])
                     self.assertEqual(
                         [rewrite.pattern_name for rewrite in eager_rewrites],
                         [rewrite.pattern_name for rewrite in deferred_rewrites],
@@ -820,7 +816,10 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     self.assertIn(
                         pattern, {rewrite.pattern_name for rewrite in deferred_rewrites}
                     )
-                    self.assertTrue(deferred.is_weight_loaded("W"))
+
+                    unloaded = load(path, defer_weights=True, raw_data_threshold=0)
+                    _, rewrites, _ = self._optimize(unloaded, [pattern], check_model=False)
+                    self.assertNotIn(pattern, {rewrite.pattern_name for rewrite in rewrites})
 
     def test_matmul_scale_fusion_no_match(self):
         numerator_div = self._make_model(

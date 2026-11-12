@@ -347,8 +347,8 @@ def load(
     :param skip_raw_data: skips the raw data of every tensor, this can be used
         to load only the architecture of the model even if the model is stored in
         one unique file
-    :param raw_data_threshold: if `skip_raw_data` is True, still keeps the tensors
-        smaller than this size (in bytes)
+    :param raw_data_threshold: if `skip_raw_data` or `defer_weights` is True, still
+        loads the tensors smaller than this size (in bytes)
     :param tiny_external_data_threshold: when parsing from a model file path without
         ``external_data_file`` (that is, with ``load_external_data=False``), loads
         tensors marked as external if their declared external ``length``/``size`` is
@@ -408,7 +408,8 @@ def load(
         inferred from the file extension (``.textproto`` selects ``"textproto"``,
         otherwise ``"protobuf"``). Text-format inputs are decoded as "utf-8".
     :param defer_weights: retains file ranges without materializing raw weight payloads,
-        ignoring ``raw_data_threshold``. Enables ``model.load_weight(name)`` and
+        except non-empty payloads smaller than ``raw_data_threshold``, which are loaded
+        but remain recoverable. Enables ``model.load_weight(name)`` and
         ``model.unload_weight(name)``. Requires a binary ONNX file path, immutable backing
         files, no typed payloads, no explicit external-data stream, and ``no_copy=False``.
         External locations are resolved relative to the original model directory.

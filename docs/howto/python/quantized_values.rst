@@ -265,6 +265,121 @@ restrictions do not prevent reference decoding of the serialized layouts.
     # unpack_awq_codes(encoded) returns UINT8 [N,K].
     # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
 
+.. _l-bitsandbytes-checkpoints:
+
+Native GPTQModel bitsandbytes checkpoints
+---------------------------------------
+
+``onnx_light.onnx_core.bitsandbytes`` imports and exports **one module's loaded
+checkpoint tensors**, retaining the original codes, scale state and JSON bytes.
+It also unpacks codes and reconstructs reference weights. No Torch,
+bitsandbytes or GPTQModel installation is required to use the adapter.
+The portable ``QuantizationFormat.NF4`` profile is unchanged: its low-nibble-first
+packing is **not** the native high-nibble-first bitsandbytes layout.
+Bitsandbytes FP4 uses its normalized codebook, **not** MX/NV E2M1.
+
+The version-1 contract pins GPTQModel
+``c1976918cfe3703fbcf6d1ce2440a82b26394375`` and the packed ``QuantState``
+schema verified with bitsandbytes **0.50.2**
+(``08a9956b939857ae2c4fbd56753960cc370fa7cf``).
+GPTQModel's optional dependency is a lower bound (``>=0.50.2``), not an exact
+pin; this adapter does not claim support for arbitrary future schemas.
+Authorities are the pinned
+`GPTQModel module <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/bitsandbytes.py>`_,
+`QuantState and reconstruction <https://github.com/bitsandbytes-foundation/bitsandbytes/blob/08a9956b939857ae2c4fbd56753960cc370fa7cf/bitsandbytes/functional.py>`_
+and `JSON packing <https://github.com/bitsandbytes-foundation/bitsandbytes/blob/08a9956b939857ae2c4fbd56753960cc370fa7cf/bitsandbytes/utils.py>`_.
+The checked-in fixtures were produced by real bitsandbytes CPU calls; their
+generator is beside ``unittests/python/backend/data/bitsandbytes_native_v1.json``.
+Upstream packages are needed only to regenerate those fixtures.
+
+Pass NumPy arrays keyed by **GPTQModel's module-local buffer suffixes**:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Format
+     - Exact tensors
+   * - NF4 / FP4
+     - ``weight`` UINT8 ``[ceil(N*K/2),1]``;
+       ``weight_absmax`` FLOAT32 ``[ceil(N*K/B)]``;
+       ``weight_quant_map`` FLOAT32 ``[16]``;
+       ``weight_quant_state`` UINT8 ``[J]``.
+   * - Nested NF4 / FP4
+     - Same, but ``weight_absmax`` is UINT8 scale codes;
+       adds ``weight_nested_absmax`` FLOAT32 ``[ceil(ceil(N*K/B)/256)]``
+       and ``weight_nested_quant_map`` FLOAT32 ``[256]``.
+   * - INT8
+     - ``weight`` INT8 ``[N,K]`` and ``weight_scb`` FLOAT32 ``[N]``.
+
+``N`` and ``K`` are positive output/input widths. Four-bit blocks partition the
+**flattened row-major matrix**, not each row separately.
+``B`` is one of 32, 64, 128, 256, 512, 1024, 2048 or 4096. Partial blocks
+and odd element counts are supported; the unused final low nibble is preserved
+but never decoded. Codes at positions ``2*i`` and ``2*i+1`` occupy the high and
+low nibbles of byte ``i``. INT8 codes retain their signed byte patterns.
+
+``weight_quant_state`` contains the original ASCII JSON emitted by
+``QuantState.as_dict(packed=True)``: ``quant_type`` (``"nf4"``/``"fp4"``),
+``blocksize``, ``dtype`` (``"float32"``/``"float16"``/``"bfloat16"``), and
+``shape`` (``[N,K]``). Nested state additionally requires
+``nested_blocksize=256``, ``nested_dtype="float32"`` and finite nonnegative
+``nested_offset`` representable in FLOAT32. The parser accepts JSON whitespace
+and arbitrary field order but rejects duplicate/unknown fields, escaped strings,
+nonintegral dimensions and trailing data. ``J`` is bounded by 4096 bytes.
+The saved source dtype is retained even though reference reconstruction defaults
+to FLOAT32.
+
+The outer map must equal the canonical NF4/FP4 FLOAT32 table. The nested map
+is a supplied finite 256-entry FLOAT32 table (normally bitsandbytes' dynamic
+8-bit map), and is retained without regeneration. Stored maxima must be finite
+and nonnegative, including zero. Nested effective scale ``s[i]`` is computed
+as two separately rounded FP32 operations:
+``weight_nested_quant_map[weight_absmax[i]] *
+weight_nested_absmax[i//256] + float32(nested_offset)``.
+Effective scales may be signed after lossy scale reconstruction.
+Weights are ``table[code] * s[i//B]``; INT8 weights are
+``float32(code) * (weight_scb[row]/float32(127))``.
+Reference reconstruction returns FLOAT32 ``[N,K]``. Setting
+``reconstruction_dtype`` to ``onnx.TensorProto.FLOAT16`` or ``BFLOAT16``
+rounds final values to that dtype; nonfinite results are rejected.
+This models weight reconstruction, not accelerator inference or activation
+quantization.
+
+Hugging Face's dotted keys such as ``weight.absmax`` and
+``weight.quant_state.bitsandbytes__nf4`` are **not** GPTQModel's saved schema.
+They must not be passed unchanged. Bias, outlier-routing state, optimizer
+state, additional nested levels, transposed or CPU-repacked storage,
+non-UINT8 four-bit storage and other side tensors are explicitly rejected.
+No checkpoint files are opened and no quantization algorithm runs.
+
+``onnx_light.bitsandbytes_weights.v1`` reuses ``EncodedValueProto`` and
+``StructTypeCatalogue``. Its exact schema records format, dimensions, block sizes,
+source dtype, JSON byte length, both reference revisions and the tensor
+types/shapes. Its payload concatenates the listed tensors in order, using
+little-endian FLOAT32 storage. The JSON is retained as a tensor, not rewritten.
+Every import/export/decode validates the schema, metadata agreement, checked
+products, tensor extents and payload length. Python borrows native-endian,
+C-contiguous arrays only during import, then returns an owned snapshot.
+``max_bytes`` (default 1 GiB) bounds checkpoint payload and logical FLOAT32
+storage **separately**, not total process RSS. Invalid and unsupported state
+raises ``ValueError`` before allocating logical output buffers.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.bitsandbytes import (
+        import_bitsandbytes_weights, export_bitsandbytes_weights,
+        reconstruct_bitsandbytes_weights, unpack_bitsandbytes_codes,
+    )
+
+    # tensors contains exactly one module's native weight_* arrays.
+    encoded = import_bitsandbytes_weights(tensors)
+    restored = export_bitsandbytes_weights(encoded)
+    assert import_bitsandbytes_weights(restored).SerializeToString() == encoded.SerializeToString()
+    weight_out_in = reconstruct_bitsandbytes_weights(encoded)  # NumPy float32 [N,K]
+    codes = unpack_bitsandbytes_codes(encoded)  # uint8 for NF4/FP4, int8 for INT8
+    # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
+
 .. _l-exl3-checkpoints:
 
 Native GPTQModel EXL3 checkpoints

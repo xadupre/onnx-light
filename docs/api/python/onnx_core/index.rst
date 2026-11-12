@@ -5,6 +5,7 @@ onnx_light.onnx_core
     :maxdepth: 1
 
     awq
+    bitsandbytes
     compressed_tensors
     exl3
     gguf

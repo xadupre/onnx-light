@@ -1,0 +1,268 @@
+[
+  {
+    "name": "nf4-nested-False",
+    "tensors": {
+      "weight": {
+        "dtype": "uint8",
+        "shape": [
+          50,
+          1
+        ],
+        "hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0127"
+      },
+      "weight_absmax": {
+        "dtype": "float32",
+        "shape": [
+          4
+        ],
+        "hex": "0000803f000000400000003f00008040"
+      },
+      "weight_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          16
+        ],
+        "hex": "000080bfb13932bf306b06bfa032cabe4da291be3f353dbe7178babd00000000fffaa23de3ca243edd047c3e3a03ad3eb8a4e13eab07103fb313393f0000803f"
+      },
+      "weight_quant_state": {
+        "dtype": "uint8",
+        "shape": [
+          76
+        ],
+        "hex": "7b227175616e745f74797065223a20226e6634222c2022626c6f636b73697a65223a2033322c20226474797065223a2022666c6f61743332222c20227368617065223a205b332c2033335d7d"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "000080bfb13932bf306b06bfa032cabe4da291be3f353dbe7178babd00000000fffaa23de3ca243edd047c3e3a03ad3eb8a4e13eab07103fb313393f0000803f000080bfb13932bf306b06bfa032cabe4da291be3f353dbe7178babd00000000fffaa23de3ca243edd047c3e3a03ad3eb8a4e13eab07103fb313393f0000803f000000c0b139b2bf306b86bfa0324abf4da211bf3f35bdbe71783abe00000000fffa223ee3caa43edd04fc3e3a032d3fb8a4613fab07903fb313b93f00000040000000c0b139b2bf306b86bfa0324abf4da211bf3f35bdbe71783abe00000000fffa223ee3caa43edd04fc3e3a032d3fb8a4613fab07903fb313b93f00000040000000bfb139b2be306b86bea0324abe4da211be3f35bdbd71783abd00000000fffa223de3caa43ddd04fc3d3a032d3eb8a4613eab07903eb313b93e0000003f000000bfb139b2be306b86bea0324abe4da211be3f35bdbd71783abd00000000fffa223de3caa43ddd04fc3d3a032d3eb8a4613eab07903eb313b93e0000003f000080c0b13932c0306b06c0"
+    }
+  },
+  {
+    "name": "nf4-nested-True",
+    "tensors": {
+      "weight": {
+        "dtype": "uint8",
+        "shape": [
+          50,
+          1
+        ],
+        "hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0127"
+      },
+      "weight_absmax": {
+        "dtype": "uint8",
+        "shape": [
+          4
+        ],
+        "hex": "29b019ff"
+      },
+      "weight_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          16
+        ],
+        "hex": "000080bfb13932bf306b06bfa032cabe4da291be3f353dbe7178babd00000000fffaa23de3ca243edd047c3e3a03ad3eb8a4e13eab07103fb313393f0000803f"
+      },
+      "weight_nested_absmax": {
+        "dtype": "float32",
+        "shape": [
+          1
+        ],
+        "hex": "00000840"
+      },
+      "weight_nested_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          256
+        ],
+        "hex": "33337ebf9a997abf000077bf666673bfcdcc6fbf33336cbf9a9968bf000065bf666661bfcdcc5dbf33335abf9a9956bf000053bf66664fbfcdcc4bbf333348bf9a9944bf000041bf66663dbfcdcc39bf343336bf9a9932bf00002fbf66662bbfcdcc27bf343324bf9a9920bf00001dbf666619bfcdcc15bf343312bf9a990ebf00000bbf666607bfcccc03bf333300bf3233f9be0000f2becccceabe9a99e3be6666dcbe3333d5be0000cebeccccc6be9a99bfbe6666b8be3333b1be0000aabecccca2be9a999bbe666694be34338dbe000086be99997dbe33336fbecdcc60be666652be000044be9a9935be333327becdcc18be66660abe0000f8bd3433dbbd85ebc9bdf728c4bd6766bebdd7a3b8bd48e1b2bdb81eadbd2a5ca7bd9a99a1bd0ad79bbd7b1496bdeb5190bd5d8f8abdcdcc84bd7b147ebd5d8f72bd3d0a67bd1f855bbd000050bde17a44bdc3f538bda3702dbd85eb21bd676616bd48e10abd52b8febc15aee7bcd7a3d0bc9a99b9bc5d8fa2bc1f858bbcc3f568bc48e13abc643b1fbc180416bccdcc0cbc819503bc6abcf4bbd34de2bb3bdfcfbba470bdbb0d02abbb749398bbdd2486bb8a6c67bb5c8f42bb2db21dbbfca9f1ba9defa7baff6577ba3ee859ba806a3cbac1ec1eba016f01ba83e2c7b905e78cb90bd723b94b1fbab8b3ef8ab8348037b80642b2b7ff0502b7941a5ab6b7a313b500000000b7a31335941a5a36ff0502370642b23734803738b3ef8a384b1fba380bd7233905e78c3983e2c739016f013ac1ec1e3a806a3c3a3ee8593aff65773a9defa73afca9f13a2db21d3b5c8f423b8a6c673bdd24863b7493983b0d02ab3ba470bd3b3bdfcf3bd34de23b6abcf43b8195033ccdcc0c3c1804163c643b1f3c48e13a3cc3f5683c1f858b3c5d8fa23c9a99b93cd7a3d03c15aee73c52b8fe3c48e10a3d6766163d85eb213da3702d3dc3f5383de17a443d0000503d1f855b3d3d0a673d5d8f723d7b147e3dcdcc843d5d8f8a3deb51903d7b14963d0ad79b3d9a99a13d2a5ca73db81ead3d48e1b23dd7a3b83d6766be3df728c43d85ebc93d3433db3d0000f83d66660a3ecdcc183e3333273e9a99353e0000443e6666523ecdcc603e33336f3e99997d3e0000863e34338d3e6666943e9a999b3ecccca23e0000aa3e3333b13e6666b83e9a99bf3eccccc63e0000ce3e3333d53e6666dc3e9a99e33eccccea3e0000f23e3233f93e3333003fcccc033f6666073f00000b3f9a990e3f3433123fcdcc153f6666193f00001d3f9a99203f3433243fcdcc273f66662b3f00002f3f9a99323f3433363fcdcc393f66663d3f0000413f9a99443f3333483fcdcc4b3f66664f3f0000533f9a99563f33335a3fcdcc5d3f6666613f0000653f9a99683f33336c3fcdcc6f3f6666733f0000773f9a997a3f33337e3f0000803f"
+      },
+      "weight_quant_state": {
+        "dtype": "uint8",
+        "shape": [
+          152
+        ],
+        "hex": "7b227175616e745f74797065223a20226e6634222c2022626c6f636b73697a65223a2033322c20226474797065223a2022666c6f61743332222c20227368617065223a205b332c2033335d2c20226e65737465645f626c6f636b73697a65223a203235362c20226e65737465645f6474797065223a2022666c6f61743332222c20226e65737465645f6f6666736574223a20312e3837357d"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "9a797dbfac7730bfc81705bf1434c8be933290be7f573bbe9ba1b8bd00000000795fa13dc92a233e8488793e5f4eab3ef86adf3efe9b0e3f6240373f9a797d3f9a797dbfac7730bfc81705bf1434c8be933290be7f573bbe9ba1b8bd00000000795fa13dc92a233e8488793e5f4eab3ef86adf3efe9b0e3f6240373f9a797d3fc30d00c0da4cb2bfa47986bf5d484abff5b111bf9749bdbe7d8c3abe00000000850c233e9bdca43ef51ffc3ed4152d3ffabc613f2717903f9927b93fc30d0040c30d00c0da4cb2bfa47986bf5d484abff5b111bf9749bdbe7d8c3abe00000000850c233e9bdca43ef51ffc3ed4152d3ffabc613f2717903f9927b93fc30d0040321303bfc581b6bedca589be220e4fbef22115bedec0c1bd3af33ebd0000000052e5263d5bc0a83d6309013e3f2b313e6b10673e727d933eea85bd3e3213033f321303bfc581b6bedca589be220e4fbef22115bedec0c1bd3af33ebd0000000052e5263d5bc0a83d6309013e3f2b313e6b10673e727d933eea85bd3e3213033f000080c0b13932c0306b06c0"
+    }
+  },
+  {
+    "name": "fp4-nested-False",
+    "tensors": {
+      "weight": {
+        "dtype": "uint8",
+        "shape": [
+          50,
+          1
+        ],
+        "hex": "0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0130"
+      },
+      "weight_absmax": {
+        "dtype": "float32",
+        "shape": [
+          4
+        ],
+        "hex": "0000803f000000400000003fabaa2a40"
+      },
+      "weight_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          16
+        ],
+        "hex": "00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be"
+      },
+      "weight_quant_state": {
+        "dtype": "uint8",
+        "shape": [
+          76
+        ],
+        "hex": "7b227175616e745f74797065223a2022667034222c2022626c6f636b73697a65223a2033322c20226474797065223a2022666c6f61743332222c20227368617065223a205b332c2033335d7d"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be00000000abaa2a3cabaaaa3f00000040abaa2a3f0000803fabaaaa3e0000003f00000000abaa2abcabaaaabf000000c0abaa2abf000080bfabaaaabe000000bf00000000abaa2a3cabaaaa3f00000040abaa2a3f0000803fabaaaa3e0000003f00000000abaa2abcabaaaabf000000c0abaa2abf000080bfabaaaabe000000bf00000000abaa2a3babaaaa3e0000003fabaa2a3e0000803eabaaaa3d0000003e00000000abaa2abbabaaaabe000000bfabaa2abe000080beabaaaabd000000be00000000abaa2a3babaaaa3e0000003fabaa2a3e0000803eabaaaa3d0000003e00000000abaa2abbabaaaabe000000bfabaa2abe000080beabaaaabd000000be000000003a8e633cabaa2a40"
+    }
+  },
+  {
+    "name": "fp4-all-codes",
+    "tensors": {
+      "weight": {
+        "dtype": "uint8",
+        "shape": [
+          50,
+          1
+        ],
+        "hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123"
+      },
+      "weight_absmax": {
+        "dtype": "float32",
+        "shape": [
+          4
+        ],
+        "hex": "0000803f000000400000003fabaa2a40"
+      },
+      "weight_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          16
+        ],
+        "hex": "00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be"
+      },
+      "weight_quant_state": {
+        "dtype": "uint8",
+        "shape": [
+          76
+        ],
+        "hex": "7b227175616e745f74797065223a2022667034222c2022626c6f636b73697a65223a2033322c20226474797065223a2022666c6f61743332222c20227368617065223a205b332c2033335d7d"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be00000000abaa2a3cabaaaa3f00000040abaa2a3f0000803fabaaaa3e0000003f00000000abaa2abcabaaaabf000000c0abaa2abf000080bfabaaaabe000000bf00000000abaa2a3cabaaaa3f00000040abaa2a3f0000803fabaaaa3e0000003f00000000abaa2abcabaaaabf000000c0abaa2abf000080bfabaaaabe000000bf00000000abaa2a3babaaaa3e0000003fabaa2a3e0000803eabaaaa3d0000003e00000000abaa2abbabaaaabe000000bfabaa2abe000080beabaaaabd000000be00000000abaa2a3babaaaa3e0000003fabaa2a3e0000803eabaaaa3d0000003e00000000abaa2abbabaaaabe000000bfabaa2abe000080beabaaaabd000000be000000003a8e633c3a8ee33f"
+    }
+  },
+  {
+    "name": "fp4-nested-True",
+    "tensors": {
+      "weight": {
+        "dtype": "uint8",
+        "shape": [
+          50,
+          1
+        ],
+        "hex": "0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0123456709abcdef0130"
+      },
+      "weight_absmax": {
+        "dtype": "uint8",
+        "shape": [
+          4
+        ],
+        "hex": "24d405ff"
+      },
+      "weight_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          16
+        ],
+        "hex": "00000000abaaaa3babaa2a3f0000803fabaaaa3e0000003fabaa2a3e0000803e00000000abaaaabbabaa2abf000080bfabaaaabe000000bfabaa2abe000080be"
+      },
+      "weight_nested_absmax": {
+        "dtype": "float32",
+        "shape": [
+          1
+        ],
+        "hex": "0000903f"
+      },
+      "weight_nested_quant_map": {
+        "dtype": "float32",
+        "shape": [
+          256
+        ],
+        "hex": "33337ebf9a997abf000077bf666673bfcdcc6fbf33336cbf9a9968bf000065bf666661bfcdcc5dbf33335abf9a9956bf000053bf66664fbfcdcc4bbf333348bf9a9944bf000041bf66663dbfcdcc39bf343336bf9a9932bf00002fbf66662bbfcdcc27bf343324bf9a9920bf00001dbf666619bfcdcc15bf343312bf9a990ebf00000bbf666607bfcccc03bf333300bf3233f9be0000f2becccceabe9a99e3be6666dcbe3333d5be0000cebeccccc6be9a99bfbe6666b8be3333b1be0000aabecccca2be9a999bbe666694be34338dbe000086be99997dbe33336fbecdcc60be666652be000044be9a9935be333327becdcc18be66660abe0000f8bd3433dbbd85ebc9bdf728c4bd6766bebdd7a3b8bd48e1b2bdb81eadbd2a5ca7bd9a99a1bd0ad79bbd7b1496bdeb5190bd5d8f8abdcdcc84bd7b147ebd5d8f72bd3d0a67bd1f855bbd000050bde17a44bdc3f538bda3702dbd85eb21bd676616bd48e10abd52b8febc15aee7bcd7a3d0bc9a99b9bc5d8fa2bc1f858bbcc3f568bc48e13abc643b1fbc180416bccdcc0cbc819503bc6abcf4bbd34de2bb3bdfcfbba470bdbb0d02abbb749398bbdd2486bb8a6c67bb5c8f42bb2db21dbbfca9f1ba9defa7baff6577ba3ee859ba806a3cbac1ec1eba016f01ba83e2c7b905e78cb90bd723b94b1fbab8b3ef8ab8348037b80642b2b7ff0502b7941a5ab6b7a313b500000000b7a31335941a5a36ff0502370642b23734803738b3ef8a384b1fba380bd7233905e78c3983e2c739016f013ac1ec1e3a806a3c3a3ee8593aff65773a9defa73afca9f13a2db21d3b5c8f423b8a6c673bdd24863b7493983b0d02ab3ba470bd3b3bdfcf3bd34de23b6abcf43b8195033ccdcc0c3c1804163c643b1f3c48e13a3cc3f5683c1f858b3c5d8fa23c9a99b93cd7a3d03c15aee73c52b8fe3c48e10a3d6766163d85eb213da3702d3dc3f5383de17a443d0000503d1f855b3d3d0a673d5d8f723d7b147e3dcdcc843d5d8f8a3deb51903d7b14963d0ad79b3d9a99a13d2a5ca73db81ead3d48e1b23dd7a3b83d6766be3df728c43d85ebc93d3433db3d0000f83d66660a3ecdcc183e3333273e9a99353e0000443e6666523ecdcc603e33336f3e99997d3e0000863e34338d3e6666943e9a999b3ecccca23e0000aa3e3333b13e6666b83e9a99bf3eccccc63e0000ce3e3333d53e6666dc3e9a99e33eccccea3e0000f23e3233f93e3333003fcccc033f6666073f00000b3f9a990e3f3433123fcdcc153f6666193f00001d3f9a99203f3433243fcdcc273f66662b3f00002f3f9a99323f3433363fcdcc393f66663d3f0000413f9a99443f3333483fcdcc4b3f66664f3f0000533f9a99563f33335a3fcdcc5d3f6666613f0000653f9a99683f33336c3fcdcc6f3f6666733f0000773f9a997a3f33337e3f0000803f"
+      },
+      "weight_quant_state": {
+        "dtype": "uint8",
+        "shape": [
+          165
+        ],
+        "hex": "7b227175616e745f74797065223a2022667034222c2022626c6f636b73697a65223a2033322c20226474797065223a2022666c6f61743332222c20227368617065223a205b332c2033335d2c20226e65737465645f626c6f636b73697a65223a203235362c20226e65737465645f6474797065223a2022666c6f61743332222c20226e65737465645f6f6666736574223a20312e353431363636373436313339353236347d"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "0000000040a9a93b40a9293fe07d7e3f40a9a93ee07dfe3e40a9293ee07d7e3e0000000040a9a9bb40a929bfe07d7ebf40a9a9bee07dfebe40a929bee07d7ebe0000000040a9a93b40a9293fe07d7e3f40a9a93ee07dfe3e40a9293ee07d7e3e0000000040a9a9bb40a929bfe07d7ebf40a9a9bee07dfebe40a929bee07d7ebe000000003a2e2a3c3a2eaa3f5645ff3f3a2e2a3f56457f3f3a2eaa3e5645ff3e000000003a2e2abc3a2eaabf5645ffbf3a2e2abf56457fbf3a2eaabe5645ffbe000000003a2e2a3c3a2eaa3f5645ff3f3a2e2a3f56457f3f3a2eaa3e5645ff3e000000003a2e2abc3a2eaabf5645ffbf3a2e2abf56457fbf3a2eaabe5645ffbe0000000018ec2b3b18ecab3e12f1003f18ec2b3e12f1803e18ecab3d12f1003e0000000018ec2bbb18ecabbe12f100bf18ec2bbe12f180be18ecabbd12f100be0000000018ec2b3b18ecab3e12f1003f18ec2b3e12f1803e18ecab3d12f1003e0000000018ec2bbb18ecabbe12f100bf18ec2bbe12f180be18ecabbd12f100be000000003a8e633cabaa2a40"
+    }
+  },
+  {
+    "name": "int8",
+    "tensors": {
+      "weight": {
+        "dtype": "int8",
+        "shape": [
+          3,
+          33
+        ],
+        "hex": "8184878a8d909396999c9fa2a5a8abaeb1b4b7babdc0c4c7cacdd0d3d6d9dcdfe2ced4d9dfe4eaeff5fa00060b11161c21272c32373d42484d53585e63696e74797f36393b3d40424446494b4d4f525456585b5d5f626466686b6d6f717476787a7d7f"
+      },
+      "weight_scb": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ],
+        "hex": "000040400040d23f00008040"
+      }
+    },
+    "expected": {
+      "dtype": "float32",
+      "shape": [
+        3,
+        33
+      ],
+      "hex": "000040c0ee763bc0dced36c0ca6432c0b7db2dc0a55229c093c924c0814020c06fb71bc05d2e17c04ba512c0381c0ec0269309c0140a05c0028100c0e0eff7bfbbddeebf97cbe5bf73b9dcbf4fa7d3bf2a95cabf0683c1bfd66ab5bfb158acbf8d46a3bf69349abf442291bf201088bff8fb7dbfafd76bbf67b359bf1e8f47bfd66a35bf1a8d25bf5faf11bf432101bf0e87dabed66ab9be5faf91be4d2661be5faf11bedced9ebd00000000dced9e3d5faf113e4d26613e5faf913ed66ab93e0e87da3e4321013f5faf113f1a8d253f371b363ff2f8493f0e875a3fca646e3fe6f27e3f5168893f5faf913f3d9e9b3f4be5a33f29d4ad3f371bb63f140ac03f2351c83f0040d23f67b3d93f97cbe53fb7dbed3fd8ebf53f04020140140a054024120940341a0d404d2613405d2e17406d361b407d3e1f40954a2540a5522940b55a2d40c6623140de6e3740ee763b40fe7e3f40168b454026934940369b4d4046a351405faf57406fb75b407fbf5f408fc76340a7d36940b7db6d40c8e37140d8eb7540f0f77b4000008040"
+    }
+  }
+]

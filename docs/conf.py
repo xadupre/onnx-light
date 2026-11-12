@@ -9,6 +9,7 @@ import onnx_light
 project = "onnx-light"
 author = "onnx-light contributors"
 release = onnx_light.__version__
+today_fmt = "%Y-%m-%d"
 
 extensions = [
     "breathe",

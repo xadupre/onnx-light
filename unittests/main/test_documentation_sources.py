@@ -8,6 +8,14 @@ from pathlib import Path
 class TestDocumentationSources(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[2]
 
+    def test_homepage_build_metadata(self):
+        text = (self.ROOT / "docs/index.rst").read_text(encoding="utf-8")
+        self.assertIn("Version: |release|", text)
+        self.assertIn("Last generated: |today|", text)
+        config = (self.ROOT / "docs/conf.py").read_text(encoding="utf-8")
+        self.assertIn("release = onnx_light.__version__", config)
+        self.assertIn('today_fmt = "%Y-%m-%d"', config)
+
     def test_internal_links_use_relative_paths(self):
         docs = self.ROOT / "docs"
         for source in sorted(docs.rglob("*")):

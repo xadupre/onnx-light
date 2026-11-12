@@ -80,6 +80,7 @@ TEST_F(DeferredInitializerLifetime, PrepareRetainsStorageAcrossUnloadAndReload) 
     ParseOptions options;
     options.defer_weights = true;
     ASSERT_TRUE(model.ParseFromStream(stream, options));
+    auto on_demand = model.CopyWithOnDemandWeights();
     core::runtime::RuntimeContext context(
         core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
     context.RegisterCustomKernel(
@@ -90,6 +91,9 @@ TEST_F(DeferredInitializerLifetime, PrepareRetainsStorageAcrossUnloadAndReload) 
     core::runtime::RuntimeSession session(model);
     EXPECT_THROW(session.Prepare(context), std::invalid_argument);
     EXPECT_FALSE(context.HasValue("W"));
+    core::runtime::RuntimeSession on_demand_session(on_demand);
+    EXPECT_THROW(on_demand_session.Prepare(context), std::invalid_argument);
+    EXPECT_FALSE(on_demand.graph().initializer(0).has_raw_data());
     ASSERT_TRUE(model.LoadWeight("W"));
     auto &raw = model.ref_graph().ref_initializer()[0].ref_raw_data();
     const auto *payload = std::as_const(raw).data();

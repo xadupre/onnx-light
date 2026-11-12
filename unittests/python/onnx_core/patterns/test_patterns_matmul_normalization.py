@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import unittest
 from itertools import product
+import tempfile
+from pathlib import Path
 
 import numpy as np
 
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import TensorProto, checker
+from onnx_light.onnx import TensorProto, checker, load, save
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -39,6 +41,20 @@ class TestPatternsMatmulNormalization(ExtTestCase):
     def _initializer(name: str, values, dtype) -> TensorProto:
         """Creates an initializer from NumPy-compatible values."""
         return onh.from_array(np.asarray(values, dtype=dtype), name=name)
+
+    @staticmethod
+    def _half_initializer(name: str, values, data_type: int) -> TensorProto:
+        """Creates a FLOAT16 or BFLOAT16 initializer."""
+        values = np.asarray(values, dtype=np.float32)
+        tensor = TensorProto()
+        tensor.name = name
+        tensor.data_type = data_type
+        tensor.dims.extend(values.shape)
+        if data_type == TensorProto.FLOAT16:
+            tensor.raw_data = values.astype(np.float16).tobytes()
+        else:
+            tensor.raw_data = (values.view(np.uint32) >> 16).astype(np.uint16).tobytes()
+        return tensor
 
     def _make_model(
         self, nodes, inputs, outputs, initializers=(), *, opset: int = 18, name: str = "pattern"
@@ -735,6 +751,76 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     self.assertAlmostEqual(
                         expected_alpha, self._attribute(optimized.graph.node[0], "alpha", 1.0)
                     )
+
+    def test_matmul_fusions_with_deferred_half_precision_weights(self):
+        for data_type in (TensorProto.FLOAT16, TensorProto.BFLOAT16):
+            for pattern, nodes, initializers in (
+                (
+                    "MatMulScaleFusion",
+                    [
+                        oh.make_node("MatMul", ["X", "W"], ["M"]),
+                        oh.make_node("Mul", ["M", "scale"], ["Y"]),
+                    ],
+                    [
+                        self._half_initializer(
+                            "W", np.arange(12, dtype=np.float32).reshape(3, 4) / 10, data_type
+                        ),
+                        self._half_initializer("scale", [0.5, 1.0, 1.5, 2.0], data_type),
+                    ],
+                ),
+                (
+                    "MatMulBatchNormalizationFusion",
+                    [
+                        oh.make_node("MatMul", ["X", "W"], ["M"]),
+                        oh.make_node(
+                            "BatchNormalization",
+                            ["M", "scale", "bias", "mean", "variance"],
+                            ["Y", "", ""],
+                            epsilon=1e-4,
+                        ),
+                    ],
+                    [
+                        self._half_initializer(
+                            "W", np.arange(12, dtype=np.float32).reshape(3, 4) / 10, data_type
+                        ),
+                        self._half_initializer("scale", [0.5, 1.0, 1.5, 2.0], data_type),
+                        self._half_initializer("bias", [0.1, -0.2, 0.4, 0.8], data_type),
+                        self._half_initializer("mean", [-0.3, 0.2, 0.5, -0.1], data_type),
+                        self._half_initializer("variance", [0.7, 1.4, 0.3, 2.0], data_type),
+                    ],
+                ),
+            ):
+                with self.subTest(data_type=data_type, pattern=pattern):
+                    model = self._make_model(
+                        nodes,
+                        [("X", data_type, [2, 3])],
+                        [("Y", data_type, [2, 4])],
+                        initializers,
+                    )
+                    with tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / "model.onnx"
+                        save(model, path)
+                        eager = load(path)
+                        deferred = load(path, defer_weights=True).copy_with_on_demand_weights()
+                        self.assertFalse(deferred.is_weight_loaded("W"))
+
+                        eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
+                        deferred_optimized, deferred_rewrites, _ = self._optimize(
+                            deferred, [pattern]
+                        )
+
+                    self.assertEqual(
+                        [rewrite.pattern_name for rewrite in eager_rewrites],
+                        [rewrite.pattern_name for rewrite in deferred_rewrites],
+                    )
+                    self.assertEqual(
+                        [node.op_type for node in eager_optimized.graph.node],
+                        [node.op_type for node in deferred_optimized.graph.node],
+                    )
+                    self.assertIn(
+                        pattern, {rewrite.pattern_name for rewrite in deferred_rewrites}
+                    )
+                    self.assertTrue(deferred.is_weight_loaded("W"))
 
     def test_matmul_scale_fusion_no_match(self):
         numerator_div = self._make_model(

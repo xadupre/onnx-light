@@ -43,12 +43,13 @@ namespace {
 constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
 
 bool HasUnloadedExternalData(const TensorProto &tensor) {
-  return !tensor.has_raw_data() && (tensor.has_external_data() ||
-                                    tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
+  return !tensor.has_raw_data() && !tensor.HasOnDemandWeight() &&
+         (tensor.has_external_data() ||
+          tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
 }
 
 template <typename Proto> std::string DeclaredValueTag(const Proto &value) {
-  for (const auto &entry : value.metadata_props()) {
+  for (const auto &entry : value.metadata_props_) {
     if (entry.key() == core::compute::kValueTagMetadataKey) {
       return entry.value();
     }
@@ -106,6 +107,8 @@ bool SameExternalData(const TensorProto &lhs, const TensorProto &rhs) {
 }
 
 bool HasComparableInitializerContent(const TensorProto &tensor) {
+  if (tensor.HasOnDemandWeight())
+    return true;
   if (!tensor.raw_data().empty() || !tensor.float_data().empty() || !tensor.int32_data().empty() ||
       !tensor.int64_data().empty() || !tensor.double_data().empty() ||
       !tensor.uint64_data().empty() || !tensor.string_data().empty())
@@ -133,8 +136,17 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
   if (lhs_location != rhs_location) {
     return false;
   }
-  if (lhs.raw_data() != rhs.raw_data()) {
-    return false;
+  const bool same_unloaded_source = lhs.HasOnDemandWeight() && rhs.HasOnDemandWeight() &&
+                                    !lhs.has_raw_data() && !rhs.has_raw_data() &&
+                                    HaveSameDeferredWeightSource(lhs, rhs);
+  if (!same_unloaded_source) {
+    if (lhs.HasOnDemandWeight())
+      lhs.is_raw_data();
+    if (rhs.HasOnDemandWeight())
+      rhs.is_raw_data();
+    if (lhs.raw_data() != rhs.raw_data()) {
+      return false;
+    }
   }
   if (!SamePackedData(lhs.float_data(), rhs.float_data()) ||
       !SamePackedData(lhs.int32_data(), rhs.int32_data()) ||
@@ -4663,12 +4675,12 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];
     auto tag = std::find_if(
-        input.ref_metadata_props().begin(), input.ref_metadata_props().end(),
+        input.metadata_props_.begin(), input.metadata_props_.end(),
         [](const auto &entry) { return entry.key() == core::compute::kValueTagMetadataKey; });
-    if (tag == input.ref_metadata_props().end()) {
-      auto *entry = input.add_metadata_props();
-      entry->set_key(core::compute::kValueTagMetadataKey);
-      entry->set_value("weight");
+    if (tag == input.metadata_props_.end()) {
+      auto &entry = input.metadata_props_.add();
+      entry.set_key(core::compute::kValueTagMetadataKey);
+      entry.set_value("weight");
     } else if (tag->value().empty()) {
       tag->set_value("weight");
     }

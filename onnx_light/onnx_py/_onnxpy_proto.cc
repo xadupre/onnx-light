@@ -2983,7 +2983,18 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_STR(ValueInfoProto, name)
       .PYFIELD_OPTIONAL_PROTO(ValueInfoProto, type)
       .PYFIELD_STR(ValueInfoProto, doc_string)
-      .PYFIELD(ValueInfoProto, metadata_props);
+      .def_prop_rw(
+          "metadata_props",
+          [](ValueInfoProto &self) -> utils::RepeatedProtoField<StringStringEntryProto> & {
+            return self.ref_metadata_props();
+          },
+          [](ValueInfoProto &self, const utils::RepeatedProtoField<StringStringEntryProto> &value) {
+            self.DiscardDeferredBounds();
+            self.metadata_props_ = value;
+          },
+          nb::rv_policy::reference_internal, ValueInfoProto::DOC_metadata_props)
+      .def("has_metadata_props", &ValueInfoProto::has_metadata_props,
+           "Tells if 'metadata_props' has a value.");
   PYADD_PROTO_SERIALIZATION(ValueInfoProto);
   nb_ValueInfoProto
       .def(
@@ -3539,6 +3550,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
            "Unloads all deferred tensors and returns the number changed.")
       .def("has_deferred_weights", &ModelProto::HasDeferredWeights,
            "Returns whether this model retains any deferred backing sources.")
+      .def("copy_with_on_demand_weights", &ModelProto::CopyWithOnDemandWeights,
+           "Returns an independent model copy whose deferred tensor values load on demand.")
       .def("validate_weight_save_path", &ModelProto::ValidateWeightSavePath, nb::arg("path") = "",
            "Requires loaded weights and rejects paths aliasing their backing sources.");
   PYADD_PROTO_SERIALIZATION(ModelProto);

@@ -73,6 +73,66 @@ public:
   }
 };
 
+class CountingBounds : public DeferredNumericBounds {
+public:
+  std::pair<std::optional<double>, std::optional<double>> Get() const override {
+    ++calls;
+    return {1.0, 3.0};
+  }
+  mutable int calls = 0;
+};
+
+TEST_F(DeferredWeights, PendingBoundsInNestedGraphsFunctionsAndPlansAreTrackedBeforeExport) {
+  ASSERT_TRUE(MakeModel().SerializeToFile(path));
+  auto bounds = std::make_shared<CountingBounds>();
+  ModelProto model;
+  auto &nested = model.ref_graph().add_node()->add_attribute()->ref_g().ref_value_info().add();
+  nested.SetDeferredBounds(bounds);
+  auto &function = model.ref_functions().add().ref_value_info().add();
+  function.SetDeferredBounds(bounds);
+  auto &plan = model.ref_rewritings()["pending"];
+  auto &planned = plan.ref_added_functions().add().ref_value_info().add();
+  planned.SetDeferredBounds(bounds);
+
+  EXPECT_TRUE(model.WeightNames().empty());
+  EXPECT_TRUE(model.HasDeferredWeights());
+  EXPECT_EQ(bounds->calls, 0);
+  EXPECT_THROW(model.SerializeToFile(path), std::runtime_error);
+  std::ostringstream stream;
+  EXPECT_THROW(plan.SerializeToOstream(&stream), std::runtime_error);
+  EXPECT_THROW(nested.SerializeToOstream(&stream), std::runtime_error);
+  EXPECT_TRUE(stream.str().empty());
+  EXPECT_EQ(bounds->calls, 0);
+
+  EXPECT_EQ(model.LoadWeights(), 0);
+  EXPECT_FALSE(model.HasDeferredWeights());
+  EXPECT_EQ(bounds->calls, 3);
+  EXPECT_EQ(nested.metadata_props().size(), 2);
+  EXPECT_EQ(function.metadata_props().size(), 2);
+  EXPECT_EQ(planned.metadata_props().size(), 2);
+  const auto output = (directory / "materialized.onnx").string();
+  EXPECT_TRUE(model.SerializeToFile(output));
+}
+
+TEST_F(DeferredWeights, OnDemandCopiesSharePayloadWithoutDetachingOnPresenceChecks) {
+  ASSERT_TRUE(MakeModel().SerializeToFile(path));
+  auto manual = Load();
+  auto first = manual.CopyWithOnDemandWeights();
+  auto second = utils::CopyWithSharedTensorStorage(first);
+  const auto &left = first.graph().initializer(0);
+  const auto &right = second.graph().initializer(0);
+
+  ASSERT_TRUE(left.is_raw_data());
+  ASSERT_TRUE(right.is_raw_data());
+  const auto *payload = left.raw_data().data();
+  ASSERT_EQ(payload, right.raw_data().data());
+  auto guard = left.raw_data().acquire_export_guard();
+  EXPECT_TRUE(left.has_raw_data());
+  EXPECT_EQ(payload, left.raw_data().data());
+  EXPECT_EQ(payload, right.raw_data().data());
+  EXPECT_FALSE(manual.IsWeightLoaded("A"));
+}
+
 TEST_F(DeferredWeights, PinnedMetadataReadsDoNotRequireDescriptorReads) {
   const std::string metadata = "metadata spanning multiple read operations";
   const std::vector<uint8_t> payload(32768 * 4, 0xAB);

@@ -82,6 +82,8 @@ std::optional<TensorProto> SmallConstant(const builder::GraphGraph &graph,
         return {};
       count *= static_cast<std::size_t>(dim);
     }
+  if (tensor->HasOnDemandWeight())
+    tensor->is_raw_data();
   if (count != 0 && tensor->raw_data().empty() && tensor->float_data().empty() &&
       tensor->int32_data().empty() && tensor->int64_data().empty() &&
       tensor->double_data().empty() && tensor->uint64_data().empty() &&

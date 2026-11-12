@@ -18,15 +18,15 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 namespace {
 
 template <typename T> void SetMetadataValue(T &obj, const char *key, const std::string &value) {
-  for (std::size_t i = 0; i < obj.metadata_props().size(); ++i) {
-    if (obj.metadata_props()[i].key() == key) {
-      obj.mutable_metadata_props(static_cast<std::size_t>(i))->set_value(value);
+  for (auto &entry : obj.metadata_props_) {
+    if (entry.key() == key) {
+      entry.set_value(value);
       return;
     }
   }
-  auto *entry = obj.add_metadata_props();
-  entry->set_key(key);
-  entry->set_value(value);
+  auto &entry = obj.metadata_props_.add();
+  entry.set_key(key);
+  entry.set_value(value);
 }
 
 void RecurseSubgraphs(NodeProto &node) {
@@ -55,7 +55,7 @@ ReadMetadataValueFromProps(const utils::RepeatedProtoField<StringStringEntryProt
 }
 
 template <typename T> std::string ReadMetadataValue(const T &obj, const char *key) {
-  return ReadMetadataValueFromProps(obj.metadata_props(), key);
+  return ReadMetadataValueFromProps(obj.metadata_props_, key);
 }
 
 void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const std::string &name,

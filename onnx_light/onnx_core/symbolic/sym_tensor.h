@@ -509,47 +509,73 @@ public:
   void SetDevice(Device device) noexcept { device_ = device; }
 
   /// ``true`` when a lower bound on the tensor's values is known.
-  bool HasMin() const noexcept { return min_.has_value(); }
+  bool HasMin() const { return Bounds().first.has_value(); }
 
   /// ``true`` when an upper bound on the tensor's values is known.
-  bool HasMax() const noexcept { return max_.has_value(); }
+  bool HasMax() const { return Bounds().second.has_value(); }
 
   /// Lower bound on the tensor's values. Throws
   /// ``std::bad_optional_access`` when :cpp:func:`HasMin` is ``false``.
-  double Min() const { return min_.value(); }
+  double Min() const { return Bounds().first.value(); }
 
   /// Upper bound on the tensor's values. Throws
   /// ``std::bad_optional_access`` when :cpp:func:`HasMax` is ``false``.
-  double Max() const { return max_.value(); }
+  double Max() const { return Bounds().second.value(); }
 
   /// Sets the lower bound on the tensor's values.
-  void SetMin(double value) noexcept { min_ = value; }
+  void SetMin(double value) {
+    ResolveBoundsForMutation();
+    min_ = value;
+  }
 
   /// Sets the upper bound on the tensor's values.
-  void SetMax(double value) noexcept { max_ = value; }
+  void SetMax(double value) {
+    ResolveBoundsForMutation();
+    max_ = value;
+  }
 
   /// Sets both bounds in a single call. ``min`` must be ``<= max``;
   /// otherwise ``std::invalid_argument`` is thrown.
   void SetMinMax(double min, double max);
 
   /// Clears the stored lower bound.
-  void ClearMin() noexcept { min_.reset(); }
+  void ClearMin() {
+    ResolveBoundsForMutation();
+    min_.reset();
+  }
 
   /// Clears the stored upper bound.
-  void ClearMax() noexcept { max_.reset(); }
+  void ClearMax() {
+    ResolveBoundsForMutation();
+    max_.reset();
+  }
 
   /// Clears both bounds.
   void ClearMinMax() noexcept {
     min_.reset();
     max_.reset();
+    deferred_bounds_.reset();
   }
 
   /// Returns ``true`` when the tensor is known to be a "null constant",
   /// i.e. when both bounds are known and equal to zero. This is the
   /// canonical condition exploited by optimisation passes that need to
   /// detect all-zero tensors without inspecting the buffer.
-  bool IsNullConstant() const noexcept {
-    return min_.has_value() && max_.has_value() && *min_ == 0.0 && *max_ == 0.0;
+  bool IsNullConstant() const {
+    const auto [minimum, maximum] = Bounds();
+    return minimum.has_value() && maximum.has_value() && *minimum == 0.0 && *maximum == 0.0;
+  }
+
+  /// Retains bounds that can be computed from an immutable deferred tensor on demand.
+  void SetDeferredBounds(std::shared_ptr<const DeferredNumericBounds> bounds) {
+    min_.reset();
+    max_.reset();
+    deferred_bounds_ = std::move(bounds);
+  }
+
+  /// Returns unresolved bounds without reading the tensor.
+  std::shared_ptr<const DeferredNumericBounds> GetDeferredBounds() const {
+    return deferred_bounds_;
   }
 
   /// Shape of the tensor (may contain symbolic dimensions).
@@ -585,12 +611,15 @@ public:
   /// value bounds. Because :cpp:class:`SymTensor` is a non-owning
   /// view, two tensors are considered equal only when they refer to the
   /// same external buffer.
-  bool operator==(const SymTensor &other) const noexcept {
-    return data_ == other.data_ && dtype_ == other.dtype_ && device_ == other.device_ &&
-           shape_ == other.shape_ && value_as_shape_ == other.value_as_shape_ &&
-           min_ == other.min_ && max_ == other.max_;
+  bool operator==(const SymTensor &other) const {
+    if (data_ != other.data_ || dtype_ != other.dtype_ || device_ != other.device_ ||
+        shape_ != other.shape_ || value_as_shape_ != other.value_as_shape_)
+      return false;
+    if (deferred_bounds_ == other.deferred_bounds_)
+      return min_ == other.min_ && max_ == other.max_;
+    return Bounds() == other.Bounds();
   }
-  bool operator!=(const SymTensor &other) const noexcept { return !(*this == other); }
+  bool operator!=(const SymTensor &other) const { return !(*this == other); }
 
   /// Returns a human-readable representation of the tensor of the form
   /// ``"SymTensor(dtype=<name>, shape=<shape>[, device=<name>][, value_as_shape=<shape>][,
@@ -635,9 +664,20 @@ public:
    * is :cpp:enumerator:`SymCmpResult::kMorePrecise` (``*this`` is at
    * least as precise as ``other``).
    */
-  SymCmpResult Cmp(const SymTensor &other) const noexcept;
+  SymCmpResult Cmp(const SymTensor &other) const;
 
 private:
+  std::pair<std::optional<double>, std::optional<double>> Bounds() const {
+    return deferred_bounds_ ? deferred_bounds_->Get() : std::make_pair(min_, max_);
+  }
+  void ResolveBoundsForMutation() {
+    if (deferred_bounds_) {
+      auto [minimum, maximum] = deferred_bounds_->Get();
+      min_ = minimum;
+      max_ = maximum;
+      deferred_bounds_.reset();
+    }
+  }
   void *data_ = nullptr;
   TensorType dtype_ = TensorType::kUndefined;
   Device device_ = Device::kUndefined;
@@ -645,6 +685,7 @@ private:
   std::optional<SymShape> value_as_shape_{};
   std::optional<double> min_{};
   std::optional<double> max_{};
+  std::shared_ptr<const DeferredNumericBounds> deferred_bounds_{};
 };
 
 /// Well-known key used to round-trip the :cpp:func:`SymTensor::Min`

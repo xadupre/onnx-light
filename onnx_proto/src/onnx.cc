@@ -749,6 +749,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
 bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   const std::string source_identity = utils::detail::ValidateDeferredWeightParse(stream, options);
   deferred_weight_source.reset();
+  deferred_weight_cache.reset();
   READ_BEGIN(options, stream, TensorProto)                 //
   READ_REPEATED_FIELD(options, stream, dims)               //
   READ_ENUM_FIELD(options, stream, data_type)              //
@@ -1047,7 +1048,10 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     }
     const int location = has_data_location() ? static_cast<int>(data_location()) : 0;
     HashCombine(seed, static_cast<uint64_t>(location));
-    HashCombine(seed, static_cast<uint64_t>(raw_data().size()));
+    const auto raw_size = HasOnDemandWeight() && !has_raw_data()
+                              ? static_cast<uint64_t>(DeferredWeightSize())
+                              : static_cast<uint64_t>(raw_data().size());
+    HashCombine(seed, raw_size);
     HashCombine(seed, static_cast<uint64_t>(float_data().size()));
     HashCombine(seed, static_cast<uint64_t>(int32_data().size()));
     HashCombine(seed, static_cast<uint64_t>(int64_data().size()));
@@ -1061,6 +1065,9 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     }
     return static_cast<int64_t>(seed);
   }
+
+  if (HasOnDemandWeight())
+    is_raw_data();
 
   // Content-sensitive hash: BLAKE3 over the element type, shape, data location
   // and every payload byte. Large payloads are hashed in parallel through the
@@ -1779,9 +1786,80 @@ void ExtendedInitializerProto::PrintToStringStream(std::stringstream &ss,
 
 // ValueInfoProto
 
-IMPLEMENT_PROTO(ValueInfoProto)
+void ValueInfoProto::CopyFrom(const ValueInfoProto &proto) {
+  if (this == &proto)
+    return;
+  if (proto.deferred_bounds_mutex_) {
+    const std::lock_guard lock(*proto.deferred_bounds_mutex_);
+    if (proto.deferred_bounds_) {
+      *this = proto;
+      return;
+    }
+  }
+  CopyProtoFrom(*this, proto);
+}
+
+void ValueInfoProto::SetDeferredBounds(std::shared_ptr<const DeferredNumericBounds> bounds) {
+  if (!deferred_bounds_mutex_)
+    deferred_bounds_mutex_ = std::make_shared<std::mutex>();
+  const std::lock_guard lock(*deferred_bounds_mutex_);
+  deferred_bounds_ = std::move(bounds);
+  deferred_bounds_metadata_prefix_size_ = metadata_props_.size();
+}
+
+std::shared_ptr<const DeferredNumericBounds> ValueInfoProto::GetDeferredBounds() const {
+  if (!deferred_bounds_mutex_)
+    return {};
+  const std::lock_guard lock(*deferred_bounds_mutex_);
+  return deferred_bounds_;
+}
+
+void ValueInfoProto::DiscardDeferredBounds() {
+  if (!deferred_bounds_mutex_)
+    return;
+  const std::lock_guard lock(*deferred_bounds_mutex_);
+  deferred_bounds_.reset();
+}
+
+void ValueInfoProto::ResolveDeferredBounds() const {
+  if (!deferred_bounds_mutex_)
+    return;
+  const std::lock_guard lock(*deferred_bounds_mutex_);
+  if (!deferred_bounds_)
+    return;
+  const auto [minimum, maximum] = deferred_bounds_->Get();
+  size_t prefix_size = std::min(deferred_bounds_metadata_prefix_size_, metadata_props_.size());
+  const auto set = [&](const char *key, const std::optional<double> &value) {
+    auto end = metadata_props_.begin() + static_cast<std::ptrdiff_t>(prefix_size);
+    auto found = std::find_if(metadata_props_.begin(), end,
+                              [&](const auto &entry) { return entry.key() == key; });
+    if (value) {
+      if (found == end) {
+        metadata_props_.add();
+        for (size_t i = metadata_props_.size() - 1; i > prefix_size; --i)
+          std::swap(metadata_props_[i], metadata_props_[i - 1]);
+        found = metadata_props_.begin() + static_cast<std::ptrdiff_t>(prefix_size++);
+        found->set_key(key);
+      }
+      found->set_value(std::to_string(*value));
+    } else if (found != end) {
+      auto last = metadata_props_.begin() + static_cast<std::ptrdiff_t>(prefix_size - 1);
+      if (found != last) {
+        found->set_key(last->key().value());
+        found->set_value(last->value().value());
+      }
+      metadata_props_.erase(last);
+      --prefix_size;
+    }
+  };
+  set("min", minimum);
+  set("max", maximum);
+  deferred_bounds_.reset();
+}
+
 SerializeSizeResult ValueInfoProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                   SerializeOptions &options) const {
+  ResolveDeferredBounds();
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, type)
@@ -1791,6 +1869,7 @@ SerializeSizeResult ValueInfoProto::SerializeSize(utils::BinaryWriteStream &stre
 }
 void ValueInfoProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                        SerializeOptions &options) const {
+  ResolveDeferredBounds();
   WRITE_FIELD(options, stream, name)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, type)
   WRITE_FIELD(options, stream, doc_string)
@@ -1798,6 +1877,7 @@ void ValueInfoProto::SerializeToStream(utils::BinaryWriteStream &stream,
 }
 
 bool ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  DiscardDeferredBounds();
   READ_BEGIN(options, stream, ValueInfoProto)          //
   READ_FIELD(options, stream, name)                    //
   READ_OPTIONAL_PROTO_FIELD(options, stream, type)     //
@@ -1808,6 +1888,7 @@ bool ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
 }
 void ValueInfoProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
+  ResolveDeferredBounds();
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(type),
                                  NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(metadata_props));
 }
@@ -3195,7 +3276,9 @@ bool VisitProtoFields(const ValueInfoProto &left, Right &right, Visitor &&visito
   VISIT_FIELD(name)
   VISIT_FIELD(type)
   VISIT_FIELD(doc_string)
-  VISIT_FIELD(metadata_props)
+  if (!visitor("metadata_props", !left.metadata_props_.empty(), !right.metadata_props_.empty(),
+               left.metadata_props_, right.metadata_props_))
+    return false;
   return true;
 }
 
@@ -3499,6 +3582,9 @@ private:
 
 class DeferredSourceVisitor {
 public:
+  explicit DeferredSourceVisitor(bool include_deferred_bounds = true)
+      : include_deferred_bounds_(include_deferred_bounds) {}
+
   template <typename T>
   bool operator()(const char *, bool present, bool, const T &value, const T &) {
     return !present || !Contains(value);
@@ -3507,6 +3593,9 @@ public:
   template <typename T> bool Contains(const T &value) {
     if constexpr (std::is_same_v<T, TensorProto>) {
       return value.HasDeferredWeight();
+    } else if constexpr (std::is_same_v<T, ValueInfoProto>) {
+      return (include_deferred_bounds_ && value.GetDeferredBounds()) ||
+             !VisitProtoFields(value, value, *this);
     } else if constexpr (requires { T::proto_id; }) {
       return !VisitProtoFields(value, value, *this);
     } else if constexpr (requires {
@@ -3527,6 +3616,54 @@ public:
     }
     return false;
   }
+
+private:
+  bool include_deferred_bounds_;
+};
+
+class DeferredBoundsVisitor {
+public:
+  explicit DeferredBoundsVisitor(bool resolve) : resolve_(resolve) {}
+
+  template <typename T>
+  bool operator()(const char *, bool present, bool, const T &value, const T &) {
+    if (present)
+      Visit(value);
+    return true;
+  }
+
+  template <typename T> void Visit(const T &value) {
+    if constexpr (std::is_same_v<T, ValueInfoProto>) {
+      if (value.GetDeferredBounds()) {
+        found_ = true;
+        if (resolve_)
+          value.ResolveDeferredBounds();
+      }
+      VisitProtoFields(value, value, *this);
+    } else if constexpr (requires { T::proto_id; }) {
+      VisitProtoFields(value, value, *this);
+    } else if constexpr (requires {
+                           value.has_value();
+                           *value;
+                         }) {
+      if (value.has_value())
+        Visit(*value);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+      for (const auto &entry : value)
+        Visit(entry.second);
+    } else if constexpr (requires { value.begin(); }) {
+      using Element = std::remove_cvref_t<decltype(*value.begin())>;
+      if constexpr (std::is_base_of_v<Message, Element>)
+        for (const auto &element : value)
+          Visit(element);
+    }
+  }
+
+  bool Found() const { return found_; }
+
+private:
+  bool resolve_;
+  bool found_ = false;
 };
 
 class LayoutTensorVisitor {
@@ -3648,6 +3785,12 @@ public:
       if (value.has_value())
         Add(*value);
     } else if constexpr (requires { T::proto_id; }) {
+      if constexpr (std::is_same_v<T, TensorProto>) {
+        if (value.HasOnDemandWeight())
+          value.is_raw_data();
+      } else if constexpr (std::is_same_v<T, ValueInfoProto>) {
+        value.ResolveDeferredBounds();
+      }
       Add(static_cast<uint16_t>(T::proto_id));
       VisitProtoFields(value, value, *this);
     } else if constexpr (requires {
@@ -3808,7 +3951,10 @@ ModelProto utils::detail::MakeExternalDataExportCopy(ModelProto &model) {
 
 void utils::detail::CollectLayoutTensors(void *source, uint16_t proto_id,
                                          std::vector<LayoutTensor> &tensors, GraphProto *graph) {
-  ValidateDeferredSubmessageExport(source, proto_id);
+  ValidateDeferredSubmessageExport(
+      source, proto_id,
+      proto_id !=
+          static_cast<uint16_t>(onnx_light::proto_serialization_detail::ProtoId::ValueInfoProto));
   LayoutTensorVisitor visitor(tensors, graph);
   switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
   case onnx_light::proto_serialization_detail::ProtoId::TypeProto:
@@ -3828,11 +3974,13 @@ void utils::detail::CollectLayoutTensors(void *source, uint16_t proto_id,
   }
 }
 
-void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id) {
+void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id,
+                                                     bool include_deferred_bounds) {
   bool contains_sources;
 #define CHECK_DEFERRED_CASE(cls, id)                                                               \
   case onnx_light::proto_serialization_detail::ProtoId::id:                                        \
-    contains_sources = DeferredSourceVisitor().Contains(*static_cast<const cls *>(source));        \
+    contains_sources = DeferredSourceVisitor(include_deferred_bounds)                              \
+                           .Contains(*static_cast<const cls *>(source));                           \
     break;
   switch (static_cast<onnx_light::proto_serialization_detail::ProtoId>(proto_id)) {
     CHECK_DEFERRED_CASE(TypeProto, TypeProto)
@@ -3890,6 +4038,21 @@ void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_
               "owning model.");
 }
 
+void utils::detail::ValidateDeferredSubmessageExport(const void *source, uint16_t proto_id) {
+  ValidateDeferredSubmessageExport(source, proto_id, true);
+}
+
+bool ModelProto::HasDeferredValueInfoBounds() const {
+  DeferredBoundsVisitor visitor(false);
+  visitor.Visit(*this);
+  return visitor.Found();
+}
+
+void ModelProto::ResolveDeferredValueInfoBounds() const {
+  DeferredBoundsVisitor visitor(true);
+  visitor.Visit(*this);
+}
+
 #define DEFINE_PROTO_EQUALS(cls)                                                                   \
   bool cls::Equals(const cls &right, std::string *difference) const {                              \
     return VisitProtoFields(*this, right, ProtoComparison(difference));                            \
@@ -3911,7 +4074,6 @@ DEFINE_PROTO_EQUALS(StructTypeProto::Structure::Field)
 DEFINE_PROTO_EQUALS(StructTypeProto::BitPacking)
 DEFINE_PROTO_EQUALS(StructTypeProto::BitPacking::Component)
 DEFINE_PROTO_EQUALS(StringStringEntryProto)
-DEFINE_PROTO_EQUALS(TensorProto)
 DEFINE_PROTO_EQUALS(TensorProto::Segment)
 DEFINE_PROTO_EQUALS(SparseTensorProto)
 DEFINE_PROTO_EQUALS(LocalRewritingProto)
@@ -3919,7 +4081,6 @@ DEFINE_PROTO_EQUALS(RewritingProto)
 DEFINE_PROTO_EQUALS(MoveNodeProto)
 DEFINE_PROTO_EQUALS(FunctionProto)
 DEFINE_PROTO_EQUALS(OperatorSetIdProto)
-DEFINE_PROTO_EQUALS(ValueInfoProto)
 DEFINE_PROTO_EQUALS(NodeProto)
 DEFINE_PROTO_EQUALS(AttributeProto)
 DEFINE_PROTO_EQUALS(GraphProto)
@@ -3943,6 +4104,34 @@ DEFINE_PROTO_EQUALS(MapProto)
 DEFINE_PROTO_EQUALS(OptionalProto)
 
 #undef DEFINE_PROTO_EQUALS
+
+bool TensorProto::Equals(const TensorProto &right, std::string *difference) const {
+  const bool same_unloaded_source = HasOnDemandWeight() && right.HasOnDemandWeight() &&
+                                    !has_raw_data() && !right.has_raw_data() &&
+                                    HaveSameDeferredWeightSource(*this, right);
+  if (!same_unloaded_source && data_type() == right.data_type() &&
+      dims().values() == right.dims().values()) {
+    if (HasOnDemandWeight())
+      is_raw_data();
+    if (right.HasOnDemandWeight())
+      right.is_raw_data();
+  }
+  return VisitProtoFields(*this, right, ProtoComparison(difference));
+}
+
+bool ValueInfoProto::Equals(const ValueInfoProto &right, std::string *difference) const {
+  const auto left_bounds = GetDeferredBounds();
+  const auto right_bounds = right.GetDeferredBounds();
+  if (left_bounds && left_bounds == right_bounds &&
+      deferred_bounds_metadata_prefix_size_ == right.deferred_bounds_metadata_prefix_size_ &&
+      VisitProtoFields(*this, right, ProtoComparison(difference)))
+    return true;
+  if (left_bounds || right_bounds) {
+    ResolveDeferredBounds();
+    right.ResolveDeferredBounds();
+  }
+  return VisitProtoFields(*this, right, ProtoComparison(difference));
+}
 
 void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const void *source,
                                                      uint16_t proto_id) {
@@ -3978,7 +4167,8 @@ void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const vo
     COPY_PROTO_CASE(StructTypeProto::BitPacking::Component, Component)
     COPY_PROTO_CASE(StringStringEntryProto, StringStringEntryProto)
     COPY_PROTO_CASE(TensorProto, TensorProto,
-                    to.deferred_weight_source = from.deferred_weight_source;)
+                    to.deferred_weight_source = from.deferred_weight_source;
+                    to.deferred_weight_cache = from.deferred_weight_cache;)
     COPY_PROTO_CASE(TensorProto::Segment, Segment)
     COPY_PROTO_CASE(SparseTensorProto, SparseTensorProto)
     COPY_PROTO_CASE(LocalRewritingProto, LocalRewritingProto)
@@ -3986,7 +4176,10 @@ void utils::detail::CopyProtoWithSharedTensorStorage(void *destination, const vo
     COPY_PROTO_CASE(MoveNodeProto, MoveNodeProto)
     COPY_PROTO_CASE(FunctionProto, FunctionProto)
     COPY_PROTO_CASE(OperatorSetIdProto, OperatorSetIdProto)
-    COPY_PROTO_CASE(ValueInfoProto, ValueInfoProto)
+    COPY_PROTO_CASE(ValueInfoProto, ValueInfoProto, to.deferred_bounds_ = from.deferred_bounds_;
+                    to.deferred_bounds_metadata_prefix_size_ =
+                        from.deferred_bounds_metadata_prefix_size_;
+                    to.deferred_bounds_mutex_ = from.deferred_bounds_mutex_;)
     COPY_PROTO_CASE(NodeProto, NodeProto)
     COPY_PROTO_CASE(AttributeProto, AttributeProto)
     COPY_PROTO_CASE(GraphProto, GraphProto)

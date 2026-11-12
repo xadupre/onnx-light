@@ -438,6 +438,9 @@ jobs:
         # helper). CI run 41431328019 measures 925 symbols; retain the size caps.
         # Deferred source comparison adds HaveSameDeferredWeightSource (one public
         # helper). Account for that ABI addition without changing the size caps.
+        # On-demand optimization adds twelve proto entry points and four standard
+        # library/RTTI symbols (942 total in the GCC 13.2 Release build).
+        # Retain the existing size caps and dependency allowlist.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -446,7 +449,7 @@ jobs:
             --max-installed-size 1903824 \
             --max-text-size 1373642 \
             --size-budget-margin-percent 5 \
-            --max-dynamic-symbols 926 \
+            --max-dynamic-symbols 942 \
             --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

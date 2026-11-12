@@ -412,11 +412,12 @@ std::string SymTensor::ToString() const {
   if (value_as_shape_.has_value()) {
     oss << ", value_as_shape=" << value_as_shape_->ToString();
   }
-  if (min_.has_value()) {
-    oss << ", min=" << *min_;
+  const auto [minimum, maximum] = Bounds();
+  if (minimum.has_value()) {
+    oss << ", min=" << *minimum;
   }
-  if (max_.has_value()) {
-    oss << ", max=" << *max_;
+  if (maximum.has_value()) {
+    oss << ", max=" << *maximum;
   }
   if (data_ != nullptr) {
     oss << ", data=" << data_;
@@ -429,9 +430,10 @@ void SymTensor::SetMinMax(double min, double max) {
   EXT_ENFORCE_INVALID(!(min > max), "SymTensor::SetMinMax requires min <= max");
   min_ = min;
   max_ = max;
+  deferred_bounds_.reset();
 }
 
-SymCmpResult SymTensor::Cmp(const SymTensor &other) const noexcept {
+SymCmpResult SymTensor::Cmp(const SymTensor &other) const {
   bool lhs_more = false;
   bool rhs_more = false;
   bool conflict = false;
@@ -487,40 +489,42 @@ SymCmpResult SymTensor::Cmp(const SymTensor &other) const noexcept {
   // Min bound: a known bound is more precise than an absent one;
   // between two known bounds, the higher value is the tighter (more
   // precise) lower bound.
-  if (min_.has_value() && other.min_.has_value()) {
-    if (*min_ > *other.min_) {
+  const auto [left_min, left_max] = Bounds();
+  const auto [right_min, right_max] = other.Bounds();
+  if (left_min.has_value() && right_min.has_value()) {
+    if (*left_min > *right_min) {
       lhs_more = true;
-    } else if (*min_ < *other.min_) {
+    } else if (*left_min < *right_min) {
       rhs_more = true;
     }
-  } else if (min_.has_value()) {
+  } else if (left_min.has_value()) {
     lhs_more = true;
-  } else if (other.min_.has_value()) {
+  } else if (right_min.has_value()) {
     rhs_more = true;
   }
 
   // Max bound: a known bound is more precise than an absent one;
   // between two known bounds, the lower value is the tighter (more
   // precise) upper bound.
-  if (max_.has_value() && other.max_.has_value()) {
-    if (*max_ < *other.max_) {
+  if (left_max.has_value() && right_max.has_value()) {
+    if (*left_max < *right_max) {
       lhs_more = true;
-    } else if (*max_ > *other.max_) {
+    } else if (*left_max > *right_max) {
       rhs_more = true;
     }
-  } else if (max_.has_value()) {
+  } else if (left_max.has_value()) {
     lhs_more = true;
-  } else if (other.max_.has_value()) {
+  } else if (right_max.has_value()) {
     rhs_more = true;
   }
 
   // Cross-side interval disjointedness: when both sides expose enough
   // bounds to prove the intervals do not overlap, the descriptors
   // contradict each other.
-  if (min_.has_value() && other.max_.has_value() && *min_ > *other.max_) {
+  if (left_min.has_value() && right_max.has_value() && *left_min > *right_max) {
     conflict = true;
   }
-  if (other.min_.has_value() && max_.has_value() && *other.min_ > *max_) {
+  if (right_min.has_value() && left_max.has_value() && *right_min > *left_max) {
     conflict = true;
   }
 
@@ -569,8 +573,8 @@ SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
 // Returns the index of the metadata entry whose key matches ``key``,
 // or -1 when none is present.
 int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
-  for (std::size_t i = 0; i < vi.metadata_props().size(); ++i) {
-    if (vi.metadata_props()[i].key() == key) {
+  for (std::size_t i = 0; i < vi.metadata_props_.size(); ++i) {
+    if (vi.metadata_props_[i].key() == key) {
       return static_cast<int>(i);
     }
   }
@@ -624,13 +628,79 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
   if (idx < 0) {
     return std::nullopt;
   }
-  const std::string value = vi.metadata_props()[idx].value();
+  const std::string value = vi.metadata_props_[idx].value();
   double parsed = 0.0;
   if (TryParseDoubleValue(value, parsed)) {
     return parsed;
   }
   return std::nullopt;
 }
+
+bool ComputeNumericBounds(const TensorProto &tensor, uint64_t count, std::optional<double> &minimum,
+                          std::optional<double> &maximum) {
+  return tensor_values_detail::WithNumericTensorValues(tensor, count, [&](const auto &values) {
+    if (count > 0) {
+      auto low = *values.begin();
+      auto high = low;
+      for (const auto value : values) {
+        if constexpr (std::is_floating_point_v<decltype(value)>) {
+          if (std::isnan(value))
+            return true;
+        }
+        if (value < low)
+          low = value;
+        if constexpr (std::is_floating_point_v<decltype(value)>) {
+          if (value > high || (value == high && std::signbit(value) != std::signbit(high)))
+            high = value;
+        } else if (value >= high) {
+          high = value;
+        }
+      }
+      minimum = static_cast<double>(low);
+      maximum = static_cast<double>(high);
+    }
+    return true;
+  });
+}
+
+bool SupportsNumericBounds(TensorProto::DataType type) {
+  switch (type) {
+  case TensorProto::FLOAT:
+  case TensorProto::DOUBLE:
+  case TensorProto::INT64:
+  case TensorProto::INT32:
+  case TensorProto::INT16:
+  case TensorProto::INT8:
+  case TensorProto::UINT64:
+  case TensorProto::UINT32:
+  case TensorProto::UINT16:
+  case TensorProto::UINT8:
+    return true;
+  default:
+    return false;
+  }
+}
+
+class DeferredTensorBounds final : public DeferredNumericBounds {
+public:
+  DeferredTensorBounds(const TensorProto &tensor, uint64_t count)
+      : tensor_(utils::CopyWithSharedTensorStorage(tensor)), count_(count) {}
+
+  std::pair<std::optional<double>, std::optional<double>> Get() const override {
+    std::call_once(once_, [&] {
+      std::optional<double> minimum, maximum;
+      ComputeNumericBounds(tensor_, count_, minimum, maximum);
+      bounds_ = {minimum, maximum};
+    });
+    return bounds_;
+  }
+
+private:
+  TensorProto tensor_;
+  uint64_t count_;
+  mutable std::once_flag once_;
+  mutable std::pair<std::optional<double>, std::optional<double>> bounds_;
+};
 
 } // namespace
 
@@ -647,18 +717,22 @@ bool SymTensorFromValueInfo(const ValueInfoProto &vi, SymTensor &out) {
   out = SymTensor(nullptr, dtype, std::move(shape));
   const int idx = FindDeviceMetadataIndex(vi);
   if (idx >= 0) {
-    const Device device = DeviceFromName(vi.metadata_props()[idx].value());
+    const Device device = DeviceFromName(vi.metadata_props_[idx].value());
     if (device != Device::kUndefined) {
       out.SetDevice(device);
     }
   }
-  const std::optional<double> min_v = ReadNumericMetadata(vi, kValueInfoMinMetadataKey);
-  if (min_v.has_value()) {
-    out.SetMin(*min_v);
-  }
-  const std::optional<double> max_v = ReadNumericMetadata(vi, kValueInfoMaxMetadataKey);
-  if (max_v.has_value()) {
-    out.SetMax(*max_v);
+  if (auto bounds = vi.GetDeferredBounds()) {
+    out.SetDeferredBounds(std::move(bounds));
+  } else {
+    const std::optional<double> min_v = ReadNumericMetadata(vi, kValueInfoMinMetadataKey);
+    if (min_v.has_value()) {
+      out.SetMin(*min_v);
+    }
+    const std::optional<double> max_v = ReadNumericMetadata(vi, kValueInfoMaxMetadataKey);
+    if (max_v.has_value()) {
+      out.SetMax(*max_v);
+    }
   }
   return true;
 }
@@ -699,32 +773,22 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
   // covers both integer and floating-point element types; tensors whose
   // data is absent (no typed field, no raw_data) or in an unsupported
   // dtype are left unannotated.
+  const bool small_integer_shape = IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 &&
+                                   count_known && count < kOptimValueAsShapeMaxElements;
+  if (tp.HasOnDemandWeight() && !tp.has_raw_data() && count_known && count > 0 &&
+      !small_integer_shape) {
+    if (SupportsNumericBounds(tp.data_type()))
+      tensor.SetDeferredBounds(std::make_shared<DeferredTensorBounds>(tp, count));
+    out = std::move(tensor);
+    return true;
+  }
+
   bool payload_readable = false;
   if (count_known) {
-    payload_readable = tensor_values_detail::WithNumericTensorValues(
-        tp, static_cast<uint64_t>(count), [&tensor, count](const auto &values) {
-          if (count > 0) {
-            auto minimum = *values.begin();
-            auto maximum = minimum;
-            for (const auto value : values) {
-              if constexpr (std::is_floating_point_v<decltype(value)>) {
-                if (std::isnan(value))
-                  return true;
-              }
-              if (value < minimum)
-                minimum = value;
-              if constexpr (std::is_floating_point_v<decltype(value)>) {
-                if (value > maximum ||
-                    (value == maximum && std::signbit(value) != std::signbit(maximum)))
-                  maximum = value;
-              } else if (value >= maximum) {
-                maximum = value;
-              }
-            }
-            tensor.SetMinMax(static_cast<double>(minimum), static_cast<double>(maximum));
-          }
-          return true;
-        });
+    std::optional<double> minimum, maximum;
+    payload_readable = ComputeNumericBounds(tp, static_cast<uint64_t>(count), minimum, maximum);
+    if (minimum && maximum)
+      tensor.SetMinMax(*minimum, *maximum);
   }
 
   // Stamp small 1-D / 0-D integer tensors with a ValueAsShape annotation
@@ -751,6 +815,7 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   if (dtype == TensorProto::DataType::UNDEFINED) {
     return false;
   }
+  vi.DiscardDeferredBounds();
   // Reset any pre-existing type/shape information so it is replaced
   // wholesale by the inferred descriptor.
   vi.clear_type();
@@ -783,12 +848,16 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   }
   // Round-trip the optional ``min``/``max`` bounds the same way. An
   // absent bound removes the corresponding metadata entry (if any).
-  SetOrRemoveNumericMetadata(vi, kValueInfoMinMetadataKey,
-                             tensor.HasMin() ? std::optional<double>(tensor.Min())
-                                             : std::optional<double>());
-  SetOrRemoveNumericMetadata(vi, kValueInfoMaxMetadataKey,
-                             tensor.HasMax() ? std::optional<double>(tensor.Max())
-                                             : std::optional<double>());
+  if (auto bounds = tensor.GetDeferredBounds()) {
+    vi.SetDeferredBounds(std::move(bounds));
+  } else {
+    SetOrRemoveNumericMetadata(vi, kValueInfoMinMetadataKey,
+                               tensor.HasMin() ? std::optional<double>(tensor.Min())
+                                               : std::optional<double>());
+    SetOrRemoveNumericMetadata(vi, kValueInfoMaxMetadataKey,
+                               tensor.HasMax() ? std::optional<double>(tensor.Max())
+                                               : std::optional<double>());
+  }
   return true;
 }
 

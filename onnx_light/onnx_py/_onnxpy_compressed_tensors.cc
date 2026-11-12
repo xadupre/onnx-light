@@ -12,7 +12,9 @@
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -276,6 +278,32 @@ Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total,
                         array.nbytes());
 }
 
+void SwapTensorWords(Tensor &tensor) {
+  const size_t width = tensor.element_size();
+  if (width == 1)
+    return;
+  for (size_t offset = 0; offset < tensor.size_bytes(); offset += width)
+    std::reverse(tensor.mutable_bytes() + offset, tensor.mutable_bytes() + offset + width);
+}
+
+Tensor BitsAndBytesArray(const std::string &name, nb::handle value, size_t &total,
+                         size_t max_bytes) {
+  Tensor tensor = BorrowGptqArray(name, value, total, max_bytes);
+  if constexpr (std::endian::native == std::endian::big) {
+    if (tensor.element_size() > 1) {
+      tensor = tensor.ToOwned();
+      SwapTensorWords(tensor);
+    }
+  }
+  return tensor;
+}
+
+nb::object ArrayFromLittleEndianTensor(Tensor tensor) {
+  if constexpr (std::endian::native == std::endian::big)
+    SwapTensorWords(tensor);
+  return ArrayFromTensor(tensor);
+}
+
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
@@ -298,7 +326,7 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
                                   name == "weight_quant_map" || name == "weight_nested_absmax" ||
                                   name == "weight_nested_quant_map" || name == "weight_quant_state",
                               "bitsandbytes unexpected side tensor.");
-          weights.tensors.emplace(name, BorrowGptqArray(name, item.second, total, max_bytes));
+          weights.tensors.emplace(name, BitsAndBytesArray(name, item.second, total, max_bytes));
         }
         return core::runtime::ImportBitsAndBytesWeights(weights, max_bytes);
       },
@@ -307,24 +335,25 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
   runtime.def(
       "export_bitsandbytes_weights",
       [](const EncodedValueProto &value, size_t max_bytes) {
-        const auto weights = core::runtime::ExportBitsAndBytesWeights(value, max_bytes);
+        auto weights = core::runtime::ExportBitsAndBytesWeights(value, max_bytes);
         nb::dict result;
-        for (const auto &[name, tensor] : weights.tensors)
-          result[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        for (auto &[name, tensor] : weights.tensors)
+          result[nb::str(name.c_str())] = ArrayFromLittleEndianTensor(std::move(tensor));
         return result;
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(
       "unpack_bitsandbytes_codes",
       [](const EncodedValueProto &value, size_t max_bytes) {
-        return ArrayFromTensor(core::runtime::UnpackBitsAndBytesCodes(value, max_bytes));
+        return ArrayFromLittleEndianTensor(
+            core::runtime::UnpackBitsAndBytesCodes(value, max_bytes));
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(
       "reconstruct_bitsandbytes_weights",
       [](const EncodedValueProto &value, size_t max_bytes, int32_t reconstruction_dtype) {
-        return ArrayFromTensor(core::runtime::ReconstructBitsAndBytesWeights(value, max_bytes, {},
-                                                                             reconstruction_dtype));
+        return ArrayFromLittleEndianTensor(core::runtime::ReconstructBitsAndBytesWeights(
+            value, max_bytes, {}, reconstruction_dtype));
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes,
       nb::arg("reconstruction_dtype") = static_cast<int32_t>(TensorProto::FLOAT));

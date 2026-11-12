@@ -17,9 +17,13 @@ import torch
 
 
 def array(value):
-    """Returns exact loaded NumPy storage, without decimal float conversion."""
+    """Returns exact little-endian storage, without decimal float conversion."""
     value = value.cpu().contiguous().numpy()
-    return {"dtype": str(value.dtype), "shape": list(value.shape), "hex": value.tobytes().hex()}
+    return {
+        "dtype": str(value.dtype),
+        "shape": list(value.shape),
+        "hex": value.astype(value.dtype.newbyteorder("<"), copy=False).tobytes().hex(),
+    }
 
 
 def generate():

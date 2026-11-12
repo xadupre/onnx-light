@@ -20,10 +20,11 @@ quantization = import_or_skip("onnx_light.onnx_core.quantization")
 
 def loaded_array(record):
     """Returns an owned native-endian reference array."""
+    dtype = numpy.dtype(record["dtype"])
     return (
-        numpy.frombuffer(bytes.fromhex(record["hex"]), dtype=numpy.dtype(record["dtype"]))
+        numpy.frombuffer(bytes.fromhex(record["hex"]), dtype=dtype.newbyteorder("<"))
         .reshape(record["shape"])
-        .copy()
+        .astype(dtype, copy=True)
     )
 
 
@@ -56,6 +57,38 @@ def state_of(tensors):
 
 
 class TestBitsAndBytes(ExtTestCase):
+    def test_native_arrays_use_little_endian_payload_without_mutating_inputs(self):
+        for name, tensors, expected in fixtures():
+            with self.subTest(name=name):
+                before = {key: value.tobytes() for key, value in tensors.items()}
+                for value in tensors.values():
+                    value.flags.writeable = False
+                encoded = bitsandbytes.import_bitsandbytes_weights(tensors)
+                fields = ["weight"]
+                if name == "int8":
+                    fields.append("weight_scb")
+                else:
+                    fields.extend(["weight_absmax", "weight_quant_map"])
+                    if "weight_nested_absmax" in tensors:
+                        fields.extend(["weight_nested_absmax", "weight_nested_quant_map"])
+                    fields.append("weight_quant_state")
+                self.assertEqual(
+                    encoded.raw_data,
+                    b"".join(
+                        tensors[key].astype(tensors[key].dtype.newbyteorder("<")).tobytes()
+                        for key in fields
+                    ),
+                )
+                self.assertEqual({key: value.tobytes() for key, value in tensors.items()}, before)
+                exported = bitsandbytes.export_bitsandbytes_weights(encoded)
+                for key in tensors:
+                    self.assertTrue(exported[key].dtype.isnative)
+                    self.assertTrue(exported[key].flags.owndata)
+                    self.assertEqual(exported[key].tobytes(), before[key])
+                actual = bitsandbytes.reconstruct_bitsandbytes_weights(encoded)
+                self.assertTrue(actual.dtype.isnative)
+                numpy.testing.assert_array_equal(actual, expected)
+
     def test_native_fixtures_exact_codes_state_and_reconstruction(self):
         for name, tensors, expected in fixtures():
             with self.subTest(name=name):
@@ -278,7 +311,7 @@ class TestBitsAndBytes(ExtTestCase):
         _, tensors, _ = fixtures()[0]
         for value in (
             tensors["weight_absmax"][::-1],
-            tensors["weight_absmax"].astype(">f4"),
+            tensors["weight_absmax"].astype(numpy.dtype("float32").newbyteorder("S")),
             tensors["weight_absmax"].tolist(),
         ):
             with self.assertRaises(ValueError):

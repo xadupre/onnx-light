@@ -29,20 +29,10 @@ size_t Product(size_t a, size_t b) {
 
 size_t CeilDiv(size_t n, size_t d) { return n / d + (n % d != 0); }
 
-void CopyWords(uint8_t *destination, const uint8_t *source, size_t bytes, size_t width) {
-  std::memcpy(destination, source, bytes);
-  if constexpr (std::endian::native == std::endian::big)
-    for (size_t offset = 0; offset < bytes; offset += width)
-      std::reverse(destination + offset, destination + offset + width);
-}
-
-float Float(const uint8_t *bytes, bool native) {
+float Float(const uint8_t *bytes) {
   uint32_t bits = 0;
-  if (native)
-    std::memcpy(&bits, bytes, 4);
-  else
-    for (size_t i = 0; i < 4; ++i)
-      bits |= uint32_t(bytes[i]) << (8 * i);
+  for (size_t i = 0; i < 4; ++i)
+    bits |= uint32_t(bytes[i]) << (8 * i);
   return std::bit_cast<float>(bits);
 }
 
@@ -200,7 +190,7 @@ struct Field {
   const char *name;
   int32_t type;
   Shape shape;
-  size_t width, bytes, offset;
+  size_t bytes, offset;
 };
 
 struct Geometry {
@@ -256,7 +246,7 @@ struct Geometry {
       bytes = Product(bytes, static_cast<size_t>(dim));
     EXT_ENFORCE_INVALID(total <= limit && bytes <= limit - total,
                         "bitsandbytes checkpoint exceeds max_bytes.");
-    fields.push_back({name, type, std::move(shape), width, bytes, total});
+    fields.push_back({name, type, std::move(shape), bytes, total});
     total += bytes;
   }
 };
@@ -325,25 +315,23 @@ const std::array<float, 16> &Codebook(int64_t format) {
   return format == 0 ? nf4 : fp4;
 }
 
-template <typename Get> float Scale(const Geometry &g, Get get, size_t block, bool native) {
-  if (g.state.format == 2)
-    return Float(get(1) + block * 4, native);
+template <typename Get> float Scale(const Geometry &g, Get get, size_t block) {
   if (!g.state.nested_block)
-    return Float(get(1) + block * 4, native);
+    return Float(get(1) + block * 4);
   const auto code = get(1)[block];
-  const float value = Float(get(4) + code * 4, native);
-  const float maximum = Float(get(3) + (block / 256) * 4, native);
+  const float value = Float(get(4) + code * 4);
+  const float maximum = Float(get(3) + (block / 256) * 4);
   return Rounded(Rounded(value * maximum) + g.state.offset);
 }
 
-template <typename Get> void CheckParameters(Geometry &g, Get get, bool native) {
+template <typename Get> void CheckParameters(Geometry &g, Get get) {
   for (size_t i = 1; i < g.fields.size(); ++i) {
     const auto &field = g.fields[i];
     if (field.type != TensorProto::FLOAT)
       continue;
     const bool maxima = i == 1 || (g.state.nested_block && i == 3);
     for (size_t j = 0; j < field.bytes / 4; ++j) {
-      const float value = Float(get(i) + j * 4, native);
+      const float value = Float(get(i) + j * 4);
       EXT_ENFORCE_INVALID(std::isfinite(value) && (!maxima || value >= 0),
                           "bitsandbytes nonfinite table or invalid absmax.");
       if (g.state.format != 2 && i == 2)
@@ -366,7 +354,7 @@ template <typename Get> void CheckParameters(Geometry &g, Get get, bool native) 
   // Validate effective nested scales even on import/export, without dense reconstruction.
   if (g.state.nested_block)
     for (size_t block = 0; block < g.blocks; ++block)
-      Scale(g, get, block, native);
+      Scale(g, get, block);
 }
 
 Geometry Validate(const BitsAndBytesWeights &weights, size_t limit) {
@@ -388,7 +376,6 @@ Geometry Validate(const BitsAndBytesWeights &weights, size_t limit) {
     CheckTensor(json, {"weight_quant_state",
                        TensorProto::UINT8,
                        {static_cast<int64_t>(json_size)},
-                       1,
                        json_size,
                        0});
     state = StateParser(std::string_view(reinterpret_cast<const char *>(json.bytes()), json_size))
@@ -399,7 +386,7 @@ Geometry Validate(const BitsAndBytesWeights &weights, size_t limit) {
                       "bitsandbytes missing or unexpected side tensors.");
   for (const auto &field : g.fields)
     CheckTensor(Require(weights, field.name), field);
-  CheckParameters(g, [&](size_t i) { return Require(weights, g.fields[i].name).bytes(); }, true);
+  CheckParameters(g, [&](size_t i) { return Require(weights, g.fields[i].name).bytes(); });
   return g;
 }
 
@@ -445,7 +432,7 @@ Geometry Validate(const EncodedValueProto &value, size_t limit,
   EXT_ENFORCE_INVALID(!storage.external && storage.record_count == 1,
                       "bitsandbytes requires one loaded encoded record.");
   const auto *raw = reinterpret_cast<const uint8_t *>(value.raw_data().data());
-  CheckParameters(g, [&](size_t i) { return raw + g.fields[i].offset; }, false);
+  CheckParameters(g, [&](size_t i) { return raw + g.fields[i].offset; });
   return g;
 }
 
@@ -462,8 +449,7 @@ EncodedValueProto ImportBitsAndBytesWeights(const BitsAndBytesWeights &weights, 
   auto *raw = result.mutable_raw_data();
   raw->resize(g.total);
   for (const auto &field : g.fields)
-    CopyWords(reinterpret_cast<uint8_t *>(raw->data()) + field.offset,
-              Require(weights, field.name).bytes(), field.bytes, field.width);
+    std::memcpy(raw->data() + field.offset, Require(weights, field.name).bytes(), field.bytes);
   StructTypeCatalogue{}.ValidateEncodedValue(result);
   return result;
 }
@@ -474,9 +460,7 @@ BitsAndBytesWeights ExportBitsAndBytesWeights(const EncodedValueProto &value, si
   BitsAndBytesWeights result;
   for (const auto &field : g.fields) {
     std::vector<uint8_t> bytes(field.bytes);
-    CopyWords(bytes.data(),
-              reinterpret_cast<const uint8_t *>(value.raw_data().data()) + field.offset,
-              field.bytes, field.width);
+    std::memcpy(bytes.data(), value.raw_data().data() + field.offset, field.bytes);
     result.tensors.emplace(field.name,
                            Tensor(field.name, field.type, field.shape, std::move(bytes)));
   }
@@ -509,7 +493,7 @@ Tensor ReconstructBitsAndBytesWeights(const EncodedValueProto &value, size_t max
   for (size_t block = 0; block < g.blocks; ++block) {
     const size_t block_size =
         static_cast<size_t>(g.state.format == 2 ? g.state.columns : g.state.block);
-    const float maximum = Scale(g, get, block, false);
+    const float maximum = Scale(g, get, block);
     const float scale = g.state.format == 2 ? Rounded(maximum / 127.f) : maximum;
     const size_t end = std::min(g.count, block * block_size + block_size);
     for (size_t i = block * block_size; i < end; ++i) {
@@ -517,18 +501,17 @@ Tensor ReconstructBitsAndBytesWeights(const EncodedValueProto &value, size_t max
                              ? float(raw[i] < 128 ? int(raw[i]) : int(raw[i]) - 256)
                              : Codebook(g.state.format)[(raw[i / 2] >> (i % 2 ? 0 : 4)) & 15];
       const float decoded = Rounded(code * scale);
-      if (width == 4)
-        std::memcpy(bytes.data() + i * width, &decoded, width);
-      else {
-        const uint16_t bits = reconstruction_dtype == TensorProto::FLOAT16
-                                  ? FloatToFloat16Bits(decoded)
-                                  : FloatToBfloat16Bits(decoded);
+      uint32_t bits = std::bit_cast<uint32_t>(decoded);
+      if (width == 2) {
+        bits = reconstruction_dtype == TensorProto::FLOAT16 ? FloatToFloat16Bits(decoded)
+                                                            : FloatToBfloat16Bits(decoded);
         EXT_ENFORCE_INVALID(
             (bits & (reconstruction_dtype == TensorProto::FLOAT16 ? 0x7c00 : 0x7f80)) !=
                 (reconstruction_dtype == TensorProto::FLOAT16 ? 0x7c00 : 0x7f80),
             "bitsandbytes nonfinite reconstruction.");
-        std::memcpy(bytes.data() + i * width, &bits, width);
       }
+      for (size_t byte = 0; byte < width; ++byte)
+        bytes[i * width + byte] = static_cast<uint8_t>(bits >> (byte * 8));
     }
   }
   return Tensor("weight", reconstruction_dtype, {g.state.rows, g.state.columns}, std::move(bytes));

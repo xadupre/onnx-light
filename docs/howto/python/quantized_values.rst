@@ -359,8 +359,10 @@ source dtype, JSON byte length, both reference revisions and the tensor
 types/shapes. Its payload concatenates the listed tensors in order, using
 little-endian FLOAT32 storage. The JSON is retained as a tensor, not rewritten.
 Every import/export/decode validates the schema, metadata agreement, checked
-products, tensor extents and payload length. Python borrows native-endian,
-C-contiguous arrays only during import, then returns an owned snapshot.
+products, tensor extents and payload length. C++ tensors and encoded payloads
+use little-endian bytes. Python accepts native-endian, C-contiguous arrays,
+normalizes multi-byte values to little endian without modifying the inputs,
+and returns owned native-endian arrays on export or reconstruction.
 ``max_bytes`` (default 1 GiB) bounds checkpoint payload and logical FLOAT32
 storage **separately**, not total process RSS. Invalid and unsupported state
 raises ``ValueError`` before allocating logical output buffers.

@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <gtest/gtest.h>
@@ -14,6 +15,28 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
+Tensor FloatTensor(const std::string &name, const Shape &shape, const std::vector<float> &values) {
+  TensorProto proto;
+  proto.set_name(name);
+  proto.set_data_type(TensorProto::FLOAT);
+  for (const auto dim : shape)
+    proto.add_dims(dim);
+  auto &raw = *proto.mutable_raw_data();
+  for (const float value : values) {
+    const uint32_t bits = std::bit_cast<uint32_t>(value);
+    for (size_t byte = 0; byte < 4; ++byte)
+      raw.push_back(static_cast<char>(bits >> (byte * 8)));
+  }
+  return TensorFromProto(proto).ToOwned();
+}
+
+float FloatValue(const Tensor &tensor, size_t index) {
+  uint32_t bits = 0;
+  for (size_t byte = 0; byte < 4; ++byte)
+    bits |= uint32_t(tensor.bytes()[index * 4 + byte]) << (byte * 8);
+  return std::bit_cast<float>(bits);
+}
+
 BitsAndBytesWeights Fixture(bool nested = false) {
   BitsAndBytesWeights weights;
   std::vector<uint8_t> codes(17);
@@ -23,21 +46,20 @@ BitsAndBytesWeights Fixture(bool nested = false) {
   weights.tensors.emplace("weight",
                           Tensor("weight", TensorProto::UINT8, {17, 1}, std::move(codes)));
   const auto table = MakeQuantizationPlan(QuantizationFormat::kNf4, 16).runs[0].blocks[0].codebook;
-  weights.tensors.emplace(
-      "weight_quant_map",
-      Tensor::FromFloat("map", {16}, std::vector<float>(table.begin(), table.end())));
+  weights.tensors.emplace("weight_quant_map",
+                          FloatTensor("map", {16}, std::vector<float>(table.begin(), table.end())));
   std::string json = R"({"quant_type":"nf4","blocksize":32,"dtype":"float16","shape":[3,11])";
   if (nested) {
     json += R"(,"nested_blocksize":256,"nested_dtype":"float32","nested_offset":2.0)";
     weights.tensors.emplace(
         "weight_absmax", Tensor("absmax", TensorProto::UINT8, {2}, std::vector<uint8_t>{0, 255}));
-    weights.tensors.emplace("weight_nested_absmax", Tensor::FromFloat("max", {1}, {0.5f}));
+    weights.tensors.emplace("weight_nested_absmax", FloatTensor("max", {1}, {0.5f}));
     std::vector<float> map(256, 0);
     map.front() = -1;
     map.back() = 1;
-    weights.tensors.emplace("weight_nested_quant_map", Tensor::FromFloat("nested_map", {256}, map));
+    weights.tensors.emplace("weight_nested_quant_map", FloatTensor("nested_map", {256}, map));
   } else
-    weights.tensors.emplace("weight_absmax", Tensor::FromFloat("absmax", {2}, {2.f, 0.f}));
+    weights.tensors.emplace("weight_absmax", FloatTensor("absmax", {2}, {2.f, 0.f}));
   json += "}";
   weights.tensors.emplace("weight_quant_state",
                           Tensor("json", TensorProto::UINT8, {static_cast<int64_t>(json.size())},
@@ -87,9 +109,8 @@ TEST(BitsAndBytesWeights, NativeNibblesPartialBlocksAndNestedState) {
     for (size_t i = 0; i < 33; ++i)
       EXPECT_EQ(codes.bytes()[i], i % 16);
     const auto decoded = ReconstructBitsAndBytesWeights(restored);
-    const auto *values = reinterpret_cast<const float *>(decoded.bytes());
     for (size_t i = 0; i < 33; ++i)
-      EXPECT_EQ(values[i],
+      EXPECT_EQ(FloatValue(decoded, i),
                 expected[i % 16] * (i < 32 ? (nested ? 1.5f : 2.f) : (nested ? 2.5f : 0.f)));
     const auto generic = DequantizeTensorProto(restored);
     EXPECT_EQ(generic.raw_data().size(), decoded.size_bytes());
@@ -101,15 +122,57 @@ TEST(BitsAndBytesWeights, Int8SignedCodesAndRowScales) {
   BitsAndBytesWeights weights;
   weights.tensors.emplace("weight", Tensor("weight", TensorProto::INT8, {2, 3},
                                            std::vector<uint8_t>{128, 129, 255, 0, 1, 127}));
-  weights.tensors.emplace("weight_scb", Tensor::FromFloat("scb", {2}, {127.f, 254.f}));
+  weights.tensors.emplace("weight_scb", FloatTensor("scb", {2}, {127.f, 254.f}));
   const auto encoded = ImportBitsAndBytesWeights(weights);
   SameCheckpoint(weights, ExportBitsAndBytesWeights(encoded));
   const auto codes = UnpackBitsAndBytesCodes(encoded);
   EXPECT_EQ(codes.data_type, TensorProto::INT8);
   EXPECT_EQ(std::memcmp(codes.bytes(), weights.tensors.at("weight").bytes(), 6), 0);
   const auto decoded = ReconstructBitsAndBytesWeights(encoded);
-  constexpr float expected[] = {-128, -127, -1, 0, 2, 254};
-  EXPECT_EQ(std::memcmp(decoded.bytes(), expected, sizeof(expected)), 0);
+  const auto expected = FloatTensor("expected", {2, 3}, {-128, -127, -1, 0, 2, 254});
+  EXPECT_EQ(std::memcmp(decoded.bytes(), expected.bytes(), expected.size_bytes()), 0);
+}
+
+TEST(BitsAndBytesWeights, PreservesLittleEndianProtoBytes) {
+  TensorProto proto;
+  proto.set_name("weight_scb");
+  proto.set_data_type(TensorProto::FLOAT);
+  proto.add_dims(1);
+  const std::string scale("\x00\x00\xfe\x42", 4); // 127.f in canonical little-endian order.
+  proto.set_raw_data(scale);
+  BitsAndBytesWeights weights;
+  weights.tensors.emplace("weight",
+                          Tensor("weight", TensorProto::INT8, {1, 1}, std::vector<uint8_t>{1}));
+  weights.tensors.emplace("weight_scb", TensorFromProto(proto));
+  const auto encoded = ImportBitsAndBytesWeights(weights);
+  EXPECT_EQ(encoded.raw_data(), std::string("\x01", 1) + scale);
+  SameCheckpoint(weights, ExportBitsAndBytesWeights(encoded));
+  for (const auto &[dtype, expected] : std::vector<std::pair<int32_t, std::string>>{
+           {TensorProto::FLOAT, std::string("\x00\x00\x80\x3f", 4)},
+           {TensorProto::FLOAT16, std::string("\x00\x3c", 2)},
+           {TensorProto::BFLOAT16, std::string("\x80\x3f", 2)}}) {
+    const auto decoded = ReconstructBitsAndBytesWeights(encoded, size_t{1} << 30, {}, dtype);
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(decoded.bytes()), decoded.size_bytes()),
+              expected);
+    const auto generic = DequantizeTensor(encoded, {}, nullptr, dtype);
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(generic.bytes()), generic.size_bytes()),
+              expected);
+  }
+  EXPECT_EQ(DequantizeTensorProto(encoded).raw_data(), std::string("\x00\x00\x80\x3f", 4));
+  for (const bool nested : {false, true}) {
+    const auto checkpoint = Fixture(nested);
+    const auto value = ImportBitsAndBytesWeights(checkpoint);
+    SameCheckpoint(checkpoint, ExportBitsAndBytesWeights(value));
+    std::string expected;
+    for (const char *name : {"weight", "weight_absmax", "weight_quant_map", "weight_nested_absmax",
+                             "weight_nested_quant_map", "weight_quant_state"}) {
+      const auto found = checkpoint.tensors.find(name);
+      if (found != checkpoint.tensors.end())
+        expected.append(reinterpret_cast<const char *>(found->second.bytes()),
+                        found->second.size_bytes());
+    }
+    EXPECT_EQ(value.raw_data(), expected);
+  }
 }
 
 TEST(BitsAndBytesWeights, RejectsMalformedStateAndOverflowBeforeAllocation) {
@@ -125,11 +188,11 @@ TEST(BitsAndBytesWeights, RejectsMalformedStateAndOverflowBeforeAllocation) {
   weights.tensors.at("weight").shape[0] = 18;
   EXPECT_ANY_THROW(ImportBitsAndBytesWeights(weights));
   weights = Fixture();
-  weights.tensors.at("weight_absmax") = Tensor::FromFloat("scales", {2}, {-1.f, 0.f});
+  weights.tensors.at("weight_absmax") = FloatTensor("scales", {2}, {-1.f, 0.f});
   EXPECT_ANY_THROW(ImportBitsAndBytesWeights(weights));
   weights = Fixture(true);
   weights.tensors.at("weight_nested_absmax") =
-      Tensor::FromFloat("scales", {1}, {std::numeric_limits<float>::infinity()});
+      FloatTensor("scales", {1}, {std::numeric_limits<float>::infinity()});
   EXPECT_ANY_THROW(ImportBitsAndBytesWeights(weights));
   auto encoded = ImportBitsAndBytesWeights(Fixture(true));
   for (size_t limit : {size_t{0}, size_t{131}}) {

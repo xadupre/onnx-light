@@ -15,6 +15,9 @@ ConvertError = _vc.ConvertError
 def convert_version(model: ModelProto, target_version: int) -> ModelProto:
     """Converts the model to the given target opset version.
 
+    Retains local functions and converts their bodies from their own default-domain
+    opset imports. Preserves references to function attributes.
+
     Args:
         model: The input ModelProto to convert.
         target_version: The target opset version for the ``ai.onnx`` domain.
@@ -25,5 +28,7 @@ def convert_version(model: ModelProto, target_version: int) -> ModelProto:
     Raises:
         ConvertError: If the conversion cannot be completed, including when any
             graph contains unsupported sparse initializers.
+        RuntimeError: If an adapter requires a concrete value for an unresolved
+            function attribute or unavailable type information.
     """
     return _vc.convert_version(model, target_version)

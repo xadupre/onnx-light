@@ -146,7 +146,7 @@ struct Dimension final {
  * float (@c f), float list (@c fs), integer (@c i), integer list (@c is),
  * string (@c s), string list (@c ss), tensor (@c t), tensor list (@c ts),
  * subgraph (@c g), subgraph list (@c gs), type-proto (@c tp), and
- * type-proto list (@c tps).
+ * type-proto list (@c tps), and unresolved function attribute reference (@c ref).
  */
 enum class AttributeKind : uint8_t {
   // float, float list, int, int list, string, string list,
@@ -162,7 +162,8 @@ enum class AttributeKind : uint8_t {
   g,
   gs,
   tp,
-  tps
+  tps,
+  ref
 };
 
 /// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
@@ -173,8 +174,8 @@ enum class AttributeKind : uint8_t {
  */
 static inline const char *toString(AttributeKind kind) {
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  static constexpr const char *names[] = {"f", "fs", "i", "is", "s",  "ss",
-                                          "t", "ts", "g", "gs", "tp", "tps"};
+  static constexpr const char *names[] = {"f",  "fs", "i",  "is", "s",   "ss", "t",
+                                          "ts", "g",  "gs", "tp", "tps", "ref"};
   ONNX_ASSERT(size_t(kind) < std::size(names))
   return names[static_cast<int>(kind)];
 }
@@ -210,6 +211,7 @@ struct AttributeValue {
  */
 template <typename T, AttributeKind Kind>
 struct ScalarAttributeValue final : public AttributeValue {
+  static constexpr AttributeKind attribute_kind = Kind;
   using ConstructorType = const T &;
   using ValueType = T;
   ScalarAttributeValue(Symbol name, ConstructorType value_)
@@ -232,6 +234,7 @@ private:
  */
 template <typename T, AttributeKind Kind>
 struct VectorAttributeValue final : public AttributeValue {
+  static constexpr AttributeKind attribute_kind = Kind;
   using ConstructorType = const std::vector<T> &&;
   using ValueType = std::vector<T>;
   VectorAttributeValue(Symbol name, ValueType value_)
@@ -273,6 +276,8 @@ using GraphsAttr = VectorAttributeValue<std::shared_ptr<Graph>, AttributeKind::g
 using TypeProtoAttr = ScalarAttributeValue<TypeProto, AttributeKind::tp>;
 /** @brief Type-proto-list attribute (kind @c tps). */
 using TypeProtosAttr = VectorAttributeValue<TypeProto, AttributeKind::tps>;
+/** @brief Unresolved function attribute reference (kind @c ref). */
+using ReferenceAttr = ScalarAttributeValue<AttributeProto, AttributeKind::ref>;
 
 /**
  * @brief CRTP mixin that adds typed attribute storage to a node class.
@@ -368,6 +373,7 @@ template <typename Derived> struct Attributes {
   CREATE_ACCESSOR(Graphs, gs)
   CREATE_ACCESSOR(TypeProto, tp)
   CREATE_ACCESSOR(TypeProtos, tps)
+  CREATE_ACCESSOR(Reference, ref)
 
 #undef CREATE_ACCESSOR
 
@@ -392,6 +398,8 @@ private:
   }
   template <typename T> typename T::ValueType &get(Symbol name) const {
     auto it = find(name, true);
+    ONNX_ASSERTM((*it)->kind() == T::attribute_kind,
+                 "Cannot read an unresolved or differently typed attribute: %s", name.toString());
     T *child = static_cast<T *>(it->get());
     return child->value();
   }

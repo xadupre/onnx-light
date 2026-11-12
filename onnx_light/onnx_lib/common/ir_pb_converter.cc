@@ -128,6 +128,10 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
 static void convertAttribute(const AttributeProto &ap, Node &n,
                              const int64_t ir_version = IR_VERSION) {
   Symbol sym = Symbol(ap.name());
+  if (ap.has_ref_attr_name()) {
+    n.ref_(sym, ap);
+    return;
+  }
   switch (ap.type()) {
   case AttributeProto::AttributeType::FLOAT:
     n.f_(sym, ap.f());
@@ -634,6 +638,9 @@ static void addAttribute(NodeProto &n_p, const Node &n, Symbol name) {
       tp->CopyFrom(v);
     }
   } break;
+  case AttributeKind::ref:
+    attr->CopyFrom(n.ref(name));
+    break;
   }
 }
 
@@ -804,6 +811,7 @@ ModelProto PrepareOutput(const ModelProto &mp_in) {
     }
   }
 
+  mp_out.functions().extend(mp_in.functions());
   return mp_out;
 }
 

@@ -182,6 +182,44 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
   debug("Finished conversion; returning model");
   ModelProto mp_out = PrepareOutput(mp_in);
   ExportModelProto(&mp_out, g);
+  for (auto &function : mp_out.functions()) {
+    const auto &imports = function.opset_import();
+    const auto default_opset = std::find_if(imports.begin(), imports.end(), [](const auto &opset) {
+      return opset.domain().empty() || opset.domain() == "ai.onnx";
+    });
+    if (default_opset == imports.end() || default_opset->version() == target_version.version())
+      continue;
+
+    ModelProto function_model;
+    function_model.set_ir_version(mp_in.ir_version());
+    function_model.opset_import().extend(imports);
+    auto &graph = *function_model.mutable_graph();
+    graph.set_name(function.name());
+    for (const auto &name : function.input())
+      graph.add_input()->set_name(name);
+    for (const auto &name : function.output())
+      graph.add_output()->set_name(name);
+    graph.node().extend(function.node());
+    graph.value_info().extend(function.value_info());
+    std::shared_ptr<Graph> function_graph(ImportModelProto(function_model));
+    convert_graph(function_graph, OpSetID(default_opset->version()), target_version);
+    ModelProto converted_function;
+    ExportModelProto(&converted_function, function_graph);
+
+    function.node().clear();
+    // Functions have no initializers; adapters' constants must be represented as nodes.
+    for (const auto &initializer : converted_function.graph().initializer()) {
+      auto *constant = function.add_node();
+      constant->set_op_type("Constant");
+      constant->add_output(initializer.name());
+      auto *value = constant->add_attribute();
+      value->set_name("value");
+      value->set_type(AttributeProto::TENSOR);
+      value->mutable_t()->CopyFrom(initializer);
+    }
+    function.node().extend(converted_function.graph().node());
+    function.opset_import() = std::move(converted_function.opset_import());
+  }
   return mp_out;
 }
 

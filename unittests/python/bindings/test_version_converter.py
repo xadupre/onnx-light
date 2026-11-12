@@ -34,6 +34,200 @@ class TestVersionConverter(ExtTestCase):
         checker.check_model(converted_model)
         return converted_model
 
+    @staticmethod
+    def _local_function_model(function, version, output_shape=(2,)):
+        """Builds a model calling a local function."""
+        graph = oh.make_graph(
+            [
+                oh.make_node(
+                    function.name,
+                    ["x"],
+                    ["y"],
+                    domain=function.domain,
+                    overload=function.overload,
+                )
+            ],
+            "local_function",
+            [oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, output_shape)],
+        )
+        return oh.make_model(
+            graph,
+            opset_imports=[
+                oh.make_operatorsetid("", version),
+                oh.make_operatorsetid("custom", 1),
+            ],
+            functions=[function],
+        )
+
+    def test_local_functions_preserved(self):
+        relu = oh.make_function(
+            "custom",
+            "MyRelu",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Relu", ["X"], ["Y"])],
+            [oh.make_operatorsetid("", 14)],
+        )
+        wrapper = oh.make_function(
+            "custom",
+            "Wrapper",
+            ["X"],
+            ["Y"],
+            [oh.make_node("MyRelu", ["X"], ["Y"], domain="custom")],
+            [oh.make_operatorsetid("", 17), oh.make_operatorsetid("custom", 1)],
+            doc_string="A nested local function.",
+            overload="float",
+            value_info=[oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        unused = oh.make_function(
+            "custom",
+            "Unused",
+            ["X"],
+            ["Y"],
+            [oh.make_node("External", ["X"], ["Y"], domain="vendor")],
+            [oh.make_operatorsetid("vendor", 2)],
+        )
+        oh.set_metadata_props(wrapper, {"origin": "local"})
+        model = self._local_function_model(wrapper, 17)
+        model.functions.extend([relu, unused])
+        checker.check_model(model)
+        before = model.SerializeToString()
+        for target in (16, 17, 18):
+            with self.subTest(target=target):
+                converted = version_converter.convert_version(model, target)
+                checker.check_model(converted)
+                self.assertEqual(len(converted.functions), 3)
+                self.assertEqual(converted.graph.node[0].op_type, "Wrapper")
+                self.assertEqual(converted.graph.node[0].domain, "custom")
+                self.assertEqual(converted.graph.node[0].overload, "float")
+                actual_wrapper, actual_relu, actual_unused = converted.functions
+                self.assertEqual(actual_wrapper.node[0].op_type, "MyRelu")
+                expected_wrapper = onnxl.FunctionProto()
+                expected_wrapper.CopyFrom(wrapper)
+                expected_wrapper.opset_import[0].version = target
+                self.assertEqual(
+                    actual_wrapper.SerializeToString(), expected_wrapper.SerializeToString()
+                )
+                self.assertEqual(actual_relu.opset_import[0].version, target)
+                self.assertEqual(actual_unused.SerializeToString(), unused.SerializeToString())
+                self.assertEqual(model.SerializeToString(), before)
+
+    def test_local_function_body_conversion(self):
+        for op_type, source, model_version, target, attributes, output_shape in (
+            ("Unsqueeze", 12, 12, 13, {"axes": [0]}, [1, 2]),
+            ("Pad", 10, 10, 11, {"pads": [1, 1], "mode": "edge"}, [4]),
+            ("ReduceMean", 13, 17, 18, {"axes": [0], "keepdims": 0}, []),
+        ):
+            with self.subTest(op_type=op_type):
+                function = oh.make_function(
+                    "custom",
+                    "Local",
+                    ["X"],
+                    ["Y"],
+                    [oh.make_node(op_type, ["X"], ["Y"], **attributes)],
+                    [oh.make_operatorsetid("", source)],
+                )
+                model = self._local_function_model(function, model_version, output_shape)
+                checker.check_model(model)
+                before = model.SerializeToString()
+                converted = version_converter.convert_version(model, target)
+                checker.check_model(converted, full_check=True)
+                self.assertEqual(len(converted.functions), 1)
+                actual = converted.functions[0]
+                self.assertEqual(actual.opset_import[0].version, target)
+                self.assertEqual(actual.node[0].op_type, "Constant")
+                self.assertEqual(
+                    list(actual.node[0].attribute[0].t.int64_data),
+                    attributes.get("axes", attributes.get("pads")),
+                )
+                self.assertEqual(actual.node[-1].op_type, op_type)
+                self.assertEqual(len(actual.node[-1].input), 2)
+                self.assertEqual(actual.node[-1].input[1], actual.node[0].output[0])
+                self.assertEqual(model.SerializeToString(), before)
+
+    def test_local_function_attribute_references(self):
+        node = oh.make_node("LeakyRelu", ["X"], ["Y"])
+        reference = oh.make_attribute_ref(
+            "alpha", onnxl.AttributeProto.FLOAT, ref_attr_name="slope"
+        )
+        node.attribute.append(reference)
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["X"],
+            ["Y"],
+            [node],
+            [oh.make_operatorsetid("ai.onnx", 17)],
+            attribute_protos=[oh.make_attribute("slope", 0.1)],
+        )
+        model = self._local_function_model(function, 17)
+        checker.check_model(model)
+        converted = version_converter.convert_version(model, 18)
+        checker.check_model(converted)
+        actual = converted.functions[0]
+        self.assertEqual(actual.opset_import[0].domain, "ai.onnx")
+        self.assertEqual(actual.opset_import[0].version, 18)
+        self.assertEqual(
+            actual.node[0].attribute[0].SerializeToString(), reference.SerializeToString()
+        )
+        self.assertEqual(
+            actual.attribute_proto[0].SerializeToString(),
+            function.attribute_proto[0].SerializeToString(),
+        )
+
+    def test_local_function_unresolved_adapter_attribute(self):
+        node = oh.make_node("Unsqueeze", ["X"], ["Y"])
+        node.attribute.append(oh.make_attribute_ref("axes", onnxl.AttributeProto.INTS))
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["X"],
+            ["Y"],
+            [node],
+            [oh.make_operatorsetid("", 12)],
+            attributes=["axes"],
+        )
+        model = self._local_function_model(function, 12, [1, 2])
+        model.graph.node[0].attribute.append(oh.make_attribute("axes", [0]))
+        checker.check_model(model)
+        before = model.SerializeToString()
+        with self.assertRaisesRegex(RuntimeError, "unresolved"):
+            version_converter.convert_version(model, 13)
+        self.assertEqual(model.SerializeToString(), before)
+
+    def test_local_function_type_dependent_conversion(self):
+        for typed in (False, True):
+            with self.subTest(typed=typed):
+                function = oh.make_function(
+                    "custom",
+                    "Local",
+                    ["X"],
+                    ["Y"],
+                    [oh.make_node("Flatten", ["X"], ["Y"])],
+                    [oh.make_operatorsetid("", 9)],
+                    value_info=(
+                        [
+                            oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                            oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 1]),
+                        ]
+                        if typed
+                        else None
+                    ),
+                )
+                model = self._local_function_model(function, 9, [2, 1])
+                checker.check_model(model)
+                before = model.SerializeToString()
+                if typed:
+                    converted = version_converter.convert_version(model, 8)
+                    checker.check_model(converted, full_check=True)
+                    self.assertEqual(converted.functions[0].opset_import[0].version, 8)
+                    self.assertEqual(converted.functions[0].node[0].op_type, "Flatten")
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "type must be known"):
+                        version_converter.convert_version(model, 8)
+                self.assertEqual(model.SerializeToString(), before)
+
     # Test 1: Backwards Incompatible Conversion: Reshape: 8 -> 2
     def test_backwards_incompatible(self) -> None:
         def test() -> None:

@@ -355,6 +355,7 @@ struct NodeData {
   std::vector<std::string> dependencies;
   bool usable = false;
   bool anchor = false;
+  bool preparation = false;
 };
 
 bool KnownType(const TypeProto &type, std::size_t depth = 0);
@@ -428,6 +429,28 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
 struct Index;
 ValueInfoProto ValueInfo(Index &index, const std::string &name);
 
+// Weight preparation converts or relayouts constants without depending on graph inputs.
+// Like initializers, it stays outside layer bodies and may precede the calls.
+bool ConstantPreparation(GraphGraph &graph, const NodeProto &node,
+                         const std::unordered_set<std::string> &prepared) {
+  if ((!node.domain().empty() && node.domain() != "ai.onnx") || !node.overload().empty() ||
+      !node.device_configurations().empty() ||
+      graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+          node.domain(), node.op_type(), "")) != nullptr)
+    return false;
+  if (node.op_type() == "Constant")
+    return node.input().empty();
+  static const std::set<std::string> kPreparations = {"Cast",    "CastLike",  "Concat",
+                                                      "Flatten", "Identity",  "Reshape",
+                                                      "Squeeze", "Transpose", "Unsqueeze"};
+  if (kPreparations.count(node.op_type().value()) == 0 || node.input().empty())
+    return false;
+  return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
+    return !input.value().empty() &&
+           (prepared.count(input.value()) != 0 || graph.IsConstant(input.value()));
+  });
+}
+
 struct Index {
   GraphGraph &graph;
   std::unordered_map<const NodeProto *, NodeData> data;
@@ -444,8 +467,16 @@ struct Index {
     std::map<std::tuple<std::string, std::string, std::string>, bool> anchor_cache;
     std::size_t function_work = 0, capture_work = 0, signature_work = 0, safety_work = 0;
     std::map<std::string, bool> safe_functions;
+    std::unordered_set<std::string> prepared;
     for (const NodeProto &node : graph.Builder().Nodes()) {
       NodeData entry;
+      entry.preparation = ConstantPreparation(graph, node, prepared);
+      if (entry.preparation) {
+        for (const auto &output : node.output()) {
+          if (!output.value().empty())
+            prepared.insert(output.value());
+        }
+      }
       if (IsLayer(node)) {
         entry.materialized = utils::CopyWithSharedTensorStorage(node);
       } else if (!Materialize(node, graph.Builder(), entry.materialized)) {
@@ -463,8 +494,8 @@ struct Index {
       }
       for (const std::string &name : entry.dependencies)
         users[name].push_back(&node);
-      // Constant nodes remain outside the body, just like initializers.
-      entry.usable = !IsLayer(node) && node.op_type().value() != "Constant" &&
+      // Constants and weight preparation remain outside the body, just like initializers.
+      entry.usable = !IsLayer(node) && !entry.preparation && node.op_type().value() != "Constant" &&
                      entry.dependencies.size() <= kMaxPorts && node.output().size() <= kMaxPorts &&
                      node.attribute().size() <= kMaxPorts;
       if (entry.usable) {
@@ -828,21 +859,6 @@ bool KnownBoundaryType(Index &index, const std::string &name) {
                                     TensorProto::DataType::UNDEFINED;
 }
 
-bool MovableConstantPreparation(Index &index, const NodeProto &node) {
-  if ((!node.domain().empty() && node.domain() != "ai.onnx") || !node.overload().empty() ||
-      !node.device_configurations().empty() ||
-      index.graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
-          node.domain(), node.op_type(), "")) != nullptr)
-    return false;
-  if (node.op_type() == "Constant")
-    return node.input().empty();
-  if (node.op_type() != "Cast" && node.op_type() != "CastLike" && node.op_type() != "Identity")
-    return false;
-  return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
-    return !input.empty() && index.graph.IsConstant(input);
-  });
-}
-
 // A unit is either a contracted region or one untouched interleaving node.
 // Sorting the contracted DAG rejects re-entry cycles, even through nested captures.
 bool Schedule(Index &index, Plan &plan) {
@@ -894,7 +910,7 @@ bool Schedule(Index &index, Plan &plan) {
   const NodeProto *previous = nullptr;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
     const NodeProto *node = &nodes[position];
-    if (MovableConstantPreparation(index, *node))
+    if (index.data.at(node).preparation)
       continue;
     if (previous != nullptr) {
       const std::size_t from = owner.at(previous), to = owner.at(node);

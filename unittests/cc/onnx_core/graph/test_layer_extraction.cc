@@ -42,6 +42,21 @@ void AddRepeatedLayers(core::builder::GraphBuilder &builder) {
   builder.MakeOutput("h1");
 }
 
+void AddRepeatedLayersWithAliasedInputs(core::builder::GraphBuilder &builder,
+                                        const std::string &second_right_input) {
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(2));
+  for (const std::string name : {"x", "y", "z"})
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, shape);
+  builder.MakeNode("MatMul", {"x", "x"}, {"mm0"});
+  builder.MakeNode("Relu", {"mm0"}, {"h0"});
+  builder.MakeNode("MatMul", {"y", second_right_input}, {"mm1"});
+  builder.MakeNode("Relu", {"mm1"}, {"h1"});
+  builder.MakeOutput("h0");
+  builder.MakeOutput("h1");
+}
+
 } // namespace
 
 TEST(LayerExtraction, ProposesWithoutMutationAndBuildsSharedFunctionCalls) {
@@ -82,6 +97,33 @@ TEST(LayerExtraction, ProposesWithoutMutationAndBuildsSharedFunctionCalls) {
   EXPECT_EQ(body.node(1).op_type(), "Relu");
   EXPECT_EQ(builder.OpsetVersion("ai.rt"), 1);
   EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+}
+
+TEST(LayerExtraction, PreservesExternalInputAliasTopology) {
+  for (const bool equivalent_aliases : {false, true}) {
+    core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+    AddRepeatedLayersWithAliasedInputs(builder, equivalent_aliases ? "y" : "z");
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+    const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+
+    if (!equivalent_aliases) {
+      EXPECT_EQ(proposal.status, core::graph::OperatorGroupStatus::kNoMatch);
+      EXPECT_TRUE(proposal.groups.empty());
+      continue;
+    }
+
+    ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+    ASSERT_EQ(proposal.groups.size(), 2u);
+    const auto replacement =
+        core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
+    ASSERT_EQ(replacement.size(), 2u);
+    EXPECT_EQ(replacement[0].op_type(), replacement[1].op_type());
+    ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+    const auto &body = builder.LocalFunctions()[0]->Nodes();
+    ASSERT_EQ(body.size(), 2u);
+    EXPECT_EQ(body[0].input(0), body[0].input(1));
+  }
 }
 
 TEST(LayerExtraction, NamesAfterFirstAnchorAndAvoidsGraphNameCollisions) {

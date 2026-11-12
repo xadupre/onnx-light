@@ -43,7 +43,7 @@ public:
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
-  /// Rechecks the match and delegates local-function construction to core.
+  /// Delegates match verification and local-function construction to core.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;

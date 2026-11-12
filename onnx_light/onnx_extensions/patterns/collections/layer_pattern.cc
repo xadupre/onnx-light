@@ -31,12 +31,7 @@ core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph
 utils::RepeatedProtoField<NodeProto>
 RepeatedLayerPattern::Apply(core::builder::GraphGraph &graph,
                             const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.empty() || nodes[0] == nullptr || graph.Builder().Nodes().empty())
-    throw core::builder::BuilderError("RepeatedLayer::Apply expects a nonempty match.");
-  graph.Position(*nodes[0]);
-  const auto verified = Match(graph, graph.Builder().Nodes()[0]);
-  if (verified.pattern != this || verified.nodes != nodes)
-    throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
+  // MakeRepeatedLayerReplacements repeats the search once and rejects inconsistent matches.
   return core::graph::MakeRepeatedLayerReplacements(graph, nodes);
 }
 

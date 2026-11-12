@@ -356,7 +356,18 @@ struct NodeData {
   bool usable = false;
   bool anchor = false;
   bool preparation = false;
+  // Value identifiers of inputs (kNoValue when omitted), outputs and dependencies.
+  std::vector<uint32_t> input_ids, output_ids, dependency_ids;
+  // Producers of the dependencies, nullptr for graph inputs, initializers and captures.
+  std::vector<const NodeProto *> producers;
+  // Positions of those producers, kNoPosition when not produced in this graph.
+  std::vector<std::size_t> producer_positions;
+  std::size_t position = 0;
 };
+
+constexpr std::size_t kNoPosition = std::numeric_limits<std::size_t>::max();
+
+constexpr uint32_t kNoValue = std::numeric_limits<uint32_t>::max();
 
 bool KnownType(const TypeProto &type, std::size_t depth = 0);
 
@@ -451,10 +462,62 @@ bool ConstantPreparation(GraphGraph &graph, const NodeProto &node,
   });
 }
 
+// Type, shape and constness of a value, looked up once per search.
+struct ValueKey {
+  const TypeProto *type = nullptr;
+  bool structured = false;
+  int32_t dtype = TensorProto::DataType::UNDEFINED;
+  const core::symbolic::SymTensor *shape = nullptr;
+  bool constant = false;
+};
+
+struct NodePairHash {
+  std::size_t operator()(const std::pair<const NodeProto *, const NodeProto *> &key) const {
+    const auto a = std::hash<const NodeProto *>()(key.first);
+    return a ^ (std::hash<const NodeProto *>()(key.second) + 0x9e3779b97f4a7c15ULL + (a << 6) +
+                (a >> 2));
+  }
+};
+
 struct Index {
   GraphGraph &graph;
   std::unordered_map<const NodeProto *, NodeData> data;
-  std::unordered_map<std::string, std::vector<const NodeProto *>> users;
+  // The graph does not change during a search, so value and node comparisons are cached.
+  std::unordered_map<std::string, ValueKey> values;
+  std::unordered_map<std::pair<const NodeProto *, const NodeProto *>, bool, NodePairHash>
+      compatible;
+  std::unordered_map<std::string, uint32_t> value_ids;
+  // Node data by graph position.
+  std::vector<NodeData *> entries;
+  // Per value identifier: name, consumers, graph-output flag and cached boundary analyses
+  // (-1 when not computed yet).
+  std::vector<std::string> names;
+  std::vector<std::vector<const NodeProto *>> consumers;
+  std::vector<bool> graph_outputs;
+  std::vector<int8_t> boundary_types;
+  std::vector<int8_t> value_bytes_known;
+  std::vector<uint64_t> value_bytes;
+  // Generation-stamped scratch storage indexed by value identifier.
+  std::vector<int64_t> scratch;
+  std::vector<uint32_t> scratch_generation;
+  uint32_t generation = 0;
+
+  uint32_t NextGeneration() {
+    if (++generation == 0) {
+      std::fill(scratch_generation.begin(), scratch_generation.end(), 0);
+      generation = 1;
+    }
+    return generation;
+  }
+
+  uint32_t ValueId(const std::string &name) {
+    if (name.empty())
+      return kNoValue;
+    auto [it, inserted] = value_ids.try_emplace(name, static_cast<uint32_t>(names.size()));
+    if (inserted)
+      names.push_back(name);
+    return it->second;
+  }
   std::map<std::string, Region> anchors;
   std::unordered_map<std::string, const ValueInfoProto *> declarations;
   bool valid = true;
@@ -492,8 +555,14 @@ struct Index {
         valid = false;
         return;
       }
-      for (const std::string &name : entry.dependencies)
-        users[name].push_back(&node);
+      for (const auto &input : node.input())
+        entry.input_ids.push_back(ValueId(input.value()));
+      for (const auto &output : node.output())
+        entry.output_ids.push_back(ValueId(output.value()));
+      for (const std::string &name : entry.dependencies) {
+        entry.dependency_ids.push_back(ValueId(name));
+        entry.producers.push_back(graph.NodeBefore(name));
+      }
       // Constants and weight preparation remain outside the body, just like initializers.
       entry.usable = !IsLayer(node) && !entry.preparation && node.op_type().value() != "Constant" &&
                      entry.dependencies.size() <= kMaxPorts && node.output().size() <= kMaxPorts &&
@@ -562,6 +631,33 @@ struct Index {
       }
       data.emplace(&node, std::move(entry));
     }
+    const auto &nodes = graph.Builder().Nodes();
+    std::unordered_map<const NodeProto *, std::size_t> positions;
+    for (std::size_t position = 0; position < nodes.size(); ++position) {
+      positions.emplace(&nodes[position], position);
+      entries.push_back(&data.at(&nodes[position]));
+    }
+    consumers.resize(names.size());
+    graph_outputs.assign(names.size(), false);
+    boundary_types.assign(names.size(), -1);
+    value_bytes_known.assign(names.size(), -1);
+    value_bytes.assign(names.size(), 0);
+    scratch.assign(names.size(), 0);
+    scratch_generation.assign(names.size(), 0);
+    for (std::size_t position = 0; position < entries.size(); ++position) {
+      NodeData *entry = entries[position];
+      entry->position = position;
+      for (uint32_t id : entry->dependency_ids)
+        consumers[id].push_back(&nodes[position]);
+      for (uint32_t id : entry->output_ids) {
+        if (id != kNoValue)
+          graph_outputs[id] = graph.IsOutput(names[id]);
+      }
+      for (const NodeProto *producer : entry->producers) {
+        const auto found = producer == nullptr ? positions.end() : positions.find(producer);
+        entry->producer_positions.push_back(found == positions.end() ? kNoPosition : found->second);
+      }
+    }
   }
 };
 
@@ -576,34 +672,43 @@ const TypeProto *DeclaredType(Index &index, const std::string &name) {
   return nullptr;
 }
 
-bool CompatibleValue(Index &index, const std::string &left, const std::string &right) {
+const ValueKey &GetValueKey(Index &index, const std::string &name) {
+  auto [it, inserted] = index.values.try_emplace(name);
+  if (!inserted)
+    return it->second;
   GraphGraph &graph = index.graph;
+  ValueKey &key = it->second;
+  key.type = DeclaredType(index, name);
+  key.structured = key.type != nullptr && core::shapes::HasStructuredType(*key.type);
+  if (key.structured)
+    return key;
+  if (key.type != nullptr && key.type->has_tensor_type())
+    key.dtype = key.type->tensor_type().elem_type();
+  else if (graph.HasType(name))
+    key.dtype = core::symbolic::TensorTypeToDataType(graph.GetType(name));
+  if (graph.HasShape(name)) {
+    key.shape = &graph.GetShape(name);
+    key.constant = graph.IsConstant(name);
+  }
+  return key;
+}
+
+bool CompatibleValue(Index &index, const std::string &left, const std::string &right) {
   if (left.empty() || right.empty())
     return left.empty() && right.empty();
-  const TypeProto *left_type = DeclaredType(index, left);
-  const TypeProto *right_type = DeclaredType(index, right);
-  const bool left_structured = left_type != nullptr && core::shapes::HasStructuredType(*left_type);
-  const bool right_structured =
-      right_type != nullptr && core::shapes::HasStructuredType(*right_type);
-  if (left_structured || right_structured)
-    return left_structured && right_structured &&
-           core::shapes::SameDeclaredType(*left_type, *right_type);
-  auto dtype = [&](const std::string &name, const TypeProto *type) {
-    if (type != nullptr && type->has_tensor_type())
-      return type->tensor_type().elem_type();
-    return graph.HasType(name) ? core::symbolic::TensorTypeToDataType(graph.GetType(name))
-                               : TensorProto::DataType::UNDEFINED;
-  };
-  if (dtype(left, left_type) != dtype(right, right_type) ||
-      graph.HasShape(left) != graph.HasShape(right))
+  const ValueKey &l = GetValueKey(index, left);
+  const ValueKey &r = GetValueKey(index, right);
+  if (l.structured || r.structured)
+    return l.structured && r.structured && core::shapes::SameDeclaredType(*l.type, *r.type);
+  if (l.dtype != r.dtype || (l.shape == nullptr) != (r.shape == nullptr))
     return false;
-  if (!graph.HasShape(left))
+  if (l.shape == nullptr)
     return true;
-  const auto &a = graph.GetShape(left).Shape();
-  const auto &b = graph.GetShape(right).Shape();
+  const auto &a = l.shape->Shape();
+  const auto &b = r.shape->Shape();
   if (a.Rank() != b.Rank())
     return false;
-  const bool activation = !graph.IsConstant(left) && !graph.IsConstant(right);
+  const bool activation = !l.constant && !r.constant;
   for (std::size_t i = 0; i < a.Rank(); ++i) {
     if (a[i].IsInt() && b[i].IsInt() && a[i].AsInt() != b[i].AsInt() &&
         !(activation && i + 1 < a.Rank()))
@@ -612,7 +717,7 @@ bool CompatibleValue(Index &index, const std::string &left, const std::string &r
   return true;
 }
 
-bool CompatibleNode(Index &index, const NodeProto &left, const NodeProto &right) {
+bool ComputeCompatibleNode(Index &index, const NodeProto &left, const NodeProto &right) {
   const auto &a = index.data.at(&left);
   const auto &b = index.data.at(&right);
   if (!a.usable || !b.usable || a.signature != b.signature ||
@@ -633,37 +738,47 @@ bool CompatibleNode(Index &index, const NodeProto &left, const NodeProto &right)
   return true;
 }
 
+bool CompatibleNode(Index &index, const NodeProto &left, const NodeProto &right) {
+  auto [it, inserted] = index.compatible.try_emplace({&left, &right}, false);
+  if (inserted)
+    it->second = ComputeCompatibleNode(index, left, right);
+  return it->second;
+}
+
 // Corresponding values have the same internal producer/output port or external
 // alias class. This also detects additional edges between already matched nodes.
-std::vector<std::string> Topology(Index &index, const Region &region) {
-  std::unordered_map<std::string, std::string> values;
+// Internal values are encoded as (role << 8 | port) >= 0, omitted inputs as -1 and
+// external alias classes as -2, -3, ...
+std::vector<int64_t> Topology(Index &index, const Region &region) {
+  const uint32_t generation = index.NextGeneration();
+  auto set = [&](uint32_t id, int64_t code) {
+    index.scratch_generation[id] = generation;
+    index.scratch[id] = code;
+  };
   for (std::size_t role = 0; role < region.size(); ++role) {
-    for (int port = 0; port < region[role]->output_size(); ++port) {
-      const std::string &name = region[role]->output()[port].value();
-      if (!name.empty())
-        values.emplace(name, "n" + std::to_string(role) + ":" + std::to_string(port));
+    const auto &outputs = index.data.at(region[role]).output_ids;
+    for (std::size_t port = 0; port < outputs.size(); ++port) {
+      if (outputs[port] != kNoValue && index.scratch_generation[outputs[port]] != generation)
+        set(outputs[port], static_cast<int64_t>((role << 8) | port));
     }
   }
-  std::size_t external = 0;
-  std::vector<std::string> topology;
+  int64_t external = 0;
+  std::vector<int64_t> topology;
+  auto add = [&](uint32_t id) {
+    if (index.scratch_generation[id] != generation)
+      set(id, -2 - external++);
+    topology.push_back(index.scratch[id]);
+  };
   for (const NodeProto *node : region) {
-    for (const auto &input : node->input()) {
-      if (input.value().empty()) {
-        topology.push_back("-");
-      } else {
-        auto [it, inserted] = values.emplace(input.value(), "e" + std::to_string(external));
-        if (inserted)
-          ++external;
-        topology.push_back(it->second);
-      }
+    const auto &entry = index.data.at(node);
+    for (uint32_t id : entry.input_ids) {
+      if (id == kNoValue)
+        topology.push_back(-1);
+      else
+        add(id);
     }
-    const auto &dependencies = index.data.at(node).dependencies;
-    for (std::size_t i = 0; i < dependencies.size(); ++i) {
-      auto [it, inserted] = values.emplace(dependencies[i], "e" + std::to_string(external));
-      if (inserted)
-        ++external;
-      topology.push_back(it->second);
-    }
+    for (uint32_t id : entry.dependency_ids)
+      add(id);
   }
   return topology;
 }
@@ -684,51 +799,64 @@ bool Correspond(Index &index, const Regions &regions) {
 }
 
 struct Boundary : OperatorGroup {
-  std::vector<std::string> edges;
+  std::vector<uint32_t> edges, input_ids, output_ids;
 };
 
 Boundary GetBoundary(Index &index, const Region &region) {
   Boundary boundary;
   std::unordered_set<const NodeProto *> inside(region.begin(), region.end());
-  std::unordered_set<std::string> produced, inputs, outputs;
-  Region ordered = region;
-  std::sort(ordered.begin(), ordered.end(), [&](const NodeProto *a, const NodeProto *b) {
-    return index.graph.Position(*a) < index.graph.Position(*b);
-  });
-  for (const NodeProto *node : ordered) {
-    const std::size_t position = index.graph.Position(*node);
-    boundary.node_indices.push_back(position);
-    for (const auto &output : node->output()) {
-      if (!output.value().empty())
-        produced.insert(output.value());
+  std::vector<const NodeData *> ordered;
+  ordered.reserve(region.size());
+  for (const NodeProto *node : region)
+    ordered.push_back(&index.data.at(node));
+  std::sort(ordered.begin(), ordered.end(),
+            [](const NodeData *a, const NodeData *b) { return a->position < b->position; });
+  // Scratch flags: 1 produced inside, 2 boundary input, 4 boundary output.
+  const uint32_t generation = index.NextGeneration();
+  auto flags = [&](uint32_t id) -> int64_t & {
+    if (index.scratch_generation[id] != generation) {
+      index.scratch_generation[id] = generation;
+      index.scratch[id] = 0;
+    }
+    return index.scratch[id];
+  };
+  for (const NodeData *entry : ordered) {
+    boundary.node_indices.push_back(entry->position);
+    for (uint32_t id : entry->output_ids) {
+      if (id != kNoValue)
+        flags(id) |= 1;
     }
   }
-  for (const NodeProto *node : ordered) {
-    for (const std::string &name : index.data.at(node).dependencies) {
-      if (produced.count(name) == 0) {
-        boundary.edges.push_back(name);
-        if (inputs.insert(name).second)
-          boundary.inputs.push_back(name);
-      }
-    }
-    for (const auto &output : node->output()) {
-      const std::string &name = output.value();
-      if (name.empty())
-        continue;
-      bool external = index.graph.IsOutput(name);
-      if (external)
-        boundary.edges.push_back(name);
-      const auto users = index.users.find(name);
-      if (users != index.users.end()) {
-        for (const NodeProto *user : users->second) {
-          if (inside.count(user) == 0) {
-            external = true;
-            boundary.edges.push_back(name);
-          }
+  for (const NodeData *entry : ordered) {
+    for (uint32_t id : entry->dependency_ids) {
+      int64_t &flag = flags(id);
+      if ((flag & 1) == 0) {
+        boundary.edges.push_back(id);
+        if ((flag & 2) == 0) {
+          flag |= 2;
+          boundary.input_ids.push_back(id);
+          boundary.inputs.push_back(index.names[id]);
         }
       }
-      if (external && outputs.insert(name).second)
-        boundary.outputs.push_back(name);
+    }
+    for (uint32_t id : entry->output_ids) {
+      if (id == kNoValue)
+        continue;
+      bool external = index.graph_outputs[id];
+      if (external)
+        boundary.edges.push_back(id);
+      for (const NodeProto *user : index.consumers[id]) {
+        if (inside.count(user) == 0) {
+          external = true;
+          boundary.edges.push_back(id);
+        }
+      }
+      int64_t &flag = flags(id);
+      if (external && (flag & 4) == 0) {
+        flag |= 4;
+        boundary.output_ids.push_back(id);
+        boundary.outputs.push_back(index.names[id]);
+      }
     }
   }
   return boundary;
@@ -864,7 +992,6 @@ bool KnownBoundaryType(Index &index, const std::string &name) {
 bool Schedule(Index &index, Plan &plan) {
   plan.first = std::numeric_limits<std::size_t>::max();
   plan.last = 0;
-  std::unordered_map<const NodeProto *, std::size_t> owner;
   std::vector<std::size_t> priority;
   for (std::size_t i = 0; i < plan.regions.size(); ++i) {
     const OperatorGroup &boundary = plan.groups[i];
@@ -873,51 +1000,46 @@ bool Schedule(Index &index, Plan &plan) {
     plan.first = std::min(plan.first, boundary.node_indices.front());
     plan.last = std::max(plan.last, boundary.node_indices.back());
     priority.push_back(boundary.node_indices.front());
-    for (const NodeProto *node : plan.regions[i])
-      owner.emplace(node, i);
   }
   if (plan.last - plan.first >= kMaxInterval)
     return false;
-  const auto &nodes = index.graph.Builder().Nodes();
-  std::vector<const NodeProto *> originals;
+  // Units are indexed by position relative to plan.first.
+  std::vector<std::size_t> owner(plan.last - plan.first + 1, kNoPosition);
+  for (std::size_t i = 0; i < plan.groups.size(); ++i) {
+    for (std::size_t position : plan.groups[i].node_indices)
+      owner[position - plan.first] = i;
+  }
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
-    if (owner.count(&nodes[position]) == 0) {
-      owner.emplace(&nodes[position], priority.size());
+    if (owner[position - plan.first] == kNoPosition) {
+      owner[position - plan.first] = priority.size();
       priority.push_back(position);
-      originals.push_back(&nodes[position]);
     }
   }
-  std::vector<std::set<std::size_t>> successors(priority.size());
+  // Duplicate edges are harmless: each one increments and later decrements the in-degree.
+  std::vector<std::vector<std::size_t>> successors(priority.size());
   std::vector<std::size_t> indegree(priority.size(), 0);
+  auto connect = [&](std::size_t from, std::size_t to) {
+    if (from != to) {
+      successors[from].push_back(to);
+      ++indegree[to];
+    }
+  };
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
-    const NodeProto *node = &nodes[position];
-    const std::size_t to = owner.at(node);
-    for (const std::string &name : index.data.at(node).dependencies) {
-      const NodeProto *producer = index.graph.NodeBefore(name);
-      if (producer == nullptr)
-        continue;
-      const auto from = owner.find(producer);
-      if (from == owner.end()) {
-        if (index.graph.Position(*producer) >= plan.first)
-          return false;
-      } else if (from->second != to && successors[from->second].insert(to).second) {
-        ++indegree[to];
-      }
+    const std::size_t to = owner[position - plan.first];
+    for (std::size_t producer : index.entries[position]->producer_positions) {
+      if (producer != kNoPosition && producer >= plan.first)
+        connect(owner[producer - plan.first], to);
     }
   }
   // Shared weight conversions may precede calls without reading or folding weights.
   // All other operations keep their execution order, including retained calls.
-  const NodeProto *previous = nullptr;
+  std::size_t previous = kNoPosition;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
-    const NodeProto *node = &nodes[position];
-    if (index.data.at(node).preparation)
+    if (index.entries[position]->preparation)
       continue;
-    if (previous != nullptr) {
-      const std::size_t from = owner.at(previous), to = owner.at(node);
-      if (from != to && successors[from].insert(to).second)
-        ++indegree[to];
-    }
-    previous = node;
+    if (previous != kNoPosition)
+      connect(owner[previous - plan.first], owner[position - plan.first]);
+    previous = position;
   }
   using Ready = std::pair<std::size_t, std::size_t>;
   std::priority_queue<Ready, std::vector<Ready>, std::greater<Ready>> ready;
@@ -929,18 +1051,31 @@ bool Schedule(Index &index, Plan &plan) {
   while (!ready.empty()) {
     const std::size_t unit = ready.top().second;
     ready.pop();
-    if (unit < plan.regions.size()) {
+    if (unit < plan.regions.size())
       plan.schedule.emplace_back(true, unit);
-    } else {
-      plan.schedule.emplace_back(false,
-                                 index.graph.Position(*originals[unit - plan.regions.size()]));
-    }
+    else
+      plan.schedule.emplace_back(false, priority[unit]);
     for (std::size_t next : successors[unit]) {
       if (--indegree[next] == 0)
         ready.emplace(priority[next], next);
     }
   }
   return plan.schedule.size() == priority.size();
+}
+
+bool CachedKnownBoundaryType(Index &index, uint32_t id) {
+  int8_t &known = index.boundary_types[id];
+  if (known < 0)
+    known = KnownBoundaryType(index, index.names[id]) ? 1 : 0;
+  return known != 0;
+}
+
+bool CachedValueBytes(Index &index, uint32_t id, uint64_t &bytes) {
+  int8_t &known = index.value_bytes_known[id];
+  if (known < 0)
+    known = ValueBytes(index.graph, index.names[id], index.value_bytes[id]) ? 1 : 0;
+  bytes = index.value_bytes[id];
+  return known != 0;
 }
 
 bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
@@ -953,24 +1088,23 @@ bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
   std::vector<std::size_t> positions;
   for (const Region &region : regions) {
     Boundary boundary = GetBoundary(index, region);
-    for (const std::string &name : boundary.inputs) {
-      if (!KnownBoundaryType(index, name))
+    for (uint32_t id : boundary.input_ids) {
+      if (!CachedKnownBoundaryType(index, id))
         return false;
     }
-    for (const std::string &name : boundary.outputs) {
-      if (!KnownBoundaryType(index, name))
+    for (uint32_t id : boundary.output_ids) {
+      if (!CachedKnownBoundaryType(index, id))
         return false;
     }
-    for (const std::string &name : boundary.edges) {
+    for (uint32_t id : boundary.edges) {
       ++crossings;
       uint64_t size = 0;
-      if (ValueBytes(index.graph, name, size))
+      if (CachedValueBytes(index, id, size))
         bytes = SaturatingAdd(bytes, size);
       else
         ++unknown;
     }
-    for (const NodeProto *node : region)
-      positions.push_back(index.graph.Position(*node));
+    positions.insert(positions.end(), boundary.node_indices.begin(), boundary.node_indices.end());
     plan.groups.push_back(std::move(static_cast<OperatorGroup &>(boundary)));
   }
   std::sort(positions.begin(), positions.end());
@@ -994,7 +1128,7 @@ std::vector<Extension> Extensions(Index &index, const Region &region) {
     const auto &dependencies = index.data.at(&node).dependencies;
     for (std::size_t port = 0; port < dependencies.size() && extensions.size() < kMaxExtensions;
          ++port) {
-      const NodeProto *before = index.graph.NodeBefore(dependencies[port]);
+      const NodeProto *before = index.data.at(&node).producers[port];
       if (before == nullptr || inside.count(before) != 0 || !index.data.at(before).usable)
         continue;
       for (int out = 0; out < before->output_size(); ++out) {
@@ -1003,19 +1137,19 @@ std::vector<Extension> Extensions(Index &index, const Region &region) {
       }
     }
     for (int out = 0; out < node.output_size() && extensions.size() < kMaxExtensions; ++out) {
-      const std::string &name = node.output()[out].value();
-      auto users = index.users.find(name);
-      if (users == index.users.end())
+      const uint32_t id = index.data.at(&node).output_ids[out];
+      if (id == kNoValue)
         continue;
-      for (const NodeProto *after : users->second) {
-        if (users->second.size() > kMaxExtensions || extensions.size() >= kMaxExtensions)
+      const auto &users = index.consumers[id];
+      for (const NodeProto *after : users) {
+        if (users.size() > kMaxExtensions || extensions.size() >= kMaxExtensions)
           break;
         if (inside.count(after) != 0 || !index.data.at(after).usable)
           continue;
-        const auto &inputs = index.data.at(after).dependencies;
+        const auto &inputs = index.data.at(after).dependency_ids;
         for (std::size_t port = 0; port < inputs.size() && extensions.size() < kMaxExtensions;
              ++port) {
-          if (inputs[port] == name)
+          if (inputs[port] == id)
             extensions.push_back({role, false, static_cast<std::size_t>(out), port, after});
         }
       }
@@ -1045,21 +1179,22 @@ bool Extend(Index &index, const Regions &regions, const Extension &extension, Re
     const NodeProto *matched = nullptr;
     const NodeProto *base = regions[occurrence][extension.role];
     if (extension.predecessor) {
-      const std::string &name = index.data.at(base).dependencies[extension.port];
-      matched = index.graph.NodeBefore(name);
+      const auto &entry = index.data.at(base);
+      const std::string &name = entry.dependencies[extension.port];
+      matched = entry.producers[extension.port];
       if (matched == nullptr || extension.other_port >= matched->output().size() ||
           matched->output()[extension.other_port].value() != name ||
           !CompatibleNode(index, *extension.node, *matched))
         return false;
     } else {
-      const std::string &name = base->output()[extension.port].value();
-      const auto users = index.users.find(name);
-      if (users == index.users.end() || users->second.size() > kMaxExtensions)
+      const uint32_t id = index.data.at(base).output_ids[extension.port];
+      if (id == kNoValue || index.consumers[id].empty() ||
+          index.consumers[id].size() > kMaxExtensions)
         return false;
-      for (const NodeProto *other : users->second) {
-        const auto &dependencies = index.data.at(other).dependencies;
+      for (const NodeProto *other : index.consumers[id]) {
+        const auto &dependencies = index.data.at(other).dependency_ids;
         if (extension.other_port >= dependencies.size() ||
-            dependencies[extension.other_port] != name ||
+            dependencies[extension.other_port] != id ||
             !CompatibleNode(index, *extension.node, *other))
           continue;
         // Ambiguous fanout is left on the boundary rather than guessed.

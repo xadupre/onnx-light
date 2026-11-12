@@ -650,6 +650,47 @@ Tensor ReconstructAwqWeights(const EncodedValueProto &value, size_t max_bytes = 
                              const StructTypeCatalogue &catalogue = {});
 
 /**
+ * Carries one GPTQModel bitsandbytes module at c1976918cfe3703fbcf6d1ce2440a82b26394375.
+ *
+ * NF4/FP4 use UINT8 weight [ceil(N*K/2),1], weight_absmax, weight_quant_map and
+ * the original UINT8 JSON weight_quant_state. Double quantization additionally
+ * supplies weight_nested_absmax and weight_nested_quant_map (one FLOAT/group-256
+ * level). INT8 uses INT8 weight [N,K] and FLOAT weight_scb [N].
+ * Uses GPTQModel's weight_* names, not Hugging Face's dotted QuantState names.
+ * Pins the QuantState serialization contract to bitsandbytes 0.50.2; CPU-repacked
+ * weights, other storage dtypes, recursive nested state and side tensors are rejected.
+ */
+struct BitsAndBytesWeights {
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports native codes, scale state and original JSON bytes without requantization. */
+EncodedValueProto ImportBitsAndBytesWeights(const BitsAndBytesWeights &weights,
+                                            size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated native state byte-for-byte, including unused final nibbles. */
+BitsAndBytesWeights ExportBitsAndBytesWeights(const EncodedValueProto &value,
+                                              size_t max_bytes = size_t{1} << 30,
+                                              const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks high-nibble-first UINT8 NF4/FP4 or signed INT8 codes into [N,K]. */
+Tensor UnpackBitsAndBytesCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                               const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs [N,K] with FP32 arithmetic, optionally rounded to FLOAT16/BFLOAT16.
+ * Decodes nested scales with separate FP32 multiply and offset addition; INT8 uses
+ * code*(weight_scb/127). Defaults to FLOAT, independently of saved source dtype.
+ * Bounds checkpoint payload and logical FLOAT output separately by max_bytes.
+ * Implements weight-format conversion, not quantization or accelerated inference.
+ */
+Tensor ReconstructBitsAndBytesWeights(const EncodedValueProto &value,
+                                      size_t max_bytes = size_t{1} << 30,
+                                      const StructTypeCatalogue &catalogue = {},
+                                      int32_t reconstruction_dtype = TensorProto::FLOAT);
+
+/**
  * Carries one GPTQModel EXL3 module, distinct from the portable kExl3 profile.
  *
  * Pins GPTQModel's canonical checkpoint contract: INT16 trellis [K/16,N/16,16*bits],

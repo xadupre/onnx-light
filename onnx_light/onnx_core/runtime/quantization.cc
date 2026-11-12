@@ -1952,6 +1952,18 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 }
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  if (encoded.has_struct_type() && catalogue.Resolve(encoded.struct_type()).name().value() ==
+                                       "onnx_light.bitsandbytes_weights.v1") {
+    const auto tensor = ReconstructBitsAndBytesWeights(encoded, size_t{1} << 30, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    if constexpr (std::endian::native == std::endian::little)
+      std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    else
+      for (size_t i = 0; i < values.size(); ++i)
+        values[i] = static_cast<float>(
+            PackedFloat({tensor.bytes(), tensor.size_bytes()}, TensorProto::FLOAT, i));
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
   if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == "onnx_light.gptq_weights.v1") {
     const auto tensor = ReconstructGptqWeights(encoded, size_t{1} << 30, catalogue);

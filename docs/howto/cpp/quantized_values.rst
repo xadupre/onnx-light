@@ -92,6 +92,32 @@ The adapters preserve original codes, scale bits, zero parameters and padding;
 they do not calibrate weights or implement GPU kernels. Generic dequantization
 also recognizes this schema.
 
+Native GPTQModel bitsandbytes weights
+------------------------------------
+
+``BitsAndBytesWeights`` in ``onnx_core/runtime/quantization.h`` accepts the
+module-local ``weight_*`` buffers, including original packed JSON for NF4/FP4,
+or ``weight`` and ``weight_scb`` for INT8. The
+:ref:`pinned native contract <l-bitsandbytes-checkpoints>` describes exact
+shapes, high-nibble-first packing, nested scale state, arithmetic and exclusions.
+This is separate from the unchanged portable ``kNf4`` profile and MX/NV FP4.
+
+.. code-block:: cpp
+
+    BitsAndBytesWeights checkpoint;
+    checkpoint.tensors = loaded_module_tensors;
+    auto encoded = ImportBitsAndBytesWeights(checkpoint);
+    auto restored = ExportBitsAndBytesWeights(encoded);  // exact bytes, including JSON
+    auto codes = UnpackBitsAndBytesCodes(encoded);       // UINT8 or INT8 [output,input]
+    auto weights = ReconstructBitsAndBytesWeights(encoded);  // FLOAT [output,input]
+
+Both payload and logical FLOAT output are separately bounded by ``max_bytes``
+(default 1 GiB). Export, unpack and reconstruction accept a ``StructTypeCatalogue``
+as their third argument. The fourth reconstruction argument selects FLOAT,
+FLOAT16 or BFLOAT16 output; saved source dtype remains checkpoint metadata.
+Generic ``DequantizeTensor`` and ``DequantizeTensorProto`` recognize this schema
+and return FLOAT. No quantization algorithm or accelerated inference is added.
+
 Native GPTQModel EXL3 weights
 -----------------------------
 

@@ -9,6 +9,7 @@ Q4_0, Q8_0, Q4_K, Q5_K and Q6_K use exact native GGML blocks, imported through
 onnx_light.onnx_core.gguf and decoded by the standard dequantization APIs.
 Q2_K, Q3_K, IQ4_NL, IQ1_S, TQ1_0 and TQ2_0 also use their native GGML layouts.
 Native GPTQModel EXL3 checkpoints use onnx_light.onnx_core.exl3, not the affine EXL3 profile.
+Native bitsandbytes checkpoints use onnx_light.onnx_core.bitsandbytes, not portable NF4.
 Codecs without a GGUF counterpart keep their existing representations.
 ORT_MATMULNBITS_INT2/INT4/INT8 produce ONNX Runtime operator inputs, not internal
 kernel prepacking. No profile performs calibration. See :doc:`/howto/python/quantized_values`.

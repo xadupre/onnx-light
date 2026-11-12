@@ -12,7 +12,9 @@
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -21,6 +23,7 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::AwqWeights;
+using core::runtime::BitsAndBytesWeights;
 using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
 using core::runtime::Exl3Weights;
@@ -275,9 +278,86 @@ Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total,
                         array.nbytes());
 }
 
+void ConvertNativeLittleEndianWords(Tensor &tensor) {
+  if constexpr (std::endian::native == std::endian::big) {
+    const size_t width = tensor.element_size();
+    if (width == 1)
+      return;
+    for (size_t offset = 0; offset < tensor.size_bytes(); offset += width)
+      std::reverse(tensor.mutable_bytes() + offset, tensor.mutable_bytes() + offset + width);
+  }
+}
+
+Tensor BitsAndBytesArray(const std::string &name, nb::handle value, size_t &total,
+                         size_t max_bytes) {
+  Tensor tensor = BorrowGptqArray(name, value, total, max_bytes);
+  if constexpr (std::endian::native == std::endian::big) {
+    if (tensor.element_size() > 1) {
+      tensor = tensor.ToOwned();
+      ConvertNativeLittleEndianWords(tensor);
+    }
+  }
+  return tensor;
+}
+
+nb::object ArrayFromLittleEndianTensor(Tensor tensor) {
+  ConvertNativeLittleEndianWords(tensor);
+  return ArrayFromTensor(tensor);
+}
+
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("bitsandbytes_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_bitsandbytes_weights",
+      [](const nb::dict &tensors, const std::string &revision, size_t max_bytes) {
+        EXT_ENFORCE_INVALID(revision == kExl3Revision,
+                            "bitsandbytes unsupported upstream revision.");
+        EXT_ENFORCE_INVALID(tensors.size() >= 2 && tensors.size() <= 6,
+                            "bitsandbytes requires a single module's weight and state tensors.");
+        BitsAndBytesWeights weights;
+        weights.upstream_revision = revision;
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "bitsandbytes tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "weight" || name == "weight_scb" || name == "weight_absmax" ||
+                                  name == "weight_quant_map" || name == "weight_nested_absmax" ||
+                                  name == "weight_nested_quant_map" || name == "weight_quant_state",
+                              "bitsandbytes unexpected side tensor.");
+          weights.tensors.emplace(name, BitsAndBytesArray(name, item.second, total, max_bytes));
+        }
+        return core::runtime::ImportBitsAndBytesWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_bitsandbytes_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportBitsAndBytesWeights(value, max_bytes);
+        nb::dict result;
+        for (auto &[name, tensor] : weights.tensors)
+          result[nb::str(name.c_str())] = ArrayFromLittleEndianTensor(std::move(tensor));
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_bitsandbytes_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromLittleEndianTensor(
+            core::runtime::UnpackBitsAndBytesCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_bitsandbytes_weights",
+      [](const EncodedValueProto &value, size_t max_bytes, int32_t reconstruction_dtype) {
+        return ArrayFromLittleEndianTensor(core::runtime::ReconstructBitsAndBytesWeights(
+            value, max_bytes, {}, reconstruction_dtype));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes,
+      nb::arg("reconstruction_dtype") = static_cast<int32_t>(TensorProto::FLOAT));
   runtime.attr("gptqmodel_upstream_revision") = kExl3Revision;
   runtime.def(
       "import_gptq_weights",

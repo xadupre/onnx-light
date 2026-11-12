@@ -1252,6 +1252,7 @@ if(ONNX_LIGHT_INSTALL)
   install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/onnx-data.pb.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/onnx_pb.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/string_utils.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib"
   )

@@ -116,12 +116,12 @@ jobs:
         run: |
           cmake --install build/cpp --config Release
 
-      - name: Compile installed visitor header
+      - name: Compile installed visitor and version converter headers
         shell: bash
         run: |
           check_dir="${RUNNER_TEMP}/visitor-header-check"
           mkdir -p "$check_dir"
-          printf '#include <onnx_lib/common/visitor.h>\n' > "$check_dir/visitor_header_check.cc"
+          printf '#include <onnx_lib/common/visitor.h>\n#include <onnx_lib/version_converter/convert.h>\n' > "$check_dir/visitor_header_check.cc"
           cat > "$check_dir/CMakeLists.txt" <<'EOF'
           cmake_minimum_required(VERSION 4.0)
           project(visitor_header_check LANGUAGES CXX)

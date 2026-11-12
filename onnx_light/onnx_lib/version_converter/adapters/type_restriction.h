@@ -42,13 +42,50 @@ private:
   std::vector<TensorProto_DataType> unallowed_types_;
 
   void isUnallowed(const Value *val) const {
-    ONNX_ASSERTM(val->elemType() != TensorProto_DataType_UNDEFINED,
-                 "DataType of Input or Output of operator '", name(),
+    if (val->uniqueName().empty()) {
+      return;
+    }
+
+    int32_t elem_type = val->elemType();
+    const TypeProto *type = val->type().get();
+    bool has_type = elem_type != TensorProto_DataType_UNDEFINED;
+    while (elem_type == TensorProto_DataType_UNDEFINED && type != nullptr) {
+      switch (type->value_case()) {
+      case TypeProto::kTensorType:
+        if (type->tensor_type().has_elem_type()) {
+          elem_type = type->tensor_type().elem_type();
+          has_type = true;
+        }
+        type = nullptr;
+        break;
+      case TypeProto::kSparseTensorType:
+        if (type->sparse_tensor_type().has_elem_type()) {
+          elem_type = type->sparse_tensor_type().elem_type();
+          has_type = true;
+        }
+        type = nullptr;
+        break;
+      case TypeProto::kSequenceType:
+        type = &type->sequence_type().elem_type();
+        break;
+      case TypeProto::kOptionalType:
+        type = &type->optional_type().elem_type();
+        break;
+      case TypeProto::kMapType:
+        type = &type->map_type().value_type();
+        break;
+      default:
+        has_type = type->value_case() != TypeProto::VALUE_NOT_SET;
+        type = nullptr;
+        break;
+      }
+    }
+    ONNX_ASSERTM(has_type, "DataType of Input or Output of operator '", name(),
                  "' must be known to convert to Opset Version ",
                  static_cast<int64_t>(target_version().version()), ".")
-    ONNX_ASSERTM(std::find(std::begin(unallowed_types_), std::end(unallowed_types_),
-                           val->elemType()) == std::end(unallowed_types_),
-                 "DataType (", val->elemType(), ") of Input or Output of operator '", name(),
+    ONNX_ASSERTM(std::find(std::begin(unallowed_types_), std::end(unallowed_types_), elem_type) ==
+                     std::end(unallowed_types_),
+                 "DataType (", elem_type, ") of Input or Output of operator '", name(),
                  "' is unallowed for Opset Version ",
                  static_cast<int64_t>(target_version().version()), ".")
   }

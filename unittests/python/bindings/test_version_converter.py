@@ -183,17 +183,12 @@ class TestVersionConverter(ExtTestCase):
         for name in ("then_branch", "else_branch"):
             graph = oh.make_graph(
                 [
-                    oh.make_node(
-                        "Constant",
-                        [],
-                        ["constant"],
-                        value=oh.make_tensor("value", onnxl.TensorProto.FLOAT, [], [1.0]),
-                    ),
-                    oh.make_node("Unsqueeze", ["constant"], ["Y"], axes=[0]),
+                    oh.make_node("Identity", ["X"], ["captured"]),
+                    oh.make_node("Unsqueeze", ["captured"], ["Y"], axes=[0]),
                 ],
                 name,
                 [],
-                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1])],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 2])],
             )
             branches.append(oh.make_attribute(name, graph))
         if_node = oh.make_node("If", ["condition"], ["Y"])
@@ -204,7 +199,7 @@ class TestVersionConverter(ExtTestCase):
         function = oh.make_function(
             "custom",
             "Local",
-            ["condition"],
+            ["condition", "X"],
             ["Y"],
             [if_node],
             [oh.make_operatorsetid("", 12)],
@@ -212,10 +207,13 @@ class TestVersionConverter(ExtTestCase):
             attribute_protos=branches,
         )
         graph = oh.make_graph(
-            [oh.make_node("Local", ["condition"], ["y"], domain="custom")],
+            [oh.make_node("Local", ["condition", "x"], ["y"], domain="custom")],
             "local_function",
-            [oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, [])],
-            [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
+            [
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [2]),
+            ],
+            [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1, 2])],
         )
         model = oh.make_model(
             graph,
@@ -242,6 +240,111 @@ class TestVersionConverter(ExtTestCase):
                         for output in node.output
                     ],
                 )
+
+    def test_local_function_call_graph_attributes_are_converted(self):
+        branches = []
+        for name in ("then_branch", "else_branch"):
+            branches.append(
+                oh.make_attribute(
+                    name,
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                "Constant",
+                                [],
+                                ["constant"],
+                                value=oh.make_tensor("value", onnxl.TensorProto.FLOAT, [], [1.0]),
+                            ),
+                            oh.make_node("Unsqueeze", ["constant"], ["Y"], axes=[0]),
+                        ],
+                        name,
+                        [],
+                        [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1])],
+                    ),
+                )
+            )
+        if_node = oh.make_node("If", ["condition"], ["Y"])
+        for name in ("then_branch", "else_branch"):
+            if_node.attribute.append(
+                oh.make_attribute_ref(name, onnxl.AttributeProto.GRAPH, ref_attr_name=name)
+            )
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["condition", "X"],
+            ["Y"],
+            [if_node],
+            [oh.make_operatorsetid("", 12)],
+            attributes=["then_branch", "else_branch"],
+        )
+        local_call = oh.make_node("Local", ["condition", "x"], ["y"], domain="custom")
+        local_call.attribute.extend(branches)
+        graph = oh.make_graph(
+            [local_call],
+            "local_function",
+            [
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [2]),
+            ],
+            [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 12), oh.make_operatorsetid("custom", 1)],
+            functions=[function],
+        )
+        checker.check_model(model)
+        converted = version_converter.convert_version(model, 13)
+        checker.check_model(converted)
+        for attribute in converted.graph.node[0].attribute:
+            with self.subTest(attribute=attribute.name):
+                unsqueeze = attribute.g.node[-1]
+                self.assertEqual(unsqueeze.op_type, "Unsqueeze")
+                self.assertEqual(len(unsqueeze.input), 2)
+                self.assertNotIn("axes", [item.name for item in unsqueeze.attribute])
+
+    def test_type_restriction_accepts_omitted_optional_input_and_sequence_type(self):
+        clip = oh.make_graph(
+            [oh.make_node("Clip", ["X", "", "max"], ["Y"])],
+            "clip",
+            [
+                oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("max", onnxl.TensorProto.FLOAT, []),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        converted_clip = self._converted(clip, oh.make_operatorsetid("", 12), 11)
+        self.assertEqual(converted_clip.graph.node[0].input[1], "")
+
+        tensor_type = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2])
+        for type_name, type_proto in (
+            ("sequence", oh.make_sequence_type_proto(tensor_type)),
+            ("optional", oh.make_optional_type_proto(tensor_type)),
+        ):
+            with self.subTest(type_name=type_name):
+                identity = oh.make_graph(
+                    [oh.make_node("Identity", ["X"], ["Y"])],
+                    "identity",
+                    [oh.make_value_info("X", type_proto)],
+                    [oh.make_value_info("Y", type_proto)],
+                )
+                converted_identity = self._converted(identity, oh.make_operatorsetid("", 19), 18)
+                self.assertEqual(converted_identity.graph.node[0].op_type, "Identity")
+
+        unsupported_type = oh.make_sequence_type_proto(
+            oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT8E4M3FN, [2])
+        )
+        unsupported = oh.make_graph(
+            [oh.make_node("Identity", ["X"], ["Y"])],
+            "identity",
+            [oh.make_value_info("X", unsupported_type)],
+            [oh.make_value_info("Y", unsupported_type)],
+        )
+        unsupported_model = oh.make_model(
+            unsupported, opset_imports=[oh.make_operatorsetid("", 19)]
+        )
+        with self.assertRaisesRegex(RuntimeError, "is unallowed"):
+            version_converter.convert_version(unsupported_model, 18)
 
     def test_local_function_unresolved_adapter_attribute(self):
         node = oh.make_node("Unsqueeze", ["X"], ["Y"])

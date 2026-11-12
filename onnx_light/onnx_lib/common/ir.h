@@ -642,6 +642,8 @@ public:
 
   /** @brief Returns a mutable reference to the optional TypeProto for this value. */
   std::unique_ptr<TypeProto> &type() { return type_; }
+  /** @brief Returns a const reference to the optional TypeProto for this value. */
+  const std::unique_ptr<TypeProto> &type() const { return type_; }
 };
 
 /**

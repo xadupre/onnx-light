@@ -141,10 +141,17 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
           }
           it = graph_node_list_iterator(cur_op, kNextDirection);
         }
-        // Recursively convert any subgraph attributes
-        for (const auto &attr : cur_op->attributeNames()) {
-          if (cur_op->kindOf(attr) == AttributeKind::g) {
-            convert_graph(cur_op->g(attr), curr_id, next_id);
+      }
+      // Recursively convert any subgraph attributes, including attributes on
+      // local-function calls and other non-default-domain nodes.
+      OpSetID curr_id(curr_version);
+      OpSetID next_id(curr_version + step);
+      for (const auto &attr : cur_op->attributeNames()) {
+        if (cur_op->kindOf(attr) == AttributeKind::g) {
+          convert_graph(cur_op->g(attr), curr_id, next_id);
+        } else if (cur_op->kindOf(attr) == AttributeKind::gs) {
+          for (const auto &subgraph : cur_op->gs(attr)) {
+            convert_graph(subgraph, curr_id, next_id);
           }
         }
       }
@@ -202,27 +209,50 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
       graph.add_output()->set_name(name);
     graph.node().extend(function.node());
     graph.value_info().extend(function.value_info());
+    constexpr char graph_defaults_domain[] = "onnx_light_internal";
+    constexpr char graph_defaults_op[] = "FunctionGraphAttributeDefaults";
+    bool has_graph_defaults = false;
+    NodeProto *graph_defaults_carrier = nullptr;
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g() || !attribute.graphs().empty()) {
+        if (graph_defaults_carrier == nullptr) {
+          graph_defaults_carrier = graph.add_node();
+          graph_defaults_carrier->set_op_type(graph_defaults_op);
+          graph_defaults_carrier->set_domain(graph_defaults_domain);
+        }
+        has_graph_defaults = true;
+        graph_defaults_carrier->add_attribute()->CopyFrom(attribute);
+      }
+    }
     std::shared_ptr<Graph> function_graph(ImportModelProto(function_model));
     convert_graph(function_graph, OpSetID(default_opset->version()), target_version);
     ModelProto converted_function;
     ExportModelProto(&converted_function, function_graph);
-
-    auto convert_default_graph = [&](GraphProto *graph_proto) {
-      ModelProto default_model;
-      default_model.set_ir_version(mp_in.ir_version());
-      default_model.opset_import().extend(imports);
-      default_model.mutable_graph()->CopyFrom(*graph_proto);
-      std::shared_ptr<Graph> default_graph(ImportModelProto(default_model));
-      convert_graph(default_graph, OpSetID(default_opset->version()), target_version);
-      ModelProto converted_default;
-      ExportModelProto(&converted_default, default_graph);
-      graph_proto->CopyFrom(converted_default.graph());
-    };
-    for (auto &attribute : *function.mutable_attribute_proto()) {
-      if (attribute.has_g())
-        convert_default_graph(attribute.mutable_g());
-      for (auto &attribute_graph : *attribute.mutable_graphs())
-        convert_default_graph(&attribute_graph);
+    if (has_graph_defaults) {
+      const auto carrier = std::find_if(
+          converted_function.graph().node().begin(), converted_function.graph().node().end(),
+          [&](const NodeProto &node) {
+            return node.domain() == graph_defaults_domain && node.op_type() == graph_defaults_op;
+          });
+      ONNX_ASSERTM(carrier != converted_function.graph().node().end(),
+                   "Function graph attribute defaults were lost during conversion.");
+      for (const auto &attribute : carrier->attribute()) {
+        auto original = std::find_if(
+            function.mutable_attribute_proto()->begin(), function.mutable_attribute_proto()->end(),
+            [&](const AttributeProto &candidate) { return candidate.name() == attribute.name(); });
+        ONNX_ASSERTM(original != function.mutable_attribute_proto()->end(),
+                     "Function graph attribute default '", attribute.name(),
+                     "' was lost during conversion.");
+        if (attribute.has_g()) {
+          original->mutable_g()->CopyFrom(attribute.g());
+        }
+        if (!attribute.graphs().empty()) {
+          original->clear_graphs();
+          for (const auto &graph : attribute.graphs()) {
+            original->add_graphs()->CopyFrom(graph);
+          }
+        }
+      }
     }
 
     std::unordered_map<std::string, ValueInfoProto> previous_value_info;
@@ -268,7 +298,13 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
       value->set_type(AttributeProto::TENSOR);
       value->mutable_t()->CopyFrom(initializer);
     }
-    function.node().extend(converted_function.graph().node());
+    for (const auto &node : converted_function.graph().node()) {
+      if (has_graph_defaults && node.domain() == graph_defaults_domain &&
+          node.op_type() == graph_defaults_op) {
+        continue;
+      }
+      function.add_node()->CopyFrom(node);
+    }
     function.opset_import() = std::move(converted_function.opset_import());
   }
   return mp_out;

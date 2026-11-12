@@ -3093,20 +3093,6 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
       Product(std::visit([](const auto &values) { return values.size(); }, decoded.values), width),
       allocator);
   result.name = value.name().value();
-  if constexpr (std::endian::native == std::endian::big) {
-    if (catalogue.Resolve(value.struct_type()).name().value() ==
-        "onnx_light.bitsandbytes_weights.v1") {
-      ByteWriter payload({result.mutable_bytes(), result.size_bytes()});
-      std::visit(
-          [&](const auto &values) {
-            for (const auto number : values)
-              PutFloat(payload, number, type);
-          },
-          decoded.values);
-      payload.Finish();
-      return result;
-    }
-  }
   std::visit(
       [&](const auto &values) {
         for (size_t i = 0; i < values.size(); ++i)

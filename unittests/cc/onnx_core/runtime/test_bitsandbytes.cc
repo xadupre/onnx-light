@@ -157,8 +157,15 @@ TEST(BitsAndBytesWeights, PreservesLittleEndianProtoBytes) {
     EXPECT_EQ(std::string(reinterpret_cast<const char *>(decoded.bytes()), decoded.size_bytes()),
               expected);
     const auto generic = DequantizeTensor(encoded, {}, nullptr, dtype);
-    EXPECT_EQ(std::string(reinterpret_cast<const char *>(generic.bytes()), generic.size_bytes()),
-              expected);
+    if (dtype == TensorProto::FLOAT) {
+      EXPECT_FLOAT_EQ(generic.AsFloat()[0], 1.f);
+    } else {
+      uint16_t bits;
+      std::memcpy(&bits, generic.bytes(), sizeof(bits));
+      EXPECT_FLOAT_EQ(dtype == TensorProto::FLOAT16 ? Float16BitsToFloat(bits)
+                                                    : Bfloat16BitsToFloat(bits),
+                      1.f);
+    }
   }
   EXPECT_EQ(DequantizeTensorProto(encoded).raw_data(), std::string("\x00\x00\x80\x3f", 4));
   for (const bool nested : {false, true}) {

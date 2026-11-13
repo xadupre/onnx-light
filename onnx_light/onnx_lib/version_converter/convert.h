@@ -757,8 +757,6 @@ public:
     registerAdapter(std::make_unique<CompatibleAdapter>("Squeeze", OpSetID(20), OpSetID(21)));
     registerAdapter(std::make_unique<CompatibleAdapter>("Transpose", OpSetID(20), OpSetID(21)));
     registerAdapter(std::make_unique<CompatibleAdapter>("Unsqueeze", OpSetID(20), OpSetID(21)));
-    registerAdapter(
-        std::make_unique<CompatibleAdapter>("GroupNormalization", OpSetID(20), OpSetID(21)));
 
     /******** 21 -> 20 ********/
     const std::vector<TensorProto_DataType> q_dqmm_20_unallowed_types = {

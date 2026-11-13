@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/gguf.h"
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -1953,6 +1954,18 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   if (encoded.has_struct_type() && catalogue.Resolve(encoded.struct_type()).name().value() ==
+                                       "onnx_light.gptqmodel_fp8_weights.v1") {
+    const auto tensor = ReconstructGptqModelFp8Weights(encoded, size_t{1} << 30, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    if constexpr (std::endian::native == std::endian::little)
+      std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    else
+      for (size_t i = 0; i < values.size(); ++i)
+        values[i] = static_cast<float>(
+            PackedFloat({tensor.bytes(), tensor.size_bytes()}, TensorProto::FLOAT, i));
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() && catalogue.Resolve(encoded.struct_type()).name().value() ==
                                        "onnx_light.bitsandbytes_weights.v1") {
     const auto tensor = ReconstructBitsAndBytesWeights(encoded, size_t{1} << 30, catalogue);
     std::vector<float> values(tensor.size_bytes() / sizeof(float));
@@ -3110,8 +3123,12 @@ Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogu
   result.name = value.name().value();
   std::visit(
       [&](const auto &values) {
-        for (size_t i = 0; i < values.size(); ++i)
-          WriteFloat(result.mutable_bytes() + i * width, type, values[i]);
+        for (size_t i = 0; i < values.size(); ++i) {
+          auto *output = result.mutable_bytes() + i * width;
+          WriteFloat(output, type, values[i]);
+          if constexpr (std::endian::native == std::endian::big)
+            std::reverse(output, output + width);
+        }
       },
       decoded.values);
   return result;

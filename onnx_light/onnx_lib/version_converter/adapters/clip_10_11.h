@@ -19,22 +19,30 @@ public:
   void adapt_clip_10_11(const std::shared_ptr<Graph> &graph, Node *node) const {
     bool has_min = node->hasAttribute(kmin);
     bool has_max = node->hasAttribute(kmax);
+    const bool has_bounds = has_min || has_max;
+    ONNX_ASSERTM(!has_bounds || !node->inputs().empty(),
+                 "Clip input type must be known to convert min/max attributes.")
+    const int32_t input_type =
+        node->inputs().empty() ? TensorProto_DataType_UNDEFINED : node->inputs()[0]->elemType();
+    ONNX_ASSERTM(!has_bounds || input_type != TensorProto_DataType_UNDEFINED,
+                 "Clip input type must be known to convert min/max attributes.")
 
     // Turn min/max attributes into tensor (if present) and add value as input
     if (has_min) {
-      attrToInput(graph, node, node->f(kmin));
+      attrToInput(graph, node, input_type, node->f(kmin));
       node->removeAttribute(kmin);
     }
     if (has_max) {
       if (!has_min) {
-        attrToInput(graph, node, std::numeric_limits<float>::lowest());
+        attrToInput(graph, node, input_type, std::numeric_limits<float>::lowest());
       }
-      attrToInput(graph, node, node->f(kmax));
+      attrToInput(graph, node, input_type, node->f(kmax));
       node->removeAttribute(kmax);
     }
   }
 
-  void attrToInput(const std::shared_ptr<Graph> &graph, Node *node, float val) const {
+  void attrToInput(const std::shared_ptr<Graph> &graph, Node *node, int32_t input_type,
+                   float val) const {
     Tensor t;
     t.elem_type() = TensorProto_DataType_FLOAT;
     auto &data = t.floats();
@@ -42,7 +50,17 @@ public:
     Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);
-    node->addInput(constant->output());
+    constant->output()->setElemType(TensorProto_DataType_FLOAT);
+    Value *value = constant->output();
+    if (input_type != TensorProto_DataType_FLOAT) {
+      Node *cast = graph->create(kCast);
+      cast->i_(kto, input_type);
+      cast->addInput(value);
+      cast->insertBefore(node);
+      cast->output()->setElemType(input_type);
+      value = cast->output();
+    }
+    node->addInput(value);
   }
 
   Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {

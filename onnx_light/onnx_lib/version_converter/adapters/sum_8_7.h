@@ -18,13 +18,27 @@ public:
   explicit Sum_8_7() : Adapter("Sum", OpSetID(8), OpSetID(7)) {}
 
   void adapt_sum_8_7(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
-    // Throw an exception if any broadcasting occurs
     const ArrayRef<Value *> &inputs = node->inputs();
-    // Determine if inputs are of different sizes
+    ONNX_ASSERTM(!inputs.empty(), "Sum requires at least one input.")
+    for (const Value *input : inputs) {
+      ONNX_ASSERTM(!input->uniqueName().empty(), "Sum inputs must be present.")
+    }
     for (size_t i = 1; i < inputs.size(); i++) {
-      std::vector<Dimension> A_sizes = inputs[i - 1]->sizes();
-      std::vector<Dimension> B_sizes = inputs[i]->sizes();
-      assert_numpy_multibroadcastable(A_sizes, B_sizes);
+      if (inputs[i - 1] == inputs[i])
+        continue;
+      ONNX_ASSERTM(inputs[i - 1]->has_sizes() && inputs[i]->has_sizes(),
+                   "Sum downgrade requires known input shapes.")
+      const auto &first = inputs[i - 1]->sizes();
+      const auto &second = inputs[i]->sizes();
+      ONNX_ASSERTM(first.size() == second.size(), "Sum downgrade requires equal input shapes.")
+      for (size_t dim = 0; dim < first.size(); ++dim) {
+        const auto &a = first[dim];
+        const auto &b = second[dim];
+        const bool same_integer = a.is_int && b.is_int && a.dim == b.dim;
+        const bool same_symbol = !a.is_unknown && !b.is_unknown && !a.is_int && !b.is_int &&
+                                 !a.param.empty() && a.param == b.param;
+        ONNX_ASSERTM(same_integer || same_symbol, "Sum downgrade requires equal input shapes.")
+      }
     }
   }
 

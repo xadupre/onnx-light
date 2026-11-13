@@ -11,6 +11,7 @@ onnx_light.onnx_core
     exl3
     gguf
     gptq
+    gptqmodel_fp8
     expressions
     gradient
     graph_builder

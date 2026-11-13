@@ -128,6 +128,10 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
 static void convertAttribute(const AttributeProto &ap, Node &n,
                              const int64_t ir_version = IR_VERSION) {
   Symbol sym = Symbol(ap.name());
+  if (ap.has_ref_attr_name()) {
+    n.ref_(sym, ap);
+    return;
+  }
   switch (ap.type()) {
   case AttributeProto::AttributeType::FLOAT:
     n.f_(sym, ap.f());
@@ -634,6 +638,9 @@ static void addAttribute(NodeProto &n_p, const Node &n, Symbol name) {
       tp->CopyFrom(v);
     }
   } break;
+  case AttributeKind::ref:
+    attr->CopyFrom(n.ref(name));
+    break;
   }
 }
 
@@ -718,7 +725,8 @@ static void encodeGraph(GraphProto &p_g, const std::shared_ptr<Graph> &g) {
       if (graph_outputs.find(output) != graph_outputs.end()) {
         continue;
       }
-      if (output->elemType() == TensorProto::DataType::UNDEFINED && output->sizes().empty()) {
+      if (output->elemType() == TensorProto::DataType::UNDEFINED && !output->has_sizes() &&
+          (output->type() == nullptr || !output->type()->has_type()) && !output->has_doc_string()) {
         continue;
       }
       ValueInfoProto *v = p_g.add_value_info();
@@ -804,6 +812,7 @@ ModelProto PrepareOutput(const ModelProto &mp_in) {
     }
   }
 
+  mp_out.functions().extend(mp_in.functions());
   return mp_out;
 }
 

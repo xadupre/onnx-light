@@ -89,6 +89,7 @@ TEST(PartitionGroupPattern, FusesExtractedFunctionInSamePassAndPreservesReplayAn
       builder.MakeNode("Add", {"mm", "bias"}, {"y"});
       builder.MakeOutput("y");
       const auto original = builder.ToModel();
+      const auto original_graph = builder.BuildGraph();
       const auto original_hash = builder.RewritingHash();
       std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
       if (all_patterns) {
@@ -121,12 +122,12 @@ TEST(PartitionGroupPattern, FusesExtractedFunctionInSamePassAndPreservesReplayAn
       VerifyModel(builder.ToModel());
 
       GraphBuilder source(original, SchemaLookup());
-      const auto replayed = source.ApplyRewritings(plan);
+      auto replayed = source.ApplyRewritings(plan);
       EXPECT_EQ(replayed.RewritingHash(), builder.RewritingHash());
       VerifyModel(replayed.ToModel());
       const auto undone = builder.UndoRewritings(plan);
       EXPECT_EQ(undone.RewritingHash(), original_hash);
-      EXPECT_TRUE(undone.BuildGraph().Equals(original.graph()));
+      EXPECT_TRUE(undone.BuildGraph().Equals(original_graph));
       EXPECT_TRUE(undone.LocalFunctions().empty());
       const auto repeated = graph.Optimize(-1, &report);
       EXPECT_TRUE(repeated.rewrites().empty());

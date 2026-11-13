@@ -6,13 +6,16 @@ Deferred weights
 ----------------
 
 ``load(path, defer_weights=True)`` reads binary ONNX structure without materializing
-raw tensor payloads. Unlike ``skip_raw_data``, it retains a non-serialized immutable
-source range for every inline ``raw_data`` field and ordinary external tensor.
+large raw tensor payloads. Unlike ``skip_raw_data``, it retains a non-serialized
+immutable source range for every inline ``raw_data`` field and ordinary external tensor.
 External locations remain relative to the original model directory, including
-when several tensors share one weights file. The raw-data threshold is ignored.
+when several tensors share one weights file. Non-empty payloads smaller than
+``raw_data_threshold`` (1024 bytes in Python, 64 bytes by default in C++) are
+loaded during parsing while keeping their source, so they can still be unloaded;
+pass ``raw_data_threshold=0`` to defer every payload.
 The main model file is memory-mapped through its securely pinned descriptor:
-metadata decoding does not issue a system call per varint byte. Parsing accesses
-only metadata and skips raw payload ranges without copying or explicitly reading
+metadata decoding does not issue a system call per varint byte. Parsing reads small
+payloads but skips large raw payload ranges without copying or explicitly reading
 them. Mapping reserves virtual address space, not a resident copy of the weights;
 the operating system may still fetch neighboring bytes at page granularity.
 
@@ -64,6 +67,14 @@ Models constructed in memory by copying deferred tensors into these unsupported
 extensions are rejected during weight traversal and before export destination I/O,
 even when those tensors are loaded.
 Existing eager parsing and ``skip_raw_data`` behavior are unchanged.
+
+``GraphBuilder`` and ``GraphGraph`` accept deferred models directly. Loaded small
+constants behave as in an eager model, so value-dependent rewrites still apply.
+Large unloaded weights have unknown numeric bounds, and value-dependent patterns
+may not apply. Explicitly load such weights before optimization when their
+values are required. Constant folding loads a temporary copy of a deferred
+initializer with ``LoadDeferredWeight`` only when it evaluates a node consuming
+it. The original initializer and other weights remain unloaded.
 
 Keep all backing files immutable and available until reloading is no longer
 needed. File identity, size and modification metadata are checked on reload;

@@ -44,7 +44,7 @@ class TestDeferredWeights(unittest.TestCase):
             with self.subTest(external=external), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "model.onnx"
                 save(self.make_model(), path, save_as_external_data=external, size_threshold=0)
-                model = load(path, defer_weights=True)
+                model = load(path, defer_weights=True, raw_data_threshold=0)
                 self.assertCountEqual(model.weight_names(), ["A", "B", "empty"])
                 self.assertTrue(model.has_deferred_weights())
                 self.assertFalse(model.is_weight_loaded("A"))
@@ -97,7 +97,7 @@ class TestDeferredWeights(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.onnx"
             save(self.make_model(), path)
-            model = load(path, defer_weights=True, file_load_mode="MMAP")
+            model = load(path, defer_weights=True, file_load_mode="MMAP", raw_data_threshold=0)
             self.assertTrue(model.load_weight("B"))
             options = ParseOptions()
             options.defer_weights = True
@@ -161,7 +161,7 @@ class TestDeferredWeights(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.onnx"
             save(self.make_model(), path)
-            model = load(path, defer_weights=True)
+            model = load(path, defer_weights=True, raw_data_threshold=0)
             path.write_bytes(path.read_bytes() + b"x")
             for name in ("A", "empty"):
                 with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "changed"):
@@ -170,6 +170,35 @@ class TestDeferredWeights(unittest.TestCase):
             path.unlink()
             with self.assertRaises(RuntimeError):
                 model.load_weight("B")
+
+    def test_threshold_applies_to_inline_and_external_weights(self):
+        for external in (False, True):
+            for mode in ("IFSTREAM", "MMAP"):
+                with (
+                    self.subTest(external=external, mode=mode),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    path = Path(directory) / "model.onnx"
+                    save(
+                        self.make_model(), path, save_as_external_data=external, size_threshold=0
+                    )
+                    for threshold, loaded in ((0, False), (16, False), (17, True)):
+                        with self.subTest(threshold=threshold):
+                            model = load(
+                                path,
+                                defer_weights=True,
+                                raw_data_threshold=threshold,
+                                file_load_mode=mode,
+                            )
+                            self.assertFalse(model.is_weight_loaded("A"))
+                            self.assertEqual(model.is_weight_loaded("B"), loaded)
+                            self.assertFalse(model.is_weight_loaded("empty"))
+                            if loaded:
+                                self.assertTrue(model.unload_weight("B"))
+                                self.assertTrue(model.load_weight("B"))
+                                np.testing.assert_array_equal(
+                                    onh.to_array(model.graph.initializer[1]), [7, 8]
+                                )
 
     def test_standalone_tensor_exports_do_not_overwrite_sources(self):
         for external in (False, True):

@@ -165,7 +165,7 @@ class TestIOModel(ExtTestCase):
             onnxl.save(original, path)
             before = path.read_bytes()
             model = RecordingModelProto()
-            model.CopyFrom(onnxl.load(path, defer_weights=True))
+            model.CopyFrom(onnxl.load(path, defer_weights=True, raw_data_threshold=0))
             with self.assertRaisesRegex(RuntimeError, "unloaded deferred"):
                 onnxl.save(model, path)
             model.load_weights()

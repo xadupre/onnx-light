@@ -42,8 +42,8 @@ namespace {
 
 constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
 
-bool HasUnloadedExternalData(const TensorProto &tensor) {
-  return !tensor.has_raw_data() && (tensor.has_external_data() ||
+bool HasUnloadedTensorData(const TensorProto &tensor) {
+  return !tensor.has_raw_data() && (tensor.HasDeferredWeight() || tensor.has_external_data() ||
                                     tensor.data_location() == TensorProto::DataLocation::EXTERNAL);
 }
 
@@ -3524,15 +3524,15 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
            excluded_ops.count({std::string(), std::string()}) != 0;
   };
 
-  // Constant tensors already materialized: the graph initializers plus every
-  // output folded so far in this pass. The initializer pointers stay valid
+  // Available constants: the graph initializers plus every output folded so
+  // far in this pass. The initializer pointers stay valid
   // because ``initializers_`` is only appended to at the very end; the folded
   // outputs live in ``folded``, whose element addresses are stable across
   // inserts because ``std::unordered_map`` never invalidates pointers or
   // references to existing elements (only iterators) on rehash.
   std::unordered_map<std::string, const TensorProto *> const_tensors;
   for (const TensorProto &initializer : initializers_) {
-    if (!HasUnloadedExternalData(initializer)) {
+    if (initializer.HasDeferredWeight() || !HasUnloadedTensorData(initializer)) {
       const_tensors.emplace(initializer.name().value(), &initializer);
     }
   }
@@ -3575,13 +3575,12 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     }
     if (candidate) {
       const auto has_unloaded_sparse_data = [](const SparseTensorProto &tensor) {
-        return HasUnloadedExternalData(tensor.values()) ||
-               HasUnloadedExternalData(tensor.indices());
+        return HasUnloadedTensorData(tensor.values()) || HasUnloadedTensorData(tensor.indices());
       };
       for (const AttributeProto &attribute : node.attribute()) {
-        if ((attribute.has_t() && HasUnloadedExternalData(attribute.t())) ||
+        if ((attribute.has_t() && HasUnloadedTensorData(attribute.t())) ||
             std::any_of(attribute.tensors().begin(), attribute.tensors().end(),
-                        HasUnloadedExternalData) ||
+                        HasUnloadedTensorData) ||
             (attribute.has_sparse_tensor() &&
              has_unloaded_sparse_data(attribute.sparse_tensor())) ||
             std::any_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
@@ -3591,9 +3590,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
         }
       }
     }
-    // Every non-empty input must already be available as a materialized
-    // constant; otherwise the data needed to evaluate the node is missing (for
-    // example a predecessor that was left unfolded).
+    // Every non-empty input must be available as a constant or a deferred
+    // source; an unfolded predecessor, for example, leaves it unavailable.
     if (candidate) {
       for (std::size_t i = 0; i < node.input().size(); ++i) {
         const std::string input(node.input(static_cast<std::size_t>(i)));
@@ -3653,6 +3651,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 
     // Evaluate the node in isolation: seed its inputs from the materialized
     // constants and run the registered kernel.
+    std::unordered_map<std::string, TensorProto> loaded_deferred_tensors;
     const int opset = OpsetVersion(domain);
     core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
                                          opset > 0 ? static_cast<int64_t>(opset) : 0)),
@@ -3666,6 +3665,16 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
         continue;
       }
       const auto *source = const_tensors.at(input);
+      if (source->HasDeferredWeight() && !source->has_raw_data()) {
+        auto loaded = loaded_deferred_tensors.find(input);
+        if (loaded == loaded_deferred_tensors.end()) {
+          // Keep the builder's initializer and its derived metadata unchanged.
+          TensorProto tensor(*source);
+          tensor.LoadDeferredWeight();
+          loaded = loaded_deferred_tensors.emplace(input, std::move(tensor)).first;
+        }
+        source = &loaded->second;
+      }
       auto tensor = core::runtime::TensorFromProto(*source);
       if (forwarding_identity && source->is_raw_data() &&
           tensor.data_type != TensorProto::DataType::STRING) {

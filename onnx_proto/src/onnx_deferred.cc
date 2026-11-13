@@ -176,6 +176,11 @@ void FinishDeferredWeight(TensorProto &tensor, BinaryStream &stream, const Parse
                           tensor.deferred_weight_source->length <= options.max_tensor_size_bytes,
                       "Deferred weight exceeds max_tensor_size_bytes.");
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
+    // Small external payloads stay loaded, like small inline payloads.
+    if (tensor.data_location() == TensorProto::EXTERNAL &&
+        tensor.deferred_weight_source->length > 0 &&
+        tensor.deferred_weight_source->length < options.raw_data_threshold)
+      tensor.LoadDeferredWeight();
   }
 }
 

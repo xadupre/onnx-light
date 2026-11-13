@@ -79,6 +79,7 @@ TEST_F(DeferredInitializerLifetime, PrepareRetainsStorageAcrossUnloadAndReload) 
     utils::FileStream stream(path);
     ParseOptions options;
     options.defer_weights = true;
+    options.raw_data_threshold = 0;
     ASSERT_TRUE(model.ParseFromStream(stream, options));
     core::runtime::RuntimeContext context(
         core::runtime::KernelContext(core::runtime::DefaultOpset(18)));

@@ -764,10 +764,22 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       stream.CanRead(length, "Deferred raw_data exceeds stream bounds");
       EXT_ENFORCE(length <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
                   "Deferred raw_data length overflows.");
+      EXT_ENFORCE(length <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
+                  "Deferred weight exceeds the addressable allocation size.");
       CheckAllocationLimit(length, options, "raw_data", "defer_weights");
       utils::detail::DeferInlineWeight(*this, stream, stream.tell(), static_cast<int64_t>(length),
                                        options);
-      stream.skip_bytes(static_cast<int64_t>(length));
+      if (length > 0 && static_cast<int64_t>(length) < options.raw_data_threshold) {
+        onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
+        if (options.alignment > 1)
+          raw_data_.resize_aligned(static_cast<size_t>(length),
+                                   static_cast<size_t>(options.alignment));
+        else
+          raw_data_.resize(static_cast<size_t>(length));
+        stream.read_bytes(static_cast<offset_t>(length), raw_data_.data());
+      } else {
+        stream.skip_bytes(static_cast<int64_t>(length));
+      }
     } else {
       read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
                                    "raw_data", options);

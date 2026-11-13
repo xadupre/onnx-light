@@ -23,7 +23,7 @@ onnx-light = "onnx_light.__main__:main"
 style = [
     "black==26.10.1",
     "clang-format==23.1.5",
-    "ruff==0.17.3",
+    "ruff==0.17.4",
 ]
 typing = [
     "mypy==2.4.1",

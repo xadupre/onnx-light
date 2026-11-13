@@ -414,6 +414,64 @@ class TestDeferredOptimization(unittest.TestCase):
             self.assertIn("Sub1Mul", names[1])
             self.assertFalse(source.is_weight_loaded("literal"))
 
+    def test_grouping_with_deferred_tensor_attributes(self):
+        nodes = []
+        previous = "x"
+        for i in range(3):
+            output = "z" if i == 2 else f"r{i}"
+            nodes.extend(
+                [
+                    oh.make_node(
+                        "ConstantOfShape",
+                        ["shape"],
+                        [f"ones{i}"],
+                        value=onh.from_array(
+                            numpy.array([1], dtype=numpy.float32), f"literal{i}"
+                        ),
+                    ),
+                    oh.make_node("Mul", [previous, f"ones{i}"], [f"scaled{i}"]),
+                    oh.make_node("MatMul", [f"scaled{i}", "w"], [f"m{i}"]),
+                    oh.make_node("Relu", [f"m{i}"], [output]),
+                ]
+            )
+            previous = output
+        model = _model(
+            nodes,
+            [_value("x", [1, 4])],
+            [_value("z", [1, 4])],
+            [
+                onh.from_array(numpy.array([1, 4], dtype=numpy.int64), "shape"),
+                onh.from_array(numpy.eye(4, dtype=numpy.float32), "w"),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            save(model, path)
+            for name in ("RepeatedLayer", "PartitionGroup"):
+                with self.subTest(pattern=name):
+                    source = load(path, defer_weights=True, raw_data_threshold=0)
+                    plans = []
+                    for value in (model, source):
+                        builder = optim.GraphBuilder(value)
+                        pattern = (
+                            optim.PartitionGroupPattern(max_group_nodes=4)
+                            if name == "PartitionGroup"
+                            else name
+                        )
+                        plan = optim.GraphGraph(builder, [pattern]).optimize()
+                        plans.append([edit.pattern_name for edit in plan.rewrites])
+                        result = builder.to_model()
+                        result.load_weights()
+                        numpy.testing.assert_array_equal(
+                            ReferenceEvaluator(result).run(
+                                None, {"x": numpy.ones((1, 4), dtype=numpy.float32)}
+                            )[0],
+                            numpy.ones((1, 4), dtype=numpy.float32),
+                        )
+                    self.assertIn(name, plans[0])
+                    self.assertEqual(plans[0], plans[1])
+                    self.assertFalse(source.is_weight_loaded("literal0"))
+
     @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
     def test_constant_folding_loads_only_inputs_and_preserves_sources(self):
         for external in (False, True):

@@ -297,12 +297,39 @@ bool HasComparableLayerTensorContent(const TensorProto &tensor) {
          std::find(tensor.dims().begin(), tensor.dims().end(), 0) != tensor.dims().end();
 }
 
-bool AttributeSignature(const AttributeProto &attribute, std::string &signature,
+bool MaterializeLayerTensor(TensorProto &tensor) {
+  if (!tensor.HasDeferredWeight())
+    return HasComparableLayerTensorContent(tensor);
+  if (!tensor.has_raw_data()) {
+    const uint32_t bits = FixedBitWidth(tensor.data_type());
+    if (bits == 0)
+      return false;
+    const uint64_t limit = kMaxSignatureBytes * 8 / bits;
+    uint64_t count =
+        std::find(tensor.dims().begin(), tensor.dims().end(), 0) == tensor.dims().end() ? 1 : 0;
+    for (const int64_t dim : tensor.dims()) {
+      if (dim < 0 || (dim != 0 && count > limit / static_cast<uint64_t>(dim)))
+        return false;
+      count *= static_cast<uint64_t>(dim);
+    }
+    if (count > limit)
+      return false;
+    tensor.LoadDeferredWeight();
+  }
+  tensor.deferred_weight_source.reset();
+  tensor.clr_external_data();
+  if (tensor.data_location() == TensorProto::EXTERNAL)
+    tensor.set_data_location(TensorProto::DEFAULT);
+  return true;
+}
+
+bool AttributeSignature(const AttributeProto &source, std::string &signature,
                         const SignatureNames &outer, std::size_t depth, std::size_t &work) {
+  auto attribute = utils::CopyWithSharedTensorStorage(source);
   // Tensor attribute values constrain matching exactly, without serializing
   // unbounded parameter payloads. Top-level Constant producers stay external.
-  auto bounded_tensor = [](const TensorProto &tensor) {
-    if (!HasComparableLayerTensorContent(tensor) || tensor.raw_data().size() > kMaxSignatureBytes ||
+  auto bounded_tensor = [](TensorProto &tensor) {
+    if (!MaterializeLayerTensor(tensor) || tensor.raw_data().size() > kMaxSignatureBytes ||
         tensor.float_data().size() > kMaxSignatureBytes / sizeof(float) ||
         tensor.double_data().size() > kMaxSignatureBytes / sizeof(double) ||
         tensor.int32_data().size() > kMaxSignatureBytes / sizeof(int32_t) ||
@@ -319,17 +346,18 @@ bool AttributeSignature(const AttributeProto &attribute, std::string &signature,
   };
   if (attribute.tensors().size() > kMaxPorts || attribute.sparse_tensors().size() > kMaxPorts)
     return false;
-  if (attribute.has_t() && !bounded_tensor(attribute.t()))
+  if (attribute.has_t() && !bounded_tensor(attribute.ref_t()))
     return false;
-  for (const auto &tensor : attribute.tensors()) {
+  for (auto &tensor : attribute.ref_tensors()) {
     if (!bounded_tensor(tensor))
       return false;
   }
-  if (attribute.has_sparse_tensor() && (!bounded_tensor(attribute.sparse_tensor().values()) ||
-                                        !bounded_tensor(attribute.sparse_tensor().indices())))
+  if (attribute.has_sparse_tensor() &&
+      (!bounded_tensor(attribute.ref_sparse_tensor().ref_values()) ||
+       !bounded_tensor(attribute.ref_sparse_tensor().ref_indices())))
     return false;
-  for (const auto &tensor : attribute.sparse_tensors()) {
-    if (!bounded_tensor(tensor.values()) || !bounded_tensor(tensor.indices()))
+  for (auto &tensor : attribute.ref_sparse_tensors()) {
+    if (!bounded_tensor(tensor.ref_values()) || !bounded_tensor(tensor.ref_indices()))
       return false;
   }
   if (!attribute.has_g() && attribute.graphs().empty())
@@ -1612,7 +1640,7 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
     names[body.input(i).name().value()] = scope + "input" + std::to_string(i);
   for (std::size_t i = 0; i < body.initializer().size(); ++i) {
     auto &initializer = *body.mutable_initializer(static_cast<int>(i));
-    if (!HasComparableLayerTensorContent(initializer))
+    if (!MaterializeLayerTensor(initializer))
       return false;
     const std::string name = initializer.name().value();
     if (!formal_inputs.contains(name))
@@ -1670,16 +1698,16 @@ bool NormalizeLayerBody(GraphProto &body, const GraphBuilder &builder, Signature
         node.ref_attribute().get(index) = std::move(attributes[index]);
     }
     for (auto &attribute : node.ref_attribute()) {
-      if ((attribute.has_t() && !HasComparableLayerTensorContent(attribute.t())) ||
-          !std::all_of(attribute.tensors().begin(), attribute.tensors().end(),
-                       HasComparableLayerTensorContent))
+      if ((attribute.has_t() && !MaterializeLayerTensor(attribute.ref_t())) ||
+          !std::all_of(attribute.ref_tensors().begin(), attribute.ref_tensors().end(),
+                       MaterializeLayerTensor))
         return false;
-      const auto comparable_sparse = [](const SparseTensorProto &tensor) {
-        return HasComparableLayerTensorContent(tensor.values()) &&
-               HasComparableLayerTensorContent(tensor.indices());
+      const auto comparable_sparse = [](SparseTensorProto &tensor) {
+        return MaterializeLayerTensor(tensor.ref_values()) &&
+               MaterializeLayerTensor(tensor.ref_indices());
       };
-      if ((attribute.has_sparse_tensor() && !comparable_sparse(attribute.sparse_tensor())) ||
-          !std::all_of(attribute.sparse_tensors().begin(), attribute.sparse_tensors().end(),
+      if ((attribute.has_sparse_tensor() && !comparable_sparse(attribute.ref_sparse_tensor())) ||
+          !std::all_of(attribute.ref_sparse_tensors().begin(), attribute.ref_sparse_tensors().end(),
                        comparable_sparse))
         return false;
       if (attribute.has_g() &&

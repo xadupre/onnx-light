@@ -4849,7 +4849,8 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
   auto loaded = utils::CopyWithSharedTensorStorage(*tensor);
   loaded.LoadDeferredWeight();
   loaded.clr_external_data();
-  loaded.set_data_location(TensorProto::DEFAULT);
+  if (loaded.data_location() == TensorProto::EXTERNAL)
+    loaded.set_data_location(TensorProto::DEFAULT);
   return &materialized_constants_.emplace(name, std::move(loaded)).first->second;
 }
 

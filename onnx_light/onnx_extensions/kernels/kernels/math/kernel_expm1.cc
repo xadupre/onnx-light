@@ -42,8 +42,7 @@ void Expm1::Configure(const KernelTuningParameters &parameters) {
 }
 
 Tensor Expm1::operator()(const Tensor &x, RuntimeContext *rt) const {
-  const size_t y_n_bytes =
-      PackedByteSize(x.data_type, x.shape.product(0, x.shape.size(), kName));
+  const size_t y_n_bytes = PackedByteSize(x.data_type, x.shape.product(0, x.shape.size(), kName));
   EXT_ENFORCE_INVALID(x.size_bytes() == y_n_bytes, kName, ": input buffer size mismatch.");
   Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, y_n_bytes)
                 : MakeOutputTensor(x.data_type, x.shape, y_n_bytes, nullptr);

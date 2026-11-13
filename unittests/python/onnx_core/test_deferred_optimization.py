@@ -686,7 +686,7 @@ class TestDeferredOptimization(unittest.TestCase):
                         "ConstantToInitializer", [edit.pattern_name for edit in plan.rewrites]
                     )
                     self.assertFalse(source.is_weight_loaded("large_constant"))
-                    self.assertFalse(result.is_weight_loaded("large_constant"))
+                    self.assertFalse(result.is_weight_loaded("y_cst2init"))
                     self.assertLess(io_bytes, payload_bytes // 8, f"read {io_bytes} bytes")
                     self.assertLess(
                         rss_bytes, 3 * payload_bytes // 4, f"allocated {rss_bytes} bytes"
@@ -767,6 +767,16 @@ class TestDeferredOptimization(unittest.TestCase):
                     (
                         "ConcatGather",
                         [oh.make_node("Gather", ["X", "large_indices"], ["Y"])],
+                        [_value("Y", [size])],
+                    ),
+                    (
+                        "GatherConcat",
+                        [oh.make_node("Gather", ["X", "large_indices"], ["Y"], axis=0)],
+                        [_value("Y", [size])],
+                    ),
+                    (
+                        "GatherGather",
+                        [oh.make_node("Gather", ["X", "large_indices"], ["Y"], axis=0)],
                         [_value("Y", [size])],
                     ),
                     (

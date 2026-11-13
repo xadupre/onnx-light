@@ -1973,6 +1973,13 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
     return {tensor.shape, TensorProto::FLOAT, std::move(values)};
   }
   if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value() == "onnx_light.qqq_weights.v1") {
+    const auto tensor = ReconstructQqqWeights(encoded, size_t{1} << 30, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == "onnx_light.awq_weights.v1") {
     const auto tensor = ReconstructAwqWeights(encoded, size_t{1} << 30, catalogue);
     std::vector<float> values(tensor.size_bytes() / sizeof(float));

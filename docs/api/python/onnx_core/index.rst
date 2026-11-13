@@ -15,6 +15,7 @@ onnx_light.onnx_core
     graph_builder
     graph_partition
     optimization
+    qqq
     quantization
     shape_inference
     tensor_statistics

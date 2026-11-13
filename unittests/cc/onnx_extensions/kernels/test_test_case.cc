@@ -588,9 +588,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   EXPECT_FALSE(peak_memory_only.empty());
 
   const auto all = CollectTestCases();
-  const auto supported_type_count = std::count_if(all.begin(), all.end(), [](const TestCase &tc) {
-    return tc.name.find("test_cc_supported_dtype_") == 0;
-  });
+  const auto supported_type_count =
+      CollectTestCasesByName("^test_cc_supported_dtype_.*_[A-Z0-9]+$").size();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() + image_only.size() +
                             object_detection_only.size() + optional_only.size() +

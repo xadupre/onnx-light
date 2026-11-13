@@ -496,6 +496,9 @@ void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 /// Exp is element-wise unary: output dtype and shape match the input.
 void ComputeShapeExp(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Expm1 is element-wise unary: output dtype and shape match the input.
+void ComputeShapeExpm1(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /// Erf is element-wise unary: output dtype and shape match the input.
 void ComputeShapeErf(ShapesContext &ctx, const NodeProto &node, const char *x);
 

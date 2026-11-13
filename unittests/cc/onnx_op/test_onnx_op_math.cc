@@ -59,6 +59,22 @@ TEST(OnnxOpMathRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {
   }
 }
 
+TEST(OnnxOpMathRegistrationTest, Expm1StartsAtOpset29) {
+  const auto schemas = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Expm1");
+  ASSERT_EQ(schemas.size(), 1u);
+  const auto &light = schemas[0];
+  EXPECT_EQ(light.since_version(), 29);
+  ASSERT_EQ(light.inputs().size(), 1u);
+  ASSERT_EQ(light.outputs().size(), 1u);
+  ASSERT_EQ(light.type_constraints().size(), 1u);
+  const auto *full = OpSchemaRegistry::Schema("Expm1", 29, ONNX_DOMAIN);
+  ASSERT_NE(full, nullptr);
+  EXPECT_EQ(OpSchemaRegistry::Schema("Expm1", 28, ONNX_DOMAIN), nullptr);
+  EXPECT_EQ(light.doc(), full->doc());
+  EXPECT_EQ(light.type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_FALSE(full->HasFunction());
+}
+
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
@@ -145,7 +161,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> mean_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
-  EXPECT_EQ(schemas.size(), 187u);
+  EXPECT_EQ(schemas.size(), 188u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);

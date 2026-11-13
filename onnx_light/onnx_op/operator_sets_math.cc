@@ -1766,6 +1766,15 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     })};
 }
 
+std::vector<LightOpSchema> BuildExpm1Schemas() {
+  return {LightOpSchema(
+      "Expm1", kOnnxDomain, 29, MakeUnaryMathDoc("Expm1"), {{"input", "Input tensor", "T"}},
+      {{"output", MakeUnaryMathOutputDescription("Expm1"), "T"}},
+      {{"T",
+        {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+        "Constrain input and output types to float tensors."}})};
+}
+
 std::vector<LightOpSchema> BuildErfSchemas() {
   const std::string doc = MakeUnaryMathDoc("Erf");
   const std::string output_description = MakeUnaryMathOutputDescription("Erf");
@@ -3199,6 +3208,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Elu", [] { return BuildEluSchemas(); }},
       {"Erf", [] { return BuildErfSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
+      {"Expm1", BuildExpm1Schemas},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gelu", [] { return BuildGeluSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

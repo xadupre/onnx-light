@@ -504,6 +504,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
         RequireInputs(node, 1);
         math::ComputeShapeExp(ctx, node, node.input(0).c_str());
       }},
+      {"ai.onnx:Expm1",
+      [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        math::ComputeShapeExpm1(ctx, node, node.input(0).c_str());
+      }},
       {"ai.onnx:Equal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

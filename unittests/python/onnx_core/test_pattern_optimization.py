@@ -1824,8 +1824,19 @@ class TestPatternOptimization(ExtTestCase):
                 rewrites, report = graph.optimize(report=True)
 
                 self.assertEqual(set(observed), {device})
-                self.assertEqual(len(rewrites.rewrites), 1)
+                expected_patterns = ["NegNeg"]
+                if device != Device.kUndefined:
+                    expected_patterns.append("IfIdenticalBranches")
+                self.assertEqual(
+                    [rewrite.pattern_name for rewrite in rewrites.rewrites], expected_patterns
+                )
                 self.assertEqual(rewrites.rewrites[0].graph_path, ["then_branch"])
+                if device != Device.kUndefined:
+                    self.assertEqual(rewrites.rewrites[1].graph_path, [])
+                self.assertEqual(
+                    [node.op_type for node in builder.build_graph().node],
+                    ["If"] if device == Device.kUndefined else ["Identity"],
+                )
                 self.assertTrue(
                     any(item.graph_path == ["then_branch"] for item in report.subgraphs)
                 )

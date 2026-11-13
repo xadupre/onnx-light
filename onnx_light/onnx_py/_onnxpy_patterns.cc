@@ -17,6 +17,7 @@
 #include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/if_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
@@ -166,6 +167,9 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "DropoutPattern",
       "Replaces an inference Dropout by an Identity node when its mask output "
       "is unused and training mode is disabled.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::IfIdenticalBranchesPattern, core::builder::PatternOptimization>(
+      m, "IfIdenticalBranchesPattern", "Inlines an If with alpha-equivalent branches.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::IdentityPattern, core::builder::PatternOptimization>(
       m, "IdentityPattern", "Replaces no-op arithmetic and layout operations by an Identity node.")

@@ -37,6 +37,7 @@ ConvAddFusionPattern: TypeAlias = _patterns.ConvAddFusionPattern
 ConvMulFusionPattern: TypeAlias = _patterns.ConvMulFusionPattern
 ConvBatchNormalizationFusionPattern: TypeAlias = _patterns.ConvBatchNormalizationFusionPattern
 DropoutPattern: TypeAlias = _patterns.DropoutPattern
+IfIdenticalBranchesPattern: TypeAlias = _patterns.IfIdenticalBranchesPattern
 IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
 PadConvPattern: TypeAlias = _patterns.PadConvPattern
@@ -544,6 +545,7 @@ __all__ = [
     "GraphGraph",
     "GroupedMatMulPattern",
     "IdentityPattern",
+    "IfIdenticalBranchesPattern",
     "InitializerUnsqueezeCastPattern",
     "LabelEncoderFusionPattern",
     "LayerNormalizationPattern",

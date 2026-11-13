@@ -698,6 +698,9 @@ public:
   /// list. Throws when ``name`` is already used.
   GraphBuilder &MakeSubgraph(const std::string &name);
 
+  /// Creates a named subgraph and imports its declarations, nodes and nested graphs.
+  GraphBuilder &MakeSubgraph(const std::string &name, const GraphProto &graph);
+
   /// Returns ``true`` when a subgraph named ``name`` exists.
   bool HasSubgraph(const std::string &name) const {
     return FindNamedBuilder(subgraphs_, name) != nullptr;

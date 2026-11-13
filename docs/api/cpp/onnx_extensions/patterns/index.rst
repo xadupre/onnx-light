@@ -30,6 +30,7 @@ This module documents the C++ optimization-pattern headers used by
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/conv_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/dropout_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/identity_pattern.h
+.. doxygenfile:: onnx_extensions/patterns/canonicalization/if_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/not_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/pad_pattern.h

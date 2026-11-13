@@ -4014,6 +4014,12 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   return ref;
 }
 
+GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name, const GraphProto &graph) {
+  auto &child = MakeSubgraph(name);
+  child.ImportGraph(graph);
+  return child;
+}
+
 // ── Queries ────────────────────────────────────────────────────────────
 
 bool GraphBuilder::HasShape(const std::string &name) const { return compute_.Shapes().Has(name); }

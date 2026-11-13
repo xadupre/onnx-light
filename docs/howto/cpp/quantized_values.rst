@@ -34,6 +34,33 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Native GPTQModel VPTQ weights
+-----------------------------
+
+``VptqWeights`` in ``onnx_core/runtime/quantization.h`` describes the pinned
+native VPTQ constructor configuration and loaded state-dictionary tensors.
+Its ``schema_version`` defaults to 1; other versions are rejected.
+``ImportVptqWeights`` produces ``onnx_light.vptq_weights.v1``;
+``ExportVptqWeights`` restores the original metadata and tensor bytes.
+``ReconstructVptqWeights`` returns FLOAT ``[out_features,in_features]`` with
+the upstream codebook-dtype rounding boundaries, inverse permutation and
+normalization. See the :ref:`VPTQ support matrix <l-vptq-checkpoints>`.
+No portable codebook decoder is changed.
+
+.. code-block:: cpp
+
+    VptqWeights checkpoint;
+    checkpoint.in_features = 37;
+    checkpoint.out_features = 7;
+    checkpoint.bits = 2;
+    checkpoint.vector_lens = {-1, 3};
+    checkpoint.num_centroids = {-1, 4};
+    checkpoint.group_size = 19;
+    checkpoint.tensors = loaded_module_tensors;
+    auto encoded = ImportVptqWeights(checkpoint);
+    auto restored = ExportVptqWeights(encoded);
+    auto weight = ReconstructVptqWeights(encoded);
+
 Native GPTQModel GPTQ weights
 -----------------------------
 

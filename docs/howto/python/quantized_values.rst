@@ -859,6 +859,128 @@ also bound loaded arrays before copying. External files are never opened.
     weight_in_out = reconstruct_exl3_weights(encoded)  # NumPy float32 [K,N]
     # Generic dequantize_tensor_proto(encoded) also uses FP32 reconstruction.
 
+.. _l-vptq-checkpoints:
+
+Native GPTQModel VPTQ checkpoints
+---------------------------------
+
+``onnx_light.onnx_core.vptq`` imports one module's loaded state dictionary,
+exports its original quantized tensors, and reconstructs its ``[N,K]`` weight.
+It does not train codebooks, calibrate, run accelerated kernels, or reinterpret
+VPTQ as the portable AQLM/QuIP profiles.
+
+The contract pins GPTQModel
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``. At this revision GPTQModel
+**vendors** its Torch VPTQ implementation; there is no external ``vptq``
+package dependency to pin. The authoritative sources are
+`VPTQLinear <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/vptq_torch.py>`_
+and its
+`packing and group-layout helpers <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/vptq.py>`_.
+This pin does not claim compatibility with arbitrary Microsoft VPTQ releases
+or other GPTQModel revisions.
+
+Let ``N=out_features``, ``K=in_features``, ``G`` be the resolved group count,
+``S`` the group width, ``V`` the
+base vector length, ``C`` the base centroid count, ``R`` the residual count
+when enabled, and ``O`` the outlier input-column count.
+
+.. list-table:: Native v1 tensor layout
+   :header-rows: 1
+
+   * - State-dictionary key
+     - Shape and meaning
+   * - ``indices``
+     - INT32 ``[G,ceil(N/V),ceil(S*(b+r)/32)]``; each row is an independent
+       LSB-first stream of ``main_index | (residual_index << b)``.
+       ``b=ceil(log2(C))`` and ``r=ceil(log2(R))`` (zero without residuals).
+   * - ``centroids.weight``
+     - Floating ``[G,C*V]``, viewed as ``[G,C,V]`` without transposition.
+   * - ``res_centroids.weight``
+     - Optional floating ``[G,R*V]``; same vector ordering as the base.
+   * - ``outlier_centroids.weight``, ``outlier_indices``
+     - Optional floating ``[1,Cout*Vout]`` and **unpacked INT32**
+       ``[1,ceil(N/Vout),O]``. Outliers are a separate column prefix,
+       not sparse scalar corrections.
+   * - ``weight_scale``, ``weight_bias``
+     - Optional floating ``[K]`` for ``norm_dim=0``, or ``[N]`` for
+       ``norm_dim=1``.
+   * - ``perm``
+     - Optional INT32 ``[K]``, a bijection. Upstream ``inverse_perm`` is
+       nonpersistent and derived from ``argsort(perm)``, not a checkpoint key.
+   * - ``bias``
+     - Optional floating ``[N]`` linear-output bias, preserved but never added
+       to the reconstructed weight.
+
+The decoder gathers vectors separately per input-column group, adds the
+residual in the codebook dtype, removes partial output-vector rows,
+prepends the separately reconstructed outlier columns, and removes padded
+input columns. It then gathers through ``argsort(perm)`` and applies
+``weight * weight_scale + weight_bias`` along the indicated original axis.
+Multiplication and addition round separately in the codebook dtype; this is
+not a fused affine operation or a double-precision additive codebook sum.
+Row tails and final-group columns are cropped, never wrapped into the next
+vector/group. Packed words and padding bits are preserved on export.
+
+Constructor ``bits`` is nominal (1--8), not the packed index width.
+The adapter obtains codebook precision from ``centroids.weight``; a ``dtype``
+configuration override cannot silently cast checkpoint state.
+``group_size`` and ``group_num`` are mutually exclusive (``-1`` means unset).
+The initial outlier count is ``ceil(npercent*K/100)``. With ``group_num`` and
+outliers, the division remainder joins the outlier prefix so groups are full;
+without outliers, the final group is padded. With ``group_size``, the final
+group may be partial even when outliers are enabled.
+
+.. list-table:: Support/version matrix
+   :header-rows: 1
+
+   * - Contract
+     - Support
+   * - GPTQModel pinned Torch packed state, native schema v1
+     - Base, optional residual, optional outlier, and residual plus outlier
+   * - Codebook precision
+     - FLOAT16, BFLOAT16, FLOAT32; all floating side tensors match
+   * - Partial vectors/groups
+     - Upstream zero-padded packing and cropped reconstruction
+   * - Permutations and normalization
+     - Persistent ``perm``; normalization dimensions 0 and 1
+   * - Microsoft/external VPTQ, unpacked main indices, other revisions/versions
+     - Unsupported; explicit rejection, no layout inference
+   * - Outlier residual codebooks, extra state keys, inconsistent codebook sizes
+     - Unsupported; explicit rejection
+
+Import/export validates required keys, exact types and extents, index ranges,
+permutation bijectivity, concrete dimensions, overflow, and ``max_bytes``
+before reconstruction. Unpacked outlier/permutation indices must be
+nonnegative signed INT32 values; signed packed words instead carry raw bits.
+No Torch or GPTQModel installation is required to use
+the adapter. Native upstream-reference fixtures record packed words,
+codebooks, auxiliary state and reconstructed weights.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.vptq import (
+        import_vptq_weights, export_vptq_weights, export_vptq_config,
+        reconstruct_vptq_weights,
+    )
+
+    encoded = import_vptq_weights(
+        tensors, in_features=37, out_features=7, bits=2,
+        vector_lens=(-1, 3), num_centroids=(-1, 4),
+        num_res_centroids=(-1, -1), group_size=19,
+    )
+    weight = reconstruct_vptq_weights(encoded)  # FLOAT32 [7,37]
+    restored = export_vptq_weights(encoded)     # exact source bytes and dtypes
+    config = export_vptq_config(encoded)        # original constructor metadata
+    same = import_vptq_weights(restored, **config)
+
+The versioned schema stores original constructor metadata as constants and
+native tensors as structured fields. ``reconstruct_vptq_weights`` returns
+FLOAT32 values lifted from the codebook-dtype result, not a higher-precision
+reconstruction. ``max_bytes`` bounds tensor storage and logical FLOAT32 output
+independently; it is not a bound on total process memory.
+Numerical reference compatibility targets eager ``VPTQLinear.dequantize``;
+it does not promise bit-identical compiler-fused or CUDA kernel execution.
+
 .. _l-compressed-tensors-checkpoints:
 
 Explicit compressed-tensors checkpoint adapters

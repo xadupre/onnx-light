@@ -1,0 +1,863 @@
+{
+  "schema": "onnx-light-vptq-native-reference-v1",
+  "provenance": {
+    "repository": "https://github.com/ModelCloud/GPTQModel",
+    "revision": "c1976918cfe3703fbcf6d1ce2440a82b26394375",
+    "source_files": {
+      "gptqmodel/nn_modules/qlinear/vptq_torch.py": "de9803cb845c29e28ccf596b0289ef6120ba46dfe2b3f4f00a1443b7a4a6a4db",
+      "gptqmodel/utils/vptq.py": "5b6d411125e863f548693a975f4ddaf1d0ce04b49f68c511715e5bfa609c11c2"
+    },
+    "runtime": "2.10.0+cpu",
+    "device": "cpu",
+    "generation": "Executed unmodified AST-extracted pinned pack_vptq_indices, unpack_vptq_indices, and VPTQLinear.dequantize with real torch.Tensor storage on a lightweight attribute holder; no ONNX Light decoder was used.",
+    "encoding": "All tensor bytes are little-endian contiguous source dtype; expected weights preserve upstream source-dtype stage rounding."
+  },
+  "fixtures": [
+    {
+      "name": "base_float32_cross_word_sign",
+      "parameters": {
+        "in_features": 23,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": -1,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            24
+          ],
+          "raw_hex": "000000000edb334099b6fbbe79fb0dc02666e13ffd820b406261e7bf38a2bdbf88e329407a5fbf3fb2f927c020879bbe2ade3b40c0814b3cb16c0fc04ff07a3ff13720400e47b2bf5ef7d6bfd87b2140f6e1b83f545818c0fc3319bfecfa3f40"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            2,
+            3
+          ],
+          "raw_hex": "673c74a8ce9cf1d001000000d599331e3a5467ce18000000"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            1,
+            2,
+            23
+          ],
+          "raw_hex": "0700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float32",
+        "shape": [
+          5,
+          23
+        ],
+        "raw_hex": "545818c02ade3b4079fb0dc05ef7d6bf7a5fbf3f000000004ff07a3f7a5fbf3f000000004ff07a3f6261e7bf545818c02ade3b4079fb0dc0545818c02ade3b4079fb0dc05ef7d6bf7a5fbf3f000000004ff07a3f7a5fbf3f00000000fc3319bfc0814b3c2666e13fd87b2140b2f927c00edb3340f1372040b2f927c00edb3340f137204038a2bdbffc3319bfc0814b3c2666e13ffc3319bfc0814b3c2666e13fd87b2140b2f927c00edb3340f1372040b2f927c00edb3340ecfa3f40b16c0fc0fd820b40f6e1b83f20879bbe99b6fbbe0e47b2bf20879bbe99b6fbbe0e47b2bf88e32940ecfa3f40b16c0fc0fd820b40ecfa3f40b16c0fc0fd820b40f6e1b83f20879bbe99b6fbbe0e47b2bf20879bbe99b6fbbe4ff07a3f6261e7bf545818c02ade3b4079fb0dc0545818c02ade3b4079fb0dc05ef7d6bf7a5fbf3f000000004ff07a3f7a5fbf3f000000004ff07a3f6261e7bf545818c02ade3b4079fb0dc0545818c02ade3b4079fb0dc05ef7d6bff137204038a2bdbffc3319bfc0814b3c2666e13ffc3319bfc0814b3c2666e13fd87b2140b2f927c00edb3340f1372040b2f927c00edb3340f137204038a2bdbffc3319bfc0814b3c2666e13ffc3319bfc0814b3c2666e13fd87b2140"
+      }
+    },
+    {
+      "name": "base_float16_row_group_tails",
+      "parameters": {
+        "in_features": 13,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": 7,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            2,
+            24
+          ],
+          "raw_hex": "00009f41deb770c00b3f5c403bbfedbd4f41fb3d40c1dcb4df415c227bc0d83b024192bdb8be0c41c73dc3c0cab800422f3870c18b398c418abb55bf523f813f29c000bb024221383ec14536f9416bb7e7c0713e8a40ecbe80bcdf400d3cedc0"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            2,
+            2,
+            1
+          ],
+          "raw_hex": "673c140043750600673c140043750600"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            2,
+            2,
+            7
+          ],
+          "raw_hex": "0700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float16",
+        "shape": [
+          5,
+          13
+        ],
+        "raw_hex": "c3c0df4170c0b8befb3d0000d83bdf403ec18c418a4000bb2f38cab85c220b3f0c4140c19f4102410d3c45368abbecbe024270c100427bc05c40c73ddcb4deb792bdedc0f94155bf80bc21388b39fb3d0000d83b3bbfc3c0df4170c000bb2f386bb7523fdf403ec140c19f410241edbdcab85c220b3f024270c1e7c0813f0d3c4536"
+      }
+    },
+    {
+      "name": "base_bfloat16_group_num_tail",
+      "parameters": {
+        "in_features": 13,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": -1,
+        "group_num": 3,
+        "npercent": 0.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "bfloat16",
+          "shape": [
+            3,
+            24
+          ],
+          "raw_hex": "00003440fcbe0ec0e13f0c40e7bfbebf2a40bf3f28c09cbe3c404c3c0fc07b3f2040b2bfd7bf2140b93f18c019bf4040063f2ec0313f314071bfebbfea3ff03f05c060bf4040043f28c0c93e3f40edbe1dc0ce3f1140ddbf90bf1c40823f1ec0b23d4940f6be20c0ae3f2740abbfeebf1540bf3f10c05abe2e40e63c1fc08a3f3a40b5bf02c00b40f83ffcbf82bf3040"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            3,
+            2,
+            1
+          ],
+          "raw_hex": "673c0000e85000003a7300008c0700001d2a0000674e0000"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            3,
+            2,
+            5
+          ],
+          "raw_hex": "070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "bfloat16",
+        "shape": [
+          5,
+          13
+        ],
+        "raw_hex": "18c03c400ec0d7bfbf3fea3f1c4028c031401c408a3fbf3fb23d19bf4c3ce13f214028c0f03f823fc93e71bf823f3a4010c0494040400fc00c40b93f9cbe05c01ec03f40ebbf1ec0b5bf5abef6be00007b3fbf3f00007b3f28c03140114060bf063ffcbf2e4020c03440204028c034402040c93e71bfddbf40402ec082bfe63cae3f"
+      }
+    },
+    {
+      "name": "residual_float16_cross_word",
+      "parameters": {
+        "in_features": 22,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          4
+        ],
+        "group_size": 11,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            2,
+            24
+          ],
+          "raw_hex": "00009f41deb770c00b3f5c403bbfedbd4f41fb3d40c1dcb4df415c227bc0d83b024192bdb8be0c41c73dc3c0cab800422f3870c18b398c418abb55bf523f813f29c000bb024221383ec14536f9416bb7e7c0713e8a40ecbe80bcdf400d3cedc0"
+        },
+        "res_centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            2,
+            12
+          ],
+          "raw_hex": "743a2c41f6bc34bfce40633e99c02dbaed41a63975c11938a94136babbbfc23e0640e7bf27bce141903936c1ab320842"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "raw_hex": "8f643f511bb84b008f85cfa35ba06f00b0a9c3f365c96c00b82e54f4a7e91100"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            2,
+            2,
+            11
+          ],
+          "raw_hex": "07000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000"
+        },
+        "res_indices": {
+          "dtype": "int64",
+          "shape": [
+            2,
+            2,
+            11
+          ],
+          "raw_hex": "01000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000030000000000000003000000000000000200000000000000010000000000000001000000000000000000000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float16",
+        "shape": [
+          5,
+          22
+        ],
+        "raw_hex": "2ec47c430dbecabb6eba34bf90ba9a40a639bf3e1bc41fb8e73c0a4344453ac56031973d74bb76441a45f6c2373f3241bebb90b2cbc23645e84400a9402d30b382c0103308b7c6439033cd38dfb9e843cf40473c04c16d429944f6c26241d43f52416c3c88322dbe40250bbb9e458e3dd8b50ec465c40046bb3c12bf0b3c9ec31ec210432ec48a3ca6bdb3be484384c4f6c2e4b4743abf3e67402ac002be843a6d40bc4034ba70b152c376442044b032373fd4405944a8c26fc1e93bed4420b3664530b35ac505c1d0370445a8b974c22b40e23caa42473c0c4227b6"
+      }
+    },
+    {
+      "name": "residual_float32",
+      "parameters": {
+        "in_features": 9,
+        "out_features": 4,
+        "vector_lens": [
+          -1,
+          2
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          8
+        ],
+        "group_size": -1,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            16
+          ],
+          "raw_hex": "000000000edb334099b6fbbe79fb0dc02666e13ffd820b406261e7bf38a2bdbf88e329407a5fbf3fb2f927c020879bbe2ade3b40c0814b3cb16c0fc04ff07a3f"
+        },
+        "res_centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            16
+          ],
+          "raw_hex": "7e884e3fe576254028c79ebf927be6bfc7bb1940b764cc3fc81b13c06e9f45bfed9a3d4053c7343f3bae2ec03b1d033fd81d35404ebd46bf9e54f7bfda3ed83f"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            2,
+            2
+          ],
+          "raw_hex": "0f997b33d20e1800bdf432e1cfc50e00"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            1,
+            2,
+            9
+          ],
+          "raw_hex": "070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000"
+        },
+        "res_indices": {
+          "dtype": "int64",
+          "shape": [
+            1,
+            2,
+            9
+          ],
+          "raw_hex": "010000000000000004000000000000000700000000000000030000000000000006000000000000000100000000000000050000000000000000000000000000000300000000000000070000000000000002000000000000000500000000000000010000000000000004000000000000000700000000000000030000000000000006000000000000000100000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float32",
+        "shape": [
+          4,
+          9
+        ],
+        "raw_hex": "45d05ec03abfb34022211bc08809233f4eda823f28c79ebff653abc0231d80bfc81b13c0d50652bf92e10c40307007bf677142bf708010c08a3a813fac66553e924b8d3f3273024000d291c06d378540760d9fc0e8ffb43f1a241e40808b85c0003eb63e05a715402cf5d83f125db13f58b57140c506bf3f60709cbe4893c1bf81db2a40861f393fccaa3fc08ee4e4bf"
+      }
+    },
+    {
+      "name": "outlier_float32_row_tails",
+      "parameters": {
+        "in_features": 13,
+        "out_features": 5,
+        "vector_lens": [
+          2,
+          3
+        ],
+        "num_centroids": [
+          5,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": -1,
+        "group_num": 2,
+        "npercent": 10.0,
+        "enable_norm": false,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            2,
+            24
+          ],
+          "raw_hex": "000000000edb334099b6fbbe79fb0dc02666e13ffd820b406261e7bf38a2bdbf88e329407a5fbf3fb2f927c020879bbe2ade3b40c0814b3cb16c0fc04ff07a3ff13720400e47b2bf5ef7d6bfd87b2140f6e1b83f545818c0fc3319bfecfa3f40dae8053f46092ec05551313fe47e3140403671bfba9deabf7434ea3f3d2ff03f972a05c06c0b60bf7e3f40401e2b043f6dcd27c04aa7c83ecb1a3f40726fedbecce21cc07d22ce3f94351140a670ddbf260f90bf2fda1b40dda7813fdfac1dc0"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            2,
+            2,
+            1
+          ],
+          "raw_hex": "673c0000e85000003a7300008c070000"
+        },
+        "outlier_centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            10
+          ],
+          "raw_hex": "8c1de13fc337f93f0ec901c0d89875bf5f413e4000c61b3fa55427c03078983e4f2f4040ca79bfbe"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            3,
+            3
+          ],
+          "raw_hex": "010000000400000002000000000000000300000001000000040000000200000000000000"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            2,
+            2,
+            5
+          ],
+          "raw_hex": "07000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            3,
+            3
+          ],
+          "raw_hex": "010000000400000002000000000000000300000001000000040000000200000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float32",
+        "shape": [
+          5,
+          13
+        ],
+        "raw_hex": "0ec901c04f2f40405f413e40545818c02ade3b4079fb0dc05ef7d6bf7a5fbf3f7434ea3f2fda1b406dcd27c0e47e31402fda1b40d89875bfca79bfbe00c61b3ffc3319bfc0814b3c2666e13fd87b2140b2f927c03d2ff03fdda7813f4aa7c83e403671bfdda7813f8c1de13fa55427c00ec901c0ecfa3f40b16c0fc0fd820b40f6e1b83f20879bbe972a05c0dfac1dc0cb1a3f40ba9deabfdfac1dc0c337f93f3078983ed89875bf000000004ff07a3f7a5fbf3f000000004ff07a3f6dcd27c0e47e3140943511406c0b60bfdae8053f4f2f40405f413e408c1de13f0edb3340f1372040b2f927c00edb3340f13720404aa7c83e403671bfa670ddbf7e3f404046092ec0"
+      }
+    },
+    {
+      "name": "combined_float16_norm0_perm_tails",
+      "parameters": {
+        "in_features": 17,
+        "out_features": 7,
+        "vector_lens": [
+          2,
+          3
+        ],
+        "num_centroids": [
+          5,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          4
+        ],
+        "group_size": 6,
+        "group_num": -1,
+        "npercent": 12.0,
+        "enable_norm": true,
+        "norm_dim": 0,
+        "enable_perm": true
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            3,
+            24
+          ],
+          "raw_hex": "00009f41deb770c00b3f5c403bbfedbd4f41fb3d40c1dcb4df415c227bc0d83b024192bdb8be0c41c73dc3c0cab800422f3870c18b398c418abb55bf523f813f29c000bb024221383ec14536f9416bb7e7c0713e8a40ecbe80bcdf400d3cedc0922d4742b1b700c16e3d3b4156bd6dbfa840f53d7ec0d0b26f413027fbc0513cd241a7bd10c05740bf3fe2bf0ebc7f41"
+        },
+        "res_centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            3,
+            12
+          ],
+          "raw_hex": "743a2c41f6bc34bfce40633e99c02dbaed41a63975c11938a94136babbbfc23e0640e7bf27bce141903936c1ab3208429cb40ec1d13dc5406abe18bdb240bc3cd7c01aae4842c9b4"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "raw_hex": "8f643f116de02e1f2c7c1e1d0bf40d1beaf07c19c96c5c17a8e84f138f643f116de02e1f"
+        },
+        "outlier_centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            1,
+            10
+          ],
+          "raw_hex": "093fca3f0ec0adbbf241de383bc1c4340142fcb5"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            4,
+            3
+          ],
+          "raw_hex": "010000000400000002000000000000000300000001000000040000000200000000000000030000000100000004000000"
+        },
+        "perm": {
+          "dtype": "int32",
+          "shape": [
+            17
+          ],
+          "raw_hex": "0e0000000f00000010000000000000000100000002000000030000000400000005000000060000000700000008000000090000000a0000000b0000000c0000000d000000"
+        },
+        "weight_scale": {
+          "dtype": "float16",
+          "shape": [
+            17
+          ],
+          "raw_hex": "71bca4bb66ba29b9d7b75cb5c3b166a629308f340a37c338003a3d3b3d3cdc3c7b3d"
+        },
+        "weight_bias": {
+          "dtype": "float16",
+          "shape": [
+            17
+          ],
+          "raw_hex": "2930a42ef62c8f2a66261f950aa7e1aa1fadcdae3db014b1ecb1c3b29ab338b4a4b4"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            3,
+            3,
+            6
+          ],
+          "raw_hex": "070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000"
+        },
+        "res_indices": {
+          "dtype": "int64",
+          "shape": [
+            3,
+            3,
+            6
+          ],
+          "raw_hex": "010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            4,
+            3
+          ],
+          "raw_hex": "010000000400000002000000000000000300000001000000040000000200000000000000030000000100000004000000"
+        }
+      },
+      "expected": {
+        "dtype": "float16",
+        "shape": [
+          7,
+          17
+        ],
+        "raw_hex": "c544f1c2263d6f39b336d03892b167b0aab764bcbfb59138ae3e0938c6c0c44292437dbfc1c0d03ae031c23efcbe72bb4f28f2b5793a86a8b9b6bb3b533004bdbeb95938fac4db4226c0d9bc1dbdf2b58733d2a52b38323ba83704b600be93b1813ee2c222c22a3c30c0ccb726bc1340993d4ab9eeb114ba7aabb837b5b90430f43f4d3f482e6bbe52c5843018224732853cd8b8d1b9a2ab20980cb56d3e163d4cc0f2c0e341b2423e4030ae503ed22bf43874c12abe9f392f2b9a39623348bb16375d3b98bc12b99c37c24085bccf3dab3d98c07a40a93ca5bacdb142b899b958ba3835d340013b05c274c1a643"
+      }
+    },
+    {
+      "name": "combined_bfloat16_norm1_perm",
+      "parameters": {
+        "in_features": 19,
+        "out_features": 5,
+        "vector_lens": [
+          2,
+          3
+        ],
+        "num_centroids": [
+          7,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          4
+        ],
+        "group_size": -1,
+        "group_num": 3,
+        "npercent": 10.0,
+        "enable_norm": true,
+        "norm_dim": 1,
+        "enable_perm": true
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "bfloat16",
+          "shape": [
+            3,
+            24
+          ],
+          "raw_hex": "00003440fcbe0ec0e13f0c40e7bfbebf2a40bf3f28c09cbe3c404c3c0fc07b3f2040b2bfd7bf2140b93f18c019bf4040063f2ec0313f314071bfebbfea3ff03f05c060bf4040043f28c0c93e3f40edbe1dc0ce3f1140ddbf90bf1c40823f1ec0b23d4940f6be20c0ae3f2740abbfeebf1540bf3f10c05abe2e40e63c1fc08a3f3a40b5bf02c00b40f83ffcbf82bf3040"
+        },
+        "res_centroids.weight": {
+          "dtype": "bfloat16",
+          "shape": [
+            3,
+            12
+          ],
+          "raw_hex": "4f3f25409fbfe6bf1a40cc3f13c046bf3e40353f2fc0033f354047bff7bfd83f0140fdbf85bf3c40323f27c0553e414093be22c0ba3f1940cdbfa3bf1640983f1bc0c3bd494099be"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            3,
+            2,
+            1
+          ],
+          "raw_hex": "8f643f01a80ddc01f2b1f0013cba05007dc3a60087e7cb00"
+        },
+        "outlier_centroids.weight": {
+          "dtype": "bfloat16",
+          "shape": [
+            1,
+            14
+          ],
+          "raw_hex": "e13ff93f02c076bf3e401c3f27c0983e4040bfbe1fc0c43f1540d5bf"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            3,
+            4
+          ],
+          "raw_hex": "010000000400000000000000030000000600000002000000050000000100000004000000000000000300000006000000"
+        },
+        "perm": {
+          "dtype": "int32",
+          "shape": [
+            19
+          ],
+          "raw_hex": "100000001100000012000000000000000100000002000000030000000400000005000000060000000700000008000000090000000a0000000b0000000c0000000d0000000e0000000f000000"
+        },
+        "weight_scale": {
+          "dtype": "bfloat16",
+          "shape": [
+            5
+          ],
+          "raw_hex": "8ebffbbe053e403faf3f"
+        },
+        "weight_bias": {
+          "dtype": "bfloat16",
+          "shape": [
+            5
+          ],
+          "raw_hex": "053ecd3ca4bd3dbe94be"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            3,
+            2,
+            5
+          ],
+          "raw_hex": "070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000040000000000000001000000000000000700000000000000040000000000000001000000000000000600000000000000030000000000000000000000000000000500000000000000030000000000000000000000000000000500000000000000020000000000000007000000000000000400000000000000010000000000000007000000000000000400000000000000"
+        },
+        "res_indices": {
+          "dtype": "int64",
+          "shape": [
+            3,
+            2,
+            5
+          ],
+          "raw_hex": "010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000010000000000000000000000000000000300000000000000030000000000000002000000000000000100000000000000"
+        },
+        "outlier_indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            3,
+            4
+          ],
+          "raw_hex": "010000000400000000000000030000000600000002000000050000000100000004000000000000000300000006000000"
+        }
+      },
+      "expected": {
+        "dtype": "bfloat16",
+        "shape": [
+          5,
+          19
+        ],
+        "raw_hex": "4140994081c0e83f9b3f833f3fbf8ec0963fc3c0a43e77bfb6bf25c06ec085bf18404dc0e9bff7bd5dbfa0bf013f083ed93f15c0bbbf94bf5e3f14bf3cc0d3be05c01ebfdd3ffe3e553e6ebfb0be043f08bf8b3e323e883e85be28bf503d12bf18bc9bbe16beeabedcbe683d643e9c3ecebe67bfc4bf4cbfc43fb23e8a3f84c08e3f3240da3e1440f0bfe43f08c0c63d6a40b8bf8c3e773f3a40db40ce40b5be3abe1cbf093f1c40d83dd240a2c0a4c08240bc405cbd1cc07440084076c0"
+      }
+    },
+    {
+      "name": "norm_float32_dim0",
+      "parameters": {
+        "in_features": 13,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": -1,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": true,
+        "norm_dim": 0,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            24
+          ],
+          "raw_hex": "000000000edb334099b6fbbe79fb0dc02666e13ffd820b406261e7bf38a2bdbf88e329407a5fbf3fb2f927c020879bbe2ade3b40c0814b3cb16c0fc04ff07a3ff13720400e47b2bf5ef7d6bfd87b2140f6e1b83f545818c0fc3319bfecfa3f40"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            2,
+            2
+          ],
+          "raw_hex": "673c74a84e00000039e3a14375000000"
+        },
+        "weight_scale": {
+          "dtype": "float32",
+          "shape": [
+            13
+          ],
+          "raw_hex": "7b148ebfdb4067bfc05832bf48e1fabe121191be6e039dbdba1e053e945fac3ee5170b3f0000403f1ce8743f1be8943f295caf3f"
+        },
+        "weight_bias": {
+          "dtype": "float32",
+          "shape": [
+            13
+          ],
+          "raw_hex": "b81e053e5c8fc23d8ec2753dcacccc3c10d723bced5138bd09d7a3bd1e85ebbd999919bea3703dbeae4761be5c8f82bee17a94be"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            1,
+            2,
+            13
+          ],
+          "raw_hex": "07000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float32",
+        "shape": [
+          5,
+          13
+        ],
+        "raw_hex": "486c314095a023c03a82cd3f2411593f6602debeed5138bdce45423dead5c63e999919be12d80c3f9183f9bf4c8c41c0a6d16e40dd554b3fa894ab3d175995bfd90d9bbfe6cf3b3ffe5985bea8557b3e99a57fbf413eb03fd6a5d83f8393d1bf988173bf72c48bbe2ac74cc0e5a30740cfb4babff7c82ebfeec89b3d907cefbb12aa85be6a7b5ebe7090d5be5e639dbf6b72144054044f403a0d57c09eeb2540c7b20f402015febfb9578e3f2c82ee3e997423be09d7a3bdbb2b5c3e028f293fa3703dbea6be373f00e816c0cf4563c08c8de9bfa4b6223fdd50523db57d56bf309339bf4af81f3e0717923e2b523a3fb6bbc9bf801af63f1b320b40463ffdbf69108ebf"
+      }
+    },
+    {
+      "name": "norm_float16_dim1",
+      "parameters": {
+        "in_features": 13,
+        "out_features": 5,
+        "vector_lens": [
+          -1,
+          3
+        ],
+        "num_centroids": [
+          -1,
+          8
+        ],
+        "num_res_centroids": [
+          -1,
+          -1
+        ],
+        "group_size": -1,
+        "group_num": -1,
+        "npercent": 0.0,
+        "enable_norm": true,
+        "norm_dim": 1,
+        "enable_perm": false
+      },
+      "tensors": {
+        "centroids.weight": {
+          "dtype": "float16",
+          "shape": [
+            1,
+            24
+          ],
+          "raw_hex": "00009f41deb770c00b3f5c403bbfedbd4f41fb3d40c1dcb4df415c227bc0d83b024192bdb8be0c41c73dc3c0cab80042"
+        },
+        "indices": {
+          "dtype": "int32",
+          "shape": [
+            1,
+            2,
+            2
+          ],
+          "raw_hex": "673c74a84e00000039e3a14375000000"
+        },
+        "weight_scale": {
+          "dtype": "float16",
+          "shape": [
+            5
+          ],
+          "raw_hex": "71bcd7b72930003a7b3d"
+        },
+        "weight_bias": {
+          "dtype": "float16",
+          "shape": [
+            5
+          ],
+          "raw_hex": "293066261fadecb1a4b4"
+        }
+      },
+      "codes": {
+        "indices": {
+          "dtype": "int64",
+          "shape": [
+            1,
+            2,
+            13
+          ],
+          "raw_hex": "07000000000000000400000000000000010000000000000006000000000000000300000000000000000000000000000005000000000000000300000000000000000000000000000005000000000000000200000000000000070000000000000004000000000000000100000000000000070000000000000004000000000000000100000000000000060000000000000003000000000000000000000000000000050000000000000003000000000000000000000000000000050000000000000002000000000000000700000000000000"
+        }
+      },
+      "expected": {
+        "dtype": "float16",
+        "shape": [
+          5,
+          13
+        ],
+        "raw_hex": "8d4142c23041fb3f1fbe2930acbb1fbe2930acbb47408d4142c21735d724b4bad8bc3f3d68bdcebc3f3d68bdcebc023a1735d724f634f1b58232e52ea6af9bb02db4a6af9bb02db43d34f634f1b566bfe2bf084066bfc8bd7d3becb167387d3becb167382abee2bf3e4071bc5eb43e405642c6c320434842c6c320434842a4c071bc"
+      }
+    }
+  ]
+}

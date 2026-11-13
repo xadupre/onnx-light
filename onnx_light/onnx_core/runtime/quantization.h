@@ -818,6 +818,49 @@ Tensor ReconstructExl3Weights(const EncodedValueProto &value, size_t max_bytes =
                               int32_t reconstruction_dtype = TensorProto::FLOAT);
 
 /**
+ * Carries GPTQModel's pinned vendored Torch VPTQ checkpoint, not a scalar profile.
+ *
+ * Tensor names match state_dict: indices, centroids.weight, optional
+ * res_centroids.weight, outlier_centroids.weight, outlier_indices, weight_scale,
+ * weight_bias, perm and bias. Nonpersistent inverse_perm is derived from perm,
+ * not accepted as checkpoint state. Codebooks share FLOAT, FLOAT16 or BFLOAT16 dtype.
+ * Constructor metadata is retained verbatim; group_size/group_num are the original
+ * mutually exclusive knobs, not the resolved layout. Packed indices are INT32
+ * little-endian bitstreams of main | residual << main_bits. Outlier indices are
+ * unpacked INT32. Outlier residual codebooks and unpacked main indices are rejected.
+ */
+struct VptqWeights {
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+  int64_t schema_version = 1;
+  int64_t in_features = 0, out_features = 0, bits = 4;
+  std::array<int64_t, 2> vector_lens{8, 8}, num_centroids{4096, 4096}, num_res_centroids{-1, -1};
+  double npercent = 0, kmeans_tol = 1e-5, percdamp = 0.01;
+  int64_t group_size = -1, group_num = -1, norm_dim = 0, kmeans_iters = 100, kmeans_seed = 0,
+          block_size = 128;
+  bool enable_norm = false, enable_perm = false;
+  std::string kmeans_mode;
+};
+
+/** Imports native VPTQ state losslessly into onnx_light.vptq_weights.v1. */
+EncodedValueProto ImportVptqWeights(const VptqWeights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated constructor metadata and native tensor bytes without recoding. */
+VptqWeights ExportVptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs FLOAT [out_features,in_features], lifting source-dtype results.
+ *
+ * Rounds residual addition, normalization multiplication and normalization addition
+ * separately to the codebook dtype, as in the pinned eager Torch implementation.
+ * Applies inverse permutation before normalization; retains but does not add bias.
+ * Bounds checkpoint storage and logical FLOAT output independently by max_bytes.
+ */
+Tensor ReconstructVptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/**
  * Quantizes a finite FLOAT matrix using complete groups of 32 columns along axis 1.
  *
  * Implements compressed-tensors eb058d630f7344099459b6795b1e3eeffdda4b40's E2M3

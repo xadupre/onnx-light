@@ -22,6 +22,7 @@ onnx_light.onnx_core
     quantization
     shape_inference
     tensor_statistics
+    vptq
 
 .. automodule:: onnx_light.onnx_core
     :members:

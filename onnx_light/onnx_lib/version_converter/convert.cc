@@ -81,6 +81,36 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
     // might change when applying the adapter (e.g. for deprecated ops)
     while (it != g->end()) {
       cur_op = *it;
+      if (cur_op->kind() == kConstant && cur_op->outputs().size() == 1 &&
+          cur_op->output()->elemType() == TensorProto_DataType_UNDEFINED) {
+        int32_t output_type = TensorProto_DataType_UNDEFINED;
+        const Symbol value_float("value_float");
+        const Symbol value_floats("value_floats");
+        const Symbol value_int("value_int");
+        const Symbol value_ints("value_ints");
+        const Symbol value_string("value_string");
+        const Symbol value_strings("value_strings");
+        if (cur_op->hasAttribute(kvalue) && cur_op->kindOf(kvalue) == AttributeKind::t) {
+          output_type = cur_op->t(kvalue).elem_type();
+        } else if ((cur_op->hasAttribute(value_float) &&
+                    cur_op->kindOf(value_float) == AttributeKind::f) ||
+                   (cur_op->hasAttribute(value_floats) &&
+                    cur_op->kindOf(value_floats) == AttributeKind::fs)) {
+          output_type = TensorProto_DataType_FLOAT;
+        } else if ((cur_op->hasAttribute(value_int) &&
+                    cur_op->kindOf(value_int) == AttributeKind::i) ||
+                   (cur_op->hasAttribute(value_ints) &&
+                    cur_op->kindOf(value_ints) == AttributeKind::is)) {
+          output_type = TensorProto_DataType_INT64;
+        } else if ((cur_op->hasAttribute(value_string) &&
+                    cur_op->kindOf(value_string) == AttributeKind::s) ||
+                   (cur_op->hasAttribute(value_strings) &&
+                    cur_op->kindOf(value_strings) == AttributeKind::ss)) {
+          output_type = TensorProto_DataType_STRING;
+        }
+        if (output_type != TensorProto_DataType_UNDEFINED)
+          cur_op->output()->setElemType(output_type);
+      }
       debug(std::string("Finding schema for ") + std::string(cur_op->kind().toString()));
       const std::string op_name = cur_op->kind().toString();
       if (op_name == "ConstantFill") {

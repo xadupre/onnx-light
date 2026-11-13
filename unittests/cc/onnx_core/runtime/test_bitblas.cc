@@ -59,8 +59,9 @@ TEST(BitblasWeights, RawCodesZerosSignednessAndBytes) {
       EXPECT_EQ(actual.data_type, tensor.data_type);
       EXPECT_EQ(actual.shape, tensor.shape);
       ASSERT_EQ(actual.size_bytes(), tensor.size_bytes());
-      if (tensor.size_bytes())
+      if (tensor.size_bytes()) {
         EXPECT_EQ(std::memcmp(actual.bytes(), tensor.bytes(), tensor.size_bytes()), 0);
+      }
     }
     auto metadata = Fixture(symmetric);
     metadata.tensors.clear();
@@ -92,6 +93,45 @@ TEST(BitblasWeights, RejectsInvalidExtentsAndMetadataBeforeAllocation) {
   checkpoint.tensors.at("qweight") =
       Tensor::Borrow("qweight", TensorProto::INT8, {32, 8}, nullptr, 256);
   EXPECT_THROW(ImportBitblasWeights(checkpoint), std::invalid_argument);
+}
+
+TEST(BitblasWeights, ValidatesAllFp16ScalesForEveryOperation) {
+  for (const bool symmetric : {false, true}) {
+    const auto checkpoint = Fixture(symmetric);
+    const auto original = ImportBitblasWeights(checkpoint);
+    const auto codes = UnpackBitblasCodes(original);
+    auto metadata = Fixture(symmetric);
+    metadata.tensors.clear();
+
+    for (const uint16_t bits : {uint16_t{0x0000}, uint16_t{0x8000}, uint16_t{0xbc00},
+                                uint16_t{0x7c00}, uint16_t{0xfc00}, uint16_t{0x7e01}}) {
+      auto invalid = Fixture(symmetric);
+      auto &scales = invalid.tensors.at("scales");
+      std::memcpy(scales.mutable_bytes() + scales.size_bytes() - 2, &bits, 2);
+      EXPECT_THROW(ImportBitblasWeights(invalid), std::invalid_argument);
+      EXPECT_THROW(PackBitblasWeights(metadata, codes, scales, invalid.tensors.at("qzeros")),
+                   std::invalid_argument);
+
+      auto value = original;
+      auto *raw = value.mutable_raw_data();
+      const size_t scale_end = checkpoint.tensors.at("qweight").size_bytes() + scales.size_bytes();
+      (*raw)[scale_end - 2] = static_cast<char>(bits & 0xff);
+      (*raw)[scale_end - 1] = static_cast<char>(bits >> 8);
+      EXPECT_THROW(ExportBitblasWeights(value), std::invalid_argument);
+      EXPECT_THROW(UnpackBitblasCodes(value), std::invalid_argument);
+      EXPECT_THROW(ReconstructBitblasWeights(value), std::invalid_argument);
+    }
+
+    for (const uint16_t bits : {uint16_t{0x0001}, uint16_t{0x7bff}}) {
+      auto valid = Fixture(symmetric);
+      auto &scales = valid.tensors.at("scales");
+      std::memcpy(scales.mutable_bytes() + scales.size_bytes() - 2, &bits, 2);
+      const auto value = ImportBitblasWeights(valid);
+      EXPECT_NO_THROW(ExportBitblasWeights(value));
+      EXPECT_NO_THROW(UnpackBitblasCodes(value));
+      EXPECT_NO_THROW(ReconstructBitblasWeights(value));
+    }
+  }
 }
 
 TEST(BitblasWeights, RejectsCorruptSchemasAndPayloadsOnEveryConsumer) {

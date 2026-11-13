@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstring>
 #include <limits>
 
@@ -223,6 +225,17 @@ Geometry Validate(const EncodedValueProto &value, size_t limit,
   return g;
 }
 
+void CheckScales(const Geometry &g, const uint8_t *data) {
+  const auto &scales = g.fields[1];
+  for (size_t offset = 0; offset < scales.bytes; offset += 2) {
+    const auto *p = data + scales.offset + offset;
+    const uint16_t bits = static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
+    const float scale = Float16BitsToFloat(bits);
+    EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0,
+                        "BitBLAS nonfinite or nonpositive scale.");
+  }
+}
+
 Tensor Codes(const Geometry &g, const uint8_t *data) {
   auto codes = UnpackQuantizationCodes({reinterpret_cast<const char *>(data), g.fields[0].bytes},
                                        g.count, g.metadata.bits);
@@ -234,8 +247,7 @@ Tensor Codes(const Geometry &g, const uint8_t *data) {
                 std::move(bytes));
 }
 
-// Converts only the storage representation. GPTQ owns zero/group validation,
-// finite scale checks and the common FLOAT reconstruction contract.
+// Converts the storage representation to the common GPTQ FLOAT reconstruction contract.
 EncodedValueProto Affine(const Geometry &g, const uint8_t *data, size_t limit) {
   auto codes = Codes(g, data);
   const auto bits = g.metadata.bits;
@@ -298,7 +310,7 @@ EncodedValueProto ImportBitblasWeights(const BitblasWeights &weights, size_t max
   for (const auto &field : g.fields)
     CopyWords(data + field.offset, weights.tensors.at(field.name).bytes(), field.bytes,
               field.width);
-  Affine(g, data, max_bytes);
+  CheckScales(g, data);
   StructTypeCatalogue{}.ValidateEncodedValue(result);
   return result;
 }
@@ -307,7 +319,7 @@ BitblasWeights ExportBitblasWeights(const EncodedValueProto &value, size_t max_b
                                     const StructTypeCatalogue &catalogue) {
   const auto g = Validate(value, max_bytes, catalogue);
   const auto *data = reinterpret_cast<const uint8_t *>(value.raw_data().data());
-  Affine(g, data, max_bytes);
+  CheckScales(g, data);
   auto result = g.metadata;
   for (const auto &field : g.fields) {
     std::vector<uint8_t> bytes(field.bytes);
@@ -322,15 +334,16 @@ Tensor UnpackBitblasCodes(const EncodedValueProto &value, size_t max_bytes,
                           const StructTypeCatalogue &catalogue) {
   const auto g = Validate(value, max_bytes, catalogue);
   const auto *data = reinterpret_cast<const uint8_t *>(value.raw_data().data());
-  Affine(g, data, max_bytes);
+  CheckScales(g, data);
   return Codes(g, data);
 }
 
 Tensor ReconstructBitblasWeights(const EncodedValueProto &value, size_t max_bytes,
                                  const StructTypeCatalogue &catalogue) {
   const auto g = Validate(value, max_bytes, catalogue);
-  return ReconstructGptqWeights(
-      Affine(g, reinterpret_cast<const uint8_t *>(value.raw_data().data()), max_bytes), max_bytes);
+  const auto *data = reinterpret_cast<const uint8_t *>(value.raw_data().data());
+  CheckScales(g, data);
+  return ReconstructGptqWeights(Affine(g, data, max_bytes), max_bytes);
 }
 
 EncodedValueProto PackBitblasWeights(const BitblasWeights &metadata, const Tensor &codes,

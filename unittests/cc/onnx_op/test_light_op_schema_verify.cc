@@ -97,7 +97,7 @@ TEST(LightOpSchemaVerify, DequantizePackedMetadata) {
     shape->set_type(AttributeProto::INTS);
     shape->add_ints(32);
     EXPECT_NO_THROW(schema.Verify(node));
-    node.mutable_attribute()->pop_back();
+    node.mutable_attribute()->RemoveLast();
     EXPECT_THROW(schema.Verify(node), SchemaError);
   }
 }

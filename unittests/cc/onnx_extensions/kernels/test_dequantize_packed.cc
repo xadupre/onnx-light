@@ -241,7 +241,7 @@ TEST(DequantizePacked, RunsThroughRuntimeAndOptimizedShapeDispatch) {
 
 TEST(DequantizePacked, OptimizedShapeChecksContractsAndEmptyDimensions) {
   using namespace core::symbolic;
-  const SymShape partially_symbolic{SymDim(0), SymDim("bytes")};
+  const SymShape partially_symbolic{SymDim(int64_t{0}), SymDim("bytes")};
   EXPECT_THROW(partially_symbolic.NumElements(), std::runtime_error);
   const int64_t max = std::numeric_limits<int64_t>::max();
   core::shapes::ShapesContext shapes;

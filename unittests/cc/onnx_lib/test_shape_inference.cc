@@ -91,7 +91,7 @@ TEST(onnx_shape_inference, DequantizePackedEmptyAndDefault) {
   for (const auto &dims : std::vector<std::vector<int64_t>>{
            {0, 32}, {2, 0}, {std::numeric_limits<int64_t>::max(), 2, 0}}) {
     auto model = DequantizePackedShapeModel("gguf:q4_0", dims, {0});
-    model.mutable_graph()->mutable_node(0)->mutable_attribute()->pop_back();
+    model.mutable_graph()->mutable_node(0)->mutable_attribute()->RemoveLast();
     ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
                                                  ShapeInferenceOptions(true, 1, false)));
     const auto &output = model.graph().output(0).type().tensor_type();

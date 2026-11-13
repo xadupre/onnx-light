@@ -265,6 +265,118 @@ restrictions do not prevent reference decoding of the serialized layouts.
     # unpack_awq_codes(encoded) returns UINT8 [N,K].
     # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
 
+.. _l-qqq-checkpoints:
+
+Native GPTQModel QQQ weight checkpoints
+--------------------------------------
+
+``onnx_light.onnx_core.qqq`` imports, exports, packs native codes and reconstructs
+**weights only**. It does not implement QQQ calibration, dynamic INT8 activation
+quantization or accelerated matrix multiplication, and is not full QQQ inference
+support. No Torch or GPTQModel installation is needed to use it.
+
+The versioned ``onnx_light.qqq_weights.v1`` contract pins GPTQModel
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``. The authority is its
+`QQQ implementation <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/qqq.py>`_,
+especially ``_get_perms``, ``pack`` and the ``QQQTorchLinear`` weight reference.
+The `packing compatibility guide <https://github.com/ModelCloud/GPTQModel/wiki/Packing-Formats-and-Compatibility>`_
+is supplementary; future revisions are not implicitly supported.
+
+Let ``K`` and ``N`` be positive input and output widths. This adapter accepts
+four-bit codes, ``K`` and ``N`` divisible by 64, and group sizes ``-1`` or 128.
+``-1`` resolves to ``K``. Group 128 requires ``K`` divisible by 128;
+``K=128, group_size=128`` uses the **channelwise** layout, not grouped layout.
+There is **no checkpoint padding**: logical and stored widths are identical,
+with complete tiles and groups. Ragged widths, arbitrary padded extents, other
+bit widths and other group sizes are rejected. Upstream GPU launch/class
+selection imposes additional dimension-pair restrictions; accepting a serialized
+weight layout does not assert that a QQQ execution backend can run it.
+
+Pass exactly these module-local arrays:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Buffer
+     - Type and exact shape
+   * - ``B``
+     - INT32 ``[K/16, 2*N]``
+   * - ``s_channel``
+     - FLOAT32 ``[1,N]``, permuted in blocks of 32
+   * - ``s_group``
+     - FLOAT16 ``[K/128,N]``, permuted in blocks of 64, or empty ``[0]``
+       for channelwise weights
+
+``B`` is **not ordinary GPTQ qweight**. Starting from codes in ``[K,N]`` order,
+the producer reshapes to ``[K/16,16,N/16,16]``, transposes axes to ``[0,2,1,3]``,
+flattens to ``[K/16,16*N]`` and gathers each 1024-code block by permutation
+``P``. For ``i=0..31``, ``j=0..3``, ``t=0..7``, in that nesting order::
+
+    u = I[t]
+    P[32*i + 8*j + t] = 256*j + 16*(4*(i % 4) + u % 4) + i//4 + 8*(u//4)
+    I_grouped = [0,2,4,6,1,3,5,7]
+    I_channel = [4,0,5,1,6,2,7,3]
+
+Eight gathered codes occupy each INT32 word, least-significant nibble first.
+All signed INT32 bit patterns are preserved. Grouped nibbles are offset-binary
+``code-8``; channelwise nibbles are signed two's-complement INT4. Thus nibble
+8 means zero in grouped mode but -8 in channelwise mode.
+
+Scale packing gathers each flattened block using::
+
+    P_group = [i + 8*j for i in range(8) for j in range(8)]
+    P_channel = [2*i + j for i in range(4) for j in [0,1,8,9,16,17,24,25]]
+
+Decoding applies the inverse permutations. The producer stores grouped
+``float16(raw_scale / float32(s_extra))`` and channel ``float32(s_extra)``
+separately. In channelwise mode it stores ``float32(raw_scale / 16)``, where
+division precedes the FLOAT32 conversion. Import/export never recalculate
+these parameters, recover raw scales or replace them with a precombined scale.
+
+Reference reconstruction returns FLOAT32 ``[N,K]`` on the upstream **Torch
+weight grid**. After unpermuting scales, grouped reconstruction evaluates
+``float32(code-8) * float32(s_group[k//128,n])``, rounds to the nearest integer
+with ties to even, clamps to ``[-128,127]``, then multiplies by
+``s_channel[n]`` in FLOAT32. Channelwise reconstruction evaluates
+``float32(signed_int4(code)*16) * s_channel[n]``. The group rounding and
+saturation stage is essential; an affine product of the two scales is wrong.
+This reference does not promise bit-identical accelerator inference.
+
+The schema records dimensions, group size, bits, revision and exact tensor
+types/extents. Its payload concatenates ``B``, ``s_channel``, ``s_group`` in
+little-endian order. C++ import/export tensors use native byte order.
+Python requires C-contiguous, native-endian NumPy arrays. Import owns a snapshot;
+export returns metadata and independent arrays with exact codes and scale bits.
+Bias, scratch buffers, GPTQ/AWQ side tensors, external/unloaded payloads and
+unknown metadata/schema versions are rejected. Portable GPTQ/AWQ profiles and
+compressed-tensors adapters remain unchanged.
+
+Every entry point validates checked products, exact extents and resource limits.
+``max_bytes`` defaults to 1 GiB and bounds the checkpoint payload and logical
+FLOAT32 storage separately, not total process RSS. Nonfinite/negative scales
+and nonfinite reconstructed results are rejected; zero scales are valid,
+including channel-scale underflow from the producer's FP16 division by 16.
+The checked-in ``qqq_native_v1.json`` fixture and adjacent generator use the
+fingerprinted pinned upstream producer and weight-reference methods, with Torch
+required only for regeneration.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.qqq import (
+        import_qqq_weights, export_qqq_weights, reconstruct_qqq_weights,
+    )
+
+    encoded = import_qqq_weights(
+        tensors, in_features=256, out_features=128, group_size=128
+    )
+    checkpoint = export_qqq_weights(encoded)
+    assert import_qqq_weights(**checkpoint).SerializeToString() == encoded.SerializeToString()
+    weights = reconstruct_qqq_weights(encoded)  # float32 [N,K]
+    # unpack_qqq_codes returns uint8 [N,K] native nibbles (not signed values).
+    # pack_qqq_weights(codes, s_channel, s_group, ...) accepts those logical
+    # nibbles and the original, already-permuted native scale tensors.
+    # Generic dequantize_tensor_proto also reconstructs this FLOAT32 reference.
+
 .. _l-bitsandbytes-checkpoints:
 
 Native GPTQModel bitsandbytes checkpoints

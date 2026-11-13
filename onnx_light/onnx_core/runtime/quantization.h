@@ -624,6 +624,34 @@ EncodedValueProto PackGptqWeights(const GptqWeights &metadata, const Tensor &cod
                                   const Tensor &zeros, const Tensor &scales, const Tensor &g_idx,
                                   size_t max_bytes = size_t{1} << 30);
 
+/** Carries a pinned native GPTQModel QQQ checkpoint without execution support. */
+struct QqqWeights {
+  int64_t in_features = 0, out_features = 0, group_size = -1;
+  uint32_t bits = 4;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+  std::unordered_map<std::string, Tensor> tensors;
+};
+
+/** Imports native QQQ B and already-permuted scale tensors byte-for-byte. */
+EncodedValueProto ImportQqqWeights(const QqqWeights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated native QQQ tensors and metadata. */
+QqqWeights ExportQqqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks native unsigned nibbles into UINT8 [N,K]. */
+Tensor UnpackQqqCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                      const StructTypeCatalogue &catalogue = {});
+
+/** Reconstructs FLOAT [N,K] with the pinned QQQ reference rounding stages. */
+Tensor ReconstructQqqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                             const StructTypeCatalogue &catalogue = {});
+
+/** Packs native nibble codes and already-permuted scales; requires empty metadata.tensors. */
+EncodedValueProto PackQqqWeights(const QqqWeights &metadata, const Tensor &codes,
+                                 const Tensor &s_channel, const Tensor &s_group,
+                                 size_t max_bytes = size_t{1} << 30);
+
 /** Carries a pinned native GPTQModel AWQ checkpoint, distinct from portable kAwq. */
 struct AwqWeights {
   std::string variant;

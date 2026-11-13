@@ -92,6 +92,36 @@ The adapters preserve original codes, scale bits, zero parameters and padding;
 they do not calibrate weights or implement GPU kernels. Generic dequantization
 also recognizes this schema.
 
+Native GPTQModel QQQ weights
+----------------------------
+
+``QqqWeights`` in ``onnx_core/runtime/quantization.h`` describes the pinned
+four-bit tiled ``B`` tensor and separately permuted ``s_channel``/``s_group``
+buffers. See :ref:`the exact weight contract <l-qqq-checkpoints>` for dimensions,
+scale permutations, code interpretation and reference arithmetic.
+
+.. code-block:: cpp
+
+    QqqWeights checkpoint;
+    checkpoint.in_features = 256;
+    checkpoint.out_features = 128;
+    checkpoint.group_size = 128;
+    checkpoint.tensors = loaded_module_tensors;  // B, s_channel, s_group
+    auto encoded = ImportQqqWeights(checkpoint);
+    auto restored = ExportQqqWeights(encoded);  // exact native tensors and metadata
+    auto codes = UnpackQqqCodes(encoded);       // UINT8 native nibbles [output,input]
+    auto weights = ReconstructQqqWeights(encoded);  // FLOAT [output,input]
+
+``PackQqqWeights(metadata, codes, s_channel, s_group, max_bytes)`` accepts
+already-quantized nibble codes and the original **already-permuted** scale
+tensors; ``metadata.tensors`` must be empty. It does not derive or combine scales.
+Grouped reconstruction rounds and saturates to INT8 before channel scaling.
+Export, unpack and reconstruction accept a ``StructTypeCatalogue`` as their third
+argument; generic dequantization also recognizes this schema. ``max_bytes``
+separately bounds payload and logical FLOAT storage (default 1 GiB).
+These APIs provide weight serialization and reference reconstruction, not
+calibration, activation quantization or accelerated QQQ inference.
+
 Native GPTQModel bitsandbytes weights
 ------------------------------------
 

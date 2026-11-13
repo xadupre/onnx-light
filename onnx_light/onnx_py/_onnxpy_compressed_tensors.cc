@@ -28,6 +28,7 @@ using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
 using core::runtime::Exl3Weights;
 using core::runtime::GptqWeights;
+using core::runtime::QqqWeights;
 using core::runtime::Shape;
 using core::runtime::Tensor;
 using ONNX_LIGHT_NAMESPACE::EncodedValueProto;
@@ -278,6 +279,22 @@ Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total,
                         array.nbytes());
 }
 
+QqqWeights QqqMetadata(int64_t in_features, int64_t out_features, int64_t group_size, uint32_t bits,
+                       const std::string &revision, size_t max_bytes) {
+  EXT_ENFORCE_INVALID(revision == kExl3Revision, "QQQ unsupported upstream revision.");
+  EXT_ENFORCE_INVALID(max_bytes > 0 && in_features > 0 && out_features > 0 && bits == 4 &&
+                          in_features % 64 == 0 && out_features % 64 == 0 &&
+                          (group_size == -1 || (group_size == 128 && in_features % 128 == 0)),
+                      "QQQ unsupported dimensions, bits, group_size or max_bytes.");
+  QqqWeights result;
+  result.in_features = in_features;
+  result.out_features = out_features;
+  result.group_size = group_size;
+  result.bits = bits;
+  result.upstream_revision = revision;
+  return result;
+}
+
 void ConvertNativeLittleEndianWords(Tensor &tensor) {
   if constexpr (std::endian::native == std::endian::big) {
     const size_t width = tensor.element_size();
@@ -308,6 +325,73 @@ nb::object ArrayFromLittleEndianTensor(Tensor tensor) {
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("qqq_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_qqq_weights",
+      [](const nb::dict &tensors, int64_t in_features, int64_t out_features, int64_t group_size,
+         uint32_t bits, const std::string &revision, size_t max_bytes) {
+        auto weights =
+            QqqMetadata(in_features, out_features, group_size, bits, revision, max_bytes);
+        EXT_ENFORCE_INVALID(tensors.size() == 3, "QQQ requires B, s_channel and s_group.");
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "QQQ tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "B" || name == "s_channel" || name == "s_group",
+                              "QQQ unexpected side tensor.");
+          weights.tensors.emplace(name, BorrowGptqArray(name, item.second, total, max_bytes));
+        }
+        return core::runtime::ImportQqqWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("in_features"), nb::arg("out_features"),
+      nb::arg("group_size") = -1, nb::arg("bits") = 4, nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "pack_qqq_weights",
+      [](nb::handle codes, nb::handle s_channel, nb::handle s_group, int64_t in_features,
+         int64_t out_features, int64_t group_size, uint32_t bits, const std::string &revision,
+         size_t max_bytes) {
+        const auto metadata =
+            QqqMetadata(in_features, out_features, group_size, bits, revision, max_bytes);
+        size_t total = 0;
+        const auto c = BorrowGptqArray("codes", codes, total, max_bytes);
+        const auto channel = BorrowGptqArray("s_channel", s_channel, total, max_bytes);
+        const auto group = BorrowGptqArray("s_group", s_group, total, max_bytes);
+        return core::runtime::PackQqqWeights(metadata, c, channel, group, max_bytes);
+      },
+      nb::arg("codes"), nb::arg("s_channel"), nb::arg("s_group"), nb::arg("in_features"),
+      nb::arg("out_features"), nb::arg("group_size") = -1, nb::arg("bits") = 4,
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_qqq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportQqqWeights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["group_size"] = weights.group_size;
+        result["bits"] = weights.bits;
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_qqq_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackQqqCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_qqq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructQqqWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("bitsandbytes_upstream_revision") = kExl3Revision;
   runtime.def(
       "import_bitsandbytes_weights",

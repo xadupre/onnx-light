@@ -28,6 +28,7 @@ public:
     Node *constant = graph->create(kConstant);
     constant->t_(kvalue, tensor);
     constant->insertBefore(before);
+    constant->output()->setElemType(TensorProto_DataType_INT64);
     return constant;
   }
 
@@ -39,6 +40,7 @@ public:
     Node *constant = graph->create(kConstant);
     constant->t_(kvalue, tensor);
     constant->insertBefore(before);
+    constant->output()->setElemType(TensorProto_DataType_FLOAT);
     return constant;
   }
 
@@ -140,6 +142,7 @@ public:
     suffix_length->addInput(shape_of_shape->output());
     suffix_length->addInput(two->output());
     suffix_length->insertBefore(node);
+    suffix_length->output()->setElemType(TensorProto_DataType_INT64);
 
     Tensor tensor_one;
     tensor_one.elem_type() = TensorProto_DataType_INT64;
@@ -150,6 +153,7 @@ public:
     suffix_ones->t_(kvalue, tensor_one);
     suffix_ones->addInput(suffix_length->output());
     suffix_ones->insertBefore(node);
+    suffix_ones->output()->setElemType(TensorProto_DataType_INT64);
 
     Node *affine_prefix = make_int64_constant(graph, node, {1, -1});
     Node *affine_shape = graph->create(kConcat);

@@ -33,6 +33,10 @@ public:
     if (!node->hasAttribute(kmode) || node->s(kmode) == "constant") {
       if (!node->hasAttribute(kvalue))
         node->f_(kvalue, 0.);
+      ONNX_ASSERTM(!node->inputs().empty() &&
+                       node->inputs()[0]->elemType() != TensorProto_DataType_UNDEFINED,
+                   "Pad input type must be known to convert the value attribute.")
+      const int32_t input_type = node->inputs()[0]->elemType();
       Tensor t_value;
       t_value.elem_type() = TensorProto_DataType_FLOAT;
       auto &data_value = t_value.floats();
@@ -41,7 +45,17 @@ public:
       Node *constant = graph->create(kConstant);
       constant->insertBefore(node);
       constant->t_(kvalue, t_value);
-      node->addInput(constant->output());
+      constant->output()->setElemType(TensorProto_DataType_FLOAT);
+      Value *value = constant->output();
+      if (input_type != TensorProto_DataType_FLOAT) {
+        Node *cast = graph->create(kCast);
+        cast->i_(kto, input_type);
+        cast->addInput(value);
+        cast->insertBefore(node);
+        cast->output()->setElemType(input_type);
+        value = cast->output();
+      }
+      node->addInput(value);
       node->removeAttribute(kvalue);
     }
   }

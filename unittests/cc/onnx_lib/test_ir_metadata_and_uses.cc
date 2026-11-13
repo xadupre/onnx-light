@@ -35,6 +35,23 @@ TEST(onnx_ir, CopyMetadataCopiesKnownSizes) {
   EXPECT_EQ(destination->sizes()[1].dim, 3);
 }
 
+TEST(onnx_ir, CopyMetadataPreservesPossibleTypes) {
+  Graph graph;
+  Value *source = graph.addInput();
+  source->setPossibleElemTypes({TensorProto_DataType_INT32, TensorProto_DataType_INT64});
+  Value *destination = graph.addInput();
+
+  source->copyMetadata(source);
+  destination->copyMetadata(source);
+
+  ASSERT_NE(source->possibleElemTypes(), nullptr);
+  ASSERT_NE(destination->possibleElemTypes(), nullptr);
+  EXPECT_EQ(*source->possibleElemTypes(), *destination->possibleElemTypes());
+  source->setElemType(TensorProto_DataType_INT64);
+  EXPECT_EQ(source->possibleElemTypes(), nullptr);
+  EXPECT_NE(destination->possibleElemTypes(), nullptr);
+}
+
 TEST(onnx_ir, HasUsesInCurrentGraphTracksDirectUses) {
   Graph graph;
   Value *input = graph.addInput();

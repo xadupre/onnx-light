@@ -146,7 +146,7 @@ struct Dimension final {
  * float (@c f), float list (@c fs), integer (@c i), integer list (@c is),
  * string (@c s), string list (@c ss), tensor (@c t), tensor list (@c ts),
  * subgraph (@c g), subgraph list (@c gs), type-proto (@c tp), and
- * type-proto list (@c tps).
+ * type-proto list (@c tps), and unresolved function attribute reference (@c ref).
  */
 enum class AttributeKind : uint8_t {
   // float, float list, int, int list, string, string list,
@@ -162,7 +162,8 @@ enum class AttributeKind : uint8_t {
   g,
   gs,
   tp,
-  tps
+  tps,
+  ref
 };
 
 /// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
@@ -173,8 +174,8 @@ enum class AttributeKind : uint8_t {
  */
 static inline const char *toString(AttributeKind kind) {
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  static constexpr const char *names[] = {"f", "fs", "i", "is", "s",  "ss",
-                                          "t", "ts", "g", "gs", "tp", "tps"};
+  static constexpr const char *names[] = {"f",  "fs", "i",  "is", "s",   "ss", "t",
+                                          "ts", "g",  "gs", "tp", "tps", "ref"};
   ONNX_ASSERT(size_t(kind) < std::size(names))
   return names[static_cast<int>(kind)];
 }
@@ -210,6 +211,7 @@ struct AttributeValue {
  */
 template <typename T, AttributeKind Kind>
 struct ScalarAttributeValue final : public AttributeValue {
+  static constexpr AttributeKind attribute_kind = Kind;
   using ConstructorType = const T &;
   using ValueType = T;
   ScalarAttributeValue(Symbol name, ConstructorType value_)
@@ -232,6 +234,7 @@ private:
  */
 template <typename T, AttributeKind Kind>
 struct VectorAttributeValue final : public AttributeValue {
+  static constexpr AttributeKind attribute_kind = Kind;
   using ConstructorType = const std::vector<T> &&;
   using ValueType = std::vector<T>;
   VectorAttributeValue(Symbol name, ValueType value_)
@@ -273,6 +276,8 @@ using GraphsAttr = VectorAttributeValue<std::shared_ptr<Graph>, AttributeKind::g
 using TypeProtoAttr = ScalarAttributeValue<TypeProto, AttributeKind::tp>;
 /** @brief Type-proto-list attribute (kind @c tps). */
 using TypeProtosAttr = VectorAttributeValue<TypeProto, AttributeKind::tps>;
+/** @brief Unresolved function attribute reference (kind @c ref). */
+using ReferenceAttr = ScalarAttributeValue<AttributeProto, AttributeKind::ref>;
 
 /**
  * @brief CRTP mixin that adds typed attribute storage to a node class.
@@ -368,6 +373,7 @@ template <typename Derived> struct Attributes {
   CREATE_ACCESSOR(Graphs, gs)
   CREATE_ACCESSOR(TypeProto, tp)
   CREATE_ACCESSOR(TypeProtos, tps)
+  CREATE_ACCESSOR(Reference, ref)
 
 #undef CREATE_ACCESSOR
 
@@ -392,6 +398,8 @@ private:
   }
   template <typename T> typename T::ValueType &get(Symbol name) const {
     auto it = find(name, true);
+    ONNX_ASSERTM((*it)->kind() == T::attribute_kind,
+                 "Cannot read an unresolved or differently typed attribute: %s", name.toString());
     T *child = static_cast<T *>(it->get());
     return child->value();
   }
@@ -490,6 +498,7 @@ private:
   bool has_sizes_{false};
   std::vector<Dimension> sizes_;
   std::unique_ptr<TypeProto> type_;
+  std::unique_ptr<std::vector<int32_t>> possible_elem_types_;
 
 public:
   /**
@@ -498,10 +507,24 @@ public:
    */
   Value *setElemType(int32_t elem_type) {
     elem_type_ = elem_type;
+    possible_elem_types_.reset();
     return this;
   }
   /** @brief Returns the ONNX element type. */
   int32_t elemType() const { return elem_type_; }
+  /** @brief Records a nonempty set of possible types when the exact type is unknown. */
+  Value *setPossibleElemTypes(std::vector<int32_t> types) {
+    ONNX_ASSERTM(elem_type_ == TensorProto::DataType::UNDEFINED && !types.empty(),
+                 "Possible element types require an unknown type and a nonempty set.")
+    for (const int32_t type : types) {
+      ONNX_ASSERTM(type != TensorProto::DataType::UNDEFINED && TensorProto::DataType_IsValid(type),
+                   "A possible element type must be defined.")
+    }
+    possible_elem_types_ = std::make_unique<std::vector<int32_t>>(std::move(types));
+    return this;
+  }
+  /** @brief Returns inferred alternatives when the exact element type is unknown. */
+  const std::vector<int32_t> *possibleElemTypes() const { return possible_elem_types_.get(); }
   /** @brief Returns true if shape information has been set. */
   bool has_sizes() const { return has_sizes_; }
   /**
@@ -617,7 +640,12 @@ public:
    * @return @c this for chaining.
    */
   Value *copyMetadata(const Value *from) {
+    if (this == from)
+      return this;
     setElemType(from->elemType());
+    if (from->possibleElemTypes()) {
+      setPossibleElemTypes(*from->possibleElemTypes());
+    }
     if (from->has_sizes()) {
       setSizes(from->sizes());
     } else {
@@ -634,6 +662,8 @@ public:
 
   /** @brief Returns a mutable reference to the optional TypeProto for this value. */
   std::unique_ptr<TypeProto> &type() { return type_; }
+  /** @brief Returns a const reference to the optional TypeProto for this value. */
+  const std::unique_ptr<TypeProto> &type() const { return type_; }
 };
 
 /**

@@ -8,47 +8,30 @@
 
 #pragma once
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "onnx_lib/version_converter/adapters/adapter.h"
 #include "onnx_lib/version_converter/adapters/transformers.h"
+#include "onnx_lib/version_converter/adapters/type_restriction.h"
 #include "onnx_lib/version_converter/internal_symbol.h"
 
 namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
-class Scatter_16_15 : public Adapter {
+class Scatter_16_15 : public TypeRestriction {
 public:
   explicit Scatter_16_15(const std::string &op_name, const OpSetID &initial, const OpSetID &target,
                          const std::vector<TensorProto_DataType> &unallowed_types)
-      : Adapter(op_name, initial, target), unallowed_types_(unallowed_types) {}
+      : TypeRestriction(op_name, initial, target, unallowed_types) {}
 
   Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
+    ONNX_ASSERTM(node->inputs().size() >= 3, "Scatter requires three inputs.")
+    for (size_t i = 0; i < 3; ++i) {
+      ONNX_ASSERTM(!node->inputs()[i]->uniqueName().empty(), "Scatter requires three inputs.")
+    }
     adapt_type_restriction(graph, node);
     RemoveAttribute(Symbol("reduction"), std::string("none"))(graph, node);
     return node;
-  }
-
-private:
-  std::vector<TensorProto_DataType> unallowed_types_;
-
-  void adapt_type_restriction(const std::shared_ptr<Graph> & /*unused*/, const Node *node) const {
-    for (const Value *input : node->inputs()) {
-      isUnallowed(input);
-    }
-    for (const Value *output : node->outputs()) {
-      isUnallowed(output);
-    }
-  }
-
-  void isUnallowed(const Value *val) const {
-    ONNX_ASSERTM(std::find(std::begin(unallowed_types_), std::end(unallowed_types_),
-                           val->elemType()) == std::end(unallowed_types_),
-                 "DataType (", val->elemType(), ") of Input or Output of operator '", name(),
-                 "' is unallowed for Opset Version ",
-                 static_cast<int64_t>(target_version().version()), ".")
   }
 };
 

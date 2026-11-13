@@ -59,6 +59,10 @@ struct ExtendSupportedTypes final : public Adapter {
 
     bool castInput = (node->kind() != kConstant);
     bool castOutput = (node->kind() != kGreater && node->kind() != kLess);
+    ONNX_ASSERTM(!castInput || input_type > TensorProto_DataType_UNDEFINED,
+                 "Input type must be known for type-extension conversion.")
+    ONNX_ASSERTM(!castOutput || output_type > TensorProto_DataType_UNDEFINED,
+                 "Output type must be known for type-extension conversion.")
     if (castInput && supported_version8_types.find(input_type) == supported_version8_types.end()) {
       for (size_t i = 0; i < inputs.size(); i++) {
         Node *pre_cast =

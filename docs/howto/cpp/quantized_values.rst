@@ -119,6 +119,35 @@ The adapters preserve original codes, scale bits, zero parameters and padding;
 they do not calibrate weights or implement GPU kernels. Generic dequantization
 also recognizes this schema.
 
+Native GPTQModel ParoQuant operators
+-----------------------------------
+
+``ParoQuantWeights`` in ``onnx_core/runtime/quantization.h`` retains the exact
+AWQ-GEMM words together with learned ``pairs``, ``theta``, ``channel_scales`` and
+optional ``bias``. See :ref:`l-paroquant-checkpoints` for the pinned upstream,
+tensor shapes, dtype contract and mandatory activation transformation.
+
+.. code-block:: cpp
+
+    ParoQuantWeights checkpoint;
+    checkpoint.in_features = 128;
+    checkpoint.out_features = 128;
+    checkpoint.group_size = 32;
+    checkpoint.krot = 8;
+    checkpoint.tensors = loaded_module_tensors;
+    auto encoded = ImportParoQuantWeights(checkpoint);
+    auto restored = ExportParoQuantWeights(encoded);
+    auto codes = UnpackParoQuantCodes(encoded);  // UINT8 [output,input]
+    auto weight = ReconstructParoQuantWeights(encoded);  // transformed basis only
+    auto output = ApplyParoQuantLinear(encoded, input);  // FLOAT [...,input] -> [...,output]
+
+Generic dequantization rejects ParoQuant: discarding rotations/channel scales
+would change the operator. ``ApplyParoQuantLinear`` scales and rotates FLOAT
+activations in serialized order before the reference matrix multiplication and
+optional bias; it does not emulate accelerator rounding.
+Weight reconstruction first retains the pinned dense consumer's rounding to the
+saved FP16/BF16 scale dtype, then widens to FLOAT.
+
 Native GPTQModel QQQ weights
 ----------------------------
 

@@ -1953,6 +1953,12 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, QuantizationHeader 
 }
 
 DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(
+      !encoded.has_struct_type() || catalogue.Resolve(encoded.struct_type()).name().value() !=
+                                        "onnx_light.paroquant_weights.v1",
+      "ParoQuant includes activation scaling and rotations; use ApplyParoQuantLinear instead "
+      "of generic dequantization. ReconstructParoQuantWeights returns transformed-basis weights "
+      "only.");
   if (encoded.has_struct_type() && catalogue.Resolve(encoded.struct_type()).name().value() ==
                                        "onnx_light.gptqmodel_fp8_weights.v1") {
     const auto tensor = ReconstructGptqModelFp8Weights(encoded, size_t{1} << 30, catalogue);

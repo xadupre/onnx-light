@@ -268,6 +268,122 @@ restrictions do not prevent reference decoding of the serialized layouts.
     # unpack_awq_codes(encoded) returns UINT8 [N,K].
     # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
 
+.. _l-paroquant-checkpoints:
+
+Native GPTQModel ParoQuant operators
+-----------------------------------
+
+``onnx_light.onnx_core.paroquant`` imports/exports one loaded ParoLinear module
+from GPTQModel revision ``c1976918cfe3703fbcf6d1ce2440a82b26394375``.
+The source contract is pinned to
+`ParoLinear <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/paroquant.py>`_
+and
+`its rotation reference <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/paroquant.py>`_.
+The
+`checkpoint producer <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/looper/paroquant_processor.py>`_
+casts the learned floating state to the module's FLOAT16/BFLOAT16 dtype.
+This is not the portable ``quarot`` or ``awq`` profile, a compressed-tensors
+adapter, or an optimized inference kernel.
+
+For input width ``K``, output width ``N``, effective group size ``G`` and
+``R=krot`` ordered rotation steps, the native state is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 20 60
+
+   * - Tensor
+     - Shape
+     - Contract
+   * - ``qweight``
+     - ``[K,N/8]``
+     - INT32 exact four-bit AWQ-GEMM output-packed words.
+   * - ``qzeros``
+     - ``[K/G,N/8]``
+     - INT32 exact AWQ-GEMM zero parameters, no zero-minus-one adjustment.
+   * - ``scales``
+     - ``[K/G,N]``
+     - FLOAT16/BFLOAT16 positive finite AWQ scales.
+   * - ``pairs``
+     - ``[R,K]``
+     - INT16 group-local indices. Each group in each row is a permutation of
+       ``0..G-1``; adjacent entries form a disjoint pair.
+   * - ``theta``
+     - ``[R,K/2]``
+     - Learned angles in radians, in step/group/pair order.
+   * - ``channel_scales``
+     - ``[1,K]``
+     - Learned multiplicative input scales, applied once before all rotation steps.
+   * - ``bias`` (optional)
+     - ``[N]``
+     - Output bias, added after matrix multiplication.
+
+The pinned module initially registers FLOAT16 rotation angles and channel
+scales; runtime dtype conversions can produce BFLOAT16 state. Floating side
+tensors (including optional bias) must be FLOAT16/BFLOAT16 and are preserved
+without conversion. FLOAT32 is a reference activation/computation dtype, not a
+supported checkpoint parameter dtype. Dense rotation matrices are not part
+of this pinned serialized representation and are rejected rather than inferred.
+The exact :ref:`AWQ GEMM packing <l-awq-checkpoints>` primitives are reused:
+physical nibble lanes contain logical outputs ``[0,2,4,6,1,3,5,7]`` and
+``W[n,k] = (code[n,k] - zero[k//G,n]) * scales[k//G,n]``.
+For the pinned dense consumer, this product is rounded to the saved scale dtype
+before widening to FLOAT32. ParoQuant reconstruction and application preserve
+that materialization step; the separate AWQ API's algebraic FLOAT32
+reconstruction remains unchanged. Nonfinite materialized weights are rejected
+by the reference consumers.
+The pinned producer quantizes symmetrically (zero code eight), but still stores
+explicit packed ``qzeros``. ``desc_act`` does not introduce a ``g_idx`` or an
+additional permutation in this representation. The stored runtime channel
+scales are used directly, without inverting them again.
+
+Metadata explicitly records dimensions, ``group_size`` (``-1`` means ``K``),
+``krot``, ``bits=4``, ``group_axis=1``, upstream revision and the versioned
+``onnx_light.paroquant_weights.v1`` schema. ``K`` must be divisible by the even
+effective group size, ``N`` by eight, and ``R`` must be positive. INT16 local
+indices limit ``G`` to 32768. Identity rotations still require valid, complete
+side state: missing tensors, duplicate or out-of-range pair indices, malformed
+dimensions, unknown tensors/revisions and nonfinite parameters are rejected.
+Checkpoint geometry is distinct from upstream GPU launch restrictions.
+
+**Consumer requirement:** weight reconstruction alone is not the represented
+linear operator. For row activations, first compute ``z = x * channel_scales``.
+For each step in increasing order and each local pair ``(i,j)``, simultaneously
+replace its previous values with
+``(z_i*cos(theta) + z_j*sin(theta), -z_i*sin(theta) + z_j*cos(theta))``.
+Then compute ``y = z @ W.T + bias``. Rotations do not generally commute.
+``reconstruct_paroquant_weights`` returns only the transformed-basis ``W``;
+callers using it must apply the activation transform separately.
+Generic ``dequantize_tensor_proto`` rejects this schema instead of silently
+discarding the side state.
+
+``apply_paroquant_linear`` provides the complete FLOAT32 reference path for
+finite, C-contiguous, native-endian NumPy inputs of rank at least two with last
+dimension ``K``; it preserves leading dimensions. It uses FLOAT arithmetic,
+with FP16/BFLOAT16 weight materialization as described above, not bit-identical
+low-precision activation rounding or accelerator accumulation.
+Runtime LoRA/adapters are not serialized by this API. Learning rotations,
+calibration, file loading and optimized kernels are out of scope.
+
+Import creates an independent snapshot and export returns all original bytes
+and metadata. ``max_bytes`` defaults to 1 GiB and bounds stored payload,
+logical FLOAT weights and reference workspace; it is not a process RSS limit.
+Overflow, malformed extents and invalid state are checked before output
+allocation, including identity and empty-input paths.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.paroquant import (
+        import_paroquant_weights, export_paroquant_weights, apply_paroquant_linear,
+    )
+
+    encoded = import_paroquant_weights(
+        tensors, in_features=128, out_features=128, group_size=32, krot=8
+    )
+    saved = export_paroquant_weights(encoded)
+    assert import_paroquant_weights(**saved).SerializeToString() == encoded.SerializeToString()
+    y = apply_paroquant_linear(encoded, x)  # x: float32 [...,128]
+
 .. _l-marlin-bitblas-checkpoints:
 
 Explicit GPTQModel Marlin and BitBLAS layouts

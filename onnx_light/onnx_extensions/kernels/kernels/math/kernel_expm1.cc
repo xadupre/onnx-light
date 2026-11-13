@@ -42,7 +42,8 @@ void Expm1::Configure(const KernelTuningParameters &parameters) {
 }
 
 Tensor Expm1::operator()(const Tensor &x, RuntimeContext *rt) const {
-  const size_t y_n_bytes = PackedByteSize(x.data_type, x.element_count());
+  const size_t y_n_bytes =
+      PackedByteSize(x.data_type, x.shape.product(0, x.shape.size(), kName));
   EXT_ENFORCE_INVALID(x.size_bytes() == y_n_bytes, kName, ": input buffer size mismatch.");
   Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, y_n_bytes)
                 : MakeOutputTensor(x.data_type, x.shape, y_n_bytes, nullptr);
@@ -56,7 +57,7 @@ void Expm1::operator()(const Tensor &x, Tensor &output) const {
   EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
   EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName,
                       ": output buffer size mismatch.");
-  const int64_t n = x.element_count();
+  const int64_t n = x.shape.product(0, x.shape.size(), kName);
   EXT_ENFORCE_INVALID(x.size_bytes() == PackedByteSize(x.data_type, n), kName,
                       ": input buffer size mismatch.");
   switch (static_cast<DataType>(x.data_type)) {

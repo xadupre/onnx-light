@@ -6,6 +6,7 @@
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/collections/partition_group_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/matmul/matmul_pattern.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -73,6 +74,92 @@ TEST(PartitionGroupPattern, CallsCoreSelectionAndPreservesShapeAndNames) {
   VerifyModel(builder.ToModel());
   EXPECT_TRUE(Optimize(builder, 8, 2).rewrites().empty());
   EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+}
+
+TEST(PartitionGroupPattern, FusesExtractedFunctionInSamePassAndPreservesReplayAndUndo) {
+  onnx_patterns::RegisterPatterns();
+  for (const bool all_patterns : {false, true})
+    for (const bool parallel : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << all_patterns << "," << parallel);
+      GraphBuilder builder("matmul_add", SchemaLookup(), {{"", 18}});
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+      builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+      builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
+      builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+      builder.MakeNode("Add", {"mm", "bias"}, {"y"});
+      builder.MakeOutput("y");
+      const auto original = builder.ToModel();
+      const auto original_graph = builder.BuildGraph();
+      const auto original_hash = builder.RewritingHash();
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      if (all_patterns) {
+        const auto sets = core::builder::RegisteredPatternSets();
+        for (const auto &name : sets.at("all"))
+          patterns.push_back(onnx_patterns::CreatePattern(name));
+      } else {
+        patterns.push_back(std::make_unique<PartitionGroupPattern>());
+        patterns.push_back(std::make_unique<onnx_patterns::MatMulAddPattern>());
+      }
+      GraphGraph graph(builder, std::move(patterns));
+      core::builder::OptimizationReport report;
+      std::vector<std::string> matches;
+      const auto callback = [&](const GraphGraph &, const core::builder::MatchResult &match) {
+        matches.push_back(match.pattern->Name());
+        return true;
+      };
+      const auto plan = graph.Optimize(-1, &report, {}, true, callback, parallel);
+      EXPECT_EQ(matches, (std::vector<std::string>{"PartitionGroup", "MatMulAdd"}));
+      EXPECT_EQ(report.rewrites, 2u);
+      ASSERT_EQ(builder.Nodes().size(), 1u);
+      EXPECT_EQ(builder.Nodes()[0].domain(), "ai.rt");
+      ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+      const auto &body = *builder.LocalFunctions()[0];
+      ASSERT_EQ(body.Nodes().size(), 1u);
+      EXPECT_EQ(body.Nodes()[0].op_type(), "Gemm");
+      ASSERT_EQ(plan.added_functions().size(), 1u);
+      ASSERT_EQ(plan.added_functions(0).node().size(), 1u);
+      EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Gemm");
+      VerifyModel(builder.ToModel());
+
+      GraphBuilder source(original, SchemaLookup());
+      auto replayed = source.ApplyRewritings(plan);
+      EXPECT_EQ(replayed.RewritingHash(), builder.RewritingHash());
+      VerifyModel(replayed.ToModel());
+      const auto undone = builder.UndoRewritings(plan);
+      EXPECT_EQ(undone.RewritingHash(), original_hash);
+      EXPECT_TRUE(undone.BuildGraph().Equals(original_graph));
+      EXPECT_TRUE(undone.LocalFunctions().empty());
+      const auto repeated = graph.Optimize(-1, &report);
+      EXPECT_TRUE(repeated.rewrites().empty());
+      EXPECT_TRUE(repeated.added_functions().empty());
+      EXPECT_EQ(report.rewrites, 0u);
+      EXPECT_EQ(builder.LocalFunctions().size(), 1u);
+    }
+}
+
+TEST(PartitionGroupPattern, FusesModelOwnedFunctionFromDirectSubgraphOptimization) {
+  onnx_patterns::RegisterPatterns();
+  GraphBuilder builder("subgraph", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+  builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
+  auto &subgraph = builder.MakeSubgraph("body");
+  subgraph.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  subgraph.MakeNode("Add", {"mm", "bias"}, {"y"});
+  subgraph.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<PartitionGroupPattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::MatMulAddPattern>());
+  GraphGraph graph(subgraph, std::move(patterns));
+  const auto plan = graph.Optimize();
+
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  const auto &function = *builder.LocalFunctions()[0];
+  ASSERT_EQ(function.Nodes().size(), 1u);
+  EXPECT_EQ(function.Nodes()[0].op_type(), "Gemm");
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Gemm");
 }
 
 TEST(PartitionGroupPattern, RunsOnlyAtFirstNodeAndRevalidatesApply) {

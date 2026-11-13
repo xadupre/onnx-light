@@ -316,6 +316,67 @@ TEST(IfIdenticalBranchesPattern, ForwardsBranchLocalInitializer) {
   EXPECT_EQ(optimized.graph().node(0).output(0), "y0");
 }
 
+TEST(IfIdenticalBranchesPattern, PreservesNestedGraphAttributeNamesDuringInlining) {
+  for (const std::string attribute_name : {"body", "body_ref__onnx_light_graph_reference_0"}) {
+    GraphProto first, second;
+    for (auto *branch : {&first, &second}) {
+      const std::string suffix = branch == &first ? "_then" : "_else";
+      GraphProto nested;
+      nested.set_name("nested" + suffix);
+      nested.add_node(MakeNode("Identity", {"x"}, {"nested_result" + suffix}));
+      *nested.add_output() = Value("nested_result" + suffix);
+      auto call = MakeNode("Custom", {"x"}, {"result" + suffix}, "custom");
+      auto &attribute = *call.add_attribute();
+      attribute.set_name(attribute_name);
+      attribute.set_type(AttributeProto::GRAPH);
+      *attribute.mutable_g() = nested;
+      branch->add_node(call);
+      *branch->add_output() = Value("result" + suffix);
+    }
+
+    auto original = Model(first, second);
+    original.add_opset("custom", 1);
+    FunctionProto function;
+    function.set_name("Custom");
+    function.set_domain("custom");
+    function.add_input("arg");
+    function.add_output("result");
+    function.add_opset("", 18);
+    function.add_node(MakeNode("Identity", {"arg"}, {"result"}));
+    function.add_attribute(attribute_name);
+    AttributeProto optional_reference;
+    optional_reference.set_name("body_ref");
+    optional_reference.set_type(AttributeProto::INT);
+    optional_reference.set_i(1);
+    *function.add_attribute_proto() = optional_reference;
+    *original.add_functions() = function;
+
+    GraphBuilder builder(original, SchemaLookup());
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<IfIdenticalBranchesPattern>());
+    GraphGraph graph(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions folding;
+    folding.enabled = false;
+    const auto plan = graph.Optimize(-1, nullptr, folding);
+    ASSERT_FALSE(plan.rewrites().empty());
+
+    const auto optimized = builder.ToModel(original.ir_version());
+    ASSERT_EQ(optimized.graph().node_size(), 1);
+    const auto *attribute = FindAttribute(optimized.graph().node(0), attribute_name.c_str());
+    ASSERT_NE(attribute, nullptr);
+    ASSERT_TRUE(attribute->has_g());
+    EXPECT_EQ(attribute->name(), attribute_name);
+    EXPECT_NO_THROW(VerifyModel(optimized));
+
+    const auto round_trip = GraphBuilder(optimized, SchemaLookup()).ToModel();
+    const auto *round_trip_attribute =
+        FindAttribute(round_trip.graph().node(0), attribute_name.c_str());
+    ASSERT_NE(round_trip_attribute, nullptr);
+    EXPECT_TRUE(round_trip_attribute->has_g());
+    EXPECT_EQ(round_trip_attribute->name(), attribute_name);
+  }
+}
+
 GraphProto NestedBranch(const std::string &suffix, const char *op = "If") {
   GraphProto branch;
   branch.set_name("outer" + suffix);
@@ -364,6 +425,30 @@ GraphProto NestedBranch(const std::string &suffix, const char *op = "If") {
         ->add_dim()
         ->set_dim_value(2);
   return branch;
+}
+
+TEST(IfIdenticalBranchesPattern, RejectsUnsupportedInitializerConstantsAtOlderOpsets) {
+  GraphProto first, second;
+  for (auto *branch : {&first, &second}) {
+    const auto name = branch == &first ? "then_weight" : "else_weight";
+    *branch->add_initializer() = MakeInitializer<int64_t>(name, {2}, {1, 2});
+    *branch->add_output() = Value(name, TensorProto::INT64);
+  }
+  auto original = Model(first, second);
+  original.ref_opset_import()[0].set_version(8);
+  EXPECT_NO_THROW(VerifyModel(original));
+
+  GraphBuilder builder(original, SchemaLookup());
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<IfIdenticalBranchesPattern>());
+  GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  EXPECT_TRUE(graph.Optimize(-1, nullptr, folding).rewrites().empty());
+  const auto unchanged = builder.ToModel(original.ir_version());
+  ASSERT_EQ(unchanged.graph().node_size(), 1);
+  EXPECT_EQ(unchanged.graph().node(0).op_type(), "If");
+  EXPECT_NO_THROW(VerifyModel(unchanged));
 }
 
 TEST(IfIdenticalBranchesPattern, NestedSubgraphsKeepLexicalCapturesAndReplay) {

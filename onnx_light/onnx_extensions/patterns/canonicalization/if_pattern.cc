@@ -24,6 +24,8 @@ using core::builder::GraphBuilder;
 using Bindings = std::unordered_map<std::string, std::size_t>;
 using Names = std::unordered_map<std::string, std::string>;
 
+constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_";
+
 bool SameTensor(const TensorProto &left, const TensorProto &right) {
   for (const auto *tensor : {&left, &right})
     if (tensor->HasDeferredWeight() || tensor->has_segment() ||
@@ -270,6 +272,46 @@ void RenameGraph(GraphProto &scope, GraphBuilder &builder, const std::string &pr
 }
 
 void ImportGraphs(NodeProto &node, GraphBuilder &builder) {
+  std::unordered_set<std::string> occupied_names;
+  for (const auto &attribute : node.attribute())
+    occupied_names.insert(attribute.name().value());
+  std::size_t alias_index = 0;
+  const auto is_declared_attribute = [&](const std::string &name) {
+    const auto *schema = builder.FindSchema(node.op_type(), node.domain(), node.overload());
+    if (schema != nullptr) {
+      for (const auto &declared : schema->attributes())
+        if (declared.name == name)
+          return true;
+    } else {
+      const auto *function =
+          builder.Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+              node.domain(), node.op_type(), node.overload()));
+      if (function != nullptr) {
+        for (const auto &declared : function->attribute())
+          if (declared == name)
+            return true;
+        for (const auto &declared : function->attribute_proto())
+          if (declared.name() == name)
+            return true;
+      }
+    }
+    return false;
+  };
+  const auto reference_name_for = [&](const AttributeProto &attribute) {
+    const auto &name = attribute.name().value();
+    const std::string direct_name = name + "_ref";
+    if (name.find(kGraphReferenceAliasMarker) == std::string::npos &&
+        !is_declared_attribute(direct_name) && occupied_names.count(direct_name) == 0) {
+      occupied_names.insert(direct_name);
+      return direct_name;
+    }
+    std::string alias;
+    do {
+      alias = name + kGraphReferenceAliasMarker + std::to_string(alias_index++) + "_ref";
+    } while (is_declared_attribute(alias) || occupied_names.count(alias) != 0);
+    occupied_names.insert(alias);
+    return alias;
+  };
   for (auto &attribute : node.ref_attribute()) {
     if (!attribute.has_g() && attribute.graphs().empty())
       continue;
@@ -281,7 +323,7 @@ void ImportGraphs(NodeProto &node, GraphBuilder &builder) {
       return name;
     };
     AttributeProto reference;
-    reference.set_name(attribute.name().value() + "_ref");
+    reference.set_name(reference_name_for(attribute));
     if (attribute.has_g()) {
       reference.set_type(AttributeProto::STRING);
       reference.set_s(import(attribute.g()));
@@ -292,6 +334,29 @@ void ImportGraphs(NodeProto &node, GraphBuilder &builder) {
     }
     attribute = std::move(reference);
   }
+}
+
+bool CanInlineInitializers(const GraphBuilder &builder, const GraphProto &graph) {
+  if (graph.initializer().empty())
+    return true;
+  if (builder.OpsetVersion("") <= 0)
+    return false;
+  const auto *schema = builder.FindSchema("Constant");
+  if (schema == nullptr || schema->outputs().empty())
+    return false;
+  const auto &constraints = schema->type_constraints();
+  const auto constraint =
+      std::find_if(constraints.begin(), constraints.end(), [&](const auto &entry) {
+        return entry.type_param_str == schema->outputs().front().type;
+      });
+  if (constraint == constraints.end())
+    return false;
+  return std::all_of(
+      graph.initializer().begin(), graph.initializer().end(), [&](const auto &initializer) {
+        const auto type = core::symbolic::DataTypeToTensorType(initializer.data_type());
+        return std::find(constraint->allowed_type_strs.begin(), constraint->allowed_type_strs.end(),
+                         type) != constraint->allowed_type_strs.end();
+      });
 }
 
 } // namespace
@@ -321,7 +386,7 @@ core::builder::MatchResult IfIdenticalBranchesPattern::Match(core::builder::Grap
       a->output().size() != candidate.output().size() ||
       (first != nullptr && !CompatibleDevices(*first, graph.Builder().device())) ||
       (second != nullptr && !CompatibleDevices(*second, graph.Builder().device())) ||
-      !SameGraph(*a, *b, {}, {}))
+      !CanInlineInitializers(graph.Builder(), *a) || !SameGraph(*a, *b, {}, {}))
     return NoMatch(candidate, "If branches are not equivalent");
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }

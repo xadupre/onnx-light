@@ -81,7 +81,8 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
     // might change when applying the adapter (e.g. for deprecated ops)
     while (it != g->end()) {
       cur_op = *it;
-      if (cur_op->kind() == kConstant && cur_op->outputs().size() == 1 &&
+      if ((cur_op->domain().empty() || cur_op->domain() == "ai.onnx") &&
+          cur_op->kind() == kConstant && cur_op->outputs().size() == 1 &&
           cur_op->output()->elemType() == TensorProto_DataType_UNDEFINED) {
         int32_t output_type = TensorProto_DataType_UNDEFINED;
         const Symbol value_float("value_float");

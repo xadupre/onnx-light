@@ -48,6 +48,28 @@ ModelProto MakeConstantConsumerModel(int64_t opset, const std::string &consumer)
   return model;
 }
 
+ModelProto MakeCustomDomainConstantModel() {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(10);
+  model.add_opset_import()->set_domain("custom");
+  model.mutable_opset_import(1)->set_version(1);
+
+  auto *graph = model.mutable_graph();
+  graph->set_name("custom_domain_constant");
+  graph->add_output()->set_name("Y");
+  auto *constant = graph->add_node();
+  constant->set_domain("custom");
+  constant->set_op_type("Constant");
+  constant->add_output("Y");
+  auto *value = constant->add_attribute();
+  value->set_name("value");
+  value->set_type(AttributeProto::TENSOR);
+  value->mutable_t()->set_data_type(TensorProto::FLOAT);
+  value->mutable_t()->add_float_data(1.0f);
+  return model;
+}
+
 ModelProto MakeFunctionAdapterModel(const std::string &op, TensorProto::DataType type,
                                     bool annotate_input = true) {
   ModelProto model;
@@ -152,6 +174,12 @@ TEST(onnx_version_converter, InfersConstantOutputTypeForAdaptersAndConsumers) {
   EXPECT_NO_THROW(version_conversion::ConvertVersion(MakeConstantConsumerModel(9, "Add"), 8));
   EXPECT_NO_THROW(
       version_conversion::ConvertVersion(MakeConstantConsumerModel(19, "Identity"), 18));
+}
+
+TEST(onnx_version_converter, DoesNotInferCustomDomainConstantOutputType) {
+  const ModelProto converted =
+      version_conversion::ConvertVersion(MakeCustomDomainConstantModel(), 9);
+  EXPECT_EQ(converted.graph().output(0).type().tensor_type().elem_type(), TensorProto::UNDEFINED);
 }
 
 TEST(onnx_version_converter, RejectsFunctionConversionWithoutRequiredConstantType) {

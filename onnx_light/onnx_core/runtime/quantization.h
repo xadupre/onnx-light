@@ -589,6 +589,31 @@ CompressedTensorsWeights ExportCompressedTensorsWeights(
     std::string upstream_revision = "eb058d630f7344099459b6795b1e3eeffdda4b40",
     size_t max_bytes = size_t{1} << 30);
 
+/** Carries resolved GPTQModel FP8 weight-only metadata and original inverse scales. */
+struct GptqModelFp8Weights {
+  int64_t in_features = 0, out_features = 0;
+  std::string format = "float8_e4m3fn";
+  std::string weight_scale_method = "row";
+  std::string weight_scale_semantics = "inverse";
+  Shape weight_block_size;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+  std::unordered_map<std::string, Tensor> tensors;
+};
+
+/** Imports native FP8 bytes and FLOAT weight_scale_inv without taking reciprocals. */
+EncodedValueProto ImportGptqModelFp8Weights(const GptqModelFp8Weights &weights,
+                                            size_t max_bytes = size_t{1} << 30);
+
+/** Exports the exact original GPTQModel FP8 tensors and resolved metadata. */
+GptqModelFp8Weights ExportGptqModelFp8Weights(const EncodedValueProto &value,
+                                              size_t max_bytes = size_t{1} << 30,
+                                              const StructTypeCatalogue &catalogue = {});
+
+/** Reconstructs FLOAT [N,K] using FP32 division by the original inverse scales. */
+Tensor ReconstructGptqModelFp8Weights(const EncodedValueProto &value,
+                                      size_t max_bytes = size_t{1} << 30,
+                                      const StructTypeCatalogue &catalogue = {});
+
 /** Carries a pinned native GPTQModel checkpoint, distinct from portable kGptq. */
 struct GptqWeights {
   std::string format = "gptq_v2";

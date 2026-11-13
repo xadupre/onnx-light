@@ -265,6 +265,142 @@ restrictions do not prevent reference decoding of the serialized layouts.
     # unpack_awq_codes(encoded) returns UINT8 [N,K].
     # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
 
+.. _l-gptqmodel-fp8-checkpoints:
+
+Native GPTQModel FP8 weight checkpoints
+--------------------------------------
+
+``onnx_light.onnx_core.gptqmodel_fp8`` supports the **native weight-only**
+FP8 checkpoint schema at GPTQModel revision
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``. Other revisions are rejected.
+The authorities are the pinned
+`FP8Config <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/quantization/config.py#L5199-L5328>`_
+and
+`TorchFP8Linear <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/fp8.py#L94-L160>`_,
+not merely matching dtype names. No Torch installation is required.
+
+The upstream config uses ``method``/``quant_method="fp8"``,
+``format``/``checkpoint_format`` set to a scalar subtype, ``bits=8``,
+``weight_scale_semantics="inverse"``, and ``weight_scale_method``.
+``group_size=-1``, ``desc_act=false`` and ``sym=true`` are fixed by FP8Config;
+integer GPTQ grouping/packing fields do not describe this format.
+The adapter consumes **resolved canonical** config fields, not arbitrary JSON:
+resolve upstream aliases/dynamic per-module overrides before calling it.
+
+Supported ``format`` values and native storage are:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Format
+      - ONNX weight dtype
+      - Pinned upstream capability
+    * - ``float8_e4m3fn``
+      - FLOAT8E4M3FN
+      - Dense quantization and reconstruction
+    * - ``float8_e5m2``
+      - FLOAT8E5M2
+      - Dense quantization and reconstruction
+    * - ``float8_e4m3fnuz``
+      - FLOAT8E4M3FNUZ
+      - Dense quantization and reconstruction
+    * - ``float8_e5m2fnuz``
+      - FLOAT8E5M2FNUZ
+      - Dense quantization and reconstruction
+    * - ``float8_e8m0fnu``
+      - FLOAT8E8M0
+      - Existing-checkpoint reconstruction only, not dense quantization
+
+Pass exactly ``weight`` (the selected FP8 dtype, ``[N,K]``, one byte per
+element) and ``weight_scale_inv`` (FLOAT32) using module-local names:
+
+.. list-table::
+    :header-rows: 1
+
+    * - ``weight_scale_method``
+      - ``weight_scale_inv`` shape
+      - Selected scale for ``weight[n,k]``
+    * - ``tensor``
+      - Scalar ``[]`` (not ``[1]``)
+      - The scalar
+    * - ``row`` (default)
+      - ``[N]`` (not ``[N,1]``)
+      - ``scale[n]``, output-channel axis
+    * - ``block``
+      - ``[N/Br,K/Bc]``
+      - ``scale[n//Br,k//Bc]``
+
+Block scaling requires positive ``weight_block_size=[Br,Bc]`` and exact
+divisibility on **both** axes, without padding or partial blocks.
+Other methods require ``weight_block_size=None`` (empty Shape in C++).
+Bias, optional smoothers and activations are outside this weight-only API;
+keep them separately. Unknown side tensors are rejected rather than discarded.
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.gptqmodel_fp8 import (
+        import_gptqmodel_fp8_weights, export_gptqmodel_fp8_weights,
+        reconstruct_gptqmodel_fp8_weights,
+    )
+
+    # Loaded NumPy arrays; FP8 dtypes are supplied by ml_dtypes.
+    encoded = import_gptqmodel_fp8_weights(
+        tensors, in_features=4, out_features=4,
+        format="float8_e4m3fn", weight_scale_method="block",
+        weight_scale_semantics="inverse", weight_block_size=[2, 2],
+    )
+    checkpoint = export_gptqmodel_fp8_weights(encoded)
+    assert import_gptqmodel_fp8_weights(**checkpoint).SerializeToString() == encoded.SerializeToString()
+    weight_out_in = reconstruct_gptqmodel_fp8_weights(encoded)  # float32 [N,K]
+
+The C++ equivalents in ``onnx_core/runtime/quantization.h`` are
+``GptqModelFp8Weights``, ``ImportGptqModelFp8Weights``,
+``ExportGptqModelFp8Weights`` and ``ReconstructGptqModelFp8Weights``.
+Export/reconstruction accept a ``StructTypeCatalogue`` for model-local schema
+references. Generic ``DequantizeTensor`` / ``dequantize_tensor_proto`` also
+dispatch to this reconstruction. All entry points validate exact versioned
+schemas, tensor dtypes/shapes/byte extents, finite positive parameters, finite
+decoded weights/reconstruction, checked dimension products and ``max_bytes``
+(default 1 GiB, bounding checkpoint and logical FLOAT32 output separately).
+Python shares loaded-array conversion with the compressed-tensors adapter;
+native schema/storage validation uses the shared ``StructTypeCatalogue``.
+
+**Scale direction and precision:** native quantization stores
+``S=FP8_MAX/absmax`` and encodes ``float32(weight)*S``.
+Our reconstruction is ``float32(decode(code))/float32(S)``, with a FLOAT32
+division and FLOAT32 result, in stored ``[N,K]`` order. It matches the pinned
+module's explicit inverse division expression at ``target_dtype=float32``
+before the module transposes to ``[K,N]`` for matmul. No reciprocal is stored,
+computed or substituted during import/export. The native
+``onnx_light.gptqmodel_fp8_weights.v1`` schema retains original scale bits
+and FP8 bytes, including signed zeros, and resolved metadata, making
+serialization and export lossless.
+
+This is deliberately **not a promise of bit-identical accelerated inference
+or every upstream dense-export path**. At the pinned revision, the generic
+`CPU helper <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/quantization/dtype.py#L350-L380>`_
+heuristically multiplies ``scale_inv`` if its global maximum magnitude is at
+most one; the module's explicit inverse path always divides. The
+`dense exporter <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/model_dequant.py#L1193-L1208>`_
+instead takes an FP32 reciprocal and multiplies when inverse semantics are
+declared. FP16/BF16 target rounding also differs. These paths can disagree:
+for code 1 and inverse scale 0.5, division gives 2, the heuristic gives 0.5.
+Even ``1/(1/S)`` need not recover the original FP32 S. Converting to a
+direct-scale portable FP8 profile or dense weights is consequently a
+**potentially lossy numerical conversion**, not a lossless checkpoint export.
+No such conversion or heuristic is performed implicitly.
+
+**Related formats are separate contracts.** GPTQModel's legacy importers
+also accept direct ``weight_scale``/``scale`` and optional ``weight_scale_2``,
+including partial or padded grids. They are not this native schema.
+Imported MXFP8 uses E8M0 *multiplicative* scales per 32 input elements:
+use the existing MXFP8 adapter, not this FLOAT32 inverse-scale adapter.
+The pinned ``nvfp8`` import label routes through a generic FP8 importer,
+not a distinct native FP8Config subtype. MXFP4, MXFP6 E2M3 and NVFP4 remain
+the existing separate numerical codecs; no MX/NV layout is inferred from
+an FP8 dtype or silently reinterpreted here. Native E8M0 **weight values**
+with FP32 inverse scales are not MXFP8's E8M0 **scale bytes**.
+
 .. _l-qqq-checkpoints:
 
 Native GPTQModel QQQ weight checkpoints

@@ -449,6 +449,8 @@ std::uint8_t FloatToFloat8E8M0Bits(double v) noexcept {
 }
 
 float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept {
+  if (bits == 0)
+    return BitcastU32ToFloat(0x00400000u); // 2^-127 is subnormal in FLOAT32.
   if (bits == 0xFFu) {
     // Canonical NaN: build a quiet NaN with sign 0.
     return BitcastU32ToFloat(0x7FC00000u);

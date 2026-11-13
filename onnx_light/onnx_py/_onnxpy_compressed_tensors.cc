@@ -6,6 +6,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
 #include <nanobind/stl/unordered_map.h>
@@ -141,6 +142,14 @@ int32_t NumpyType(nb::handle array) {
     return TensorProto::BFLOAT16;
   if (name == "float8_e4m3fn")
     return TensorProto::FLOAT8E4M3FN;
+  if (name == "float8_e4m3fnuz")
+    return TensorProto::FLOAT8E4M3FNUZ;
+  if (name == "float8_e5m2")
+    return TensorProto::FLOAT8E5M2;
+  if (name == "float8_e5m2fnuz")
+    return TensorProto::FLOAT8E5M2FNUZ;
+  if (name == "float8_e8m0fnu")
+    return TensorProto::FLOAT8E8M0;
   EXT_THROW_INVALID("compressed-tensors: unsupported NumPy dtype ", name, ".");
 }
 
@@ -214,7 +223,24 @@ nb::object ArrayFromTensor(const Tensor &tensor) {
     dtype = "bfloat16";
     break;
   case TensorProto::FLOAT8E4M3FN:
+    nb::module_::import_("ml_dtypes");
     dtype = "float8_e4m3fn";
+    break;
+  case TensorProto::FLOAT8E4M3FNUZ:
+    nb::module_::import_("ml_dtypes");
+    dtype = "float8_e4m3fnuz";
+    break;
+  case TensorProto::FLOAT8E5M2:
+    nb::module_::import_("ml_dtypes");
+    dtype = "float8_e5m2";
+    break;
+  case TensorProto::FLOAT8E5M2FNUZ:
+    nb::module_::import_("ml_dtypes");
+    dtype = "float8_e5m2fnuz";
+    break;
+  case TensorProto::FLOAT8E8M0:
+    nb::module_::import_("ml_dtypes");
+    dtype = "float8_e8m0fnu";
     break;
   default:
     EXT_THROW_INVALID("compressed-tensors: cannot export an unsupported array dtype.");
@@ -325,6 +351,71 @@ nb::object ArrayFromLittleEndianTensor(Tensor tensor) {
 } // namespace
 
 void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
+  runtime.attr("gptqmodel_fp8_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_gptqmodel_fp8_weights",
+      [](const nb::dict &tensors, int64_t in_features, int64_t out_features,
+         const std::string &format, const std::string &method, const std::string &semantics,
+         const std::optional<std::vector<int64_t>> &block_size, const std::string &revision,
+         size_t max_bytes) {
+        EXT_ENFORCE_INVALID(revision == kExl3Revision && max_bytes > 0,
+                            "GPTQModel FP8 unsupported revision or max_bytes.");
+        EXT_ENFORCE_INVALID(tensors.size() == 2 && tensors.contains("weight") &&
+                                tensors.contains("weight_scale_inv"),
+                            "GPTQModel FP8 requires exactly weight and weight_scale_inv.");
+        core::runtime::GptqModelFp8Weights weights;
+        weights.in_features = in_features;
+        weights.out_features = out_features;
+        weights.format = format;
+        weights.weight_scale_method = method;
+        weights.weight_scale_semantics = semantics;
+        if (block_size) {
+          EXT_ENFORCE_INVALID(block_size->size() == 2,
+                              "GPTQModel FP8 weight_block_size must be null or a pair.");
+          weights.weight_block_size = Shape(*block_size);
+        }
+        weights.upstream_revision = revision;
+        size_t total = 0;
+        for (const char *name : {"weight", "weight_scale_inv"}) {
+          Tensor tensor = TensorFromArray(name, tensors[name], max_bytes - total);
+          total += tensor.size_bytes();
+          weights.tensors.emplace(name, std::move(tensor));
+        }
+        return core::runtime::ImportGptqModelFp8Weights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("in_features"), nb::arg("out_features"),
+      nb::arg("format") = "float8_e4m3fn", nb::arg("weight_scale_method") = "row",
+      nb::arg("weight_scale_semantics") = "inverse", nb::arg("weight_block_size") = nb::none(),
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_gptqmodel_fp8_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportGptqModelFp8Weights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["format"] = weights.format;
+        result["weight_scale_method"] = weights.weight_scale_method;
+        result["weight_scale_semantics"] = weights.weight_scale_semantics;
+        result["weight_block_size"] =
+            weights.weight_block_size.empty()
+                ? nb::none()
+                : nb::cast(std::vector<int64_t>(weights.weight_block_size.begin(),
+                                                weights.weight_block_size.end()));
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_gptqmodel_fp8_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructGptqModelFp8Weights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("qqq_upstream_revision") = kExl3Revision;
   runtime.def(
       "import_qqq_weights",

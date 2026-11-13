@@ -241,6 +241,8 @@ TEST(DequantizePacked, RunsThroughRuntimeAndOptimizedShapeDispatch) {
 
 TEST(DequantizePacked, OptimizedShapeChecksContractsAndEmptyDimensions) {
   using namespace core::symbolic;
+  const SymShape partially_symbolic{SymDim(0), SymDim("bytes")};
+  EXPECT_THROW(partially_symbolic.NumElements(), std::runtime_error);
   const int64_t max = std::numeric_limits<int64_t>::max();
   core::shapes::ShapesContext shapes;
   shapes.Set("X", SymTensor(nullptr, TensorType::kUint8, SymShape{SymDim("bytes")}));
@@ -251,9 +253,11 @@ TEST(DequantizePacked, OptimizedShapeChecksContractsAndEmptyDimensions) {
     EXPECT_EQ(shapes.Get("Y").Shape().Rank(), size_t{3});
     EXPECT_EQ(shapes.Get("Y").Shape()[0].AsInt(), max);
     EXPECT_EQ(shapes.Get("Y").Shape()[2].AsInt(), 0);
+    EXPECT_EQ(shapes.Get("Y").Shape().NumElements(), 0);
     EXPECT_EQ(shapes.Get("Y").Dtype(),
               DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype)));
   }
+
   for (const auto &node : {PackedNode("gguf:Q4_0", {0, 32}), PackedNode("gguf:q4_0", {0, -1, 32}),
                            PackedNode("gguf:q4_0", {0, 31}), PackedNode("gguf:q4_0", {max, 32}),
                            PackedNode("gguf:q4_0", {0, 32}, TensorProto::INT8)}) {
@@ -281,4 +285,24 @@ TEST(DequantizePacked, OptimizedShapeChecksContractsAndEmptyDimensions) {
         onnx_shapes::shapes::quantization::ComputeShapeDequantizePacked(shapes, invalid, "X"),
         std::invalid_argument);
   }
+}
+
+TEST(DequantizePacked, RuntimeAcceptsHugeEmptyOutputShape) {
+  onnx_kernels::RegisterKernelFunctions();
+  const int64_t max = std::numeric_limits<int64_t>::max();
+  ModelProto model;
+  model.set_ir_version(13);
+  model.add_opset_import()->set_version(29);
+  auto *graph = model.mutable_graph();
+  graph->set_name("empty_packed");
+  graph->add_input()->set_name("X");
+  graph->add_output()->set_name("Y");
+  *graph->add_node() = PackedNode("gguf:q4_0", {max, 2, 0});
+  RuntimeSession session(model);
+  RuntimeContext context;
+  context.Put("X", Tensor("", TensorProto::UINT8, {0}, {}));
+  session.Run(context);
+  EXPECT_EQ(context.Get("Y").shape, (Shape{max, 2, 0}));
+  EXPECT_EQ(context.Get("Y").element_count(), 0);
+  EXPECT_EQ(context.Get("Y").size_bytes(), size_t{0});
 }

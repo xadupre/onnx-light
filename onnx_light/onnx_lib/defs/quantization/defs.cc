@@ -53,7 +53,7 @@ void DequantizePackedInference(InferenceContext &ctx) {
     fail_shape_inference(
         "The last output dimension must be a multiple of the quantization block size.");
   int64_t bytes = empty ? 0 : block.second;
-  for (size_t i = 0; i < shape->ints_size(); ++i) {
+  for (int i = 0; i < shape->ints_size(); ++i) {
     const auto dim = i == shape->ints_size() - 1 ? shape->ints(i) / block.first : shape->ints(i);
     if (dim != 0 && bytes > std::numeric_limits<int64_t>::max() / dim)
       fail_shape_inference("The packed byte count exceeds int64 range.");

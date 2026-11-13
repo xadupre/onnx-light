@@ -33,6 +33,7 @@ using core::runtime::GptqWeights;
 using core::runtime::QqqWeights;
 using core::runtime::Shape;
 using core::runtime::Tensor;
+using core::runtime::VptqWeights;
 using ONNX_LIGHT_NAMESPACE::EncodedValueProto;
 
 namespace {
@@ -170,6 +171,104 @@ Tensor TensorFromArray(const std::string &name, nb::handle array, size_t max_byt
   if (!bytes.empty())
     std::memcpy(bytes.data(), raw.data(), bytes.size());
   return Tensor(name, type, std::move(shape), std::move(bytes));
+}
+
+VptqWeights ParseVptqConfig(const nb::dict &config) {
+  VptqWeights result;
+  for (const char *name : {"in_features", "out_features"})
+    EXT_ENFORCE_INVALID(config.contains(name), "VPTQ missing configuration ", name, ".");
+  for (auto item : config) {
+    EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                        "VPTQ configuration names must be strings.");
+    const std::string name = nb::cast<std::string>(item.first);
+    bool known = false;
+    for (const auto &[key, destination] :
+         {std::pair<const char *, int64_t *>{"in_features", &result.in_features},
+          {"out_features", &result.out_features},
+          {"bits", &result.bits},
+          {"group_size", &result.group_size},
+          {"group_num", &result.group_num},
+          {"norm_dim", &result.norm_dim},
+          {"kmeans_iters", &result.kmeans_iters},
+          {"kmeans_seed", &result.kmeans_seed},
+          {"block_size", &result.block_size}}) {
+      if (name != key)
+        continue;
+      EXT_ENFORCE_INVALID(ExactInt(item.second), "VPTQ ", key, " must be an integer.");
+      *destination = nb::cast<int64_t>(item.second);
+      known = true;
+    }
+    for (const auto &[key, destination] :
+         {std::pair<const char *, std::array<int64_t, 2> *>{"vector_lens", &result.vector_lens},
+          {"num_centroids", &result.num_centroids},
+          {"num_res_centroids", &result.num_res_centroids}}) {
+      if (name != key)
+        continue;
+      EXT_ENFORCE_INVALID(nb::isinstance<nb::tuple>(item.second) ||
+                              nb::isinstance<nb::list>(item.second),
+                          "VPTQ ", key, " must be an integer pair.");
+      nb::sequence pair = nb::borrow<nb::sequence>(item.second);
+      EXT_ENFORCE_INVALID(nb::len(pair) == 2 && ExactInt(pair[0]) && ExactInt(pair[1]), "VPTQ ",
+                          key, " must be an integer pair.");
+      for (size_t i = 0; i < 2; ++i)
+        (*destination)[i] = nb::cast<int64_t>(pair[i]);
+      known = true;
+    }
+    for (const auto &[key, destination] :
+         {std::pair<const char *, bool *>{"enable_norm", &result.enable_norm},
+          {"enable_perm", &result.enable_perm}}) {
+      if (name != key)
+        continue;
+      EXT_ENFORCE_INVALID(ExactBool(item.second), "VPTQ ", key, " must be a boolean.");
+      *destination = nb::cast<bool>(item.second);
+      known = true;
+    }
+    for (const auto &[key, destination] :
+         {std::pair<const char *, double *>{"npercent", &result.npercent},
+          {"kmeans_tol", &result.kmeans_tol},
+          {"percdamp", &result.percdamp}}) {
+      if (name != key)
+        continue;
+      EXT_ENFORCE_INVALID(ExactInt(item.second) || nb::isinstance<nb::float_>(item.second), "VPTQ ",
+                          key, " must be a number.");
+      *destination = nb::cast<double>(item.second);
+      known = true;
+    }
+    if (name == "kmeans_mode") {
+      EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.second),
+                          "VPTQ kmeans_mode must be a string.");
+      result.kmeans_mode = nb::cast<std::string>(item.second);
+      known = true;
+    }
+    EXT_ENFORCE_INVALID(known, "VPTQ unsupported configuration ", name, ".");
+  }
+  return result;
+}
+
+nb::dict VptqConfig(const VptqWeights &weights) {
+  nb::dict result;
+  result["in_features"] = weights.in_features;
+  result["out_features"] = weights.out_features;
+  result["bits"] = weights.bits;
+  result["vector_lens"] = nb::make_tuple(weights.vector_lens[0], weights.vector_lens[1]);
+  result["num_centroids"] = nb::make_tuple(weights.num_centroids[0], weights.num_centroids[1]);
+  result["num_res_centroids"] =
+      nb::make_tuple(weights.num_res_centroids[0], weights.num_res_centroids[1]);
+  result["npercent"] = weights.npercent;
+  result["group_size"] = weights.group_size;
+  result["group_num"] = weights.group_num;
+  result["enable_norm"] = weights.enable_norm;
+  result["norm_dim"] = weights.norm_dim;
+  result["enable_perm"] = weights.enable_perm;
+  result["kmeans_mode"] = weights.kmeans_mode;
+  result["kmeans_iters"] = weights.kmeans_iters;
+  result["kmeans_tol"] = weights.kmeans_tol;
+  result["kmeans_seed"] = weights.kmeans_seed;
+  result["block_size"] = weights.block_size;
+  result["percdamp"] = weights.percdamp;
+  result["upstream_revision"] = weights.upstream_revision;
+  result["schema_version"] = weights.schema_version;
+  return result;
 }
 
 CompressedTensorsWeights ToNative(const PythonCompressedTensorsWeights &checkpoint,
@@ -802,6 +901,60 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("exl3_upstream_revision") = kExl3Revision;
+  runtime.attr("vptq_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_vptq_weights",
+      [](const nb::dict &tensors, const nb::dict &config, const std::string &revision,
+         int64_t version, size_t max_bytes) {
+        EXT_ENFORCE_INVALID(version == 1, "VPTQ unsupported schema version.");
+        EXT_ENFORCE_INVALID(revision == kExl3Revision, "VPTQ unsupported upstream revision.");
+        EXT_ENFORCE_INVALID(max_bytes > 0, "VPTQ max_bytes must be positive.");
+        EXT_ENFORCE_INVALID(tensors.size() >= 2 && tensors.size() <= 9,
+                            "VPTQ invalid number of checkpoint tensors.");
+        VptqWeights weights = ParseVptqConfig(config);
+        weights.upstream_revision = revision;
+        weights.schema_version = version;
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "VPTQ tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "indices" || name == "centroids.weight" ||
+                                  name == "res_centroids.weight" ||
+                                  name == "outlier_centroids.weight" || name == "outlier_indices" ||
+                                  name == "weight_scale" || name == "weight_bias" ||
+                                  name == "perm" || name == "bias",
+                              "VPTQ unexpected checkpoint tensor ", name, ".");
+          Tensor tensor = TensorFromArray(name, item.second, max_bytes - total);
+          total += tensor.size_bytes();
+          weights.tensors.emplace(name, std::move(tensor));
+        }
+        return core::runtime::ImportVptqWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("config"), nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("schema_version") = 1, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_vptq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportVptqWeights(value, max_bytes);
+        nb::dict result;
+        for (const auto &[name, tensor] : weights.tensors)
+          result[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_vptq_config",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return VptqConfig(core::runtime::ExportVptqConfig(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_vptq_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructVptqWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(
       "import_exl3_weights",
       [](const nb::dict &tensors, const std::string &revision, size_t max_bytes) {

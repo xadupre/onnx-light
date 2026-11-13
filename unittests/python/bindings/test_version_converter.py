@@ -410,6 +410,256 @@ class TestVersionConverter(ExtTestCase):
         with self.assertRaisesRegex(RuntimeError, "must be known"):
             version_converter.convert_version(unknown_model, 18)
 
+    def test_type_restriction_infers_intermediate_types(self):
+        for op_type, output_type, attributes, domain in (
+            ("Relu", onnxl.TensorProto.FLOAT, {}, ""),
+            ("Cast", onnxl.TensorProto.INT64, {"to": onnxl.TensorProto.INT64}, ""),
+            ("Relu", onnxl.TensorProto.FLOAT, {}, "ai.onnx"),
+        ):
+            with self.subTest(op_type=op_type, domain=domain):
+                graph = oh.make_graph(
+                    [
+                        oh.make_node(
+                            op_type, ["X"], ["intermediate"], domain=domain, **attributes
+                        ),
+                        oh.make_node("Identity", ["intermediate"], ["Y"], domain=domain),
+                    ],
+                    "intermediate_type",
+                    [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])],
+                    [oh.make_tensor_value_info("Y", output_type, [2])],
+                )
+                model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid(domain, 19)])
+                checker.check_model(model, full_check=True)
+                before = model.SerializeToString()
+                converted = version_converter.convert_version(model, 18)
+                checker.check_model(converted, full_check=True)
+                self.assertEqual(
+                    [node.op_type for node in converted.graph.node], [op_type, "Identity"]
+                )
+                self.assertEqual(model.SerializeToString(), before)
+
+    def test_type_restriction_rejects_inferred_disallowed_intermediate_type(self):
+        graph = oh.make_graph(
+            [
+                oh.make_node("Cast", ["X"], ["A"], to=onnxl.TensorProto.FLOAT8E4M3FN),
+                oh.make_node("Identity", ["A"], ["B"]),
+                oh.make_node("Cast", ["B"], ["Y"], to=onnxl.TensorProto.FLOAT),
+            ],
+            "intermediate_float8",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 19)])
+        checker.check_model(model, full_check=True)
+        with self.assertRaisesRegex(RuntimeError, "is unallowed"):
+            version_converter.convert_version(model, 18)
+
+    def test_type_restriction_uses_types_from_enclosing_scope(self):
+        tensor_type = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2])
+        sequence_type = oh.make_sequence_type_proto(tensor_type)
+        for source in ("input", "initializer", "intermediate", "sequence"):
+            with self.subTest(source=source):
+                value_type = sequence_type if source == "sequence" else tensor_type
+                captured = "intermediate" if source == "intermediate" else "X"
+                branches = [
+                    oh.make_graph(
+                        [oh.make_node("Identity", [captured], ["branch_output"])],
+                        name,
+                        [],
+                        [oh.make_value_info("branch_output", value_type)],
+                    )
+                    for name in ("then", "else")
+                ]
+                nodes = []
+                if source == "intermediate":
+                    nodes.append(oh.make_node("Relu", ["X"], [captured]))
+                nodes.append(
+                    oh.make_node(
+                        "If",
+                        ["condition"],
+                        ["Y"],
+                        then_branch=branches[0],
+                        else_branch=branches[1],
+                    )
+                )
+                inputs = [oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, [])]
+                initializers = []
+                if source == "initializer":
+                    initializers.append(
+                        oh.make_tensor("X", onnxl.TensorProto.FLOAT, [2], [1.0, 2.0])
+                    )
+                else:
+                    inputs.append(oh.make_value_info("X", value_type))
+                graph = oh.make_graph(
+                    nodes, "capture", inputs, [oh.make_value_info("Y", value_type)], initializers
+                )
+                model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 19)])
+                checker.check_model(model, full_check=True)
+                converted = version_converter.convert_version(model, 18)
+                checker.check_model(converted, full_check=True)
+                self.assertEqual(converted.graph.node[-1].op_type, "If")
+
+    def test_type_restriction_rejects_disallowed_captured_type(self):
+        branches = [
+            oh.make_graph(
+                [
+                    oh.make_node("Identity", ["X"], ["intermediate"]),
+                    oh.make_node(
+                        "Cast", ["intermediate"], ["branch_output"], to=onnxl.TensorProto.FLOAT
+                    ),
+                ],
+                name,
+                [],
+                [oh.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
+            )
+            for name in ("then", "else")
+        ]
+        graph = oh.make_graph(
+            [
+                oh.make_node(
+                    "If", ["condition"], ["Y"], then_branch=branches[0], else_branch=branches[1]
+                )
+            ],
+            "capture_float8",
+            [
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT8E4M3FN, [2]),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 19)])
+        checker.check_model(model, full_check=True)
+        with self.assertRaisesRegex(RuntimeError, "is unallowed"):
+            version_converter.convert_version(model, 18)
+
+    def test_type_restriction_rejects_unknown_captured_type(self):
+        branches = [
+            oh.make_graph(
+                [oh.make_node("Identity", ["X"], ["branch_output"])],
+                name,
+                [],
+                [oh.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
+            )
+            for name in ("then", "else")
+        ]
+        graph = oh.make_graph(
+            [
+                oh.make_node(
+                    "If", ["condition"], ["Y"], then_branch=branches[0], else_branch=branches[1]
+                )
+            ],
+            "unknown_capture",
+            [
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("X", onnxl.TensorProto.UNDEFINED, [2]),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 19)])
+        with self.assertRaisesRegex(RuntimeError, "must be known"):
+            version_converter.convert_version(model, 18)
+
+    def test_type_restriction_uses_nested_function_captures(self):
+        def branch(name):
+            return oh.make_graph(
+                [oh.make_node("Identity", ["X"], ["result"])],
+                name,
+                [],
+                [oh.make_tensor_value_info("result", onnxl.TensorProto.FLOAT, [2])],
+            )
+
+        nested_if = oh.make_node(
+            "If",
+            ["condition"],
+            ["result"],
+            then_branch=branch("then"),
+            else_branch=branch("else"),
+        )
+        outer_branches = [
+            oh.make_graph(
+                [nested_if],
+                name,
+                [],
+                [oh.make_tensor_value_info("result", onnxl.TensorProto.FLOAT, [2])],
+            )
+            for name in ("outer_then", "outer_else")
+        ]
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["condition", "X"],
+            ["Y"],
+            [
+                oh.make_node(
+                    "If",
+                    ["condition"],
+                    ["Y"],
+                    then_branch=outer_branches[0],
+                    else_branch=outer_branches[1],
+                )
+            ],
+            [oh.make_operatorsetid("", 19)],
+            value_info=[
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2]),
+            ],
+        )
+        graph = oh.make_graph(
+            [oh.make_node("Local", ["condition", "x"], ["y"], domain="custom")],
+            "function_captures",
+            [
+                oh.make_tensor_value_info("condition", onnxl.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [2]),
+            ],
+            [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 19), oh.make_operatorsetid("custom", 1)],
+            functions=[function],
+        )
+        checker.check_model(model, full_check=True)
+        converted = version_converter.convert_version(model, 18)
+        checker.check_model(converted, full_check=True)
+        self.assertEqual(converted.functions[0].opset_import[0].version, 18)
+
+    def test_type_restriction_does_not_infer_custom_operator_types(self):
+        graph = oh.make_graph(
+            [
+                oh.make_node("Relu", ["X"], ["intermediate"], domain="vendor"),
+                oh.make_node("Identity", ["intermediate"], ["Y"]),
+            ],
+            "custom_intermediate",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 19), oh.make_operatorsetid("vendor", 1)],
+        )
+        with self.assertRaisesRegex(RuntimeError, "must be known"):
+            version_converter.convert_version(model, 18)
+
+    def test_local_function_unresolved_type_attribute_remains_unknown(self):
+        cast = oh.make_node("Cast", ["X"], ["intermediate"])
+        cast.attribute.append(oh.make_attribute_ref("to", onnxl.AttributeProto.INT))
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["X"],
+            ["Y"],
+            [cast, oh.make_node("Identity", ["intermediate"], ["Y"])],
+            [oh.make_operatorsetid("", 19)],
+            attributes=["to"],
+            value_info=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = self._local_function_model(function, 19)
+        model.graph.node[0].attribute.append(oh.make_attribute("to", onnxl.TensorProto.FLOAT))
+        checker.check_model(model)
+        with self.assertRaisesRegex(RuntimeError, "must be known"):
+            version_converter.convert_version(model, 18)
+
     def test_local_function_unresolved_adapter_attribute(self):
         node = oh.make_node("Unsqueeze", ["X"], ["Y"])
         node.attribute.append(oh.make_attribute_ref("axes", onnxl.AttributeProto.INTS))
@@ -539,8 +789,8 @@ class TestVersionConverter(ExtTestCase):
             [oh.make_operatorsetid("", 20)],
             value_info=[
                 oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 4, 2]),
-                oh.make_tensor_value_info("scale", onnxl.TensorProto.FLOAT, [4]),
-                oh.make_tensor_value_info("bias", onnxl.TensorProto.FLOAT, [4]),
+                oh.make_tensor_value_info("scale", onnxl.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("bias", onnxl.TensorProto.FLOAT, [2]),
                 oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 4, 2]),
             ],
         )
@@ -549,8 +799,8 @@ class TestVersionConverter(ExtTestCase):
             "local_function",
             [
                 oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1, 4, 2]),
-                oh.make_tensor_value_info("scale", onnxl.TensorProto.FLOAT, [4]),
-                oh.make_tensor_value_info("bias", onnxl.TensorProto.FLOAT, [4]),
+                oh.make_tensor_value_info("scale", onnxl.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("bias", onnxl.TensorProto.FLOAT, [2]),
             ],
             [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1, 4, 2])],
         )
@@ -560,6 +810,7 @@ class TestVersionConverter(ExtTestCase):
             functions=[typed_function],
         )
         converted = version_converter.convert_version(model, 21)
+        checker.check_model(converted, full_check=True)
         converted_group_normalization = next(
             node for node in converted.functions[0].node if node.op_type == "GroupNormalization"
         )
@@ -569,6 +820,36 @@ class TestVersionConverter(ExtTestCase):
             if attribute.name == "stash_type"
         )
         self.assertEqual(stash_type, onnxl.TensorProto.FLOAT)
+
+        with self.subTest("converted group parameters"):
+            ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+            helper_graph = oh.make_graph(
+                [
+                    node
+                    for node in converted.functions[0].node
+                    if node.op_type != "GroupNormalization"
+                ],
+                "group_parameters",
+                [
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 4, 2]),
+                    oh.make_tensor_value_info("scale", onnxl.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("bias", onnxl.TensorProto.FLOAT, [2]),
+                ],
+                [
+                    oh.make_tensor_value_info(name, onnxl.TensorProto.FLOAT, [4])
+                    for name in list(converted_group_normalization.input)[1:3]
+                ],
+            )
+            helper_model = oh.make_model(
+                helper_graph, opset_imports=[oh.make_operatorsetid("", 21)]
+            )
+            scale = np.array([1.25, 2.5], dtype=np.float32)
+            bias = np.array([-1.0, 3.0], dtype=np.float32)
+            converted_scale, converted_bias = ReferenceEvaluator(helper_model).run(
+                None, {"X": np.ones((1, 4, 2), dtype=np.float32), "scale": scale, "bias": bias}
+            )
+            np.testing.assert_array_equal(converted_scale, np.repeat(scale, 2))
+            np.testing.assert_array_equal(converted_bias, np.repeat(bias, 2))
 
     def test_local_function_unknown_types_reject_specialized_adapters(self):
         cases = (

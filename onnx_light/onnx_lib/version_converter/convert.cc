@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -14,8 +15,184 @@
 #include <utility>
 
 #include "onnx_lib/common/ir_pb_converter.h"
+#include "onnx_lib/shape_inference/implementation.h"
 
 namespace ONNX_LIGHT_NAMESPACE::version_conversion {
+
+namespace {
+
+using ValueTypes = std::unordered_map<std::string, TypeProto>;
+using ValueInfos = std::unordered_map<std::string, ValueInfoProto *>;
+using OpsetVersions = std::unordered_map<std::string, int>;
+
+struct ValueTypeScope {
+  const ValueTypeScope *outer;
+  std::unordered_set<std::string> local_names;
+  ValueTypes visible_types;
+
+  const TypeProto *find(const std::string &name) const {
+    for (const auto *scope = this; scope != nullptr; scope = scope->outer) {
+      const auto it = scope->visible_types.find(name);
+      if (it != scope->visible_types.end())
+        return &it->second;
+      // Local definitions hide enclosing names even before their producers run.
+      if (scope->local_names.contains(name))
+        return nullptr;
+    }
+    return nullptr;
+  }
+};
+
+OpsetVersions inference_opsets(const utils::RepeatedProtoField<OperatorSetIdProto> &imports,
+                               int64_t default_version) {
+  OpsetVersions result;
+  for (const auto &opset : imports) {
+    if (opset.version() < 0 || opset.version() > std::numeric_limits<int>::max())
+      continue;
+    const std::string domain = opset.domain();
+    if (!domain.empty() && domain != "ai.onnx")
+      result[domain] = static_cast<int>(opset.version());
+  }
+  result[""] = static_cast<int>(default_version);
+  return result;
+}
+
+void merge_value_type(GraphProto &graph, ValueInfos &values, const std::string &name,
+                      const TypeProto &type) {
+  if (name.empty() || !type.has_type())
+    return;
+  const auto it = values.find(name);
+  if (it != values.end()) {
+    shape_inference::mergeShapesAndTypes(type, it->second->mutable_type());
+    return;
+  }
+  auto *value = graph.add_value_info();
+  value->set_name(name);
+  value->mutable_type()->CopyFrom(type);
+  values.emplace(name, value);
+}
+
+void prepare_inference_copy(GraphProto &graph, const OpsetVersions &opsets) {
+  auto &nodes = *graph.mutable_node();
+  // Unbound attributes must not be interpreted as default values during inference.
+  const auto remaining = std::remove_if(nodes.begin(), nodes.end(), [&](const NodeProto &node) {
+    const bool unresolved = std::any_of(node.attribute().begin(), node.attribute().end(),
+                                        [](const auto &attr) { return attr.has_ref_attr_name(); });
+    const std::string domain = node.domain();
+    return unresolved || (!domain.empty() && domain != "ai.onnx" && !opsets.contains(domain));
+  });
+  nodes.erase(remaining, nodes.end());
+  for (auto &node : nodes) {
+    const std::string domain = node.domain();
+    if (domain == "ai.onnx")
+      node.set_domain("");
+    for (auto &attr : *node.mutable_attribute()) {
+      if (attr.has_g())
+        prepare_inference_copy(*attr.mutable_g(), opsets);
+      for (auto &subgraph : *attr.mutable_graphs())
+        prepare_inference_copy(subgraph, opsets);
+    }
+  }
+}
+
+void infer_graph_types(GraphProto &graph, const ValueTypeScope *outer_scope,
+                       const OpsetVersions &opsets,
+                       const shape_inference::ModelLocalFunctionsMap &functions) {
+  ValueInfos value_infos;
+  for (auto &value : *graph.mutable_value_info())
+    value_infos[value.name()] = &value;
+
+  ValueTypeScope scope{outer_scope, {}, {}};
+  for (const auto &input : graph.input())
+    scope.local_names.insert(input.name());
+  for (const auto &initializer : graph.initializer())
+    scope.local_names.insert(initializer.name());
+  for (const auto &node : graph.node())
+    for (const auto &output : node.output())
+      scope.local_names.insert(output.value());
+
+  auto add_capture = [&](const std::string &name) {
+    if (name.empty() || scope.local_names.contains(name) || outer_scope == nullptr)
+      return;
+    if (const auto *type = outer_scope->find(name))
+      merge_value_type(graph, value_infos, name, *type);
+  };
+  for (const auto &node : graph.node())
+    for (const auto &input : node.input())
+      add_capture(input.value());
+  for (const auto &output : graph.output())
+    add_capture(output.name());
+
+  {
+    GraphProto inferred;
+    inferred.CopyFrom(graph);
+    prepare_inference_copy(inferred, opsets);
+    // Partial inference leaves genuinely unknown types for the adapters to reject.
+    shape_inference::InferShapes(&inferred, opsets, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(), functions);
+    for (const auto &value : inferred.value_info())
+      if (value.has_type())
+        merge_value_type(graph, value_infos, value.name(), value.type());
+    for (const auto &output : inferred.output())
+      if (output.has_type())
+        merge_value_type(graph, value_infos, output.name(), output.type());
+  }
+
+  ValueTypes annotated_types;
+  for (const auto &output : graph.output())
+    if (output.has_type())
+      annotated_types[output.name()] = output.type();
+  for (const auto &value : graph.value_info())
+    if (value.has_type())
+      annotated_types[value.name()] = value.type();
+
+  for (const auto &initializer : graph.initializer()) {
+    TypeProto type;
+    auto *tensor = type.mutable_tensor_type();
+    tensor->set_elem_type(initializer.data_type());
+    auto *shape = tensor->mutable_shape();
+    for (const auto dim : initializer.dims())
+      shape->add_dim()->set_dim_value(dim);
+    scope.visible_types[initializer.name()] = std::move(type);
+  }
+  for (const auto &input : graph.input()) {
+    if (input.has_type() && input.type().has_type())
+      scope.visible_types[input.name()] = input.type();
+    else {
+      const auto it = annotated_types.find(input.name());
+      if (it != annotated_types.end())
+        scope.visible_types[input.name()] = it->second;
+      else
+        scope.visible_types.erase(input.name());
+    }
+  }
+  for (auto &node : *graph.mutable_node()) {
+    for (auto &attr : *node.mutable_attribute()) {
+      if (attr.has_g())
+        infer_graph_types(*attr.mutable_g(), &scope, opsets, functions);
+      for (auto &subgraph : *attr.mutable_graphs())
+        infer_graph_types(subgraph, &scope, opsets, functions);
+    }
+    for (const auto &output : node.output()) {
+      const auto it = annotated_types.find(output.value());
+      if (it != annotated_types.end())
+        scope.visible_types[output.value()] = it->second;
+      else
+        scope.visible_types.erase(output.value());
+    }
+  }
+}
+
+void infer_conversion_types(GraphProto &graph, const OpsetVersions &opsets,
+                            const shape_inference::ModelLocalFunctionsMap &functions) {
+  ONNX_TRY { infer_graph_types(graph, nullptr, opsets, functions); }
+  ONNX_CATCH(const InferenceError &error) {
+    ONNX_HANDLE_EXCEPTION(
+        [&]() { ONNX_THROW("Version conversion type inference failed: ", error.what()); });
+  }
+}
+
+} // namespace
 
 ConvertError::~ConvertError() = default;
 
@@ -213,7 +390,29 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
     }
   }
 
-  std::shared_ptr<Graph> g(ImportModelProto(mp_in));
+  shape_inference::ModelLocalFunctionsMap local_functions;
+  for (const auto &function : mp_in.functions()) {
+    std::string identifier = MakeString(function.domain(), ":", function.name());
+    if (!function.overload().empty())
+      identifier += MakeString(":", function.overload());
+    local_functions.emplace(std::move(identifier), &function);
+  }
+
+  std::shared_ptr<Graph> g;
+  if (initial_version.version() != target_version.version()) {
+    assertInVersionRange(initial_version.version());
+    assertInVersionRange(target_version.version());
+    ModelProto graph_model;
+    graph_model.set_ir_version(mp_in.ir_version());
+    graph_model.opset_import().extend(mp_in.opset_import());
+    graph_model.mutable_graph()->CopyFrom(mp_in.graph());
+    infer_conversion_types(*graph_model.mutable_graph(),
+                           inference_opsets(graph_model.opset_import(), initial_version.version()),
+                           local_functions);
+    g = std::shared_ptr<Graph>(ImportModelProto(graph_model));
+  } else {
+    g = std::shared_ptr<Graph>(ImportModelProto(mp_in));
+  }
 
   convert_graph(g, initial_version, target_version);
 
@@ -265,6 +464,10 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
         graph_defaults_carrier->add_attribute()->CopyFrom(attribute);
       }
     }
+    assertInVersionRange(default_opset->version());
+    infer_conversion_types(
+        graph, inference_opsets(function_model.opset_import(), default_opset->version()),
+        local_functions);
     std::shared_ptr<Graph> function_graph(ImportModelProto(function_model));
     convert_graph(function_graph, OpSetID(default_opset->version()), target_version);
     ModelProto converted_function;

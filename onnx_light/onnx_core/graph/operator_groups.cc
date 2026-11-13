@@ -408,6 +408,7 @@ void OperatorGroupProposal::Validate(std::size_t node_count) const {
   case OperatorGroupStatus::kNoMatch:
   case OperatorGroupStatus::kInsideFunction:
   case OperatorGroupStatus::kIncompatibleOpset:
+  case OperatorGroupStatus::kResourceLimit:
     if (!groups.empty() || !schedule.empty())
       fail();
     return;

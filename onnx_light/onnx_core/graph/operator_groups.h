@@ -39,6 +39,7 @@ enum class OperatorGroupStatus {
   kNoMatch,
   kInsideFunction,
   kIncompatibleOpset,
+  kResourceLimit,
 };
 
 /// Selects a proposed group or an untouched source node in replacement order.
@@ -62,6 +63,8 @@ struct OperatorGroupProposal {
   std::vector<OperatorGroupStep> schedule;
   std::size_t first = 0;
   std::size_t last = 0;
+  /// Reports incomplete repeated-layer capture analysis, even when safe groups were found.
+  bool capture_analysis_limited = false;
 
   /// Checks bounds, disjoint groups and complete, nonduplicated schedule coverage.
   void Validate(std::size_t node_count) const;

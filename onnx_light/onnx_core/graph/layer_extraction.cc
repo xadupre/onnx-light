@@ -384,6 +384,7 @@ struct NodeData {
   bool usable = false;
   bool anchor = false;
   bool preparation = false;
+  bool captures_complete = true;
   // Value identifiers of inputs (kNoValue when omitted), outputs and dependencies.
   std::vector<uint32_t> input_ids, output_ids, dependency_ids;
   // Producers of the dependencies, nullptr for graph inputs, initializers and captures.
@@ -549,6 +550,8 @@ struct Index {
   std::map<std::string, Region> anchors;
   std::unordered_map<std::string, const ValueInfoProto *> declarations;
   bool valid = true;
+  // Any earlier value may be captured by this last incompletely analyzed node.
+  std::size_t last_incomplete_capture = kNoPosition;
 
   explicit Index(GraphGraph &graph) : graph(graph) {
     for (const auto &input : graph.Builder().Inputs())
@@ -556,7 +559,7 @@ struct Index {
     for (const auto &output : graph.Builder().Outputs())
       declarations[output.name().value()] = &output;
     std::map<std::tuple<std::string, std::string, std::string>, bool> anchor_cache;
-    std::size_t function_work = 0, capture_work = 0, signature_work = 0, safety_work = 0;
+    std::size_t function_work = 0, signature_work = 0, safety_work = 0;
     std::map<std::string, bool> safe_functions;
     std::unordered_set<std::string> prepared;
     for (const NodeProto &node : graph.Builder().Nodes()) {
@@ -578,11 +581,11 @@ struct Index {
         if (!input.value().empty())
           entry.dependencies.push_back(input.value());
       }
-      if (!IsLayer(node) &&
-          !NodeCaptures(entry.materialized, entry.dependencies, 0, capture_work)) {
-        valid = false;
-        return;
-      }
+      std::size_t capture_work = 0;
+      entry.captures_complete =
+          IsLayer(node) || NodeCaptures(entry.materialized, entry.dependencies, 0, capture_work);
+      if (!entry.captures_complete)
+        last_incomplete_capture = data.size();
       for (const auto &input : node.input())
         entry.input_ids.push_back(ValueId(input.value()));
       for (const auto &output : node.output())
@@ -592,7 +595,8 @@ struct Index {
         entry.producers.push_back(graph.NodeBefore(name));
       }
       // Constants and weight preparation remain outside the body, just like initializers.
-      entry.usable = !IsLayer(node) && !entry.preparation && node.op_type().value() != "Constant" &&
+      entry.usable = entry.captures_complete && !IsLayer(node) && !entry.preparation &&
+                     node.op_type().value() != "Constant" &&
                      entry.dependencies.size() <= kMaxPorts && node.output().size() <= kMaxPorts &&
                      node.attribute().size() <= kMaxPorts;
       if (entry.usable) {
@@ -870,7 +874,8 @@ Boundary GetBoundary(Index &index, const Region &region) {
     for (uint32_t id : entry->output_ids) {
       if (id == kNoValue)
         continue;
-      bool external = index.graph_outputs[id];
+      bool external = index.graph_outputs[id] || (index.last_incomplete_capture != kNoPosition &&
+                                                  entry->position < index.last_incomplete_capture);
       if (external)
         boundary.edges.push_back(id);
       for (const NodeProto *user : index.consumers[id]) {
@@ -1068,6 +1073,24 @@ bool Schedule(Index &index, Plan &plan) {
     if (previous != kNoPosition)
       connect(owner[previous - plan.first], owner[position - plan.first]);
     previous = position;
+  }
+  // Unknown captures prevent every unit, including preparations, from crossing their owner.
+  if (index.last_incomplete_capture != kNoPosition) {
+    std::size_t barrier = kNoPosition;
+    std::vector<std::size_t> since_barrier;
+    for (std::size_t position = plan.first; position <= plan.last; ++position) {
+      const std::size_t unit = owner[position - plan.first];
+      if (barrier != kNoPosition)
+        connect(barrier, unit);
+      if (!index.entries[position]->captures_complete) {
+        for (std::size_t before : since_barrier)
+          connect(before, unit);
+        since_barrier.clear();
+        barrier = unit;
+      } else {
+        since_barrier.push_back(unit);
+      }
+    }
   }
   using Ready = std::pair<std::size_t, std::size_t>;
   std::priority_queue<Ready, std::vector<Ready>, std::greater<Ready>> ready;
@@ -1899,8 +1922,15 @@ OperatorGroupProposal ProposeRepeatedLayers(GraphGraph &graph) {
   }
   Index index(graph);
   Plan plan;
-  if (!FindPlan(index, plan))
-    return {};
+  const bool found = FindPlan(index, plan);
+  plan.capture_analysis_limited = index.last_incomplete_capture != kNoPosition;
+  if (!found) {
+    OperatorGroupProposal proposal;
+    proposal.capture_analysis_limited = plan.capture_analysis_limited;
+    if (proposal.capture_analysis_limited)
+      proposal.status = OperatorGroupStatus::kResourceLimit;
+    return proposal;
+  }
   plan.status = OperatorGroupStatus::kFound;
   return std::move(static_cast<OperatorGroupProposal &>(plan));
 }

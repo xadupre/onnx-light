@@ -22,6 +22,7 @@
 #include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/if_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
@@ -105,6 +106,8 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<DropoutPattern>();
                                    });
+    core::builder::RegisterPattern("IfIdenticalBranches",
+                                   [] { return std::make_unique<IfIdenticalBranchesPattern>(); });
     core::builder::RegisterPattern("Identity",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<IdentityPattern>();

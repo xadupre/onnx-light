@@ -491,17 +491,22 @@ core::builder::MatchResult ConcatGatherPattern::Match(core::builder::GraphGraph 
   if (!graph.IsConstant(index_name)) {
     return NoMatch(candidate, "the Gather index is not constant");
   }
-  const TensorProto *index = graph.GetComputedConstant(index_name);
-  if (index == nullptr ||
-      static_cast<TensorProto::DataType>(index->data_type()) != TensorProto::DataType::INT64) {
+  const TensorProto *index_metadata = graph.GetConstantMetadata(index_name);
+  if (index_metadata == nullptr ||
+      static_cast<TensorProto::DataType>(index_metadata->data_type()) !=
+          TensorProto::DataType::INT64) {
     return NoMatch(candidate, "the Gather index is not a materialised int64 tensor");
   }
-  if (index->dims_size() != 1 || index->dims()[0] != 1) {
+  if (index_metadata->dims_size() != 1 || index_metadata->dims()[0] != 1) {
     return NoMatch(candidate, "the Gather index is not a single-element vector");
   }
   const NodeProto *concat = graph.NodeBefore(candidate.input()[0].value());
   if (concat == nullptr || !IsDefaultOp(*concat, "Concat")) {
     return NoMatch(candidate, "the gathered value is not produced by a Concat");
+  }
+  const TensorProto *index = graph.GetComputedConstant(index_name);
+  if (index == nullptr) {
+    return NoMatch(candidate, "the Gather index is not a materialised int64 tensor");
   }
   std::vector<int64_t> index_values;
   if (!ReadIntegerValues(*index, index_values) || index_values.empty()) {

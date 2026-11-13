@@ -294,6 +294,12 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           },
           nb::arg("name"), nb::arg("value") = nb::none(), nb::arg("broadcast") = false)
       .def(
+          "get_constant_metadata",
+          [](const GraphGraph &graph, nb::handle name) {
+            return graph.GetConstantMetadata(PyValueName(name));
+          },
+          nb::arg("name"), nb::rv_policy::reference_internal)
+      .def(
           "get_computed_constant",
           [](const GraphGraph &graph, nb::handle name) {
             return graph.GetComputedConstant(PyValueName(name));

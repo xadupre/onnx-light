@@ -1645,6 +1645,7 @@ void GraphGraph::Rebuild() {
   subgraph_captured_.clear();
   initializers_.clear();
   computed_constants_.clear();
+  materialized_constants_.clear();
 
   std::unordered_set<std::string> input_names;
   for (const ValueInfoProto &input : builder_.Inputs()) {
@@ -4837,6 +4838,23 @@ bool GraphGraph::IsConstant(const std::string &name) const {
 }
 
 const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) const {
+  const TensorProto *tensor = GetConstantMetadata(name);
+  if (tensor == nullptr || !tensor->HasDeferredWeight() ||
+      (tensor->has_raw_data() && tensor->data_location() != TensorProto::EXTERNAL))
+    return tensor;
+  std::lock_guard<std::mutex> lock(materialized_constants_mutex_);
+  auto cached = materialized_constants_.find(name);
+  if (cached != materialized_constants_.end())
+    return &cached->second;
+  auto loaded = utils::CopyWithSharedTensorStorage(*tensor);
+  loaded.LoadDeferredWeight();
+  loaded.clr_external_data();
+  if (loaded.data_location() == TensorProto::EXTERNAL)
+    loaded.set_data_location(TensorProto::DEFAULT);
+  return &materialized_constants_.emplace(name, std::move(loaded)).first->second;
+}
+
+const TensorProto *GraphGraph::GetConstantMetadata(const std::string &name) const {
   auto cached = computed_constants_.find(name);
   if (cached != computed_constants_.end()) {
     return &cached->second;
@@ -4857,7 +4875,7 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
     return nullptr;
   return parent_graph_ == nullptr || !parent_graph_->IsVisibleBefore(name, parent_position_limit_)
              ? nullptr
-             : parent_graph_->GetComputedConstant(name);
+             : parent_graph_->GetConstantMetadata(name);
 }
 
 const GraphGraph *GraphGraph::GetConstantScope(const std::string &name) const {
@@ -4883,11 +4901,12 @@ bool GraphGraph::IsVisibleBefore(const std::string &name, std::size_t position_l
 }
 
 void GraphGraph::SetComputedConstant(const std::string &name, TensorProto value) {
+  materialized_constants_.erase(name);
   computed_constants_[name] = std::move(value);
 }
 
 bool GraphGraph::ConstantShape(const std::string &name, std::vector<int64_t> &dims) const {
-  const TensorProto *tensor = GetComputedConstant(name);
+  const TensorProto *tensor = GetConstantMetadata(name);
   if (tensor != nullptr) {
     dims.clear();
     for (std::size_t i = 0; i < tensor->dims().size(); ++i) {

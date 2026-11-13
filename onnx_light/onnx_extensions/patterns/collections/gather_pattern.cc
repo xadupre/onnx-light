@@ -529,16 +529,16 @@ core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph 
   if (!graph.IsConstant(index_name)) {
     return NoMatch(candidate, "the Gather index is not constant");
   }
+  const NodeProto *concat = graph.NodeBefore(candidate.input()[0].value());
+  if (concat == nullptr || !IsDefaultOp(*concat, "Concat") ||
+      GetAttributeOr<int64_t>(*concat, "axis", 0) != 0) {
+    return NoMatch(candidate, "the gathered value is not produced by an axis=0 Concat");
+  }
   const TensorProto *index = graph.GetComputedConstant(index_name);
   std::vector<int64_t> index_values;
   int index_rank = 0;
   if (index == nullptr || !ReadIntTensor(*index, index_values, index_rank) || index_rank > 1) {
     return NoMatch(candidate, "the Gather index is not a constant scalar or vector");
-  }
-  const NodeProto *concat = graph.NodeBefore(candidate.input()[0].value());
-  if (concat == nullptr || !IsDefaultOp(*concat, "Concat") ||
-      GetAttributeOr<int64_t>(*concat, "axis", 0) != 0) {
-    return NoMatch(candidate, "the gathered value is not produced by an axis=0 Concat");
   }
 
   int non_const_position = -1;
@@ -550,7 +550,7 @@ core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph 
       if (non_const_position >= 0) {
         continue;
       }
-      const TensorProto *cst = graph.GetComputedConstant(name);
+      const TensorProto *cst = graph.GetConstantMetadata(name);
       if (cst == nullptr || cst->dims_size() < 1) {
         return NoMatch(candidate, "a Concat constant input has no known size");
       }
@@ -612,7 +612,7 @@ GatherConcatPattern::Apply(core::builder::GraphGraph &graph,
   for (const auto &input : concat.input()) {
     const std::string &name = input.value();
     if (graph.IsConstant(name) && x_name.empty()) {
-      const TensorProto *cst = graph.GetComputedConstant(name);
+      const TensorProto *cst = graph.GetConstantMetadata(name);
       offset += cst->dims()[0];
     } else if (!graph.IsConstant(name)) {
       x_name = name;
@@ -657,12 +657,6 @@ core::builder::MatchResult GatherGatherPattern::Match(core::builder::GraphGraph 
   if (!graph.IsConstant(outer_index_name)) {
     return NoMatch(candidate, "the outer Gather index is not constant");
   }
-  const TensorProto *outer = graph.GetComputedConstant(outer_index_name);
-  std::vector<int64_t> outer_values;
-  int outer_rank = 0;
-  if (outer == nullptr || !ReadIntTensor(*outer, outer_values, outer_rank)) {
-    return NoMatch(candidate, "the outer Gather index is not a constant integer tensor");
-  }
   const NodeProto *inner = graph.NodeBefore(candidate.input()[0].value());
   if (inner == nullptr || !IsAxis0Gather(*inner)) {
     return NoMatch(candidate, "the gathered value is not produced by an axis=0 Gather");
@@ -670,6 +664,12 @@ core::builder::MatchResult GatherGatherPattern::Match(core::builder::GraphGraph 
   const std::string &inner_index_name = inner->input()[1].value();
   if (!graph.IsConstant(inner_index_name)) {
     return NoMatch(candidate, "the inner Gather index is not constant");
+  }
+  const TensorProto *outer = graph.GetComputedConstant(outer_index_name);
+  std::vector<int64_t> outer_values;
+  int outer_rank = 0;
+  if (outer == nullptr || !ReadIntTensor(*outer, outer_values, outer_rank)) {
+    return NoMatch(candidate, "the outer Gather index is not a constant integer tensor");
   }
   const TensorProto *innercst = graph.GetComputedConstant(inner_index_name);
   std::vector<int64_t> inner_values;

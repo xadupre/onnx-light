@@ -695,6 +695,13 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
     count *= d.AsInt();
   }
 
+  if (tp.HasDeferredWeight() && !tp.has_raw_data() && count_known && IsIntegerTensorType(dtype) &&
+      tensor.Shape().Rank() <= 1 && count < kOptimValueAsShapeMaxElements) {
+    auto loaded = utils::CopyWithSharedTensorStorage(tp);
+    loaded.LoadDeferredWeight();
+    return SymTensorFromTensorProto(loaded, out);
+  }
+
   // Record the actual value bounds when the payload is readable. This
   // covers both integer and floating-point element types; tensors whose
   // data is absent (no typed field, no raw_data) or in an unsupported

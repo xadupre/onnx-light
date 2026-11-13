@@ -73,16 +73,19 @@ bool ReadScalar(const TensorProto &tensor, double &value) {
   return ReadScalarAsDouble(tensor, value);
 }
 
-bool IsSupportedSingleOne(const TensorProto &tensor) {
-  for (int64_t dim : tensor.dims()) {
-    if (dim != 1) {
-      return false;
-    }
-  }
+bool HasSupportedSingleOneMetadata(const TensorProto &tensor) {
   const auto type = static_cast<TensorProto::DataType>(tensor.data_type());
   if (type != TensorProto::DataType::FLOAT && type != TensorProto::DataType::FLOAT16 &&
       type != TensorProto::DataType::DOUBLE && type != TensorProto::DataType::INT32 &&
       type != TensorProto::DataType::INT64) {
+    return false;
+  }
+  return std::all_of(tensor.dims().begin(), tensor.dims().end(),
+                     [](int64_t dim) { return dim == 1; });
+}
+
+bool IsSupportedSingleOne(const TensorProto &tensor) {
+  if (!HasSupportedSingleOneMetadata(tensor)) {
     return false;
   }
   double value = 0.0;
@@ -259,7 +262,11 @@ core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph
   if (is_left_input == is_right_input) {
     return NoMatch(candidate, "the Mul must consume the Div output exactly once");
   }
-  const TensorProto *one = graph.GetComputedConstant(candidate.input()[0].value());
+  const TensorProto *one = graph.GetConstantMetadata(candidate.input()[0].value());
+  if (one == nullptr || !HasSupportedSingleOneMetadata(*one)) {
+    return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
+  }
+  one = graph.GetComputedConstant(candidate.input()[0].value());
   if (one == nullptr || !IsSupportedSingleOne(*one)) {
     return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
   }
@@ -316,15 +323,20 @@ core::builder::MatchResult MulMulMulScalarPattern::Match(core::builder::GraphGra
   if (!graph.IsConstant(left->input()[1].value()) || !graph.IsConstant(right->input()[1].value())) {
     return NoMatch(candidate, "the inner right operands are not constants");
   }
-  const TensorProto *left_constant = graph.GetComputedConstant(left->input()[1].value());
-  const TensorProto *right_constant = graph.GetComputedConstant(right->input()[1].value());
-  if (left_constant == nullptr || right_constant == nullptr ||
-      !IsScalarOrOneElementVector(*left_constant) || !IsScalarOrOneElementVector(*right_constant)) {
+  const TensorProto *left_metadata = graph.GetConstantMetadata(left->input()[1].value());
+  const TensorProto *right_metadata = graph.GetConstantMetadata(right->input()[1].value());
+  if (left_metadata == nullptr || right_metadata == nullptr ||
+      !IsScalarOrOneElementVector(*left_metadata) || !IsScalarOrOneElementVector(*right_metadata)) {
     return NoMatch(candidate, "the inner constants are not scalar or one-element vectors");
   }
   if ((IsDefaultOp(*left, "Div") || IsDefaultOp(*right, "Div")) &&
-      (!IsFloatingForDiv(*left_constant) || !IsFloatingForDiv(*right_constant))) {
+      (!IsFloatingForDiv(*left_metadata) || !IsFloatingForDiv(*right_metadata))) {
     return NoMatch(candidate, "Div constants are not float16, float, or double");
+  }
+  const TensorProto *left_constant = graph.GetComputedConstant(left->input()[1].value());
+  const TensorProto *right_constant = graph.GetComputedConstant(right->input()[1].value());
+  if (left_constant == nullptr || right_constant == nullptr) {
+    return NoMatch(candidate, "the inner constants have no readable tensor values");
   }
   return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }

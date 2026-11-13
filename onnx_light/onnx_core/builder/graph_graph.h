@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -214,7 +215,15 @@ public:
   /// ``Constant`` node using ``value_int`` / ``value_float``, or a constant
   /// that has not been folded). Registered computed constants take precedence
   /// over the builder's initializers and ``Constant`` node attributes.
+  /// Deferred payloads are loaded on demand into an index-owned copy, without
+  /// loading the source tensor or unrelated weights. Source validation failures
+  /// propagate to the caller, including during parallel matching.
   const TensorProto *GetComputedConstant(const std::string &name) const;
+
+  /// Returns the constant declaration without loading its deferred payload.
+  /// Shape/type-only queries and size guards should use this method before
+  /// requesting values through :cpp:func:`GetComputedConstant`.
+  const TensorProto *GetConstantMetadata(const std::string &name) const;
 
   /// Returns the scope providing a materialized constant, or nullptr when no
   /// visible definition exists. Local definitions never resolve to outer values.
@@ -276,6 +285,8 @@ private:
   std::unordered_map<std::string, const TensorProto *> initializers_;
   // Folded-constant cache keyed by value name.
   std::unordered_map<std::string, TensorProto> computed_constants_;
+  mutable std::mutex materialized_constants_mutex_;
+  mutable std::unordered_map<std::string, TensorProto> materialized_constants_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

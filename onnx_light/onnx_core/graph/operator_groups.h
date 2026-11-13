@@ -98,7 +98,8 @@ struct OperatorGroupInput {
 
 /// Finds common small constants and Shape producers of corresponding boundary inputs.
 /// Requires matching Shape attributes and source-input positions across all instances.
-/// Never loads external/deferred payloads or specializes overridable graph inputs.
+/// Loads deferred payloads only after the small-constant size guard; never
+/// specializes overridable graph inputs or loads ownerless external references.
 std::vector<OperatorGroupInput>
 FindCommonOperatorGroupInputs(const builder::GraphGraph &graph,
                               std::span<const OperatorGroup> instances);

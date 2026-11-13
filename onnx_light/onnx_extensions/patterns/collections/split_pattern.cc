@@ -40,6 +40,11 @@ bool ConstScalarInt(core::builder::GraphGraph &graph, const std::string &name, i
   if (!graph.IsConstant(name)) {
     return false;
   }
+  const TensorProto *metadata = graph.GetConstantMetadata(name);
+  if (metadata == nullptr || !std::all_of(metadata->dims().begin(), metadata->dims().end(),
+                                          [](int64_t dim) { return dim == 1; })) {
+    return false;
+  }
   const TensorProto *tensor = graph.GetComputedConstant(name);
   if (tensor == nullptr) {
     return false;

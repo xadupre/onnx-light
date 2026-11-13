@@ -788,38 +788,46 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ],
                 ),
             ):
-                with (
-                    self.subTest(data_type=data_type, pattern=pattern),
-                    TemporaryDirectory() as d,
-                ):
-                    model = self._make_model(
-                        nodes,
-                        [("X", data_type, [2, 3])],
-                        [("Y", data_type, [2, 4])],
-                        initializers,
-                    )
-                    path = Path(d) / "model.onnx"
-                    save(model, path)
-                    eager = load(path)
-                    deferred = load(path, defer_weights=True)
-                    self.assertTrue(deferred.is_weight_loaded("W"))
-                    eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
-                    deferred_optimized, deferred_rewrites, _ = self._optimize(deferred, [pattern])
-                    self.assertEqual(
-                        [rewrite.pattern_name for rewrite in eager_rewrites],
-                        [rewrite.pattern_name for rewrite in deferred_rewrites],
-                    )
-                    self.assertEqual(
-                        [node.op_type for node in eager_optimized.graph.node],
-                        [node.op_type for node in deferred_optimized.graph.node],
-                    )
-                    self.assertIn(
-                        pattern, {rewrite.pattern_name for rewrite in deferred_rewrites}
-                    )
+                for external in (False, True):
+                    with (
+                        self.subTest(data_type=data_type, pattern=pattern, external=external),
+                        TemporaryDirectory() as d,
+                    ):
+                        model = self._make_model(
+                            nodes,
+                            [("X", data_type, [2, 3])],
+                            [("Y", data_type, [2, 4])],
+                            initializers,
+                        )
+                        path = Path(d) / "model.onnx"
+                        save(model, path, save_as_external_data=external, size_threshold=0)
+                        eager = load(path, load_external_data=external)
+                        if external:
+                            normalized = Path(d) / "eager.onnx"
+                            save(eager, normalized)
+                            eager = load(normalized)
+                        deferred = load(path, defer_weights=True)
+                        self.assertTrue(deferred.is_weight_loaded("W"))
+                        eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
+                        deferred_optimized, deferred_rewrites, _ = self._optimize(
+                            deferred, [pattern], check_model=False
+                        )
+                        self.assertEqual(
+                            [rewrite.pattern_name for rewrite in eager_rewrites],
+                            [rewrite.pattern_name for rewrite in deferred_rewrites],
+                        )
+                        self.assertEqual(
+                            [node.op_type for node in eager_optimized.graph.node],
+                            [node.op_type for node in deferred_optimized.graph.node],
+                        )
+                        self.assertIn(
+                            pattern, {rewrite.pattern_name for rewrite in deferred_rewrites}
+                        )
 
-                    unloaded = load(path, defer_weights=True, raw_data_threshold=0)
-                    _, rewrites, _ = self._optimize(unloaded, [pattern], check_model=False)
-                    self.assertNotIn(pattern, {rewrite.pattern_name for rewrite in rewrites})
+                        unloaded = load(path, defer_weights=True, raw_data_threshold=0)
+                        _, rewrites, _ = self._optimize(unloaded, [pattern], check_model=False)
+                        self.assertIn(pattern, {rewrite.pattern_name for rewrite in rewrites})
+                        self.assertFalse(unloaded.is_weight_loaded("W"))
 
     def test_matmul_scale_fusion_no_match(self):
         numerator_div = self._make_model(

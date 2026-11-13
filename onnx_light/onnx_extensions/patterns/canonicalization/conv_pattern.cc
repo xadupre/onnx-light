@@ -615,7 +615,7 @@ core::builder::MatchResult PadPoolPattern::Match(core::builder::GraphGraph &grap
   }
   const std::string value = OptionalInput(*pad, 2);
   if (!value.empty()) {
-    const TensorProto *tensor = graph.GetComputedConstant(value);
+    const TensorProto *tensor = graph.GetConstantMetadata(value);
     if (!graph.IsConstant(value) || tensor == nullptr || tensor->dims_size() != 0 ||
         tensor->data_type() != core::symbolic::TensorTypeToDataType(type)) {
       return NoMatch(candidate, "the Pad value must be a scalar of the input type");

@@ -68,13 +68,53 @@ extensions are rejected during weight traversal and before export destination I/
 even when those tensors are loaded.
 Existing eager parsing and ``skip_raw_data`` behavior are unchanged.
 
-``GraphBuilder`` and ``GraphGraph`` accept deferred models directly. Loaded small
-constants behave as in an eager model, so value-dependent rewrites still apply.
-Large unloaded weights have unknown numeric bounds, and value-dependent patterns
-may not apply. Explicitly load such weights before optimization when their
-values are required. Constant folding loads a temporary copy of a deferred
-initializer with ``LoadDeferredWeight`` only when it evaluates a node consuming
-it. The original initializer and other weights remain unloaded.
+``GraphBuilder`` and ``GraphGraph`` accept deferred models directly.
+``GraphGraph.GetComputedConstant`` (Python: ``get_computed_constant``) loads a
+deferred constant on demand into an index-owned copy when a pattern needs its
+values. This includes large constants and payloads deferred with threshold zero:
+value-dependent matches do not silently fail just because their bytes are
+unloaded. The original model and builder declarations remain unloaded.
+``GetConstantMetadata`` / ``get_constant_metadata`` returns the declaration
+without reading payloads; custom patterns should use it for shape/type checks
+and size guards. Scalar shape checks also avoid loading values. Parallel matching
+shares a synchronized value cache, invalidated when the graph index is rebuilt.
+Constant folding likewise loads temporary inputs only after its work/size guards.
+Partitioning and repeated-layer extraction leave large weights deferred and
+shared; only small constants eligible for internalization require their values.
+
+Large unloaded weights still have unknown inferred numeric bounds. Shape-value
+inference loads temporary copies of small scalar/vector integer constants within
+its existing rank/element limit, even with threshold zero, without changing their
+declarations' loaded state. Ordinary external references without deferred sources
+retain their existing behavior: use deferred file loading to enable on-demand
+access. Mixed raw/typed models and the unsupported structures listed above must
+use the existing eager load path; deferred parsing raises rather than silently
+discarding their values.
+
+For capture, replay, undo and saving, no full reload of the source model is
+necessary:
+
+.. code-block:: python
+
+    from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph
+
+    model = load("model.onnx", defer_weights=True)
+    builder = GraphBuilder(model)
+    plan = GraphGraph(builder, ["Sub1Mul"]).optimize()
+    optimized = builder.to_model()  # Unrelated payloads remain deferred.
+    replayed = GraphBuilder(model).apply_rewritings(plan).to_model()
+    restored = builder.undo_rewritings(plan).to_model()
+    model.add_rewriting("optimized", plan)
+    model.load_weights()  # Materializes graph, function and plan tensors for export.
+    save(model, "with_plan.onnx")
+
+Plans retain shared deferred sources in memory, including tensors in nested
+graphs and functions. After loading and saving the owning model, its serialized
+plan can be replayed independently of the original backing files. Undo state is
+in-memory state of the builder that applied the plan, not serialized history.
+An in-memory borrowed buffer still requires the existing shared-copy ownership
+and snapshot contract; deferred file loading does not make mutable or detachable
+foreign buffers safe to share.
 
 Keep all backing files immutable and available until reloading is no longer
 needed. File identity, size and modification metadata are checked on reload;

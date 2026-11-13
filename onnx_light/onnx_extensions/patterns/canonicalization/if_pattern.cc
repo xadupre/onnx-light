@@ -13,6 +13,7 @@
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
@@ -161,6 +162,9 @@ bool SameGraph(const GraphProto &left, const GraphProto &right, Bindings a, Bind
   }
   for (int i = 0; i < left.initializer_size(); ++i) {
     for (const auto *scope : {&left, &right})
+      if (!scope->initializer(i).metadata_props().empty())
+        return false;
+    for (const auto *scope : {&left, &right})
       for (const auto &input : scope->input())
         if (input.name() == scope->initializer(i).name())
           return false;
@@ -244,6 +248,12 @@ bool HasNestedName(const GraphBuilder &builder, const std::string &name) {
     if (HasNestedName(*child, name))
       return true;
   return false;
+}
+
+void SetSubgraphDevice(GraphBuilder &builder, core::symbolic::Device device) {
+  builder.set_device(device);
+  for (const auto &child : builder.Subgraphs())
+    SetSubgraphDevice(*child, device);
 }
 
 void RenameGraph(GraphProto &scope, GraphBuilder &builder, const std::string &prefix,
@@ -346,7 +356,8 @@ void ImportGraphs(NodeProto &node, GraphBuilder &builder) {
       std::string name = "IfIdenticalBranches_graph";
       for (std::size_t i = 0; builder.HasName(name); ++i)
         name = "IfIdenticalBranches_graph_" + std::to_string(i);
-      builder.MakeSubgraph(name, body).set_device(builder.device());
+      auto &subgraph = builder.MakeSubgraph(name, body);
+      SetSubgraphDevice(subgraph, builder.device());
       return name;
     };
     AttributeProto reference;
@@ -415,6 +426,9 @@ core::builder::MatchResult IfIdenticalBranchesPattern::Match(core::builder::Grap
       (second != nullptr && !CompatibleDevices(*second, graph.Builder().device())) ||
       !CanInlineInitializers(graph.Builder(), *a) || !SameGraph(*a, *b, {}, {}))
     return NoMatch(candidate, "If branches are not equivalent");
+  for (const auto &node : a->node())
+    if (!core::shapes::HasShapeInference(graph.Builder().Shapes(), node))
+      return NoMatch(candidate, "branch requires output type declarations");
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }
 

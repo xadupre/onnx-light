@@ -28,9 +28,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * differ. Graph attributes are compared recursively with lexical bindings.
  * Output order and declared types must agree. Configured nodes, external
  * tensors, sparse/extended initializers, quantization annotations, non-tensor
- * value declarations, value metadata and persistent bindings are conservatively
- * excluded, as are If nodes carrying metadata. Local values receive fresh
- * names; forwarded outputs use Identity nodes.
+ * value declarations, value and initializer metadata, and persistent bindings
+ * are conservatively excluded, as are If nodes carrying metadata. Branch nodes
+ * without shape inference are excluded because their type declarations cannot
+ * be retained during inlining. Local values receive fresh names; forwarded
+ * outputs use Identity nodes.
  * Materialized GRAPH attributes are accepted by Match/Apply, including directly
  * forwarded captures. GraphBuilder imports retain their stricter requirement
  * that a subgraph output has a local definition.

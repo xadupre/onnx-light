@@ -700,6 +700,73 @@ TEST(IfIdenticalBranchesPattern, RejectsValueMetadataThatCannotBeInlined) {
   EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(IfIdenticalBranchesPattern, RejectsInitializerMetadataThatCannotBeInlined) {
+  for (bool tag_then : {false, true}) {
+    GraphProto first, second;
+    for (auto *branch : {&first, &second}) {
+      const auto name = branch == &first ? "then_weight" : "else_weight";
+      auto &tensor = *branch->add_initializer();
+      tensor = MakeInitializer<float>(name, {2}, {1.0f, 2.0f});
+      if ((branch == &first) == tag_then) {
+        auto &metadata = *tensor.add_metadata_props();
+        metadata.set_key("onnx_light.value_tag");
+        metadata.set_value("axes");
+      }
+      branch->add_node(MakeNode("Identity", {name}, {std::string(name) + "_result"}));
+      *branch->add_output() = Value(std::string(name) + "_result");
+    }
+    GraphBuilder builder(Model(first, second), SchemaLookup());
+    GraphGraph graph(builder);
+    IfIdenticalBranchesPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+  }
+}
+
+TEST(IfIdenticalBranchesPattern, RejectsUnknownBranchOperatorsRequiringDeclaredTypes) {
+  GraphProto first, second;
+  for (auto *branch : {&first, &second}) {
+    const auto output = branch == &first ? "then_result" : "else_result";
+    branch->add_node(MakeNode("Unknown", {"x"}, {output}, "custom"));
+    *branch->add_output() = Value(output);
+  }
+  auto model = Model(first, second);
+  model.add_opset("custom", 1);
+  model.mutable_graph()->add_node(MakeNode("Neg", {"y0"}, {"final"}));
+  model.mutable_graph()->ref_output()[0].set_name("final");
+  GraphBuilder builder(model, SchemaLookup());
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<IfIdenticalBranchesPattern>());
+  GraphGraph graph(builder, std::move(patterns));
+  core::builder::ConstantFoldingOptions folding;
+  folding.enabled = false;
+  EXPECT_TRUE(graph.Optimize(-1, nullptr, folding).rewrites().empty());
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "If");
+}
+
+TEST(IfIdenticalBranchesPattern, PropagatesDeviceToImportedNestedGraphs) {
+  auto first = NestedBranch("_then"), second = NestedBranch("_else");
+  for (auto *branch : {&first, &second}) {
+    const auto suffix = branch == &first ? "_then" : "_else";
+    for (auto &attribute : branch->ref_node()[1].ref_attribute())
+      *attribute.mutable_g() = NestedBranch(std::string("_deep") + suffix);
+  }
+  GraphBuilder builder(Model(first, second), SchemaLookup());
+  builder.set_device(core::symbolic::Device::kGPU0);
+  GraphGraph graph(builder);
+  IfIdenticalBranchesPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  const auto *reference = FindAttribute(replacements[1], "then_branch_ref");
+  ASSERT_NE(reference, nullptr);
+  const auto &imported = builder.Subgraph(reference->s().value());
+  EXPECT_EQ(imported.device(), core::symbolic::Device::kGPU0);
+  ASSERT_FALSE(imported.Subgraphs().empty());
+  for (const auto &child : imported.Subgraphs())
+    EXPECT_EQ(child->device(), core::symbolic::Device::kGPU0);
+}
+
 TEST(IfIdenticalBranchesPattern, RegistersBuiltInPattern) {
   onnx_patterns::RegisterPatterns();
   auto pattern = core::builder::CreateRegisteredPattern("IfIdenticalBranches");

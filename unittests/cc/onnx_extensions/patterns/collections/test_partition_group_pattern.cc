@@ -137,6 +137,31 @@ TEST(PartitionGroupPattern, FusesExtractedFunctionInSamePassAndPreservesReplayAn
     }
 }
 
+TEST(PartitionGroupPattern, FusesModelOwnedFunctionFromDirectSubgraphOptimization) {
+  onnx_patterns::RegisterPatterns();
+  GraphBuilder builder("subgraph", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+  builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
+  auto &subgraph = builder.MakeSubgraph("body");
+  subgraph.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  subgraph.MakeNode("Add", {"mm", "bias"}, {"y"});
+  subgraph.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<PartitionGroupPattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::MatMulAddPattern>());
+  GraphGraph graph(subgraph, std::move(patterns));
+  const auto plan = graph.Optimize();
+
+  ASSERT_EQ(builder.LocalFunctions().size(), 1u);
+  const auto &function = *builder.LocalFunctions()[0];
+  ASSERT_EQ(function.Nodes().size(), 1u);
+  EXPECT_EQ(function.Nodes()[0].op_type(), "Gemm");
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Gemm");
+}
+
 TEST(PartitionGroupPattern, RunsOnlyAtFirstNodeAndRevalidatesApply) {
   auto builder = Chain();
   GraphGraph graph(builder);

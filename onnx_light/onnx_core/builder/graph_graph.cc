@@ -1893,7 +1893,7 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   original_functions_ = &original_functions_by_key;
   const auto function_only_callers = FunctionOnlyCallers(*root, original_definitions);
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection,
-                             *undo, callback, parallel, function_only_callers);
+                             *undo, callback, parallel, function_only_callers, true);
   if (report != nullptr)
     report->cleanup_time_ns += canonicalization_time_ns;
   utils::RepeatedProtoField<FunctionProto> optimized_functions;
@@ -2075,7 +2075,7 @@ RewritingProto GraphGraph::OptimizeImpl(
     int max_iter, OptimizationReport *report, const std::vector<std::string> &graph_path,
     const ConstantFoldingOptions &folding_options, bool remove_unused, RewritingProto &collection,
     detail::RewritingUndoState &undo, const OptimizationCallback &callback, bool parallel,
-    const std::unordered_set<std::string> &function_only_callers) {
+    const std::unordered_set<std::string> &function_only_callers, bool outermost_invocation) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -2100,6 +2100,7 @@ RewritingProto GraphGraph::OptimizeImpl(
                                          function.function_template_.overload());
   };
   const std::size_t original_function_count = builder_.local_functions_.size();
+  const std::size_t original_model_function_count = builder_.ModelBuilder().local_functions_.size();
   std::vector<GraphBuilder *> functions;
   functions.reserve(original_function_count);
   for (const auto &function : builder_.local_functions_)
@@ -2122,7 +2123,7 @@ RewritingProto GraphGraph::OptimizeImpl(
                            original_functions_);
     RewritingProto child_rewrites = child_graph.OptimizeImpl(
         max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options,
-        remove_unused, collection, undo, callback, parallel, function_only_callers);
+        remove_unused, collection, undo, callback, parallel, function_only_callers, false);
 
     const std::size_t graph_rewrites = child_rewrites.rewrites().size();
     applied.extend(std::move(child_rewrites.ref_rewrites()));
@@ -2177,7 +2178,7 @@ RewritingProto GraphGraph::OptimizeImpl(
     detail::RewritingUndoState child_undo;
     child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, function_path,
                              folding_options, remove_unused, collection, child_undo, callback,
-                             parallel, function_only_callers);
+                             parallel, function_only_callers, false);
     if (report != nullptr) {
       const int64_t elapsed_time_ns = ElapsedNanoseconds(function_start);
       report->iterations += child_report.iterations;
@@ -2664,6 +2665,14 @@ RewritingProto GraphGraph::OptimizeImpl(
     GraphBuilder *function = builder_.local_functions_[i].get();
     if (can_optimize_function(*function))
       optimize_function(function);
+  }
+  if (outermost_invocation && &builder_ != &builder_.ModelBuilder()) {
+    auto &model = builder_.ModelBuilder();
+    for (std::size_t i = original_model_function_count; i < model.local_functions_.size(); ++i) {
+      GraphBuilder *function = model.local_functions_[i].get();
+      if (can_optimize_function(*function))
+        optimize_function(function);
+    }
   }
   if (report != nullptr)
     report->rewrites = applied.size() + function_body_rewrites;

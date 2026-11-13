@@ -24,12 +24,13 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @endcode
  *
  * Captured names must agree; local initializers and tensor attributes are
- * compared by value. Graph attributes are compared recursively with lexical
- * bindings. Output order and declared types must agree. Configured nodes,
- * external or deferred tensors, sparse/extended initializers, quantization
- * annotations, non-tensor value declarations, value metadata and persistent
- * bindings are conservatively excluded, as are If nodes carrying metadata.
- * Local values receive fresh names; forwarded outputs use Identity nodes.
+ * compared by value, loading deferred payloads only when their backing sources
+ * differ. Graph attributes are compared recursively with lexical bindings.
+ * Output order and declared types must agree. Configured nodes, external
+ * tensors, sparse/extended initializers, quantization annotations, non-tensor
+ * value declarations, value metadata and persistent bindings are conservatively
+ * excluded, as are If nodes carrying metadata. Local values receive fresh
+ * names; forwarded outputs use Identity nodes.
  * Materialized GRAPH attributes are accepted by Match/Apply, including directly
  * forwarded captures. GraphBuilder imports retain their stricter requirement
  * that a subgraph output has a local definition.

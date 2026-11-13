@@ -28,20 +28,47 @@ constexpr char kGraphReferenceAliasMarker[] = "_ref__onnx_light_graph_reference_
 
 bool SameTensor(const TensorProto &left, const TensorProto &right) {
   for (const auto *tensor : {&left, &right})
-    if (tensor->HasDeferredWeight() || tensor->has_segment() ||
-        tensor->data_location() == TensorProto::EXTERNAL || !tensor->external_data().empty())
+    if (tensor->has_segment() ||
+        (!tensor->HasDeferredWeight() &&
+         (tensor->data_location() == TensorProto::EXTERNAL || !tensor->external_data().empty())))
       return false;
   if (left.data_type() != right.data_type() || left.dims_size() != right.dims_size() ||
       !std::equal(left.dims().begin(), left.dims().end(), right.dims().begin()))
     return false;
-  VerifyTensor(left);
-  VerifyTensor(right);
+  const auto has_inline_payload = [](const TensorProto &tensor) {
+    return !tensor.raw_data().empty() || !tensor.float_data().empty() ||
+           !tensor.int32_data().empty() || !tensor.int64_data().empty() ||
+           !tensor.uint64_data().empty() || !tensor.double_data().empty() ||
+           !tensor.string_data().empty();
+  };
+  if (left.HasDeferredWeight() && right.HasDeferredWeight() && !has_inline_payload(left) &&
+      !has_inline_payload(right) && HaveSameDeferredWeightSource(left, right))
+    return true;
+  TensorProto a_copy, b_copy;
+  const TensorProto *a_proto = &left;
+  const TensorProto *b_proto = &right;
+  if (left.HasDeferredWeight() || right.HasDeferredWeight()) {
+    a_copy = utils::CopyWithSharedTensorStorage(left);
+    b_copy = utils::CopyWithSharedTensorStorage(right);
+    if (a_copy.HasDeferredWeight())
+      a_copy.LoadDeferredWeight();
+    if (b_copy.HasDeferredWeight())
+      b_copy.LoadDeferredWeight();
+    for (auto *tensor : {&a_copy, &b_copy}) {
+      tensor->clr_external_data();
+      tensor->set_data_location(TensorProto::DEFAULT);
+    }
+    a_proto = &a_copy;
+    b_proto = &b_copy;
+  }
+  VerifyTensor(*a_proto);
+  VerifyTensor(*b_proto);
   if (left.data_type() == TensorProto::STRING)
-    return left.string_data_size() == right.string_data_size() &&
-           std::equal(left.string_data().begin(), left.string_data().end(),
-                      right.string_data().begin());
-  const auto a = core::runtime::TensorFromProto(left);
-  const auto b = core::runtime::TensorFromProto(right);
+    return a_proto->string_data_size() == b_proto->string_data_size() &&
+           std::equal(a_proto->string_data().begin(), a_proto->string_data().end(),
+                      b_proto->string_data().begin());
+  const auto a = core::runtime::TensorFromProto(*a_proto);
+  const auto b = core::runtime::TensorFromProto(*b_proto);
   return a.size_bytes() == b.size_bytes() &&
          (a.size_bytes() == 0 || std::memcmp(a.bytes(), b.bytes(), a.size_bytes()) == 0);
 }

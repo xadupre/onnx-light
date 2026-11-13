@@ -11,6 +11,9 @@
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
+#include <chrono>
+#include <filesystem>
+
 #include <gtest/gtest.h>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -300,6 +303,62 @@ TEST(IfIdenticalBranchesPattern, InitializersAndConstantsCompareByValue) {
     IfIdenticalBranchesPattern pattern;
     EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
   }
+}
+
+TEST(IfIdenticalBranchesPattern, MatchesDeferredInitializersWithoutLoadingOriginals) {
+  const auto make_branch = [](const std::string &name) {
+    GraphProto branch;
+    branch.set_name(name);
+    const auto weight_name = name + "_weight";
+    auto weight = MakeInitializer<float>(weight_name.c_str(), {2}, {2.0f, -5.0f});
+    const float values[] = {2.0f, -5.0f};
+    weight.clr_float_data();
+    weight.set_raw_data(values, sizeof(values));
+    *branch.add_initializer() = std::move(weight);
+    branch.add_node(MakeNode("Add", {name + "_weight", "x"}, {name + "_result"}));
+    *branch.add_output() = Value(name + "_result");
+    return branch;
+  };
+  const auto original = Model(make_branch("then"), make_branch("else"));
+  const auto path =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_if_deferred_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".onnx");
+  ASSERT_TRUE(original.SerializeToFile(path.string()));
+
+  ModelProto deferred;
+  {
+    utils::FileStream stream(path.string());
+    ParseOptions options;
+    options.defer_weights = true;
+    options.raw_data_threshold = 0;
+    ASSERT_TRUE(deferred.ParseFromStream(stream, options));
+  }
+  auto &node = *deferred.mutable_graph()->mutable_node(0);
+  AttributeProto *then_branch = nullptr;
+  AttributeProto *else_branch = nullptr;
+  for (auto &attribute : node.ref_attribute()) {
+    if (attribute.name() == "then_branch")
+      then_branch = &attribute;
+    else if (attribute.name() == "else_branch")
+      else_branch = &attribute;
+  }
+  ASSERT_NE(then_branch, nullptr);
+  ASSERT_NE(else_branch, nullptr);
+  auto &then_weight = *then_branch->mutable_g()->mutable_initializer(0);
+  auto &else_weight = *else_branch->mutable_g()->mutable_initializer(0);
+  ASSERT_TRUE(then_weight.HasDeferredWeight());
+  ASSERT_TRUE(else_weight.HasDeferredWeight());
+  ASSERT_FALSE(then_weight.has_raw_data());
+  ASSERT_FALSE(else_weight.has_raw_data());
+
+  GraphBuilder builder(deferred, SchemaLookup());
+  GraphGraph graph(builder);
+  IfIdenticalBranchesPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
+  EXPECT_FALSE(then_weight.has_raw_data());
+  EXPECT_FALSE(else_weight.has_raw_data());
+  std::filesystem::remove(path);
 }
 
 TEST(IfIdenticalBranchesPattern, ForwardsBranchLocalInitializer) {

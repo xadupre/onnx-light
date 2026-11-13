@@ -241,6 +241,57 @@ class TestVersionConverter(ExtTestCase):
                     ],
                 )
 
+    def test_local_function_preserves_nodes_matching_graph_defaults_carrier(self):
+        for with_default in (False, True):
+            with self.subTest(with_default=with_default):
+                collision = oh.make_node(
+                    "FunctionGraphAttributeDefaults",
+                    ["X"],
+                    ["intermediate"],
+                    name="__onnx_light_graph_defaults",
+                    domain="onnx_light_internal",
+                )
+                default = oh.make_attribute(
+                    "body",
+                    oh.make_graph(
+                        [oh.make_node("Unsqueeze", ["X"], ["D"], axes=[0])],
+                        "default_body",
+                        [],
+                        [oh.make_tensor_value_info("D", onnxl.TensorProto.FLOAT, [1, 2])],
+                    ),
+                )
+                function = oh.make_function(
+                    "custom",
+                    "Local",
+                    ["X"],
+                    ["Y"],
+                    [collision, oh.make_node("Unsqueeze", ["intermediate"], ["Y"], axes=[0])],
+                    [
+                        oh.make_operatorsetid("", 12),
+                        oh.make_operatorsetid("onnx_light_internal", 1),
+                    ],
+                    attributes=["body"] if with_default else [],
+                    attribute_protos=[default] if with_default else [],
+                )
+                model = self._local_function_model(function, 12, output_shape=[1, 2])
+                checker.check_model(model)
+                converted = version_converter.convert_version(model, 13)
+                checker.check_model(converted)
+                actual = converted.functions[0]
+                matching_nodes = [
+                    node
+                    for node in actual.node
+                    if node.domain == collision.domain and node.op_type == collision.op_type
+                ]
+                self.assertEqual(len(matching_nodes), 1)
+                self.assertEqual(
+                    matching_nodes[0].SerializeToString(), collision.SerializeToString()
+                )
+                if with_default:
+                    unsqueeze = actual.attribute_proto[0].g.node[-1]
+                    self.assertEqual(unsqueeze.op_type, "Unsqueeze")
+                    self.assertEqual(len(unsqueeze.input), 2)
+
     def test_local_function_call_graph_attributes_are_converted(self):
         branches = []
         for name in ("then_branch", "else_branch"):
@@ -345,6 +396,19 @@ class TestVersionConverter(ExtTestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "is unallowed"):
             version_converter.convert_version(unsupported_model, 18)
+
+        unknown_type = oh.make_sequence_type_proto(
+            oh.make_tensor_type_proto(onnxl.TensorProto.UNDEFINED, [2])
+        )
+        unknown = oh.make_graph(
+            [oh.make_node("Identity", ["X"], ["Y"])],
+            "identity",
+            [oh.make_value_info("X", unknown_type)],
+            [oh.make_value_info("Y", unknown_type)],
+        )
+        unknown_model = oh.make_model(unknown, opset_imports=[oh.make_operatorsetid("", 19)])
+        with self.assertRaisesRegex(RuntimeError, "must be known"):
+            version_converter.convert_version(unknown_model, 18)
 
     def test_local_function_unresolved_adapter_attribute(self):
         node = oh.make_node("Unsqueeze", ["X"], ["Y"])
@@ -506,6 +570,207 @@ class TestVersionConverter(ExtTestCase):
         )
         self.assertEqual(stash_type, onnxl.TensorProto.FLOAT)
 
+    def test_local_function_unknown_types_reject_specialized_adapters(self):
+        cases = (
+            ("Cast", 9, 8, onnxl.TensorProto.STRING, onnxl.TensorProto.FLOAT),
+            ("ScatterElements", 16, 15, onnxl.TensorProto.BFLOAT16, onnxl.TensorProto.FLOAT),
+            ("ScatterND", 16, 15, onnxl.TensorProto.BFLOAT16, onnxl.TensorProto.FLOAT),
+            ("ReduceLogSum", 27, 28, onnxl.TensorProto.INT64, onnxl.TensorProto.FLOAT),
+            ("ReduceLogSumExp", 27, 28, onnxl.TensorProto.INT64, onnxl.TensorProto.FLOAT),
+        )
+        for op_type, source, target, incompatible, compatible in cases:
+            for annotated, data_type in (
+                (False, incompatible),
+                (True, incompatible),
+                (True, compatible),
+            ):
+                with self.subTest(op_type=op_type, annotated=annotated, data_type=data_type):
+                    inputs = [("X", data_type, [2])]
+                    output_type = data_type
+                    output_shape = [2]
+                    attributes = {}
+                    if op_type == "Cast":
+                        attributes["to"] = onnxl.TensorProto.FLOAT
+                        output_type = onnxl.TensorProto.FLOAT
+                    elif op_type.startswith("Scatter"):
+                        index_shape = [1, 1] if op_type == "ScatterND" else [1]
+                        inputs.extend(
+                            [("I", onnxl.TensorProto.INT64, index_shape), ("U", data_type, [1])]
+                        )
+                    else:
+                        attributes["keepdims"] = 0
+                        output_shape = []
+                    values = [
+                        oh.make_tensor_value_info(name, dtype, shape)
+                        for name, dtype, shape in inputs
+                    ]
+                    output = oh.make_tensor_value_info("Y", output_type, output_shape)
+                    function = oh.make_function(
+                        "custom",
+                        "Local",
+                        [value.name for value in values],
+                        ["Y"],
+                        [
+                            oh.make_node(
+                                op_type, [value.name for value in values], ["Y"], **attributes
+                            )
+                        ],
+                        [oh.make_operatorsetid("", source)],
+                        value_info=[*values, output] if annotated else None,
+                    )
+                    graph = oh.make_graph(
+                        [
+                            oh.make_node(
+                                "Local", [value.name for value in values], ["Y"], domain="custom"
+                            )
+                        ],
+                        "local_function",
+                        values,
+                        [output],
+                    )
+                    model = oh.make_model(
+                        graph,
+                        opset_imports=[
+                            oh.make_operatorsetid("", source),
+                            oh.make_operatorsetid("custom", 1),
+                        ],
+                        functions=[function],
+                    )
+                    before = model.SerializeToString()
+                    if not annotated:
+                        with self.assertRaisesRegex(RuntimeError, "must be known"):
+                            version_converter.convert_version(model, target)
+                    elif data_type == incompatible:
+                        with self.assertRaises(RuntimeError):
+                            version_converter.convert_version(model, target)
+                    else:
+                        converted = version_converter.convert_version(model, target)
+                        checker.check_model(converted)
+                        self.assertEqual(converted.functions[0].opset_import[0].version, target)
+                    self.assertEqual(model.SerializeToString(), before)
+
+    def test_local_function_sum_downgrade_requires_equal_shapes(self):
+        for annotated, shapes, accepted in (
+            (False, ([2, 1], [1, 3]), False),
+            (True, ([2, 1], [1, 3]), False),
+            (True, ([None, 3], [None, 3]), False),
+            (True, ([2, 3], [2, 3]), True),
+            (True, (["N", 3], ["N", 3]), True),
+        ):
+            with self.subTest(annotated=annotated, shapes=shapes):
+                inputs = [
+                    oh.make_tensor_value_info(name, onnxl.TensorProto.FLOAT, shape)
+                    for name, shape in zip(("X", "B"), shapes)
+                ]
+                output_shape = shapes[0] if shapes[0] == shapes[1] else [2, 3]
+                output = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, output_shape)
+                function = oh.make_function(
+                    "custom",
+                    "Local",
+                    ["X", "B"],
+                    ["Y"],
+                    [oh.make_node("Sum", ["X", "B"], ["Y"])],
+                    [oh.make_operatorsetid("", 8)],
+                    value_info=[*inputs, output] if annotated else None,
+                )
+                graph = oh.make_graph(
+                    [oh.make_node("Local", ["X", "B"], ["Y"], domain="custom")],
+                    "local_function",
+                    inputs,
+                    [output],
+                )
+                model = oh.make_model(
+                    graph,
+                    opset_imports=[
+                        oh.make_operatorsetid("", 8),
+                        oh.make_operatorsetid("custom", 1),
+                    ],
+                    functions=[function],
+                )
+                if accepted:
+                    converted = version_converter.convert_version(model, 7)
+                    checker.check_model(converted)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        version_converter.convert_version(model, 7)
+
+    def test_local_function_sum_downgrade_accepts_same_untyped_input(self):
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Sum", ["X", "X"], ["Y"])],
+            [oh.make_operatorsetid("", 8)],
+        )
+        converted = version_converter.convert_version(self._local_function_model(function, 8), 7)
+        checker.check_model(converted)
+
+    def test_specialized_adapters_reject_missing_required_inputs(self):
+        for op_type, source, target, inputs, attributes in (
+            ("Cast", 9, 8, [""], {"to": onnxl.TensorProto.FLOAT}),
+            ("ScatterElements", 16, 15, ["", "I", "U"], {}),
+            ("ScatterND", 16, 15, ["", "I", "U"], {}),
+            ("ReduceLogSum", 27, 28, [""], {}),
+        ):
+            with self.subTest(op_type=op_type):
+                graph = oh.make_graph(
+                    [oh.make_node(op_type, inputs, ["Y"], **attributes)],
+                    "missing_input",
+                    [
+                        oh.make_tensor_value_info("I", onnxl.TensorProto.INT64, [1]),
+                        oh.make_tensor_value_info("U", onnxl.TensorProto.FLOAT, [1]),
+                    ],
+                    [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1])],
+                )
+                model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", source)])
+                with self.assertRaisesRegex(RuntimeError, "requires"):
+                    version_converter.convert_version(model, target)
+
+    def test_nd_indices_generated_cast_does_not_invent_an_input_type(self):
+        graph = oh.make_graph(
+            [
+                oh.make_node("Opaque", ["indices"], ["unknown"], domain="custom"),
+                oh.make_node("GatherND", ["data", "unknown"], ["Y"]),
+            ],
+            "unknown_indices",
+            [
+                oh.make_tensor_value_info("data", onnxl.TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("indices", onnxl.TensorProto.INT32, [1, 1]),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 3])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 29), oh.make_operatorsetid("custom", 1)],
+        )
+        converted = version_converter.convert_version(model, 13)
+        cast = next(node for node in converted.graph.node if node.op_type == "Cast")
+        self.assertEqual(list(cast.input), ["unknown"])
+        self.assertNotIn("unknown", [value.name for value in converted.graph.value_info])
+
+    def test_existing_cast_with_unknown_input_does_not_skip_type_restrictions(self):
+        graph = oh.make_graph(
+            [
+                oh.make_node("Opaque", ["source"], ["unknown"], domain="custom"),
+                oh.make_node("Cast", ["unknown"], ["indices"], to=onnxl.TensorProto.INT64),
+                oh.make_node("GatherND", ["data", "indices"], ["Y"]),
+            ],
+            "unknown_cast",
+            [
+                oh.make_tensor_value_info("data", onnxl.TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("source", onnxl.TensorProto.FLOAT6E2M3, [1, 1]),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 3])],
+            value_info=[oh.make_tensor_value_info("indices", onnxl.TensorProto.INT64, [1, 1])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 29), oh.make_operatorsetid("custom", 1)],
+        )
+        with self.assertRaisesRegex(RuntimeError, "must be known"):
+            version_converter.convert_version(model, 27)
+
     def test_local_function_conversion_preserves_converted_type_annotations(self):
         function = oh.make_function(
             "custom",
@@ -551,6 +816,81 @@ class TestVersionConverter(ExtTestCase):
         converted_again = version_converter.convert_version(converted_up, 8)
         checker.check_model(converted_again, full_check=True)
         self.assertEqual(converted_again.functions[0].opset_import[0].version, 8)
+
+    def test_local_function_container_intermediate_type_round_trip(self):
+        tensor_type = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2])
+        for container in (
+            oh.make_sequence_type_proto(tensor_type),
+            oh.make_optional_type_proto(tensor_type),
+        ):
+            with self.subTest(type_case=container.WhichOneof("value")):
+                values = [oh.make_value_info(name, container) for name in ("X", "S", "Y")]
+                values[1].doc_string = "intermediate metadata"
+                oh.set_metadata_props(values[1], {"origin": "function"})
+                function = oh.make_function(
+                    "custom",
+                    "Local",
+                    ["X"],
+                    ["Y"],
+                    [
+                        oh.make_node("Identity", ["X"], ["S"]),
+                        oh.make_node("Identity", ["S"], ["Y"]),
+                    ],
+                    [oh.make_operatorsetid("", 19)],
+                    value_info=values,
+                )
+                graph = oh.make_graph(
+                    [oh.make_node("Local", ["X"], ["Y"], domain="custom")],
+                    "local_function",
+                    [values[0]],
+                    [values[2]],
+                )
+                model = oh.make_model(
+                    graph,
+                    opset_imports=[
+                        oh.make_operatorsetid("", 19),
+                        oh.make_operatorsetid("custom", 1),
+                    ],
+                    functions=[function],
+                )
+                converted = version_converter.convert_version(model, 18)
+                intermediate = next(
+                    value for value in converted.functions[0].value_info if value.name == "S"
+                )
+                self.assertEqual(
+                    intermediate.type.SerializeToString(), container.SerializeToString()
+                )
+                self.assertEqual(intermediate.doc_string, "intermediate metadata")
+                self.assertEqual(intermediate.metadata_props[0].key, "origin")
+                self.assertEqual(intermediate.metadata_props[0].value, "function")
+                converted = version_converter.convert_version(converted, 19)
+                converted = version_converter.convert_version(converted, 18)
+                checker.check_model(converted)
+
+    def test_local_function_preserves_metadata_only_live_values(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])
+        intermediate = onnxl.ValueInfoProto()
+        intermediate.name = "S"
+        oh.set_metadata_props(intermediate, {"origin": "function"})
+        stale = onnxl.ValueInfoProto()
+        stale.name = "stale"
+        oh.set_metadata_props(stale, {"origin": "unused"})
+        function = oh.make_function(
+            "custom",
+            "Local",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Identity", ["X"], ["S"]), oh.make_node("Identity", ["S"], ["Y"])],
+            [oh.make_operatorsetid("", 18)],
+            value_info=[x, intermediate, y, stale],
+        )
+        model = self._local_function_model(function, 18)
+        converted = version_converter.convert_version(model, 19)
+        values = {value.name: value for value in converted.functions[0].value_info}
+        self.assertNotIn("stale", values)
+        self.assertEqual(values["S"].metadata_props[0].key, "origin")
+        self.assertEqual(values["S"].metadata_props[0].value, "function")
 
     # Test 1: Backwards Incompatible Conversion: Reshape: 8 -> 2
     def test_backwards_incompatible(self) -> None:

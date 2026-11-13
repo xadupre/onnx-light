@@ -211,12 +211,22 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
     graph.value_info().extend(function.value_info());
     constexpr char graph_defaults_domain[] = "onnx_light_internal";
     constexpr char graph_defaults_op[] = "FunctionGraphAttributeDefaults";
+    constexpr char graph_defaults_name_base[] = "__onnx_light_graph_defaults";
+    std::string graph_defaults_name = graph_defaults_name_base;
     bool has_graph_defaults = false;
     NodeProto *graph_defaults_carrier = nullptr;
     for (const auto &attribute : function.attribute_proto()) {
       if (attribute.has_g() || !attribute.graphs().empty()) {
         if (graph_defaults_carrier == nullptr) {
+          std::unordered_set<std::string> existing_names;
+          for (const auto &node : graph.node()) {
+            if (node.domain() == graph_defaults_domain && node.op_type() == graph_defaults_op)
+              existing_names.insert(node.name());
+          }
+          for (size_t suffix = 1; existing_names.contains(graph_defaults_name); ++suffix)
+            graph_defaults_name = std::string(graph_defaults_name_base) + std::to_string(suffix);
           graph_defaults_carrier = graph.add_node();
+          graph_defaults_carrier->set_name(graph_defaults_name);
           graph_defaults_carrier->set_op_type(graph_defaults_op);
           graph_defaults_carrier->set_domain(graph_defaults_domain);
         }
@@ -228,12 +238,14 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
     convert_graph(function_graph, OpSetID(default_opset->version()), target_version);
     ModelProto converted_function;
     ExportModelProto(&converted_function, function_graph);
+    auto is_graph_defaults_carrier = [&](const NodeProto &node) {
+      return has_graph_defaults && node.name() == graph_defaults_name &&
+             node.domain() == graph_defaults_domain && node.op_type() == graph_defaults_op;
+    };
     if (has_graph_defaults) {
-      const auto carrier = std::find_if(
-          converted_function.graph().node().begin(), converted_function.graph().node().end(),
-          [&](const NodeProto &node) {
-            return node.domain() == graph_defaults_domain && node.op_type() == graph_defaults_op;
-          });
+      const auto carrier =
+          std::find_if(converted_function.graph().node().begin(),
+                       converted_function.graph().node().end(), is_graph_defaults_carrier);
       ONNX_ASSERTM(carrier != converted_function.graph().node().end(),
                    "Function graph attribute defaults were lost during conversion.");
       for (const auto &attribute : carrier->attribute()) {
@@ -286,6 +298,21 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
       append_value_info(value_info);
     for (const auto &value_info : converted_function.graph().value_info())
       append_value_info(value_info);
+    auto retain_live_metadata = [&](const std::string &name) {
+      const auto previous = previous_value_info.find(name);
+      if (name.empty() || value_info_names.contains(name) ||
+          previous == previous_value_info.end() ||
+          (!previous->second.has_doc_string() && previous->second.metadata_props().empty()))
+        return;
+      ValueInfoProto value_info;
+      value_info.set_name(name);
+      append_value_info(value_info);
+    };
+    for (const auto &node : converted_function.graph().node())
+      for (const auto &output : node.output())
+        retain_live_metadata(output.value());
+    for (const auto &initializer : converted_function.graph().initializer())
+      retain_live_metadata(initializer.name());
 
     function.node().clear();
     // Functions have no initializers; adapters' constants must be represented as nodes.
@@ -299,8 +326,7 @@ ModelProto DefaultVersionConverter::convert_version(const ModelProto &mp_in,
       value->mutable_t()->CopyFrom(initializer);
     }
     for (const auto &node : converted_function.graph().node()) {
-      if (has_graph_defaults && node.domain() == graph_defaults_domain &&
-          node.op_type() == graph_defaults_op) {
+      if (is_graph_defaults_carrier(node)) {
         continue;
       }
       function.add_node()->CopyFrom(node);

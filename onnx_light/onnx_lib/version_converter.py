@@ -29,6 +29,6 @@ def convert_version(model: ModelProto, target_version: int) -> ModelProto:
         ConvertError: If the conversion cannot be completed, including when any
             graph contains unsupported sparse initializers.
         RuntimeError: If an adapter requires a concrete value for an unresolved
-            function attribute or unavailable type information.
+            function attribute or unavailable type or shape information.
     """
     return _vc.convert_version(model, target_version)

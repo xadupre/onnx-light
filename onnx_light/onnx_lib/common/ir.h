@@ -498,6 +498,7 @@ private:
   bool has_sizes_{false};
   std::vector<Dimension> sizes_;
   std::unique_ptr<TypeProto> type_;
+  std::unique_ptr<std::vector<int32_t>> possible_elem_types_;
 
 public:
   /**
@@ -506,10 +507,24 @@ public:
    */
   Value *setElemType(int32_t elem_type) {
     elem_type_ = elem_type;
+    possible_elem_types_.reset();
     return this;
   }
   /** @brief Returns the ONNX element type. */
   int32_t elemType() const { return elem_type_; }
+  /** @brief Records a nonempty set of possible types when the exact type is unknown. */
+  Value *setPossibleElemTypes(std::vector<int32_t> types) {
+    ONNX_ASSERTM(elem_type_ == TensorProto::DataType::UNDEFINED && !types.empty(),
+                 "Possible element types require an unknown type and a nonempty set.")
+    for (const int32_t type : types) {
+      ONNX_ASSERTM(type != TensorProto::DataType::UNDEFINED && TensorProto::DataType_IsValid(type),
+                   "A possible element type must be defined.")
+    }
+    possible_elem_types_ = std::make_unique<std::vector<int32_t>>(std::move(types));
+    return this;
+  }
+  /** @brief Returns inferred alternatives when the exact element type is unknown. */
+  const std::vector<int32_t> *possibleElemTypes() const { return possible_elem_types_.get(); }
   /** @brief Returns true if shape information has been set. */
   bool has_sizes() const { return has_sizes_; }
   /**
@@ -625,7 +640,12 @@ public:
    * @return @c this for chaining.
    */
   Value *copyMetadata(const Value *from) {
+    if (this == from)
+      return this;
     setElemType(from->elemType());
+    if (from->possibleElemTypes()) {
+      setPossibleElemTypes(*from->possibleElemTypes());
+    }
     if (from->has_sizes()) {
       setSizes(from->sizes());
     } else {

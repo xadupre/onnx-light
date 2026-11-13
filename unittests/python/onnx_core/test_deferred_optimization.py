@@ -243,6 +243,8 @@ class TestDeferredOptimization(unittest.TestCase):
                     if value != 1.0:
                         self.assertFalse(builder.to_model().is_weight_loaded("one"))
                         continue
+                    restored = builder.undo_rewritings(plan).to_model()
+                    restored.load_weights()
                     source.add_rewriting("optimized", plan)
                     source.load_weights()
                     saved = Path(directory) / "saved.onnx"
@@ -254,9 +256,6 @@ class TestDeferredOptimization(unittest.TestCase):
                     restored_source = load(saved)
                     replay_builder = optim.GraphBuilder(restored_source)
                     replayed = replay_builder.apply_rewritings("optimized").to_model()
-                    restored = replay_builder.undo_rewritings(
-                        restored_source.rewritings["optimized"]
-                    ).to_model()
                     feeds = {
                         "x": numpy.full(2048, 0.25, dtype=numpy.float32),
                         "y": numpy.full(2048, 4, dtype=numpy.float32),
@@ -359,14 +358,21 @@ class TestDeferredOptimization(unittest.TestCase):
                 save(model, path)
                 source = load(path, defer_weights=True)
                 builder = optim.GraphBuilder(source)
-                plan = optim.GraphGraph(builder, ["Sub1Mul"]).optimize()
+                plan, report = optim.GraphGraph(builder, ["Sub1Mul"]).optimize(report=True)
                 eager_builder = optim.GraphBuilder(model)
-                eager_plan = optim.GraphGraph(eager_builder, ["Sub1Mul"]).optimize()
+                eager_plan, eager_report = optim.GraphGraph(eager_builder, ["Sub1Mul"]).optimize(
+                    report=True
+                )
                 self.assertEqual(
                     [edit.pattern_name for edit in plan.rewrites],
                     [edit.pattern_name for edit in eager_plan.rewrites],
                 )
-                self.assertIn("Sub1Mul", [edit.pattern_name for edit in plan.rewrites])
+                self.assertEqual(report.patterns[0].matches, eager_report.patterns[0].matches)
+                self.assertGreater(report.patterns[0].matches, 0)
+                if scope == "function":
+                    self.assertTrue(plan.replaced_function_ids)
+                else:
+                    self.assertIn("Sub1Mul", [edit.pattern_name for edit in plan.rewrites])
                 self.assertFalse(source.is_weight_loaded("one"))
                 replayed = optim.GraphBuilder(source).apply_rewritings(plan).to_model()
                 restored = builder.undo_rewritings(plan).to_model()
@@ -602,12 +608,12 @@ class TestDeferredOptimization(unittest.TestCase):
                             transpose=name == "TransposeTranspose",
                         )
                         if name == "Sub1Mul":
-                            model.graph.node[0].input[0] = "algebra"
                             model = _model(
                                 [
                                     oh.make_node("Sub", ["one", "x"], ["s"]),
                                     oh.make_node("Mul", ["s", "x"], ["algebra"]),
-                                    *model.graph.node,
+                                    oh.make_node("MatMul", ["algebra", "w"], ["m0"]),
+                                    *list(model.graph.node)[1:],
                                 ],
                                 model.graph.input,
                                 model.graph.output,

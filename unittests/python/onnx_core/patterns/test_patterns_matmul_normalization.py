@@ -801,7 +801,11 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         )
                         path = Path(d) / "model.onnx"
                         save(model, path, save_as_external_data=external, size_threshold=0)
-                        eager = load(path)
+                        eager = load(path, load_external_data=external)
+                        if external:
+                            normalized = Path(d) / "eager.onnx"
+                            save(eager, normalized)
+                            eager = load(normalized)
                         deferred = load(path, defer_weights=True)
                         self.assertTrue(deferred.is_weight_loaded("W"))
                         eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])

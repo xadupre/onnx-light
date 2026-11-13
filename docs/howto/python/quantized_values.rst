@@ -171,7 +171,8 @@ Let ``K`` denote input width, ``N`` output width, ``G`` effective group size,
 and ``H=K/G``. Grouping is along input columns (``group_axis=1``) of the
 reconstructed PyTorch Linear matrix ``[N,K]``. Dimensions are positive and
 groups complete; ``group_size=-1`` means ``G=K``. Codes are unsigned four-bit
-integers 0--15. Multi-byte encoded payload words are little-endian; loaded
+integers 0--15, or eight-bit integers 0--255 for GEMM (including historical
+AWQ-Marlin source checkpoints). Multi-byte encoded payload words are little-endian; loaded
 runtime tensors and NumPy arrays use native byte order.
 
 .. list-table:: Supported native formats and versions
@@ -184,8 +185,8 @@ runtime tensors and NumPy arrays use native byte order.
      - Reconstruction
    * - ``gemm``
      - v1; any positive divisor ``G`` of ``K``
-     - INT32 ``qweight[K,N/8]``, INT32 ``qzeros[H,N/8]``,
-       FP16 or BF16 ``scales[H,N]``; ``N`` divisible by 8
+     - INT32 ``qweight[K,N/F]``, INT32 ``qzeros[H,N/F]``,
+       FP16 or BF16 ``scales[H,N]``; ``F=32/bits`` divides ``N``
      - ``(code-zero)*scale``; output-axis packing
    * - ``gemv``
      - v1; ``G=16,32,64`` or ``G>=128``
@@ -215,6 +216,8 @@ use the same output order. GEMV packs eight consecutive input codes in
 natural order, low nibble first; its zero points pack eight consecutive groups
 in the same natural order. Neither convention subtracts one from stored zero
 points. Asymmetric and symmetric checkpoint parameters follow the same ABI.
+Eight-bit GEMM instead stores four consecutive output codes per INT32 in
+natural low-byte-first order, for both weights and zeros.
 
 GEMV_FAST first reshapes each row's 32 codes to ``[4,4,2]`` and transposes
 to ``[4,4,2]`` with axes ``[1,0,2]``. It then applies the even/odd order
@@ -264,6 +267,135 @@ restrictions do not prevent reference decoding of the serialized layouts.
     weight_out_in = reconstruct_awq_weights(encoded)  # NumPy float32 [N,K]
     # unpack_awq_codes(encoded) returns UINT8 [N,K].
     # Generic dequantize_tensor_proto(encoded) also reconstructs FLOAT32.
+
+.. _l-marlin-bitblas-checkpoints:
+
+Explicit GPTQModel Marlin and BitBLAS layouts
+-------------------------------------------
+
+These adapters pin GPTQModel
+``c1976918cfe3703fbcf6d1ce2440a82b26394375``. A backend name is **not**
+a serialized layout. In particular, ordinary GPTQ/AWQ checkpoints selected for
+Marlin or BitBLAS inference remain ordinary checkpoints until runtime repacking.
+The portable ``gptq`` and ``awq`` profiles are unchanged.
+
+The inventory below follows the pinned
+`Marlin GPTQ holder <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/marlin.py>`_,
+`Marlin AWQ holder <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/marlin_awq.py>`_,
+`BitBLAS buffers/repacker <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/bitblas.py>`_,
+`AWQ BitBLAS producer <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/bitblas_awq.py>`_,
+`MLX checkpoint holders <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/nn_modules/qlinear/mlx.py>`_
+and `CPU transcoders <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/utils/mlx_packing.py>`_,
+not merely the compatibility wiki's format names.
+
+Historical Marlin: import versus export
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``marlin.import_marlin_weights`` requires both ``method`` and ``layout``:
+
+* ``method="gptq", layout="gptq-v1"`` imports ordinary INT32
+  ``qweight[K*bits/32,N]``, ``qzeros[G,N*bits/32]``,
+  ``scales[G,N]`` and INT32 ``g_idx[K]``. Codes are unsigned, low bits first
+  along K; stored zeros are actual-zero-minus-one. Four/eight bits, symmetric
+  midpoint zeros, complete groups, 32-aligned dimensions and contiguous
+  ``g_idx`` are required by the supported row reader.
+  The result is the existing native GPTQ encoded schema, not a new tile ABI.
+* ``method="awq", layout="awq-gemm"`` imports ordinary four/eight-bit AWQ GEMM
+  INT32 ``qweight[K,N/F]``, INT32 ``qzeros[G,N/F]`` (``F=32/bits``) and
+  ``scales[G,N]``. It reuses the exact AWQ decoder, including its
+  four-bit ``[0,2,4,6,1,3,5,7]`` output-lane packing order and direct zeros.
+  Eight-bit source words use natural byte order, as in the pinned CPU reader;
+  this does not assert equivalence with CUDA's INT8 AWQ undo permutation.
+  The result is the existing native AWQ encoded schema.
+
+Both use FP16/BF16 scales. ``G=K/effective_group_size`` and ``-1`` means K.
+No tile permutation is present in either loading representation.
+``MarlinLinear.post_init`` and ``AwqMarlinLinear.post_init`` *always* repack:
+runtime weights have 16-row tiles, INT32 shape ``[padded_K/16,
+padded_N*bits/2]``, with kernel-specific lane interleaving; scales are permuted
+in 64-value grouped or 32-value channel blocks. AWQ additionally permutes and
+repacks zeros, while symmetric GPTQ drops them. Padding and activation sorting
+are runtime state, not recoverable checkpoint metadata supplied by ``marlin``.
+Passing these transformed shapes to the historical import is rejected.
+Historical ``B/s`` buffers are not silently interpreted as either holder.
+
+For inventory purposes, the pinned runtime
+`repacker <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel_ext/marlin/gptq_marlin_repack.cu>`_
+gathers a 16-by-64 tile: lane ``t`` and warp ``w`` select column
+``16*w+t//4`` and rows ``[r,r+1,r+8,r+9]``, where ``r=2*(t%4)``,
+then the same rows at column+8. Four-bit words gather those eight values
+in order ``[0,2,4,6,1,3,5,7]``; eight-bit words gather each four-value
+half in order ``[0,2,1,3]``. Runtime scale gathers are
+``[i+8*j for i in range(8) for j in range(8)]`` for grouped blocks and
+``[2*i+j for i in range(4) for j in [0,1,8,9,16,17,24,25]]`` for
+channelwise blocks. AWQ runtime zeros use the grouped gather followed by
+the corresponding four/eight-bit packing interleave. These are **runtime
+operand permutations**, not a second checkpoint ABI inferred from a backend.
+
+Export the imported value through ``gptq.export_gptq_weights`` or
+``awq.export_awq_weights`` under its **ordinary** format. There is deliberately
+no ``pack_marlin_weights``/``export_marlin_weights`` API: the pinned
+`quantization entry point <https://github.com/ModelCloud/GPTQModel/blob/c1976918cfe3703fbcf6d1ce2440a82b26394375/gptqmodel/models/base.py>`_
+rejects new quantization to ``FORMAT.MARLIN`` and the AWQ processor does not
+export it. This adapter does not invent a compatible reader for runtime tiles.
+
+BitBLAS row-packed checkpoint: reversible import and export
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``bitblas.import_bitblas_weights`` requires ``layout="row-packed-v1"``
+and ``method="gptq"`` or ``"awq"``. This identifier explicitly selects the
+untransformed row streams read by ``GPTQBitBLASMlxQuantLinear`` /
+``AWQBitBLASMlxQuantLinear`` and ``repack_*_bitblas``. It is not a claim that
+every CUDA BitBLAS operator accepts those bytes.
+
+* INT8 ``qweight[N,K*bits/8]`` stores consecutive low-to-high code fields
+  along K, with no tile, ladder or fast-decoding permutation.
+* FP16 ``scales[N,G]`` is output-major, unlike GPTQ/AWQ GEMM. This row
+  reader does not claim the CUDA operator's BF16 scale contract.
+* GPTQ supports 2/4/8 bits. Symmetric storage uses **two's-complement**
+  intN bit patterns and an empty INT8 ``qzeros[0]``; reconstruction sign-extends
+  codes before scaling. Asymmetric storage uses unsigned codes and direct
+  INT8-packed zeros ``[G,N*bits/8]``.
+* AWQ supports the pinned row reader's 2-through-8-bit paths, including fields
+  crossing byte boundaries. The CUDA producer supports only four bits.
+  Codes and zeros are
+  always unsigned, **even when the originating AWQ config says symmetric**.
+  Packed zeros are mandatory and have the same direct, low-field-first order.
+  The ordinary AWQ GEMM output interleave is absent.
+
+Dimensions are positive and unpadded. K is divisible by 32; N is divisible
+by 32 for GPTQ and 16 for AWQ, matching their row-reader contracts.
+Groups are complete with size -1, K, 32, 64 or 128.
+Scale values must be finite and positive, and FLOAT reconstruction must remain
+finite. ``unpack_bitblas_codes`` returns raw UINT8 code bit patterns in
+``[N,K]`` order, not sign-extended values. ``pack_bitblas_weights`` accepts those
+exact codes and already-native ``scales`` and packed ``qzeros``; it does not
+requantize, infer symmetry, drop AWQ zeros, or apply GPTQ-v1 zero correction.
+Import owns a snapshot; export preserves all three native buffers byte-for-byte.
+The independent fixtures execute the fingerprinted pinned CPU transcoders.
+
+``onnx_light.bitblas_weights.v1`` stores the explicit layout, originating method,
+dimensions, grouping, bit width, symmetry and upstream revision. Unknown
+versions, bare backend names, additional tensors, non-native/noncontiguous
+arrays, wrong dtypes/shapes, truncated/oversized payloads, and overflows are
+rejected. ``max_bytes`` bounds serialized and logical FLOAT extents before
+allocation. Common low-bit packing and exact GPTQ zero/group/reconstruction
+primitives are reused.
+
+Target-specific BitBLAS transformed buffers are a different case:
+``_initialize_buffers`` asks ``retrieve_weight_shape()`` for their dimensions
+and ``_transform_bitblas_weight`` executes the installed BitBLAS operator's
+``weight_transform`` when present. Its ladder propagation and LOP3/fast-decoding
+ordering depend on that external operator/target, not just GPTQModel's revision
+or the ``bitblas`` token. Neither shape equality nor a backend name identifies
+those permutations. Such payloads are **not supported** by ``row-packed-v1``;
+they require a separately pinned external implementation and explicit transform
+metadata. Export here is compatible with the identified row reader only, not
+an arbitrary transformed CUDA reader. No GPU execution, MLX, Torch, BitBLAS,
+runtime JIT or accelerated kernels are required for format decoding.
+The pinned CUDA GPTQ repacker also contains producer-specific sign-bit and
+zero conversions that differ from the CPU row reader (including a literal
+four-bit zero mask). Those conversions are not implicitly applied here.
 
 .. _l-qqq-checkpoints:
 

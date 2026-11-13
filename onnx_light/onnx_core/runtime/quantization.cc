@@ -1965,6 +1965,14 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
     return {tensor.shape, TensorProto::FLOAT, std::move(values)};
   }
   if (encoded.has_struct_type() &&
+      catalogue.Resolve(encoded.struct_type()).name().value() == "onnx_light.bitblas_weights.v1") {
+    const auto tensor = ReconstructBitblasWeights(encoded, size_t{1} << 30, catalogue);
+    std::vector<float> values(tensor.size_bytes() / sizeof(float));
+    if (!values.empty())
+      std::memcpy(values.data(), tensor.bytes(), tensor.size_bytes());
+    return {tensor.shape, TensorProto::FLOAT, std::move(values)};
+  }
+  if (encoded.has_struct_type() &&
       catalogue.Resolve(encoded.struct_type()).name().value() == "onnx_light.gptq_weights.v1") {
     const auto tensor = ReconstructGptqWeights(encoded, size_t{1} << 30, catalogue);
     std::vector<float> values(tensor.size_bytes() / sizeof(float));

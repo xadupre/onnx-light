@@ -6,6 +6,7 @@ onnx_light.onnx_core
 
     awq
     bitsandbytes
+    bitblas
     compressed_tensors
     exl3
     gguf
@@ -15,6 +16,7 @@ onnx_light.onnx_core
     gradient
     graph_builder
     graph_partition
+    marlin
     optimization
     qqq
     quantization

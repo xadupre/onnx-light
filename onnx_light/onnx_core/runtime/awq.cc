@@ -45,7 +45,7 @@ struct Field {
 
 struct Geometry {
   std::string variant;
-  int64_t k, n, group;
+  int64_t k, n, group, bits;
   size_t count = 0, total = 0, groups = 0, padded_groups = 0;
   std::vector<Field> fields;
 
@@ -59,11 +59,12 @@ struct Geometry {
     total += bytes;
   }
 
-  Geometry(std::string kind, int64_t rows, int64_t columns, int64_t grouping, int64_t bits,
+  Geometry(std::string kind, int64_t rows, int64_t columns, int64_t grouping, int64_t code_bits,
            int64_t axis, size_t limit, int32_t scale_type = TensorProto::FLOAT16)
-      : variant(std::move(kind)), k(rows), n(columns), group(grouping) {
-    EXT_ENFORCE_INVALID(limit > 0 && k > 0 && n > 0 && bits == 4 && axis == 1,
-                        "AWQ requires positive dimensions, four bits and group_axis=1.");
+      : variant(std::move(kind)), k(rows), n(columns), group(grouping), bits(code_bits) {
+    EXT_ENFORCE_INVALID(limit > 0 && k > 0 && n > 0 &&
+                            (bits == 4 || (bits == 8 && variant == "gemm")) && axis == 1,
+                        "AWQ requires positive dimensions, supported bits and group_axis=1.");
     EXT_ENFORCE_INVALID(variant == "gemm" || variant == "gemv" || variant == "gemv_fast" ||
                             variant == "llm-awq",
                         "AWQ unsupported variant.");
@@ -78,11 +79,11 @@ struct Geometry {
                         "AWQ logical FLOAT weights exceed max_bytes.");
     groups = static_cast<size_t>(k / effective_group);
     if (variant == "gemm") {
-      EXT_ENFORCE_INVALID(
-          n % 8 == 0 && (scale_type == TensorProto::FLOAT16 || scale_type == TensorProto::BFLOAT16),
-          "AWQ GEMM requires N divisible by eight and FP16/BF16 scales.");
-      Add("qweight", TensorProto::INT32, {k, n / 8}, 4, limit);
-      Add("qzeros", TensorProto::INT32, {static_cast<int64_t>(groups), n / 8}, 4, limit);
+      EXT_ENFORCE_INVALID(n % (32 / bits) == 0 && (scale_type == TensorProto::FLOAT16 ||
+                                                   scale_type == TensorProto::BFLOAT16),
+                          "AWQ GEMM requires complete INT32 words and FP16/BF16 scales.");
+      Add("qweight", TensorProto::INT32, {k, n / (32 / bits)}, 4, limit);
+      Add("qzeros", TensorProto::INT32, {static_cast<int64_t>(groups), n / (32 / bits)}, 4, limit);
       Add("scales", scale_type, {static_cast<int64_t>(groups), n}, 2, limit);
     } else {
       EXT_ENFORCE_INVALID(effective_group >= 128 || effective_group == 16 ||
@@ -133,7 +134,7 @@ StructTypeProto Schema(const Geometry &g) {
   number("in_features", g.k);
   number("out_features", g.n);
   number("group_size", g.group);
-  number("bits", 4);
+  number("bits", g.bits);
   number("group_axis", 1);
   text("gptqmodel_revision", kRevision);
   for (const auto &spec : g.fields) {
@@ -178,8 +179,9 @@ uint8_t Code(const Geometry &g, const uint8_t *data, size_t n, size_t k, bool na
   size_t word, shift, width = 4;
   if (g.variant == "gemm") {
     constexpr size_t inverse[] = {0, 4, 1, 5, 2, 6, 3, 7};
-    word = k * (static_cast<size_t>(g.n) / 8) + n / 8;
-    shift = inverse[n % 8] * 4;
+    const size_t factor = 32 / static_cast<size_t>(g.bits);
+    word = k * (static_cast<size_t>(g.n) / factor) + n / factor;
+    shift = (g.bits == 4 ? inverse[n % 8] : n % factor) * static_cast<size_t>(g.bits);
   } else if (g.variant == "gemv") {
     word = n * (static_cast<size_t>(g.k) / 8) + k / 8;
     shift = (k % 8) * 4;
@@ -203,7 +205,7 @@ uint8_t Code(const Geometry &g, const uint8_t *data, size_t n, size_t k, bool na
       packed = half;
     }
   }
-  return static_cast<uint8_t>((packed >> shift) & 15);
+  return static_cast<uint8_t>((packed >> shift) & ((1u << g.bits) - 1));
 }
 
 float Reconstructed(const Geometry &g, const std::array<const uint8_t *, 3> &data, size_t n,
@@ -219,8 +221,9 @@ float Reconstructed(const Geometry &g, const std::array<const uint8_t *, 3> &dat
     size_t shift, word;
     if (g.variant == "gemm") {
       constexpr size_t inverse[] = {0, 4, 1, 5, 2, 6, 3, 7};
-      word = group * (static_cast<size_t>(g.n) / 8) + n / 8;
-      shift = inverse[n % 8] * 4;
+      const size_t factor = 32 / static_cast<size_t>(g.bits);
+      word = group * (static_cast<size_t>(g.n) / factor) + n / factor;
+      shift = (g.bits == 4 ? inverse[n % 8] : n % factor) * static_cast<size_t>(g.bits);
     } else {
       word = n * (g.padded_groups / 8) + group / 8;
       shift = (group % 8) * 4;
@@ -228,7 +231,7 @@ float Reconstructed(const Geometry &g, const std::array<const uint8_t *, 3> &dat
     zero = Word(data[1] + word * 4, 4);
     if (native)
       std::memcpy(&zero, data[1] + word * 4, 4);
-    result = (code - static_cast<float>((zero >> shift) & 15)) * scale;
+    result = (code - static_cast<float>((zero >> shift) & ((1u << g.bits) - 1))) * scale;
   } else {
     volatile float product = code * scale;
     result = product + Parameter(g.fields[1], data[1], index, native);
@@ -239,7 +242,7 @@ float Reconstructed(const Geometry &g, const std::array<const uint8_t *, 3> &dat
 
 void CheckReconstruction(const Geometry &g, const std::array<const uint8_t *, 3> &data,
                          bool native = false) {
-  // Validated finite FP16 parameters cannot overflow FLOAT with a 4-bit code.
+  // Validated finite FP16 parameters cannot overflow FLOAT with an 8-bit code.
   if (g.fields[2].type == TensorProto::FLOAT16)
     return;
   for (size_t n = 0; n < static_cast<size_t>(g.n); ++n)
@@ -341,6 +344,7 @@ AwqWeights ExportAwqWeights(const EncodedValueProto &value, size_t max_bytes,
   result.in_features = g.k;
   result.out_features = g.n;
   result.group_size = g.group;
+  result.bits = static_cast<uint32_t>(g.bits);
   const auto *data = reinterpret_cast<const uint8_t *>(value.raw_data().data());
   for (const auto &field : g.fields) {
     std::vector<uint8_t> bytes(field.bytes);

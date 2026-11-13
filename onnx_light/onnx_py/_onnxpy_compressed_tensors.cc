@@ -24,6 +24,7 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::AwqWeights;
+using core::runtime::BitblasWeights;
 using core::runtime::BitsAndBytesWeights;
 using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
@@ -305,6 +306,21 @@ Tensor BorrowGptqArray(const std::string &name, nb::handle value, size_t &total,
                         array.nbytes());
 }
 
+BitblasWeights BitblasMetadata(const std::string &layout, const std::string &method,
+                               int64_t in_features, int64_t out_features, int64_t group_size,
+                               uint32_t bits, bool symmetric, const std::string &revision) {
+  BitblasWeights result;
+  result.layout = layout;
+  result.method = method;
+  result.in_features = in_features;
+  result.out_features = out_features;
+  result.group_size = group_size;
+  result.bits = bits;
+  result.symmetric = symmetric;
+  result.upstream_revision = revision;
+  return result;
+}
+
 QqqWeights QqqMetadata(int64_t in_features, int64_t out_features, int64_t group_size, uint32_t bits,
                        const std::string &revision, size_t max_bytes) {
   EXT_ENFORCE_INVALID(revision == kExl3Revision, "QQQ unsupported upstream revision.");
@@ -537,6 +553,79 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
       nb::arg("reconstruction_dtype") = static_cast<int32_t>(TensorProto::FLOAT));
   runtime.attr("gptqmodel_upstream_revision") = kExl3Revision;
   runtime.def(
+      "import_bitblas_weights",
+      [](const nb::dict &tensors, const std::string &layout, const std::string &method,
+         int64_t in_features, int64_t out_features, int64_t group_size, uint32_t bits,
+         bool symmetric, const std::string &revision, size_t max_bytes) {
+        auto weights = BitblasMetadata(layout, method, in_features, out_features, group_size, bits,
+                                       symmetric, revision);
+        EXT_ENFORCE_INVALID(tensors.size() == 3,
+                            "BitBLAS requires qweight, scales and qzeros (possibly empty).");
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "BitBLAS tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "qweight" || name == "scales" || name == "qzeros",
+                              "BitBLAS unexpected side tensor.");
+          weights.tensors.emplace(name, BorrowGptqArray(name, item.second, total, max_bytes));
+        }
+        return core::runtime::ImportBitblasWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("layout"), nb::arg("method"), nb::arg("in_features"),
+      nb::arg("out_features"), nb::arg("group_size") = 128, nb::arg("bits") = 4,
+      nb::arg("symmetric") = false, nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "pack_bitblas_weights",
+      [](nb::handle codes, nb::handle scales, nb::handle qzeros, const std::string &layout,
+         const std::string &method, int64_t in_features, int64_t out_features, int64_t group_size,
+         uint32_t bits, bool symmetric, const std::string &revision, size_t max_bytes) {
+        const auto metadata = BitblasMetadata(layout, method, in_features, out_features, group_size,
+                                              bits, symmetric, revision);
+        size_t total = 0;
+        const auto c = BorrowGptqArray("codes", codes, total, max_bytes);
+        const auto s = BorrowGptqArray("scales", scales, total, max_bytes);
+        const auto z = BorrowGptqArray("qzeros", qzeros, total, max_bytes);
+        return core::runtime::PackBitblasWeights(metadata, c, s, z, max_bytes);
+      },
+      nb::arg("codes"), nb::arg("scales"), nb::arg("qzeros"), nb::arg("layout"), nb::arg("method"),
+      nb::arg("in_features"), nb::arg("out_features"), nb::arg("group_size") = 128,
+      nb::arg("bits") = 4, nb::arg("symmetric") = false,
+      nb::arg("upstream_revision") = kExl3Revision, nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_bitblas_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportBitblasWeights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["layout"] = weights.layout;
+        result["method"] = weights.method;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["group_size"] = weights.group_size;
+        result["bits"] = weights.bits;
+        result["symmetric"] = weights.symmetric;
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_bitblas_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackBitblasCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_bitblas_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructBitblasWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
       "import_gptq_weights",
       [](const nb::dict &tensors, const std::string &format, int64_t in_features,
          int64_t out_features, int64_t group_size, uint32_t bits, int64_t group_axis,
@@ -629,7 +718,8 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
         EXT_ENFORCE_INVALID(variant == "gemm" || variant == "gemv" || variant == "gemv_fast" ||
                                 variant == "llm-awq",
                             "AWQ unsupported variant.");
-        EXT_ENFORCE_INVALID(bits == 4 && group_axis == 1 && in_features > 0 && out_features > 0 &&
+        EXT_ENFORCE_INVALID((bits == 4 || (bits == 8 && variant == "gemm")) && group_axis == 1 &&
+                                in_features > 0 && out_features > 0 &&
                                 (group_size > 0 || group_size == -1) && max_bytes > 0,
                             "AWQ invalid bits, axis, dimensions, group_size or max_bytes.");
         EXT_ENFORCE_INVALID(tensors.size() == 3, "AWQ requires exactly three native tensors.");

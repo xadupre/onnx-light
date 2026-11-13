@@ -649,6 +649,39 @@ EncodedValueProto PackGptqWeights(const GptqWeights &metadata, const Tensor &cod
                                   const Tensor &zeros, const Tensor &scales, const Tensor &g_idx,
                                   size_t max_bytes = size_t{1} << 30);
 
+/** Carries explicitly row-packed BitBLAS state, not target-specific transformed weights. */
+struct BitblasWeights {
+  std::string layout;
+  std::string method;
+  int64_t in_features = 0, out_features = 0, group_size = 128;
+  uint32_t bits = 4;
+  bool symmetric = false;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+  std::unordered_map<std::string, Tensor> tensors;
+};
+
+/** Imports the pinned row-packed INT8/FP16 layout with an explicit originating method. */
+EncodedValueProto ImportBitblasWeights(const BitblasWeights &weights,
+                                       size_t max_bytes = size_t{1} << 30);
+
+/** Exports original row-packed buffers, without promising target-specific CUDA compatibility. */
+BitblasWeights ExportBitblasWeights(const EncodedValueProto &value,
+                                    size_t max_bytes = size_t{1} << 30,
+                                    const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks raw unsigned storage codes into UINT8 [N,K], including signed-code bit patterns. */
+Tensor UnpackBitblasCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                          const StructTypeCatalogue &catalogue = {});
+
+/** Reconstructs through the exact GPTQ affine reference, without accelerator rounding. */
+Tensor ReconstructBitblasWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                                 const StructTypeCatalogue &catalogue = {});
+
+/** Packs raw codes with already-native scales and qzeros, without quantization. */
+EncodedValueProto PackBitblasWeights(const BitblasWeights &metadata, const Tensor &codes,
+                                     const Tensor &scales, const Tensor &qzeros,
+                                     size_t max_bytes = size_t{1} << 30);
+
 /** Carries a pinned native GPTQModel QQQ checkpoint without execution support. */
 struct QqqWeights {
   int64_t in_features = 0, out_features = 0, group_size = -1;
@@ -694,7 +727,7 @@ EncodedValueProto ImportAwqWeights(const AwqWeights &weights, size_t max_bytes =
 AwqWeights ExportAwqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
                             const StructTypeCatalogue &catalogue = {});
 
-/** Unpacks native AWQ unsigned four-bit codes into UINT8 [N,K]. */
+/** Unpacks native AWQ unsigned codes into UINT8 [N,K]; GEMM also accepts eight bits. */
 Tensor UnpackAwqCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
                       const StructTypeCatalogue &catalogue = {});
 

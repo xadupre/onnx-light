@@ -16,14 +16,19 @@ namespace {
 
 Tensor Scales(Shape shape, const std::vector<float> &values) {
   std::vector<uint8_t> bytes(values.size() * sizeof(float));
-  std::memcpy(bytes.data(), values.data(), bytes.size());
+  for (size_t i = 0; i < values.size(); ++i) {
+    const uint32_t bits = std::bit_cast<uint32_t>(values[i]);
+    for (size_t j = 0; j < sizeof(float); ++j)
+      bytes[i * sizeof(float) + j] = static_cast<uint8_t>(bits >> (8 * j));
+  }
   return Tensor("weight_scale_inv", TensorProto::FLOAT, std::move(shape), std::move(bytes));
 }
 
 float At(const Tensor &tensor, size_t index) {
-  float value;
-  std::memcpy(&value, tensor.bytes() + index * sizeof(float), sizeof(float));
-  return value;
+  uint32_t bits = 0;
+  for (size_t j = 0; j < sizeof(float); ++j)
+    bits |= uint32_t(tensor.bytes()[index * sizeof(float) + j]) << (8 * j);
+  return std::bit_cast<float>(bits);
 }
 
 void EqualTensor(const Tensor &a, const Tensor &b) {
@@ -158,6 +163,32 @@ TEST(GptqModelFp8, RetainsNonReversibleInverseParameters) {
   EqualTensor(ExportGptqModelFp8Weights(ImportGptqModelFp8Weights(checkpoint))
                   .tensors.at("weight_scale_inv"),
               checkpoint.tensors.at("weight_scale_inv"));
+}
+
+TEST(GptqModelFp8, UsesLittleEndianTensorAndWireBytes) {
+  auto checkpoint = Fixture("tensor");
+  checkpoint.tensors.at("weight_scale_inv") = Scales({}, {0.5f});
+  const auto encoded = ImportGptqModelFp8Weights(checkpoint);
+  const std::string scale_bytes("\x00\x00\x00\x3f", 4);
+  EXPECT_EQ(std::memcmp(encoded.raw_data().data() + 16, scale_bytes.data(), 4), 0);
+  const auto exported = ExportGptqModelFp8Weights(encoded);
+  EXPECT_EQ(std::memcmp(exported.tensors.at("weight_scale_inv").bytes(), scale_bytes.data(), 4), 0);
+
+  const std::string floats("\x00\x00\x00\x40\x00\x00\x40\xc0", 8);
+  const std::string halves("\x00\x40\x00\xc2", 4);
+  const std::string doubles("\x00\x00\x00\x00\x00\x00\x00\x40"
+                            "\x00\x00\x00\x00\x00\x00\x08\xc0",
+                            16);
+  const auto reconstructed = ReconstructGptqModelFp8Weights(encoded);
+  EXPECT_EQ(std::memcmp(reconstructed.bytes(), floats.data(), floats.size()), 0);
+  const auto generic = DequantizeTensor(encoded);
+  EXPECT_EQ(std::memcmp(generic.bytes(), floats.data(), floats.size()), 0);
+  const auto generic_half = DequantizeTensor(encoded, {}, nullptr, TensorProto::FLOAT16);
+  EXPECT_EQ(std::memcmp(generic_half.bytes(), halves.data(), halves.size()), 0);
+  const auto generic_double = DequantizeTensor(encoded, {}, nullptr, TensorProto::DOUBLE);
+  EXPECT_EQ(std::memcmp(generic_double.bytes(), doubles.data(), doubles.size()), 0);
+  const auto proto = DequantizeTensorProto(encoded);
+  EXPECT_EQ(std::memcmp(proto.raw_data().data(), floats.data(), floats.size()), 0);
 }
 
 TEST(GptqModelFp8, RejectsInvalidCheckpointGeometryDtypesExtentsAndLimits) {

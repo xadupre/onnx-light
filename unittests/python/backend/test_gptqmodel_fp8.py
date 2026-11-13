@@ -58,6 +58,9 @@ class TestGptqModelFp8(ExtTestCase):
                         weight_scale_method=method,
                         weight_block_size=block,
                     )
+                    self.assertEqual(
+                        encoded.raw_data[weight.size :], scale.astype("<f4").tobytes()
+                    )
                     restored = onnx.EncodedValueProto()
                     restored.ParseFromString(encoded.SerializeToString())
                     # Mirrors fp8.py's explicit inverse path at target_dtype=float32.
@@ -140,7 +143,7 @@ class TestGptqModelFp8(ExtTestCase):
         for scale in [
             numpy.ones((2, 1), dtype=numpy.float32),
             numpy.ones(2, dtype=numpy.float16),
-            numpy.ones(2, dtype=">f4"),
+            numpy.ones(2, dtype=">f4" if numpy.little_endian else "<f4"),
             numpy.array([0, 1], dtype=numpy.float32),
             numpy.array([-1, 1], dtype=numpy.float32),
             numpy.array([numpy.nan, 1], dtype=numpy.float32),

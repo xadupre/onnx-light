@@ -379,6 +379,7 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
         for (const char *name : {"weight", "weight_scale_inv"}) {
           Tensor tensor = TensorFromArray(name, tensors[name], max_bytes - total);
           total += tensor.size_bytes();
+          ConvertNativeLittleEndianWords(tensor);
           weights.tensors.emplace(name, std::move(tensor));
         }
         return core::runtime::ImportGptqModelFp8Weights(weights, max_bytes);
@@ -392,8 +393,8 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
       [](const EncodedValueProto &value, size_t max_bytes) {
         auto weights = core::runtime::ExportGptqModelFp8Weights(value, max_bytes);
         nb::dict tensors;
-        for (const auto &[name, tensor] : weights.tensors)
-          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        for (auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromLittleEndianTensor(std::move(tensor));
         nb::dict result;
         result["in_features"] = weights.in_features;
         result["out_features"] = weights.out_features;
@@ -413,7 +414,8 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
   runtime.def(
       "reconstruct_gptqmodel_fp8_weights",
       [](const EncodedValueProto &value, size_t max_bytes) {
-        return ArrayFromTensor(core::runtime::ReconstructGptqModelFp8Weights(value, max_bytes));
+        return ArrayFromLittleEndianTensor(
+            core::runtime::ReconstructGptqModelFp8Weights(value, max_bytes));
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("qqq_upstream_revision") = kExl3Revision;

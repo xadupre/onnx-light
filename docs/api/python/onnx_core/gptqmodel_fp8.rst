@@ -1,5 +1,5 @@
 onnx_light.onnx_core.gptqmodel_fp8
-================================
+==================================
 
 .. automodule:: onnx_light.onnx_core.gptqmodel_fp8
     :members:

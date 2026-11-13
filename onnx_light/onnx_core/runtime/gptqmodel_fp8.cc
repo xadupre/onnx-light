@@ -4,7 +4,6 @@
 
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/quantization.h"
-#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -173,13 +172,6 @@ void CheckData(const Geometry &g, const uint8_t *data) {
                         "GPTQModel FP8 nonfinite weight or reconstruction.");
 }
 
-void CopyScales(uint8_t *destination, const uint8_t *source, size_t bytes) {
-  std::memcpy(destination, source, bytes);
-  if constexpr (std::endian::native == std::endian::big)
-    for (size_t i = 0; i < bytes; i += sizeof(float))
-      std::reverse(destination + i, destination + i + sizeof(float));
-}
-
 Geometry Validate(const EncodedValueProto &value, size_t limit,
                   const StructTypeCatalogue &catalogue) {
   EXT_ENFORCE_INVALID(!value.has_parameter_ref() && value.has_struct_type() &&
@@ -271,7 +263,7 @@ EncodedValueProto ImportGptqModelFp8Weights(const GptqModelFp8Weights &weights, 
   result.mutable_raw_data()->resize(g.total);
   auto *data = reinterpret_cast<uint8_t *>(result.mutable_raw_data()->data());
   std::memcpy(data, weight.bytes(), g.count);
-  CopyScales(data + g.count, scale.bytes(), g.total - g.count);
+  std::memcpy(data + g.count, scale.bytes(), g.total - g.count);
   CheckData(g, data);
   StructTypeCatalogue{}.ValidateEncodedValue(result);
   return result;
@@ -285,7 +277,7 @@ GptqModelFp8Weights ExportGptqModelFp8Weights(const EncodedValueProto &value, si
                                               {g.metadata.out_features, g.metadata.in_features},
                                               std::vector<uint8_t>(data, data + g.count)));
   std::vector<uint8_t> scales(g.total - g.count);
-  CopyScales(scales.data(), data + g.count, scales.size());
+  std::memcpy(scales.data(), data + g.count, scales.size());
   g.metadata.tensors.emplace("weight_scale_inv", Tensor("weight_scale_inv", TensorProto::FLOAT,
                                                         g.scale_shape, std::move(scales)));
   return std::move(g.metadata);
@@ -299,8 +291,9 @@ Tensor ReconstructGptqModelFp8Weights(const EncodedValueProto &value, size_t max
                 std::vector<uint8_t>(g.count * sizeof(float)));
   const auto *data = reinterpret_cast<const uint8_t *>(value.raw_data().data());
   for (size_t i = 0; i < g.count; ++i) {
-    const float reconstructed = Reconstructed(g, data, i);
-    std::memcpy(result.mutable_bytes() + i * sizeof(float), &reconstructed, sizeof(float));
+    const uint32_t bits = std::bit_cast<uint32_t>(Reconstructed(g, data, i));
+    for (size_t j = 0; j < sizeof(float); ++j)
+      result.mutable_bytes()[i * sizeof(float) + j] = static_cast<uint8_t>(bits >> (8 * j));
   }
   return result;
 }

@@ -1345,22 +1345,24 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
   if (!graph.IsConstant(matmul->input()[1].value())) {
     return NoMatch(candidate, "the MatMul weight is not constant");
   }
-  const TensorProto *weight = graph.GetConstantMetadata(matmul->input()[1].value());
-  if (weight == nullptr || weight->dims_size() != 2 || weight->dims(1) <= 0) {
+  const TensorProto *weight_metadata = graph.GetConstantMetadata(matmul->input()[1].value());
+  if (weight_metadata == nullptr || weight_metadata->dims_size() != 2 ||
+      weight_metadata->dims(1) <= 0) {
     return NoMatch(candidate, "the MatMul weight is not a valid rank-two tensor");
   }
-  const auto type = static_cast<TensorProto::DataType>(weight->data_type());
+  const auto type = static_cast<TensorProto::DataType>(weight_metadata->data_type());
   if (!IsFloatingType(type)) {
     return NoMatch(candidate, "the MatMul weight is not floating-point");
   }
-  const int64_t channels = weight->dims(1);
+  const int64_t channels = weight_metadata->dims(1);
   nodes.push_back(matmul);
   std::reverse(nodes.begin(), nodes.end());
   if (nodes.size() > 2 && !MatMulColumnsAreBatchNormChannels(graph, nodes, channels)) {
     return NoMatch(candidate, "the shape chain does not preserve MatMul columns as BN channels");
   }
+  const TensorProto *weight = graph.GetComputedConstant(matmul->input()[1].value());
   std::vector<double> weight_values;
-  if (!ReadFloatingTensor(*weight, weight_values) ||
+  if (weight == nullptr || !ReadFloatingTensor(*weight, weight_values) ||
       weight_values.size() != static_cast<std::size_t>(weight->dims(0) * weight->dims(1)) ||
       !std::all_of(weight_values.begin(), weight_values.end(),
                    [](double value) { return std::isfinite(value); })) {

@@ -643,6 +643,114 @@ class TestDeferredOptimization(unittest.TestCase):
                             rss_bytes, 3 * payload_bytes // 4, f"{name}: allocated {rss_bytes}"
                         )
 
+    @unittest.skipUnless(Path("/proc/self/io").exists(), "Requires Linux process I/O accounting")
+    def test_constant_to_initializer_does_not_read_large_deferred_weights(self):
+        def metric(path, name):
+            with open(path, encoding="ascii") as stream:
+                return int(
+                    next(line.split()[1] for line in stream if line.startswith(name + ":"))
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            size = 2048
+            payload_bytes = size * size * 4
+            for external in (False, True):
+                with self.subTest(external=external):
+                    weight = onh.from_array(
+                        numpy.zeros((size, size), dtype=numpy.float32), "large_constant"
+                    )
+                    model = _model(
+                        [oh.make_node("Constant", [], ["y"], value=weight)],
+                        [],
+                        [_value("y", [size, size])],
+                        [],
+                    )
+                    save(model, path, save_as_external_data=external, size_threshold=0)
+                    del model, weight
+                    gc.collect()
+                    source = load(path, defer_weights=True, raw_data_threshold=0)
+                    self.assertFalse(source.is_weight_loaded("large_constant"))
+                    before_io = metric("/proc/self/io", "rchar")
+                    before_rss = metric("/proc/self/status", "VmRSS") * 1024
+                    builder = optim.GraphBuilder(source)
+                    options = ConstantFoldingOptions()
+                    options.enabled = False
+                    plan = optim.GraphGraph(builder, ["ConstantToInitializer"]).optimize(
+                        folding_options=options
+                    )
+                    result = builder.to_model()
+                    io_bytes = metric("/proc/self/io", "rchar") - before_io
+                    rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
+                    self.assertNotIn(
+                        "ConstantToInitializer", [edit.pattern_name for edit in plan.rewrites]
+                    )
+                    self.assertFalse(source.is_weight_loaded("large_constant"))
+                    self.assertFalse(result.is_weight_loaded("large_constant"))
+                    self.assertLess(io_bytes, payload_bytes // 8, f"read {io_bytes} bytes")
+                    self.assertLess(
+                        rss_bytes, 3 * payload_bytes // 4, f"allocated {rss_bytes} bytes"
+                    )
+
+    @unittest.skipUnless(Path("/proc/self/io").exists(), "Requires Linux process I/O accounting")
+    def test_rejected_scalar_patterns_do_not_read_large_constants(self):
+        def metric(path, name):
+            with open(path, encoding="ascii") as stream:
+                return int(
+                    next(line.split()[1] for line in stream if line.startswith(name + ":"))
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            size = 1 << 20
+            payload_bytes = size * 4
+            for external in (False, True):
+                for pattern, nodes in (
+                    (
+                        "DivMul",
+                        [
+                            oh.make_node("Div", ["large_constant", "x"], ["reciprocal"]),
+                            oh.make_node("Mul", ["reciprocal", "y"], ["z"]),
+                        ],
+                    ),
+                    (
+                        "MulMulMulScalar",
+                        [
+                            oh.make_node("Div", ["x", "large_constant"], ["left"]),
+                            oh.make_node("Div", ["y", "large_constant"], ["right"]),
+                            oh.make_node("Mul", ["left", "right"], ["z"]),
+                        ],
+                    ),
+                ):
+                    with self.subTest(external=external, pattern=pattern):
+                        model = _model(
+                            nodes,
+                            [_value("x", [size]), _value("y", [size])],
+                            [_value("z", [size])],
+                            [
+                                onh.from_array(
+                                    numpy.ones(size, dtype=numpy.float32), "large_constant"
+                                )
+                            ],
+                        )
+                        save(model, path, save_as_external_data=external, size_threshold=0)
+                        del model
+                        gc.collect()
+                        source = load(path, defer_weights=True, raw_data_threshold=0)
+                        self.assertFalse(source.is_weight_loaded("large_constant"))
+                        before_io = metric("/proc/self/io", "rchar")
+                        before_rss = metric("/proc/self/status", "VmRSS") * 1024
+                        builder = optim.GraphBuilder(source)
+                        plan = optim.GraphGraph(builder, [pattern]).optimize()
+                        io_bytes = metric("/proc/self/io", "rchar") - before_io
+                        rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
+                        self.assertNotIn(pattern, [edit.pattern_name for edit in plan.rewrites])
+                        self.assertFalse(source.is_weight_loaded("large_constant"))
+                        self.assertLess(io_bytes, payload_bytes // 8, f"read {io_bytes} bytes")
+                        self.assertLess(
+                            rss_bytes, 3 * payload_bytes // 4, f"allocated {rss_bytes} bytes"
+                        )
+
 
 if __name__ == "__main__":
     unittest.main()

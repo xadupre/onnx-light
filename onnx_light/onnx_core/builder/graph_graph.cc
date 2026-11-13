@@ -2092,14 +2092,18 @@ RewritingProto GraphGraph::OptimizeImpl(
   for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
     fast_op_types_by_pattern.push_back(pattern->FastOpType());
   }
+  const auto can_optimize_function = [&](const GraphBuilder &function) {
+    return function_only_callers.count(
+               ShapesContext::LocalFunctionKey(function.function_domain_, function.name_,
+                                               function.function_template_.overload())) != 0 ||
+           !IsRegisteredFunctionIdentity(builder_, function.function_domain_, function.name_,
+                                         function.function_template_.overload());
+  };
+  const std::size_t original_function_count = builder_.local_functions_.size();
   std::vector<GraphBuilder *> functions;
-  functions.reserve(builder_.local_functions_.size());
+  functions.reserve(original_function_count);
   for (const auto &function : builder_.local_functions_)
-    if (function_only_callers.count(
-            ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
-                                            function->function_template_.overload())) != 0 ||
-        !IsRegisteredFunctionIdentity(builder_, function->function_domain_, function->name_,
-                                      function->function_template_.overload()))
+    if (can_optimize_function(*function))
       functions.push_back(function.get());
 
   RewritingProto result;
@@ -2159,9 +2163,9 @@ RewritingProto GraphGraph::OptimizeImpl(
       optimize_subgraph(*subgraph, builder_.nodes_.size());
     }
   }
-  for (GraphBuilder *function : functions) {
+  const auto optimize_function = [&, max_iter](GraphBuilder *function) {
     if (!optimized_subgraphs.insert(function).second) {
-      continue;
+      return;
     }
     std::vector<std::string> function_path = graph_path;
     function_path.push_back("function:" + function->name());
@@ -2195,7 +2199,9 @@ RewritingProto GraphGraph::OptimizeImpl(
       report->subgraphs.insert(report->subgraphs.end(), child_report.subgraphs.begin(),
                                child_report.subgraphs.end());
     }
-  }
+  };
+  for (GraphBuilder *function : functions)
+    optimize_function(function);
 
   std::vector<int> priorities;
   priorities.reserve(patterns_.size());
@@ -2652,6 +2658,12 @@ RewritingProto GraphGraph::OptimizeImpl(
       break;
     }
     ++priority_index;
+  }
+  // Function bodies are exported as final definitions rather than parent graph edits.
+  for (std::size_t i = original_function_count; i < builder_.local_functions_.size(); ++i) {
+    GraphBuilder *function = builder_.local_functions_[i].get();
+    if (can_optimize_function(*function))
+      optimize_function(function);
   }
   if (report != nullptr)
     report->rewrites = applied.size() + function_body_rewrites;

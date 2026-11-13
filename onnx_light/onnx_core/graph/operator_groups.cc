@@ -24,7 +24,7 @@ constexpr std::size_t kSmallConstantElementLimit = 32;
 std::optional<TensorProto> SmallConstant(const builder::GraphGraph &graph,
                                          const std::string &name) {
   const auto *scope = graph.GetConstantScope(name);
-  const TensorProto *tensor = scope == nullptr ? nullptr : scope->GetComputedConstant(name);
+  const TensorProto *tensor = scope == nullptr ? nullptr : scope->GetConstantMetadata(name);
   TensorProto literal;
   const NodeProto *node = (scope == nullptr ? graph : *scope).NodeBefore(name);
   if (node != nullptr &&
@@ -82,6 +82,8 @@ std::optional<TensorProto> SmallConstant(const builder::GraphGraph &graph,
         return {};
       count *= static_cast<std::size_t>(dim);
     }
+  if (scope != nullptr && tensor->HasDeferredWeight() && !tensor->has_raw_data())
+    tensor = scope->GetComputedConstant(name);
   if (count != 0 && tensor->raw_data().empty() && tensor->float_data().empty() &&
       tensor->int32_data().empty() && tensor->int64_data().empty() &&
       tensor->double_data().empty() && tensor->uint64_data().empty() &&

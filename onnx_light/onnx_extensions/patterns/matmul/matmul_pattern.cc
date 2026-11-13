@@ -1345,7 +1345,7 @@ MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
   if (!graph.IsConstant(matmul->input()[1].value())) {
     return NoMatch(candidate, "the MatMul weight is not constant");
   }
-  const TensorProto *weight = graph.GetComputedConstant(matmul->input()[1].value());
+  const TensorProto *weight = graph.GetConstantMetadata(matmul->input()[1].value());
   if (weight == nullptr || weight->dims_size() != 2 || weight->dims(1) <= 0) {
     return NoMatch(candidate, "the MatMul weight is not a valid rank-two tensor");
   }

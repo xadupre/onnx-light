@@ -550,7 +550,7 @@ core::builder::MatchResult GatherConcatPattern::Match(core::builder::GraphGraph 
       if (non_const_position >= 0) {
         continue;
       }
-      const TensorProto *cst = graph.GetComputedConstant(name);
+      const TensorProto *cst = graph.GetConstantMetadata(name);
       if (cst == nullptr || cst->dims_size() < 1) {
         return NoMatch(candidate, "a Concat constant input has no known size");
       }
@@ -612,7 +612,7 @@ GatherConcatPattern::Apply(core::builder::GraphGraph &graph,
   for (const auto &input : concat.input()) {
     const std::string &name = input.value();
     if (graph.IsConstant(name) && x_name.empty()) {
-      const TensorProto *cst = graph.GetComputedConstant(name);
+      const TensorProto *cst = graph.GetConstantMetadata(name);
       offset += cst->dims()[0];
     } else if (!graph.IsConstant(name)) {
       x_name = name;

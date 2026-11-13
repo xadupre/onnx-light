@@ -96,13 +96,14 @@ class TestDeferredOptimization(unittest.TestCase):
                     )
                     save(original, path, save_as_external_data=external, size_threshold=0)
                     eager = load(path, load_external_data=external)
-                    deferred = load(path, defer_weights=True)
-                    self.assertTrue(deferred.is_weight_loaded("one"))
+                    deferred = load(path, defer_weights=True, raw_data_threshold=0)
+                    self.assertFalse(deferred.is_weight_loaded("one"))
                     results = []
                     for source in (eager, deferred):
                         builder = optim.GraphBuilder(source)
                         plan = optim.GraphGraph(builder, ["Sub1Mul"]).optimize()
                         result = builder.to_model()
+                        result.load_weights()
                         results.append(
                             (
                                 [edit.pattern_name for edit in plan.rewrites],
@@ -118,6 +119,8 @@ class TestDeferredOptimization(unittest.TestCase):
                                 optim.GraphBuilder(deferred).apply_rewritings(plan).to_model()
                             )
                             restored = builder.undo_rewritings(plan).to_model()
+                            replayed.load_weights()
+                            restored.load_weights()
                             self.assertEqual(
                                 [node.op_type for node in replayed.graph.node], results[-1][1]
                             )
@@ -140,16 +143,21 @@ class TestDeferredOptimization(unittest.TestCase):
             [onh.from_array(numpy.array([2, 3], dtype=numpy.int64), "shape")],
         )
         for external in (False, True):
-            with self.subTest(external=external), tempfile.TemporaryDirectory() as directory:
-                path = Path(directory) / "model.onnx"
-                save(model, path, save_as_external_data=external, size_threshold=0)
-                source = load(path, defer_weights=True)
-                self.assertTrue(source.is_weight_loaded("shape"))
-                builder = optim.GraphBuilder(source)
-                self.assertEqual(list(builder.get_shape("y").shape), [2, 3])
+            for threshold in (0, 1024):
+                with (
+                    self.subTest(external=external, threshold=threshold),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    path = Path(directory) / "model.onnx"
+                    save(model, path, save_as_external_data=external, size_threshold=0)
+                    source = load(path, defer_weights=True, raw_data_threshold=threshold)
+                    self.assertEqual(source.is_weight_loaded("shape"), threshold != 0)
+                    builder = optim.GraphBuilder(source)
+                    self.assertEqual(list(builder.get_shape("y").shape), [2, 3])
+                    self.assertEqual(source.is_weight_loaded("shape"), threshold != 0)
 
     @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
-    def test_canonicalization_skips_unloaded_inline_weights(self):
+    def test_canonicalization_loads_needed_inline_weights(self):
         weight = onh.from_array(numpy.arange(2048, dtype=numpy.float32), "w")
         for pattern in ("ConstantToInitializer", "InitializerUnsqueezeCast"):
             with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as directory:
@@ -184,8 +192,227 @@ class TestDeferredOptimization(unittest.TestCase):
                 self.assertFalse(source.is_weight_loaded("w"))
                 builder = optim.GraphBuilder(source)
                 plan = optim.GraphGraph(builder, [pattern]).optimize(folding_options=options)
-                self.assertNotIn(pattern, [edit.pattern_name for edit in plan.rewrites])
-                self.assertFalse(builder.to_model().is_weight_loaded("w"))
+                self.assertEqual(
+                    [edit.pattern_name for edit in plan.rewrites],
+                    [edit.pattern_name for edit in eager_plan.rewrites],
+                )
+                self.assertFalse(source.is_weight_loaded("w"))
+                result = builder.to_model()
+                result.load_weights()
+                feeds = (
+                    {}
+                    if pattern == "ConstantToInitializer"
+                    else {"x": numpy.zeros((1, 2048), dtype=numpy.float32)}
+                )
+                numpy.testing.assert_array_equal(
+                    ReferenceEvaluator(result).run(None, feeds)[0],
+                    ReferenceEvaluator(model).run(None, feeds)[0],
+                )
+
+    def test_large_value_dependent_constant_and_save_replay(self):
+        for external in (False, True):
+            for value in (1.0, 2.0):
+                with (
+                    self.subTest(external=external, value=value),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    path = Path(directory) / "model.onnx"
+                    model = _model(
+                        [
+                            oh.make_node("Sub", ["one", "x"], ["s"]),
+                            oh.make_node("Mul", ["s", "y"], ["z"]),
+                        ],
+                        [_value("x", [2048]), _value("y", [2048])],
+                        [_value("z", [2048])],
+                        [onh.from_array(numpy.full(2048, value, dtype=numpy.float32), "one")],
+                    )
+                    save(model, path, save_as_external_data=external, size_threshold=0)
+                    source = load(path, defer_weights=True)
+                    eager_builder = optim.GraphBuilder(model)
+                    eager_plan = optim.GraphGraph(eager_builder, ["Sub1Mul"]).optimize()
+                    builder = optim.GraphBuilder(source)
+                    graph = optim.GraphGraph(builder, ["Sub1Mul"])
+                    self.assertEqual(len(graph.get_constant_metadata("one").raw_data), 0)
+                    self.assertFalse(graph.is_constant_scalar("one"))
+                    plan = graph.optimize()
+                    self.assertEqual(
+                        [edit.pattern_name for edit in plan.rewrites],
+                        [edit.pattern_name for edit in eager_plan.rewrites],
+                    )
+                    self.assertFalse(source.is_weight_loaded("one"))
+                    if value != 1.0:
+                        self.assertFalse(builder.to_model().is_weight_loaded("one"))
+                        continue
+                    source.add_rewriting("optimized", plan)
+                    source.load_weights()
+                    saved = Path(directory) / "saved.onnx"
+                    save(source, saved)
+                    del graph, builder, source
+                    path.unlink()
+                    if external:
+                        Path(str(path) + ".data").unlink()
+                    restored_source = load(saved)
+                    replay_builder = optim.GraphBuilder(restored_source)
+                    replayed = replay_builder.apply_rewritings("optimized").to_model()
+                    restored = replay_builder.undo_rewritings(
+                        restored_source.rewritings["optimized"]
+                    ).to_model()
+                    feeds = {
+                        "x": numpy.full(2048, 0.25, dtype=numpy.float32),
+                        "y": numpy.full(2048, 4, dtype=numpy.float32),
+                    }
+                    expected = ReferenceEvaluator(model).run(None, feeds)[0]
+                    for result in (replayed, restored):
+                        numpy.testing.assert_array_equal(
+                            ReferenceEvaluator(result).run(None, feeds)[0], expected
+                        )
+
+    def test_value_dependent_match_rejects_stale_sources(self):
+        for external in (False, True):
+            for missing in (False, True):
+                with (
+                    self.subTest(external=external, missing=missing),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    path = Path(directory) / "model.onnx"
+                    model = _model(
+                        [
+                            oh.make_node("Sub", ["one", "x"], ["s"]),
+                            oh.make_node("Mul", ["s", "y"], ["z"]),
+                        ],
+                        [_value("x", [2048]), _value("y", [2048])],
+                        [_value("z", [2048])],
+                        [onh.from_array(numpy.ones(2048, dtype=numpy.float32), "one")],
+                    )
+                    save(model, path, save_as_external_data=external, size_threshold=0)
+                    source = load(path, defer_weights=True)
+                    builder = optim.GraphBuilder(source)
+                    backing = Path(str(path) + ".data") if external else path
+                    if missing:
+                        backing.unlink()
+                    else:
+                        with backing.open("ab") as stream:
+                            stream.write(b"x")
+                    graph = optim.GraphGraph(builder, ["Sub1Mul"])
+                    self.assertEqual(len(graph.get_constant_metadata("one").raw_data), 0)
+                    self.assertFalse(graph.is_constant_scalar("one"))
+                    with self.assertRaises(RuntimeError):
+                        graph.optimize()
+                    self.assertFalse(source.is_weight_loaded("one"))
+                    self.assertFalse(builder.to_model().is_weight_loaded("one"))
+
+    def test_scoped_deferred_constants_preserve_replay_and_undo(self):
+        for scope in ("capture", "nested", "function"):
+            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as directory:
+                weight = onh.from_array(numpy.ones(2048, dtype=numpy.float32), "one")
+                nodes = [
+                    oh.make_node("Sub", ["one", "x"], ["s"]),
+                    oh.make_node("Mul", ["s", "y"], ["z"]),
+                ]
+                inputs = [_value("x", [2048]), _value("y", [2048])]
+                if scope == "function":
+                    function = oh.make_function(
+                        "local",
+                        "Compute",
+                        ["x", "y"],
+                        ["z"],
+                        [oh.make_node("Constant", [], ["one"], value=weight), *nodes],
+                        [oh.make_opsetid("", 18)],
+                    )
+                    model = _model(
+                        [oh.make_node("Compute", ["x", "y"], ["out"], domain="local")],
+                        inputs,
+                        [_value("out", [2048])],
+                        [],
+                    )
+                    model.functions.append(function)
+                    model.opset_import.append(oh.make_opsetid("local", 1))
+                else:
+                    then_branch = oh.make_graph(
+                        nodes,
+                        "then",
+                        [],
+                        [_value("z", [2048])],
+                        [] if scope == "capture" else [weight],
+                    )
+                    else_branch = oh.make_graph(
+                        [oh.make_node("Identity", ["x"], ["other"])],
+                        "else",
+                        [],
+                        [_value("other", [2048])],
+                    )
+                    model = _model(
+                        [
+                            oh.make_node(
+                                "If",
+                                ["cond"],
+                                ["out"],
+                                then_branch=then_branch,
+                                else_branch=else_branch,
+                            )
+                        ],
+                        [*inputs, oh.make_tensor_value_info("cond", TensorProto.BOOL, [])],
+                        [_value("out", [2048])],
+                        [weight] if scope == "capture" else [],
+                    )
+                path = Path(directory) / "model.onnx"
+                save(model, path)
+                source = load(path, defer_weights=True)
+                builder = optim.GraphBuilder(source)
+                plan = optim.GraphGraph(builder, ["Sub1Mul"]).optimize()
+                eager_builder = optim.GraphBuilder(model)
+                eager_plan = optim.GraphGraph(eager_builder, ["Sub1Mul"]).optimize()
+                self.assertEqual(
+                    [edit.pattern_name for edit in plan.rewrites],
+                    [edit.pattern_name for edit in eager_plan.rewrites],
+                )
+                self.assertIn("Sub1Mul", [edit.pattern_name for edit in plan.rewrites])
+                self.assertFalse(source.is_weight_loaded("one"))
+                replayed = optim.GraphBuilder(source).apply_rewritings(plan).to_model()
+                restored = builder.undo_rewritings(plan).to_model()
+                feeds = {
+                    "x": numpy.full(2048, 0.25, dtype=numpy.float32),
+                    "y": numpy.full(2048, 4, dtype=numpy.float32),
+                }
+                if scope != "function":
+                    feeds["cond"] = numpy.array(True)
+                expected = ReferenceEvaluator(model).run(None, feeds)[0]
+                for result in (replayed, restored):
+                    result.load_weights()
+                    numpy.testing.assert_array_equal(
+                        ReferenceEvaluator(result).run(None, feeds)[0], expected
+                    )
+
+    def test_constant_of_shape_deferred_value_attribute(self):
+        model = _model(
+            [
+                oh.make_node(
+                    "ConstantOfShape",
+                    ["shape"],
+                    ["ones"],
+                    value=onh.from_array(numpy.array([1], dtype=numpy.float32), "literal"),
+                ),
+                oh.make_node("Sub", ["ones", "x"], ["s"]),
+                oh.make_node("Mul", ["s", "y"], ["z"]),
+            ],
+            [_value("x", [2048]), _value("y", [2048])],
+            [_value("z", [2048])],
+            [onh.from_array(numpy.array([2048], dtype=numpy.int64), "shape")],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            save(model, path)
+            source = load(path, defer_weights=True, raw_data_threshold=0)
+            options = ConstantFoldingOptions()
+            options.enabled = False
+            names = []
+            for value in (model, source):
+                builder = optim.GraphBuilder(value)
+                plan = optim.GraphGraph(builder, ["Sub1Mul"]).optimize(folding_options=options)
+                names.append([edit.pattern_name for edit in plan.rewrites])
+            self.assertEqual(names[0], names[1])
+            self.assertIn("Sub1Mul", names[1])
+            self.assertFalse(source.is_weight_loaded("literal"))
 
     @unittest.skipUnless(HAS_KERNELS, "Requires the compiled kernels extension.")
     def test_constant_folding_loads_only_inputs_and_preserves_sources(self):
@@ -309,17 +536,32 @@ class TestDeferredOptimization(unittest.TestCase):
             size = 2048
             payload_bytes = size * size * 4
             for external in (False, True):
-                for name in ("RepeatedLayer", "PartitionGroup", "TransposeTranspose"):
+                for name in ("RepeatedLayer", "PartitionGroup", "TransposeTranspose", "Sub1Mul"):
                     with self.subTest(external=external, pattern=name):
                         model = _matmul_model(
                             size,
                             count=3 if name == "RepeatedLayer" else 1,
                             transpose=name == "TransposeTranspose",
                         )
+                        if name == "Sub1Mul":
+                            model.graph.node[0].input[0] = "algebra"
+                            model = _model(
+                                [
+                                    oh.make_node("Sub", ["one", "x"], ["s"]),
+                                    oh.make_node("Mul", ["s", "x"], ["algebra"]),
+                                    *model.graph.node,
+                                ],
+                                model.graph.input,
+                                model.graph.output,
+                                [
+                                    *model.graph.initializer,
+                                    onh.from_array(numpy.array([1], dtype=numpy.float32), "one"),
+                                ],
+                            )
                         save(model, path, save_as_external_data=external, size_threshold=0)
                         del model
                         gc.collect()
-                        source = load(path, defer_weights=True)
+                        source = load(path, defer_weights=True, raw_data_threshold=0)
                         before_io = metric("/proc/self/io", "rchar")
                         before_rss = metric("/proc/self/status", "VmRSS") * 1024
                         builder = optim.GraphBuilder(source)
@@ -330,10 +572,14 @@ class TestDeferredOptimization(unittest.TestCase):
                         )
                         plan = optim.GraphGraph(builder, [pattern]).optimize()
                         result = builder.to_model()
+                        replayed = optim.GraphBuilder(source).apply_rewritings(plan).to_model()
+                        restored = builder.undo_rewritings(plan).to_model()
                         io_bytes = metric("/proc/self/io", "rchar") - before_io
                         rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
                         self.assertIn(name, [edit.pattern_name for edit in plan.rewrites])
                         self.assertFalse(result.is_weight_loaded("w"))
+                        self.assertFalse(replayed.is_weight_loaded("w"))
+                        self.assertFalse(restored.is_weight_loaded("w"))
                         self.assertLess(io_bytes, payload_bytes // 8, f"{name}: read {io_bytes}")
                         self.assertLess(
                             rss_bytes, 3 * payload_bytes // 4, f"{name}: allocated {rss_bytes}"

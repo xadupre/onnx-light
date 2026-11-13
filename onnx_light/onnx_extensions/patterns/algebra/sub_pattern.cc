@@ -22,6 +22,11 @@ using collections::IsDefaultOp;
 using core::builder::BuilderError;
 
 bool IsAllOne(const TensorProto &tensor) {
+  if (tensor.HasDeferredWeight() && !tensor.has_raw_data()) {
+    auto loaded = utils::CopyWithSharedTensorStorage(tensor);
+    loaded.LoadDeferredWeight();
+    return IsAllOne(loaded);
+  }
   const auto dtype = static_cast<TensorProto::DataType>(tensor.data_type());
   if (dtype == TensorProto::DataType::FLOAT || dtype == TensorProto::DataType::DOUBLE) {
     std::vector<double> values;

@@ -58,7 +58,7 @@ bool IsFiniteScalarConstant(core::builder::GraphGraph &graph, const std::string 
 }
 
 bool IsRankZeroConstant(core::builder::GraphGraph &graph, const std::string &name) {
-  const TensorProto *tensor = graph.GetComputedConstant(name);
+  const TensorProto *tensor = graph.GetConstantMetadata(name);
   if (tensor != nullptr) {
     return tensor->dims_size() == 0;
   }

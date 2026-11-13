@@ -58,9 +58,9 @@ core::builder::MatchResult ConstantToInitializerPattern::Match(core::builder::Gr
     return NoMatch(candidate, "candidate is not a default-domain Constant");
   }
   const TensorProto *value = graph.GetConstantMetadata(candidate.output()[0].value());
-  if (value == nullptr ||
-      (!value->has_raw_data() && (value->HasDeferredWeight() || value->has_external_data() ||
-                                  value->data_location() == TensorProto::DataLocation::EXTERNAL))) {
+  if (value == nullptr || (!value->has_raw_data() && !value->HasDeferredWeight() &&
+                           (value->has_external_data() ||
+                            value->data_location() == TensorProto::DataLocation::EXTERNAL))) {
     return NoMatch(candidate, "the Constant value is not materialised as a tensor");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};

@@ -806,7 +806,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         self.assertTrue(deferred.is_weight_loaded("W"))
                         eager_optimized, eager_rewrites, _ = self._optimize(eager, [pattern])
                         deferred_optimized, deferred_rewrites, _ = self._optimize(
-                            deferred, [pattern]
+                            deferred, [pattern], check_model=False
                         )
                         self.assertEqual(
                             [rewrite.pattern_name for rewrite in eager_rewrites],

@@ -682,7 +682,7 @@ class TestDeferredOptimization(unittest.TestCase):
                     result = builder.to_model()
                     io_bytes = metric("/proc/self/io", "rchar") - before_io
                     rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
-                    self.assertNotIn(
+                    self.assertIn(
                         "ConstantToInitializer", [edit.pattern_name for edit in plan.rewrites]
                     )
                     self.assertFalse(source.is_weight_loaded("large_constant"))
@@ -746,6 +746,57 @@ class TestDeferredOptimization(unittest.TestCase):
                         rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
                         self.assertNotIn(pattern, [edit.pattern_name for edit in plan.rewrites])
                         self.assertFalse(source.is_weight_loaded("large_constant"))
+                        self.assertLess(io_bytes, payload_bytes // 8, f"read {io_bytes} bytes")
+                        self.assertLess(
+                            rss_bytes, 3 * payload_bytes // 4, f"allocated {rss_bytes} bytes"
+                        )
+
+    @unittest.skipUnless(Path("/proc/self/io").exists(), "Requires Linux process I/O accounting")
+    def test_rejected_gather_patterns_do_not_read_large_indices(self):
+        def metric(path, name):
+            with open(path, encoding="ascii") as stream:
+                return int(
+                    next(line.split()[1] for line in stream if line.startswith(name + ":"))
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            size = 1 << 20
+            payload_bytes = size * 8
+            for external in (False, True):
+                for pattern, nodes, outputs in (
+                    (
+                        "ConcatGather",
+                        [oh.make_node("Gather", ["X", "large_indices"], ["Y"])],
+                        [_value("Y", [size])],
+                    ),
+                    (
+                        "GathersSplit",
+                        [
+                            oh.make_node("Gather", ["X", "large_indices"], ["Y1"], axis=0),
+                            oh.make_node("Gather", ["X", "large_indices"], ["Y2"], axis=0),
+                        ],
+                        [_value("Y1", [size]), _value("Y2", [size])],
+                    ),
+                ):
+                    with self.subTest(external=external, pattern=pattern):
+                        path = Path(directory) / f"{pattern}_{external}.onnx"
+                        indices = onh.from_array(
+                            numpy.zeros(size, dtype=numpy.int64), "large_indices"
+                        )
+                        model = _model(nodes, [_value("X", [2])], outputs, [indices])
+                        save(model, path, save_as_external_data=external, size_threshold=0)
+                        del model, indices
+                        gc.collect()
+                        source = load(path, defer_weights=True, raw_data_threshold=0)
+                        self.assertFalse(source.is_weight_loaded("large_indices"))
+                        before_io = metric("/proc/self/io", "rchar")
+                        before_rss = metric("/proc/self/status", "VmRSS") * 1024
+                        builder = optim.GraphBuilder(source)
+                        plan = optim.GraphGraph(builder, [pattern]).optimize()
+                        io_bytes = metric("/proc/self/io", "rchar") - before_io
+                        rss_bytes = metric("/proc/self/status", "VmRSS") * 1024 - before_rss
+                        self.assertNotIn(pattern, [edit.pattern_name for edit in plan.rewrites])
+                        self.assertFalse(source.is_weight_loaded("large_indices"))
                         self.assertLess(io_bytes, payload_bytes // 8, f"read {io_bytes} bytes")
                         self.assertLess(
                             rss_bytes, 3 * payload_bytes // 4, f"allocated {rss_bytes} bytes"

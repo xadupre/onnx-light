@@ -12,6 +12,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization {
 
 namespace {
 
+LightOpSchema MakeDequantizePackedV29Schema() {
+  return LightOpSchema(
+      "DequantizePacked", kOnnxDomain, 29, MakeDequantizePackedDoc(29),
+      {{"x", "Consecutive quantization blocks with little-endian fields.", "tensor(uint8)"}},
+      {{"y", "Dequantized tensor with the specified shape and output_dtype.", "T"}},
+      {{"T",
+        {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16, TensorType::kDouble},
+        "Floating-point output."}},
+      {{"format", "ONNX-defined, case-sensitive fixed quantization format identifier.",
+        AttributeType::STRING, true},
+       {"shape", "Logical output dimensions in ONNX order; rank at least one.", AttributeType::INTS,
+        true},
+       {"output_dtype",
+        "ONNX TensorProto data type of the output: FLOAT, FLOAT16, BFLOAT16, or DOUBLE.",
+        AttributeType::INT, false, int64_t{1}}});
+}
+
 LightOpSchema MakeQuantizeLinearV25Schema() {
   return LightOpSchema(
       "QuantizeLinear", kOnnxDomain, 25, MakeQuantizeLinearDoc(25),
@@ -688,6 +705,8 @@ LightOpSchema MakeQLinearMatMulV10Schema() {
 std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std::string &op_type,
                                                                       bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"DequantizePacked",
+       [] { return std::vector<LightOpSchema>{MakeDequantizePackedV29Schema()}; }},
       {"QuantizeLinear",
        [] {
          return std::vector<LightOpSchema>{

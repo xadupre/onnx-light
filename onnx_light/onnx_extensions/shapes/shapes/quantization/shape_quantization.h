@@ -65,6 +65,9 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace quantization {
 
+/** Validates a packed profile and infers its fixed attribute-defined output shape. */
+void ComputeShapeDequantizePacked(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of a ``QuantizeLinear``
  * node and stores it in ``ctx``.

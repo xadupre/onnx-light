@@ -120,6 +120,19 @@ TEST(SimpleTensorShape, VectorConstructionHandlesScalarsAndDimensions) {
   }
 }
 
+TEST(SimpleTensorShape, EmptyProductsValidateDimensionsWithoutOverflow) {
+  const int64_t max = std::numeric_limits<int64_t>::max();
+  for (const Shape shape : {Shape{0, max, 2}, Shape{max, 0, 2}, Shape{max, 2, 0}}) {
+    EXPECT_EQ(shape.product(), 0);
+    EXPECT_EQ(shape.product(0, shape.size(), "empty"), 0);
+  }
+  for (const Shape shape : {Shape{0, -1}, Shape{-1, 0}})
+    EXPECT_THROW(shape.product(0, shape.size(), "negative"), std::invalid_argument);
+  const Shape shape{max, 2, 0};
+  EXPECT_THROW(shape.product(0, 2, "nonempty"), std::invalid_argument);
+  EXPECT_EQ(shape.product(2, 2, "scalar"), 1);
+}
+
 TEST(SimpleTensorShape, VectorAssignmentHandlesScalarTransitions) {
   Shape copied{2, 3};
   Shape moved{2, 3};

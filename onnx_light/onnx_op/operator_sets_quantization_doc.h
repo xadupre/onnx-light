@@ -10,6 +10,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization {
 
+/** Returns the documentation string for DequantizePacked at the given opset version. */
+std::string MakeDequantizePackedDoc(int since_version);
+
 /**
  * Returns the documentation string for the QuantizeLinear operator at the
  * given opset version.

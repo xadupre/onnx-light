@@ -5,6 +5,7 @@
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_lib/version_converter/convert.h"
 #include "onnx_manipulations/parser.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -18,6 +19,138 @@
 #include <tuple>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+namespace {
+
+ModelProto DequantizePackedShapeModel(const std::string &format, const std::vector<int64_t> &shape,
+                                      const std::vector<int64_t> &input_shape,
+                                      int64_t dtype = TensorProto::FLOAT) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(29);
+  auto *graph = model.mutable_graph();
+  graph->set_name("dequantize_packed");
+  auto *input = graph->add_input();
+  input->set_name("x");
+  auto *type = input->mutable_type()->mutable_tensor_type();
+  type->set_elem_type(TensorProto::UINT8);
+  for (const auto dim : input_shape) {
+    auto *dimension = type->mutable_shape()->add_dim();
+    if (dim >= 0)
+      dimension->set_dim_value(dim);
+    else
+      dimension->set_dim_param("bytes");
+  }
+  if (input_shape.empty())
+    type->mutable_shape();
+  graph->add_output()->set_name("y");
+  auto *node = graph->add_node();
+  node->set_op_type("DequantizePacked");
+  node->add_input("x");
+  node->add_output("y");
+  AddAttribute<std::string>(*node, "format", format);
+  AddAttribute<std::vector<int64_t>>(*node, "shape", shape);
+  AddAttribute<int64_t>(*node, "output_dtype", dtype);
+  return model;
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, DequantizePackedProfiles) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::tuple<std::string, int64_t, int64_t>> profiles{
+      {"q4_0", 32, 18},     {"q4_1", 32, 20},    {"q5_0", 32, 22},     {"q5_1", 32, 24},
+      {"q8_0", 32, 34},     {"q8_1", 32, 36},    {"q2_k", 256, 84},    {"q3_k", 256, 110},
+      {"q4_k", 256, 144},   {"q5_k", 256, 176},  {"q6_k", 256, 210},   {"q8_k", 256, 292},
+      {"iq2_xxs", 256, 66}, {"iq2_xs", 256, 74}, {"iq3_xxs", 256, 98}, {"iq1_s", 256, 50},
+      {"iq4_nl", 32, 18},   {"iq3_s", 256, 110}, {"iq2_s", 256, 82},   {"iq4_xs", 256, 136},
+      {"iq1_m", 256, 56},   {"tq1_0", 256, 54},  {"tq2_0", 256, 66},   {"mxfp4", 32, 17},
+      {"nvfp4", 64, 36},    {"q1_0", 128, 18},   {"q2_0", 64, 18}};
+  for (const auto &[format, elements, bytes] : profiles) {
+    SCOPED_TRACE(format);
+    for (const auto dtype :
+         {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::DOUBLE}) {
+      for (const int64_t length : {4 * bytes, int64_t{-1}}) {
+        auto model =
+            DequantizePackedShapeModel("gguf:" + format, {2, 2 * elements}, {length}, dtype);
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(true, 1, false)));
+        const auto &output = model.graph().output(0).type().tensor_type();
+        EXPECT_EQ(output.elem_type(), dtype);
+        ASSERT_EQ(output.shape().dim_size(), 2u);
+        EXPECT_EQ(output.shape().dim(0).dim_value(), 2);
+        EXPECT_EQ(output.shape().dim(1).dim_value(), 2 * elements);
+        EXPECT_NO_THROW(checker::check_model(model, true));
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, DequantizePackedEmptyAndDefault) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const auto &dims : std::vector<std::vector<int64_t>>{
+           {0, 32}, {2, 0}, {std::numeric_limits<int64_t>::max(), 2, 0}}) {
+    auto model = DequantizePackedShapeModel("gguf:q4_0", dims, {0});
+    model.mutable_graph()->mutable_node(0)->mutable_attribute()->pop_back();
+    ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                 ShapeInferenceOptions(true, 1, false)));
+    const auto &output = model.graph().output(0).type().tensor_type();
+    EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
+    ASSERT_EQ(output.shape().dim_size(), dims.size());
+    for (size_t i = 0; i < dims.size(); ++i)
+      EXPECT_EQ(output.shape().dim(i).dim_value(), dims[i]);
+  }
+}
+
+TEST(onnx_shape_inference, DequantizePackedBeforeIntroductionFails) {
+  RegisterAllOnnxOperatorSchemas();
+  auto model = DequantizePackedShapeModel("gguf:q4_0", {32}, {18});
+  ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                               ShapeInferenceOptions(true, 1, false)));
+  EXPECT_NO_THROW(version_conversion::ConvertVersion(model, 29));
+  EXPECT_THROW(version_conversion::ConvertVersion(model, 28), std::runtime_error);
+  model.mutable_opset_import(0)->set_version(28);
+  EXPECT_THROW(checker::check_model(model, true), checker::ValidationError);
+}
+
+TEST(onnx_shape_inference, DequantizePackedInvalidMetadata) {
+  RegisterAllOnnxOperatorSchemas();
+  std::vector<ModelProto> invalid{
+      DequantizePackedShapeModel("gguf:Q4_0", {32}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0;block=32", {32}, {18}),
+      DequantizePackedShapeModel("gguf:unknown", {32}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0", {}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0", {-1, 32}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0", {31}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0", {0, 31}, {0}),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {}),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {1, 18}),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {17}),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {19}),
+      DequantizePackedShapeModel("gguf:q4_0", {0, 32}, {18}),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {18}, TensorProto::INT32),
+      DequantizePackedShapeModel("gguf:q4_0", {32}, {18}, int64_t{1} << 32),
+      DequantizePackedShapeModel("gguf:q4_0", {std::numeric_limits<int64_t>::max(), 32}, {-1})};
+  for (size_t attribute = 0; attribute < 2; ++attribute) {
+    auto missing = DequantizePackedShapeModel("gguf:q4_0", {32}, {18});
+    auto *attributes = missing.mutable_graph()->mutable_node(0)->mutable_attribute();
+    attributes->erase(attributes->begin() + attribute);
+    invalid.push_back(std::move(missing));
+  }
+  auto wrong_type = DequantizePackedShapeModel("gguf:q4_0", {32}, {18});
+  wrong_type.mutable_graph()
+      ->mutable_input(0)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::INT8);
+  invalid.push_back(std::move(wrong_type));
+  for (size_t i = 0; i < invalid.size(); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_THROW(shape_inference::InferShapes(invalid[i], OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(true, 1, false)),
+                 InferenceError);
+  }
+}
 
 TEST(onnx_shape_inference, EinsumScalarOperands) {
   RegisterAllOnnxOperatorSchemas();

@@ -2,12 +2,40 @@ import platform
 import sys
 import unittest
 import numpy as np
+from packaging.version import Version
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
 from onnx_light.onnx_lib.backend.runtime_coverage import ort_max_ir_version, ort_max_opset_version
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
+onnxruntime = import_or_skip("onnxruntime")
+_ort_errors = import_or_skip("onnxruntime.capi.onnxruntime_pybind11_state")
+
+
+def _is_known_unsupported_ort_error(exc: Exception) -> bool:
+    """Identifies specific unsupported types and kernels reported by ORT."""
+    if isinstance(exc, _ort_errors.Fail):
+        detail = str(exc).partition(" : FAIL : ")[2]
+        return any(
+            detail == f"Exception during loading: MLDataType for: tensor({dtype}) "
+            "is not currently registered or supported"
+            for dtype in ("float6e2m3", "float6e3m2")
+        )
+    if isinstance(exc, _ort_errors.NotImplemented):
+        detail = str(exc).partition(" : NOT_IMPLEMENTED : ")[2]
+        return any(
+            detail.startswith(
+                (
+                    f"Could not find an implementation for {operator} node with name ",
+                    f"Failed to find kernel for {operator} (node:",
+                )
+            )
+            for operator in ("Swish(24)", "OneHot(28)")
+        )
+    return False
 
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -34,7 +62,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
                 f"onnxruntime maximum {max_opset_version}"
             )
 
-    sess = InferenceSessionAllTypes(model)
+    try:
+        sess = InferenceSessionAllTypes(model)
+    except (_ort_errors.Fail, _ort_errors.NotImplemented) as exc:
+        if not _is_known_unsupported_ort_error(exc):
+            raise
+        raise unittest.SkipTest(f"ONNX Runtime does not support this case: {exc}") from exc
 
     # Get input names and create feed dict
     input_names = [inp.name for inp in sess._sess.get_inputs()]
@@ -258,7 +291,7 @@ TestOrtBackend = make_test_class(
 
 # Keep these known ORT limitations executable: an unexpected success must fail
 # so the marker is removed when ORT catches up with the ONNX reference.
-for _case_name in (
+_expected_failure_cases = [
     # ORT 1.30 overflows intermediate sums despite finite ReduceMean outputs.
     # Keep the correct expectations executable and track separately from #5626
     # (xadupre/onnx-light#5636).
@@ -266,12 +299,6 @@ for _case_name in (
     "reducemean_finite_range_float_18",
     "reducemean_finite_range_double_17",
     "reducemean_finite_range_double_18",
-    # ORT 1.30 fails to normalize negative reduction axes when another input
-    # dimension is empty (microsoft/onnxruntime#33230).
-    "reducemean_empty_negative_axis_keepdims",
-    "reduceprod_empty_negative_axis_keepdims",
-    "reducesum_empty_negative_axis_keepdims",
-    "reducesum_empty_negative_axis_no_keepdims",
     # ORT omits ceil-tail padding from the dilated AveragePool divisor
     # (microsoft/onnxruntime#29629).
     "averagepool_3d_dilated_ceil_padding_divisor",
@@ -326,13 +353,96 @@ for _case_name in (
     "supported_dtype_Tan_BFLOAT16",
     # The schema expansion mixes FLOAT constants with DOUBLE inputs (#5611).
     "supported_dtype_MeanVarianceNormalization_DOUBLE",
-):
+]
+
+# The negative-axis bug was fixed after ORT 1.31 (microsoft/onnxruntime#33232).
+if Version(onnxruntime.__version__) < Version("1.32"):
+    _expected_failure_cases.extend(
+        [
+            "reducemean_empty_negative_axis_keepdims",
+            "reduceprod_empty_negative_axis_keepdims",
+            "reducesum_empty_negative_axis_keepdims",
+            "reducesum_empty_negative_axis_no_keepdims",
+        ]
+    )
+
+for _case_name in _expected_failure_cases:
     _method_name = f"test_test_cc_{_case_name}"
     setattr(
         TestOrtBackend,
         _method_name,
         unittest.expectedFailure(getattr(TestOrtBackend, _method_name)),
     )
+
+
+class TestOrtBackendErrorHandling(unittest.TestCase):
+    def test_only_specific_missing_capabilities_are_skipped(self):
+        failures = [
+            (
+                _ort_errors.Fail(
+                    "[ONNXRuntimeError] : 1 : FAIL : Exception during loading: MLDataType for: "
+                    f"tensor({dtype}) is not currently registered or supported"
+                ),
+                True,
+            )
+            for dtype in ("float6e2m3", "float6e3m2")
+        ]
+        failures.extend(
+            [
+                (
+                    _ort_errors.NotImplemented(
+                        "[ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : "
+                        f"Could not find an implementation for {operator} node with name ''"
+                    ),
+                    True,
+                )
+                for operator in ("Swish(24)", "OneHot(28)")
+            ]
+        )
+        failures.extend(
+            [
+                (
+                    _ort_errors.NotImplemented(
+                        "[ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : "
+                        "Failed to find kernel for Swish(24) (node:'' ep:'CPUExecutionProvider')"
+                    ),
+                    True,
+                ),
+                (_ort_errors.Fail("[ONNXRuntimeError] : 1 : FAIL : invalid model"), False),
+                (
+                    _ort_errors.Fail(
+                        "[ONNXRuntimeError] : 1 : FAIL : invalid model: Exception during "
+                        "loading: MLDataType for: tensor(float6e2m3) "
+                        "is not currently registered or supported"
+                    ),
+                    False,
+                ),
+                (
+                    _ort_errors.NotImplemented(
+                        "[ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : "
+                        "Could not find an implementation for Abs(13) node with name "
+                        "'Could not find an implementation for Swish(24) node with name '"
+                    ),
+                    False,
+                ),
+            ]
+        )
+        for exc, expected in failures:
+            with self.subTest(error=str(exc)):
+                self.assertEqual(_is_known_unsupported_ort_error(exc), expected)
+
+    def test_invalid_graph_failure_is_not_skipped(self):
+        graph = oh.make_graph(
+            [oh.make_node("Identity", ["Y"], ["Y"])],
+            "cycle",
+            [],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1])],
+        )
+        model = oh.make_model(
+            graph, ir_version=ort_max_ir_version(), opset_imports=[oh.make_opsetid("", 18)]
+        )
+        with self.assertRaisesRegex(_ort_errors.Fail, "graph is not acyclic"):
+            onnxruntime_backend(model)
 
 
 if __name__ == "__main__":

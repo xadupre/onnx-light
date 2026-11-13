@@ -164,6 +164,20 @@ TEST(VptqWeights, NativeGroupedResidualOutlierPartialVectorPermutationNormRoundT
   }
 }
 
+TEST(VptqWeights, ExportsValidatedConfigWithoutMaterializingTensors) {
+  const auto encoded = ImportVptqWeights(Fixture());
+  const auto config = ExportVptqConfig(encoded);
+  EXPECT_TRUE(config.tensors.empty());
+  EXPECT_EQ(config.in_features, 17);
+  EXPECT_EQ(config.out_features, 5);
+  EXPECT_EQ(config.group_size, 9);
+  EXPECT_EQ(config.enable_norm, true);
+
+  auto corrupt = encoded;
+  corrupt.mutable_raw_data()->data()[0] = static_cast<char>(0xff);
+  EXPECT_ANY_THROW(ExportVptqConfig(corrupt));
+}
+
 TEST(VptqWeights, RoundsEverySourceDtypeOperationAndSupportsOutputAxisNorm) {
   for (int32_t dtype : {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT}) {
     VptqWeights w;

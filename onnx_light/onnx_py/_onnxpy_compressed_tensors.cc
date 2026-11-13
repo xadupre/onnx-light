@@ -946,7 +946,7 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
   runtime.def(
       "export_vptq_config",
       [](const EncodedValueProto &value, size_t max_bytes) {
-        return VptqConfig(core::runtime::ExportVptqWeights(value, max_bytes));
+        return VptqConfig(core::runtime::ExportVptqConfig(value, max_bytes));
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.def(

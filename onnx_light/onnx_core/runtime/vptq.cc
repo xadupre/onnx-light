@@ -393,6 +393,11 @@ VptqWeights ExportVptqWeights(const EncodedValueProto &v, size_t max_bytes,
   return std::move(decoded.weights);
 }
 
+VptqWeights ExportVptqConfig(const EncodedValueProto &v, size_t max_bytes,
+                             const StructTypeCatalogue &catalogue) {
+  return Validate(v, max_bytes, catalogue).weights;
+}
+
 Tensor ReconstructVptqWeights(const EncodedValueProto &v, size_t max_bytes,
                               const StructTypeCatalogue &catalogue) {
   const auto decoded = Validate(v, max_bytes, catalogue);

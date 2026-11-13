@@ -849,6 +849,10 @@ EncodedValueProto ImportVptqWeights(const VptqWeights &weights, size_t max_bytes
 VptqWeights ExportVptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
                               const StructTypeCatalogue &catalogue = {});
 
+/** Exports validated constructor metadata without materializing native tensors. */
+VptqWeights ExportVptqConfig(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                             const StructTypeCatalogue &catalogue = {});
+
 /**
  * Reconstructs FLOAT [out_features,in_features], lifting source-dtype results.
  *

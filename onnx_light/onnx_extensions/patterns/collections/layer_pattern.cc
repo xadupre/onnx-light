@@ -15,8 +15,8 @@ std::set<std::string> RepeatedLayerPattern::FastOpType() const { return {}; }
 
 core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph &graph,
                                                        const NodeProto &candidate) const {
-  if (graph.Builder().Nodes().empty() || &candidate != &graph.Builder().Nodes()[0])
-    return NoMatch(candidate, "whole-graph detection runs only at the first graph node");
+  if (&candidate != graph.FirstPatternCandidate())
+    return NoMatch(candidate, "whole-graph detection runs only at the first eligible graph node");
   auto proposal = core::graph::ProposeRepeatedLayers(graph);
   if (proposal.status == core::graph::OperatorGroupStatus::kInsideFunction)
     return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");

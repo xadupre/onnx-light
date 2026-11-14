@@ -11,7 +11,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 /**
  * Extracts repeated operator regions using core::graph::ProposeRepeatedLayers.
  *
- * Runs detection at the first graph node of each optimizer scan and delegates
+ * Runs detection at the first eligible graph node of each optimizer scan and delegates
  * function construction to core::graph::MakeRepeatedLayerReplacements.
  * Preserves the core algorithm's boundary, scheduling and reuse safeguards.
  * The pattern is opt-in and does not wrap existing ai.rt Layer bodies.
@@ -39,7 +39,7 @@ public:
   /// Returns an empty filter because local-function names are unrestricted.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds occurrences from the first node using the core analysis.
+  /// Finds occurrences from the first eligible node using the core analysis.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 

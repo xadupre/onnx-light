@@ -82,6 +82,9 @@ public:
   /// Returns the builder for read-only inspection.
   const GraphBuilder &Builder() const noexcept { return builder_; }
 
+  /// Returns the first node without unresolved attribute references, or nullptr.
+  const NodeProto *FirstPatternCandidate() const;
+
   /// Sets a concrete target on this builder, its local functions and their subgraphs.
   /// Rejects conflicting existing devices before modifying any builder.
   void SetTargetDevice(symbolic::Device device);
@@ -272,6 +275,7 @@ private:
   const GraphGraph *parent_graph_ = nullptr;
   std::size_t parent_position_limit_ = 0;
   const OriginalFunctions *original_functions_ = nullptr;
+  const NodeProto *first_pattern_candidate_ = nullptr;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;
   // Value name -> consuming nodes, deduplicated, in insertion order.

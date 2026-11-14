@@ -1637,7 +1637,10 @@ void GraphGraph::SetTargetDevice(symbolic::Device device) {
     builder->set_device(device);
 }
 
+const NodeProto *GraphGraph::FirstPatternCandidate() const { return first_pattern_candidate_; }
+
 void GraphGraph::Rebuild() {
+  first_pattern_candidate_ = nullptr;
   predecessors_.clear();
   successors_.clear();
   positions_.clear();
@@ -1663,6 +1666,8 @@ void GraphGraph::Rebuild() {
   const utils::RepeatedProtoField<NodeProto> &nodes = builder_.Nodes();
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &node = nodes[i];
+    if (first_pattern_candidate_ == nullptr && !HasUnresolvedAttributeReferences(node))
+      first_pattern_candidate_ = &node;
     positions_.emplace(&node, i);
     for (std::size_t o = 0; o < node.output().size(); ++o) {
       std::string name(node.output(static_cast<std::size_t>(o)));

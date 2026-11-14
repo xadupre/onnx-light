@@ -1637,6 +1637,13 @@ void GraphGraph::SetTargetDevice(symbolic::Device device) {
     builder->set_device(device);
 }
 
+const NodeProto *GraphGraph::FirstPatternCandidate() const {
+  for (const auto &node : builder_.Nodes())
+    if (!HasUnresolvedAttributeReferences(node))
+      return &node;
+  return nullptr;
+}
+
 void GraphGraph::Rebuild() {
   predecessors_.clear();
   successors_.clear();

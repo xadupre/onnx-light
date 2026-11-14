@@ -2420,6 +2420,57 @@ TEST(RepeatedLayerPattern, PreservesAttributesBoundByRetainedFunctionCalls) {
   EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
 }
 
+TEST(RepeatedLayerPattern, FindsLayersAfterUnresolvedFirstNode) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"source.local", 1}});
+  auto &source = builder.MakeLocalFunction("Source", "source.local");
+  source.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &alpha = attributes.add();
+  alpha.set_name("alpha");
+  alpha.set_type(AttributeProto::FLOAT);
+  alpha.set_f(0.3f);
+  source.MakeNode("LeakyRelu", {"x"}, {"activation"}, "", "", attributes);
+  for (int index = 0; index < 2; ++index) {
+    const std::string suffix = std::to_string(index);
+    source.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    builder.MakeInput("w" + suffix, core::symbolic::TensorType::kFloat, LayerShape({4, 4}));
+    source.MakeNode("MatMul", {index == 0 ? "activation" : "h0", "w" + suffix}, {"m" + suffix});
+    source.MakeNode("Relu", {"m" + suffix}, {"h" + suffix});
+  }
+  source.MakeOutput("h1");
+  builder.MakeNode("Source", {"x", "w0", "w1"}, {"y"}, "source.local", "", attributes);
+  builder.MakeOutput("y");
+  ModelProto model = builder.ToModel();
+  auto &function = model.ref_functions()[0];
+  function.add_attribute("alpha");
+  auto &reference = function.ref_node()[0].ref_attribute()[0];
+  reference.clear_f();
+  reference.set_ref_attr_name("alpha");
+  core::builder::GraphBuilder imported(model, LayerSchemaLookup());
+  auto &imported_source = imported.LocalFunction("Source");
+  const NodeProto first = imported_source.Nodes()[0];
+
+  EXPECT_FALSE(OptimizeLayers(imported_source).rewrites().empty());
+  const GraphProto after = imported_source.BuildGraph();
+  ASSERT_EQ(after.node().size(), 3u);
+  EXPECT_TRUE(first.Equals(after.node()[0]));
+  EXPECT_EQ(ExpectLayerContracts(after), 2u);
+  EXPECT_EQ(after.node()[1].op_type(), after.node()[2].op_type());
+  for (std::size_t index = 1; index < after.node().size(); ++index) {
+    const GraphProto *body = LayerBody(after.node()[index]);
+    ASSERT_NE(body, nullptr);
+    ASSERT_EQ(body->node().size(), 2u);
+    EXPECT_EQ(body->node()[0].op_type(), "MatMul");
+    EXPECT_EQ(body->node()[1].op_type(), "Relu");
+  }
+  EXPECT_EQ(after.node()[1].input()[0], "activation");
+  EXPECT_EQ(after.node()[2].output()[0], "h1");
+  EXPECT_NO_THROW(VerifyModel(imported.ToModel()));
+  EXPECT_TRUE(OptimizeLayers(imported_source).rewrites().empty());
+  EXPECT_TRUE(after.Equals(imported_source.BuildGraph()));
+}
+
 TEST(RepeatedLayerPattern, RejectsEnclosingAttributeReferencesIncludingNestedGraphs) {
   for (bool nested : {false, true}) {
     SCOPED_TRACE(nested);

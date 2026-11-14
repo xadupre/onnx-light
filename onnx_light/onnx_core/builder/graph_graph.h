@@ -82,6 +82,9 @@ public:
   /// Returns the builder for read-only inspection.
   const GraphBuilder &Builder() const noexcept { return builder_; }
 
+  /// Returns the first node without unresolved attribute references, or nullptr.
+  const NodeProto *FirstPatternCandidate() const;
+
   /// Sets a concrete target on this builder, its local functions and their subgraphs.
   /// Rejects conflicting existing devices before modifying any builder.
   void SetTargetDevice(symbolic::Device device);

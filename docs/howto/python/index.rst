@@ -38,6 +38,7 @@ C++ counterpart linked from its introduction.
     use_custom_kernel
     persistent_feedback
     quantized_values
+    gptqmodel_compatibility
     gguf_blocks
     tune_kernel_thresholds
     use_custom_shape_inference

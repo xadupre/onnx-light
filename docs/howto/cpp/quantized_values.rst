@@ -6,6 +6,9 @@ Quantizes tensors into encoded values
 This guide covers the C++ interface. For the other language, see
 :doc:`../python/quantized_values`.
 
+For revision/subtype import/export support and unsupported checkpoint layouts,
+see the :ref:`GPTQModel compatibility matrix <l-gptqmodel-compatibility>`.
+
 The converters implement **portable onnx-light representations** of the
 :ref:`quantization catalogue <l-next-steps-quantization>`, plus three explicit
 :ref:`ORT MatMulNBits input layouts <l-ort-matmulnbits-inputs-cpp>`.

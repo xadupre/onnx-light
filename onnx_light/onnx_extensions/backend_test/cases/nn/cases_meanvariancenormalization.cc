@@ -7,6 +7,7 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -34,6 +35,35 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("MeanVarianceNormalization");
+    node.add_input("X");
+    node.add_output("Y");
+    AddAttribute<std::vector<int64_t>>(node, "axes", {1, -1});
+    AddAttribute<float>(node, "epsilon", 1.0f);
+    Expect(registry, std::move(node), "test_cc_mvn_epsilon", {DefaultOpset(29)}, []() -> IoData {
+      std::vector<double> values(24), expected(24);
+      for (size_t i = 0; i < values.size(); ++i) {
+        values[i] = static_cast<double>(i);
+        expected[i] = (static_cast<double>(i % 12) - 5.5) / (std::sqrt(143.0 / 12) + 1);
+      }
+      return {{Tensor::FromDouble("X", {2, 3, 4}, values)},
+              {Tensor::FromDouble("Y", {2, 3, 4}, expected)}};
+    });
+  }
+  {
+    NodeProto node;
+    node.set_op_type("MeanVarianceNormalization");
+    node.add_input("X");
+    node.add_output("Y");
+    AddAttribute<std::vector<int64_t>>(node, "axes", {0});
+    Expect(registry, std::move(node), "test_cc_mvn_zero_variance", {DefaultOpset(29)},
+           []() -> IoData {
+             return {{Tensor::FromFloat("X", {2}, {1, 1})}, {Tensor::FromFloat("Y", {2}, {0, 0})}};
+           });
   }
 
   // ``mvn``: default axes [0,2,3].

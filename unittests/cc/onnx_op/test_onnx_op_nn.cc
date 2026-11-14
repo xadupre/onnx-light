@@ -36,7 +36,7 @@ constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLayerNormalizationSchemaCount = 1;
 constexpr size_t kExpectedLinearAttentionSchemaCount = 1;
-constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
+constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLpPoolSchemaCount = 5;
@@ -1067,10 +1067,12 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
 
   const core::schema::LightOpSchema *const v13 = FindByVersion(schemas, 13);
   const core::schema::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  const core::schema::LightOpSchema *const v29 = FindByVersion(schemas, 29);
   ASSERT_NE(nullptr, v13);
   ASSERT_NE(nullptr, v9);
+  ASSERT_NE(nullptr, v29);
 
-  for (const core::schema::LightOpSchema *schema : {v9, v13}) {
+  for (const core::schema::LightOpSchema *schema : {v9, v13, v29}) {
     SCOPED_TRACE("MeanVarianceNormalization@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "MeanVarianceNormalization");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -1078,7 +1080,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
     EXPECT_EQ(schema->inputs()[0].name, "X");
     ASSERT_EQ(schema->outputs().size(), 1u);
     EXPECT_EQ(schema->outputs()[0].name, "Y");
-    ASSERT_EQ(schema->attributes().size(), 1u);
+    ASSERT_EQ(schema->attributes().size(), schema->since_version() == 29 ? 2u : 1u);
     EXPECT_EQ(schema->attributes()[0].name, "axes");
     ASSERT_EQ(schema->type_constraints().size(), 1u);
     EXPECT_FALSE(schema->doc().empty());
@@ -1086,6 +1088,11 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
 
   EXPECT_EQ(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v29->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v29->attributes()[1].name, "epsilon");
+  EXPECT_EQ(v29->attributes()[1].type, core::schema::AttributeType::FLOAT);
+  EXPECT_DOUBLE_EQ(std::get<double>(v29->attributes()[1].default_value), 1e-9f);
+  EXPECT_NE(v29->doc().find("float32"), std::string::npos);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLayerNormalizationSchemasForAllVersions) {

@@ -808,7 +808,7 @@ TEST(KernelClass, MeanVarianceNormalizationCustomAxes) {
 TEST(KernelClass, MeanVarianceNormalizationSchemaExpansionPreservesNumericalResults) {
   RegisterAllOnnxOperatorSchemas();
   const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
-  for (const int opset : {13, 17, 18, 21}) {
+  for (const int opset : {13, 17, 18, 21, 29}) {
     for (const int32_t dtype :
          {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT, TensorProto::DOUBLE}) {
       for (const bool explicit_axes : {false, true}) {
@@ -872,6 +872,103 @@ TEST(KernelClass, MeanVarianceNormalizationSchemaExpansionPreservesNumericalResu
         }
       }
     }
+  }
+}
+
+TEST(KernelClass, MeanVarianceNormalization29EpsilonAndEmptyAxes) {
+  const KernelContext ctx{DefaultOpset(29)};
+  const MeanVarianceNormalization mvn{ctx};
+  for (const int32_t dtype :
+       {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT, TensorProto::DOUBLE}) {
+    SCOPED_TRACE(dtype);
+    Tensor x = dtype == TensorProto::DOUBLE ? Tensor::FromDouble("", {2, 2}, {1, 3, 5, 7})
+                                            : Tensor::FromFloat("", {2, 2}, {1, 3, 5, 7});
+    if (core::runtime::IsHalfPrecision(dtype))
+      x = core::runtime::DemoteFromFloat32(x, dtype);
+    const Tensor y = mvn(x, {-1}, nullptr, 1.0f);
+    EXPECT_EQ(y.data_type, dtype);
+    const Tensor actual = core::runtime::PromoteToFloat32(y);
+    for (int i = 0; i < 4; ++i) {
+      const double value =
+          dtype == TensorProto::DOUBLE ? actual.AsDouble()[i] : actual.AsFloat()[i];
+      EXPECT_DOUBLE_EQ(value, i % 2 == 0 ? -0.5 : 0.5);
+    }
+    Tensor in_place = x;
+    mvn(in_place, in_place, {-1}, 1.0f);
+    ASSERT_EQ(in_place.size_bytes(), y.size_bytes());
+    EXPECT_EQ(std::memcmp(in_place.bytes(), y.bytes(), y.size_bytes()), 0);
+    const Tensor all_axes = core::runtime::PromoteToFloat32(mvn(x, {}, nullptr, 1.0f));
+    const double first =
+        dtype == TensorProto::DOUBLE ? all_axes.AsDouble()[0] : all_axes.AsFloat()[0];
+    EXPECT_NEAR(first, -3.0 / (std::sqrt(5.0) + 1), 0.005);
+    Tensor constant = dtype == TensorProto::DOUBLE ? Tensor::FromDouble("", {2}, {1, 1})
+                                                   : Tensor::FromFloat("", {2}, {1, 1});
+    if (core::runtime::IsHalfPrecision(dtype))
+      constant = core::runtime::DemoteFromFloat32(constant, dtype);
+    const Tensor zero = core::runtime::PromoteToFloat32(mvn(constant, {0}));
+    EXPECT_DOUBLE_EQ(dtype == TensorProto::DOUBLE ? zero.AsDouble()[0] : zero.AsFloat()[0], 0);
+  }
+}
+
+TEST(KernelClass, MeanVarianceNormalization29CentersVarianceBeforeSquaring) {
+  const MeanVarianceNormalization mvn{KernelContext{DefaultOpset(29)}};
+  const Tensor x = Tensor::FromFloat("", {2}, {1000000, 1000002});
+  const Tensor y = mvn(x, {0});
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], -1);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 1);
+  const Tensor scalar = Tensor::FromFloat("", {}, {3});
+  EXPECT_FLOAT_EQ(mvn(scalar, {}).AsFloat()[0], 0);
+  const Tensor empty = Tensor::FromFloat("", {0}, {});
+  EXPECT_EQ(mvn(empty, {}).element_count(), 0);
+  EXPECT_THROW(mvn(empty, {1}), std::invalid_argument);
+}
+
+TEST(KernelClass, MeanVarianceNormalization29LocalFunctionLinkedEpsilon) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset("", 29);
+  model.add_opset("local", 1);
+  auto &graph = *model.mutable_graph();
+  graph.set_name("mvn_linked_epsilon");
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  auto &call = *graph.add_node();
+  call.set_op_type("Normalize");
+  call.set_domain("local");
+  call.add_input("X");
+  call.add_output("Y");
+  AddAttribute<float>(call, "outer_epsilon", 1.0f);
+  auto &function = *model.add_functions();
+  function.set_name("Normalize");
+  function.set_domain("local");
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_attribute("outer_epsilon");
+  function.add_opset_import()->set_version(29);
+  auto &node = *function.add_node();
+  node.set_op_type("MeanVarianceNormalization");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<std::vector<int64_t>>(node, "axes", {});
+  auto &epsilon = *node.add_attribute();
+  epsilon.set_name("epsilon");
+  epsilon.set_type(AttributeProto::FLOAT);
+  epsilon.set_ref_attr_name("outer_epsilon");
+  for (const int32_t dtype :
+       {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT, TensorProto::DOUBLE}) {
+    SCOPED_TRACE(dtype);
+    Tensor x = dtype == TensorProto::DOUBLE ? Tensor::FromDouble("X", {2}, {1, 3})
+                                            : Tensor::FromFloat("X", {2}, {1, 3});
+    if (core::runtime::IsHalfPrecision(dtype))
+      x = core::runtime::DemoteFromFloat32(x, dtype);
+    const auto outputs = core::runtime::RunModel(model, {std::move(x)});
+    ASSERT_EQ(outputs.size(), 1u);
+    EXPECT_EQ(outputs[0].data_type, dtype);
+    const Tensor actual = core::runtime::PromoteToFloat32(outputs[0]);
+    EXPECT_DOUBLE_EQ(dtype == TensorProto::DOUBLE ? actual.AsDouble()[0] : actual.AsFloat()[0],
+                     -0.5);
+    EXPECT_DOUBLE_EQ(dtype == TensorProto::DOUBLE ? actual.AsDouble()[1] : actual.AsFloat()[1],
+                     0.5);
   }
 }
 

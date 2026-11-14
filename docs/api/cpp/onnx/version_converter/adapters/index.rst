@@ -27,6 +27,7 @@ adapters
     group_normalization_20_21
     group_normalization_21_20
     maxpool_8_7
+    mean_variance_normalization_29_28
     nd_indices_29_28
     no_previous_version
     pad_10_11

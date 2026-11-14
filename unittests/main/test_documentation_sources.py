@@ -136,6 +136,38 @@ class TestDocumentationSources(unittest.TestCase):
         self.assertNotIn(":imported-members:", text)
         self.assertIn(":doc:`../../protos/index`", text)
 
+    def test_gptqmodel_compatibility_matrix(self):
+        """Checks tracker coverage, discoverability and local evidence references."""
+        docs = self.ROOT / "docs"
+        source = docs / "howto/python/gptqmodel_compatibility.rst"
+        text = source.read_text(encoding="utf-8")
+        for issue in range(5777, 5793):
+            with self.subTest(issue=issue):
+                self.assertIn(f":issue:`{issue}`", text)
+        self.assertIn("c1976918cfe3703fbcf6d1ce2440a82b26394375", text)
+        index = (source.parent / "index.rst").read_text(encoding="utf-8")
+        self.assertIn("    gptqmodel_compatibility\n", index)
+        for language in ("python", "cpp"):
+            guide = (docs / f"howto/{language}/quantized_values.rst").read_text(encoding="utf-8")
+            self.assertIn("<l-gptqmodel-compatibility>`", guide)
+        targets = re.findall(r"``(unittests/[^`]+)``", text)
+        self.assertTrue(targets)
+        for target in targets:
+            with self.subTest(target=target):
+                self.assertTrue((self.ROOT / target).is_file(), target)
+        labels = set(
+            re.findall(
+                r"(?m)^\.\. _([^:]+):",
+                "\n".join(
+                    (source.parent / name).read_text(encoding="utf-8")
+                    for name in ("quantized_values.rst", "gguf_blocks.rst")
+                ),
+            )
+        )
+        for target in re.findall(r":ref:`[^`<>]*<([^<>]+)>`", text):
+            with self.subTest(label=target):
+                self.assertIn(target, labels)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -72,6 +72,11 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *
  * Work limits:
  *
+ * - Visits at most 4096 nested nodes per graph node for lexical captures, with
+ *   scope depth below 16. An incomplete node stays outside Layers; earlier values
+ *   remain live and scheduling cannot move preparations across that node.
+ *   Reports capture_analysis_limited even when safe groups elsewhere are found,
+ *   or kResourceLimit instead of kNoMatch when no safe proposal remains.
  * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.

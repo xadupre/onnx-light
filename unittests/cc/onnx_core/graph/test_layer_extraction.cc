@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/graph/graph_partition.h"
 #include "onnx_core/graph/layer_extraction.h"
+#include "onnx_extensions/patterns/collections/layer_pattern.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -57,7 +58,159 @@ void AddRepeatedLayersWithAliasedInputs(core::builder::GraphBuilder &builder,
   builder.MakeOutput("h1");
 }
 
+void AddCaptureHeavyIf(core::builder::GraphBuilder &builder, std::size_t nested_nodes,
+                       const std::string &capture, const std::string &output) {
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const bool then_branch : {true, false}) {
+    auto &attribute = attributes.add();
+    attribute.set_name(then_branch ? "then_branch" : "else_branch");
+    attribute.set_type(AttributeProto::GRAPH);
+    auto &branch = *attribute.mutable_g();
+    branch.set_name(attribute.name());
+    const std::size_t count = then_branch ? nested_nodes / 2 : nested_nodes - nested_nodes / 2;
+    std::string previous = "x";
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::string next = "inner_" + std::to_string(i);
+      // The last lexical capture lies beyond the work budget in the oversized case.
+      branch.add_node(
+          MakeNode("Identity", {then_branch && i + 1 == count ? capture : previous}, {next}));
+      previous = next;
+    }
+    auto &result = *branch.add_output();
+    result.set_name(previous);
+    auto &tensor = *result.mutable_type()->mutable_tensor_type();
+    tensor.set_elem_type(TensorProto::FLOAT);
+    tensor.mutable_shape()->add_dim()->set_dim_value(2);
+    tensor.mutable_shape()->add_dim()->set_dim_value(2);
+  }
+  builder.MakeNode("If", {"condition"}, {output}, "", "", attributes);
+  builder.MakeOutput(output);
+}
+
 } // namespace
+
+TEST(LayerExtraction, CaptureBudgetIsLocalAndRetainsUnseenCaptures) {
+  for (const std::size_t nested_nodes : {4095u, 4096u, 4097u}) {
+    for (const int insertion : {0, 2, 4}) {
+      SCOPED_TRACE(std::to_string(nested_nodes) + ":" + std::to_string(insertion));
+      core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+      core::symbolic::SymShape shape;
+      shape.PushBack(core::symbolic::SymDim(2));
+      shape.PushBack(core::symbolic::SymDim(2));
+      for (const std::string name : {"x", "w0", "w1"})
+        builder.MakeInput(name, core::symbolic::TensorType::kFloat, shape);
+      builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+      for (int position = 0; position <= 4; ++position) {
+        if (position == insertion)
+          AddCaptureHeavyIf(builder, nested_nodes, insertion == 0 ? "x" : "mm0", "side");
+        if (position == 0)
+          builder.MakeNode("MatMul", {"x", "w0"}, {"mm0"});
+        else if (position == 1)
+          builder.MakeNode("Relu", {"mm0"}, {"h0"});
+        else if (position == 2)
+          builder.MakeNode("MatMul", {"h0", "w1"}, {"mm1"});
+        else if (position == 3)
+          builder.MakeNode("Relu", {"mm1"}, {"h1"});
+      }
+      builder.MakeOutput("h1");
+      core::builder::GraphGraph graph(
+          builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+      const GraphProto before = builder.BuildGraph();
+      const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+      ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+      EXPECT_EQ(proposal.capture_analysis_limited, nested_nodes > 4096);
+      ASSERT_EQ(proposal.groups.size(), 2u);
+      for (const auto &group : proposal.groups)
+        EXPECT_EQ(group.node_indices.size(), 2u);
+      if (insertion != 0) {
+        const auto &outputs = proposal.groups[0].outputs;
+        EXPECT_NE(std::find(outputs.begin(), outputs.end(), "mm0"), outputs.end());
+      }
+      const auto replacement =
+          core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
+      std::vector<std::string> calls;
+      for (const auto &node : replacement)
+        calls.push_back(node.op_type());
+      if (insertion == 2) {
+        ASSERT_EQ(calls.size(), 3u);
+        EXPECT_EQ(calls[1], "If");
+      } else {
+        EXPECT_EQ(calls.size(), 2u);
+      }
+      EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+    }
+  }
+}
+
+TEST(LayerExtraction, CaptureBudgetsDoNotAccumulateAcrossOwners) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+  AddRepeatedLayers(builder);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+  AddCaptureHeavyIf(builder, 4096, "mm0", "side0");
+  AddCaptureHeavyIf(builder, 4096, "mm1", "side1");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+  EXPECT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+  EXPECT_FALSE(proposal.capture_analysis_limited);
+}
+
+TEST(LayerExtraction, IncompleteCapturesKeepPreparationsLocalToEachSide) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim(2));
+  for (const std::string name : {"x", "w0", "w1"})
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+  builder.MakeInitializer(MakeInitializer<float>("bias", {2, 2}, {1, 2, 3, 4}));
+  builder.MakeNode("MatMul", {"x", "w0"}, {"mm0"});
+  builder.MakeNode("Identity", {"bias"}, {"bias0"});
+  builder.MakeNode("Add", {"mm0", "bias0"}, {"h0"});
+  AddCaptureHeavyIf(builder, 4097, "mm0", "side");
+  builder.MakeNode("MatMul", {"h0", "w1"}, {"mm1"});
+  builder.MakeNode("Identity", {"bias"}, {"bias1"});
+  builder.MakeNode("Add", {"mm1", "bias1"}, {"h1"});
+  builder.MakeOutput("h1");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+  ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+  EXPECT_TRUE(proposal.capture_analysis_limited);
+  const auto replacement =
+      core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
+  ASSERT_EQ(replacement.size(), 5u);
+  EXPECT_EQ(replacement[0].output(0), "bias0");
+  EXPECT_EQ(replacement[1].domain(), "ai.rt");
+  EXPECT_EQ(replacement[2].op_type(), "If");
+  EXPECT_EQ(replacement[3].output(0), "bias1");
+  EXPECT_EQ(replacement[4].domain(), "ai.rt");
+}
+
+TEST(LayerExtraction, ReportsCaptureResourceLimitSeparatelyFromNoMatch) {
+  for (const std::size_t nested_nodes : {4096u, 4097u}) {
+    core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+    core::symbolic::SymShape shape;
+    shape.PushBack(core::symbolic::SymDim(2));
+    shape.PushBack(core::symbolic::SymDim(2));
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, core::symbolic::SymShape{});
+    AddCaptureHeavyIf(builder, nested_nodes, "x", "side");
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+    const auto proposal = core::graph::ProposeRepeatedLayers(graph);
+    EXPECT_EQ(proposal.status, nested_nodes > 4096
+                                   ? core::graph::OperatorGroupStatus::kResourceLimit
+                                   : core::graph::OperatorGroupStatus::kNoMatch);
+    EXPECT_EQ(proposal.capture_analysis_limited, nested_nodes > 4096);
+    EXPECT_TRUE(proposal.MatchedNodes(builder.Nodes()).empty());
+    onnx_patterns::RepeatedLayerPattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[0]);
+    ASSERT_TRUE(match.no_match.has_value());
+    EXPECT_EQ(match.no_match->reason.find("capture analysis resource limit") != std::string::npos,
+              nested_nodes > 4096);
+  }
+}
 
 TEST(LayerExtraction, ProposesWithoutMutationAndBuildsSharedFunctionCalls) {
   core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});

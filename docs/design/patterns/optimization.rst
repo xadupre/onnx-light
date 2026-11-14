@@ -159,6 +159,14 @@ explicitly:
 In C++, pass ``onnx_patterns::CreatePattern("RepeatedLayer")`` in the explicit
 pattern vector.
 
+Lexical capture analysis visits at most 4096 nested nodes per owning graph node
+and requires scope depth below 16. Exhaustion excludes that owner from extraction,
+conservatively keeps earlier values live, and prevents reordering across it;
+unrelated safe repeated regions remain eligible. The C++ proposal reports
+``capture_analysis_limited`` even if groups are found. If none are found, it
+returns ``OperatorGroupStatus::kResourceLimit`` rather than ``kNoMatch``, and the
+pattern's no-match diagnostics identify the capture resource limit.
+
 Python enumeration excludes opt-in patterns by default: this applies to
 ``standard_pattern_names()`` and both low-level
 ``registered_pattern_names()`` bindings (``_onnxpypatterns`` and

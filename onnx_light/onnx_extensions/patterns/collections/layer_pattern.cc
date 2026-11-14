@@ -22,6 +22,10 @@ core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph
     return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
   if (proposal.status == core::graph::OperatorGroupStatus::kIncompatibleOpset)
     return NoMatch(candidate, "RepeatedLayer requires ai.rt opset 1 for its local functions");
+  if (proposal.status == core::graph::OperatorGroupStatus::kResourceLimit)
+    return NoMatch(candidate,
+                   "RepeatedLayer capture analysis resource limit (4096 nested nodes or scope "
+                   "depth 16 per graph node); no safe repeated region found");
   if (proposal.status != core::graph::OperatorGroupStatus::kFound)
     return NoMatch(candidate, "no bounded, nonoverlapping repeated region with a safe contraction");
   auto nodes = proposal.MatchedNodes(graph.Builder().Nodes());

@@ -736,6 +736,58 @@ Tensor ReconstructAwqWeights(const EncodedValueProto &value, size_t max_bytes = 
                              const StructTypeCatalogue &catalogue = {});
 
 /**
+ * Carries pinned GPTQModel ParoLinear state, using the AWQ GEMM four-bit packing.
+ *
+ * Requires INT32 qweight [K,N/8], qzeros [K/G,N/8], FP16/BF16 scales [K/G,N],
+ * INT16 pairs [krot,K], theta [krot,K/2], channel_scales [1,K], and optional bias [N].
+ * Each pairs group is a permutation of [0,G). G is even, at most 32768, and divides K;
+ * group_size=-1 selects G=K. All rotation state is required, including identity state.
+ * The pinned producer initializes theta/channel_scales in FP16, then narrows them to the
+ * weight dtype. Theta, channel_scales and bias accept FP16/BF16 only; FLOAT storage is rejected.
+ * The versioned schema preserves tensor dtypes and the pinned upstream revision.
+ */
+struct ParoQuantWeights {
+  int64_t in_features = 0, out_features = 0, group_size = 128, krot = 0;
+  uint32_t bits = 4;
+  int64_t group_axis = 1;
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports complete ParoQuant state without repacking or requantization. */
+EncodedValueProto ImportParoQuantWeights(const ParoQuantWeights &weights,
+                                         size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated ParoQuant metadata and native tensors byte-for-byte. */
+ParoQuantWeights ExportParoQuantWeights(const EncodedValueProto &value,
+                                        size_t max_bytes = size_t{1} << 30,
+                                        const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks the AWQ GEMM unsigned codes into UINT8 [N,K]. */
+Tensor UnpackParoQuantCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs FLOAT [N,K] in the transformed basis only, not a standalone linear weight.
+ * Materializes AWQ reconstruction in the scales' FP16/BF16 dtype before lifting to FLOAT.
+ * Uses ApplyParoQuantLinear to retain channel scaling, rotations and optional bias.
+ */
+Tensor ReconstructParoQuantWeights(const EncodedValueProto &value,
+                                   size_t max_bytes = size_t{1} << 30,
+                                   const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Applies channel scaling, ascending disjoint-pair rotation steps, AWQ weights and bias.
+ * Accepts FLOAT [...,K] with rank >=2 and returns FLOAT [...,N]. Uses FLOAT algebraic
+ * reference activation arithmetic with the materialized FP16/BF16 weights, not accelerator
+ * rounding emulation; rejects nonfinite inputs and arithmetic overflow. Bounds aggregate checkpoint
+ * storage, FLOAT weights and activation/output workspace conservatively by max_bytes.
+ */
+Tensor ApplyParoQuantLinear(const EncodedValueProto &value, const Tensor &input,
+                            size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/**
  * Carries one GPTQModel bitsandbytes module at c1976918cfe3703fbcf6d1ce2440a82b26394375.
  *
  * NF4/FP4 use UINT8 weight [ceil(N*K/2),1], weight_absmax, weight_quant_map and

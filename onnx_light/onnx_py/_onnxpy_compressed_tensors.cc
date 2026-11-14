@@ -30,6 +30,7 @@ using core::runtime::CompressedTensorsQuantizationArgs;
 using core::runtime::CompressedTensorsWeights;
 using core::runtime::Exl3Weights;
 using core::runtime::GptqWeights;
+using core::runtime::ParoQuantWeights;
 using core::runtime::QqqWeights;
 using core::runtime::Shape;
 using core::runtime::Tensor;
@@ -900,6 +901,82 @@ void AddOnnxPyCompressedTensors(nb::module_ &runtime) {
         return ArrayFromTensor(core::runtime::ReconstructAwqWeights(value, max_bytes));
       },
       nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.attr("paroquant_upstream_revision") = kExl3Revision;
+  runtime.def(
+      "import_paroquant_weights",
+      [](const nb::dict &tensors, int64_t in_features, int64_t out_features, int64_t group_size,
+         int64_t krot, uint32_t bits, int64_t group_axis, const std::string &revision,
+         size_t max_bytes) {
+        EXT_ENFORCE_INVALID(revision == kExl3Revision && in_features > 0 && out_features > 0 &&
+                                (group_size > 0 || group_size == -1) && krot > 0 && bits == 4 &&
+                                group_axis == 1 && max_bytes > 0,
+                            "ParoQuant invalid metadata or unsupported upstream revision.");
+        EXT_ENFORCE_INVALID(tensors.size() == 6 || tensors.size() == 7,
+                            "ParoQuant requires six native tensors and optional bias.");
+        ParoQuantWeights weights;
+        weights.in_features = in_features;
+        weights.out_features = out_features;
+        weights.group_size = group_size;
+        weights.krot = krot;
+        weights.bits = bits;
+        weights.group_axis = group_axis;
+        weights.upstream_revision = revision;
+        size_t total = 0;
+        for (auto item : tensors) {
+          EXT_ENFORCE_INVALID(nb::isinstance<nb::str>(item.first),
+                              "ParoQuant tensor names must be strings.");
+          const std::string name = nb::cast<std::string>(item.first);
+          EXT_ENFORCE_INVALID(name == "qweight" || name == "qzeros" || name == "scales" ||
+                                  name == "pairs" || name == "theta" || name == "channel_scales" ||
+                                  name == "bias",
+                              "ParoQuant unexpected side tensor.");
+          weights.tensors.emplace(name, BorrowGptqArray(name, item.second, total, max_bytes));
+        }
+        return core::runtime::ImportParoQuantWeights(weights, max_bytes);
+      },
+      nb::arg("tensors"), nb::arg("in_features"), nb::arg("out_features"),
+      nb::arg("group_size") = 128, nb::arg("krot") = 8, nb::arg("bits") = 4,
+      nb::arg("group_axis") = 1, nb::arg("upstream_revision") = kExl3Revision,
+      nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "export_paroquant_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        auto weights = core::runtime::ExportParoQuantWeights(value, max_bytes);
+        nb::dict tensors;
+        for (const auto &[name, tensor] : weights.tensors)
+          tensors[nb::str(name.c_str())] = ArrayFromTensor(tensor);
+        nb::dict result;
+        result["in_features"] = weights.in_features;
+        result["out_features"] = weights.out_features;
+        result["group_size"] = weights.group_size;
+        result["krot"] = weights.krot;
+        result["bits"] = weights.bits;
+        result["group_axis"] = weights.group_axis;
+        result["upstream_revision"] = weights.upstream_revision;
+        result["tensors"] = std::move(tensors);
+        return result;
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "unpack_paroquant_codes",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::UnpackParoQuantCodes(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "reconstruct_paroquant_weights",
+      [](const EncodedValueProto &value, size_t max_bytes) {
+        return ArrayFromTensor(core::runtime::ReconstructParoQuantWeights(value, max_bytes));
+      },
+      nb::arg("value"), nb::arg("max_bytes") = kDefaultMaxBytes);
+  runtime.def(
+      "apply_paroquant_linear",
+      [](const EncodedValueProto &value, nb::handle input, size_t max_bytes) {
+        size_t total = 0;
+        const auto tensor = BorrowGptqArray("input", input, total, max_bytes);
+        return ArrayFromTensor(core::runtime::ApplyParoQuantLinear(value, tensor, max_bytes));
+      },
+      nb::arg("value"), nb::arg("input"), nb::arg("max_bytes") = kDefaultMaxBytes);
   runtime.attr("exl3_upstream_revision") = kExl3Revision;
   runtime.attr("vptq_upstream_revision") = kExl3Revision;
   runtime.def(

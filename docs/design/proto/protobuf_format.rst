@@ -370,6 +370,10 @@ this convention and can additionally split very large initializers
 across multiple data files automatically (see the ``location`` and
 ``max_external_file_size`` options on :func:`onnx_light.onnx.save`).
 
+External data uses the same binary representation as ``raw_data``.
+Like ``raw_data``, it cannot hold ``STRING`` tensors; these must use
+the inline ``string_data`` field.
+
 The 2 GB protobuf limit
 ~~~~~~~~~~~~~~~~~~~~~~~
 

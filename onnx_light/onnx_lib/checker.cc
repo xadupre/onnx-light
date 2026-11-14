@@ -282,6 +282,9 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       fail_check("Data of TensorProto ( tensor name: ", tensor.name(),
                  ") is stored externally and should not have data field.", value_field);
     }
+    if (tensor.data_type() == TensorProto::STRING) {
+      fail_check("STRING data (tensor name: ", tensor.name(), ") should not be stored externally");
+    }
 
     bool has_location = false;
     std::filesystem::path data_path;

@@ -176,6 +176,138 @@ TEST(CHECKER, ExternalTensorDataBounds) {
 #endif
 }
 
+TEST(CHECKER, ExternalStringTensorRejected) {
+#ifndef ONNX_NO_EXCEPTIONS
+  TensorProto tensor;
+  tensor.set_name("labels");
+  tensor.set_data_type(TensorProto::STRING);
+  tensor.add_dims(2);
+  tensor.set_data_location(TensorProto::EXTERNAL);
+  auto *location = tensor.add_external_data();
+  location->set_key("location");
+  checker::CheckerContext ctx;
+  for (bool skip_location_check : {false, true}) {
+    ctx.set_skip_external_data_location_check(skip_location_check);
+    for (const auto &path : {"strings.bin", "../strings.bin", "#strings", ""}) {
+      location->set_value(path);
+      for (int64_t count : {0, 2}) {
+        tensor.ref_dims()[0] = count;
+        try {
+          checker::check_tensor(tensor, ctx);
+          FAIL() << "Accepted external STRING tensor";
+        } catch (const checker::ValidationError &error) {
+          EXPECT_EQ(std::string(error.what()),
+                    "STRING data (tensor name: labels) should not be stored externally");
+        }
+      }
+    }
+  }
+#endif
+}
+
+TEST(CHECKER, ExternalStringTensorInModelRejected) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const fs::path dir = fs::temp_directory_path() / "onnx_light_external_string_checker_test";
+  fs::create_directories(dir);
+  const auto model_path = dir / "model.onnx";
+  const auto data_path = dir / "strings.bin";
+  auto make_model = [](const std::string &where, const TensorProto &tensor) {
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset_import()->set_version(21);
+    auto *graph = model.mutable_graph();
+    graph->set_name("strings");
+    auto *output = graph->add_output();
+    output->set_name("y");
+    auto *type = output->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::STRING);
+    type->mutable_shape()->add_dim()->set_dim_value(2);
+    auto *node = graph->add_node();
+    node->add_output("y");
+    if (where == "initializer") {
+      *graph->add_initializer() = tensor;
+      node->set_op_type("Identity");
+      node->add_input(tensor.name());
+    } else {
+      node->set_op_type("Constant");
+      auto *value = node->add_attribute();
+      value->set_name("value");
+      value->set_type(AttributeProto::TENSOR);
+      *value->mutable_t() = tensor;
+      if (where == "subgraph") {
+        GraphProto branch = *graph;
+        node->clear_attribute();
+        node->set_op_type("If");
+        node->add_input("cond");
+        auto *cond = graph->add_initializer();
+        cond->set_name("cond");
+        cond->set_data_type(TensorProto::BOOL);
+        cond->add_int32_data(1);
+        for (const auto &name : {"then_branch", "else_branch"}) {
+          auto *attr = node->add_attribute();
+          attr->set_name(name);
+          attr->set_type(AttributeProto::GRAPH);
+          *attr->mutable_g() = branch;
+        }
+      } else if (where == "function") {
+        auto *function = model.add_functions();
+        function->set_domain("local");
+        function->set_name("Strings");
+        function->add_output("y");
+        function->add_opset_import()->set_version(21);
+        *function->add_node() = *node;
+        node->clear_attribute();
+        node->set_domain("local");
+        node->set_op_type("Strings");
+        auto *opset = model.add_opset_import();
+        opset->set_domain("local");
+        opset->set_version(1);
+      }
+    }
+    return model;
+  };
+  for (const auto &where : {"initializer", "attribute", "subgraph", "function"}) {
+    SCOPED_TRACE(where);
+    TensorProto tensor;
+    tensor.set_name("labels");
+    tensor.set_data_type(TensorProto::STRING);
+    tensor.add_dims(2);
+    tensor.add_string_data("cat");
+    tensor.add_string_data("dog");
+    EXPECT_NO_THROW(checker::check_model(make_model(where, tensor)));
+    tensor.clear_string_data();
+    tensor.set_data_location(TensorProto::EXTERNAL);
+    auto *location = tensor.add_external_data();
+    location->set_key("location");
+    location->set_value("strings.bin");
+    for (bool with_data_file : {false, true}) {
+      SCOPED_TRACE(with_data_file);
+      if (with_data_file) {
+        std::ofstream data(data_path, std::ios::binary);
+        data << "catdog";
+      } else {
+        fs::remove(data_path);
+      }
+      {
+        std::ofstream out(model_path, std::ios::binary);
+        out << make_model(where, tensor).SerializeAsString();
+      }
+      try {
+        checker::check_model(path_to_utf8(model_path));
+        FAIL() << "Accepted external STRING tensor";
+      } catch (const checker::ValidationError &error) {
+        EXPECT_NE(std::string(error.what())
+                      .find("STRING data (tensor name: labels) should not be stored externally"),
+                  std::string::npos);
+      }
+    }
+  }
+  fs::remove(data_path);
+  fs::remove(model_path);
+  fs::remove(dir);
+#endif
+}
+
 TEST(CHECKER, TensorSegmentRawData) {
   checker::CheckerContext ctx;
   for (const auto &[dtype, bytes] :

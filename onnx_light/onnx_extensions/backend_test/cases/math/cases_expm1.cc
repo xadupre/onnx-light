@@ -20,7 +20,11 @@ Tensor TypedTensor(DataType dtype, const Shape &shape, const std::vector<double>
   if (dtype == DataType::DOUBLE) {
     return Tensor::FromDouble("", shape, values);
   }
-  const std::vector<float> floats(values.begin(), values.end());
+  std::vector<float> floats;
+  floats.reserve(values.size());
+  for (double value : values) {
+    floats.push_back(static_cast<float>(value));
+  }
   if (dtype == DataType::FLOAT16) {
     return MakeFloat16Tensor("", shape, floats);
   }

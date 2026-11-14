@@ -263,7 +263,8 @@ private:
                               const ConstantFoldingOptions &folding_options, bool remove_unused,
                               RewritingProto &collection, detail::RewritingUndoState &undo,
                               const OptimizationCallback &callback, bool parallel,
-                              const std::unordered_set<std::string> &function_only_callers);
+                              const std::unordered_set<std::string> &function_only_callers,
+                              bool outermost_invocation);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

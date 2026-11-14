@@ -290,17 +290,18 @@ size_t ValidatePackedQuantizationShape(const PackedQuantizationProfile &profile,
   bool empty = false;
   for (const int64_t dim : shape) {
     EXT_ENFORCE_INVALID(dim >= 0, "DequantizePacked: dimensions must be nonnegative.");
-    EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <= std::numeric_limits<size_t>::max(),
-                        "DequantizePacked: dimension exceeds size_t.");
     empty |= dim == 0;
   }
-  EXT_ENFORCE_INVALID(shape[shape.size() - 1] % profile.block_size == 0,
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(shape[shape.size() - 1]) % profile.block_size == 0,
                       "DequantizePacked: last dimension must contain complete blocks.");
   if (empty)
     return 0;
   size_t count = 1;
-  for (const int64_t dim : shape)
+  for (const int64_t dim : shape) {
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <= std::numeric_limits<size_t>::max(),
+                        "DequantizePacked: dimension exceeds size_t.");
     count = CheckedMultiply(count, static_cast<size_t>(dim));
+  }
   const size_t width = output_dtype == TensorProto::DOUBLE  ? 8
                        : output_dtype == TensorProto::FLOAT ? 4
                                                             : 2;

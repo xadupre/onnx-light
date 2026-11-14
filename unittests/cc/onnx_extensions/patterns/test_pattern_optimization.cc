@@ -411,9 +411,9 @@ public:
 
   std::set<std::string> FastOpType() const override { return {"Identity"}; }
 
-  core::builder::MatchResult Match(core::builder::GraphGraph &,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override {
-    return candidate.op_type() == "Identity"
+    return !graph.Builder().IsInsideLocalFunction() && candidate.op_type() == "Identity"
                ? core::builder::MatchResult{this, {&candidate}, &candidate}
                : core::builder::MatchResult{};
   }

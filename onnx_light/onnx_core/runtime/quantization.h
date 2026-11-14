@@ -736,6 +736,58 @@ Tensor ReconstructAwqWeights(const EncodedValueProto &value, size_t max_bytes = 
                              const StructTypeCatalogue &catalogue = {});
 
 /**
+ * Carries pinned GPTQModel ParoLinear state, using the AWQ GEMM four-bit packing.
+ *
+ * Requires INT32 qweight [K,N/8], qzeros [K/G,N/8], FP16/BF16 scales [K/G,N],
+ * INT16 pairs [krot,K], theta [krot,K/2], channel_scales [1,K], and optional bias [N].
+ * Each pairs group is a permutation of [0,G). G is even, at most 32768, and divides K;
+ * group_size=-1 selects G=K. All rotation state is required, including identity state.
+ * The pinned producer initializes theta/channel_scales in FP16, then narrows them to the
+ * weight dtype. Theta, channel_scales and bias accept FP16/BF16 only; FLOAT storage is rejected.
+ * The versioned schema preserves tensor dtypes and the pinned upstream revision.
+ */
+struct ParoQuantWeights {
+  int64_t in_features = 0, out_features = 0, group_size = 128, krot = 0;
+  uint32_t bits = 4;
+  int64_t group_axis = 1;
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+};
+
+/** Imports complete ParoQuant state without repacking or requantization. */
+EncodedValueProto ImportParoQuantWeights(const ParoQuantWeights &weights,
+                                         size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated ParoQuant metadata and native tensors byte-for-byte. */
+ParoQuantWeights ExportParoQuantWeights(const EncodedValueProto &value,
+                                        size_t max_bytes = size_t{1} << 30,
+                                        const StructTypeCatalogue &catalogue = {});
+
+/** Unpacks the AWQ GEMM unsigned codes into UINT8 [N,K]. */
+Tensor UnpackParoQuantCodes(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs FLOAT [N,K] in the transformed basis only, not a standalone linear weight.
+ * Materializes AWQ reconstruction in the scales' FP16/BF16 dtype before lifting to FLOAT.
+ * Uses ApplyParoQuantLinear to retain channel scaling, rotations and optional bias.
+ */
+Tensor ReconstructParoQuantWeights(const EncodedValueProto &value,
+                                   size_t max_bytes = size_t{1} << 30,
+                                   const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Applies channel scaling, ascending disjoint-pair rotation steps, AWQ weights and bias.
+ * Accepts FLOAT [...,K] with rank >=2 and returns FLOAT [...,N]. Uses FLOAT algebraic
+ * reference activation arithmetic with the materialized FP16/BF16 weights, not accelerator
+ * rounding emulation; rejects nonfinite inputs and arithmetic overflow. Bounds aggregate checkpoint
+ * storage, FLOAT weights and activation/output workspace conservatively by max_bytes.
+ */
+Tensor ApplyParoQuantLinear(const EncodedValueProto &value, const Tensor &input,
+                            size_t max_bytes = size_t{1} << 30,
+                            const StructTypeCatalogue &catalogue = {});
+
+/**
  * Carries one GPTQModel bitsandbytes module at c1976918cfe3703fbcf6d1ce2440a82b26394375.
  *
  * NF4/FP4 use UINT8 weight [ceil(N*K/2),1], weight_absmax, weight_quant_map and
@@ -816,6 +868,53 @@ Tensor UnpackExl3States(const EncodedValueProto &value, size_t max_bytes = size_
 Tensor ReconstructExl3Weights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
                               const StructTypeCatalogue &catalogue = {},
                               int32_t reconstruction_dtype = TensorProto::FLOAT);
+
+/**
+ * Carries GPTQModel's pinned vendored Torch VPTQ checkpoint, not a scalar profile.
+ *
+ * Tensor names match state_dict: indices, centroids.weight, optional
+ * res_centroids.weight, outlier_centroids.weight, outlier_indices, weight_scale,
+ * weight_bias, perm and bias. Nonpersistent inverse_perm is derived from perm,
+ * not accepted as checkpoint state. Codebooks share FLOAT, FLOAT16 or BFLOAT16 dtype.
+ * Constructor metadata is retained verbatim; group_size/group_num are the original
+ * mutually exclusive knobs, not the resolved layout. Packed indices are INT32
+ * little-endian bitstreams of main | residual << main_bits. Outlier indices are
+ * unpacked INT32. Outlier residual codebooks and unpacked main indices are rejected.
+ */
+struct VptqWeights {
+  std::unordered_map<std::string, Tensor> tensors;
+  std::string upstream_revision = "c1976918cfe3703fbcf6d1ce2440a82b26394375";
+  int64_t schema_version = 1;
+  int64_t in_features = 0, out_features = 0, bits = 4;
+  std::array<int64_t, 2> vector_lens{8, 8}, num_centroids{4096, 4096}, num_res_centroids{-1, -1};
+  double npercent = 0, kmeans_tol = 1e-5, percdamp = 0.01;
+  int64_t group_size = -1, group_num = -1, norm_dim = 0, kmeans_iters = 100, kmeans_seed = 0,
+          block_size = 128;
+  bool enable_norm = false, enable_perm = false;
+  std::string kmeans_mode;
+};
+
+/** Imports native VPTQ state losslessly into onnx_light.vptq_weights.v1. */
+EncodedValueProto ImportVptqWeights(const VptqWeights &weights, size_t max_bytes = size_t{1} << 30);
+
+/** Exports validated constructor metadata and native tensor bytes without recoding. */
+VptqWeights ExportVptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
+
+/** Exports validated constructor metadata without materializing native tensors. */
+VptqWeights ExportVptqConfig(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                             const StructTypeCatalogue &catalogue = {});
+
+/**
+ * Reconstructs FLOAT [out_features,in_features], lifting source-dtype results.
+ *
+ * Rounds residual addition, normalization multiplication and normalization addition
+ * separately to the codebook dtype, as in the pinned eager Torch implementation.
+ * Applies inverse permutation before normalization; retains but does not add bias.
+ * Bounds checkpoint storage and logical FLOAT output independently by max_bytes.
+ */
+Tensor ReconstructVptqWeights(const EncodedValueProto &value, size_t max_bytes = size_t{1} << 30,
+                              const StructTypeCatalogue &catalogue = {});
 
 /**
  * Quantizes a finite FLOAT matrix using complete groups of 32 columns along axis 1.

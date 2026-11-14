@@ -817,6 +817,33 @@ const char kDoc_Asin_ver7[] = R"DOC(
 Calculates the arcsine (inverse of sine) of the given input tensor, element-wise.
 )DOC";
 
+const char kDoc_Expm1_ver29[] = R"DOC(
+Computes `exp(x) - 1` element-wise, where `exp` is the exponential to base `e`.
+The input may have any shape, including a scalar or an empty tensor. The output
+has the same shape and element type as the input.
+
+For finite nonzero `x`, the output is a floating-point approximation of the
+real-valued function `exp(x) - 1` at the exact value represented by `x`.
+The computation must preserve nonzero results representable in the output type
+when an intermediate floating-point `exp(x)` would round to `1`. For example,
+a FLOAT input `1e-8` produces a result approximately equal to `1e-8`, rather
+than zero.
+
+Special values are defined element-wise as follows:
+
+| Input `x` | Output `y` |
+| --- | --- |
+| Positive zero | Positive zero |
+| Negative zero | Negative zero |
+| Negative infinity | `-1` |
+| Positive infinity | Positive infinity |
+| NaN | NaN |
+
+The sign and payload of an output NaN are unspecified. Finite positive inputs
+whose results overflow the output type produce positive infinity.
+
+)DOC";
+
 const char kDoc_Expand_ver8[] = R"DOC(
 Broadcast the input tensor following the given shape and the broadcast rule.
 The broadcast rule is similar to numpy.array(input) * numpy.ones(shape):
@@ -6700,6 +6727,7 @@ const char kDoc_RandomUniformLike_ver1[] = "";
 const char kDoc_Relu_ver6[] = "";
 const char kDoc_RandomNormalLike_ver1[] = "";
 const char kDoc_Exp_ver6[] = "";
+const char kDoc_Expm1_ver29[] = "";
 const char kDoc_Sign_ver9[] = "";
 const char kDoc_Cosh_ver9[] = "";
 const char kDoc_Sigmoid_ver6[] = "";

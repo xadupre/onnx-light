@@ -41,6 +41,7 @@ extern ONNX_LIGHT_LIB_API const char kDoc_Einsum_ver12[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Elu_ver6[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Erf_ver9[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Exp_ver6[];
+extern ONNX_LIGHT_LIB_API const char kDoc_Expm1_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Expand_ver8[];
 extern ONNX_LIGHT_LIB_API const char kDoc_EyeLike_ver9[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Flatten_ver24[];

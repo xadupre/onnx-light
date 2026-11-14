@@ -158,6 +158,60 @@ TEST_F(ExternalDataDescriptorTest, RejectsUnsafeObjectsBeforeTruncation) {
   EXPECT_EQ(utils::FileStream("unused", created).size(), 0);
 }
 
+TEST_F(ExternalDataDescriptorTest, SidecarWritesRejectLinksBeforeTruncation) {
+  const auto base = root / "model";
+  const auto victim = std::filesystem::absolute(root / "outside" / "weights.bin");
+  const auto sidecar = base / "linked.bin";
+  for (const bool shared : {false, true}) {
+    for (const bool symbolic : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "shared=" << shared << " symbolic=" << symbolic);
+      std::error_code error;
+      if (symbolic)
+        std::filesystem::create_symlink(victim, sidecar, error);
+      else
+        std::filesystem::create_hard_link(victim, sidecar, error);
+#ifdef _WIN32
+      if (symbolic && error)
+        continue;
+#endif
+      ASSERT_FALSE(error) << error.message();
+      if (shared) {
+        EXPECT_ANY_THROW(
+            utils::TwoFilesWriteStream((base / "model.onnx").string(), sidecar.string()));
+      } else {
+        utils::TwoFilesWriteStream stream((base / "model.onnx").string(),
+                                          (base / "weights.bin").string());
+        EXPECT_ANY_THROW(stream.write_raw_bytes_in_second_stream(
+            reinterpret_cast<const uint8_t *>("data"), 4, "linked.bin"));
+      }
+      EXPECT_EQ(ReadWholeFile(victim.string()), "sentinel");
+      EXPECT_TRUE(std::filesystem::remove(sidecar));
+    }
+  }
+}
+
+TEST_F(ExternalDataDescriptorTest, SidecarWritesTruncateRegularFilesAndPreservePayloads) {
+  const auto base = root / "model";
+  const auto weights = base / "weights.bin";
+  const auto extra = base / "extra.bin";
+  for (const bool shared : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "shared=" << shared);
+    WriteWholeFile(weights.string(), std::string(500, 'x'));
+    WriteWholeFile(extra.string(), std::string(500, 'x'));
+    {
+      utils::TwoFilesWriteStream stream((base / "model.onnx").string(), weights.string());
+      EXPECT_EQ(stream.weights_size(), 0);
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("first"), 5);
+      EXPECT_EQ(stream.weights_size(shared ? "weights.bin" : "extra.bin"), shared ? 5 : 0);
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("second"), 6,
+                                              shared ? "weights.bin" : "extra.bin");
+      EXPECT_EQ(stream.weights_size(shared ? "weights.bin" : "extra.bin"), shared ? 11 : 6);
+    }
+    EXPECT_EQ(ReadWholeFile(weights.string()), shared ? "firstsecond" : "first");
+    EXPECT_EQ(ReadWholeFile(extra.string()), shared ? std::string(500, 'x') : "second");
+  }
+}
+
 TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths) {
   const auto base = root / "model";
   std::filesystem::create_directories(base / "sub" / "nested");
@@ -351,6 +405,33 @@ TEST_F(ExternalDataDescriptorTest, TrustedBaseAliasesPreservePrimaryAndAdditiona
 }
 
 #ifndef _WIN32
+TEST_F(ExternalDataDescriptorTest, SidecarWritesKeepDescriptorAfterLeafReplacement) {
+  const auto base = root / "model";
+  const auto victim = std::filesystem::absolute(root / "outside" / "weights.bin");
+  for (const bool shared : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "shared=" << shared);
+    const auto sidecar = base / (shared ? "weights.bin" : "extra.bin");
+    const auto pinned = base / "pinned.bin";
+    {
+      utils::TwoFilesWriteStream stream((base / "model.onnx").string(),
+                                        (base / "weights.bin").string());
+      const std::string location = sidecar.filename().string();
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("first"), 5,
+                                              location);
+      EXPECT_EQ(stream.weights_size(location), 5);
+      std::filesystem::rename(sidecar, pinned);
+      std::filesystem::create_symlink(victim, sidecar);
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("second"), 6,
+                                              location);
+      EXPECT_EQ(stream.weights_size(location), 11);
+    }
+    EXPECT_EQ(ReadWholeFile(pinned.string()), "firstsecond");
+    EXPECT_EQ(ReadWholeFile(victim.string()), "sentinel");
+    std::filesystem::remove(sidecar);
+    std::filesystem::remove(pinned);
+  }
+}
+
 TEST_F(ExternalDataDescriptorTest, RejectsSymlinkLeavesAndNonregularFilesWithoutDamage) {
   const auto base = root / "model";
   std::filesystem::create_symlink(std::filesystem::absolute(root / "outside" / "weights.bin"),

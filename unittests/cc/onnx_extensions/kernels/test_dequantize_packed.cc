@@ -135,8 +135,9 @@ TEST(DequantizePacked, RejectsInvalidLayoutsBeforeEmptyFastPaths) {
   const int64_t max = std::numeric_limits<int64_t>::max();
   EXPECT_THROW(DequantizePackedTensor(empty, "gguf:Q4_0", {0, 32}, TensorProto::FLOAT),
                std::invalid_argument);
-  for (const Shape &shape : {Shape{}, Shape{-1, 32}, Shape{0, 31}, Shape{max, 32},
-                             Shape{max / 32, 32}, Shape{0, -1, 32}, Shape{-1, 0, 32}})
+  for (const Shape &shape :
+       {Shape{}, Shape{-1, 32}, Shape{0, 31}, Shape{max, 32}, Shape{max / 32, 32}, Shape{0, -1, 32},
+        Shape{-1, 0, 32}, Shape{0, max}})
     EXPECT_THROW(DequantizePackedTensor(empty, "gguf:q4_0", shape, TensorProto::FLOAT),
                  std::invalid_argument);
   EXPECT_THROW(DequantizePackedTensor(empty, "gguf:q4_0", {0, 32}, TensorProto::INT32),
@@ -155,7 +156,8 @@ TEST(DequantizePacked, RejectsInvalidLayoutsBeforeEmptyFastPaths) {
   EXPECT_THROW(DequantizePackedTensor(Tensor("", TensorProto::UINT8, {-1}, {}), "gguf:q4_0",
                                       {0, 32}, TensorProto::FLOAT),
                std::invalid_argument);
-  for (const Shape &shape : {Shape{0, int64_t{1} << 62, 32}, Shape{max, 2, 0}, Shape{max, 0, 32}}) {
+  for (const Shape &shape :
+       {Shape{0, int64_t{1} << 62, 32}, Shape{max, 2, 0}, Shape{max, 0, 32}, Shape{0, max - 31}}) {
     const auto output = DequantizePackedTensor(empty, "gguf:q4_0", shape, TensorProto::FLOAT);
     EXPECT_EQ(output.shape, shape);
     EXPECT_EQ(output.element_count(), 0);

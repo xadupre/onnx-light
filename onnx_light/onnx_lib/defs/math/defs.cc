@@ -570,6 +570,17 @@ ONNX_OPERATOR_SET_SCHEMA(Exp, 13,
                              .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
 
 ONNX_OPERATOR_SET_SCHEMA(
+    Expm1, 29,
+    OpSchema()
+        .SetDoc(kDoc_Expm1_ver29)
+        .Input(0, "input", "Input tensor", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
+        .Output(0, "output", "The exponential of the input minus one, computed element-wise", "T",
+                OpSchema::Single, true, 1, OpSchema::Differentiable)
+        .TypeConstraint("T", OpSchema::all_float_types_ir4(),
+                        "Constrain input and output types to float tensors.")
+        .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
+
+ONNX_OPERATOR_SET_SCHEMA(
     Log, 13,
     OpSchema()
         .SetDoc(kDoc_Log_ver6)

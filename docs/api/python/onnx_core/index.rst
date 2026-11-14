@@ -18,10 +18,12 @@ onnx_light.onnx_core
     graph_partition
     marlin
     optimization
+    paroquant
     qqq
     quantization
     shape_inference
     tensor_statistics
+    vptq
 
 .. automodule:: onnx_light.onnx_core
     :members:

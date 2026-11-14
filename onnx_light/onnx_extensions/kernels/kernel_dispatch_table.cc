@@ -149,6 +149,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:Equal", MakeKernel<onnx_kernels::kernel::Equal>()},
       {"ai.onnx:Erf", MakeKernel<onnx_kernels::kernel::Erf>()},
       {"ai.onnx:Exp", MakeKernel<onnx_kernels::kernel::Exp>()},
+      {"ai.onnx:Expm1", MakeKernel<onnx_kernels::kernel::Expm1>()},
       {"ai.onnx:Expand", MakeKernel<onnx_kernels::kernel::Expand>()},
       {"ai.onnx:EyeLike", MakeKernel<onnx_kernels::kernel::EyeLike>()},
       {"ai.onnx:Flatten", MakeKernel<onnx_kernels::kernel::Flatten>()},
@@ -403,6 +404,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Equal::RegisterTuningSchemas();
     onnx_kernels::kernel::Erf::RegisterTuningSchemas();
     onnx_kernels::kernel::Exp::RegisterTuningSchemas();
+    onnx_kernels::kernel::Expm1::RegisterTuningSchemas();
     onnx_kernels::kernel::FlexAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Floor::RegisterTuningSchemas();
     onnx_kernels::kernel::Gemm::RegisterTuningSchemas();

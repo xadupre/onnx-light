@@ -17,6 +17,7 @@ const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
      "The error function of the input tensor computed element-wise. It has the same shape and "
      "type of the input."},
     {"Exp", "The exponential of the input tensor computed element-wise"},
+    {"Expm1", "The exponential of the input minus one, computed element-wise"},
     {"Log", "The natural log of the input tensor computed element-wise"},
     {"Sinh", "The hyperbolic sine values of the input tensor computed element-wise"},
     {"Cosh", "The hyperbolic cosine values of the input tensor computed element-wise"},
@@ -114,6 +115,34 @@ for more details please check the broadcasting behavior in ONNX.)DOC";
 }
 
 std::string MakeUnaryMathDoc(const char *op_type) {
+  if (std::string_view(op_type) == "Expm1") {
+    return R"DOC(
+Computes `exp(x) - 1` element-wise, where `exp` is the exponential to base `e`.
+The input may have any shape, including a scalar or an empty tensor. The output
+has the same shape and element type as the input.
+
+For finite nonzero `x`, the output is a floating-point approximation of the
+real-valued function `exp(x) - 1` at the exact value represented by `x`.
+The computation must preserve nonzero results representable in the output type
+when an intermediate floating-point `exp(x)` would round to `1`. For example,
+a FLOAT input `1e-8` produces a result approximately equal to `1e-8`, rather
+than zero.
+
+Special values are defined element-wise as follows:
+
+| Input `x` | Output `y` |
+| --- | --- |
+| Positive zero | Positive zero |
+| Negative zero | Negative zero |
+| Negative infinity | `-1` |
+| Positive infinity | Positive infinity |
+| NaN | NaN |
+
+The sign and payload of an output NaN are unspecified. Finite positive inputs
+whose results overflow the output type produce positive infinity.
+
+)DOC";
+  }
   return "Computes the " + std::string(op_type) + " value of the input tensor element-wise.";
 }
 

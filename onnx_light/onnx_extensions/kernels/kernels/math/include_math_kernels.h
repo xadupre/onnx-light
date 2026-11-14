@@ -326,6 +326,29 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise exponential minus one: y = expm1(x), accurate near zero.
+class Expm1 : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Expm1";
+  explicit Expm1(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
+};
+
 /// Element-wise exponential: y = exp(x), defined for all real x.
 class Exp : public KernelBase {
 public:

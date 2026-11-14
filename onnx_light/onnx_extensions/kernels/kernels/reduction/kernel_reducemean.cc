@@ -184,8 +184,8 @@ void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
     // discarding small terms when large positive and negative values cancel.
     int value_exponent = 0;
     int count_exponent = 0;
-    std::frexp(magnitude, &value_exponent);
-    std::frexp(static_cast<long double>(reduced_count), &count_exponent);
+    static_cast<void>(std::frexp(magnitude, &value_exponent));
+    static_cast<void>(std::frexp(static_cast<long double>(reduced_count), &count_exponent));
     const int shift = std::max(0, value_exponent + count_exponent -
                                       std::numeric_limits<long double>::max_exponent + 1);
     long double sum = 0;

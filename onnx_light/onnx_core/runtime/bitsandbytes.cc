@@ -7,11 +7,17 @@
 
 #include <algorithm>
 #include <bit>
+#include <cerrno>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <unordered_set>
+
+#if defined(__APPLE__)
+#include <locale.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -89,9 +95,24 @@ public:
       } else if (key == "nested_offset") {
         const auto token = Number();
         double value = 0;
+#if defined(__APPLE__)
+        // Floating-point from_chars requires macOS 26; keep parsing locale-independent.
+        const std::string number(token);
+        locale_t c_locale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
+        EXT_ENFORCE_INVALID(c_locale != nullptr, "bitsandbytes cannot create numeric locale.");
+        char *end = nullptr;
+        errno = 0;
+        value = strtod_l(number.c_str(), &end, c_locale);
+        // Unlike from_chars, strtod_l may set ERANGE for representable subnormals.
+        const bool in_range =
+            errno != ERANGE || (value != 0 && std::abs(value) < std::numeric_limits<double>::min());
+        const bool valid = in_range && end == number.c_str() + number.size();
+        freelocale(c_locale);
+#else
         const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
-        EXT_ENFORCE_INVALID(parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size() &&
-                                std::isfinite(value) && value >= 0 &&
+        const bool valid = parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size();
+#endif
+        EXT_ENFORCE_INVALID(valid && std::isfinite(value) && value >= 0 &&
                                 value <= std::numeric_limits<float>::max(),
                             "bitsandbytes invalid nested offset.");
         result.offset = static_cast<float>(value);

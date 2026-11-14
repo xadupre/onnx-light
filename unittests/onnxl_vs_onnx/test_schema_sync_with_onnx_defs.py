@@ -33,6 +33,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     GEMM_29_KEY = ("", "Gemm", 29)
     DEQUANTIZE_PACKED_29_KEY = ("", "DequantizePacked", 29)
     EXPM1_29_KEY = ("", "Expm1", 29)
+    MVN_29_KEY = ("", "MeanVarianceNormalization", 29)
     ND_29_KEYS = {("", "GatherND", 29), ("", "ScatterND", 29)}
     STFT_KEY = ("", "STFT", 17)
     STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
@@ -54,7 +55,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             cls.OPTIONAL_28_KEYS
             | cls.REDUCE_LOG_28_KEYS
             | cls.DATA_LAYOUT_28_KEYS
-            | {cls.GEMM_29_KEY, cls.DEQUANTIZE_PACKED_29_KEY, cls.EXPM1_29_KEY}
+            | {cls.GEMM_29_KEY, cls.DEQUANTIZE_PACKED_29_KEY, cls.EXPM1_29_KEY, cls.MVN_29_KEY}
             | cls.ND_29_KEYS
         )
         for key in recent_keys - set(onnx_dict):
@@ -255,6 +256,19 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             for available in (set(), {self.EXPM1_29_KEY}):
                 with self.subTest(use_set=use_set, available=available):
                     keys = {self.EXPM1_29_KEY} | unrelated
+                    light = set(keys) if use_set else dict.fromkeys(keys)
+                    self._remove_recent_schemas_if_onnx_is_outdated(light, available)
+                    self.assertEqual(set(light), available | unrelated)
+
+    def test_recent_mvn_schema_is_compared_when_available(self):
+        unrelated = {
+            ("custom", "MeanVarianceNormalization", 29),
+            ("", "MeanVarianceNormalization", 30),
+        }
+        for use_set in (False, True):
+            for available in (set(), {self.MVN_29_KEY}):
+                with self.subTest(use_set=use_set, available=available):
+                    keys = {self.MVN_29_KEY} | unrelated
                     light = set(keys) if use_set else dict.fromkeys(keys)
                     self._remove_recent_schemas_if_onnx_is_outdated(light, available)
                     self.assertEqual(set(light), available | unrelated)

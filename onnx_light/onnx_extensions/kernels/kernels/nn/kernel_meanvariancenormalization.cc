@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
@@ -20,8 +22,9 @@ namespace {
 constexpr double kMvnEpsilon = 1e-9;
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
-                                                           static_cast<int32_t>(DataType::DOUBLE)};
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
 Shape NormalizeAxes(const Shape &axes, int64_t rank) {
   Shape normalized;
@@ -59,15 +62,16 @@ int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
 
 template <typename T>
 void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator,
-                int64_t minimum_elements) {
+                int64_t minimum_elements, bool modern, float epsilon) {
   const onnx_kernels::Shape &dims = x.shape;
   const int64_t rank = static_cast<int64_t>(dims.size());
   const int64_t total = x.element_count();
-  if (total == 0) {
+  Shape normalized_axes = NormalizeAxes(axes, rank);
+  if (modern && axes.empty())
+    for (int64_t axis = 0; axis < rank; ++axis)
+      normalized_axes.push_back(axis);
+  if (total == 0)
     return;
-  }
-
-  const Shape normalized_axes = NormalizeAxes(axes, rank);
   Shape reduce_mask;
   reduce_mask.assign(static_cast<size_t>(rank), 0);
   for (int64_t axis : normalized_axes) {
@@ -86,8 +90,17 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
   EXT_ENFORCE_INVALID(reduced_size > 0,
                       "kernel::MeanVarianceNormalization: reduced size must be > 0.");
 
-  const T *px = x.As<T>();
-  T *py = output.As<T>();
+  const bool half = core::runtime::IsHalfPrecision(x.data_type);
+  const auto decode = x.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                          ? core::runtime::Float16BitsToFloat
+                          : core::runtime::Bfloat16BitsToFloat;
+  const auto encode = x.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                          ? core::runtime::FloatToFloat16Bits
+                          : core::runtime::FloatToBfloat16Bits;
+  const auto read = [&](int64_t index) -> T {
+    return half ? static_cast<T>(decode(reinterpret_cast<const uint16_t *>(x.bytes())[index]))
+                : x.As<T>()[index];
+  };
   core::runtime::detail::TemporaryTypedBuffer<statistics::VarianceAccumulator<double>> stats_buf(
       static_cast<size_t>(lane_count), allocator, "kernel::MeanVarianceNormalization statistics");
   auto *stats = stats_buf.data();
@@ -95,11 +108,19 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
     stats[lane] = {};
   }
   if (lane_count == 1) {
-    stats[0] =
-        statistics::Accumulate<double>(total, [&](int64_t i) { return px[i]; }, minimum_elements);
+    stats[0] = statistics::Accumulate<double>(total, read, minimum_elements);
   } else {
     for (int64_t idx = 0; idx < total; ++idx) {
-      stats[ComputeLane(idx, dims, reduce_mask)].Add(static_cast<double>(px[idx]));
+      stats[ComputeLane(idx, dims, reduce_mask)].Add(static_cast<double>(read(idx)));
+    }
+  }
+  if (modern) {
+    for (int64_t lane = 0; lane < lane_count; ++lane)
+      stats[lane].m2 = 0;
+    for (int64_t idx = 0; idx < total; ++idx) {
+      auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+      const T centered = read(idx) - static_cast<T>(stat.mean);
+      stat.m2 += static_cast<double>(centered * centered);
     }
   }
 
@@ -109,18 +130,27 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
         for (int64_t idx = begin; idx < end; ++idx) {
           const int64_t lane = ComputeLane(idx, dims, reduce_mask);
           const auto &stat = stats[lane];
-          const double denom = std::sqrt(stat.Variance() + kMvnEpsilon);
-          py[idx] = static_cast<T>((static_cast<double>(px[idx]) - stat.mean) / denom);
+          const T result =
+              modern ? (read(idx) - static_cast<T>(stat.mean)) /
+                           (std::sqrt(static_cast<T>(stat.Variance())) + static_cast<T>(epsilon))
+                     : static_cast<T>((static_cast<double>(read(idx)) - stat.mean) /
+                                      std::sqrt(stat.Variance() + kMvnEpsilon));
+          if (half)
+            reinterpret_cast<uint16_t *>(output.mutable_bytes())[idx] =
+                encode(static_cast<float>(result));
+          else
+            output.As<T>()[idx] = result;
         }
       },
       "MeanVarianceNormalization");
 }
 
 void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator,
-                 int64_t minimum_elements) {
+                 int64_t minimum_elements, bool modern, float epsilon) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          x.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
+                          x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
+                          (modern && core::runtime::IsHalfPrecision(x.data_type)),
+                      "kernel::MeanVarianceNormalization: unsupported X dtype.");
   EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                       "kernel::MeanVarianceNormalization: output must have the same dtype as X.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -129,11 +159,11 @@ void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAl
       output.size_bytes() == x.size_bytes(),
       "kernel::MeanVarianceNormalization: output buffer must have the same byte size as X.");
 
-  if (x.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    ComputeMvn<float>(x, output, axes, allocator, minimum_elements);
+  if (x.data_type != static_cast<int32_t>(DataType::DOUBLE)) {
+    ComputeMvn<float>(x, output, axes, allocator, minimum_elements, modern, epsilon);
     return;
   }
-  ComputeMvn<double>(x, output, axes, allocator, minimum_elements);
+  ComputeMvn<double>(x, output, axes, allocator, minimum_elements, modern, epsilon);
 }
 
 } // namespace
@@ -144,22 +174,25 @@ MeanVarianceNormalization::MeanVarianceNormalization(const KernelContext &ctx)
 
 ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(MeanVarianceNormalization)
 
-Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
-                                             RuntimeContext *rt) const {
+Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes, RuntimeContext *rt,
+                                             float epsilon) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          x.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
+                          x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
+                          (ctx_.opset.version >= 29 && core::runtime::IsHalfPrecision(x.data_type)),
+                      "kernel::MeanVarianceNormalization: unsupported X dtype.");
   RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const size_t out_n_bytes = x.size_bytes();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  DispatchMvn(x, out, axes, allocator, tuning().parallel_minimum_elements);
+  DispatchMvn(x, out, axes, allocator, tuning().parallel_minimum_elements, ctx_.opset.version >= 29,
+              epsilon);
   return out;
 }
 
-void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
-                                           const Shape &axes) const {
-  DispatchMvn(x, output, axes, nullptr, tuning().parallel_minimum_elements);
+void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output, const Shape &axes,
+                                           float epsilon) const {
+  DispatchMvn(x, output, axes, nullptr, tuning().parallel_minimum_elements,
+              ctx_.opset.version >= 29, epsilon);
 }
 
 void MeanVarianceNormalization::Run(RuntimeContext &rt) {
@@ -168,7 +201,9 @@ void MeanVarianceNormalization::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt);
   const std::vector<int64_t> axes = GetAttributeIntsOrDefault(node, "axes", {0, 2, 3});
-  SetOutput(node, 0, (*this)(x, axes, &rt), rt);
+  const float epsilon =
+      ctx_.opset.version >= 29 ? GetAttributeFloatOrDefault(node, "epsilon", 1e-9f) : 1e-9f;
+  SetOutput(node, 0, (*this)(x, axes, &rt, epsilon), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

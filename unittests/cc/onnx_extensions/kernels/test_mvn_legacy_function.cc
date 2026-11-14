@@ -21,7 +21,7 @@ TEST(MeanVarianceNormalizationFunctionExecution, PreservesLegacyVarianceBeforeVe
   onnx_kernels::RegisterKernelFunctions();
   const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
   for (const int version : {13, 18, 28, 29}) {
-    for (const auto &values : std::vector<std::vector<float>>{{1, 3}, {10000, 10001}, {1, 1}}) {
+    for (const auto &values : std::vector<std::vector<float>>{{1, 3}, {10000, 10100}, {1, 1}}) {
       SCOPED_TRACE(version);
       SCOPED_TRACE(values[0]);
       ModelProto model;

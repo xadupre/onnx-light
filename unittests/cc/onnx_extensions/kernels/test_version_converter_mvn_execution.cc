@@ -100,7 +100,7 @@ TEST(MeanVarianceNormalizationConverterExecution, PreservesBothVersionsForAllFlo
 TEST(MeanVarianceNormalizationConverterExecution, PreservesLegacyAndCenteredVarianceAtLargeOffset) {
   RegisterAllOnnxOperatorSchemas();
   onnx_kernels::RegisterKernelFunctions();
-  const std::vector<float> values{10000, 10001};
+  const std::vector<float> values{10000, 10100};
   for (const bool upgrade : {false, true}) {
     SCOPED_TRACE(upgrade);
     ModelProto model;

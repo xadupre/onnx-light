@@ -1026,7 +1026,6 @@ TEST(SimpleTensorFromProto, RejectsInvalidDimensionsAndOverflow) {
     for (const std::vector<int64_t> &dims :
          {std::vector<int64_t>{std::numeric_limits<int64_t>::min()}, std::vector<int64_t>{0, -1},
           std::vector<int64_t>{std::numeric_limits<int64_t>::max(), 2},
-          std::vector<int64_t>{std::numeric_limits<int64_t>::max(), 2, 0},
           std::vector<int64_t>{std::numeric_limits<int64_t>::max()}}) {
       TensorProto tp;
       tp.set_data_type(DataType::FLOAT);
@@ -1036,6 +1035,18 @@ TEST(SimpleTensorFromProto, RejectsInvalidDimensionsAndOverflow) {
         tp.ref_raw_data() = std::vector<uint8_t>{1};
       EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
     }
+  }
+  for (bool raw : {false, true}) {
+    TensorProto tp;
+    tp.set_data_type(DataType::FLOAT);
+    tp.ref_dims().push_back(std::numeric_limits<int64_t>::max());
+    tp.ref_dims().push_back(2);
+    tp.ref_dims().push_back(0);
+    if (raw)
+      tp.ref_raw_data() = std::vector<uint8_t>{};
+    const Tensor tensor = TensorFromProto(tp);
+    EXPECT_EQ(tensor.size_bytes(), 0u);
+    EXPECT_EQ(tensor.shape.back(), 0);
   }
   const int64_t max_count = std::numeric_limits<int64_t>::max();
   if (sizeof(size_t) >= sizeof(int64_t)) {

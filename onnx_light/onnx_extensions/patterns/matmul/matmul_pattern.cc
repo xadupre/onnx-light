@@ -1095,10 +1095,11 @@ core::builder::MatchResult MatMulReshape2Of3Pattern::Match(core::builder::GraphG
 
   std::vector<int64_t> final_shape = output_shape;
   if (next != nullptr) {
-    if (!ReadStaticShape(graph, next->output()[0].value(), final_shape) ||
+    if (!ReadStaticShape(graph, next->output()[0].value(), final_shape) || final_shape.size() < 2 ||
         !SameElementCount(output_shape, final_shape) ||
         Suffix(final_shape, 2) != Suffix(output_shape, 2)) {
-      return NoMatch(candidate, "the post-Reshape changes result size or matrix dimensions");
+      return NoMatch(candidate, "the post-Reshape has rank below two or changes result size or "
+                                "matrix dimensions");
     }
     if (final_shape.size() != effective_left.size() &&
         final_shape.size() != effective_right.size()) {

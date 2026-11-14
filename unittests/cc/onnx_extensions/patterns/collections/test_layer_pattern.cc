@@ -2439,8 +2439,11 @@ TEST(RepeatedLayerPattern, FindsLayersAfterUnresolvedFirstNode) {
     source.MakeNode("Relu", {"m" + suffix}, {"h" + suffix});
   }
   source.MakeOutput("h1");
-  builder.MakeNode("Source", {"x", "w0", "w1"}, {"y"}, "source.local", "", attributes);
+  source.MakeOutput("activation");
+  builder.MakeNode("Source", {"x", "w0", "w1"}, {"y", "activation_out"}, "source.local", "",
+                   attributes);
   builder.MakeOutput("y");
+  builder.MakeOutput("activation_out");
   ModelProto model = builder.ToModel();
   auto &function = model.ref_functions()[0];
   function.add_attribute("alpha");
@@ -2450,8 +2453,10 @@ TEST(RepeatedLayerPattern, FindsLayersAfterUnresolvedFirstNode) {
   core::builder::GraphBuilder imported(model, LayerSchemaLookup());
   auto &imported_source = imported.LocalFunction("Source");
   const NodeProto first = imported_source.Nodes()[0];
+  ASSERT_TRUE(imported_source.Shapes().Has("activation"));
 
-  EXPECT_FALSE(OptimizeLayers(imported_source).rewrites().empty());
+  ASSERT_FALSE(OptimizeLayers(imported_source).rewrites().empty());
+  CacheLayerBodies(imported);
   const GraphProto after = imported_source.BuildGraph();
   ASSERT_EQ(after.node().size(), 3u);
   EXPECT_TRUE(first.Equals(after.node()[0]));

@@ -27,6 +27,17 @@ using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
 
+/** Decodes a standard-domain fixed GGML byte-vector profile. */
+class DequantizePacked : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DequantizePacked";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, const std::string &format, const Shape &shape,
+                    int64_t output_dtype = TensorProto::FLOAT, RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /** Encodes a tensor using a StructTypeProto and optional calibration parameters. */
 class Quantize : public KernelBase {
 public:

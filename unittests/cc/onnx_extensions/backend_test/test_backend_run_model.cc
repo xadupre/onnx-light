@@ -736,6 +736,8 @@ TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 // Quantization kernels.
 TEST(BackendRunModel, Dequantize) { RunBackendCasesFor("Dequantize"); }
 
+TEST(BackendRunModel, DequantizePacked) { RunBackendCasesFor("DequantizePacked"); }
+
 TEST(BackendRunModel, BitsAndBytesDequantize) {
   std::set<std::string> executed;
   RunBackendCasesFor(

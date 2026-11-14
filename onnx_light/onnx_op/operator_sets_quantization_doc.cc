@@ -8,6 +8,32 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization {
 
+std::string MakeDequantizePackedDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+Dequantizes the packed payload of one quantized tensor.
+`x` is a one-dimensional UINT8 tensor containing exactly the tensor's bytes.
+All multibyte fields are little-endian.
+
+`format` selects an ONNX-defined, case-sensitive fixed identifier, without parameters:
+gguf:q4_0, gguf:q4_1, gguf:q5_0, gguf:q5_1, gguf:q8_0, gguf:q8_1,
+gguf:q2_k, gguf:q3_k, gguf:q4_k, gguf:q5_k, gguf:q6_k, gguf:q8_k,
+gguf:iq2_xxs, gguf:iq2_xs, gguf:iq3_xxs, gguf:iq1_s, gguf:iq4_nl,
+gguf:iq3_s, gguf:iq2_s, gguf:iq4_xs, gguf:iq1_m, gguf:tq1_0, gguf:tq2_0,
+gguf:mxfp4, gguf:nvfp4, gguf:q1_0, gguf:q2_0.
+Byte layouts, decoding arithmetic and complete IQ codebooks are defined in the
+[DequantizePacked decoding specification](https://github.com/onnx/onnx/blob/19b091202765d5d444acd9d9c25a0b81eef474b5/docs/DequantizePacked.md).
+
+`shape` gives static dimensions in ONNX row-major order. Rank must be at least one,
+dimensions must be nonnegative, and the last dimension must be block-aligned,
+even for an empty tensor. For B elements and S bytes per block, input length is
+`product(shape[:-1]) * (shape[-1] / B) * S`.
+Blocks are decoded in input order using FLOAT arithmetic, reshaped to `shape`,
+then converted once to `output_dtype` (FLOAT by default, FLOAT16, BFLOAT16 or DOUBLE).
+FLOAT16 and BFLOAT16 conversion uses round-to-nearest, ties-to-even, as in Cast.
+)DOC";
+}
+
 namespace {
 
 constexpr const char *kQuantizeLinearVer25Doc = R"DOC(

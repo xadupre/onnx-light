@@ -14,13 +14,14 @@ namespace Test {
 
 constexpr size_t kExpectedQuantizeLinearSchemaCount = 8;
 constexpr size_t kExpectedDequantizeLinearSchemaCount = 8;
+constexpr size_t kExpectedDequantizePackedSchemaCount = 1;
 constexpr size_t kExpectedQLinearConvSchemaCount = 1;
 constexpr size_t kExpectedQLinearMatMulSchemaCount = 2;
 constexpr size_t kExpectedDynamicQuantizeLinearSchemaCount = 1;
 constexpr size_t kExpectedQuantizationSchemaCount =
-    kExpectedQuantizeLinearSchemaCount + kExpectedDequantizeLinearSchemaCount +
-    kExpectedQLinearConvSchemaCount + kExpectedQLinearMatMulSchemaCount +
-    kExpectedDynamicQuantizeLinearSchemaCount;
+    kExpectedDequantizePackedSchemaCount + kExpectedQuantizeLinearSchemaCount +
+    kExpectedDequantizeLinearSchemaCount + kExpectedQLinearConvSchemaCount +
+    kExpectedQLinearMatMulSchemaCount + kExpectedDynamicQuantizeLinearSchemaCount;
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {

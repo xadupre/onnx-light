@@ -26,13 +26,29 @@
         }
       ],
       "licenses": [{"license": {"id": "BSD-3-Clause"}}]
+    },
+    {
+      "type": "data",
+      "name": "ggml-iq-codebooks",
+      "version": "da8e2a54b919557b816b1c2beb432ccb766f7ce0",
+      "bom-ref": "ggml-iq-codebooks",
+      "description": "IQ lookup tables and decoding logic; no GGML runtime dependency",
+      "purl": "pkg:github/ggml-org/ggml@da8e2a54b919557b816b1c2beb432ccb766f7ce0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/ggml-org/ggml/blob/da8e2a54b919557b816b1c2beb432ccb766f7ce0/src/ggml-common.h"
+        }
+      ],
+      "licenses": [{"license": {"id": "MIT"}}]
     }
   ],
   "dependencies": [
     {
       "ref": "onnx-light",
-      "dependsOn": ["nanobind"]
+      "dependsOn": ["nanobind", "ggml-iq-codebooks"]
     },
-    {"ref": "nanobind"}
+    {"ref": "nanobind"},
+    {"ref": "ggml-iq-codebooks"}
   ]
 }

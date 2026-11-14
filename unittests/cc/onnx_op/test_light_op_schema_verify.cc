@@ -57,6 +57,51 @@ TEST(LightOpSchemaVerify, ValidNodePasses) {
   EXPECT_NO_THROW(schema.Verify(node));
 }
 
+TEST(LightOpSchemaVerify, DequantizePackedMetadata) {
+  for (const bool init_doc : {false, true}) {
+    const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("DequantizePacked", init_doc);
+    ASSERT_EQ(schemas.size(), 1u);
+    const auto &schema = schemas.front();
+    EXPECT_EQ(schema.domain(), core::schema::kOnnxDomain);
+    EXPECT_EQ(schema.since_version(), 29);
+    EXPECT_EQ(schema.doc().empty(), !init_doc);
+    ASSERT_EQ(schema.inputs().size(), 1u);
+    EXPECT_EQ(schema.inputs()[0].type, "tensor(uint8)");
+    ASSERT_EQ(schema.type_constraints().size(), 1u);
+    EXPECT_EQ(schema.type_constraints()[0].allowed_type_strs,
+              (std::vector<core::schema::TensorType>{
+                  core::schema::TensorType::kFloat, core::schema::TensorType::kFloat16,
+                  core::schema::TensorType::kBfloat16, core::schema::TensorType::kDouble}));
+    ASSERT_EQ(schema.attributes().size(), 3u);
+    EXPECT_EQ(schema.attributes()[0].name, "format");
+    EXPECT_EQ(schema.attributes()[0].type, AttributeType::STRING);
+    EXPECT_TRUE(schema.attributes()[0].required);
+    EXPECT_EQ(schema.attributes()[1].name, "shape");
+    EXPECT_EQ(schema.attributes()[1].type, AttributeType::INTS);
+    EXPECT_TRUE(schema.attributes()[1].required);
+    EXPECT_EQ(schema.attributes()[2].name, "output_dtype");
+    EXPECT_EQ(schema.attributes()[2].type, AttributeType::INT);
+    EXPECT_FALSE(schema.attributes()[2].required);
+    EXPECT_EQ(std::get<int64_t>(schema.attributes()[2].default_value), TensorProto::FLOAT);
+
+    NodeProto node;
+    node.set_op_type("DequantizePacked");
+    node.add_input("x");
+    node.add_output("y");
+    auto *format = node.add_attribute();
+    format->set_name("format");
+    format->set_type(AttributeProto::STRING);
+    format->set_s("gguf:q4_0");
+    auto *shape = node.add_attribute();
+    shape->set_name("shape");
+    shape->set_type(AttributeProto::INTS);
+    shape->add_ints(32);
+    EXPECT_NO_THROW(schema.Verify(node));
+    node.mutable_attribute()->RemoveLast();
+    EXPECT_THROW(schema.Verify(node), SchemaError);
+  }
+}
+
 TEST(LightOpSchemaVerify, CosineSumWindowAttributeMetadata) {
   for (const auto *op_type : {"HannWindow", "HammingWindow", "BlackmanWindow"}) {
     SCOPED_TRACE(op_type);

@@ -292,6 +292,20 @@ The C++ counterparts are ``ImportGgufTensorPayload``,
 ``ReadGgufBlockParameters``, ``ImportGptqModelGgufWeights`` and
 ``ExportGptqModelGgufWeights``.
 
+Standard ONNX packed dequantization
+-----------------------------------
+
+The standard ONNX ``DequantizePacked`` operator (opset 29) also accepts packed
+GGUF tensor bytes, as a rank-one UINT8 tensor. Its required ``format`` attribute
+is a fixed, case-sensitive identifier such as ``gguf:q4_0``, and ``shape`` gives
+static output dimensions in ONNX order. The last dimension must be block-aligned,
+including for empty tensors. ``output_dtype`` defaults to FLOAT and also supports
+FLOAT16, BFLOAT16 and DOUBLE, with decoding performed in FLOAT before conversion.
+Unlike the structured native payload API described above, the standard operator
+supports all 27 profiles in the
+`ONNX decoding specification <https://github.com/onnx/onnx/blob/19b091202765d5d444acd9d9c25a0b81eef474b5/docs/DequantizePacked.md>`_
+and does not impose that API's finite-value restriction or 1 GiB default budget.
+
 Native fixture provenance
 -------------------------
 

@@ -1210,6 +1210,10 @@ endif()
 if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/onnx_light"
+  )
+
   # Install the static library and export its target.
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while

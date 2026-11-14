@@ -139,6 +139,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:DepthToSpace", MakeKernel<onnx_kernels::kernel::DepthToSpace>()},
       {"ai.onnx:SpaceToDepth", MakeKernel<onnx_kernels::kernel::SpaceToDepth>()},
       {"ai.onnx:DequantizeLinear", MakeKernel<onnx_kernels::kernel::DequantizeLinear>()},
+      {"ai.onnx:DequantizePacked", MakeKernel<onnx_kernels::kernel::DequantizePacked>()},
       {"ai.onnx:DFT", MakeKernel<onnx_kernels::kernel::DFT>()},
       {"ai.onnx:Div", MakeKernel<onnx_kernels::kernel::Div>()},
       {"ai.onnx:Dropout", MakeKernel<onnx_kernels::kernel::Dropout>()},

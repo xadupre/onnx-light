@@ -124,7 +124,11 @@ struct Shape {
   bool empty() const noexcept { return size_ == 0; }
 
   /// Computes and returns the product of all dimensions; 1 for an empty (scalar) shape.
+  /// Detects zero dimensions before multiplication, avoiding overflow for empty tensors.
   int64_t product() const noexcept {
+    for (size_t i = 0; i < size_; ++i)
+      if (dims_[i] == 0)
+        return 0;
     int64_t n = 1;
     for (size_t i = 0; i < size_; ++i) {
       n *= dims_[i];
@@ -136,7 +140,8 @@ struct Shape {
    * Computes the product of dimensions in [begin, end).
    *
    * Validates the requested range and checks for negative dimensions and INT64
-   * overflow while multiplying.
+   * overflow while multiplying. Validates all dimensions before returning zero
+   * for an empty tensor, without multiplying its other dimensions.
    *
    * Parameters:
    *   begin: Start index of the dimension range (inclusive).
@@ -149,9 +154,15 @@ struct Shape {
     EXT_ENFORCE_INVALID(begin <= end && end <= size_, "Shape::product: invalid range [", begin,
                         ", ", end, ") for rank ", size_, ".");
     int64_t n = 1;
+    bool zero = false;
     for (size_t i = begin; i < end; ++i) {
       EXT_ENFORCE_INVALID(!(dims_[i] < 0), "Shape::product: ", where, " encounters a negative ",
                           "dimension at index ", i, " with value ", dims_[i], ".");
+      zero |= dims_[i] == 0;
+    }
+    if (zero)
+      return 0;
+    for (size_t i = begin; i < end; ++i) {
       EXT_ENFORCE_INVALID(!(n != 0 && dims_[i] > std::numeric_limits<int64_t>::max() / n),
                           "Shape::product: ", where, " would overflow INT64 shape arithmetic.");
       n *= dims_[i];

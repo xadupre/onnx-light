@@ -31,6 +31,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     }
     ATTENTION_25_KEY = ("", "Attention", 25)
     GEMM_29_KEY = ("", "Gemm", 29)
+    DEQUANTIZE_PACKED_29_KEY = ("", "DequantizePacked", 29)
     EXPM1_29_KEY = ("", "Expm1", 29)
     ND_29_KEYS = {("", "GatherND", 29), ("", "ScatterND", 29)}
     STFT_KEY = ("", "STFT", 17)
@@ -53,7 +54,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             cls.OPTIONAL_28_KEYS
             | cls.REDUCE_LOG_28_KEYS
             | cls.DATA_LAYOUT_28_KEYS
-            | {cls.GEMM_29_KEY, cls.EXPM1_29_KEY}
+            | {cls.GEMM_29_KEY, cls.DEQUANTIZE_PACKED_29_KEY, cls.EXPM1_29_KEY}
             | cls.ND_29_KEYS
         )
         for key in recent_keys - set(onnx_dict):

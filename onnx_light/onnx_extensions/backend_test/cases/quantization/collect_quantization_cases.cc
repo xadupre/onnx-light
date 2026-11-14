@@ -13,6 +13,7 @@ void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::st
       {"Dequantize", &RegisterDequantizeCases},
       {"QuantizeLinear", &RegisterQuantizeLinearCases},
       {"DequantizeLinear", &RegisterDequantizeLinearCases},
+      {"DequantizePacked", &RegisterDequantizePackedCases},
       {"DynamicQuantizeLinear", &RegisterDynamicQuantizeLinearCases},
       {"QLinearMatMul", &RegisterQLinearMatMulCases},
       {"QLinearConv", &RegisterQLinearConvCases},

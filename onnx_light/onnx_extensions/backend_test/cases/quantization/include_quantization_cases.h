@@ -32,6 +32,10 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQuantizeLinearCases(std::vector<TestC
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDequantizeLinearCases(std::vector<TestCase> &registry,
                                                                  TestMode mode = TestMode::TEST);
 
+/// Registers fixed-profile standard-domain packed dequantization cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDequantizePackedCases(std::vector<TestCase> &registry,
+                                                                 TestMode mode = TestMode::TEST);
+
 /// Registers the ``DynamicQuantizeLinear`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);

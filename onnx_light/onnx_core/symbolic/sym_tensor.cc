@@ -218,11 +218,17 @@ bool SymShape::IsFullyKnown() const noexcept {
  *         partially symbolic.
  */
 int64_t SymShape::NumElements() const {
-  int64_t total = 1;
+  bool zero = false;
   for (const auto &d : dims_) {
     if (!d.IsInt()) {
       throw std::runtime_error("SymShape::NumElements requires a fully-known shape");
     }
+    zero |= d.AsInt() == 0;
+  }
+  if (zero)
+    return 0;
+  int64_t total = 1;
+  for (const auto &d : dims_) {
     total *= d.AsInt();
   }
   return total;

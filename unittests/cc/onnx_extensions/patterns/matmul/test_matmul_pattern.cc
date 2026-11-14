@@ -1275,6 +1275,29 @@ TEST(MatMulReshape2Of3Pattern, MovesBatchReshapeAndRejectsOnlyOneReshape) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[1]).pattern, nullptr);
 }
 
+TEST(MatMulReshape2Of3Pattern, RejectsLowRankFinalOutputs) {
+  for (const std::vector<int64_t> &final_shape :
+       {std::vector<int64_t>{}, std::vector<int64_t>{1}, std::vector<int64_t>{1, 1}}) {
+    SCOPED_TRACE(final_shape.size());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({1, 1}));
+    builder.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({1, 1}));
+    AddShape(builder, "left_shape", {1, 1});
+    AddShape(builder, "out_shape", final_shape);
+    builder.MakeNode("Reshape", {"left", "left_shape"}, {"left2"});
+    builder.MakeNode("MatMul", {"left2", "right"}, {"mm"});
+    builder.MakeNode("Reshape", {"mm", "out_shape"}, {"out"});
+    builder.MakeOutput("out", core::symbolic::TensorType::kFloat, Shape(final_shape));
+    SeedShape(builder, "left2", {1, 1});
+    SeedShape(builder, "mm", {1, 1});
+    SeedShape(builder, "out", final_shape);
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::MatMulReshape2Of3Pattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[1]);
+    EXPECT_EQ(match.pattern, final_shape.size() < 2 ? nullptr : &pattern);
+  }
+}
+
 TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar) {
   core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({32, 16}));

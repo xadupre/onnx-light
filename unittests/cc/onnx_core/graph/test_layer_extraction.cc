@@ -73,7 +73,7 @@ void AddCaptureHeavyIf(core::builder::GraphBuilder &builder, std::size_t nested_
       const std::string next = "inner_" + std::to_string(i);
       // The last lexical capture lies beyond the work budget in the oversized case.
       branch.add_node(
-          MakeNode("Identity", {!then_branch && i + 1 == count ? capture : previous}, {next}));
+          MakeNode("Identity", {then_branch && i + 1 == count ? capture : previous}, {next}));
       previous = next;
     }
     auto &result = *branch.add_output();

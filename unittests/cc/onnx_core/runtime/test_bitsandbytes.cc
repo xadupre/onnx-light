@@ -37,7 +37,7 @@ float FloatValue(const Tensor &tensor, size_t index) {
   return std::bit_cast<float>(bits);
 }
 
-BitsAndBytesWeights Fixture(bool nested = false) {
+BitsAndBytesWeights Fixture(bool nested = false, const std::string &offset = "2.0") {
   BitsAndBytesWeights weights;
   std::vector<uint8_t> codes(17);
   for (size_t i = 0; i < codes.size(); ++i)
@@ -52,7 +52,7 @@ BitsAndBytesWeights Fixture(bool nested = false) {
   weights.tensors.emplace("weight_quant_map", FloatTensor("map", {16}, quant_map));
   std::string json = R"({"quant_type":"nf4","blocksize":32,"dtype":"float16","shape":[3,11])";
   if (nested) {
-    json += R"(,"nested_blocksize":256,"nested_dtype":"float32","nested_offset":2.0)";
+    json += R"(,"nested_blocksize":256,"nested_dtype":"float32","nested_offset":)" + offset;
     weights.tensors.emplace(
         "weight_absmax", Tensor("absmax", TensorProto::UINT8, {2}, std::vector<uint8_t>{0, 255}));
     weights.tensors.emplace("weight_nested_absmax", FloatTensor("max", {1}, {0.5f}));
@@ -133,6 +133,39 @@ TEST(BitsAndBytesWeights, Int8SignedCodesAndRowScales) {
   const auto decoded = ReconstructBitsAndBytesWeights(encoded);
   const auto expected = FloatTensor("expected", {2, 3}, {-128, -127, -1, 0, 2, 254});
   EXPECT_EQ(std::memcmp(decoded.bytes(), expected.bytes(), expected.size_bytes()), 0);
+}
+
+TEST(BitsAndBytesWeights, ParsesNestedOffsetDecimalAndExponentForms) {
+  for (const auto &[text, offset] : std::vector<std::pair<std::string, float>>{
+           {"0", 0.f},
+           {"-0", 0.f},
+           {"0.5", 0.5f},
+           {"2.0", 2.f},
+           {"2e0", 2.f},
+           {"2E+0", 2.f},
+           {"200e-2", 2.f},
+           {" \t2.0\r\n", 2.f},
+           {"1e-300", 0.f},
+           {"1e-320", 0.f},
+           {"0e-9999", 0.f},
+           {"3.4028234663852886e38", std::numeric_limits<float>::max()}}) {
+    SCOPED_TRACE(text);
+    const auto weights = Fixture(true, text);
+    const auto encoded = ImportBitsAndBytesWeights(weights);
+    SameCheckpoint(weights, ExportBitsAndBytesWeights(encoded));
+    const auto decoded = ReconstructBitsAndBytesWeights(encoded);
+    EXPECT_EQ(FloatValue(decoded, 0), -(offset - 0.5f));
+    EXPECT_EQ(FloatValue(decoded, 32), -(offset + 0.5f));
+  }
+}
+
+TEST(BitsAndBytesWeights, RejectsInvalidNestedOffsetNumbers) {
+  for (const auto &text : std::vector<std::string>{
+           "", "+2", "01", ".5", "1.", "1e", "1e+", "--1", "- 1", "2x", "0x1p0", "NaN", "Infinity",
+           "-0.1", "3.402824e38", "1e309", "1e-324", "1e-9999", std::string("2\0x", 3)}) {
+    SCOPED_TRACE(text);
+    EXPECT_ANY_THROW(ImportBitsAndBytesWeights(Fixture(true, text)));
+  }
 }
 
 TEST(BitsAndBytesWeights, PreservesLittleEndianProtoBytes) {

@@ -92,27 +92,6 @@ public:
   mutable std::vector<std::weak_ptr<const core::builder::PatternApplication>> applications;
 };
 
-class InvalidateExtractionOpset : public core::builder::PatternOptimization {
-public:
-  InvalidateExtractionOpset() : PatternOptimization(0, "InvalidateExtractionOpset") {}
-
-  std::set<std::string> FastOpType() const override { return {"Constant"}; }
-
-  core::builder::MatchResult Match(GraphGraph &, const NodeProto &candidate) const override {
-    return candidate.name() == "invalidate"
-               ? core::builder::MatchResult{this, {&candidate}, &candidate}
-               : core::builder::MatchResult{};
-  }
-
-  utils::RepeatedProtoField<NodeProto>
-  Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const override {
-    graph.Builder().SetOpsetVersion("ai.rt", 2);
-    utils::RepeatedProtoField<NodeProto> result;
-    result.push_back(*nodes[0]);
-    return result;
-  }
-};
-
 GraphBuilder ExtractionChain(size_t count) {
   GraphBuilder builder("extraction_chain", SchemaLookup(), {{"", 18}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({64, 64}));
@@ -171,21 +150,24 @@ TEST(ExtractionPatterns, DirectApplyRejectsStaleMatches) {
   }
 }
 
-TEST(ExtractionPatterns, RejectsProposalInvalidatedByEarlierApplication) {
+TEST(ExtractionPatterns, RejectsProposalInvalidatedBeforeRevalidation) {
   for (const bool repeated : {false, true}) {
     SCOPED_TRACE(repeated);
     auto builder = ExtractionChain(4);
-    utils::RepeatedProtoField<AttributeProto> attributes;
-    auto &value = attributes.add();
-    value.set_name("value_float");
-    value.set_type(AttributeProto::FLOAT);
-    value.set_f(1.0f);
-    builder.MakeNode("Constant", {}, {"marker"}, "", "invalidate", attributes);
-    builder.MakeOutput("marker");
     auto extraction = std::make_shared<CountExtractionSearches>(repeated);
-    GraphGraph graph(builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
-                                  std::make_shared<InvalidateExtractionOpset>(), extraction});
-    EXPECT_FALSE(graph.Optimize(1).rewrites().empty());
+    GraphGraph graph(builder,
+                     std::vector<std::shared_ptr<core::builder::PatternOptimization>>{extraction});
+    bool invalidated = false;
+    const auto invalidate_proposal = [&](const GraphGraph &,
+                                         const core::builder::MatchResult &match) {
+      if (!invalidated && match.pattern == extraction.get()) {
+        builder.SetOpsetVersion("ai.rt", 2);
+        invalidated = true;
+      }
+      return true;
+    };
+    EXPECT_TRUE(graph.Optimize(1, nullptr, {}, true, invalidate_proposal).rewrites().empty());
+    EXPECT_TRUE(invalidated);
     EXPECT_EQ(extraction->searches, 1u);
     EXPECT_EQ(extraction->direct_applies, 0u);
     EXPECT_EQ(builder.OpsetVersion("ai.rt"), 2);

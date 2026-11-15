@@ -22,6 +22,11 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace core::runtime;
 
+namespace Test {
+
+using core::runtime::DataType;
+using core::runtime::Tensor;
+
 namespace {
 
 Tensor RunLogSoftmaxFunction(const Tensor &input, int64_t axis) {
@@ -163,3 +168,5 @@ TEST(BackendLogSoftmaxFunction, PromotesHalfReductionsAndCountsTiedMaximaExactly
                 MakeInput(dtype, {1, 101}, expected));
   }
 }
+
+} // namespace Test

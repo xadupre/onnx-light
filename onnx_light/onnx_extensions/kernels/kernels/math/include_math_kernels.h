@@ -1276,6 +1276,19 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Computes the stable inclusive forward logsumexp along ``axis`` (opset 29).
+/// Supports FLOAT16, BFLOAT16 and FLOAT with float accumulation, and DOUBLE
+/// with double accumulation. The output preserves input shape and dtype.
+class LogCumSumExp : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LogCumSumExp";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, int64_t axis = 0, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Cumulative product of the input tensor along ``axis``. Semantics mirror
 /// :class:`CumSum` with addition replaced by multiplication; in
 /// ``exclusive`` mode the starting value is 1 (multiplicative identity).

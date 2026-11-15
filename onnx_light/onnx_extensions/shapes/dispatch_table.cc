@@ -57,6 +57,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
       {"ai.rt:Dequantize", rt::ComputeShapeDequantize},
       {"ai.rt:PagedAttention", nn::ComputeShapePagedAttention},
       {"ai.rt:QuantizePagedCache", nn::ComputeShapeQuantizePagedCache},
+      {"ai.onnx:LogCumSumExp",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeLogCumSumExp(ctx, node, node.input(0).c_str());
+       }},
       {"ai.onnx:Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

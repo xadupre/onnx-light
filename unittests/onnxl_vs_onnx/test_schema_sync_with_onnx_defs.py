@@ -65,6 +65,14 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 light_dict.pop(key, None)
 
     @staticmethod
+    def _remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict):
+        key = ("", "GroupedMatMul", 29)
+        schema = onnx_dict.get(key)
+        if schema is not None and "transB" not in schema.attributes:
+            light_dict.pop(key, None)
+            onnx_dict.pop(key, None)
+
+    @staticmethod
     def _normalize_div_doc(key, doc):
         if key in {("", "Div", version) for version in (6, 7, 13, 14)}:
             # Installed ONNX may predate the clarification in onnx#8461.
@@ -298,6 +306,14 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     self._remove_recent_schemas_if_onnx_is_outdated(light, available)
                     self.assertEqual(set(light), available | unrelated)
 
+    def test_grouped_matmul_schema_is_skipped_when_transb_is_unavailable(self):
+        key = ("", "GroupedMatMul", 29)
+        light = {key: object()}
+        upstream = {key: type("Schema", (), {"attributes": {}})()}
+        self._remove_grouped_matmul_if_onnx_is_outdated(light, upstream)
+        self.assertEqual(light, {})
+        self.assertEqual(upstream, {})
+
     def test_normalize_nd_text(self):
         for name, version in (("GatherND", 13), ("ScatterND", 18)):
             key = ("", name, version)
@@ -365,6 +381,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
@@ -444,6 +461,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
@@ -487,6 +505,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():

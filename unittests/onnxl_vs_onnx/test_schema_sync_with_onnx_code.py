@@ -80,6 +80,13 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                     schemas[op_name] = (opset_version, schemas[op_name][1] | attributes)
         return schemas
 
+    @staticmethod
+    def _remove_grouped_matmul_if_onnx_is_outdated(light_schemas, onnx_schemas):
+        onnx_schema = onnx_schemas.get("GroupedMatMul")
+        if onnx_schema is not None and "transB" not in onnx_schema[1]:
+            light_schemas.pop("GroupedMatMul", None)
+            onnx_schemas.pop("GroupedMatMul", None)
+
     @classmethod
     def _extract_schema_blocks(
         cls, source: str, helper_sources: tuple[str, ...] = ()
@@ -353,11 +360,19 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             onnx_light_schemas.pop("Expm1", None)
         if "DequantizePacked" not in onnx_schemas:
             onnx_light_schemas.pop("DequantizePacked", None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(onnx_light_schemas, onnx_schemas)
 
         self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))
         for op_name in sorted(onnx_schemas):
             with self.subTest(op_name=op_name):
                 self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
+
+    def test_grouped_matmul_signature_is_skipped_when_transb_is_unavailable(self):
+        onnx_light_schemas = {"GroupedMatMul": (29, {"transB"})}
+        onnx_schemas = {"GroupedMatMul": (29, set())}
+        self._remove_grouped_matmul_if_onnx_is_outdated(onnx_light_schemas, onnx_schemas)
+        self.assertEqual(onnx_light_schemas, {})
+        self.assertEqual(onnx_schemas, {})
 
     def test_registered_onnx_ops_match_onnx_code(self):
         defs_root = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"

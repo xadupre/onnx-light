@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
@@ -22,6 +23,9 @@ namespace {
 constexpr double kMvnEpsilon = 1e-9;
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr int64_t kPendingOverflowRepair = -1;
+constexpr int64_t kNonFiniteLane = -2;
+constexpr int64_t kAveragedVariance = -3;
 constexpr std::array<int32_t, 4> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
     static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
@@ -112,15 +116,88 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
       auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
       stat.mean = static_cast<double>(static_cast<T>(stat.mean) + read(idx));
     }
+    if constexpr (std::is_same_v<T, float>) {
+      bool needs_repair = false;
+      for (int64_t lane = 0; lane < lane_count; ++lane)
+        if (!std::isfinite(static_cast<float>(stats[lane].mean))) {
+          stats[lane].count = kPendingOverflowRepair;
+          needs_repair = true;
+        }
+      if (needs_repair) {
+        for (int64_t idx = 0; idx < total; ++idx) {
+          auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+          if (stat.count == kPendingOverflowRepair && !std::isfinite(read(idx)))
+            stat.count = kNonFiniteLane;
+        }
+        for (int64_t lane = 0; lane < lane_count; ++lane)
+          if (stats[lane].count == kPendingOverflowRepair) {
+            stats[lane].mean = 0;
+            stats[lane].m2 = 0;
+          }
+        for (int64_t idx = 0; idx < total; ++idx) {
+          auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+          if (stat.count == kPendingOverflowRepair) {
+            const double value = read(idx);
+            const double sum = stat.mean;
+            const double next = sum + value;
+            stat.m2 +=
+                std::abs(sum) >= std::abs(value) ? (sum - next) + value : (value - next) + sum;
+            stat.mean = next;
+          }
+        }
+        for (int64_t lane = 0; lane < lane_count; ++lane)
+          if (stats[lane].count == kPendingOverflowRepair)
+            stats[lane].mean = static_cast<float>((stats[lane].mean + stats[lane].m2) /
+                                                  static_cast<double>(reduced_size));
+      }
+    }
     for (int64_t lane = 0; lane < lane_count; ++lane) {
-      stats[lane].mean = static_cast<double>(
-          static_cast<T>(static_cast<T>(stats[lane].mean) / static_cast<T>(reduced_size)));
-      stats[lane].count = reduced_size;
+      if (stats[lane].count == kPendingOverflowRepair) {
+        stats[lane].count = reduced_size;
+      } else if (stats[lane].count != kNonFiniteLane) {
+        stats[lane].mean = static_cast<double>(
+            static_cast<T>(static_cast<T>(stats[lane].mean) / static_cast<T>(reduced_size)));
+        stats[lane].count = reduced_size;
+      }
     }
     for (int64_t idx = 0; idx < total; ++idx) {
       auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
       const T centered = read(idx) - static_cast<T>(stat.mean);
       stat.m2 = static_cast<double>(static_cast<T>(static_cast<T>(stat.m2) + centered * centered));
+    }
+    if constexpr (std::is_same_v<T, float>) {
+      bool needs_repair = false;
+      for (int64_t lane = 0; lane < lane_count; ++lane)
+        if (stats[lane].count != kNonFiniteLane &&
+            !std::isfinite(static_cast<float>(stats[lane].m2))) {
+          stats[lane].count = kPendingOverflowRepair;
+          needs_repair = true;
+        }
+      if (needs_repair) {
+        for (int64_t idx = 0; idx < total; ++idx) {
+          auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+          if (stat.count == kPendingOverflowRepair) {
+            const T centered = read(idx) - static_cast<T>(stat.mean);
+            if (!std::isfinite(centered * centered))
+              stat.count = kNonFiniteLane;
+          }
+        }
+        for (int64_t lane = 0; lane < lane_count; ++lane)
+          if (stats[lane].count == kPendingOverflowRepair)
+            stats[lane].m2 = 0;
+        for (int64_t idx = 0; idx < total; ++idx) {
+          auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+          if (stat.count == kPendingOverflowRepair) {
+            const T centered = read(idx) - static_cast<T>(stat.mean);
+            stat.m2 += static_cast<double>(centered * centered);
+          }
+        }
+        for (int64_t lane = 0; lane < lane_count; ++lane)
+          if (stats[lane].count == kPendingOverflowRepair) {
+            stats[lane].m2 = static_cast<float>(stats[lane].m2 / static_cast<double>(reduced_size));
+            stats[lane].count = kAveragedVariance;
+          }
+      }
     }
   } else if (lane_count == 1) {
     stats[0] = statistics::Accumulate<double>(total, read, minimum_elements);
@@ -137,8 +214,11 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
           const int64_t lane = ComputeLane(idx, dims, reduce_mask);
           const auto &stat = stats[lane];
           const T variance =
-              modern ? static_cast<T>(static_cast<T>(stat.m2) / static_cast<T>(reduced_size))
-                     : static_cast<T>(stat.Variance());
+              modern
+                  ? (stat.count == kAveragedVariance
+                         ? static_cast<T>(stat.m2)
+                         : static_cast<T>(static_cast<T>(stat.m2) / static_cast<T>(reduced_size)))
+                  : static_cast<T>(stat.Variance());
           const T result = modern ? (read(idx) - static_cast<T>(stat.mean)) /
                                         (std::sqrt(variance) + static_cast<T>(epsilon))
                                   : static_cast<T>((static_cast<double>(read(idx)) - stat.mean) /

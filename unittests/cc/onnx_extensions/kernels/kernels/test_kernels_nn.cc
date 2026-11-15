@@ -963,6 +963,50 @@ TEST(KernelClass, MeanVarianceNormalization29MatchesExpandedFloatReduction) {
   EXPECT_NEAR(direct.AsFloat()[2], 1.2247449f, 1e-6f);
 }
 
+TEST(KernelClass, MeanVarianceNormalization29RepairsFiniteReductionOverflow) {
+  RegisterAllOnnxOperatorSchemas();
+  onnx_kernels::RegisterKernelFunctions();
+  const MeanVarianceNormalization mvn{KernelContext{DefaultOpset(29)}};
+  const auto check = [&](const std::vector<float> &values, float expected) {
+    const Tensor x = Tensor::FromFloat("X", {static_cast<int64_t>(values.size())}, values);
+    const Tensor direct = mvn(x, {0});
+
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    model.add_opset("", 29);
+    auto *graph = model.mutable_graph();
+    graph->set_name("mvn_float_overflow");
+    auto *input = graph->add_input();
+    input->set_name("X");
+    auto *type = input->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(static_cast<int64_t>(values.size()));
+    auto *output = graph->add_output();
+    output->set_name("Y");
+    output->mutable_type()->CopyFrom(input->type());
+    auto *node = graph->add_node();
+    node->set_op_type("MeanVarianceNormalization");
+    node->add_input("X");
+    node->add_output("Y");
+    auto *axes = node->add_attribute();
+    axes->set_name("axes");
+    axes->set_type(AttributeProto::INTS);
+    axes->add_ints(0);
+    const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+    inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+    const auto expanded = core::runtime::RunModel(model, {x});
+    ASSERT_EQ(expanded.size(), 1u);
+    for (int64_t i = 0; i < direct.element_count(); ++i) {
+      EXPECT_TRUE(std::isfinite(direct.AsFloat()[i]));
+      EXPECT_NEAR(direct.AsFloat()[i], expanded[0].AsFloat()[i], 1e-6f);
+      EXPECT_NEAR(std::abs(direct.AsFloat()[i]), expected, 1e-6f);
+    }
+  };
+
+  check({3e38f, 3e38f}, 0.0f);
+  check({1e19f, -1e19f, 1e19f, -1e19f}, 1.0f);
+}
+
 TEST(KernelClass, MeanVarianceNormalization29LocalFunctionLinkedEpsilon) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);

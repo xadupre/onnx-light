@@ -56,9 +56,12 @@ TEST(MeanVarianceNormalizationFunctionExecution, PreservesLegacyVarianceBeforeVe
       const float mean = (values[0] + values[1]) / 2;
       const float first_centered = values[0] - mean;
       const float second_centered = values[1] - mean;
-      const float variance =
-          version < 29 ? (values[0] * values[0] + values[1] * values[1]) / 2 - mean * mean
-                       : (first_centered * first_centered + second_centered * second_centered) / 2;
+      const float second_moment = (values[0] * values[0] + values[1] * values[1]) / 2;
+      const float squared_mean = mean * mean;
+      const float legacy_variance = second_moment - squared_mean;
+      const float centered_variance =
+          (first_centered * first_centered + second_centered * second_centered) / 2;
+      const float variance = version < 29 ? legacy_variance : centered_variance;
       for (size_t i = 0; i < values.size(); ++i) {
         const float expected = (values[i] - mean) / (std::sqrt(variance) + 1e-9f);
         const float actual = outputs[0].AsFloat()[i];

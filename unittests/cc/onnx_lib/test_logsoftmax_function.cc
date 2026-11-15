@@ -45,8 +45,8 @@ TEST(LogSoftmaxFunction, KeepsVersionedDependenciesAndPromotesHalfInputs) {
           EXPECT_NE(internal.op_type(), "ArgMax");
           if (internal.output(0) == "axes") {
             ASSERT_EQ(internal.attribute_size(), 1);
-            ASSERT_EQ(internal.attribute(0).ints_size(), 1);
-            EXPECT_EQ(internal.attribute(0).ints(0), axis);
+            ASSERT_EQ(internal.attribute(0).t().int64_data_size(), 1);
+            EXPECT_EQ(internal.attribute(0).t().int64_data(0), axis);
             found_axes = true;
           }
           if (version == 29 && internal.output(0) == "X") {

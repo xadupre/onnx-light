@@ -75,7 +75,11 @@ Tensor MakeInput(int32_t dtype, const Shape &shape, const std::vector<double> &v
   if (dtype == DataType::DOUBLE) {
     return Tensor::FromDouble("x", shape, values);
   }
-  const std::vector<float> floats(values.begin(), values.end());
+  std::vector<float> floats;
+  floats.reserve(values.size());
+  for (const double value : values) {
+    floats.push_back(static_cast<float>(value));
+  }
   if (dtype == DataType::FLOAT16) {
     return MakeFloat16Tensor("x", shape, floats);
   }

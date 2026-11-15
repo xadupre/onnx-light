@@ -53,7 +53,17 @@ TEST(onnx_log1p, InfersTypeAndShapeAndChecksModel) {
                                    ShapeInferenceOptions(true, 1, false));
       const auto &output = model.graph().output(0).type().tensor_type();
       EXPECT_EQ(output.elem_type(), data_type);
-      EXPECT_EQ(output.shape().SerializeAsString(), shape.SerializeAsString());
+      auto expected_shape = shape;
+      for (int i = 0; i < shape.dim_size(); ++i) {
+        const auto &dim = shape.dim(i);
+        if (!dim.has_dim_value() && !dim.has_dim_param()) {
+          ASSERT_LT(i, output.shape().dim_size());
+          EXPECT_TRUE(output.shape().dim(i).has_dim_param());
+          EXPECT_FALSE(output.shape().dim(i).dim_param().empty());
+          expected_shape.mutable_dim(i)->set_dim_param(output.shape().dim(i).dim_param());
+        }
+      }
+      EXPECT_EQ(output.shape().SerializeAsString(), expected_shape.SerializeAsString());
       EXPECT_NO_THROW(checker::check_model(model, true));
       const auto unchanged = version_conversion::ConvertVersion(model, 29);
       EXPECT_EQ(unchanged.graph().node(0).op_type(), "Log1p");

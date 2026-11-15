@@ -221,6 +221,16 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             text = text.replace(old, new)
         return text
 
+    @staticmethod
+    def _normalize_grouped_matmul_input_text(key, text):
+        if key == ("", "GroupedMatMul", 29):
+            text = text.replace(
+                "Stack of G group weight matrices with shape [G, K, N].",
+                "Stack of G group weight matrices with shape [G, K, N] if transB is zero, "
+                "or [G, N, K] if transB is non-zero.",
+            )
+        return text
+
     def test_normalize_div_doc(self):
         example = " For example, `-11 / 3` yields `-3`."
         for version in (6, 7, 13, 14):
@@ -237,6 +247,21 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     ("custom", "Div", version),
                 ):
                     self.assertEqual(self._normalize_div_doc(other_key, old_doc), old_doc)
+
+    def test_normalize_grouped_matmul_input_text(self):
+        key = ("", "GroupedMatMul", 29)
+        old_text = "Stack of G group weight matrices with shape [G, K, N]."
+        current_text = (
+            "Stack of G group weight matrices with shape [G, K, N] if transB is zero, "
+            "or [G, N, K] if transB is non-zero."
+        )
+        self.assertEqual(self._normalize_grouped_matmul_input_text(key, old_text), current_text)
+        self.assertEqual(
+            self._normalize_grouped_matmul_input_text(key, current_text), current_text
+        )
+        self.assertEqual(
+            self._normalize_grouped_matmul_input_text(("", "Add", 14), old_text), old_text
+        )
 
     def test_recent_nd_schemas_are_compared_when_available(self):
         historical = {("", "GatherND", 13), ("", "ScatterND", 18)}
@@ -433,7 +458,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     with self.subTest(input=index, name=onnx_in.name):
                         self.assertEqual(onnx_in.name, light_in.name)
                         self.assertEqual(
-                            _normalize(self._normalize_nd_text(key, onnx_in.description)),
+                            _normalize(
+                                self._normalize_grouped_matmul_input_text(
+                                    key, self._normalize_nd_text(key, onnx_in.description)
+                                )
+                            ),
                             _normalize(light_in.description),
                         )
                 for index, (onnx_out, light_out) in enumerate(

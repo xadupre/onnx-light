@@ -75,6 +75,30 @@ TEST(OnnxOpMathRegistrationTest, Expm1StartsAtOpset29) {
   EXPECT_FALSE(full->HasFunction());
 }
 
+TEST(OnnxOpMathRegistrationTest, LogCumSumExpDeclaresOptionalAxisAttribute) {
+  const auto schemas = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("LogCumSumExp");
+  ASSERT_EQ(schemas.size(), 1u);
+  const auto &schema = schemas.front();
+  ASSERT_EQ(schema.attributes().size(), 1u);
+  EXPECT_EQ(schema.attributes()[0].name, "axis");
+  EXPECT_EQ(schema.attributes()[0].type, core::schema::AttributeType::INT);
+  EXPECT_FALSE(schema.attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(schema.attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(schema.attributes()[0].default_value), 0);
+
+  NodeProto node;
+  node.set_op_type("LogCumSumExp");
+  node.add_input("X");
+  node.add_output("Y");
+  EXPECT_NO_THROW(schema.Verify(node));
+
+  auto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(-1);
+  EXPECT_NO_THROW(schema.Verify(node));
+}
+
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();

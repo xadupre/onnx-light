@@ -2251,6 +2251,8 @@ std::vector<LightOpSchema> BuildLogCumSumExpSchemas() {
       {{"T",
         {TensorType::kFloat16, TensorType::kBfloat16, TensorType::kFloat, TensorType::kDouble},
         "Input and output have the same floating-point element type."}},
+      {{"axis", "Axis along which to compute the cumulative sum. Defaults to 0.",
+        core::schema::AttributeType::INT, /*required=*/false, int64_t{0}}},
       /*has_function_implementation=*/true)};
 }
 

@@ -5,6 +5,7 @@
 #include "onnx_extensions/shapes/shapes/math/shape_math.h"
 
 #include "onnx_core/shapes/shape_check.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
@@ -28,8 +29,9 @@ void ComputeShapeGroupedMatMul(ShapesContext &ctx, const NodeProto &node) {
     return right.IsInt() ? right : left;
   };
   const SymDim m = unify(x[0], i[0]);
-  unify(x[1], w[1]);
-  SymDim n = w[2];
+  const bool transB = GetAttributeOr<int64_t>(node, "transB", int64_t{0}) != 0;
+  unify(x[1], w[transB ? 2 : 1]);
+  SymDim n = w[transB ? 1 : 2];
   if (node.input_size() > 3 && !node.input(3).empty()) {
     const auto &bias = ctx.Get(node.input(3));
     EXT_ENFORCE_INVALID(bias.Shape().Rank() == 2 && bias.Dtype() == input.Dtype(),

@@ -1121,14 +1121,15 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Computes per-selection expert matrix products with optional per-group bias.
+/// Computes per-selection expert matrix products with optional bias and transposed weights.
 class GroupedMatMul : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GroupedMatMul";
   using KernelBase::KernelBase;
   void Run(RuntimeContext &rt) override;
   Tensor operator()(const Tensor &input, const Tensor &weights, const Tensor &group_indices,
-                    const Tensor *bias = nullptr, RuntimeContext *rt = nullptr) const;
+                    const Tensor *bias = nullptr, RuntimeContext *rt = nullptr,
+                    int64_t transB = 0) const;
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

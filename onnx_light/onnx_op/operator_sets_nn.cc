@@ -2136,23 +2136,37 @@ std::vector<TensorType> MeanVarianceNormalizationTypes(int since_version) {
 }
 
 LightOpSchema MakeMeanVarianceNormalizationSchema(int since_version) {
-  return LightOpSchema("MeanVarianceNormalization", kOnnxDomain, since_version,
-                       MakeMeanVarianceNormalizationDoc(since_version),
-                       {
-                           {"X", "Input tensor", "T"},
-                       },
-                       {
-                           {"Y", "Output tensor", "T"},
-                       },
-                       {
-                           {"T", MeanVarianceNormalizationTypes(since_version),
-                            "Constrain input and output types to all numeric tensors."},
-                       },
-                       {
-                           {"axes", kMeanVarianceNormalizationAxesDesc, AttributeType::INTS,
-                            /*required=*/false, std::vector<int64_t>{0, 2, 3}},
-                       },
-                       /*has_function_implementation=*/true);
+  const char *axes_description =
+      since_version >= 29 ? "Axes over which to compute mean and variance. Values must be in "
+                            "[-r, r-1], where r is the rank of X; negative values count from "
+                            "the last dimension. An empty list reduces over all dimensions. "
+                            "The default is [0, 2, 3], which computes per-channel statistics "
+                            "for an NCHW tensor."
+                          : kMeanVarianceNormalizationAxesDesc;
+  std::vector<AttributeParam> attributes = {
+      {"axes", axes_description, AttributeType::INTS, /*required=*/false,
+       std::vector<int64_t>{0, 2, 3}},
+  };
+  if (since_version >= 29) {
+    attributes.push_back({"epsilon", "Value added to the standard deviation in the denominator.",
+                          AttributeType::FLOAT, /*required=*/false, 1e-9f});
+  }
+  return LightOpSchema(
+      "MeanVarianceNormalization", kOnnxDomain, since_version,
+      MakeMeanVarianceNormalizationDoc(since_version),
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", MeanVarianceNormalizationTypes(since_version),
+           since_version >= 29 ? "Constrain input and output types to floating-point tensors."
+                               : "Constrain input and output types to all numeric tensors."},
+      },
+      std::move(attributes),
+      /*has_function_implementation=*/true);
 }
 
 } // namespace
@@ -2309,6 +2323,7 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
       {"MeanVarianceNormalization",
        [] {
          return std::vector<LightOpSchema>{
+             MakeMeanVarianceNormalizationSchema(29),
              MakeMeanVarianceNormalizationSchema(13),
              MakeMeanVarianceNormalizationSchema(9),
          };

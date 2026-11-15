@@ -9,6 +9,104 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+const std::vector<int64_t> kMeanVarianceNormalizationDefaultAxes = {0, 2, 3};
+
+void MeanVarianceNormalizationShapeInference(InferenceContext &ctx) {
+  propagateShapeAndTypeFromFirstInput(ctx);
+  if (!hasInputShape(ctx, 0)) {
+    return;
+  }
+  const auto *axes_attribute = ctx.getAttribute("axes");
+  if (axes_attribute != nullptr && axes_attribute->has_ref_attr_name()) {
+    return;
+  }
+  const std::vector<int64_t> axes =
+      axes_attribute == nullptr
+          ? kMeanVarianceNormalizationDefaultAxes
+          : std::vector<int64_t>(axes_attribute->ints().begin(), axes_attribute->ints().end());
+  const int64_t rank = ctx.getInputType(0)->tensor_type().shape().dim_size();
+  for (const int64_t axis : axes) {
+    if (axis < -rank || axis >= rank) {
+      fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ").");
+    }
+  }
+}
+
+static bool BuildMeanVarianceNormalizationFunctionBody(const FunctionBodyBuildContext &ctx,
+                                                       const OpSchema &schema,
+                                                       FunctionProto &functionProto,
+                                                       int functionOpsetVersion) {
+  ONNX_ASSERT(functionOpsetVersion == 13 || functionOpsetVersion == 18);
+  const auto *input_type = ctx.getInputType(0);
+  if (input_type == nullptr || !input_type->has_tensor_type()) {
+    return false;
+  }
+  const int64_t elem_type = input_type->tensor_type().elem_type();
+  if (elem_type != TensorProto::FLOAT && elem_type != TensorProto::DOUBLE &&
+      elem_type != TensorProto::FLOAT16 && elem_type != TensorProto::BFLOAT16) {
+    return false;
+  }
+  const int64_t compute_type =
+      elem_type == TensorProto::FLOAT16 || elem_type == TensorProto::BFLOAT16
+          ? static_cast<int64_t>(TensorProto::FLOAT)
+          : elem_type;
+
+  FunctionBuilder builder(functionProto);
+  builder.Add("XCompute = Cast (X)", "to", compute_type);
+  if (ctx.getAttribute("epsilon") == nullptr) {
+    builder.Add("EpsilonFloat = Constant()", "value_float",
+                schema.attributes().at("epsilon").default_value.f());
+  } else {
+    builder.Add("EpsilonFloat = Constant <value_float: float = @epsilon>()");
+  }
+  builder.Add("Epsilon = Cast (EpsilonFloat)", "to", compute_type);
+
+  const bool has_axes = ctx.getAttribute("axes") != nullptr;
+  if (functionOpsetVersion == 13) {
+    if (has_axes) {
+      builder.Add("X_RM = ReduceMean <axes : ints = @axes> (XCompute)");
+    } else {
+      builder.Add("X_RM = ReduceMean (XCompute)", "axes", kMeanVarianceNormalizationDefaultAxes);
+    }
+    builder.Add("X_variance = Sub (XCompute, X_RM)")
+        .Add("X_variance_squared = Mul (X_variance, X_variance)");
+    if (has_axes) {
+      builder.Add("Variance = ReduceMean <axes : ints = @axes> (X_variance_squared)");
+    } else {
+      builder.Add("Variance = ReduceMean (X_variance_squared)", "axes",
+                  kMeanVarianceNormalizationDefaultAxes);
+    }
+  } else {
+    if (has_axes) {
+      builder.Add("axes = Constant <value_ints: ints = @axes>()");
+    } else {
+      builder.Add("axes = Constant()", "value_ints", kMeanVarianceNormalizationDefaultAxes);
+    }
+    builder.Add("X_RM = ReduceMean (XCompute, axes)")
+        .Add("X_variance = Sub (XCompute, X_RM)")
+        .Add("X_variance_squared = Mul (X_variance, X_variance)")
+        .Add("Variance = ReduceMean (X_variance_squared, axes)");
+  }
+  builder.Add("STD = Sqrt (Variance)")
+      .Add("Processed_STD = Add (STD, Epsilon)")
+      .Add("YCompute = Div (X_variance, Processed_STD)")
+      .Add("Y = Cast (YCompute)", "to", elem_type);
+  schema.BuildFunction(functionProto);
+  return true;
+}
+
+bool BuildMeanVarianceNormalizationFunctionBody_opset13(const FunctionBodyBuildContext &ctx,
+                                                        const OpSchema &schema,
+                                                        FunctionProto &functionProto) {
+  return BuildMeanVarianceNormalizationFunctionBody(ctx, schema, functionProto, 13);
+}
+
+bool BuildMeanVarianceNormalizationFunctionBody_opset18(const FunctionBodyBuildContext &ctx,
+                                                        const OpSchema &schema,
+                                                        FunctionProto &functionProto) {
+  return BuildMeanVarianceNormalizationFunctionBody(ctx, schema, functionProto, 18);
+}
+
 std::vector<int64_t> getConvPoolStrides(InferenceContext &ctx, size_t n_input_dims) {
   std::vector<int64_t> strides;
   if (getRepeatedAttribute(ctx, "strides", strides)) {

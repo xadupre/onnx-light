@@ -1808,114 +1808,30 @@ ONNX_OPERATOR_SET_SCHEMA(
         })
         .SetDoc(kDoc_TfIdfVectorizer_ver9));
 
-static const std::vector<int64_t> mvn_default_axes = {0, 2, 3};
-
-static void MeanVarianceNormalizationShapeInference(InferenceContext &ctx) {
-  propagateShapeAndTypeFromFirstInput(ctx);
-  if (!hasInputShape(ctx, 0)) {
-    return;
-  }
-
-  const auto *axes_attribute = ctx.getAttribute("axes");
-  if (axes_attribute != nullptr && axes_attribute->has_ref_attr_name()) {
-    return;
-  }
-  const std::vector<int64_t> axes =
-      axes_attribute == nullptr
-          ? mvn_default_axes
-          : std::vector<int64_t>(axes_attribute->ints().begin(), axes_attribute->ints().end());
-  const int64_t rank = ctx.getInputType(0)->tensor_type().shape().dim_size();
-  for (const int64_t axis : axes) {
-    if (axis < -rank || axis >= rank) {
-      fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ").");
-    }
-  }
-}
-
-static bool BuildMeanVarianceNormalizationFunction(const FunctionBodyBuildContext &ctx,
-                                                   const OpSchema &schema, FunctionProto &function,
-                                                   int opset) {
-  const auto *input_type = ctx.getInputType(0);
-  if (input_type == nullptr || !input_type->has_tensor_type() ||
-      !input_type->tensor_type().has_elem_type()) {
-    return false;
-  }
-  const int64_t dtype = input_type->tensor_type().elem_type();
-  if (dtype != TensorProto::FLOAT && dtype != TensorProto::DOUBLE &&
-      dtype != TensorProto::FLOAT16 && dtype != TensorProto::BFLOAT16) {
-    return false;
-  }
-  const int64_t compute_type = dtype == TensorProto::FLOAT16 || dtype == TensorProto::BFLOAT16
-                                   ? static_cast<int64_t>(TensorProto::FLOAT)
-                                   : dtype;
-  const auto *axes_attribute = ctx.getAttribute("axes");
-  if (axes_attribute != nullptr && axes_attribute->has_ref_attr_name()) {
-    return false;
-  }
-  const std::vector<int64_t> axes =
-      axes_attribute == nullptr
-          ? mvn_default_axes
-          : std::vector<int64_t>(axes_attribute->ints().begin(), axes_attribute->ints().end());
-  FunctionBuilder builder(function);
-  builder.Const("EpsilonFloat", ToTensor<float>(1e-9f))
-      .Add("Epsilon = Cast (EpsilonFloat)", "to", compute_type)
-      .Add("XCompute = Cast (X)", "to", compute_type);
-  if (opset == 13) {
-    builder.Add("X_RM = ReduceMean (XCompute)", "axes", axes);
-  } else {
-    builder.Add("axes = Constant()", "value_ints", axes).Add("X_RM = ReduceMean (XCompute, axes)");
-  }
-  builder.Add(R"ONNX(
-         EX_squared = Mul (X_RM, X_RM)
-         X_squared = Mul (XCompute, XCompute)
-      )ONNX");
-  if (opset == 13) {
-    builder.Add("E_Xsquared = ReduceMean (X_squared)", "axes", axes);
-  } else {
-    builder.Add("E_Xsquared = ReduceMean (X_squared, axes)");
-  }
-  builder
-      .Add(R"ONNX(
-         Variance = Sub (E_Xsquared, EX_squared)
-         STD = Sqrt (Variance)
-         X_variance = Sub (XCompute, X_RM)
-         Processed_STD = Add (STD, Epsilon)
-         YCompute = Div (X_variance, Processed_STD)
-      )ONNX")
-      .Add("Y = Cast (YCompute)", "to", dtype);
-  schema.BuildFunction(function);
-  return true;
-}
-
 ONNX_OPERATOR_SET_SCHEMA(
-    MeanVarianceNormalization, 13,
+    MeanVarianceNormalization, 29,
     OpSchema()
-        .SetDoc(kDoc_mvn_ver13)
+        .SetDoc(kDoc_MeanVarianceNormalization_ver29)
         .Input(0, "X", "Input tensor", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
         .Output(0, "Y", "Output tensor", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
         .Attr("axes",
-              "A list of integers, along which to reduce. The default is to "
-              "calculate along axes [0,2,3] for calculating mean and variance "
-              "along each channel. Two variables with the same C-coordinate "
-              "are associated with the same mean and variance.",
-              AttributeProto::INTS, mvn_default_axes)
+              "Axes over which to compute mean and variance. Values must be in "
+              "[-r, r-1], where r is the rank of X; negative values count from "
+              "the last dimension. An empty list reduces over all dimensions. "
+              "The default is [0, 2, 3], which computes per-channel statistics "
+              "for an NCHW tensor.",
+              AttributeProto::INTS, kMeanVarianceNormalizationDefaultAxes)
+        .Attr("epsilon", "Value added to the standard deviation in the denominator.",
+              AttributeProto::FLOAT, 1e-9f)
         .TypeConstraint("T",
                         {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(bfloat16)"},
-                        "Constrain input and output types to all numeric tensors.")
+                        "Constrain input and output types to floating-point tensors.")
         .TypeAndShapeInferenceFunction(MeanVarianceNormalizationShapeInference)
         .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
-        .SetContextDependentFunctionBodyBuilder(
-            [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,
-               FunctionProto &function) {
-              return BuildMeanVarianceNormalizationFunction(ctx, schema, function, 13);
-            },
-            13)
-        .SetContextDependentFunctionBodyBuilder(
-            [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,
-               FunctionProto &function) {
-              return BuildMeanVarianceNormalizationFunction(ctx, schema, function, 18);
-            },
-            18));
+        .SetContextDependentFunctionBodyBuilder(BuildMeanVarianceNormalizationFunctionBody_opset13,
+                                                13)
+        .SetContextDependentFunctionBodyBuilder(BuildMeanVarianceNormalizationFunctionBody_opset18,
+                                                18));
 
 static void col2imShapeInference(InferenceContext &ctx) {
   propagateElemTypeFromInputToOutput(ctx, 0, 0);

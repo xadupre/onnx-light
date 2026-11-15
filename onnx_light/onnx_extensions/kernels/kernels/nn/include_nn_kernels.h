@@ -552,11 +552,12 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
-/// Reference implementation of ``MeanVarianceNormalization`` (opset 9, 13).
+/// Reference implementation of ``MeanVarianceNormalization`` (opset 9, 13, 29).
 ///
 /// Normalizes each element as
 /// ``Y = (X - mean(X, axes)) / sqrt(mean((X - mean(X, axes))^2, axes))``.
-/// The default axes are ``[0, 2, 3]``.
+/// The default axes are ``[0, 2, 3]``. Opset 29 adds ``epsilon`` after the
+/// standard deviation and promotes half-precision inputs to FLOAT.
 class MeanVarianceNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MeanVarianceNormalization";
@@ -564,9 +565,10 @@ public:
   explicit MeanVarianceNormalization(const KernelContext &ctx);
   static void RegisterTuningSchemas();
 
-  Tensor operator()(const Tensor &x, const Shape &axes = {0, 2, 3},
-                    RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &x, Tensor &output, const Shape &axes = {0, 2, 3}) const;
+  Tensor operator()(const Tensor &x, const Shape &axes = {0, 2, 3}, RuntimeContext *rt = nullptr,
+                    float epsilon = 1e-9f) const;
+  void operator()(const Tensor &x, Tensor &output, const Shape &axes = {0, 2, 3},
+                  float epsilon = 1e-9f) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.

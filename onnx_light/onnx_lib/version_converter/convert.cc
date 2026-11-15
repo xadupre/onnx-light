@@ -95,6 +95,24 @@ void prepare_inference_copy(GraphProto &graph, const OpsetVersions &opsets) {
   }
 }
 
+void inherit_capture_type(TypeProto &existing, const TypeProto &outer) {
+  if (!existing.has_type()) {
+    existing.CopyFrom(outer);
+    return;
+  }
+  // Capture annotations take precedence; only missing metadata is inherited.
+  if (existing.has_tensor_type() && outer.has_tensor_type()) {
+    auto *tensor = existing.mutable_tensor_type();
+    const auto &outer_tensor = outer.tensor_type();
+    if (tensor->elem_type() == TensorProto_DataType_UNDEFINED)
+      tensor->set_elem_type(outer_tensor.elem_type());
+    if (!tensor->has_shape() && outer_tensor.has_shape())
+      tensor->mutable_shape()->CopyFrom(outer_tensor.shape());
+  } else {
+    shape_inference::mergeShapesAndTypes(outer, &existing);
+  }
+}
+
 void infer_graph_types(GraphProto &graph, const ValueTypeScope *outer_scope,
                        const OpsetVersions &opsets,
                        const shape_inference::ModelLocalFunctionsMap &functions) {
@@ -111,11 +129,22 @@ void infer_graph_types(GraphProto &graph, const ValueTypeScope *outer_scope,
     for (const auto &output : node.output())
       scope.local_names.insert(output.value());
 
+  ValueInfos capture_annotations = value_infos;
+  for (auto &output : *graph.mutable_output())
+    capture_annotations.try_emplace(output.name(), &output);
   auto add_capture = [&](const std::string &name) {
     if (name.empty() || scope.local_names.contains(name) || outer_scope == nullptr)
       return;
-    if (const auto *type = outer_scope->find(name))
+    const auto *type = outer_scope->find(name);
+    if (type == nullptr || !type->has_type())
+      return;
+    const auto annotation = capture_annotations.find(name);
+    if (annotation == capture_annotations.end()) {
       merge_value_type(graph, value_infos, name, *type);
+      capture_annotations.emplace(name, value_infos.at(name));
+      return;
+    }
+    inherit_capture_type(*annotation->second->mutable_type(), *type);
   };
   for (const auto &node : graph.node())
     for (const auto &input : node.input())
@@ -146,6 +175,9 @@ void infer_graph_types(GraphProto &graph, const ValueTypeScope *outer_scope,
     if (value.has_type())
       annotated_types[value.name()] = value.type();
 
+  for (const auto &[name, type] : annotated_types)
+    if (!scope.local_names.contains(name))
+      scope.visible_types[name] = type;
   for (const auto &initializer : graph.initializer()) {
     TypeProto type;
     auto *tensor = type.mutable_tensor_type();

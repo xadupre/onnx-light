@@ -165,6 +165,8 @@ extern ONNX_LIGHT_LIB_API const char kDoc_GroupNormalization_ver21[];
 extern ONNX_LIGHT_LIB_API const char kDoc_LayerNormalization_ver17[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Col2Im_ver18[];
 extern ONNX_LIGHT_LIB_API const char kDoc_mvn_ver13[];
+extern ONNX_LIGHT_LIB_API const char kDoc_MeanVarianceNormalization_ver13[];
+extern ONNX_LIGHT_LIB_API const char kDoc_MeanVarianceNormalization_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_TfIdfVectorizer_ver9[];
 extern ONNX_LIGHT_LIB_API const char kDoc_LRN_ver13[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Shrink_ver9[];

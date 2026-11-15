@@ -673,53 +673,55 @@ TEST(onnx_shape_inference, RangeFloatingPointUnchanged) {
 
 TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
   RegisterAllOnnxOperatorSchemas();
-  const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", 13, "");
-  ASSERT_NE(schema, nullptr);
-  EXPECT_EQ(schema->GetNodeDeterminism(), OpSchema::NodeDeterminism::Deterministic);
-  NodeProto untyped_node;
-  untyped_node.add_input("X");
-  FunctionBodyBuildContextImpl untyped_context(untyped_node);
-  FunctionProto untyped_function;
-  for (const int opset : {13, 17, 18, 21}) {
-    EXPECT_FALSE(schema->BuildContextDependentFunction(untyped_context, untyped_function, opset));
-    for (const auto dtype :
-         {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
-      for (const bool explicit_axes : {false, true}) {
-        SCOPED_TRACE(opset);
-        SCOPED_TRACE(dtype);
-        SCOPED_TRACE(explicit_axes);
-        ModelProto model;
-        model.set_ir_version(IR_VERSION);
-        model.add_opset_import()->set_version(opset);
-        auto *graph = model.mutable_graph();
-        graph->set_name("mvn");
-        auto *input = graph->add_input();
-        input->set_name("X");
-        auto *tensor_type = input->mutable_type()->mutable_tensor_type();
-        tensor_type->set_elem_type(dtype);
-        for (const int64_t dim : {2, 3, 4, 5}) {
-          tensor_type->mutable_shape()->add_dim()->set_dim_value(dim);
+  for (const int schema_version : {13, 29}) {
+    const auto *schema = OpSchemaRegistry::Schema("MeanVarianceNormalization", schema_version, "");
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->GetNodeDeterminism(), OpSchema::NodeDeterminism::Deterministic);
+    NodeProto untyped_node;
+    untyped_node.add_input("X");
+    FunctionBodyBuildContextImpl untyped_context(untyped_node);
+    FunctionProto untyped_function;
+    for (const int opset : {13, 17, 18, 21, 29}) {
+      EXPECT_FALSE(schema->BuildContextDependentFunction(untyped_context, untyped_function, opset));
+      for (const auto dtype :
+           {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+        for (const bool explicit_axes : {false, true}) {
+          SCOPED_TRACE(opset);
+          SCOPED_TRACE(dtype);
+          SCOPED_TRACE(explicit_axes);
+          ModelProto model;
+          model.set_ir_version(IR_VERSION);
+          model.add_opset_import()->set_version(opset);
+          auto *graph = model.mutable_graph();
+          graph->set_name("mvn");
+          auto *input = graph->add_input();
+          input->set_name("X");
+          auto *tensor_type = input->mutable_type()->mutable_tensor_type();
+          tensor_type->set_elem_type(dtype);
+          for (const int64_t dim : {2, 3, 4, 5}) {
+            tensor_type->mutable_shape()->add_dim()->set_dim_value(dim);
+          }
+          const TypeProto input_type = input->type();
+          auto *output = graph->add_output();
+          output->set_name("Y");
+          output->mutable_type()->CopyFrom(input_type);
+          NodeProto node;
+          node.set_op_type("MeanVarianceNormalization");
+          node.add_input("X");
+          node.add_output("Y");
+          if (explicit_axes) {
+            AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
+          }
+          FunctionProto function;
+          FunctionBodyBuildContextImpl context(node, std::vector<TypeProto>{input_type});
+          ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, opset));
+          FunctionExpandHelper(node, function, *graph);
+          graph->mutable_output(0)->clear_type();
+          ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                       ShapeInferenceOptions(true, 1, false)));
+          EXPECT_TRUE(graph->output(0).type().Equals(input_type));
+          ASSERT_NO_THROW(checker::check_model(model, true));
         }
-        const TypeProto input_type = input->type();
-        auto *output = graph->add_output();
-        output->set_name("Y");
-        output->mutable_type()->CopyFrom(input_type);
-        NodeProto node;
-        node.set_op_type("MeanVarianceNormalization");
-        node.add_input("X");
-        node.add_output("Y");
-        if (explicit_axes) {
-          AddAttribute<std::vector<int64_t>>(node, "axes", {0, 2});
-        }
-        FunctionProto function;
-        FunctionBodyBuildContextImpl context(node, std::vector<TypeProto>{input_type});
-        ASSERT_TRUE(schema->BuildContextDependentFunction(context, function, opset));
-        FunctionExpandHelper(node, function, *graph);
-        graph->mutable_output(0)->clear_type();
-        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
-                                                     ShapeInferenceOptions(true, 1, false)));
-        EXPECT_TRUE(graph->output(0).type().Equals(input_type));
-        ASSERT_NO_THROW(checker::check_model(model, true));
       }
     }
   }
@@ -727,7 +729,7 @@ TEST(onnx_shape_inference, MeanVarianceNormalizationFunctionTypes) {
 
 TEST(onnx_shape_inference, MeanVarianceNormalizationUnexpandedNode) {
   RegisterAllOnnxOperatorSchemas();
-  for (const int opset : {13, 18}) {
+  for (const int opset : {13, 18, 29}) {
     SCOPED_TRACE(opset);
     ModelProto model;
     model.set_ir_version(IR_VERSION);

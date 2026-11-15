@@ -1613,6 +1613,31 @@ constexpr const char *kMeanVarianceNormalizationDoc = R"DOC(
       on the input tensor X using formula: `(X-EX)/sqrt(E(X-EX)^2)`
 )DOC";
 
+constexpr const char *kMeanVarianceNormalizationDocOpset13 = R"DOC(
+Computes mean-variance normalization of `X`:
+`Y = (X - mean) / (sqrt(variance) + 1e-9)`, where
+`mean = ReduceMean(X, axes)` and
+`variance = ReduceMean(X^2, axes) - mean^2`.
+Each reduction computes the arithmetic mean over `axes` and retains the
+reduced dimensions with size 1 for broadcasting.
+)DOC";
+
+constexpr const char *kMeanVarianceNormalizationDocOpset29 = R"DOC(
+Computes mean-variance normalization of `X`:
+`Y = (X - mean) / (sqrt(variance) + epsilon)`, where
+`mean = ReduceMean(X, axes)` and
+`variance = ReduceMean((X - mean)^2, axes)`.
+Each reduction computes the arithmetic mean over `axes` and retains the
+reduced dimensions with size 1 for broadcasting.
+An empty `axes` list reduces over all dimensions.
+
+The default `epsilon` is 1e-9 and is added after the square root.
+For float16 and bfloat16 inputs, `X` is converted to float32 before computation.
+Otherwise, computation uses the input type. `epsilon` is converted to the
+computation type, and the result is cast to the input type.
+`Y` has the same shape and element type as `X`.
+)DOC";
+
 } // namespace
 
 std::string MakeInstanceNormalizationDoc(int since_version) {
@@ -1640,8 +1665,11 @@ std::string MakeGroupNormalizationDoc(int since_version) {
 std::string MakeMeanVarianceNormalizationDoc(int since_version) {
   switch (since_version) {
   case 9:
-  case 13:
     return kMeanVarianceNormalizationDoc;
+  case 13:
+    return kMeanVarianceNormalizationDocOpset13;
+  case 29:
+    return kMeanVarianceNormalizationDocOpset29;
   default:
     return "";
   }

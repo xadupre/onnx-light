@@ -143,5 +143,47 @@ TEST(MeanVarianceNormalizationConverterExecution, PreservesLegacyAndCenteredVari
   }
 }
 
+TEST(MeanVarianceNormalizationConverterExecution,
+     UpgradeKeepsHalfPrecisionEpsilonAndZeroVarianceFinite) {
+  RegisterAllOnnxOperatorSchemas();
+  onnx_kernels::RegisterKernelFunctions();
+  for (const auto dtype : {TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    auto model = ModelProto();
+    model.set_ir_version(IR_VERSION);
+    model.add_opset("", 28);
+    auto *graph = model.mutable_graph();
+    graph->set_name("mvn_constant_half_input");
+    auto *input = graph->add_input();
+    input->set_name("X");
+    auto *type = input->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(dtype);
+    type->mutable_shape()->add_dim()->set_dim_value(2);
+    auto *output = graph->add_output();
+    output->set_name("Y");
+    output->mutable_type()->CopyFrom(input->type());
+    auto *node = graph->add_node();
+    node->set_op_type("MeanVarianceNormalization");
+    node->add_input("X");
+    node->add_output("Y");
+    auto *axes = node->add_attribute();
+    axes->set_name("axes");
+    axes->set_type(AttributeProto::INTS);
+    axes->add_ints(0);
+
+    const ModelProto converted = version_conversion::ConvertVersion(model, 29);
+    ASSERT_NO_THROW(checker::check_model(converted, true));
+    auto x = core::runtime::Tensor::FromFloat("X", {2}, {1.0f, 1.0f});
+    x = core::runtime::DemoteFromFloat32(x, dtype);
+    const auto outputs = core::runtime::RunModel(converted, {std::move(x)});
+    ASSERT_EQ(outputs.size(), 1u);
+    EXPECT_EQ(outputs[0].data_type, dtype);
+    const auto actual = core::runtime::PromoteToFloat32(outputs[0]);
+    EXPECT_TRUE(std::isfinite(actual.AsFloat()[0]));
+    EXPECT_TRUE(std::isfinite(actual.AsFloat()[1]));
+    EXPECT_FLOAT_EQ(actual.AsFloat()[0], 0.0f);
+    EXPECT_FLOAT_EQ(actual.AsFloat()[1], 0.0f);
+  }
+}
+
 } // namespace Test
 } // namespace ONNX_LIGHT_NAMESPACE

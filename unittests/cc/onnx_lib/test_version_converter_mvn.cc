@@ -81,7 +81,7 @@ void CheckMvnExpansion(const ModelProto &converted, bool upgrade, TensorProto::D
     EXPECT_EQ(variance->input(0), means[1]->output(0));
     EXPECT_EQ(variance->input(1), squares[0]->output(0));
     EXPECT_EQ(squares[0]->input(0), means[0]->output(0));
-    EXPECT_EQ(squares[1]->input(0), "X");
+    EXPECT_EQ(squares[1]->input(0), means[0]->input(0));
   } else {
     EXPECT_EQ(variance->input(0), squares[0]->output(0));
     const auto *centered = MvnProducer(graph, squares[0]->input(0));
@@ -104,7 +104,7 @@ void CheckMvnExpansion(const ModelProto &converted, bool upgrade, TensorProto::D
   EXPECT_EQ(epsilon_constant->op_type(), "Constant");
   ASSERT_EQ(epsilon_constant->attribute(0).t().float_data_size(), 1);
   EXPECT_EQ(epsilon_constant->attribute(0).t().float_data(0), epsilon);
-  const bool promoted = !upgrade && (type == TensorProto::FLOAT16 || type == TensorProto::BFLOAT16);
+  const bool promoted = type == TensorProto::FLOAT16 || type == TensorProto::BFLOAT16;
   const auto casts = MvnNodes(graph, "Cast");
   EXPECT_EQ(casts.size(), promoted ? 2u : type == TensorProto::FLOAT ? 0u : 1u);
   const auto *output = MvnProducer(graph, "Y");
@@ -221,7 +221,7 @@ TEST(onnx_version_converter, MvnUsesOutputTypeWhenCustomProducerTypeIsUnknown) {
     opset->set_version(1);
     const auto converted = version_conversion::ConvertVersion(model, upgrade ? 29 : 28);
     EXPECT_TRUE(MvnNodes(converted.graph(), "MeanVarianceNormalization").empty());
-    EXPECT_EQ(MvnNodes(converted.graph(), "Cast").size(), upgrade ? 1u : 2u);
+    EXPECT_EQ(MvnNodes(converted.graph(), "Cast").size(), 2u);
   }
 }
 
@@ -251,6 +251,86 @@ TEST(onnx_version_converter, MvnConvertsAnnotatedFunctionBody) {
     casts += node.op_type() == "Cast";
   }
   EXPECT_EQ(casts, 2);
+}
+
+TEST(onnx_version_converter, MvnPreservesLinkedFunctionAttributesInBothDirections) {
+  for (const bool upgrade : {false, true}) {
+    const int64_t source_version = upgrade ? 28 : 29;
+    auto model = MakeMvnModel(source_version, TensorProto::FLOAT16);
+    auto *function = model.add_functions();
+    function->set_domain("local");
+    function->set_name("Normalize");
+    function->add_input("X");
+    function->add_output("Y");
+    function->add_attribute("outer_axes");
+    if (!upgrade)
+      function->add_attribute("outer_epsilon");
+    function->add_opset_import()->set_version(source_version);
+    auto *mvn = function->add_node();
+    mvn->set_op_type("MeanVarianceNormalization");
+    mvn->add_input("X");
+    mvn->add_output("Y");
+    auto *axes = mvn->add_attribute();
+    axes->set_name("axes");
+    axes->set_type(AttributeProto::INTS);
+    axes->set_ref_attr_name("outer_axes");
+    if (!upgrade) {
+      auto *epsilon = mvn->add_attribute();
+      epsilon->set_name("epsilon");
+      epsilon->set_type(AttributeProto::FLOAT);
+      epsilon->set_ref_attr_name("outer_epsilon");
+    }
+    AddMvnTensor(function->add_value_info(), "X", TensorProto::FLOAT16);
+    AddMvnTensor(function->add_value_info(), "Y", TensorProto::FLOAT16);
+    auto *call = model.mutable_graph()->mutable_node(0);
+    call->set_op_type("Normalize");
+    call->set_domain("local");
+    auto *call_axes = call->add_attribute();
+    call_axes->set_name("outer_axes");
+    call_axes->set_type(AttributeProto::INTS);
+    call_axes->add_ints(0);
+    if (!upgrade) {
+      auto *call_epsilon = call->add_attribute();
+      call_epsilon->set_name("outer_epsilon");
+      call_epsilon->set_type(AttributeProto::FLOAT);
+      call_epsilon->set_f(0.25f);
+    }
+    auto *local_opset = model.add_opset_import();
+    local_opset->set_domain("local");
+    local_opset->set_version(1);
+
+    const auto converted = version_conversion::ConvertVersion(model, upgrade ? 29 : 28);
+    ASSERT_EQ(converted.functions_size(), 1);
+    const auto &converted_function = converted.functions(0);
+    const NodeProto *axes_constant = nullptr;
+    const NodeProto *epsilon_constant = nullptr;
+    for (const auto &node : converted_function.node()) {
+      if (node.op_type() != "Constant")
+        continue;
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.name() == "value_ints")
+          axes_constant = &node;
+        if (attribute.name() == "value_float")
+          epsilon_constant = &node;
+      }
+    }
+    const auto find_attribute = [](const NodeProto &node, const std::string &name) {
+      for (const auto &attribute : node.attribute())
+        if (attribute.name() == name)
+          return &attribute;
+      return static_cast<const AttributeProto *>(nullptr);
+    };
+    ASSERT_NE(axes_constant, nullptr);
+    const auto *axes_value = find_attribute(*axes_constant, "value_ints");
+    ASSERT_NE(axes_value, nullptr);
+    EXPECT_EQ(axes_value->ref_attr_name(), "outer_axes");
+    if (!upgrade) {
+      ASSERT_NE(epsilon_constant, nullptr);
+      const auto *epsilon_value = find_attribute(*epsilon_constant, "value_float");
+      ASSERT_NE(epsilon_value, nullptr);
+      EXPECT_EQ(epsilon_value->ref_attr_name(), "outer_epsilon");
+    }
+  }
 }
 
 void AddMvnBranch(NodeProto *node, const char *name, const std::string &input,

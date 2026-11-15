@@ -923,6 +923,46 @@ TEST(KernelClass, MeanVarianceNormalization29CentersVarianceBeforeSquaring) {
   EXPECT_THROW(mvn(empty, {1}), std::invalid_argument);
 }
 
+TEST(KernelClass, MeanVarianceNormalization29MatchesExpandedFloatReduction) {
+  RegisterAllOnnxOperatorSchemas();
+  onnx_kernels::RegisterKernelFunctions();
+  const MeanVarianceNormalization mvn{KernelContext{DefaultOpset(29)}};
+  const Tensor x = Tensor::FromFloat("X", {3}, {100000000, 100000008, 100000008});
+  const Tensor direct = mvn(x, {0});
+
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset("", 29);
+  auto *graph = model.mutable_graph();
+  graph->set_name("mvn_float_reduction");
+  auto *input = graph->add_input();
+  input->set_name("X");
+  auto *type = input->mutable_type()->mutable_tensor_type();
+  type->set_elem_type(TensorProto::FLOAT);
+  type->mutable_shape()->add_dim()->set_dim_value(3);
+  auto *output = graph->add_output();
+  output->set_name("Y");
+  output->mutable_type()->CopyFrom(input->type());
+  auto *node = graph->add_node();
+  node->set_op_type("MeanVarianceNormalization");
+  node->add_input("X");
+  node->add_output("Y");
+  auto *axes = node->add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::INTS);
+  axes->add_ints(0);
+  const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});
+  inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+  const auto expanded = core::runtime::RunModel(model, {x});
+  ASSERT_EQ(expanded.size(), 1u);
+  ASSERT_EQ(expanded[0].element_count(), 3);
+  for (int64_t i = 0; i < 3; ++i)
+    EXPECT_NEAR(direct.AsFloat()[i], expanded[0].AsFloat()[i], 1e-6f);
+  EXPECT_FLOAT_EQ(direct.AsFloat()[0], 0.0f);
+  EXPECT_NEAR(direct.AsFloat()[1], 1.2247449f, 1e-6f);
+  EXPECT_NEAR(direct.AsFloat()[2], 1.2247449f, 1e-6f);
+}
+
 TEST(KernelClass, MeanVarianceNormalization29LocalFunctionLinkedEpsilon) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);

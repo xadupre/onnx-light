@@ -367,6 +367,15 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(schema.non_deterministic, lights.non_deterministic)
                 self.assertEqual(schema.support_level.name, lights.support_level.name)
                 onnx_doc = self._normalize_nd_text(key, self._normalize_div_doc(key, schema.doc))
+                if key == ("", "MeanVarianceNormalization", 13):
+                    # The legacy implementation uses E[X^2] - E[X]^2, not centered variance.
+                    onnx_doc = onnx_doc.replace(
+                        "\n      A MeanVarianceNormalization Function: "
+                        "Perform mean variance normalization\n"
+                        "      on the input tensor X using formula: "
+                        "`(X-EX)/sqrt(E(X-EX)^2)`\n",
+                        lights.doc,
+                    )
                 if key == ("", "GroupNormalization", 21):
                     # Installed ONNX may predate the documentation fix in onnx#8428.
                     onnx_doc = onnx_doc.replace(

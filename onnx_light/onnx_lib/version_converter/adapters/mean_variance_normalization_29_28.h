@@ -50,14 +50,36 @@ protected:
     return constant;
   }
 
-  static Node *make_axes_constant(const std::shared_ptr<Graph> &graph, Node *before,
-                                  const std::vector<int64_t> &axes) {
-    Tensor tensor;
-    tensor.elem_type() = TensorProto_DataType_INT64;
-    tensor.sizes() = {static_cast<int64_t>(axes.size())};
-    tensor.int64s() = axes;
+  static Node *make_float_reference_constant(const std::shared_ptr<Graph> &graph, Node *before,
+                                             const std::string &ref_attr_name) {
     Node *constant = graph->create(kConstant);
-    constant->t_(kvalue, tensor);
+    AttributeProto value;
+    value.set_name("value_float");
+    value.set_type(AttributeProto::FLOAT);
+    value.set_ref_attr_name(ref_attr_name);
+    constant->ref_(Symbol("value_float"), value);
+    constant->insertBefore(before);
+    constant->output()->setElemType(TensorProto_DataType_FLOAT);
+    return constant;
+  }
+
+  static Node *make_axes_constant(const std::shared_ptr<Graph> &graph, Node *before,
+                                  const std::vector<int64_t> &axes,
+                                  const std::string &ref_attr_name = {}, bool linked = false) {
+    Node *constant = graph->create(kConstant);
+    if (linked) {
+      AttributeProto value;
+      value.set_name("value_ints");
+      value.set_type(AttributeProto::INTS);
+      value.set_ref_attr_name(ref_attr_name);
+      constant->ref_(Symbol("value_ints"), value);
+    } else {
+      Tensor tensor;
+      tensor.elem_type() = TensorProto_DataType_INT64;
+      tensor.sizes() = {static_cast<int64_t>(axes.size())};
+      tensor.int64s() = axes;
+      constant->t_(kvalue, tensor);
+    }
     constant->insertBefore(before);
     constant->output()->setElemType(TensorProto_DataType_INT64);
     return constant;
@@ -134,26 +156,33 @@ public:
 
   Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     const auto input_type = get_input_type(node);
+    const bool has_axes = node->hasAttribute(kaxes);
+    const bool linked_axes = has_axes && node->kindOf(kaxes) == AttributeKind::ref;
+    const std::string axes_ref = linked_axes ? node->ref(kaxes).ref_attr_name() : "";
     const std::vector<int64_t> axes =
-        node->hasAttribute(kaxes) ? node->is(kaxes) : std::vector<int64_t>{0, 2, 3};
-    Node *axes_constant = make_axes_constant(graph, node, axes);
+        !has_axes || linked_axes ? std::vector<int64_t>{0, 2, 3} : node->is(kaxes);
+    const auto compute_type =
+        input_type == TensorProto_DataType_FLOAT16 || input_type == TensorProto_DataType_BFLOAT16
+            ? TensorProto_DataType_FLOAT
+            : input_type;
+    Node *axes_constant = make_axes_constant(graph, node, axes, axes_ref, linked_axes);
+    Value *input = cast_to(graph, node, node->inputs()[0], compute_type);
     Value *epsilon =
-        cast_to(graph, node, make_float_constant(graph, node, 1e-9f)->output(), input_type);
-    // Legacy MVN uses E[X^2] - E[X]^2 without low-precision promotion.
-    Node *mean =
-        make_reduce_mean(graph, node, node->inputs()[0], axes_constant->output(), input_type);
-    Node *mean_squared = make_binary(graph, node, kMul, mean->output(), mean->output(), input_type);
-    Node *input_squared =
-        make_binary(graph, node, kMul, node->inputs()[0], node->inputs()[0], input_type);
-    Node *squared_mean =
-        make_reduce_mean(graph, node, input_squared->output(), axes_constant->output(), input_type);
-    Node *variance =
-        make_binary(graph, node, kSub, squared_mean->output(), mean_squared->output(), input_type);
-    Node *stddev = make_sqrt(graph, node, variance->output(), input_type);
-    Node *centered = make_binary(graph, node, kSub, node->inputs()[0], mean->output(), input_type);
-    Node *denominator = make_binary(graph, node, kAdd, stddev->output(), epsilon, input_type);
-    return replace_node(node, make_binary(graph, node, kDiv, centered->output(),
-                                          denominator->output(), input_type));
+        cast_to(graph, node, make_float_constant(graph, node, 1e-9f)->output(), compute_type);
+    Node *mean = make_reduce_mean(graph, node, input, axes_constant->output(), compute_type);
+    Node *mean_squared =
+        make_binary(graph, node, kMul, mean->output(), mean->output(), compute_type);
+    Node *input_squared = make_binary(graph, node, kMul, input, input, compute_type);
+    Node *squared_mean = make_reduce_mean(graph, node, input_squared->output(),
+                                          axes_constant->output(), compute_type);
+    Node *variance = make_binary(graph, node, kSub, squared_mean->output(), mean_squared->output(),
+                                 compute_type);
+    Node *stddev = make_sqrt(graph, node, variance->output(), compute_type);
+    Node *centered = make_binary(graph, node, kSub, input, mean->output(), compute_type);
+    Node *denominator = make_binary(graph, node, kAdd, stddev->output(), epsilon, compute_type);
+    Node *normalized =
+        make_binary(graph, node, kDiv, centered->output(), denominator->output(), compute_type);
+    return replace_node(node, cast_to(graph, node, normalized->output(), input_type)->node());
   }
 };
 
@@ -167,14 +196,23 @@ public:
         input_type == TensorProto_DataType_FLOAT16 || input_type == TensorProto_DataType_BFLOAT16
             ? TensorProto_DataType_FLOAT
             : input_type;
+    const bool has_axes = node->hasAttribute(kaxes);
+    const bool linked_axes = has_axes && node->kindOf(kaxes) == AttributeKind::ref;
+    const std::string axes_ref = linked_axes ? node->ref(kaxes).ref_attr_name() : "";
     const std::vector<int64_t> axes =
-        node->hasAttribute(kaxes) ? node->is(kaxes) : std::vector<int64_t>{0, 2, 3};
-    const float epsilon_value =
-        node->hasAttribute(kepsilon) ? static_cast<float>(node->f(kepsilon)) : 1e-9f;
-    Node *axes_constant = make_axes_constant(graph, node, axes);
+        !has_axes || linked_axes ? std::vector<int64_t>{0, 2, 3} : node->is(kaxes);
+    const bool linked_epsilon =
+        node->hasAttribute(kepsilon) && node->kindOf(kepsilon) == AttributeKind::ref;
+    const std::string epsilon_ref = linked_epsilon ? node->ref(kepsilon).ref_attr_name() : "";
+    const float epsilon_value = node->hasAttribute(kepsilon) && !linked_epsilon
+                                    ? static_cast<float>(node->f(kepsilon))
+                                    : 1e-9f;
+    Node *axes_constant = make_axes_constant(graph, node, axes, axes_ref, linked_axes);
     Value *input = cast_to(graph, node, node->inputs()[0], compute_type);
-    Value *epsilon = cast_to(graph, node, make_float_constant(graph, node, epsilon_value)->output(),
-                             compute_type);
+    Node *epsilon_constant = linked_epsilon
+                                 ? make_float_reference_constant(graph, node, epsilon_ref)
+                                 : make_float_constant(graph, node, epsilon_value);
+    Value *epsilon = cast_to(graph, node, epsilon_constant->output(), compute_type);
     Node *mean = make_reduce_mean(graph, node, input, axes_constant->output(), compute_type);
     Node *centered = make_binary(graph, node, kSub, input, mean->output(), compute_type);
     Node *centered_squared =

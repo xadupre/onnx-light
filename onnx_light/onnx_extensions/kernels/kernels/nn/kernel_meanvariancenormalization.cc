@@ -107,20 +107,26 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
   for (int64_t lane = 0; lane < lane_count; ++lane) {
     stats[lane] = {};
   }
-  if (lane_count == 1) {
+  if (modern) {
+    for (int64_t idx = 0; idx < total; ++idx) {
+      auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+      stat.mean = static_cast<double>(static_cast<T>(stat.mean) + read(idx));
+    }
+    for (int64_t lane = 0; lane < lane_count; ++lane) {
+      stats[lane].mean = static_cast<double>(
+          static_cast<T>(static_cast<T>(stats[lane].mean) / static_cast<T>(reduced_size)));
+      stats[lane].count = reduced_size;
+    }
+    for (int64_t idx = 0; idx < total; ++idx) {
+      auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
+      const T centered = read(idx) - static_cast<T>(stat.mean);
+      stat.m2 = static_cast<double>(static_cast<T>(static_cast<T>(stat.m2) + centered * centered));
+    }
+  } else if (lane_count == 1) {
     stats[0] = statistics::Accumulate<double>(total, read, minimum_elements);
   } else {
     for (int64_t idx = 0; idx < total; ++idx) {
       stats[ComputeLane(idx, dims, reduce_mask)].Add(static_cast<double>(read(idx)));
-    }
-  }
-  if (modern) {
-    for (int64_t lane = 0; lane < lane_count; ++lane)
-      stats[lane].m2 = 0;
-    for (int64_t idx = 0; idx < total; ++idx) {
-      auto &stat = stats[ComputeLane(idx, dims, reduce_mask)];
-      const T centered = read(idx) - static_cast<T>(stat.mean);
-      stat.m2 += static_cast<double>(centered * centered);
     }
   }
 
@@ -130,11 +136,13 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
         for (int64_t idx = begin; idx < end; ++idx) {
           const int64_t lane = ComputeLane(idx, dims, reduce_mask);
           const auto &stat = stats[lane];
-          const T result =
-              modern ? (read(idx) - static_cast<T>(stat.mean)) /
-                           (std::sqrt(static_cast<T>(stat.Variance())) + static_cast<T>(epsilon))
-                     : static_cast<T>((static_cast<double>(read(idx)) - stat.mean) /
-                                      std::sqrt(stat.Variance() + kMvnEpsilon));
+          const T variance =
+              modern ? static_cast<T>(static_cast<T>(stat.m2) / static_cast<T>(reduced_size))
+                     : static_cast<T>(stat.Variance());
+          const T result = modern ? (read(idx) - static_cast<T>(stat.mean)) /
+                                        (std::sqrt(variance) + static_cast<T>(epsilon))
+                                  : static_cast<T>((static_cast<double>(read(idx)) - stat.mean) /
+                                                   std::sqrt(stat.Variance() + kMvnEpsilon));
           if (half)
             reinterpret_cast<uint16_t *>(output.mutable_bytes())[idx] =
                 encode(static_cast<float>(result));

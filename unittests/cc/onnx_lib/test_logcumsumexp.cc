@@ -140,9 +140,6 @@ TEST(LogCumSumExpSchema, FunctionBuildAndCheck) {
       checker_context.set_ir_version(13);
       checker::LexicalScopeContext lexical_scope;
       EXPECT_NO_THROW(checker::check_function(function, checker_context, lexical_scope));
-      GraphProto expanded;
-      EXPECT_NO_THROW(FunctionExpandHelper(node, function, expanded));
-      EXPECT_EQ(expanded.node_size(), function.node_size());
     }
   }
   auto model = MakeLogCumSumExpModel(TensorProto::INT32, {2});

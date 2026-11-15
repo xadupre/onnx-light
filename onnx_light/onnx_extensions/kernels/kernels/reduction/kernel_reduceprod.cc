@@ -7,10 +7,12 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
@@ -47,24 +49,35 @@ Shape RowMajorStrides(const Shape &shape) {
   return strides;
 }
 
-void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::ReduceProd: ", name, " must be a FLOAT tensor.");
+void ValidateDataType(const Tensor &t, const char *name) {
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          t.data_type == static_cast<int32_t>(DataType::INT64),
+                      "kernel::ReduceProd: ", name, " must be a FLOAT or INT64 tensor.");
 }
 
 // Multiplies elements of ``data`` into the output buffer. The empty-set
 // identity for ``prod`` is ``1`` so the output buffer is initialized to
-// ``1.0f`` before the reduction loop.
+// ``1`` before the reduction loop.
+template <typename T> T Multiply(T lhs, T rhs) {
+  if constexpr (std::is_same_v<T, int64_t>) {
+    return std::bit_cast<int64_t>(std::bit_cast<std::uint64_t>(lhs) *
+                                  std::bit_cast<std::uint64_t>(rhs));
+  } else {
+    return lhs * rhs;
+  }
+}
+
+template <typename T>
 void ProdReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
                 Tensor &output) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
-  float *py = output.AsFloat();
+  T *py = output.As<T>();
   const int64_t out_count = output.element_count();
   for (int64_t i = 0; i < out_count; ++i) {
-    py[i] = 1.0f;
+    py[i] = static_cast<T>(1);
   }
 
-  const float *px = data.AsFloat();
+  const T *px = data.As<T>();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   Shape idx;
   idx.assign(static_cast<size_t>(rank), 0);
@@ -78,7 +91,7 @@ void ProdReduce(const Tensor &data, const Shape &is_reduced, const Shape &output
         ++out_dim;
       }
     }
-    py[out_offset] *= px[i];
+    py[out_offset] = Multiply(py[out_offset], px[i]);
     for (int64_t d = rank - 1; d >= 0; --d) {
       ++idx[static_cast<size_t>(d)];
       if (idx[static_cast<size_t>(d)] < data.shape[static_cast<size_t>(d)]) {
@@ -93,7 +106,7 @@ void ProdReduce(const Tensor &data, const Shape &is_reduced, const Shape &output
 
 Tensor ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                               RuntimeContext *rt) const {
-  ValidateFloat(data, "data");
+  ValidateDataType(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
@@ -105,18 +118,19 @@ Tensor ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementSize(data.data_type);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
 
 void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                             Tensor &output) const {
-  ValidateFloat(data, "data");
-  ValidateFloat(output, "output");
+  ValidateDataType(data, "data");
+  ValidateDataType(output, "output");
+  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
+                      "kernel::ReduceProd: output type must match data type.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
@@ -129,7 +143,7 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
       "kernel::ReduceProd preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(out_count) * ElementSize(data.data_type),
       "kernel::ReduceProd preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
@@ -137,12 +151,16 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  ProdReduce(data, is_reduced, out_shape_noreduce, output);
+  if (data.data_type == static_cast<int32_t>(DataType::INT64)) {
+    ProdReduce<int64_t>(data, is_reduced, out_shape_noreduce, output);
+  } else {
+    ProdReduce<float>(data, is_reduced, out_shape_noreduce, output);
+  }
 }
 
 Tensor ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                               bool noop_with_empty_axes, RuntimeContext *rt) const {
-  ValidateFloat(data, "data");
+  ValidateDataType(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceProd: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -165,18 +183,19 @@ Tensor ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepd
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementSize(data.data_type);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
 
 void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                             bool noop_with_empty_axes, Tensor &output) const {
-  ValidateFloat(data, "data");
-  ValidateFloat(output, "output");
+  ValidateDataType(data, "data");
+  ValidateDataType(output, "output");
+  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
+                      "kernel::ReduceProd: output type must match data type.");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceProd: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -201,7 +220,7 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       "kernel::ReduceProd preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(out_count) * ElementSize(data.data_type),
       "kernel::ReduceProd preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
@@ -209,7 +228,11 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  ProdReduce(data, is_reduced, out_shape_noreduce, output);
+  if (data.data_type == static_cast<int32_t>(DataType::INT64)) {
+    ProdReduce<int64_t>(data, is_reduced, out_shape_noreduce, output);
+  } else {
+    ProdReduce<float>(data, is_reduced, out_shape_noreduce, output);
+  }
 }
 
 void ReduceProd::Run(RuntimeContext &rt) {

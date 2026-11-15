@@ -9,9 +9,12 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_extensions/shapes/shapes/math/shape_math.h"
+#include "onnx_lib/checker.h"
 #include "onnx_lib/defs/function.h"
+#include "onnx_lib/inliner/inliner.h"
 
 #include <gtest/gtest.h>
 
@@ -247,8 +250,10 @@ TEST(LogCumSumExpShape, BackendCasesUseExtensionInference) {
 
 TEST(LogCumSumExpKernel, InlinedFunctionMatchesNativeWithInt64ShapeReduction) {
   RegisterAllOnnxOperatorSchemas();
+  onnx_kernels::RegisterKernelFunctions();
   const auto *schema = OpSchemaRegistry::Schema("LogCumSumExp", 29, "");
   ASSERT_NE(schema, nullptr);
+  const auto selected = inliner::FunctionIdSet::Create({{"local", "LogCumSumExp"}});
   const LogCumSumExp kernel{KernelContext{DefaultOpset(29)}};
   const double inf = std::numeric_limits<double>::infinity();
   const double nan = std::numeric_limits<double>::quiet_NaN();
@@ -266,64 +271,48 @@ TEST(LogCumSumExpKernel, InlinedFunctionMatchesNativeWithInt64ShapeReduction) {
         SCOPED_TRACE(input.shape.size());
         SCOPED_TRACE(axis);
         SCOPED_TRACE(unknown_rank);
-        const NodeProto node = MakeNode(axis);
-        TypeProto input_type;
-        auto *tensor_type = input_type.mutable_tensor_type();
+        NodeProto node = MakeNode(axis);
+        node.set_domain("local");
+        ModelProto model;
+        model.set_ir_version(IR_VERSION);
+        model.add_opset_import()->set_version(29);
+        auto *local_opset = model.add_opset_import();
+        local_opset->set_domain("local");
+        local_opset->set_version(1);
+        auto *graph = model.mutable_graph();
+        graph->set_name("expanded_logcumsumexp");
+        auto *input_info = graph->add_input();
+        input_info->set_name("actual_input");
+        auto *tensor_type = input_info->mutable_type()->mutable_tensor_type();
         tensor_type->set_elem_type(input.data_type);
         if (!unknown_rank) {
           for (const int64_t dim : input.shape)
             tensor_type->mutable_shape()->add_dim()->set_dim_value(dim);
         }
-        const std::vector<TypeProto> input_types{input_type};
+        utils::RepeatedProtoField<TypeProto> input_types;
+        input_types.push_back(input_info->type());
         FunctionBodyBuildContextImpl context(node, input_types);
         FunctionProto function;
         ASSERT_TRUE(schema->BuildContextDependentFunction(context, function));
-        ModelProto model;
-        model.set_ir_version(13);
-        for (const auto &opset : function.opset_import())
-          *model.add_opset_import() = opset;
-        auto *graph = model.mutable_graph();
-        graph->set_name("expanded_logcumsumexp");
-        auto *value = graph->add_input();
-        value->set_name("X");
-        *value->mutable_type() = input_type;
+        function.set_domain("local");
+        *model.add_functions() = function;
         auto *output = graph->add_output();
-        output->set_name("Y");
-        *output->mutable_type() = input_type;
-        // Inline into an otherwise-empty graph without renaming: the generic
-        // FunctionExpandHelper does not rename nested graph lexical captures.
-        for (const NodeProto &body_node : function.node()) {
-          auto *inlined = graph->add_node();
-          *inlined = body_node;
-          for (int i = 0; i < inlined->attribute_size(); ++i) {
-            auto *attr = inlined->mutable_attribute(i);
-            if (attr->has_ref_attr_name()) {
-              ASSERT_EQ(attr->ref_attr_name(), "axis");
-              attr->clear_ref_attr_name();
-              attr->set_i(axis);
-            }
-          }
+        output->set_name("actual_output");
+        *output->mutable_type() = input_info->type();
+        NodeProto *call = graph->add_node();
+        *call = node;
+        call->ref_input()[0] = "actual_input";
+        call->ref_output()[0] = "actual_output";
+        inliner::InlineSelectedLocalFunctions(model, *selected);
+        ASSERT_GT(graph->node_size(), 1);
+        if (!unknown_rank) {
+          ASSERT_NO_THROW(checker::check_model(model, true));
         }
         core::runtime::RuntimeContext runtime;
-        // The native ReduceProd currently only accepts FLOAT. Supply the
-        // function's INT64 shape reduction locally, without changing its body.
-        ASSERT_TRUE(runtime.RegisterKernelFn(
-            "", "ReduceProd", core::symbolic::Device::kCPU,
-            core::runtime::MakeCustomKernelFactory([](const NodeProto &reduction,
-                                                      core::runtime::RuntimeContext &rt) {
-              ASSERT_EQ(reduction.input_size(), 1);
-              const Tensor &shape = rt.Get(reduction.input(0));
-              ASSERT_EQ(shape.data_type, DataType::INT64);
-              ASSERT_EQ(shape.shape.size(), 1u);
-              int64_t product = 1;
-              for (int64_t i = 0; i < shape.element_count(); ++i)
-                product *= shape.AsInt64()[i];
-              rt.Set(reduction.output(0), Tensor::FromInt64(reduction.output(0), {1}, {product}));
-            })));
-        runtime.Set("X", input);
+        runtime.Set("actual_input", input);
         core::runtime::RuntimeSession session(model);
         session.Run(runtime);
-        ExpectSameValues(runtime.Get("Y"), kernel(input, axis),
+        ExpectSameValues(runtime.Get("actual_output"), kernel(input, axis),
                          input.data_type == DataType::DOUBLE ? 1e-13 : 1e-6);
       }
     }

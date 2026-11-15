@@ -27,7 +27,8 @@ core::builder::MatchResult PartitionGroupPattern::Match(core::builder::GraphGrap
                                                         const NodeProto &candidate) const {
   if (graph.Builder().Nodes().empty() || &candidate != &graph.Builder().Nodes()[0])
     return NoMatch(candidate, "operator grouping runs only at the first graph node");
-  auto proposal = core::graph::ProposePartitionGroups(graph, options_);
+  std::shared_ptr<const core::builder::PatternApplication> application;
+  auto proposal = core::graph::ProposePartitionGroups(graph, options_, &application);
   if (proposal.status == core::graph::OperatorGroupStatus::kInsideFunction)
     return NoMatch(candidate, "local-function bodies must not introduce recursive groups");
   if (proposal.status == core::graph::OperatorGroupStatus::kIncompatibleOpset)
@@ -35,7 +36,8 @@ core::builder::MatchResult PartitionGroupPattern::Match(core::builder::GraphGrap
   if (proposal.status != core::graph::OperatorGroupStatus::kFound)
     return NoMatch(candidate, "no extractable low-transfer operator interval");
   auto nodes = proposal.MatchedNodes(graph.Builder().Nodes());
-  return {this, std::move(nodes), &graph.Builder().Nodes()[proposal.first]};
+  return {this, std::move(nodes), &graph.Builder().Nodes()[proposal.first], std::nullopt,
+          std::move(application)};
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -43,9 +45,6 @@ PartitionGroupPattern::Apply(core::builder::GraphGraph &graph,
                              const std::vector<const NodeProto *> &nodes) const {
   if (nodes.empty() || nodes[0] == nullptr || graph.Builder().Nodes().empty())
     throw core::builder::BuilderError("PartitionGroup::Apply expects a nonempty match.");
-  const auto verified = Match(graph, graph.Builder().Nodes()[0]);
-  if (verified.pattern != this || verified.nodes != nodes)
-    throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
   return core::graph::MakePartitionGroupReplacements(graph, nodes, options_);
 }
 

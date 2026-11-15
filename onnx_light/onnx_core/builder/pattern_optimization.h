@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -119,6 +120,24 @@ struct PatternNoMatch {
   std::string ToString() const;
 };
 
+/**
+ * Owns replacement construction prepared by Match.
+ *
+ * Only the optimizer may invoke it, immediately after revalidating the match.
+ * Direct Apply calls must still validate their inputs against the current graph.
+ * Captured analysis belongs to this match, never to the shared pattern object.
+ */
+class PatternApplication {
+public:
+  /// Creates replacement construction for one match.
+  explicit PatternApplication(std::function<utils::RepeatedProtoField<NodeProto>()> apply)
+      : apply_(std::move(apply)) {}
+
+private:
+  friend class GraphGraph;
+  std::function<utils::RepeatedProtoField<NodeProto>()> apply_;
+};
+
 /// Describes one subgraph recognized by an optimization pattern.
 struct MatchResult {
   /// Pattern that produced this match.
@@ -134,6 +153,8 @@ struct MatchResult {
   const NodeProto *insert_at = nullptr;
   /// Diagnostic attached to an empty result, when the pattern supplied one.
   std::optional<PatternNoMatch> no_match = std::nullopt;
+  /// Optional replacement construction, used only from a freshly revalidated match.
+  std::shared_ptr<const PatternApplication> application = nullptr;
 
   /// Returns a concise summary of this match.
   std::string ToString() const;

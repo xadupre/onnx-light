@@ -15,6 +15,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  * inputs except for shared materialized constants with fewer than 32 elements.
  * Preserves side outputs and lexical subgraph dependencies.
  * Returns OperatorGroupProposal, shared with transfer-aware partitioning.
+ * Optionally retains the index for immediate use by optimizer revalidation.
  * Indices refer to the unchanged source graph; transfer estimates are not reported.
  *
  * Algorithm, in execution order:
@@ -100,7 +101,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *                                               w1
  * @endcode
  */
-OperatorGroupProposal ProposeRepeatedLayers(builder::GraphGraph &graph);
+OperatorGroupProposal
+ProposeRepeatedLayers(builder::GraphGraph &graph,
+                      std::shared_ptr<const builder::PatternApplication> *application = nullptr);
 
 /// Revalidates the proposed interval and builds its replacement nodes.
 /// Appends or reuses local functions and imports ai.rt opset 1, but does not

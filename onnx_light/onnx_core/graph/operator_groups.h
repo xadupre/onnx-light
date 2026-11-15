@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -19,6 +20,7 @@
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 class GraphBuilder;
 class GraphGraph;
+class PatternApplication;
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {

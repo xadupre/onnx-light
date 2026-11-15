@@ -2326,6 +2326,8 @@ RewritingProto GraphGraph::OptimizeImpl(
         if (report != nullptr) {
           ++report->patterns[pattern_index].matches;
         }
+        // Only a freshly revalidated match may supply replacement construction.
+        match.application.reset();
         matches.push_back(AcceptedMatch{std::move(match), &candidate, pattern_index});
       };
 
@@ -2426,7 +2428,8 @@ RewritingProto GraphGraph::OptimizeImpl(
       const std::size_t initializers_before = builder_.initializers_.size();
       const auto apply_start = std::chrono::steady_clock::now();
       utils::RepeatedProtoField<NodeProto> replacement_nodes =
-          match.pattern->Apply(*this, match.nodes);
+          verified.application ? verified.application->apply_()
+                               : match.pattern->Apply(*this, match.nodes);
       const int64_t apply_time_ns = ElapsedNanoseconds(apply_start);
       LocalRewritingProto rewriting;
       rewriting.set_pattern_name(match.pattern->Name());

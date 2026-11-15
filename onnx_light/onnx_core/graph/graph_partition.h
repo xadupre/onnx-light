@@ -42,8 +42,10 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
                       const std::set<size_t> &excluded_nodes = {});
 
 /// Proposes extractable groups using the builder's inferred boundary descriptors.
-OperatorGroupProposal ProposePartitionGroups(builder::GraphGraph &graph,
-                                             const OperatorGroupOptions &options = {});
+/// Optionally retains analysis for immediate use by optimizer revalidation.
+OperatorGroupProposal
+ProposePartitionGroups(builder::GraphGraph &graph, const OperatorGroupOptions &options = {},
+                       std::shared_ptr<const builder::PatternApplication> *application = nullptr);
 
 /// Revalidates the interval and builds local-function calls in proposal order.
 utils::RepeatedProtoField<NodeProto>

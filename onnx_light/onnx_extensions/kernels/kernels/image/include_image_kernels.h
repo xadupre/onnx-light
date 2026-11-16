@@ -50,13 +50,13 @@ using ::onnx_light::core::runtime::OpsetId;
 //     standard JFIF YCbCr → RGB conversion (ITU-R BT.601, full range).
 //     Non-baseline JPEGs (progressive, arithmetic-coded, 12-bit
 //     precision, lossless) fall through to the empty-matrix path.
-//   * **PNG** — 8-bit non-interlaced grayscale (color type 0) or
-//     truecolor (color type 2) with single or multiple ``IDAT`` chunks:
+//   * **PNG** — non-interlaced grayscale/palette at 1/2/4/8 bits or
+//     RGB/grayscale-alpha/RGBA at 8 bits with single or multiple ``IDAT`` chunks:
 //     fully decoded to ``(H, W, C)`` uint8 output in the requested
 //     ``pixel_format``. DEFLATE (RFC 1951) and zlib (RFC 1950) are
 //     implemented inline so no external ``libpng`` / ``zlib`` dependency
-//     is required. Palette, alpha (color types 3/4/6), 16-bit depth and
-//     interlaced PNGs fall through to the empty-matrix path.
+//     is required. Alpha is discarded without compositing. 16-bit depth
+//     and interlaced PNGs fall through to the empty-matrix path.
 //   * **PNM** — the Netpbm family (``P1``/``P4`` bitmaps, ``P2``/``P5``
 //     graymaps, ``P3``/``P6`` pixmaps) with 8-bit samples
 //     (``maxval <= 255``): fully decoded inline to ``(H, W, C)`` uint8
@@ -91,8 +91,8 @@ using ::onnx_light::core::runtime::OpsetId;
 ///
 /// BMP (24-bit uncompressed, BI_RGB) and baseline-sequential JPEG
 /// (JFIF, SOF0, 8-bit precision, 1 or 3 components, sampling factors
-/// in ``{1, 2}``, optional restart intervals) images, as well as 8-bit
-/// non-interlaced grayscale/truecolor PNG (color types 0 and 2), are
+/// in ``{1, 2}``, optional restart intervals) images, as well as non-interlaced
+/// PNG (1/2/4/8-bit grayscale/palette or 8-bit RGB/grayscale-alpha/RGBA), are
 /// decoded natively without any external library dependency. The
 /// Netpbm family (``P1``-``P6`` with 8-bit samples) is also decoded
 /// natively. Bytestreams that cannot be decoded fall back to returning

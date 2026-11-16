@@ -215,6 +215,10 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterExpCases(std::vector<TestCase> &regis
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterExpm1Cases(std::vector<TestCase> &registry,
                                                       TestMode mode = TestMode::TEST);
 
+/// Registers the ``Log1p`` backend test node case(s).
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterLog1pCases(std::vector<TestCase> &registry,
+                                                      TestMode mode = TestMode::TEST);
+
 /// Registers the ``Erf`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterErfCases(std::vector<TestCase> &registry,
                                                     TestMode mode = TestMode::TEST);

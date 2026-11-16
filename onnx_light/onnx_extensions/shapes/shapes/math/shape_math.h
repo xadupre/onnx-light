@@ -906,6 +906,9 @@ void ComputeShapeMean(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Propagates the shape and dtype of LogCumSumExp, validating rank and axis.
+void ComputeShapeLogCumSumExp(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of a ``CumProd`` node and
  * stores it in ``ctx``.

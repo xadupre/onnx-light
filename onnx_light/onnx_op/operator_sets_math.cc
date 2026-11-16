@@ -2242,6 +2242,29 @@ std::vector<LightOpSchema> BuildMatMulSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildLogCumSumExpSchemas() {
+  return {LightOpSchema(
+      "LogCumSumExp", kOnnxDomain, 29,
+      "Computes inclusive, forward cumulative log-sum-exp along axis (default 0). "
+      "X must have rank >= 1 and axis must be in [-rank(X), rank(X)-1]. "
+      "Y has the same shape and type as X; empty dimensions produce an empty output. "
+      "NaN propagates through each prefix, positive infinity dominates finite values, "
+      "and an all-negative-infinity prefix produces negative infinity. "
+      "Stable accumulation uses at least float32 for float16, bfloat16 and float32, "
+      "and float64 for float64, without rounding the intermediate state to Y's type.",
+      {{"X", "Floating-point input tensor of rank at least one. Dimensions may be zero.", "T"}},
+      {{"Y",
+        "Tensor with the same shape and element type as X, containing inclusive cumulative "
+        "log-sum-exp values.",
+        "T"}},
+      {{"T",
+        {TensorType::kFloat16, TensorType::kBfloat16, TensorType::kFloat, TensorType::kDouble},
+        "Input and output have the same floating-point element type."}},
+      {{"axis", "Axis along which to compute the cumulative sum. Defaults to 0.",
+        core::schema::AttributeType::INT, /*required=*/false, int64_t{0}}},
+      /*has_function_implementation=*/true)};
+}
+
 std::vector<LightOpSchema> BuildGroupedMatMulSchemas() {
   static constexpr const char *doc = R"DOC(
 GroupedMatMul multiplies each row of `input` [M,K] by the expert matrices
@@ -3233,6 +3256,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Gelu", [] { return BuildGeluSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
       {"GroupedMatMul", [] { return BuildGroupedMatMulSchemas(); }},
+      {"LogCumSumExp", BuildLogCumSumExpSchemas},
       {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
       {"HardSigmoid", [] { return BuildHardSigmoidSchemas(); }},

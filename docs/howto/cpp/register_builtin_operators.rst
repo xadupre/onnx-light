@@ -329,8 +329,8 @@ missing shape slots or unknown ranks produce an unresolved estimate.
 The following operators use the zero default:
 
 * ``Mul``, ``Sub``, ``GreaterOrEqual``, ``And``, ``Swish``, ``Where``, ``CumSum``,
-  ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the zero default;
-  no per-operator registration is needed. Binary broadcast strides use inline
+  ``LogCumSumExp``, ``Shape``, ``Unsqueeze``, ``Transpose`` and ``Cast`` use the
+  zero default; no per-operator registration is needed. Binary broadcast strides use inline
   ``Shape`` storage for every supported rank, including equal-shape and scalar
   fast paths, so they require no additional heap buffers.
 

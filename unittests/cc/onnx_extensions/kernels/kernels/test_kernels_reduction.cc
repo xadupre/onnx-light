@@ -698,10 +698,29 @@ TEST(KernelClass, ReduceProdEmptySetIdentityIsOne) {
   }
 }
 
-TEST(KernelClass, ReduceProdRejectsNonFloatData) {
+TEST(KernelClass, ReduceProdSupportsInt64Data) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
-  Tensor data = Tensor::FromInt64("", {2}, {1, 2});
+  Tensor data = Tensor::FromInt64("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_prod(data, axes, /*keepdims=*/false,
+                         /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(y.AsInt64()[0], 6);
+  EXPECT_EQ(y.AsInt64()[1], 120);
+
+  Tensor empty("", static_cast<int32_t>(core::runtime::DataType::INT64), {0}, {});
+  Tensor identity = reduce_prod(empty);
+  ASSERT_EQ(identity.shape, (std::vector<int64_t>{1}));
+  EXPECT_EQ(identity.AsInt64()[0], 1);
+}
+
+TEST(KernelClass, ReduceProdRejectsUnsupportedData) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor("", static_cast<int32_t>(core::runtime::DataType::INT32), {2},
+                       std::vector<uint8_t>(2 * sizeof(int32_t), 0u));
   EXPECT_THROW(reduce_prod(data), std::invalid_argument);
 }
 

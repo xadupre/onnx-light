@@ -473,6 +473,7 @@ TEST(BackendRunModel, NonZero) { RunBackendCasesFor("NonZero"); }
 TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
 TEST(BackendRunModel, Split) { RunBackendCasesFor("Split"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
+TEST(BackendRunModel, LogCumSumExp) { RunBackendCasesFor("LogCumSumExp"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
 TEST(BackendRunModel, STFT) { RunBackendCasesFor("STFT"); }

@@ -61,6 +61,10 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterCoshCases(std::vector<TestCase> &regi
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterCumSumCases(std::vector<TestCase> &registry,
                                                        TestMode mode = TestMode::TEST);
 
+/// Registers the ``LogCumSumExp`` backend test node cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterLogCumSumExpCases(std::vector<TestCase> &registry,
+                                                             TestMode mode = TestMode::TEST);
+
 /// Registers the ``CumProd`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterCumProdCases(std::vector<TestCase> &registry,
                                                         TestMode mode = TestMode::TEST);

@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernels/math/softmax_utils.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -37,26 +38,9 @@ void LogSoftmaxTyped(const Tensor &x, Tensor &output, int64_t outer, int64_t axi
         for (int64_t row = begin; row < end; ++row) {
           const int64_t o = row / inner;
           const int64_t i = row % inner;
-          T max_v = -std::numeric_limits<T>::infinity();
-          int64_t max_index = 0;
-          for (int64_t a = 0; a < axis_dim; ++a) {
-            const int64_t offset = (o * axis_dim + a) * inner + i;
-            if (px[offset] > max_v) {
-              max_v = px[offset];
-              max_index = a;
-            }
-          }
-          T sum = 0;
-          for (int64_t a = 0; a < axis_dim; ++a) {
-            if (a == max_index) {
-              continue;
-            }
-            const int64_t offset = (o * axis_dim + a) * inner + i;
-            sum += std::exp(px[offset] - max_v);
-          }
-          // Accounts for exactly one maximum without rounding 1 + sum to one.
-          const T log_sum =
-              std::isfinite(max_v) ? std::log1p(sum) : std::numeric_limits<T>::quiet_NaN();
+          const T *row_values = px + o * axis_dim * inner + i;
+          const auto [max_v, log_sum] =
+              softmax_detail::ComputeMaxAndLogSum(row_values, axis_dim, inner);
           for (int64_t a = 0; a < axis_dim; ++a) {
             const int64_t offset = (o * axis_dim + a) * inner + i;
             py[offset] = (px[offset] - max_v) - log_sum;

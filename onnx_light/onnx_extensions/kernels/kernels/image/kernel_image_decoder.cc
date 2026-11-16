@@ -787,9 +787,9 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
 // ---------------------------------------------------------------------------
 // PNG decoder
 //
-// Decodes a PNG bytestream restricted to the variants used by the upstream
-// backend test data: 8-bit non-interlaced color type 0 (Grayscale) or 2
-// (RGB), single or multiple ``IDAT`` chunks, deflate compressed. Implements
+// Decodes non-interlaced PNGs: grayscale/palette at 1/2/4/8 bits and
+// RGB, grayscale-alpha or RGBA at 8 bits per sample. Alpha is discarded
+// rather than composited when converting to RGB/BGR/Grayscale. Implements
 // DEFLATE (RFC 1951) and zlib (RFC 1950) inline so the kernel remains free
 // of external dependencies.
 // ---------------------------------------------------------------------------
@@ -899,7 +899,7 @@ int DecodeDeflate(DeflateBitReader &br, const DeflateHuff &h) {
   return -1;
 }
 
-bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
+bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out, size_t max_output) {
   static const int kLengthBase[29] = {3,  4,  5,  6,   7,   8,   9,   10,  11, 13,
                                       15, 17, 19, 23,  27,  31,  35,  43,  51, 59,
                                       67, 83, 99, 115, 131, 163, 195, 227, 258};
@@ -933,6 +933,8 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
       if (static_cast<uint16_t>(len ^ 0xFFFF) != nlen) {
         return false;
       }
+      if (len > max_output - out.size())
+        return false;
       for (int i = 0; i < len; ++i) {
         uint8_t v = br.read_byte();
         if (br.error()) {
@@ -1022,6 +1024,8 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
         if (sym < 0)
           return false;
         if (sym < 256) {
+          if (out.size() == max_output)
+            return false;
           out.push_back(static_cast<uint8_t>(sym));
         } else if (sym == 256) {
           break;
@@ -1037,6 +1041,8 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
           if (br.error())
             return false;
           if (distance <= 0 || static_cast<size_t>(distance) > out.size())
+            return false;
+          if (static_cast<size_t>(length) > max_output - out.size())
             return false;
           size_t start = out.size() - static_cast<size_t>(distance);
           for (int k = 0; k < length; ++k) {
@@ -1077,6 +1083,7 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   bool ihdr_seen = false;
   bool iend_seen = false;
   std::vector<uint8_t> idat;
+  std::vector<uint8_t> palette;
 
   while (pos + 8 <= size) {
     uint32_t chunk_len = ReadU32BE(data + pos);
@@ -1099,6 +1106,11 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
       filter_method = data[pos + 11];
       interlace = data[pos + 12];
       ihdr_seen = true;
+    } else if (std::strcmp(tag, "PLTE") == 0) {
+      if (!ihdr_seen || !idat.empty() || !palette.empty() || chunk_len == 0 || chunk_len > 768 ||
+          chunk_len % 3 != 0)
+        return false;
+      palette.assign(data + pos, data + pos + chunk_len);
     } else if (std::strcmp(tag, "IDAT") == 0) {
       if (!ihdr_seen)
         return false;
@@ -1117,16 +1129,24 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
     return false;
   if (compression != 0 || filter_method != 0 || interlace != 0)
     return false;
-  if (bit_depth != 8)
+  if (bit_depth != 1 && bit_depth != 2 && bit_depth != 4 && bit_depth != 8)
     return false;
   int src_channels;
   if (color_type == 2) {
     src_channels = 3;
-  } else if (color_type == 0) {
+  } else if (color_type == 0 || color_type == 3) {
     src_channels = 1;
+  } else if (color_type == 4) {
+    src_channels = 2;
+  } else if (color_type == 6) {
+    src_channels = 4;
   } else {
     return false;
   }
+  if (bit_depth != 8 && color_type != 0 && color_type != 3)
+    return false;
+  if (color_type == 3 && (palette.empty() || palette.size() / 3 > (1u << bit_depth)))
+    return false;
 
   // zlib wrapper: 2-byte header, deflate stream, 4-byte Adler-32 (unchecked).
   if (idat.size() < 2)
@@ -1142,17 +1162,24 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
 
   DeflateBitReader br(idat.data() + 2, idat.size() - 2);
   std::vector<uint8_t> raw;
-  const size_t row_bytes = static_cast<size_t>(width) * static_cast<size_t>(src_channels);
+  const size_t max_size = (std::numeric_limits<size_t>::max)();
+  const size_t bits_per_pixel = static_cast<size_t>(src_channels * bit_depth);
+  if (static_cast<size_t>(width) > (max_size - 7) / bits_per_pixel)
+    return false;
+  const size_t row_bytes = (static_cast<size_t>(width) * bits_per_pixel + 7) / 8;
+  const size_t out_channels = static_cast<size_t>(ImageDecoder::ChannelCount(pixel_format));
+  if (row_bytes == max_size || static_cast<size_t>(height) > max_size / (1 + row_bytes) ||
+      static_cast<size_t>(width) > max_size / out_channels / static_cast<size_t>(height))
+    return false;
   const size_t expected = static_cast<size_t>(height) * (1u + row_bytes);
-  raw.reserve(expected);
-  if (!Inflate(br, raw))
+  if (!Inflate(br, raw, expected))
     return false;
   if (raw.size() < expected)
     return false;
 
   detail::TemporaryTypedBuffer<uint8_t> rows(static_cast<size_t>(height) * row_bytes, allocator,
                                              "PNG rows");
-  const int bpp = src_channels;
+  const int bpp = static_cast<int>((bits_per_pixel + 7) / 8);
   for (int r = 0; r < height; ++r) {
     uint8_t filt_type = raw[static_cast<size_t>(r) * (1u + row_bytes)];
     const uint8_t *src = raw.data() + static_cast<size_t>(r) * (1u + row_bytes) + 1;
@@ -1206,7 +1233,6 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
     }
   }
 
-  const int64_t out_channels = ImageDecoder::ChannelCount(pixel_format);
   out_pixels.resize(static_cast<size_t>(height) * static_cast<size_t>(width) *
                     static_cast<size_t>(out_channels));
   for (int y = 0; y < height; ++y) {
@@ -1217,12 +1243,26 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
       uint8_t r;
       uint8_t g;
       uint8_t b;
-      if (src_channels == 3) {
-        r = src_row[x * 3 + 0];
-        g = src_row[x * 3 + 1];
-        b = src_row[x * 3 + 2];
+      const size_t offset = static_cast<size_t>(x) * static_cast<size_t>(src_channels);
+      if (color_type == 2 || color_type == 6) {
+        r = src_row[offset];
+        g = src_row[offset + 1];
+        b = src_row[offset + 2];
+      } else if (color_type == 4) {
+        r = g = b = src_row[offset];
       } else {
-        r = g = b = src_row[x];
+        const size_t bit_offset = static_cast<size_t>(x) * bit_depth;
+        const unsigned int sample =
+            (src_row[bit_offset / 8] >> (8 - bit_depth - bit_offset % 8)) & ((1u << bit_depth) - 1);
+        if (color_type == 3) {
+          if (sample >= palette.size() / 3)
+            return false;
+          r = palette[sample * 3];
+          g = palette[sample * 3 + 1];
+          b = palette[sample * 3 + 2];
+        } else {
+          r = g = b = static_cast<uint8_t>(sample * 255 / ((1u << bit_depth) - 1));
+        }
       }
       uint8_t *p = dst_row + static_cast<size_t>(x) * static_cast<size_t>(out_channels);
       if (pixel_format == "RGB") {

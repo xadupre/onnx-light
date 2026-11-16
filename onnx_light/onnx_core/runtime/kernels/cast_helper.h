@@ -58,13 +58,16 @@ float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept;
 
 // Encodes a ``float`` to the nearest representable FLOAT4E2M1 nibble, using
 // round-half-to-even tie-breaking. Values outside the representable range
-// ``[-6, 6]`` are saturated to ``+/-6``; ``NaN`` maps to ``+0``.
+// ``[-6, 6]`` are saturated to ``+/-6``; ``NaN`` maps to ``+0`` in this
+// implementation. ONNX leaves NaN conversion unspecified (no NaN encoding).
 std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept;
 
 // Decodes a FLOAT6 code of the specified element type to float32.
 float Float6BitsToFloat(std::uint8_t bits, DataType dtype);
 
 // Encodes a float32 value to the nearest FLOAT6 code of the specified element type.
+// ONNX leaves NaN conversion unspecified for FLOAT6E2M3 and FLOAT6E3M2
+// because neither format has a NaN encoding.
 std::uint8_t FloatToFloat6Bits(float value, DataType dtype);
 
 // Reads a FLOAT6 code from an LSB-first packed buffer.

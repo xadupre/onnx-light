@@ -12,6 +12,7 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_lib/checker.h"
@@ -561,6 +562,30 @@ TEST(BackendRunModel, AttentionCausalMaskExpanded) {
 
 TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
 TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
+
+TEST(BackendRunModel, Float4CastCasesExcludeNaN) {
+  auto cases = core::backend_test::CollectTestCasesByName(
+      "^test_cc_cast(like)?_(FLOAT(16)?_to_FLOAT4E2M1|FLOAT4E2M1_to_FLOAT(16)?)$");
+  ASSERT_EQ(cases.size(), 8u);
+  const KernelContext ctx{DefaultOpset(23)};
+  const onnx_kernels::kernel::Cast cast{ctx};
+  for (TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard unload_guard(tc);
+    for (const DataSet &ds : tc.data_sets()) {
+      ASSERT_FALSE(ds.inputs.empty());
+      ASSERT_EQ(ds.outputs.size(), 1u);
+      Tensor input = cast(ds.inputs[0], static_cast<int32_t>(DataType::FLOAT));
+      Tensor output = cast(ds.outputs[0], static_cast<int32_t>(DataType::FLOAT));
+      ASSERT_EQ(input.element_count(), 15);
+      ASSERT_EQ(output.element_count(), 15);
+      for (int64_t i = 0; i < input.element_count(); ++i) {
+        EXPECT_FALSE(std::isnan(input.AsFloat()[i]));
+      }
+      EXPECT_FLOAT_EQ(output.AsFloat()[8], -6.0f);
+    }
+  }
+}
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
 TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
 TEST(BackendRunModel, Slice) { RunBackendCasesFor("Slice"); }

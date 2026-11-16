@@ -208,7 +208,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       9.0f,
       1000000.0f,
       1e-7f,
-      std::nanf(""),
+      -1000000.0f,
       std::numeric_limits<float>::infinity(),
       std::numeric_limits<float>::infinity(),
       -std::numeric_limits<float>::infinity(),

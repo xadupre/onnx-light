@@ -626,9 +626,10 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
   // Mirrors the upstream ``test_cast_<FROM>_to_FLOAT4E2M1`` /
   // ``test_cast_FLOAT4E2M1_to_<TO>`` node tests. The 15-element FP32
   // vector covers the saturating-cast paths (values above the
-  // representable range +/-6), the +/-0 / NaN / +/-infinity special
+  // representable range +/-6), the +/-0 / +/-infinity special
   // values, and a few in-range values such as the asymmetric
   // ``+/-0.5`` / ``+/-1.5`` representable points.
+  // NaN conversion is unspecified, so NaN inputs are excluded.
   // FLOAT4E2M1 was introduced in opset 23.
   // ---------------------------------------------------------------------
   const std::vector<int64_t> f4_shape = {3, 5};
@@ -641,7 +642,7 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
       9.0f,
       1000000.0f,
       1e-7f,
-      std::nanf(""),
+      -1000000.0f,
       std::numeric_limits<float>::infinity(),
       std::numeric_limits<float>::infinity(),
       -std::numeric_limits<float>::infinity(),

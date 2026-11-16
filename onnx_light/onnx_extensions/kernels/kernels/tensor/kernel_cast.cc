@@ -32,7 +32,7 @@ namespace {
 
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 26> kSupportedElementTypes = {
+constexpr std::array<int32_t, 27> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT),        static_cast<int32_t>(DataType::DOUBLE),
     static_cast<int32_t>(DataType::INT32),        static_cast<int32_t>(DataType::INT64),
     static_cast<int32_t>(DataType::INT8),         static_cast<int32_t>(DataType::UINT8),
@@ -46,6 +46,7 @@ constexpr std::array<int32_t, 26> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::UINT2),        static_cast<int32_t>(DataType::FLOAT4E2M1),
     static_cast<int32_t>(DataType::FLOAT6E2M3),   static_cast<int32_t>(DataType::FLOAT6E3M2),
     static_cast<int32_t>(DataType::COMPLEX64),    static_cast<int32_t>(DataType::COMPLEX128),
+    static_cast<int32_t>(DataType::UINT32),
 };
 // Returns true when ``dtype`` is one of the numeric (non-STRING) element
 // types supported by ``Cast``. Element bytes for these types live in
@@ -61,6 +62,7 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
   case DataType::UINT8:
   case DataType::INT16:
   case DataType::UINT16:
+  case DataType::UINT32:
   case DataType::BOOL:
   case DataType::FLOAT16:
   case DataType::BFLOAT16:
@@ -245,6 +247,8 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
     return static_cast<double>(x.AsInt16()[i]);
   case DataType::UINT16:
     return static_cast<double>(x.AsUint16()[i]);
+  case DataType::UINT32:
+    return static_cast<double>(x.AsUint32()[i]);
   case DataType::BOOL:
     return x.AsBool()[i] != 0 ? 1.0 : 0.0;
   case DataType::FLOAT16: {
@@ -309,6 +313,9 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     return;
   case DataType::UINT16:
     output.AsUint16()[i] = static_cast<uint16_t>(static_cast<int64_t>(v));
+    return;
+  case DataType::UINT32:
+    output.AsUint32()[i] = static_cast<uint32_t>(static_cast<int64_t>(v));
     return;
   case DataType::BOOL:
     output.AsBool()[i] = (v != 0.0) ? uint8_t{1} : uint8_t{0};
@@ -382,6 +389,8 @@ std::string ElementToString(const Tensor &x, int64_t i) {
     return std::to_string(static_cast<int32_t>(x.AsInt16()[i]));
   case DataType::UINT16:
     return std::to_string(static_cast<uint32_t>(x.AsUint16()[i]));
+  case DataType::UINT32:
+    return std::to_string(x.AsUint32()[i]);
   case DataType::BOOL:
     return x.AsBool()[i] != 0 ? std::string("1") : std::string("0");
   case DataType::FLOAT16:
@@ -435,7 +444,7 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "INT16, UINT16, UINT32, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
       "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   if (static_cast<DataType>(to) == DataType::STRING) {
@@ -466,13 +475,13 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       IsSupportedCastDtype(x.data_type), "kernel::Cast: unsupported input dtype ",
       std::to_string(x.data_type),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "INT16, UINT16, UINT32, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
       "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "INT16, UINT16, UINT32, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
       "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   EXT_ENFORCE_INVALID(output.data_type == to,

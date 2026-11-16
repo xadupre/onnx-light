@@ -33,9 +33,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     GEMM_29_KEY = ("", "Gemm", 29)
     DEQUANTIZE_PACKED_29_KEY = ("", "DequantizePacked", 29)
     EXPM1_29_KEY = ("", "Expm1", 29)
+    LOG_CUM_SUM_EXP_29_KEY = ("", "LogCumSumExp", 29)
     LOG1P_29_KEY = ("", "Log1p", 29)
     MVN_29_KEY = ("", "MeanVarianceNormalization", 29)
     ND_29_KEYS = {("", "GatherND", 29), ("", "ScatterND", 29)}
+    PACKING_29_KEYS = {("", "Pack", 29), ("", "Unpack", 29)}
     STFT_KEY = ("", "STFT", 17)
     STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
 
@@ -60,10 +62,12 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 cls.GEMM_29_KEY,
                 cls.DEQUANTIZE_PACKED_29_KEY,
                 cls.EXPM1_29_KEY,
+                cls.LOG_CUM_SUM_EXP_29_KEY,
                 cls.LOG1P_29_KEY,
                 cls.MVN_29_KEY,
             }
             | cls.ND_29_KEYS
+            | cls.PACKING_29_KEYS
         )
         for key in recent_keys - set(onnx_dict):
             if isinstance(light_dict, set):

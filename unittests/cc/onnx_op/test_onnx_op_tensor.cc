@@ -172,7 +172,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 145u);
+  EXPECT_EQ(schemas.size(), 147u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);

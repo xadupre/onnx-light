@@ -3227,10 +3227,12 @@ TEST(OnnxOptimShapesPackUnpack, BitsAxesStorageAndTrimming) {
         auto unpack = PackingNode(true, bits);
         AddAttribute<int64_t>(unpack, "axis", axis);
         ctx.Set("X", SymTensor(packed));
+        ctx.Remove("Y");
         SetPackingCount(ctx, 11);
         ctx.ComputeShapeNode(unpack);
         EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 11);
         EXPECT_EQ(ctx.Get("Y").Dtype(), TensorType::kUint8);
+        ctx.Remove("Y");
         SetPackingCount(ctx, int64_t{0});
         EXPECT_THROW(ctx.ComputeShapeNode(unpack), std::invalid_argument);
       }
@@ -3263,6 +3265,7 @@ TEST(OnnxOptimShapesPackUnpack, GroupedPackingAndOverflowBoundaries) {
         AddAttribute<int64_t>(unpack, "radix", radix);
         AddAttribute<int64_t>(unpack, "group_size", group);
         ctx.Set("X", SymTensor(ctx.Get("Y")));
+        ctx.Remove("Y");
         SetPackingCount(ctx, count);
         ctx.ComputeShapeNode(unpack);
         EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), count);
@@ -3280,6 +3283,7 @@ TEST(OnnxOptimShapesPackUnpack, GroupedPackingAndOverflowBoundaries) {
       auto overflow = PackingNode(unpack, 0);
       AddAttribute<int64_t>(overflow, "radix", 256);
       AddAttribute<int64_t>(overflow, "group_size", group);
+      ctx.Remove("Y");
       SetPackingCount(ctx, std::numeric_limits<int64_t>::max());
       EXPECT_THROW(ctx.ComputeShapeNode(overflow), std::invalid_argument);
     }
@@ -3326,15 +3330,19 @@ TEST(OnnxOptimShapesPackUnpack, SymbolicUnknownAndDataBackedCount) {
   SetPackingCount(ctx, "count_symbol");
   ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("Y").Shape()[1].AsExpr(), "count_symbol");
+  ctx.Remove("Y");
   ctx.Set("count", SymTensor(nullptr, TensorType::kInt64, {}));
   ctx.ComputeShapeNode(node);
   EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  ctx.Remove("Y");
   int64_t count = 11;
   ctx.Set("count", SymTensor(&count, TensorType::kInt64, {}));
   ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), 11);
+  ctx.Remove("Y");
   count = -1;
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  ctx.Remove("Y");
   ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {"N"}));
   ctx.Set("count", SymTensor(nullptr, TensorType::kInt64, {}));
   ctx.ComputeShapeNode(PackingNode(true, 8));
@@ -3477,7 +3485,8 @@ TEST(OnnxOptimShapesPackUnpack, GraphBuilderPropagatesSymbolicCountAndIncrementa
   builder.MakeNode("Pack", {"X"}, {"packed"}, "", "", pack.attribute());
   auto unpack = PackingNode(true);
   builder.MakeNode("Unpack", {"packed", "count"}, {"unpacked"}, "", "", unpack.attribute());
-  builder.MakeNode("Identity", {"unpacked"}, {"Y"});
+  builder.MakeNode("Identity", {"unpacked"}, {"forwarded"});
+  builder.MakeNode("Identity", {"forwarded"}, {"Y"});
   builder.MakeOutput("Y");
   EXPECT_EQ(builder.GetShape("Y").Shape()[0].AsExpr(), "batch");
   EXPECT_EQ(builder.GetShape("Y").Shape()[1].AsExpr(), "N");

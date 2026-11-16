@@ -135,6 +135,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:Cos", MakeKernel<onnx_kernels::kernel::Cos>()},
       {"ai.onnx:Cosh", MakeKernel<onnx_kernels::kernel::Cosh>()},
       {"ai.onnx:CumSum", MakeKernel<onnx_kernels::kernel::CumSum>()},
+      {"ai.onnx:LogCumSumExp", MakeKernel<onnx_kernels::kernel::LogCumSumExp>()},
       {"ai.onnx:CumProd", MakeKernel<onnx_kernels::kernel::CumProd>()},
       {"ai.onnx:DeformConv", MakeKernel<onnx_kernels::kernel::DeformConv>()},
       {"ai.onnx:Det", MakeKernel<onnx_kernels::kernel::Det>()},

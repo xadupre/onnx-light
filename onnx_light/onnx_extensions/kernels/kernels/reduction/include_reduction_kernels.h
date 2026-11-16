@@ -318,8 +318,8 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Product reduction of a FLOAT input ``data`` along the dimensions listed in
-/// the optional ``axes`` int64 tensor. ``ReduceProd`` computes
+/// Product reduction of a FLOAT or INT64 input ``data`` along the dimensions
+/// listed in the optional ``axes`` int64 tensor. ``ReduceProd`` computes
 /// ``y = prod(x, axes)``; the empty-set identity is ``1`` (so reducing over a
 /// size-0 axis yields a one-filled output, and ``noop_with_empty_axes`` skips
 /// the reduction entirely).

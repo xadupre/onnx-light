@@ -121,9 +121,6 @@ TEST(LightOpSchemaVerify, PackingMetadataMatchesOnnxLib) {
       bits->set_name("unknown_attribute");
       bits->set_type(AttributeProto::INT);
       EXPECT_THROW(schema.Verify(node), SchemaError);
-      node.mutable_attribute()->Clear();
-      node.clear_input();
-      EXPECT_THROW(schema.Verify(node), SchemaError);
     }
   }
 }

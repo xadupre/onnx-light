@@ -358,10 +358,15 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             onnx_light_schemas.pop("DynamicQuantizeLinear", None)
         if "Expm1" not in onnx_schemas:
             onnx_light_schemas.pop("Expm1", None)
+        if "LogCumSumExp" not in onnx_schemas:
+            onnx_light_schemas.pop("LogCumSumExp", None)
         if "Log1p" not in onnx_schemas:
             onnx_light_schemas.pop("Log1p", None)
         if "DequantizePacked" not in onnx_schemas:
             onnx_light_schemas.pop("DequantizePacked", None)
+        for name in ("Pack", "Unpack"):
+            if name not in onnx_schemas:
+                onnx_light_schemas.pop(name, None)
         self._remove_grouped_matmul_if_onnx_is_outdated(onnx_light_schemas, onnx_schemas)
 
         self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))

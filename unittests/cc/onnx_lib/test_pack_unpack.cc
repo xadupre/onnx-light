@@ -163,6 +163,7 @@ TEST(onnx_pack_unpack, InfersGroupedPartialAndZeroDimensions) {
 
 TEST(onnx_pack_unpack, PreservesSymbolicDimensionsOnlyForByteIdentity) {
   auto shape = PackingShape({2, 3});
+  shape.mutable_dim(1)->clear_dim_value();
   shape.mutable_dim(1)->set_dim_param("codes");
   for (const auto *op : {"Pack", "Unpack"}) {
     for (int storage : {TensorProto::UINT8, TensorProto::UINT32}) {

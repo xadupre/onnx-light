@@ -71,6 +71,68 @@ TEST(CHECKER, ValidDataLocationTest) {
 #endif
 }
 
+TEST(CHECKER, ExternalModelRequiresFilePath) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const std::string data_filename = "onnx_light_in_memory_checker_weights.bin";
+  const std::string model_filename = "onnx_light_in_memory_checker_model.onnx";
+  {
+    std::ofstream out(data_filename, std::ios::binary);
+    out << "data";
+  }
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(21);
+  auto *graph = model.mutable_graph();
+  graph->set_name("external_data");
+  auto *tensor = graph->add_initializer();
+  tensor->set_name("weights");
+  tensor->set_data_type(TensorProto::FLOAT);
+  tensor->add_dims(1);
+  tensor->set_data_location(TensorProto::EXTERNAL);
+  auto *location = tensor->add_external_data();
+  location->set_key("location");
+  location->set_value(data_filename);
+  auto *output = graph->add_output();
+  output->set_name("weights");
+  auto *type = output->mutable_type()->mutable_tensor_type();
+  type->set_elem_type(TensorProto::FLOAT);
+  type->mutable_shape()->add_dim()->set_dim_value(1);
+  {
+    std::ofstream out(model_filename, std::ios::binary);
+    EXPECT_TRUE(model.SerializeToOstream(&out));
+  }
+  EXPECT_NO_THROW(checker::check_model(model_filename));
+  EXPECT_NO_THROW(checker::check_model(path_to_utf8(fs::absolute(model_filename))));
+
+  checker::CheckerContext ctx;
+  EXPECT_FALSE(ctx.model_dir_from_path());
+  ctx.set_model_dir("");
+  EXPECT_TRUE(ctx.model_dir_from_path());
+  EXPECT_NO_THROW(checker::check_tensor(*tensor, ctx));
+
+  for (const auto &path : {data_filename, "#unused/../" + data_filename}) {
+    SCOPED_TRACE(path);
+    location->set_value(path);
+    try {
+      checker::check_model(model);
+      FAIL() << "Accepted a file location without a model path";
+    } catch (const checker::ValidationError &error) {
+      EXPECT_NE(std::string(error.what()).find("not checked from a file path"), std::string::npos);
+    }
+    EXPECT_NO_THROW(checker::check_model(model, false, false, false, true));
+  }
+  for (const auto &path : {"#in-memory", "./#in-memory", "#unused/../#in-memory"}) {
+    SCOPED_TRACE(path);
+    location->set_value(path);
+    EXPECT_NO_THROW(checker::check_model(model));
+  }
+  tensor->set_raw_data("data");
+  EXPECT_THROW(checker::check_model(model), checker::ValidationError);
+  fs::remove(model_filename);
+  fs::remove(data_filename);
+#endif
+}
+
 TEST(CHECKER, ExternalTensorDataBounds) {
 #ifndef ONNX_NO_EXCEPTIONS
   const fs::path dir = fs::temp_directory_path() / "onnx_light_external_bounds_checker_test";

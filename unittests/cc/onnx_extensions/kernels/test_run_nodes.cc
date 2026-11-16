@@ -46,6 +46,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -2712,6 +2713,12 @@ TEST(RunModel, ModelLocalFunctionRepeatedContainerOutputs) {
         else
           rt.PutValue("input", core::runtime::RuntimeValue(std::vector<core::runtime::RuntimeValue>{
                                    core::runtime::RuntimeValue(std::move(tensor))}));
+        for (const auto &name : outputs) {
+          if (name == "y")
+            rt.PutValue(name, core::runtime::RuntimeValue(Tensor::FromFloat("", {}, {-1})));
+          else if (name == "z")
+            rt.PutShape(name, {42});
+        }
         ASSERT_NO_THROW(session.Run(rt));
         for (const auto &name : outputs) {
           if (name.empty())
@@ -2740,6 +2747,11 @@ TEST(RunModel, ModelLocalFunctionRepeatedContainerOutputs) {
           EXPECT_EQ(actual->shape, (std::vector<int64_t>{2}));
           EXPECT_FLOAT_EQ(actual->AsFloat()[0], value);
           EXPECT_FLOAT_EQ(actual->AsFloat()[1], 1.0f);
+          EXPECT_FALSE(rt.Has(name));
+          EXPECT_FALSE(rt.HasShape(name));
+          EXPECT_EQ(rt.values().count(name), kind == "value" ? 1u : 0u);
+          EXPECT_EQ(rt.sequences().count(name), kind == "sequence" ? 1u : 0u);
+          EXPECT_EQ(rt.maps().count(name), kind == "map" ? 1u : 0u);
         }
         EXPECT_EQ(rt.sequences().count("a"), 0u);
         EXPECT_EQ(rt.maps().count("a"), 0u);
@@ -4689,6 +4701,86 @@ TEST(RunModel, LocalFunctionSharesKernelContextOnlyWithEmptyTensorMap) {
   ASSERT_TRUE(rt.Has("internal_tmp"));
   ASSERT_EQ(rt.Get("internal_tmp").shape, (std::vector<int64_t>{1}));
   EXPECT_FLOAT_EQ(rt.Get("internal_tmp").AsFloat()[0], -1.0f);
+}
+
+TEST(RunModel, NestedLocalFunctionRestoresAllValueStoresAndSlots) {
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "local", 1);
+  for (const std::string name : {"Inner", "Outer"}) {
+    FunctionProto *function = model.add_functions();
+    function->set_name(name);
+    function->set_domain("local");
+    function->add_input("x");
+    function->add_output("out");
+    *function->add_node() = MakeNode(name == "Inner" ? "Probe" : "Inner", {"x"}, {"tmp"}, "local");
+    *function->add_node() = MakeNode("Identity", {"tmp"}, {"out"});
+  }
+  GraphProto *graph = model.add_graph();
+  graph->add_input()->set_name("a");
+  *graph->add_node() = MakeNode("Outer", {"a"}, {"result"}, "local");
+  // A second call uses a caller output name that collides with a formal input.
+  *graph->add_node() = MakeNode("Outer", {"result"}, {"x"}, "local");
+  graph->add_output()->set_name("x");
+  RuntimeSession session(model);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  bool fail = false;
+  size_t calls = 0;
+  rt.RegisterCustomKernel("local", "Probe", [&](const NodeProto &node, RuntimeContext &ctx) {
+    ++calls;
+    EXPECT_EQ(std::as_const(ctx).tensors().size(), 1u);
+    EXPECT_TRUE(ctx.values().empty());
+    EXPECT_TRUE(ctx.sequences().empty());
+    EXPECT_TRUE(ctx.maps().empty());
+    EXPECT_TRUE(ctx.shapes().empty());
+    EXPECT_FALSE(ctx.HasValue("a"));
+    EXPECT_FALSE(ctx.HasValue("result"));
+    const float value = ctx.Get(node.input(0)).AsFloat()[0];
+    ctx.Put("scratch", Tensor::FromFloat("", {}, {99}));
+    ctx.PutShape("scratch_shape", {3});
+    if (fail)
+      throw std::invalid_argument("local function probe failure");
+    ctx.Put(node.output(0), Tensor::FromFloat("", {}, {value + 1}));
+  });
+  rt.PutSequence("out", Sequence("out", DataType::FLOAT, {Tensor::FromFloat("", {}, {7})}));
+  rt.PutShape("tmp", {42});
+  rt.PutMap("map", core::runtime::Map("map", Tensor::FromInt64("", {1}, {5}),
+                                      Tensor::FromFloat("", {1}, {8})));
+  rt.PutValue("value", core::runtime::RuntimeValue(Tensor::FromFloat("", {}, {9})));
+  rt.Put("unrelated", Tensor::FromFloat("", {}, {10}));
+  const uint32_t unrelated_slot = rt.ResolveValueSlot("unrelated");
+  const uint64_t directory = rt.value_directory_identity();
+  const Tensor *unrelated = &rt.GetTensor(unrelated_slot);
+  const std::vector<uint32_t> caller_slots{unrelated_slot};
+  rt.SetCurrentNodeValueSlots(&caller_slots, &caller_slots);
+  for (const bool should_fail : {false, true, false}) {
+    SCOPED_TRACE(should_fail);
+    fail = should_fail;
+    rt.Put("a", Tensor::FromFloat("", {}, {2}));
+    rt.Put("x", Tensor::FromFloat("", {}, {-1}));
+    const uint32_t x_slot = rt.ResolveValueSlot("x");
+    if (should_fail) {
+      EXPECT_THROW(session.Run(rt), std::invalid_argument);
+      EXPECT_FLOAT_EQ(rt.GetTensor(x_slot).AsFloat()[0], -1);
+    } else {
+      ASSERT_NO_THROW(session.Run(rt));
+      EXPECT_FLOAT_EQ(rt.GetTensor(x_slot).AsFloat()[0], 4);
+    }
+    EXPECT_EQ(rt.value_directory_identity(), directory);
+    EXPECT_EQ(rt.current_input_slots(), &caller_slots);
+    EXPECT_EQ(rt.current_output_slots(), &caller_slots);
+    EXPECT_EQ(&rt.GetTensor(rt.CurrentInputSlot(0)), unrelated);
+    EXPECT_EQ(&rt.GetTensor(unrelated_slot), unrelated);
+    EXPECT_FLOAT_EQ(rt.Get("a").AsFloat()[0], 2);
+    EXPECT_EQ(rt.GetShape("tmp"), (core::runtime::Shape{42}));
+    EXPECT_FLOAT_EQ(rt.GetSequence("out").at(0).AsFloat()[0], 7);
+    EXPECT_FLOAT_EQ(rt.GetMap("map").values.AsFloat()[0], 8);
+    EXPECT_FLOAT_EQ(rt.values().at("value").tensor.AsFloat()[0], 9);
+    EXPECT_FALSE(rt.HasValue("scratch"));
+    EXPECT_FALSE(rt.HasValue("scratch_shape"));
+  }
+  EXPECT_EQ(calls, 5u);
 }
 
 // A local subgraph (e.g. the body of an If/Loop/Scan node) must start

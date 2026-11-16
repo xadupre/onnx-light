@@ -22,6 +22,7 @@ kernels
     include_training_kernels
     auto_pad
     matmul_shape_utils
+    softmax_utils
     pool_attrs
     recurrent_common
     kernel_svm_common

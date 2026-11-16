@@ -33,6 +33,13 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterCastLikeCases(std::vector<TestCase> &
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterBitCastCases(std::vector<TestCase> &registry,
                                                         TestMode mode = TestMode::TEST);
 
+/// Registers the opset-29 ``Pack`` backend cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterPackCases(std::vector<TestCase> &registry,
+                                                     TestMode mode = TestMode::TEST);
+/// Registers the opset-29 ``Unpack`` backend cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterUnpackCases(std::vector<TestCase> &registry,
+                                                       TestMode mode = TestMode::TEST);
+
 /// Registers the ``AffineGrid`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAffineGridCases(std::vector<TestCase> &registry,
                                                            TestMode mode = TestMode::TEST);

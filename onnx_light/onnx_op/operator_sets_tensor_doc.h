@@ -10,6 +10,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
+/// Returns the documentation string for the Pack operator (opset 29).
+std::string MakePackDoc();
+
+/// Returns the documentation string for the Unpack operator (opset 29).
+std::string MakeUnpackDoc();
+
 /**
  * Returns the documentation string for the Cast operator at the given opset
  * version.

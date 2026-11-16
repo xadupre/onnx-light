@@ -22,6 +22,7 @@ import numpy as np
 from onnx_light.ext_test_case import import_or_skip
 
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 
 # The kernels runtime and backend test registries are only available in the
@@ -58,7 +59,10 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
             f"{graph_inputs}, got {len(inputs)}."
         )
     for name, arr in zip(graph_inputs, inputs):
-        tp = onh.from_array(np.ascontiguousarray(arr), name=name)
+        input_array = np.asarray(arr)
+        if not input_array.flags.c_contiguous:
+            input_array = input_array.copy(order="C")
+        tp = onh.from_array(input_array, name=name)
         ctx.set(name, rt.tensor_from_proto(tp))
 
     rt.register_model_functions(model, ctx)
@@ -101,6 +105,23 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         outputs.append(arr.reshape(tuple(int(d) for d in t.shape)))
     return outputs
+
+
+class TestRunModelBackendInputShape(unittest.TestCase):
+    def test_scalar_input_remains_scalar(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["X"], ["Y"])],
+                "scalar_identity",
+                [oh.make_tensor_value_info("X", onnxl.TensorProto.INT64, [])],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.INT64, [])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+
+        output = run_model_backend(model, np.array(7, dtype=np.int64))[0]
+
+        np.testing.assert_array_equal(output, np.array(7, dtype=np.int64))
 
 
 def _single_node_op_type(tc) -> str | None:

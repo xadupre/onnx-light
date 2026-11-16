@@ -65,6 +65,12 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace tensor {
 
+/// Computes packed word dimensions while preserving other symbolic dimensions.
+void ComputeShapePack(ShapesContext &ctx, const NodeProto &node);
+
+/// Computes unpacked dimensions using the scalar count, including symbolic values.
+void ComputeShapeUnpack(ShapesContext &ctx, const NodeProto &node);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of a ``Concat`` node
  * and stores it in ``ctx``.

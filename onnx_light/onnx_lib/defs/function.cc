@@ -7,6 +7,8 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "onnx_lib/inliner/inliner.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, GraphProto &g,
                           const std::string &node_prefix) {
@@ -20,14 +22,17 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
   std::string node_name =
       node.has_name() ? node.ref_name().value() : std::string(func.ref_name()) + uniq_prefix;
-  std::unordered_map<std::string, std::string> io_names_map;
+  inliner::Renamer renamer(node_name, g);
   std::unordered_map<std::string, AttributeProto> attr_map;
 
   for (int idx = 0; idx < (int)node.ref_input().size(); ++idx) {
     if (idx >= (int)func.ref_input().size()) {
       ONNX_THROW("Input for function node " + node_name + " is out of bounds");
     }
-    io_names_map[func.ref_input()[idx]] = node.ref_input()[idx];
+    renamer.BindName(func.ref_input()[idx], node.ref_input()[idx]);
+  }
+  for (size_t idx = node.ref_input().size(); idx < func.ref_input().size(); ++idx) {
+    renamer.BindName(func.ref_input()[idx], "");
   }
   for (int idx = 0; idx < (int)node.ref_output().size(); ++idx) {
     if (idx >= (int)func.ref_output().size()) {
@@ -39,7 +44,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     if (node.ref_output()[idx].empty()) {
       continue;
     }
-    io_names_map[func.ref_output()[idx]] = node.ref_output()[idx];
+    renamer.BindName(func.ref_output()[idx], node.ref_output()[idx]);
   }
 
   for (const auto &attr : node.ref_attribute()) {
@@ -78,23 +83,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   for (const auto &function_node : func.ref_node()) {
     NodeProto *new_node = g.add_node();
     new_node->CopyFrom(function_node);
-    new_node->clr_input();
-    new_node->clr_output();
     new_node->clr_attribute();
-    for (const auto &input : function_node.ref_input()) {
-      if (io_names_map.count(input)) {
-        *new_node->add_input() = io_names_map[input];
-      } else {
-        new_node->add_input()->assign("Func_").append(node_name).append(input);
-      }
-    }
-    for (const auto &output : function_node.ref_output()) {
-      if (io_names_map.count(output)) {
-        *new_node->add_output() = io_names_map[output];
-      } else {
-        new_node->add_output()->assign("Func_").append(node_name).append(output);
-      }
-    }
     for (const auto &attr : function_node.ref_attribute()) {
       if (attr.has_ref_attr_name()) {
         if (attr_map.count(attr.ref_ref_attr_name())) {
@@ -107,6 +96,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
         new_attr->CopyFrom(attr);
       }
     }
+    renamer.RenameNode(*new_node);
   }
 }
 

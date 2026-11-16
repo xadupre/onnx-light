@@ -270,9 +270,18 @@ public:
       Rename(s);
       init.set_name(s);
     }
+    std::unordered_set<std::string> local_outputs;
+    for (const auto &n : graph.node())
+      for (const auto &y : n.output())
+        if (!y.empty())
+          local_outputs.insert(y);
+    // Outputs forwarding an input, initializer or outer-scope value keep that binding.
     for (auto &y : graph.output()) {
       std::string s = y.name();
-      Rename(s);
+      if (local_outputs.count(s))
+        Rename(s);
+      else
+        LookupOrRename(s, false);
       y.set_name(s);
     }
     for (auto &n : graph.node())
@@ -937,10 +946,7 @@ public:
     renamer_.BindFormalToActual(formal_name, actual_name);
   }
 
-  void RenameNode(NodeProto &node) {
-    // Use the InliningRenamer's ProcessNode method which handles graph-value attributes
-    renamer_.ProcessNode(node);
-  }
+  void RenameNode(NodeProto &node) { renamer_.VisitNode(node); }
 };
 
 Renamer::Renamer(const std::string &prefix, const GraphProto &graph)

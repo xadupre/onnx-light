@@ -618,7 +618,7 @@ TEST(KernelClass, CastUsesTypedTuningAndParallelNumericConversion) {
   EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(float_key), nullptr);
   EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(string_key), nullptr);
   EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(packed_key), nullptr);
-  EXPECT_EQ(cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::UINT32)).device,
+  EXPECT_EQ(cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::UINT64)).device,
             core::symbolic::Device::kUndefined);
 
   cast_kernel.Configure({float_key, {{"parallel.minimum_elements", int64_t{1}}}});
@@ -956,8 +956,8 @@ TEST(KernelClass, CastClassRejectsUnsupportedTo) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
-  // UINT32 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::UINT32)),
+  // UINT64 is not in the supported set for the kernel today.
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::UINT64)),
                std::invalid_argument);
 }
 

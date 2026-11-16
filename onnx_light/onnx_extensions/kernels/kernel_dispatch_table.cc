@@ -108,6 +108,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:AveragePool", MakeKernel<onnx_kernels::kernel::AveragePool>()},
       {"ai.onnx:BitShift", MakeKernel<onnx_kernels::kernel::BitShift>()},
       {"ai.onnx:BitCast", MakeKernel<onnx_kernels::kernel::BitCast>()},
+      {"ai.onnx:Pack", MakeKernel<onnx_kernels::kernel::Pack>()},
+      {"ai.onnx:Unpack", MakeKernel<onnx_kernels::kernel::Unpack>()},
       {"ai.onnx:BitwiseAnd", MakeKernel<onnx_kernels::kernel::BitwiseAnd>()},
       {"ai.onnx:BitwiseNot", MakeKernel<onnx_kernels::kernel::BitwiseNot>()},
       {"ai.onnx:BitwiseOr", MakeKernel<onnx_kernels::kernel::BitwiseOr>()},

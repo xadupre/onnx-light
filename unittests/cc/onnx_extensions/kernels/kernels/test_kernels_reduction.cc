@@ -142,6 +142,64 @@ TEST(KernelClass, ReduceSumDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 21.0f);
 }
 
+TEST(KernelClass, ReduceSumUint32PreservesHighBitsAndWrapsWithoutFloatConversion) {
+  onnx_kernels::RegisterKernelFunctions();
+  const ReduceSum sum{KernelContext{DefaultOpset(29)}};
+  ASSERT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(
+                sum.TuningKey(core::runtime::DataType::UINT32)),
+            nullptr);
+  const Tensor data = Tensor::FromUint32("", {2, 3}, {0x80000000, 0x7FFFFFFF, 0, 0xFFFFFFFF, 1, 1});
+  const Tensor axis = Tensor::FromInt64("", {1}, {-1});
+  const Tensor empty_axes = Tensor::FromInt64("", {0}, {});
+  for (bool keepdims : {false, true}) {
+    const Shape shape = keepdims ? Shape{2, 1} : Shape{2};
+    const Tensor expected = Tensor::FromUint32("", shape, {0xFFFFFFFF, 1});
+    const Tensor result = sum(data, axis, keepdims);
+    EXPECT_EQ(result.data_type, core::runtime::DataType::UINT32);
+    EXPECT_EQ(result.shape, shape);
+    EXPECT_EQ(result.size_bytes(), 2 * sizeof(uint32_t));
+    EXPECT_EQ(result.data, expected.data);
+    Tensor preallocated = Tensor::FromUint32("", shape, {0, 0});
+    sum(data, axis, keepdims, false, preallocated);
+    EXPECT_EQ(preallocated.data, expected.data);
+    const Shape all_shape = keepdims ? Shape{1, 1} : Shape{};
+    const Tensor all_expected = Tensor::FromUint32("", all_shape, {0});
+    EXPECT_EQ(sum(data, keepdims).data, all_expected.data);
+    Tensor all_preallocated = Tensor::FromUint32("", all_shape, {1});
+    sum(data, keepdims, false, all_preallocated);
+    EXPECT_EQ(all_preallocated.data, all_expected.data);
+    EXPECT_EQ(sum(data, empty_axes, keepdims).data, all_expected.data);
+    EXPECT_EQ(sum(data, keepdims, true).data, data.data);
+    EXPECT_EQ(sum(data, empty_axes, keepdims, true).data, data.data);
+    Tensor noop = Tensor::FromUint32("", data.shape, std::vector<uint32_t>(6, 0));
+    sum(data, keepdims, true, noop);
+    EXPECT_EQ(noop.data, data.data);
+    sum(data, empty_axes, keepdims, true, noop);
+    EXPECT_EQ(noop.data, data.data);
+  }
+  const Tensor high_bit = Tensor::FromUint32("", {1}, {0x80000000});
+  EXPECT_EQ(sum(high_bit, false).data, high_bit.data);
+  Tensor wrong_size("", core::runtime::DataType::UINT32, {}, std::vector<uint8_t>(8));
+  EXPECT_THROW(sum(data, false, false, wrong_size), std::invalid_argument);
+  Tensor wrong_type = Tensor::FromInt64("", {}, {0});
+  EXPECT_THROW(sum(data, false, false, wrong_type), std::invalid_argument);
+}
+
+TEST(KernelClass, ReduceSumUint32EmptyReductionAndNoop) {
+  const ReduceSum sum{KernelContext{DefaultOpset(29)}};
+  const Tensor empty = Tensor::FromUint32("", {2, 0, 3}, {});
+  const Tensor axis = Tensor::FromInt64("", {1}, {1});
+  const Tensor empty_axes = Tensor::FromInt64("", {0}, {});
+  const Tensor expected = Tensor::FromUint32("", {2, 3}, std::vector<uint32_t>(6, 0));
+  const Tensor result = sum(empty, axis, false);
+  EXPECT_EQ(result.shape, expected.shape);
+  EXPECT_EQ(result.data, expected.data);
+  EXPECT_EQ(sum(empty, false).data, Tensor::FromUint32("", {}, {0}).data);
+  const Tensor noop = sum(empty, empty_axes, false, true);
+  EXPECT_EQ(noop.shape, empty.shape);
+  EXPECT_EQ(noop.size_bytes(), 0u);
+}
+
 TEST(KernelClass, ReduceSumParallelLeadingSlicesMatchSerial) {
   core::runtime::CpuExecutionPolicy policy;
   policy.num_threads = 2;

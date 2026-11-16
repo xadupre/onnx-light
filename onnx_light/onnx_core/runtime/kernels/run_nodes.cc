@@ -1073,6 +1073,8 @@ namespace {
 // The bound function (with resolved attribute references) is computed once at
 // construction time, and the execution plan + per-node kernel instances are
 // resolved on the first ``Run`` and reused across all subsequent calls.
+// RuntimeSession requires callers to serialize runs on the same session; this
+// kernel's reusable local value context relies on that guarantee.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
@@ -1374,6 +1376,7 @@ public:
     bindings.Restore();
     value_scope.Restore();
     for (auto &[name, result] : output_values) {
+      rt.Remove(name);
       rt.PutValue(name, std::move(result));
     }
     for (auto &[name, result] : output_sequences) {
@@ -1381,9 +1384,11 @@ public:
       rt.PutSequence(name, std::move(result));
     }
     for (auto &[name, result] : output_maps) {
+      rt.Remove(name);
       rt.PutMap(name, std::move(result));
     }
     for (auto &[name, result] : output_tensors) {
+      rt.Remove(name);
       rt.Put(name, std::move(result), RuntimeEventKind::kOutput);
     }
   }

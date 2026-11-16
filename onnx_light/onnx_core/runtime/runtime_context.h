@@ -862,8 +862,10 @@ public:
 
   /// Exchanges all value stores and their stable slot directory in constant time.
   /// Active node-slot bindings follow their directory.
-  /// Execution configuration, allocators and diagnostics remain unchanged.
-  /// Both contexts must keep their allocators alive until the values are restored.
+  /// Execution allocators and diagnostics remain unchanged; allocator/resource
+  /// references in the value stores move with those stores. Both contexts must
+  /// keep any allocators/resources referenced by stored values alive until those
+  /// values are restored or destroyed.
   void SwapValues(RuntimeContext &other) noexcept;
 
   /// Seeds the stable value directory from a reusable execution plan.

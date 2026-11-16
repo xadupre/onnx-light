@@ -27,16 +27,25 @@ void ComputeLogSoftmaxOverClassAxis(const float *scores, float *log_prob, int64_
   for (int64_t o = 0; o < n_outer; ++o) {
     for (int64_t i = 0; i < n_inner; ++i) {
       float max_v = -std::numeric_limits<float>::infinity();
+      int64_t max_index = 0;
       for (int64_t c = 0; c < n_classes; ++c) {
         const int64_t offset = (o * n_classes + c) * n_inner + i;
-        max_v = std::max(max_v, scores[static_cast<size_t>(offset)]);
+        if (scores[static_cast<size_t>(offset)] > max_v) {
+          max_v = scores[static_cast<size_t>(offset)];
+          max_index = c;
+        }
       }
       float sum = 0.0f;
       for (int64_t c = 0; c < n_classes; ++c) {
+        if (c == max_index) {
+          continue;
+        }
         const int64_t offset = (o * n_classes + c) * n_inner + i;
         sum += std::exp(scores[static_cast<size_t>(offset)] - max_v);
       }
-      const float log_sum = std::log(sum);
+      // Accounts for exactly one maximum without rounding 1 + sum to one.
+      const float log_sum =
+          std::isfinite(max_v) ? std::log1p(sum) : std::numeric_limits<float>::quiet_NaN();
       for (int64_t c = 0; c < n_classes; ++c) {
         const int64_t offset = (o * n_classes + c) * n_inner + i;
         log_prob[static_cast<size_t>(offset)] =

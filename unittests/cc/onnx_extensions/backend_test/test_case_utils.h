@@ -28,7 +28,9 @@ inline void ExpectTensorBitEqual(const runtime::Tensor &actual, const runtime::T
 inline void ExpectBackendCaseTensorEqual(const runtime::Tensor &actual,
                                          const runtime::Tensor &expected, const TestCase &tc) {
   using runtime::DataType;
-  if (tc.name.find("test_cc_supported_dtype_") != 0 ||
+  const bool softmax_reference = tc.name.find("test_cc_reference_logsoftmax_") == 0 ||
+                                 tc.name.find("test_cc_reference_sce_") == 0;
+  if ((!softmax_reference && tc.name.find("test_cc_supported_dtype_") != 0) ||
       tc.name.find("test_cc_supported_dtype_Transpose_") == 0 ||
       (expected.data_type != DataType::FLOAT && expected.data_type != DataType::DOUBLE &&
        expected.data_type != DataType::FLOAT16 && expected.data_type != DataType::BFLOAT16)) {

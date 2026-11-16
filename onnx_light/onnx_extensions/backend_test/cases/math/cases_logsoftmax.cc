@@ -8,6 +8,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,117 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (const auto dtype :
+       {DataType::FLOAT16, DataType::BFLOAT16, DataType::FLOAT, DataType::DOUBLE}) {
+    const std::string suffix = dtype == DataType::FLOAT16    ? "float16"
+                               : dtype == DataType::BFLOAT16 ? "bfloat16"
+                               : dtype == DataType::FLOAT    ? "float32"
+                                                             : "float64";
+    for (const int64_t axis : {0, 1, -1}) {
+      NodeProto node;
+      node.set_op_type("LogSoftmax");
+      node.add_input("input");
+      node.add_output("output");
+      auto *attribute = node.add_attribute();
+      attribute->set_name("axis");
+      attribute->set_type(AttributeProto::INT);
+      attribute->set_i(axis);
+      Expect(
+          registry, std::move(node),
+          "test_cc_reference_logsoftmax_small_log_probability_" + suffix + "_axis_" +
+              std::to_string(axis),
+          {DefaultOpset(13)},
+          [dtype, axis]() -> IoData {
+            const double margin = dtype == DataType::DOUBLE    ? 40.0
+                                  : dtype == DataType::FLOAT16 ? 10.0
+                                                               : 18.0;
+            const double normalizer = std::log1p(2 * std::exp(-margin));
+            const std::vector<int64_t> shape =
+                axis == 0 ? std::vector<int64_t>{3, 2, 3} : std::vector<int64_t>{2, 3, 3};
+            const int64_t inner = axis == 0 ? 6 : axis == 1 ? 3 : 1;
+            std::vector<double> scores(18), expected(18);
+            for (int64_t row = 0; row < 6; ++row) {
+              for (int64_t a = 0; a < 3; ++a) {
+                const int64_t offset = (row / inner * 3 + a) * inner + row % inner;
+                scores[offset] = a == row % 3 ? 0.0 : -margin;
+                expected[offset] = scores[offset] - normalizer;
+              }
+            }
+            if (dtype == DataType::DOUBLE) {
+              return IoData{{Tensor::FromDouble("", shape, scores)},
+                            {Tensor::FromDouble("", shape, expected)}};
+            }
+            Tensor x =
+                Tensor::FromFloat("", shape, std::vector<float>(scores.begin(), scores.end()));
+            Tensor y =
+                Tensor::FromFloat("", shape, std::vector<float>(expected.begin(), expected.end()));
+            if (core::runtime::IsHalfPrecision(dtype)) {
+              x = core::runtime::DemoteFromFloat32(x, dtype);
+              y = core::runtime::DemoteFromFloat32(y, dtype);
+            }
+            return IoData{{std::move(x)}, {std::move(y)}};
+          },
+          "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+    }
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    Expect(
+        registry, std::move(node), "test_cc_reference_logsoftmax_tied_maxima", {DefaultOpset(13)},
+        []() -> IoData {
+          const double inf = std::numeric_limits<double>::infinity();
+          Tensor x = Tensor::FromDouble("", {3, 3}, {0, 0, -200, 4, 4, 4, 0, -inf, -inf});
+          Tensor y =
+              Tensor::FromDouble("", {3, 3},
+                                 {-std::log(2.0), -std::log(2.0), -200 - std::log(2.0),
+                                  -std::log(3.0), -std::log(3.0), -std::log(3.0), 0, -inf, -inf});
+          return IoData{{std::move(x)}, {std::move(y)}};
+        },
+        "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+  }
+
+  for (const bool empty : {false, true}) {
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    auto *axis = node.add_attribute();
+    axis->set_name("axis");
+    axis->set_type(AttributeProto::INT);
+    axis->set_i(1);
+    Expect(
+        registry, std::move(node),
+        empty ? "test_cc_reference_logsoftmax_empty_input"
+              : "test_cc_reference_logsoftmax_single_class",
+        {DefaultOpset(13)},
+        [empty]() -> IoData {
+          if (empty) {
+            return IoData{{Tensor::FromFloat("", {0, 3}, {})}, {Tensor::FromFloat("", {0, 3}, {})}};
+          }
+          return IoData{{Tensor::FromFloat("", {2, 1, 3}, {1, -2, 3, 4, 5, -6})},
+                        {Tensor::FromFloat("", {2, 1, 3}, std::vector<float>(6, 0))}};
+        },
+        "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    Expect(registry, std::move(node), "test_cc_reference_logsoftmax_nonfinite", {DefaultOpset(13)},
+           []() -> IoData {
+             const double inf = std::numeric_limits<double>::infinity();
+             const double nan = std::numeric_limits<double>::quiet_NaN();
+             return IoData{{Tensor::FromDouble("", {3, 2}, {inf, 0, -inf, -inf, nan, 0})},
+                           {Tensor::FromDouble("", {3, 2}, std::vector<double>(6, nan))}};
+           });
   }
 
   for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {

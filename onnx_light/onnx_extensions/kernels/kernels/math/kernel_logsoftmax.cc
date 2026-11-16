@@ -38,16 +38,25 @@ void LogSoftmaxTyped(const Tensor &x, Tensor &output, int64_t outer, int64_t axi
           const int64_t o = row / inner;
           const int64_t i = row % inner;
           T max_v = -std::numeric_limits<T>::infinity();
+          int64_t max_index = 0;
           for (int64_t a = 0; a < axis_dim; ++a) {
             const int64_t offset = (o * axis_dim + a) * inner + i;
-            max_v = std::max(max_v, px[offset]);
+            if (px[offset] > max_v) {
+              max_v = px[offset];
+              max_index = a;
+            }
           }
           T sum = 0;
           for (int64_t a = 0; a < axis_dim; ++a) {
+            if (a == max_index) {
+              continue;
+            }
             const int64_t offset = (o * axis_dim + a) * inner + i;
             sum += std::exp(px[offset] - max_v);
           }
-          const T log_sum = std::log(sum);
+          // Accounts for exactly one maximum without rounding 1 + sum to one.
+          const T log_sum =
+              std::isfinite(max_v) ? std::log1p(sum) : std::numeric_limits<T>::quiet_NaN();
           for (int64_t a = 0; a < axis_dim; ++a) {
             const int64_t offset = (o * axis_dim + a) * inner + i;
             py[offset] = (px[offset] - max_v) - log_sum;

@@ -512,3 +512,36 @@ TEST(onnx_pack_unpack, ExpandsNestedCapturesAndPreservesEmptyOptionalInputs) {
   EXPECT_TRUE(optional_graph.node(0).input(1).empty());
   EXPECT_TRUE(optional_graph.node(0).input(2).empty());
 }
+
+TEST(onnx_pack_unpack, ExpandsPassthroughLoopBody) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto *schema = OpSchemaRegistry::Schema("Identity", 29, "");
+  ASSERT_NE(schema, nullptr);
+  NodeProto node;
+  node.set_op_type("Identity");
+  node.add_input("caller_input");
+  node.add_output("caller_output");
+  FunctionProto passthrough;
+  FunctionBuilder(passthrough).Add(R"ONNX(
+    trip = Constant <value = int64 {2}>()
+    keep = Constant <value = bool {1}>()
+    output = Loop(trip, keep, input) <
+      body = passthrough_body (int64 iteration, bool cond, float[2] state) => (bool cond, float[2] state) {}
+    >
+  )ONNX");
+  schema->BuildFunction(passthrough);
+  ModelProto passthrough_model;
+  ASSERT_TRUE(OnnxParser::Parse(passthrough_model, R"ONNX(
+    <ir_version: 14, opset_import: ["" : 29]>
+    expanded (float[2] caller_input) => (float[2] caller_output) {}
+  )ONNX")
+                  .IsOK());
+  auto &passthrough_graph = *passthrough_model.mutable_graph();
+  FunctionExpandHelper(node, passthrough, passthrough_graph);
+  EXPECT_NO_THROW(checker::check_model(passthrough_model));
+  const auto &body = passthrough_graph.node(2).attribute(0).g();
+  ASSERT_EQ(body.input_size(), 3);
+  ASSERT_EQ(body.output_size(), 2);
+  EXPECT_EQ(body.output(0).name(), body.input(1).name());
+  EXPECT_EQ(body.output(1).name(), body.input(2).name());
+}

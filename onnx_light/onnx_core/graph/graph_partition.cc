@@ -68,6 +68,11 @@ Cost AddCost(const Cost &a, const Cost &b) {
           CheckedAdd(CheckedAdd(a.overflow, b.overflow), bytes < a.bytes)};
 }
 
+Cost SubtractCost(const Cost &a, const Cost &b) {
+  // Removes a live boundary contribution, including any borrow from the high word.
+  return {a.unknown - b.unknown, a.bytes - b.bytes, a.overflow - b.overflow - (a.bytes < b.bytes)};
+}
+
 struct Score {
   Cost cost;
   size_t grouped = 0;
@@ -83,7 +88,7 @@ bool Better(const Score &a, const Score &b) {
 
 struct Step {
   size_t start = 0;
-  std::optional<OperatorGroup> group;
+  std::optional<Cost> boundary;
 };
 
 } // namespace
@@ -166,20 +171,13 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
       throw std::invalid_argument("Undefined graph output '" + value.name() + "'.");
     last_use[value.name()] = count;
   }
-  auto cost = [&](const std::vector<std::string> &inputs, const std::vector<std::string> &outputs) {
-    Cost result;
-    for (const auto *names : {&inputs, &outputs}) {
-      for (const auto &name : *names) {
-        if (constants.count(name))
-          continue;
-        const auto size = sizes.find(name);
-        if (size == sizes.end() || !size->second)
-          result.unknown = CheckedAdd(result.unknown, 1);
-        else
-          result = AddCost(result, {0, *size->second});
-      }
-    }
-    return result;
+  auto cost = [&](const std::string &name) -> Cost {
+    if (constants.count(name))
+      return {};
+    const auto size = sizes.find(name);
+    if (size == sizes.end() || !size->second)
+      return {1, 0};
+    return {0, *size->second};
   };
   auto live_after = [&](const std::string &name, size_t position) {
     const auto use = last_use.find(name);
@@ -189,22 +187,24 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
   std::vector<Step> previous(count + 1);
   best[0] = Score{};
   auto update = [&](size_t position, const Score &score, size_t start,
-                    std::optional<OperatorGroup> group) {
+                    std::optional<Cost> boundary) {
     if (!best[position] || Better(score, *best[position])) {
       best[position] = score;
-      previous[position] = {start, std::move(group)};
+      previous[position] = {start, boundary};
     }
   };
   for (size_t start = 0; start < count; ++start) {
     const Score state = *best[start];
-    std::vector<std::string> single_outputs;
+    Cost single;
+    for (const auto &name : node_inputs[start])
+      single = AddCost(single, cost(name));
     for (const auto &name : node_outputs[start])
       if (live_after(name, start))
-        single_outputs.push_back(name);
-    const Cost single = cost(node_inputs[start], single_outputs);
+        single = AddCost(single, cost(name));
     update(start + 1, {AddCost(state.cost, single), state.grouped}, start, std::nullopt);
 
-    std::vector<std::string> inputs, outputs;
+    Cost input_cost, output_cost;
+    size_t output_count = 0;
     std::unordered_set<std::string> seen_inputs;
     size_t constant_inputs = 0;
     const size_t length_limit =
@@ -217,51 +217,65 @@ ProposeOperatorGroups(const GraphProto &graph, const OperatorGroupOptions &optio
         const auto producer = producers.find(name);
         if ((producer == producers.end() || producer->second < start) &&
             seen_inputs.insert(name).second) {
-          inputs.push_back(name);
+          input_cost = AddCost(input_cost, cost(name));
           constant_inputs += constants.count(name);
         }
         const auto use = last_use.find(name);
-        if (use != last_use.end() && use->second == end)
-          std::erase(outputs, name);
+        if (use != last_use.end() && use->second == end && producer != producers.end() &&
+            producer->second >= start) {
+          output_cost = SubtractCost(output_cost, cost(name));
+          --output_count;
+        }
       }
       for (const auto &name : node_outputs[end])
-        if (live_after(name, end))
-          outputs.push_back(name);
+        if (live_after(name, end)) {
+          output_cost = AddCost(output_cost, cost(name));
+          ++output_count;
+        }
       if (options.max_constant_inputs && constant_inputs > *options.max_constant_inputs)
         break;
       if (options.max_boundary_bytes) {
-        const Cost input_cost = cost(inputs, {});
         if (input_cost.unknown || input_cost.overflow ||
             input_cost.bytes > *options.max_boundary_bytes)
           break;
       }
       const size_t length = end - start + 1;
-      if (length < options.min_group_nodes || outputs.empty())
+      if (length < options.min_group_nodes || !output_count)
         continue;
-      const Cost boundary = cost(inputs, outputs);
+      const Cost boundary = AddCost(input_cost, output_cost);
       if (options.max_boundary_bytes &&
           (boundary.unknown || boundary.overflow || boundary.bytes > *options.max_boundary_bytes))
         continue;
       const Score score{AddCost(state.cost, boundary), state.grouped + length};
-      if (!best[end + 1] || Better(score, *best[end + 1])) {
-        OperatorGroup group;
-        group.node_indices.assign(indices.begin() + start, indices.begin() + end + 1);
-        group.inputs = inputs;
-        group.outputs = outputs;
-        if (!boundary.unknown && !boundary.overflow)
-          group.transfer_bytes = boundary.bytes;
-        update(end + 1, score, start, std::move(group));
-      }
+      update(end + 1, score, start, boundary);
     }
   }
   if (best[count]->cost.overflow)
     throw std::invalid_argument("Operator grouping transfer cost overflows uint64.");
   std::vector<OperatorGroup> result;
   for (size_t position = count; position;) {
-    auto &step = previous[position];
+    const auto &step = previous[position];
+    if (step.boundary) {
+      // Materializes ordered ports only for selected, disjoint intervals.
+      OperatorGroup group;
+      group.node_indices.assign(indices.begin() + step.start, indices.begin() + position);
+      std::unordered_set<std::string> seen_inputs;
+      for (size_t index = step.start; index < position; ++index) {
+        for (const auto &name : node_inputs[index]) {
+          const auto producer = producers.find(name);
+          if ((producer == producers.end() || producer->second < step.start) &&
+              seen_inputs.insert(name).second)
+            group.inputs.push_back(name);
+        }
+        for (const auto &name : node_outputs[index])
+          if (live_after(name, position - 1))
+            group.outputs.push_back(name);
+      }
+      if (!step.boundary->unknown && !step.boundary->overflow)
+        group.transfer_bytes = step.boundary->bytes;
+      result.push_back(std::move(group));
+    }
     position = step.start;
-    if (step.group)
-      result.push_back(std::move(*step.group));
   }
   std::reverse(result.begin(), result.end());
   return MakeIntervalGroupProposal(std::move(result), graph.node().size());

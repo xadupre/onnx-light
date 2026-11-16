@@ -12,6 +12,64 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 namespace {
 
+LightOpSchema MakePackingSchema(bool unpack) {
+  std::vector<AttributeParam> attributes{
+      {"axis",
+       unpack ? "Axis along which independent sequences are unpacked. Negative axes are supported."
+              : "Axis along which independent sequences are packed. Negative axes are supported.",
+       AttributeType::INT, /*required=*/false, int64_t{-1}},
+  };
+  if (!unpack) {
+    attributes.push_back(
+        {"output_type",
+         "Packed storage type: TensorProto UINT8 (2) or UINT32 (12). Logical codes remain UINT8.",
+         AttributeType::INT, /*required=*/false, int64_t{TensorProto::UINT8}});
+  }
+  attributes.push_back(
+      {"bits", "Number of bits per unsigned code. Mutually exclusive with radix/group_size.",
+       AttributeType::INT, /*required=*/false});
+  attributes.push_back({"radix",
+                        "Base of grouped codes, in [2, 256]. Requires group_size; excludes bits.",
+                        AttributeType::INT, /*required=*/false});
+  attributes.push_back({"group_size",
+                        "Codes per group. Positive; radix^group_size must fit in positive INT64.",
+                        AttributeType::INT, /*required=*/false});
+  std::vector<FormalParameter> inputs;
+  std::vector<FormalParameter> outputs;
+  if (unpack) {
+    inputs = {
+        {"X",
+         "UINT8 or UINT32 tensor of rank at least 1, with the exact packed word count along axis.",
+         "TStorage"},
+        {"count",
+         "Scalar INT64 tensor giving the logical output length along axis. Must be nonnegative.",
+         "tensor(int64)"},
+    };
+    outputs = {{"Y",
+                "UINT8 tensor preserving every dimension except axis, which becomes count. "
+                "Each element is below the selected radix.",
+                "T"}};
+  } else {
+    inputs = {
+        {"X", "UINT8 tensor of rank at least 1, with codes below the selected radix.", "T"},
+    };
+    outputs = {
+        {"Y",
+         "Packed tensor preserving every dimension except axis, which becomes "
+         "ceil(ceil(N / group_size) * group_width / word_bits); bits implies group_size=1.",
+         "TStorage"},
+    };
+  }
+  return LightOpSchema(
+      unpack ? "Unpack" : "Pack", kOnnxDomain, 29, unpack ? MakeUnpackDoc() : MakePackDoc(),
+      std::move(inputs), std::move(outputs),
+      {
+          {"T", {TensorType::kUint8}, "Unsigned byte tensors."},
+          {"TStorage", {TensorType::kUint8, TensorType::kUint32}, "Unsigned storage word tensors."},
+      },
+      std::move(attributes), /*has_function_implementation=*/true);
+}
+
 // Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream
 // AffineGrid schema: bfloat16, float16, float, double.
 std::vector<TensorType> AffineGridFloatTypes() {
@@ -1852,6 +1910,8 @@ LightOpSchema MakeSplitSchema(int since_version, const std::vector<TensorType> &
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"Pack", [] { return std::vector<LightOpSchema>{MakePackingSchema(false)}; }},
+      {"Unpack", [] { return std::vector<LightOpSchema>{MakePackingSchema(true)}; }},
       {"AffineGrid", [] { return std::vector<LightOpSchema>{MakeAffineGridSchema(20)}; }},
       {"BitCast", [] { return std::vector<LightOpSchema>{MakeBitCastSchema()}; }},
       {"Cast",

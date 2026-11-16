@@ -937,10 +937,7 @@ public:
     renamer_.BindFormalToActual(formal_name, actual_name);
   }
 
-  void RenameNode(NodeProto &node) {
-    // Use the InliningRenamer's ProcessNode method which handles graph-value attributes
-    renamer_.ProcessNode(node);
-  }
+  void RenameNode(NodeProto &node) { renamer_.VisitNode(node); }
 };
 
 Renamer::Renamer(const std::string &prefix, const GraphProto &graph)

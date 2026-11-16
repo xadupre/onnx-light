@@ -128,6 +128,33 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Packs UINT8 radix digits into contiguous least-significant-first groups and words.
+class Pack : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Pack";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, std::optional<int64_t> bits = std::nullopt,
+                    std::optional<int64_t> radix = std::nullopt,
+                    std::optional<int64_t> group_size = std::nullopt, int64_t axis = -1,
+                    int64_t output_type = TensorProto::UINT8, RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Unpacks groups into UINT8 digits, trimming the selected axis to scalar ``count``.
+class Unpack : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Unpack";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, const Tensor &count,
+                    std::optional<int64_t> bits = std::nullopt,
+                    std::optional<int64_t> radix = std::nullopt,
+                    std::optional<int64_t> group_size = std::nullopt, int64_t axis = -1,
+                    RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``AffineGrid`` operator (since
 /// opset 20 in the ``ai.onnx`` domain). Generates a flow field of
 /// sampling coordinates by applying a batch of affine matrices ``theta``

@@ -43,9 +43,9 @@ using ::onnx_light::core::runtime::OpsetId;
 //
 // ``ReduceSum`` mirrors the ONNX ``ReduceSum`` operator at opset 13, where
 // ``axes`` is an optional second input tensor (int64) rather than an
-// attribute. The kernel supports FLOAT, DOUBLE and INT64 tensors and the standard ``keepdims``
-// and ``noop_with_empty_axes`` attributes. When ``axes`` is omitted (or
-// empty), the kernel either reduces over all dimensions (the default,
+// attribute. The kernel supports FLOAT, DOUBLE, INT64 and UINT32 tensors and the standard
+// ``keepdims`` and ``noop_with_empty_axes`` attributes. When ``axes`` is omitted (or empty), the
+// kernel either reduces over all dimensions (the default,
 // ``noop_with_empty_axes == false``) or performs an identity copy
 // (``noop_with_empty_axes == true``).
 //
@@ -101,10 +101,10 @@ public:
   explicit ArgMin(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMin) {}
 };
 
-/// Sum reduction of a FLOAT, DOUBLE or INT64 input ``data`` along the dimensions listed in the
-/// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
-/// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true
-/// in which case it performs an identity copy.
+/// Sum reduction of a FLOAT, DOUBLE, INT64 or UINT32 input ``data`` along the dimensions listed in
+/// the optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the kernel reduces over
+/// all dimensions unless ``noop_with_empty_axes`` is true in which case it performs an identity
+/// copy.
 class ReduceSum : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ReduceSum";

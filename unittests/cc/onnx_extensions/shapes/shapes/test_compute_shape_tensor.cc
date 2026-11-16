@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_extensions/shapes/shapes/tensor/shape_tensor.h"
@@ -14,7 +16,9 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
+#include <variant>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -3173,6 +3177,315 @@ TEST(OnnxOptimShapesTensorOneHot, RejectsWrongOpType) {
   SeedOneHotInputs(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)},
                    core::symbolic::TensorType::kFloat, /*depth_value=*/3);
   EXPECT_THROW(onnx_shapes::shapes::tensor::ComputeShapeOneHot(ctx, node), std::invalid_argument);
+}
+
+namespace {
+
+NodeProto PackingNode(bool unpack, int64_t bits = 3) {
+  NodeProto node;
+  node.set_op_type(unpack ? "Unpack" : "Pack");
+  node.add_input("X");
+  if (unpack) {
+    node.add_input("count");
+  }
+  node.add_output("Y");
+  if (bits != 0) {
+    AddAttribute<int64_t>(node, "bits", bits);
+  }
+  return node;
+}
+
+void SetPackingCount(core::shapes::ShapesContext &ctx, core::symbolic::SymDim value) {
+  core::symbolic::SymTensor count(nullptr, core::symbolic::TensorType::kInt64, {});
+  count.SetValueAsShape({std::move(value)});
+  ctx.Set("count", std::move(count));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesPackUnpack, BitsAxesStorageAndTrimming) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  for (int64_t bits = 1; bits <= 8; ++bits) {
+    for (bool wide : {false, true}) {
+      for (int64_t axis : {int64_t{0}, int64_t{-3}}) {
+        auto pack = PackingNode(false, bits);
+        AddAttribute<int64_t>(pack, "axis", axis);
+        if (wide) {
+          AddAttribute<int64_t>(pack, "output_type", TensorProto::UINT32);
+        }
+        core::shapes::ShapesContext ctx;
+        ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {11, "batch", int64_t{0}}));
+        ctx.ComputeShapeNode(pack);
+        const auto &packed = ctx.Get("Y");
+        const int64_t words = (11 * bits + (wide ? 31 : 7)) / (wide ? 32 : 8);
+        ASSERT_EQ(packed.Shape()[0].AsInt(), words);
+        EXPECT_EQ(packed.Shape()[1].AsExpr(), "batch");
+        EXPECT_EQ(packed.Shape()[2].AsInt(), 0);
+        EXPECT_EQ(packed.Dtype(), wide ? TensorType::kUint32 : TensorType::kUint8);
+
+        auto unpack = PackingNode(true, bits);
+        AddAttribute<int64_t>(unpack, "axis", axis);
+        ctx.Set("X", SymTensor(packed));
+        SetPackingCount(ctx, 11);
+        ctx.ComputeShapeNode(unpack);
+        EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 11);
+        EXPECT_EQ(ctx.Get("Y").Dtype(), TensorType::kUint8);
+        SetPackingCount(ctx, int64_t{0});
+        EXPECT_THROW(ctx.ComputeShapeNode(unpack), std::invalid_argument);
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapesPackUnpack, GroupedPackingAndOverflowBoundaries) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  for (const auto &[radix, group, width] : std::vector<std::tuple<int64_t, int64_t, int64_t>>{
+           {3, 5, 8}, {10, 3, 10}, {256, 7, 56}, {2, 62, 62}}) {
+    for (const int64_t count :
+         {int64_t{0}, int64_t{1}, int64_t{11}, std::numeric_limits<int64_t>::max()}) {
+      for (bool wide : {false, true}) {
+        auto node = PackingNode(false, 0);
+        AddAttribute<int64_t>(node, "radix", radix);
+        AddAttribute<int64_t>(node, "group_size", group);
+        AddAttribute<int64_t>(node, "output_type", wide ? TensorProto::UINT32 : TensorProto::UINT8);
+        core::shapes::ShapesContext ctx;
+        ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {int64_t{0}, count}));
+        ctx.ComputeShapeNode(node);
+        const int64_t groups = count / group + (count % group != 0);
+        const int64_t word_bits = wide ? 32 : 8;
+        const int64_t expected = (groups / word_bits) * width +
+                                 ((groups % word_bits) * width + word_bits - 1) / word_bits;
+        EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), expected);
+        EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 0);
+        auto unpack = PackingNode(true, 0);
+        AddAttribute<int64_t>(unpack, "radix", radix);
+        AddAttribute<int64_t>(unpack, "group_size", group);
+        ctx.Set("X", SymTensor(ctx.Get("Y")));
+        SetPackingCount(ctx, count);
+        ctx.ComputeShapeNode(unpack);
+        EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), count);
+      }
+    }
+  }
+  auto node = PackingNode(false, 8);
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", SymTensor(nullptr, TensorType::kUint8,
+                         {int64_t{0}, std::numeric_limits<int64_t>::max()}));
+  ctx.ComputeShapeNode(node);
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), std::numeric_limits<int64_t>::max());
+  for (const int64_t group : {int64_t{2}, int64_t{6}}) {
+    for (bool unpack : {false, true}) {
+      auto overflow = PackingNode(unpack, 0);
+      AddAttribute<int64_t>(overflow, "radix", 256);
+      AddAttribute<int64_t>(overflow, "group_size", group);
+      SetPackingCount(ctx, std::numeric_limits<int64_t>::max());
+      EXPECT_THROW(ctx.ComputeShapeNode(overflow), std::invalid_argument);
+    }
+  }
+}
+
+TEST(OnnxOptimShapesPackUnpack, SymbolicPackingPreservesExpressionsAndNonaxisDimensions) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  for (bool grouped : {false, true}) {
+    auto node = PackingNode(false, grouped ? 0 : 3);
+    if (grouped) {
+      AddAttribute<int64_t>(node, "radix", 10);
+      AddAttribute<int64_t>(node, "group_size", 3);
+    }
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {"batch", int64_t{0}, "N"}));
+    ctx.ComputeShapeNode(node);
+    const auto &shape = ctx.Get("Y").Shape();
+    EXPECT_EQ(shape[0].AsExpr(), "batch");
+    EXPECT_EQ(shape[1].AsInt(), 0);
+    ASSERT_TRUE(shape[2].IsExpr());
+    for (const int64_t count :
+         {int64_t{0}, int64_t{1}, int64_t{19}, std::numeric_limits<int64_t>::max()}) {
+      const int64_t groups = grouped ? count / 3 + (count % 3 != 0) : count;
+      const int64_t width = grouped ? 10 : 3;
+      const int64_t expected = (groups / 8) * width + ((groups % 8) * width + 7) / 8;
+      EXPECT_EQ(core::expressions::evaluate_expression(shape[2].AsExpr(), {{"N", count}}),
+                expected);
+    }
+  }
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {"N"}));
+  ctx.ComputeShapeNode(PackingNode(false, 8));
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "N");
+}
+
+TEST(OnnxOptimShapesPackUnpack, SymbolicUnknownAndDataBackedCount) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", SymTensor(nullptr, TensorType::kUint32, {"batch", 2}));
+  const auto node = PackingNode(true);
+  SetPackingCount(ctx, "count_symbol");
+  ctx.ComputeShapeNode(node);
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsExpr(), "count_symbol");
+  ctx.Set("count", SymTensor(nullptr, TensorType::kInt64, {}));
+  ctx.ComputeShapeNode(node);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  int64_t count = 11;
+  ctx.Set("count", SymTensor(&count, TensorType::kInt64, {}));
+  ctx.ComputeShapeNode(node);
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), 11);
+  count = -1;
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {"N"}));
+  ctx.Set("count", SymTensor(nullptr, TensorType::kInt64, {}));
+  ctx.ComputeShapeNode(PackingNode(true, 8));
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "N");
+}
+
+TEST(OnnxOptimShapesPackUnpack, DynamicCountUsesSafeExpressionIdentifier) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  for (const char *count_name : {"count", "x+y", "name.with.dot", "z//2"}) {
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {2}));
+    ctx.Set(count_name, SymTensor(nullptr, TensorType::kInt64, {}));
+    for (const char *output_name : {"0*", "second"}) {
+      NodeProto unpack;
+      unpack.set_op_type("Unpack");
+      unpack.add_input("X");
+      unpack.add_input(count_name);
+      unpack.add_output(output_name);
+      AddAttribute<int64_t>(unpack, "bits", 3);
+      ctx.ComputeShapeNode(unpack);
+    }
+    const auto symbol = ctx.Get("0*").Shape()[0];
+    ASSERT_TRUE(symbol.IsExpr());
+    EXPECT_EQ(ctx.Get("second").Shape()[0], symbol);
+    EXPECT_TRUE(std::holds_alternative<std::string>(
+        core::expressions::simplify_expression(symbol.AsExpr())));
+    EXPECT_EQ(core::expressions::evaluate_expression(symbol.AsExpr(), {{symbol.AsExpr(), 5}}), 5);
+    for (const char *op : {"Identity", "Shape", "Size"}) {
+      NodeProto consumer;
+      consumer.set_op_type(op);
+      consumer.add_input("0*");
+      consumer.add_output(op);
+      ctx.ComputeShapeNode(consumer);
+    }
+    EXPECT_EQ(ctx.Get("Identity").Shape()[0], symbol);
+    ASSERT_TRUE(ctx.Get("Shape").HasValueAsShape());
+    EXPECT_EQ(ctx.Get("Shape").ValueAsShape()[0], symbol);
+    EXPECT_FALSE(ctx.Get("Size").HasValueAsShape());
+  }
+}
+
+TEST(OnnxOptimShapesPackUnpack, ValidatesAllAttributesBeforeEmptyOutput) {
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  std::vector<NodeProto> invalid;
+  for (int64_t bits : {int64_t{-1}, int64_t{0}, int64_t{9}}) {
+    invalid.push_back(PackingNode(false, bits));
+  }
+  for (const auto &[radix, group] :
+       std::vector<std::pair<int64_t, int64_t>>{{1, 1},
+                                                {257, 1},
+                                                {2, 0},
+                                                {2, -1},
+                                                {2, 63},
+                                                {256, 8},
+                                                {2, std::numeric_limits<int64_t>::max()}}) {
+    auto node = PackingNode(false, 0);
+    AddAttribute<int64_t>(node, "radix", radix);
+    AddAttribute<int64_t>(node, "group_size", group);
+    invalid.push_back(std::move(node));
+  }
+  auto mixed = PackingNode(false);
+  AddAttribute<int64_t>(mixed, "radix", 3);
+  AddAttribute<int64_t>(mixed, "group_size", 5);
+  invalid.push_back(std::move(mixed));
+  auto missing_group = PackingNode(false, 0);
+  AddAttribute<int64_t>(missing_group, "radix", 3);
+  invalid.push_back(std::move(missing_group));
+  for (const char *name : {"axis", "output_type", "bits"}) {
+    auto node = PackingNode(false, 0);
+    if (std::string(name) != "bits") {
+      AddAttribute<int64_t>(node, "bits", 3);
+    }
+    AddAttribute<std::string>(node, name, "invalid");
+    invalid.push_back(std::move(node));
+  }
+  auto bad_axis = PackingNode(false);
+  AddAttribute<int64_t>(bad_axis, "axis", std::numeric_limits<int64_t>::min());
+  invalid.push_back(std::move(bad_axis));
+  auto bad_type = PackingNode(false);
+  AddAttribute<int64_t>(bad_type, "output_type", TensorProto::INT8);
+  invalid.push_back(std::move(bad_type));
+  for (const auto &node : invalid) {
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {int64_t{0}, int64_t{0}}));
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapesPackUnpack, RejectsInvalidInputsEvenWithZeroDimensions) {
+  using core::symbolic::SymDim;
+  using core::symbolic::SymShape;
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+  for (bool unpack : {false, true}) {
+    const auto node = PackingNode(unpack);
+    for (const SymShape &shape : {SymShape{}, SymShape{int64_t{0}, -1}}) {
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, shape));
+      SetPackingCount(ctx, int64_t{0});
+      EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+    }
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kInt8, {int64_t{0}, int64_t{0}}));
+    SetPackingCount(ctx, int64_t{0});
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+  const auto node = PackingNode(true);
+  for (const SymTensor &count :
+       {SymTensor(nullptr, TensorType::kInt64, {1}), SymTensor(nullptr, TensorType::kUint64, {})}) {
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {int64_t{0}, int64_t{0}}));
+    ctx.Set("count", SymTensor(count));
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+  for (const SymShape &values : {SymShape{}, SymShape{1, 2}, SymShape{-1}, SymShape{1}}) {
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", SymTensor(nullptr, TensorType::kUint8, {int64_t{0}, int64_t{0}}));
+    SymTensor count(nullptr, TensorType::kInt64, {});
+    count.SetValueAsShape(values);
+    ctx.Set("count", std::move(count));
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapesPackUnpack, GraphBuilderPropagatesSymbolicCountAndIncrementalCleanup) {
+  using core::symbolic::TensorType;
+  core::builder::GraphBuilder builder("packing", {}, {{"", 29}});
+  builder.MakeInput("X", TensorType::kUint8, {"batch", "N"});
+  TensorProto index;
+  index.set_name("index");
+  index.set_data_type(TensorProto::INT64);
+  index.add_int64_data(1);
+  builder.MakeInitializer(index);
+  builder.MakeNode("Shape", {"X"}, {"shape"});
+  builder.MakeNode("Gather", {"shape", "index"}, {"count"});
+  ASSERT_TRUE(builder.GetShape("count").HasValueAsShape());
+  auto pack = PackingNode(false);
+  builder.MakeNode("Pack", {"X"}, {"packed"}, "", "", pack.attribute());
+  auto unpack = PackingNode(true);
+  builder.MakeNode("Unpack", {"packed", "count"}, {"unpacked"}, "", "", unpack.attribute());
+  builder.MakeNode("Identity", {"unpacked"}, {"Y"});
+  builder.MakeOutput("Y");
+  EXPECT_EQ(builder.GetShape("Y").Shape()[0].AsExpr(), "batch");
+  EXPECT_EQ(builder.GetShape("Y").Shape()[1].AsExpr(), "N");
+  EXPECT_EQ(builder.GetShape("packed").Dtype(), TensorType::kUint8);
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  EXPECT_EQ(builder.GetShape("Y").Shape()[1].AsExpr(), "N");
+  EXPECT_EQ(builder.GetShape("Y").Dtype(), TensorType::kUint8);
+  EXPECT_EQ(builder.GetShape("X").Shape()[1].AsExpr(), "N");
 }
 
 } // namespace Test

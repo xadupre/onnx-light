@@ -53,6 +53,8 @@ using ::onnx_light::core::shapes::ComputeShapeFn;
 // never queried directly by shape inference.
 const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
   static const std::unordered_map<std::string, ComputeShapeFn> table = {
+      {"ai.onnx:Pack", tensor::ComputeShapePack},
+      {"ai.onnx:Unpack", tensor::ComputeShapeUnpack},
       {"ai.rt:Quantize", rt::ComputeShapeQuantize},
       {"ai.rt:Dequantize", rt::ComputeShapeDequantize},
       {"ai.rt:PagedAttention", nn::ComputeShapePagedAttention},

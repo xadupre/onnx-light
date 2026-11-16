@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/light_op_schema/light_op_schema.h"
+#include "onnx_lib/defs/operator_sets.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_op/operator_sets.h"
 
@@ -55,6 +56,76 @@ TEST(LightOpSchemaVerify, ValidNodePasses) {
   const LightOpSchema schema = MakeScaleSchema();
   const NodeProto node = MakeValidScaleNode();
   EXPECT_NO_THROW(schema.Verify(node));
+}
+
+TEST(LightOpSchemaVerify, PackingMetadataMatchesOnnxLib) {
+  onnx_light::RegisterOnnxOperatorSetSchema(0, false);
+  for (const auto *op_type : {"Pack", "Unpack"}) {
+    SCOPED_TRACE(op_type);
+    const bool unpack = std::string(op_type) == "Unpack";
+    const auto *reference = OpSchemaRegistry::Schema(op_type, 29, ONNX_DOMAIN);
+    ASSERT_NE(reference, nullptr);
+    const std::vector<std::string> expected_attributes =
+        unpack ? std::vector<std::string>{"axis", "bits", "radix", "group_size"}
+               : std::vector<std::string>{"axis", "output_type", "bits", "radix", "group_size"};
+    for (const bool init_doc : {false, true}) {
+      SCOPED_TRACE(init_doc);
+      const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, init_doc);
+      ASSERT_EQ(schemas.size(), 1u);
+      const auto &schema = schemas.front();
+      EXPECT_EQ(schema.domain(), core::schema::kOnnxDomain);
+      EXPECT_EQ(schema.since_version(), 29);
+      EXPECT_EQ(schema.doc(), init_doc ? reference->doc() : std::string());
+      EXPECT_TRUE(schema.has_function_implementation());
+      EXPECT_EQ(schema.inputs().size(), unpack ? 2u : 1u);
+      EXPECT_EQ(schema.outputs().size(), 1u);
+      EXPECT_EQ(schema.min_output(), 1);
+      EXPECT_EQ(schema.max_output(), 1);
+      ASSERT_EQ(schema.attributes().size(), expected_attributes.size());
+      ASSERT_EQ(reference->attributes().size(), expected_attributes.size());
+      for (size_t i = 0; i < expected_attributes.size(); ++i) {
+        const auto &attribute = schema.attributes()[i];
+        EXPECT_EQ(attribute.name, expected_attributes[i]);
+        const auto found = reference->attributes().find(attribute.name);
+        ASSERT_NE(found, reference->attributes().end());
+        EXPECT_EQ(attribute.description, found->second.description);
+        EXPECT_EQ(attribute.type, AttributeType::INT);
+        EXPECT_FALSE(attribute.required);
+        EXPECT_EQ(attribute.required, found->second.required);
+        if (attribute.name == "axis" || attribute.name == "output_type") {
+          const auto *value = std::get_if<int64_t>(&attribute.default_value);
+          ASSERT_NE(value, nullptr);
+          EXPECT_EQ(*value, found->second.default_value.i());
+          EXPECT_EQ(*value, attribute.name == "axis" ? int64_t{-1} : int64_t{TensorProto::UINT8});
+        } else {
+          EXPECT_TRUE(std::holds_alternative<std::monostate>(attribute.default_value));
+          EXPECT_EQ(found->second.default_value.type(), AttributeProto::UNDEFINED);
+        }
+      }
+
+      NodeProto node;
+      node.set_op_type(op_type);
+      node.add_input("x");
+      if (unpack) {
+        node.add_input("count");
+      }
+      node.add_output("y");
+      auto *bits = node.add_attribute();
+      bits->set_name("bits");
+      bits->set_type(AttributeProto::INT);
+      bits->set_i(3);
+      EXPECT_NO_THROW(schema.Verify(node));
+      bits->set_type(AttributeProto::STRING);
+      bits->set_s("3");
+      EXPECT_THROW(schema.Verify(node), SchemaError);
+      bits->set_name("unknown_attribute");
+      bits->set_type(AttributeProto::INT);
+      EXPECT_THROW(schema.Verify(node), SchemaError);
+      node.mutable_attribute()->Clear();
+      node.clear_input();
+      EXPECT_THROW(schema.Verify(node), SchemaError);
+    }
+  }
 }
 
 TEST(LightOpSchemaVerify, DequantizePackedMetadata) {

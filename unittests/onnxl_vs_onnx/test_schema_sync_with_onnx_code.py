@@ -351,6 +351,8 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             onnx_light_schemas.pop("DynamicQuantizeLinear", None)
         if "Expm1" not in onnx_schemas:
             onnx_light_schemas.pop("Expm1", None)
+        if "LogCumSumExp" not in onnx_schemas:
+            onnx_light_schemas.pop("LogCumSumExp", None)
         if "DequantizePacked" not in onnx_schemas:
             onnx_light_schemas.pop("DequantizePacked", None)
 

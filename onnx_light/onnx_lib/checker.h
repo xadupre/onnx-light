@@ -122,10 +122,16 @@ public:
    *
    * @param model_dir Filesystem path containing the loaded model.
    */
-  void set_model_dir(const std::string &model_dir) { model_dir_ = model_dir; }
+  void set_model_dir(const std::string &model_dir) {
+    model_dir_ = model_dir;
+    model_dir_from_path_ = true;
+  }
 
   /** Returns the directory used to resolve relative external data locations. */
   const std::string &get_model_dir() const { return model_dir_; }
+
+  /** Returns true when the model directory was explicitly set from a file path. */
+  bool model_dir_from_path() const { return model_dir_from_path_; }
 
   /** Returns true when schema-version compatibility checks are skipped. */
   bool skip_opset_compatibility_check() const { return skip_opset_compatibility_check_; }
@@ -175,6 +181,7 @@ private:
   bool is_main_graph_ = true;
   const ISchemaRegistry *schema_registry_ = OpSchemaRegistry::Instance();
   std::string model_dir_;
+  bool model_dir_from_path_ = false;
   bool skip_opset_compatibility_check_ = false;
   bool check_custom_domain_ = false;
   bool skip_external_data_location_check_ = false;
@@ -389,6 +396,10 @@ ONNX_API void check_function_call_cycles(const ModelProto &model);
 
 /**
  * Validates an in-memory model protobuf.
+ *
+ * File-backed external tensors require the filesystem-path overload instead.
+ * Synthetic external data locations beginning with '#' after lexical
+ * normalization do not require a model path.
  *
  * @param model Model to validate.
  * @param full_check When true, enables additional shape inference checks after

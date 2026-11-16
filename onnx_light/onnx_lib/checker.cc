@@ -295,8 +295,21 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
         location = entry.value();
-        if (!ctx.skip_external_data_location_check() && (location.empty() || location[0] != '#')) {
-          data_path = resolve_external_data_location(ctx.get_model_dir(), location, tensor.name());
+        if (!ctx.skip_external_data_location_check()) {
+          // Classifies synthetic references after the same normalization used by the resolver.
+          location = path_to_utf8(utf8_to_path(location).lexically_normal().make_preferred());
+          if (!ctx.model_dir_from_path() && !location.empty() && location[0] != '#') {
+            fail_check(
+                "Data of TensorProto ( tensor name: ", tensor.name(),
+                ") is stored externally, but the model was not checked from a file path, so "
+                "its external data location '",
+                entry.value(),
+                "' cannot be resolved. Pass a model path to check_model to check external data.");
+          }
+          if (location.empty() || location[0] != '#') {
+            data_path =
+                resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
+          }
         }
       } else if (entry.has_key() && entry.key() == "offset") {
         offset_entry = &entry;

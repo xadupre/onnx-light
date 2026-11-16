@@ -72,7 +72,11 @@ Tensor Oracle(const Tensor &x, int64_t radix, int64_t group_size, int64_t axis,
       }
   if (output_type == TensorProto::UINT32)
     return Tensor::FromUint32("", shape, words);
-  return Tensor::FromUint8("", shape, std::vector<uint8_t>(words.begin(), words.end()));
+  std::vector<uint8_t> bytes;
+  bytes.reserve(words.size());
+  for (const uint32_t word : words)
+    bytes.push_back(static_cast<uint8_t>(word));
+  return Tensor::FromUint8("", shape, bytes);
 }
 
 } // namespace

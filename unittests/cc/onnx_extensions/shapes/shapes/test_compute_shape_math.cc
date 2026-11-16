@@ -2057,31 +2057,48 @@ TEST(OnnxOptimShapesMathGroupedMatMul, SymbolicShapeWithOptionalBias) {
   using core::symbolic::SymShape;
   using core::symbolic::SymTensor;
   using core::symbolic::TensorType;
-  for (int bias_mode : {0, 1, 2}) {
-    NodeProto node;
-    node.set_op_type("GroupedMatMul");
-    for (const char *name : {"X", "W", "I"}) {
-      node.add_input(name);
+  for (int64_t transB : {0, 1, -1, 2}) {
+    for (int bias_mode : {0, 1, 2}) {
+      NodeProto node;
+      node.set_op_type("GroupedMatMul");
+      auto *attr = node.add_attribute();
+      attr->set_name("transB");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(transB);
+      for (const char *name : {"X", "W", "I"}) {
+        node.add_input(name);
+      }
+      if (bias_mode != 0) {
+        node.add_input(bias_mode == 1 ? "" : "B");
+      }
+      node.add_output("Y");
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim("M"), SymDim("K")}));
+      ctx.Set("W", SymTensor(nullptr, TensorType::kFloat,
+                             transB ? SymShape{SymDim("G"), SymDim("N"), SymDim("K")}
+                                    : SymShape{SymDim("G"), SymDim("K"), SymDim("N")}));
+      ctx.Set("I", SymTensor(nullptr, TensorType::kInt64, SymShape{SymDim("M"), SymDim("S")}));
+      ctx.Set("B", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim("G"), SymDim("N")}));
+      onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node);
+      EXPECT_EQ(ctx.Get("Y").Shape(), (SymShape{SymDim("M"), SymDim("S"), SymDim("N")}));
+      EXPECT_EQ(ctx.Get("Y").Dtype(), TensorType::kFloat);
+      ctx.Set("X", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(4), SymDim(3)}));
+      ctx.Set("W", SymTensor(nullptr, TensorType::kFloat,
+                             transB ? SymShape{SymDim(2), SymDim(5), SymDim(3)}
+                                    : SymShape{SymDim(2), SymDim(3), SymDim(5)}));
+      onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node);
+      EXPECT_EQ(ctx.Get("Y").Shape(), (SymShape{SymDim(4), SymDim("S"), SymDim(5)}));
+      ctx.Set("W",
+              SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(2), SymDim(5), SymDim(5)}));
+      EXPECT_THROW(onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node),
+                   std::invalid_argument);
+      ctx.Set("W", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(2), SymDim(3)}));
+      EXPECT_THROW(onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node),
+                   std::invalid_argument);
+      node.clear_input();
+      EXPECT_THROW(onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node),
+                   std::invalid_argument);
     }
-    if (bias_mode != 0) {
-      node.add_input(bias_mode == 1 ? "" : "B");
-    }
-    node.add_output("Y");
-    core::shapes::ShapesContext ctx;
-    ctx.Set("X", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim("M"), SymDim("K")}));
-    ctx.Set("W", SymTensor(nullptr, TensorType::kFloat,
-                           SymShape{SymDim("G"), SymDim("K"), SymDim("N")}));
-    ctx.Set("I", SymTensor(nullptr, TensorType::kInt64, SymShape{SymDim("M"), SymDim("S")}));
-    ctx.Set("B", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim("G"), SymDim("N")}));
-    onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node);
-    EXPECT_EQ(ctx.Get("Y").Shape(), (SymShape{SymDim("M"), SymDim("S"), SymDim("N")}));
-    EXPECT_EQ(ctx.Get("Y").Dtype(), TensorType::kFloat);
-    ctx.Set("W", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(2), SymDim(3)}));
-    EXPECT_THROW(onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node),
-                 std::invalid_argument);
-    node.clear_input();
-    EXPECT_THROW(onnx_shapes::shapes::math::ComputeShapeGroupedMatMul(ctx, node),
-                 std::invalid_argument);
   }
 }
 

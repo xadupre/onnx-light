@@ -3564,15 +3564,50 @@ TEST(KernelClass, GroupedMatMulZeroInnerDimension) {
   const KernelContext ctx{DefaultOpset(29)};
   const GroupedMatMul kernel{ctx};
   const Tensor input = Tensor::FromFloat("", {2, 0}, {});
-  const Tensor weights = Tensor::FromFloat("", {1, 0, 2}, {});
   const Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
   const Tensor bias = Tensor::FromFloat("", {1, 2}, {3, 4});
-  const Tensor result = kernel(input, weights, indices, &bias);
-  EXPECT_EQ(result.shape, Shape({2, 1, 2}));
-  EXPECT_EQ(result.AsFloat()[0], 3);
-  EXPECT_EQ(result.AsFloat()[1], 4);
-  EXPECT_EQ(result.AsFloat()[2], 3);
-  EXPECT_EQ(result.AsFloat()[3], 4);
+  for (int64_t transB : {0, 1, -1, 2}) {
+    const Tensor weights = Tensor::FromFloat("", transB ? Shape{1, 2, 0} : Shape{1, 0, 2}, {});
+    const Tensor result = kernel(input, weights, indices, &bias, nullptr, transB);
+    EXPECT_EQ(result.shape, Shape({2, 1, 2}));
+    EXPECT_EQ(result.AsFloat()[0], 3);
+    EXPECT_EQ(result.AsFloat()[1], 4);
+    EXPECT_EQ(result.AsFloat()[2], 3);
+    EXPECT_EQ(result.AsFloat()[3], 4);
+  }
+}
+
+TEST(KernelClass, GroupedMatMulTransposedWeightsValidation) {
+  const KernelContext ctx{DefaultOpset(29)};
+  const GroupedMatMul kernel{ctx};
+  const Tensor input = Tensor::FromFloat("", {1, 2}, {1, 2});
+  const Tensor weights = Tensor::FromFloat("", {2, 1, 2}, {1, 2, 3, 4});
+  const Tensor indices = Tensor::FromInt64("", {1, 1}, {1});
+  const Tensor bias = Tensor::FromFloat("", {2, 1}, {1, 2});
+  for (int64_t transB : {1, -1, 2}) {
+    EXPECT_EQ(kernel(input, weights, indices, &bias, nullptr, transB).AsFloat()[0], 13);
+    Tensor invalid = weights;
+    invalid.shape = {2, 2, 1};
+    EXPECT_THROW(kernel(input, invalid, indices, nullptr, nullptr, transB), std::invalid_argument);
+    invalid.shape = {3, 1, 2};
+    EXPECT_THROW(kernel(input, invalid, indices, nullptr, nullptr, transB), std::invalid_argument);
+    const Tensor bad_bias = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
+    EXPECT_THROW(kernel(input, weights, indices, &bad_bias, nullptr, transB),
+                 std::invalid_argument);
+    for (int64_t group : {-1, 2}) {
+      EXPECT_THROW(
+          kernel(input, weights, Tensor::FromInt64("", {1, 1}, {group}), nullptr, nullptr, transB),
+          std::invalid_argument);
+      EXPECT_THROW(kernel(input, Tensor::FromFloat("", {2, 0, 2}, {}),
+                          Tensor::FromInt64("", {1, 1}, {group}), nullptr, nullptr, transB),
+                   std::invalid_argument);
+    }
+    const Tensor wide_weights =
+        Tensor::FromFloat("", {1, std::numeric_limits<int64_t>::max(), 0}, {});
+    EXPECT_THROW(kernel(Tensor::FromFloat("", {2, 0}, {}), wide_weights,
+                        Tensor::FromInt64("", {2, 1}, {0, 0}), nullptr, nullptr, transB),
+                 std::invalid_argument);
+  }
 }
 
 } // namespace Test

@@ -6,6 +6,8 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 
+#include <optional>
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterGroupedMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
@@ -13,9 +15,15 @@ void RegisterGroupedMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     return;
   }
   auto add = [&](const std::string &name, const Tensors &inputs, const Tensor &output,
-                 bool explicit_empty = false) {
+                 bool explicit_empty = false, std::optional<int64_t> transB = std::nullopt) {
     NodeProto node;
     node.set_op_type("GroupedMatMul");
+    if (transB.has_value()) {
+      auto *attr = node.add_attribute();
+      attr->set_name("transB");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(*transB);
+    }
     for (const char *input : {"input", "weights", "group_indices"}) {
       node.add_input(input);
     }
@@ -49,6 +57,26 @@ void RegisterGroupedMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
       }
     };
     for (const bool int32_indices : {false, true}) {
+      for (int64_t transB : {0, 1, -1, 2}) {
+        for (int bias_mode : {0, 1, 2}) {
+          Tensors inputs{make({2, 2}, {1, 2, 3, 4}),
+                         transB ? make({2, 3, 2}, {1, 4, 2, 5, 3, 6, 7, 10, 8, 11, 9, 12})
+                                : make({2, 2, 3}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+                         int32_indices ? Tensor::FromInt32("", {2, 2}, {0, 1, 1, 1})
+                                       : Tensor::FromInt64("", {2, 2}, {0, 1, 1, 1})};
+          if (bias_mode == 2) {
+            inputs.push_back(make({2, 3}, {0.5f, 1, 1.5f, 2, 2.5f, 3}));
+          }
+          add("test_cc_groupedmatmul_transB_" + std::to_string(transB) + "_" +
+                  std::to_string(dtype) + (int32_indices ? "_int32" : "_int64") + "_bias_mode_" +
+                  std::to_string(bias_mode),
+              inputs,
+              bias_mode == 2
+                  ? make({2, 2, 3}, {9.5f, 13, 16.5f, 29, 32.5f, 36, 63, 70.5f, 78, 63, 70.5f, 78})
+                  : make({2, 2, 3}, {9, 12, 15, 27, 30, 33, 61, 68, 75, 61, 68, 75}),
+              bias_mode == 1, transB);
+        }
+      }
       if (dtype == DataType::FLOAT16 || dtype == DataType::DOUBLE) {
         std::string name = "test_cc_groupedmatmul_";
         name += dtype == DataType::FLOAT16 ? "float16" : "float64";
@@ -81,17 +109,20 @@ void RegisterGroupedMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
       Tensor::FromFloat("", {3, 1, 3}, {9, 12, 15, 19, 26, 33, 29, 40, 51}));
   for (const bool zero_tokens : {false, true}) {
     for (const bool bias : {false, true}) {
-      const int64_t m = zero_tokens ? 0 : 2;
-      const int64_t s = zero_tokens ? 2 : 0;
-      Tensors inputs{Tensor::FromFloat("", {m, 3}, std::vector<float>(m * 3)),
-                     Tensor::FromFloat("", {2, 3, 4}, std::vector<float>(24)),
-                     Tensor::FromInt64("", {m, s}, {})};
-      if (bias) {
-        inputs.push_back(Tensor::FromFloat("", {2, 4}, std::vector<float>(8)));
+      for (int64_t transB : {0, 1}) {
+        const int64_t m = zero_tokens ? 0 : 2;
+        const int64_t s = zero_tokens ? 2 : 0;
+        Tensors inputs{
+            Tensor::FromFloat("", {m, 3}, std::vector<float>(m * 3)),
+            Tensor::FromFloat("", transB ? Shape{2, 4, 3} : Shape{2, 3, 4}, std::vector<float>(24)),
+            Tensor::FromInt64("", {m, s}, {})};
+        if (bias) {
+          inputs.push_back(Tensor::FromFloat("", {2, 4}, std::vector<float>(8)));
+        }
+        add(std::string("test_cc_groupedmatmul_zero_") + (zero_tokens ? "tokens" : "selections") +
+                (bias ? "_with_bias" : "") + (transB ? "_transB_1" : ""),
+            inputs, Tensor::FromFloat("", {m, s, 4}, {}), false, transB);
       }
-      add(std::string("test_cc_groupedmatmul_zero_") + (zero_tokens ? "tokens" : "selections") +
-              (bias ? "_with_bias" : ""),
-          inputs, Tensor::FromFloat("", {m, s, 4}, {}));
     }
   }
 }

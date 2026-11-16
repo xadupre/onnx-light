@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_extensions/patterns/collections/layer_pattern.h"
 #include "onnx_extensions/patterns/collections/partition_group_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
@@ -13,6 +14,7 @@
 #include "onnx_proto/onnx_verify.h"
 
 #include <algorithm>
+#include <chrono>
 #include <gtest/gtest.h>
 #include <memory>
 
@@ -56,6 +58,123 @@ RewritingProto Optimize(GraphBuilder &builder, uint64_t bytes = 1024, uint64_t m
       std::make_shared<PartitionGroupPattern>(0, bytes, 2, maximum)};
   GraphGraph graph(builder, patterns);
   return graph.Optimize();
+}
+
+class CountExtractionSearches : public core::builder::PatternOptimization {
+public:
+  explicit CountExtractionSearches(bool repeated)
+      : PatternOptimization(0, "CountExtractionSearches"),
+        pattern(repeated ? std::shared_ptr<PatternOptimization>(
+                               std::make_shared<onnx_patterns::RepeatedLayerPattern>())
+                         : std::make_shared<PartitionGroupPattern>()) {}
+
+  core::builder::MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
+    auto match = pattern->Match(graph, candidate);
+    if (match.pattern != nullptr) {
+      match.pattern = this;
+      if (match.application) {
+        ++searches;
+        applications.push_back(match.application);
+      }
+    }
+    return match;
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const override {
+    ++direct_applies;
+    return pattern->Apply(graph, nodes);
+  }
+
+  std::shared_ptr<PatternOptimization> pattern;
+  mutable size_t searches = 0;
+  mutable size_t direct_applies = 0;
+  mutable std::vector<std::weak_ptr<const core::builder::PatternApplication>> applications;
+};
+
+GraphBuilder ExtractionChain(size_t count) {
+  GraphBuilder builder("extraction_chain", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({64, 64}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({64, 64}));
+  std::string input = "x";
+  for (size_t i = 0; i < count; ++i) {
+    const std::string output = i + 1 == count ? "y" : "v" + std::to_string(i);
+    if (i % 2 == 0)
+      builder.MakeNode("MatMul", {input, "w"}, {output});
+    else
+      builder.MakeNode("Relu", {input}, {output});
+    input = output;
+  }
+  builder.MakeOutput("y");
+  return builder;
+}
+
+TEST(ExtractionPatterns, ReusesOnlyFreshSearchesOnSyntheticGraph) {
+  for (const bool repeated : {false, true}) {
+    SCOPED_TRACE(repeated);
+    auto builder = ExtractionChain(128);
+    auto pattern = std::make_shared<CountExtractionSearches>(repeated);
+    GraphGraph graph(builder,
+                     std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+    const auto start = std::chrono::steady_clock::now();
+    const auto plan = graph.Optimize(1);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - start);
+    RecordProperty(repeated ? "repeated_layer_us" : "partition_group_us",
+                   std::to_string(elapsed.count()));
+    ASSERT_FALSE(plan.rewrites().empty());
+    // One initial search and one fresh search; no searches hidden in Apply.
+    EXPECT_EQ(pattern->searches, 2u);
+    EXPECT_EQ(pattern->direct_applies, 0u);
+    for (const auto &application : pattern->applications)
+      EXPECT_TRUE(application.expired());
+    EXPECT_FALSE(builder.LocalFunctions().empty());
+    VerifyModel(builder.ToModel());
+  }
+}
+
+TEST(ExtractionPatterns, DirectApplyRejectsStaleMatches) {
+  for (const bool repeated : {false, true}) {
+    SCOPED_TRACE(repeated);
+    auto builder = ExtractionChain(4);
+    CountExtractionSearches pattern(repeated);
+    GraphGraph graph(builder);
+    const auto match = pattern.Match(graph, builder.Nodes()[0]);
+    ASSERT_EQ(match.pattern, &pattern);
+    ASSERT_NE(match.application, nullptr);
+    builder.SetOpsetVersion("ai.rt", 2);
+    const auto before = builder.BuildGraph();
+    EXPECT_THROW(pattern.Apply(graph, match.nodes), BuilderError);
+    EXPECT_TRUE(builder.LocalFunctions().empty());
+    EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+  }
+}
+
+TEST(ExtractionPatterns, RejectsProposalInvalidatedBeforeRevalidation) {
+  for (const bool repeated : {false, true}) {
+    SCOPED_TRACE(repeated);
+    auto builder = ExtractionChain(4);
+    auto extraction = std::make_shared<CountExtractionSearches>(repeated);
+    GraphGraph graph(builder,
+                     std::vector<std::shared_ptr<core::builder::PatternOptimization>>{extraction});
+    bool invalidated = false;
+    const auto invalidate_proposal = [&](const GraphGraph &,
+                                         const core::builder::MatchResult &match) {
+      if (!invalidated && match.pattern == extraction.get()) {
+        builder.SetOpsetVersion("ai.rt", 2);
+        invalidated = true;
+      }
+      return true;
+    };
+    EXPECT_TRUE(graph.Optimize(1, nullptr, {}, true, invalidate_proposal).rewrites().empty());
+    EXPECT_TRUE(invalidated);
+    EXPECT_EQ(extraction->searches, 1u);
+    EXPECT_EQ(extraction->direct_applies, 0u);
+    EXPECT_EQ(builder.OpsetVersion("ai.rt"), 2);
+    EXPECT_TRUE(builder.LocalFunctions().empty());
+    for (const auto &node : builder.Nodes())
+      EXPECT_NE(node.domain(), "ai.rt");
+  }
 }
 
 TEST(PartitionGroupPattern, CallsCoreSelectionAndPreservesShapeAndNames) {

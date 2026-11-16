@@ -178,10 +178,23 @@ OperatorGroupStatus Eligibility(const GraphGraph &graph) {
   return OperatorGroupStatus::kFound;
 }
 
+utils::RepeatedProtoField<NodeProto> MakeReplacements(GraphGraph &graph, const GraphProto &snapshot,
+                                                      const OperatorGroupProposal &proposal) {
+  const auto descriptors = Descriptors(snapshot);
+  size_t suffix = 0;
+  OperatorGroupFunctions functions(graph.Builder(), "PartitionGroup");
+  return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
+    return MakeGroup(graph, snapshot, proposal.groups[group], descriptors, suffix, functions);
+  });
+}
+
 } // namespace
 
-OperatorGroupProposal ProposePartitionGroups(GraphGraph &graph,
-                                             const OperatorGroupOptions &options) {
+OperatorGroupProposal
+ProposePartitionGroups(GraphGraph &graph, const OperatorGroupOptions &options,
+                       std::shared_ptr<const builder::PatternApplication> *application) {
+  if (application != nullptr)
+    application->reset();
   if (options.min_group_nodes < 2 || options.max_group_nodes < options.min_group_nodes)
     throw std::invalid_argument(
         "Operator grouping requires 2 <= min_group_nodes <= max_group_nodes.");
@@ -193,7 +206,14 @@ OperatorGroupProposal ProposePartitionGroups(GraphGraph &graph,
     proposal.status = status;
     return proposal;
   }
-  return Groups(graph, AnalysisGraph(graph), options);
+  GraphProto snapshot = AnalysisGraph(graph);
+  auto proposal = Groups(graph, snapshot, options);
+  if (application != nullptr && proposal.status == OperatorGroupStatus::kFound)
+    *application = std::make_shared<builder::PatternApplication>(
+        [&graph, snapshot = std::move(snapshot), proposal]() {
+          return MakeReplacements(graph, snapshot, proposal);
+        });
+  return proposal;
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -209,12 +229,7 @@ MakePartitionGroupReplacements(GraphGraph &graph, const std::vector<const NodePr
   if (proposal.status != OperatorGroupStatus::kFound ||
       proposal.MatchedNodes(graph.Builder().Nodes()) != nodes)
     throw core::builder::BuilderError("PartitionGroup::Apply received an inconsistent match.");
-  const auto descriptors = Descriptors(snapshot);
-  size_t suffix = 0;
-  OperatorGroupFunctions functions(graph.Builder(), "PartitionGroup");
-  return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
-    return MakeGroup(graph, snapshot, proposal.groups[group], descriptors, suffix, functions);
-  });
+  return MakeReplacements(graph, snapshot, proposal);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

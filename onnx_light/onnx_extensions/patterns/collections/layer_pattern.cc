@@ -17,7 +17,8 @@ core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph
                                                        const NodeProto &candidate) const {
   if (&candidate != graph.FirstPatternCandidate())
     return NoMatch(candidate, "whole-graph detection runs only at the first eligible graph node");
-  auto proposal = core::graph::ProposeRepeatedLayers(graph);
+  std::shared_ptr<const core::builder::PatternApplication> application;
+  auto proposal = core::graph::ProposeRepeatedLayers(graph, &application);
   if (proposal.status == core::graph::OperatorGroupStatus::kInsideFunction)
     return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
   if (proposal.status == core::graph::OperatorGroupStatus::kIncompatibleOpset)
@@ -29,7 +30,8 @@ core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph
   if (proposal.status != core::graph::OperatorGroupStatus::kFound)
     return NoMatch(candidate, "no bounded, nonoverlapping repeated region with a safe contraction");
   auto nodes = proposal.MatchedNodes(graph.Builder().Nodes());
-  return {this, std::move(nodes), &graph.Builder().Nodes()[proposal.first]};
+  return {this, std::move(nodes), &graph.Builder().Nodes()[proposal.first], std::nullopt,
+          std::move(application)};
 }
 
 utils::RepeatedProtoField<NodeProto>

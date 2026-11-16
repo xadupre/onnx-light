@@ -349,6 +349,29 @@ private:
   tuning::ParallelTuning tuning_;
 };
 
+/// Element-wise natural logarithm of one plus the input, accurate near zero.
+class Log1p : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Log1p";
+  explicit Log1p(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
+};
+
 /// Element-wise exponential: y = exp(x), defined for all real x.
 class Exp : public KernelBase {
 public:
@@ -1121,14 +1144,15 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Computes per-selection expert matrix products with optional per-group bias.
+/// Computes per-selection expert matrix products with optional bias and transposed weights.
 class GroupedMatMul : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GroupedMatMul";
   using KernelBase::KernelBase;
   void Run(RuntimeContext &rt) override;
   Tensor operator()(const Tensor &input, const Tensor &weights, const Tensor &group_indices,
-                    const Tensor *bias = nullptr, RuntimeContext *rt = nullptr) const;
+                    const Tensor *bias = nullptr, RuntimeContext *rt = nullptr,
+                    int64_t transB = 0) const;
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

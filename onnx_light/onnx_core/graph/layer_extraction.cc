@@ -1909,9 +1909,25 @@ OperatorGroupStatus Eligibility(const GraphGraph &graph) {
   return OperatorGroupStatus::kFound;
 }
 
+utils::RepeatedProtoField<NodeProto> MakeReplacements(Index &index,
+                                                      const OperatorGroupProposal &proposal) {
+  auto &graph = index.graph;
+  const auto producers = FindCommonOperatorGroupInputs(graph, proposal.groups);
+  std::size_t suffix = 0;
+  OperatorGroupFunctions functions(graph.Builder(), "Layer");
+  return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
+    return MakeLayer(index, proposal.groups[group], proposal.groups, group, producers, suffix,
+                     functions);
+  });
+}
+
 } // namespace
 
-OperatorGroupProposal ProposeRepeatedLayers(GraphGraph &graph) {
+OperatorGroupProposal
+ProposeRepeatedLayers(GraphGraph &graph,
+                      std::shared_ptr<const builder::PatternApplication> *application) {
+  if (application != nullptr)
+    application->reset();
   if (graph.Builder().Nodes().empty())
     return {};
   const auto status = Eligibility(graph);
@@ -1920,10 +1936,10 @@ OperatorGroupProposal ProposeRepeatedLayers(GraphGraph &graph) {
     proposal.status = status;
     return proposal;
   }
-  Index index(graph);
+  auto index = std::make_shared<Index>(graph);
   Plan plan;
-  const bool found = FindPlan(index, plan);
-  plan.capture_analysis_limited = index.last_incomplete_capture != kNoPosition;
+  const bool found = FindPlan(*index, plan);
+  plan.capture_analysis_limited = index->last_incomplete_capture != kNoPosition;
   if (!found) {
     OperatorGroupProposal proposal;
     proposal.capture_analysis_limited = plan.capture_analysis_limited;
@@ -1932,7 +1948,11 @@ OperatorGroupProposal ProposeRepeatedLayers(GraphGraph &graph) {
     return proposal;
   }
   plan.status = OperatorGroupStatus::kFound;
-  return std::move(static_cast<OperatorGroupProposal &>(plan));
+  auto proposal = std::move(static_cast<OperatorGroupProposal &>(plan));
+  if (application != nullptr)
+    *application = std::make_shared<builder::PatternApplication>(
+        [index = std::move(index), proposal]() { return MakeReplacements(*index, proposal); });
+  return proposal;
 }
 
 utils::RepeatedProtoField<NodeProto>
@@ -1949,12 +1969,7 @@ MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodePro
   plan.status = OperatorGroupStatus::kFound;
   if (plan.MatchedNodes(graph.Builder().Nodes()) != nodes)
     throw core::builder::BuilderError("RepeatedLayer::Apply received an inconsistent match.");
-  const auto producers = FindCommonOperatorGroupInputs(graph, plan.groups);
-  std::size_t suffix = 0;
-  OperatorGroupFunctions functions(graph.Builder(), "Layer");
-  return MakeOperatorGroupReplacements(graph, plan, [&](std::size_t group) {
-    return MakeLayer(index, plan.groups[group], plan.groups, group, producers, suffix, functions);
-  });
+  return MakeReplacements(index, plan);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

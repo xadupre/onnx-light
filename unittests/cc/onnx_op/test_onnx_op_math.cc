@@ -99,6 +99,25 @@ TEST(OnnxOpMathRegistrationTest, LogCumSumExpDeclaresOptionalAxisAttribute) {
   EXPECT_NO_THROW(schema.Verify(node));
 }
 
+TEST(OnnxOpMathRegistrationTest, Log1pStartsAtOpset29) {
+  const auto schemas = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Log1p");
+  ASSERT_EQ(schemas.size(), 1u);
+  const auto &light = schemas[0];
+  EXPECT_EQ(light.since_version(), 29);
+  ASSERT_EQ(light.inputs().size(), 1u);
+  ASSERT_EQ(light.outputs().size(), 1u);
+  ASSERT_EQ(light.type_constraints().size(), 1u);
+  const auto *full = OpSchemaRegistry::Schema("Log1p", 29, ONNX_DOMAIN);
+  ASSERT_NE(full, nullptr);
+  EXPECT_EQ(OpSchemaRegistry::Schema("Log1p", 28, ONNX_DOMAIN), nullptr);
+  EXPECT_EQ(light.doc(), full->doc());
+  EXPECT_EQ(light.type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{
+                core::schema::TensorType::kBfloat16, core::schema::TensorType::kFloat16,
+                core::schema::TensorType::kFloat, core::schema::TensorType::kDouble}));
+  EXPECT_FALSE(full->HasFunction());
+}
+
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();

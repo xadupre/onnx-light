@@ -1775,6 +1775,15 @@ std::vector<LightOpSchema> BuildExpm1Schemas() {
         "Constrain input and output types to float tensors."}})};
 }
 
+std::vector<LightOpSchema> BuildLog1pSchemas() {
+  return {LightOpSchema(
+      "Log1p", kOnnxDomain, 29, MakeUnaryMathDoc("Log1p"), {{"input", "Input tensor", "T"}},
+      {{"output", MakeUnaryMathOutputDescription("Log1p"), "T"}},
+      {{"T",
+        {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+        "Constrain input and output types to float tensors."}})};
+}
+
 std::vector<LightOpSchema> BuildErfSchemas() {
   const std::string doc = MakeUnaryMathDoc("Erf");
   const std::string output_description = MakeUnaryMathOutputDescription("Erf");
@@ -2259,18 +2268,23 @@ std::vector<LightOpSchema> BuildLogCumSumExpSchemas() {
 std::vector<LightOpSchema> BuildGroupedMatMulSchemas() {
   static constexpr const char *doc = R"DOC(
 GroupedMatMul multiplies each row of `input` [M,K] by the expert matrices
-selected from `weights` [G,K,N] by `group_indices` [M,S]. The output has
-shape [M,S,N], with output[m,i] = input[m] @ weights[group_indices[m,i]].
+selected from `weights` by `group_indices` [M,S]. Weights have shape [G,K,N]
+when `transB` is zero (the default), or [G,N,K] when `transB` is non-zero.
+In the latter case each selected matrix is logically transposed. The output has
+shape [M,S,N]. For transB=0, output[m,i] = input[m] @ weights[group_indices[m,i]].
 Optional `bias` [G,N] adds bias[group_indices[m,i]] to each result.
 Indices must be in [0,G); negative indices are invalid.
-The context-dependent function decomposes into Gather, Expand, and MatMul.
+The context-dependent function decomposes into Gather, optional Transpose, Expand, and MatMul.
 Runtimes may fuse it to avoid expanded [M*S,K,N] weights, or fuse upstream
 DequantizeLinear for weight-only quantized experts.
 )DOC";
   return {LightOpSchema(
       "GroupedMatMul", kOnnxDomain, 29, doc,
       {{"input", "Token matrix with shape [M, K].", "T"},
-       {"weights", "Stack of G group weight matrices with shape [G, K, N].", "T"},
+       {"weights",
+        "Stack of G group weight matrices with shape [G, K, N] if transB is zero, "
+        "or [G, N, K] if transB is non-zero.",
+        "T"},
        {"group_indices",
         "Group index for each token and selection, with shape [M, S]. Values outside "
         "[0, G) are invalid input.",
@@ -2283,6 +2297,11 @@ DequantizeLinear for weight-only quantized experts.
        {"Tind",
         {TensorType::kInt32, TensorType::kInt64},
         "Constrain group indices to int32 or int64 tensors."}},
+      {AttributeParam{
+          "transB",
+          "Whether to transpose the last two axes of weights before multiplication. "
+          "If zero, weights has shape [G, K, N]; if non-zero, weights has shape [G, N, K].",
+          AttributeType::INT, false, int64_t{0}}},
       /*has_function_implementation=*/true)};
 }
 
@@ -3232,6 +3251,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Erf", [] { return BuildErfSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Expm1", BuildExpm1Schemas},
+      {"Log1p", BuildLog1pSchemas},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gelu", [] { return BuildGeluSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

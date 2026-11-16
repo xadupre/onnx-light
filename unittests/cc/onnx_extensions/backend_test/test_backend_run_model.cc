@@ -252,7 +252,7 @@ void RunBackendCasesFor(
 TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
   // Selects the one-per-type batch, not additional reference cases sharing its comparison policy.
   auto cases = core::backend_test::CollectTestCasesByName("^test_cc_supported_dtype_.*_[A-Z0-9]+$");
-  ASSERT_EQ(cases.size(), 94u);
+  ASSERT_EQ(cases.size(), 97u);
   std::set<std::pair<std::string, int32_t>> memberships;
   std::set<std::string> operators;
   for (TestCase &tc : cases) {
@@ -285,7 +285,7 @@ TEST(BackendRunModel, SupportedDtypeBatchIsLazyAndReloadable) {
     ExpectTensorBitEqual(tc.data_sets().at(0).outputs[0], expected);
     tc.unload();
   }
-  EXPECT_EQ(operators.size(), 40u);
+  EXPECT_EQ(operators.size(), 41u);
   auto benchmarks = core::backend_test::CollectTestCasesByName(
       "^test_cc_supported_dtype_", false, core::backend_test::TestMode::BENCHMARK);
   EXPECT_TRUE(benchmarks.empty());

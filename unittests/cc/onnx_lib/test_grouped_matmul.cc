@@ -58,12 +58,19 @@ TEST(GroupedMatMul, SchemaAndTypes) {
   const auto *schema = OpSchemaRegistry::Schema("GroupedMatMul", 29, "");
   ASSERT_NE(schema, nullptr);
   EXPECT_TRUE(schema->HasContextDependentFunction());
+  ASSERT_EQ(schema->attributes().count("transB"), 1u);
+  EXPECT_EQ(schema->attributes().at("transB").default_value.i(), 0);
   const auto light = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("GroupedMatMul");
   ASSERT_EQ(light.size(), 1u);
   EXPECT_EQ(light[0].since_version(), 29);
   EXPECT_TRUE(light[0].has_function_implementation());
   EXPECT_EQ(light[0].inputs().size(), 4u);
   EXPECT_EQ(light[0].type_constraints().size(), 2u);
+  ASSERT_EQ(light[0].attributes().size(), 1u);
+  EXPECT_EQ(light[0].attributes()[0].name, "transB");
+  EXPECT_EQ(light[0].attributes()[0].type, core::schema::AttributeType::INT);
+  EXPECT_FALSE(light[0].attributes()[0].required);
+  EXPECT_EQ(std::get<int64_t>(light[0].attributes()[0].default_value), 0);
   for (auto dtype :
        {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::DOUBLE}) {
     for (auto index_dtype : {TensorProto::INT32, TensorProto::INT64}) {
@@ -113,8 +120,54 @@ TEST(GroupedMatMul, RejectsInvalidShapes) {
       {{4, 3}, {2, 3, 5}, {4, 2}, {2, 4}},
       {{4, 3}, {2, 3, 5}, {4, 2}, {2, 5, 1}}};
   for (const auto &shapes : invalid) {
-    auto model = MakeGroupedMatMulModel(shapes);
-    EXPECT_THROW(Infer(model), InferenceError);
+    for (int64_t transB : {0, 1}) {
+      auto model = MakeGroupedMatMulModel(shapes);
+      auto *attr = model.mutable_graph()->mutable_node(0)->add_attribute();
+      attr->set_name("transB");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(transB);
+      if (transB && shapes[1].size() == 3) {
+        auto *w = model.mutable_graph()
+                      ->mutable_input(1)
+                      ->mutable_type()
+                      ->mutable_tensor_type()
+                      ->mutable_shape();
+        w->mutable_dim(1)->set_dim_value(shapes[1][2]);
+        w->mutable_dim(2)->set_dim_value(shapes[1][1]);
+      }
+      EXPECT_THROW(Infer(model), InferenceError);
+    }
+  }
+}
+
+TEST(GroupedMatMul, TransposedShapeWithPartialDimensions) {
+  for (int64_t transB : {0, 1, -1, 2}) {
+    for (bool symbolic : {false, true}) {
+      auto model = MakeGroupedMatMulModel(
+          {{4, 3},
+           transB ? std::vector<int64_t>{2, 5, 3} : std::vector<int64_t>{2, 3, 5},
+           {4, 2},
+           {2, 5}});
+      auto *attr = model.mutable_graph()->mutable_node(0)->add_attribute();
+      attr->set_name("transB");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(transB);
+      auto *weights_shape = model.mutable_graph()
+                                ->mutable_input(1)
+                                ->mutable_type()
+                                ->mutable_tensor_type()
+                                ->mutable_shape();
+      weights_shape->mutable_dim(transB ? 1 : 2)->clear_dim_value();
+      if (symbolic) {
+        weights_shape->mutable_dim(transB ? 1 : 2)->set_dim_param("N");
+      }
+      Infer(model);
+      const auto &output = model.graph().output(0).type().tensor_type().shape();
+      ASSERT_EQ(output.dim_size(), 3);
+      EXPECT_EQ(output.dim(0).dim_value(), 4);
+      EXPECT_EQ(output.dim(1).dim_value(), 2);
+      EXPECT_EQ(output.dim(2).dim_value(), 5);
+    }
   }
 }
 
@@ -123,32 +176,61 @@ TEST(GroupedMatMul, OptionalBiasFunctionExpansion) {
   const auto *schema = OpSchemaRegistry::Schema("GroupedMatMul", 29, "");
   ASSERT_NE(schema, nullptr);
   for (int bias_mode : {0, 1, 2}) {
-    auto model = MakeGroupedMatMulModel();
-    NodeProto node = model.graph().node(0);
-    if (bias_mode != 0) {
-      node.add_input(bias_mode == 1 ? "" : "bias");
-    }
-    FunctionBodyBuildContextImpl context(node);
-    FunctionProto function;
-    ASSERT_TRUE(schema->BuildContextDependentFunction(context, function));
-    EXPECT_EQ(function.input_size(), 4);
-    ASSERT_GT(function.node_size(), 0);
-    EXPECT_EQ(function.node(function.node_size() - 1).op_type(),
-              bias_mode == 2 ? "Add" : "Identity");
-    GraphProto expanded;
-    FunctionExpandHelper(node, function, expanded);
-    EXPECT_EQ(expanded.node_size(), function.node_size());
-    int reshapes = 0;
-    for (const auto &inner : function.node()) {
-      if (inner.op_type() == "Reshape") {
-        ++reshapes;
-        ASSERT_EQ(inner.attribute_size(), 1);
-        EXPECT_EQ(inner.attribute(0).name(), "allowzero");
-        EXPECT_EQ(inner.attribute(0).i(), 1);
+    for (int64_t transB : {0, 1, -1, 2}) {
+      auto model = MakeGroupedMatMulModel();
+      NodeProto node = model.graph().node(0);
+      auto *attr = node.add_attribute();
+      attr->set_name("transB");
+      attr->set_type(AttributeProto::INT);
+      attr->set_i(transB);
+      if (bias_mode != 0) {
+        node.add_input(bias_mode == 1 ? "" : "bias");
       }
+      FunctionBodyBuildContextImpl context(node);
+      FunctionProto function;
+      ASSERT_TRUE(schema->BuildContextDependentFunction(context, function));
+      EXPECT_EQ(function.input_size(), 4);
+      ASSERT_GT(function.node_size(), 0);
+      EXPECT_EQ(function.node(function.node_size() - 1).op_type(),
+                bias_mode == 2 ? "Add" : "Identity");
+      GraphProto expanded;
+      FunctionExpandHelper(node, function, expanded);
+      EXPECT_EQ(expanded.node_size(), function.node_size());
+      int reshapes = 0;
+      int transposes = 0;
+      for (const auto &inner : function.node()) {
+        if (inner.op_type() == "Transpose") {
+          ++transposes;
+          EXPECT_EQ(inner.input(0), "gathered_weights");
+          ASSERT_EQ(inner.attribute_size(), 1);
+          EXPECT_EQ(inner.attribute(0).name(), "perm");
+          EXPECT_EQ(inner.attribute(0).ints().values(), (std::vector<int64_t>{0, 2, 1}));
+        }
+        if (inner.op_type() == "Reshape") {
+          ++reshapes;
+          ASSERT_EQ(inner.attribute_size(), 1);
+          EXPECT_EQ(inner.attribute(0).name(), "allowzero");
+          EXPECT_EQ(inner.attribute(0).i(), 1);
+        }
+      }
+      EXPECT_EQ(reshapes, bias_mode == 2 ? 4 : 3);
+      EXPECT_EQ(transposes, transB ? 1 : 0);
     }
-    EXPECT_EQ(reshapes, bias_mode == 2 ? 4 : 3);
   }
+}
+
+TEST(GroupedMatMul, RejectsUnresolvedTransBFunctionExpansion) {
+  auto model = MakeGroupedMatMulModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  auto *attr = node->add_attribute();
+  attr->set_name("transB");
+  attr->set_type(AttributeProto::INT);
+  attr->set_ref_attr_name("outer_transB");
+  FunctionBodyBuildContextImpl context(*node);
+  FunctionProto function;
+  const auto *schema = OpSchemaRegistry::Schema("GroupedMatMul", 29, "");
+  ASSERT_NE(schema, nullptr);
+  EXPECT_FALSE(schema->BuildContextDependentFunction(context, function));
 }
 
 TEST(GroupedMatMul, VersionConversion) {

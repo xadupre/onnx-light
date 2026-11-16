@@ -34,6 +34,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     DEQUANTIZE_PACKED_29_KEY = ("", "DequantizePacked", 29)
     EXPM1_29_KEY = ("", "Expm1", 29)
     LOG_CUM_SUM_EXP_29_KEY = ("", "LogCumSumExp", 29)
+    LOG1P_29_KEY = ("", "Log1p", 29)
     MVN_29_KEY = ("", "MeanVarianceNormalization", 29)
     ND_29_KEYS = {("", "GatherND", 29), ("", "ScatterND", 29)}
     STFT_KEY = ("", "STFT", 17)
@@ -61,6 +62,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 cls.DEQUANTIZE_PACKED_29_KEY,
                 cls.EXPM1_29_KEY,
                 cls.LOG_CUM_SUM_EXP_29_KEY,
+                cls.LOG1P_29_KEY,
                 cls.MVN_29_KEY,
             }
             | cls.ND_29_KEYS
@@ -70,6 +72,14 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 light_dict.discard(key)
             else:
                 light_dict.pop(key, None)
+
+    @staticmethod
+    def _remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict):
+        key = ("", "GroupedMatMul", 29)
+        schema = onnx_dict.get(key)
+        if schema is not None and "transB" not in schema.attributes:
+            light_dict.pop(key, None)
+            onnx_dict.pop(key, None)
 
     @staticmethod
     def _normalize_div_doc(key, doc):
@@ -228,6 +238,16 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             text = text.replace(old, new)
         return text
 
+    @staticmethod
+    def _normalize_grouped_matmul_input_text(key, text):
+        if key == ("", "GroupedMatMul", 29):
+            text = text.replace(
+                "Stack of G group weight matrices with shape [G, K, N].",
+                "Stack of G group weight matrices with shape [G, K, N] if transB is zero, "
+                "or [G, N, K] if transB is non-zero.",
+            )
+        return text
+
     def test_normalize_div_doc(self):
         example = " For example, `-11 / 3` yields `-3`."
         for version in (6, 7, 13, 14):
@@ -244,6 +264,21 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     ("custom", "Div", version),
                 ):
                     self.assertEqual(self._normalize_div_doc(other_key, old_doc), old_doc)
+
+    def test_normalize_grouped_matmul_input_text(self):
+        key = ("", "GroupedMatMul", 29)
+        old_text = "Stack of G group weight matrices with shape [G, K, N]."
+        current_text = (
+            "Stack of G group weight matrices with shape [G, K, N] if transB is zero, "
+            "or [G, N, K] if transB is non-zero."
+        )
+        self.assertEqual(self._normalize_grouped_matmul_input_text(key, old_text), current_text)
+        self.assertEqual(
+            self._normalize_grouped_matmul_input_text(key, current_text), current_text
+        )
+        self.assertEqual(
+            self._normalize_grouped_matmul_input_text(("", "Add", 14), old_text), old_text
+        )
 
     def test_recent_nd_schemas_are_compared_when_available(self):
         historical = {("", "GatherND", 13), ("", "ScatterND", 18)}
@@ -267,6 +302,16 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     self._remove_recent_schemas_if_onnx_is_outdated(light, available)
                     self.assertEqual(set(light), available | unrelated)
 
+    def test_recent_log1p_schema_is_compared_when_available(self):
+        unrelated = {("custom", "Log1p", 29), ("", "Log1p", 30)}
+        for use_set in (False, True):
+            for available in (set(), {self.LOG1P_29_KEY}):
+                with self.subTest(use_set=use_set, available=available):
+                    keys = {self.LOG1P_29_KEY} | unrelated
+                    light = set(keys) if use_set else dict.fromkeys(keys)
+                    self._remove_recent_schemas_if_onnx_is_outdated(light, available)
+                    self.assertEqual(set(light), available | unrelated)
+
     def test_recent_mvn_schema_is_compared_when_available(self):
         unrelated = {
             ("custom", "MeanVarianceNormalization", 29),
@@ -279,6 +324,14 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     light = set(keys) if use_set else dict.fromkeys(keys)
                     self._remove_recent_schemas_if_onnx_is_outdated(light, available)
                     self.assertEqual(set(light), available | unrelated)
+
+    def test_grouped_matmul_schema_is_skipped_when_transb_is_unavailable(self):
+        key = ("", "GroupedMatMul", 29)
+        light = {key: object()}
+        upstream = {key: type("Schema", (), {"attributes": {}})()}
+        self._remove_grouped_matmul_if_onnx_is_outdated(light, upstream)
+        self.assertEqual(light, {})
+        self.assertEqual(upstream, {})
 
     def test_normalize_nd_text(self):
         for name, version in (("GatherND", 13), ("ScatterND", 18)):
@@ -347,6 +400,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
@@ -426,6 +480,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
@@ -440,7 +495,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     with self.subTest(input=index, name=onnx_in.name):
                         self.assertEqual(onnx_in.name, light_in.name)
                         self.assertEqual(
-                            _normalize(self._normalize_nd_text(key, onnx_in.description)),
+                            _normalize(
+                                self._normalize_grouped_matmul_input_text(
+                                    key, self._normalize_nd_text(key, onnx_in.description)
+                                )
+                            ),
                             _normalize(light_in.description),
                         )
                 for index, (onnx_out, light_out) in enumerate(
@@ -465,6 +524,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():

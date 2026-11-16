@@ -1530,6 +1530,7 @@ public:
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, MeanVarianceNormalization);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, DequantizePacked);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Expm1);
+class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Log1p);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Gemm);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, GroupedMatMul);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, LogCumSumExp);
@@ -1542,6 +1543,7 @@ public:
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, MeanVarianceNormalization)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, DequantizePacked)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Expm1)>());
+    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Log1p)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, Gemm)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, GroupedMatMul)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 29, LogCumSumExp)>());

@@ -3,19 +3,58 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.2.8] – Unreleased
-
-### Bug Fixes
-
-- `RepeatedLayer` keeps constant weight-preparation chains (`Cast`, `CastLike`, `Concat`, `Flatten`, `Identity`, `Reshape`, `Squeeze`, `Transpose`, `Unsqueeze` on initializers or constants) outside layer bodies, like initializers. Models that prepare every layer's weights before the first layer, such as Qwen3 exported by mbext, now extract whole decoder layers instead of small fragments (#5901).
-- `diff_models` and `GraphBuilder::DiffRewritings` now report every incompatible model declaration (IR version, domain, model version, metadata and existing opset versions with source and target values), name each mismatched graph input or output with its source and target tensor types, and name removed or conflicting local functions and changed internal value metadata instead of raising generic errors.
-
-### Performance
-
-- `RepeatedLayer` caches value and node comparisons, encodes region topology and boundaries with integer value identifiers, and no longer repeats its whole-graph search in `Apply`. On Qwen3-0.6B (mbext), extraction drops from about 10.6 s to 0.8 s with the same result.
+## [0.2.9] – Unreleased
 
 ### Documentation & CI
 
+- Bumped the release version to `0.2.9`.
+
+## [0.2.8] – Unreleased
+
+### New Features
+
+- Added validated GPTQModel checkpoint import/export for GPTQ v1/v2/planes, AWQ GEMM/GEMV/GEMV-fast/LLM-AWQ, bitsandbytes NF4/FP4/INT8, QQQ tiled weights, native FP8 inverse-scale layouts and VPTQ codebook state, with native reference reconstruction. Support is revision- and layout-specific, accepts already-loaded tensors and explicit metadata, and does not imply whole-model loading, training or accelerated inference ([#5886](https://github.com/xadupre/onnx-light/pull/5886), [#5867](https://github.com/xadupre/onnx-light/pull/5867), [#5892](https://github.com/xadupre/onnx-light/pull/5892), [#5909](https://github.com/xadupre/onnx-light/pull/5909), [#5916](https://github.com/xadupre/onnx-light/pull/5916), [#5944](https://github.com/xadupre/onnx-light/pull/5944)).
+- Added pinned GPTQModel EXL3 trellis/codebook weight import/export and C++/Python reference reconstruction, separate from the portable affine `exl3` profile. Preserves native state for integer rates 1–8 and three procedural codebooks, with validated block-128 transforms and explicit FLOAT32/FLOAT16-intermediate arithmetic contracts; no accelerated matmul or training support is claimed ([#5859](https://github.com/xadupre/onnx-light/pull/5859)).
+- Added explicit BitBLAS `row-packed-v1` checkpoint import/export and historical Marlin imports through declared GPTQ/AWQ source layouts. Target-specific BitBLAS transforms and Marlin runtime tiles are unsupported; Marlin exports use ordinary GPTQ/AWQ layouts ([#5915](https://github.com/xadupre/onnx-light/pull/5915)).
+- Added pinned GPTQModel ParoQuant checkpoint round-trips and reference linear execution, retaining AWQ weights, rotations, channel scales and optional bias. Generic weight dequantization rejects this operator schema because reconstructed weights alone omit the activation transform ([#5945](https://github.com/xadupre/onnx-light/pull/5945)).
+- Added ONNX opset-29 `Expm1`, `MeanVarianceNormalization`, INT32 indices for `GatherND` and `ScatterND`, and `DequantizePacked` with native decoding for 27 GGUF profiles. Packed tensor decoding does not add native `.gguf` container loading ([#5940](https://github.com/xadupre/onnx-light/pull/5940), [#5956](https://github.com/xadupre/onnx-light/pull/5956), [#5869](https://github.com/xadupre/onnx-light/pull/5869), [#5941](https://github.com/xadupre/onnx-light/pull/5941)).
+- Added top-k and top-p sampling after temperature scaling in native generation, with seed-controlled sampling and forwarded Python evaluator settings ([#5882](https://github.com/xadupre/onnx-light/pull/5882)).
+- Added separate prefill/decode models to native `PipelineProto` generation and opt-in `GenerationState` pause/resume with retained caches, pending tokens, EOS state and RNG progress. Resuming continues the original request rather than appending new conversation turns; the native Python binding exposes the retained state ([#5884](https://github.com/xadupre/onnx-light/pull/5884), [#5891](https://github.com/xadupre/onnx-light/pull/5891)).
+- Added explicit generation-only `PrepareGenerationModel` preparation that gathers the last hidden position before supported floating-point MatMul LM heads, changing logits from `[B,S,V]` to `[B,1,V]` without copying weights ([#5866](https://github.com/xadupre/onnx-light/pull/5866)).
+- Added `partition --max-constant-inputs` overrides for constant-input limits in layer and mincut partitioning ([#5885](https://github.com/xadupre/onnx-light/pull/5885)).
+
+### Improvements
+
+- Added `IfIdenticalBranchesPattern` to inline recursively equivalent If branches while preserving captures, metadata and device constraints ([#5910](https://github.com/xadupre/onnx-light/pull/5910)).
+- Optimized newly extracted local functions within the same optimization pass, allowing their operators to fuse without a second optimization invocation ([#5943](https://github.com/xadupre/onnx-light/pull/5943)).
+- Localized `RepeatedLayer` capture limits and exposed resource exhaustion rather than silently treating bounded searches as exhaustive ([#5946](https://github.com/xadupre/onnx-light/pull/5946)).
+
+### Bug Fixes
+
+- `RepeatedLayer` keeps constant weight-preparation chains (`Cast`, `CastLike`, `Concat`, `Flatten`, `Identity`, `Reshape`, `Squeeze`, `Transpose`, `Unsqueeze` on initializers or constants) outside layer bodies, like initializers. Models that prepare every layer's weights before the first layer, such as Qwen3 exported by mbext, now extract whole decoder layers instead of small fragments ([#5902](https://github.com/xadupre/onnx-light/pull/5902), fixes #5901).
+- `diff_models` and `GraphBuilder::DiffRewritings` now report every incompatible model declaration (IR version, domain, model version, metadata and existing opset versions with source and target values), name each mismatched graph input or output with its source and target tensor types, and name removed or conflicting local functions and changed internal value metadata instead of raising generic errors ([#5883](https://github.com/xadupre/onnx-light/pull/5883)).
+- Preserved captured-value ordering and per-reference graph attribute identity during rewriting, semantic comparisons, proto copies and optimizer-plan serialization ([#5865](https://github.com/xadupre/onnx-light/pull/5865)).
+- Preserved live output-name reservations when pruning retired subgraphs, preventing name collisions in subsequent mutations ([#5890](https://github.com/xadupre/onnx-light/pull/5890)).
+- Preserved and converted model-local functions using their own opset imports during version conversion, including constants introduced by adapters ([#5906](https://github.com/xadupre/onnx-light/pull/5906)).
+- Enabled optimization and partitioning with deferred inline weights by loading needed constants on demand while leaving unrelated payloads deferred and preserving replay/export behavior ([#5905](https://github.com/xadupre/onnx-light/pull/5905), [#5911](https://github.com/xadupre/onnx-light/pull/5911)).
+- Started repeated-layer detection at the first eligible candidate so preceding nodes with unresolved attributes no longer hide later layers, and reused freshly revalidated extraction proposals when applying graph rewrites ([#5952](https://github.com/xadupre/onnx-light/pull/5952), [#5957](https://github.com/xadupre/onnx-light/pull/5957)).
+- Rejected MatMul post-Reshape fusion with output rank below two before accessing matrix dimensions ([#5950](https://github.com/xadupre/onnx-light/pull/5950)).
+- Corrected low-precision LogSoftmax and cross-entropy computation and made half-precision InstanceNormalization and LRN overflow-safe ([#5875](https://github.com/xadupre/onnx-light/pull/5875), [#5873](https://github.com/xadupre/onnx-light/pull/5873)).
+- Rejected externally stored STRING tensors in the checker ([#5955](https://github.com/xadupre/onnx-light/pull/5955)).
+- Restored macOS universal2 builds by avoiding unsupported floating-point `from_chars` in bitsandbytes parsing, fixed ReduceMean `nodiscard` warnings on Windows ARM64, and avoided GCC 14 array-bounds warnings in Whisper case generation ([#5953](https://github.com/xadupre/onnx-light/pull/5953), [#5954](https://github.com/xadupre/onnx-light/pull/5954), [#5896](https://github.com/xadupre/onnx-light/pull/5896)).
+- Installed the version-converter forwarding header for standalone SDK consumers ([#5898](https://github.com/xadupre/onnx-light/pull/5898)).
+
+### Performance
+
+- `RepeatedLayer` caches value and node comparisons, encodes region topology and boundaries with integer value identifiers, and no longer repeats its whole-graph search in `Apply`. On Qwen3-0.6B (mbext), extraction drops from about 10.6 s to 0.8 s with the same result ([#5903](https://github.com/xadupre/onnx-light/pull/5903)).
+
+### Documentation & CI
+
+- Added a pinned GPTQModel checkpoint compatibility matrix distinguishing supported layouts, reconstruction contracts and unsupported containers/backends ([#5949](https://github.com/xadupre/onnx-light/pull/5949)).
+- Added four-layer Whisper shape-inference cases and external-data sidecar write regressions ([#5888](https://github.com/xadupre/onnx-light/pull/5888), [#5942](https://github.com/xadupre/onnx-light/pull/5942)).
+- Displayed the documentation generation date alongside the release version, used relative local documentation/source links, and documented the `merge_models` producer-name default ([#5894](https://github.com/xadupre/onnx-light/pull/5894), [#5877](https://github.com/xadupre/onnx-light/pull/5877), [#5871](https://github.com/xadupre/onnx-light/pull/5871)).
+- Shipped `NOTICE` in Python and native packages alongside the new packed-weight decoder ([#5941](https://github.com/xadupre/onnx-light/pull/5941)).
+- Updated Ruff from `0.17.3` to `0.17.4`, pyrefly from `1.4.0` to `1.4.1`, and clang-format from `23.1.3` to `23.1.5` ([#5914](https://github.com/xadupre/onnx-light/pull/5914), [#5912](https://github.com/xadupre/onnx-light/pull/5912), [#5913](https://github.com/xadupre/onnx-light/pull/5913)).
 - Bumped the release version to `0.2.8`.
 
 ## [0.2.7] – Unreleased
@@ -50,10 +89,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Preserved scalar operands, including trailing empty terms, in Einsum shape inference and explicitly rejected type strings missing a map key/value separator ([#5843](https://github.com/xadupre/onnx-light/pull/5843)).
 - Hardened ONNX literal parsing with checked integer conversions, direct FLOAT attribute parsing and length-aware string handling. Numeric overflow and negative unsigned literals now report parser errors; floating-point underflow, signed zero, subnormals and embedded NUL bytes are preserved ([#5845](https://github.com/xadupre/onnx-light/pull/5845)).
 - Avoided GCC 13 array-bounds diagnostics when constructing GroupedMatMul backend case names, preserving names and warnings-as-errors in standalone Release builds ([#5824](https://github.com/xadupre/onnx-light/pull/5824)).
-
-### Pending Pull Requests
-
-- **Pending merge:** Added pinned GPTQModel EXL3 trellis/codebook weight import/export and C++/Python reference reconstruction, separate from the portable affine `exl3` profile. Preserves native state for integer rates 1–8 and three procedural codebooks, with validated block-128 transforms and explicit FLOAT32/FLOAT16-intermediate arithmetic contracts; no accelerated matmul or training support is claimed ([#5859](https://github.com/xadupre/onnx-light/pull/5859)).
 
 ### Documentation & CI
 

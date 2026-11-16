@@ -598,6 +598,8 @@ def make_tensor(
     :param dims: shape
     :param vals: values. Must be ``None`` (or omitted) when ``external_data``
         is provided, since the tensor content then lives in an external file.
+        For STRING tensors, str values are UTF-8 encoded and bytes values
+        are stored unchanged.
     :param raw: if True, vals contains the serialized content of the tensor,
         otherwise, vals should be a list of values
         of the type defined by ``data_type``.
@@ -676,9 +678,8 @@ def make_tensor(
     assert not raw, "Bug: raw should be False at this point."
 
     if data_type == TensorProto.STRING:
-        vals = np.array(vals).flatten()
-        if len(vals) != 0:
-            vals = np.vectorize(_to_bytes)(vals)
+        vals = np.array(vals, dtype=object).flatten()
+        vals = np.vectorize(_to_bytes, otypes=[object])(vals)
     else:
         vals = np.asarray(vals, dtype=np_dtype).flatten()
 

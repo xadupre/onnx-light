@@ -13,6 +13,50 @@ from onnx_light.onnx_proto._helper import tensor_dtype_to_field
 
 
 class TestOnnxLightHelper(ExtTestCase):
+    def test_make_string_tensor_preserves_values(self):
+        cases = [
+            ((), [b"\xffa\x00"], [b"\xffa\x00"]),
+            ((), b"\xffa\x00", [b"\xffa\x00"]),
+            ((), np.array(b"\xffa\x00", dtype=object), [b"\xffa\x00"]),
+            ((), "\u00e9\x00", [b"\xc3\xa9\x00"]),
+            (
+                (4,),
+                [b"", b"\x00", b"\xffa\x00", b"a\x00b\x00\x00"],
+                [b"", b"\x00", b"\xffa\x00", b"a\x00b\x00\x00"],
+            ),
+            (
+                (2, 2),
+                [[b"\x00", b"\xffa\x00"], [b"a\x00b\x00", b""]],
+                [b"\x00", b"\xffa\x00", b"a\x00b\x00", b""],
+            ),
+            (
+                (2, 2),
+                np.array([[b"\x00", b"\xffa\x00"], [b"a\x00b\x00", b""]], dtype=object),
+                [b"\x00", b"\xffa\x00", b"a\x00b\x00", b""],
+            ),
+            ((3,), ["\u00e9\x00", "\u4e2d", ""], [b"\xc3\xa9\x00", b"\xe4\xb8\xad", b""]),
+            ((2,), [b"\xffa\x00", "\u00e9\x00"], [b"\xffa\x00", b"\xc3\xa9\x00"]),
+            (
+                (2,),
+                np.array(["\u00e9\x00", "\u4e2d"], dtype=object),
+                [b"\xc3\xa9\x00", b"\xe4\xb8\xad"],
+            ),
+            ((2,), np.array(["\u00e9", "\u4e2d"]), [b"\xc3\xa9", b"\xe4\xb8\xad"]),
+            ((2,), np.array([b"abc", b"d"], dtype="S3"), [b"abc", b"d"]),
+            ((), [b""], [b""]),
+            ((0,), [], []),
+            ((2, 0), np.empty((2, 0), dtype=object), []),
+        ]
+        for dims, vals, expected in cases:
+            with self.subTest(dims=dims, vals=vals):
+                tensor = oh.make_tensor("test", onnxl.TensorProto.STRING, dims, vals)
+                self.assertEqual(list(tensor.string_data), expected)
+                self.assertEqual(list(tensor.dims), list(dims))
+                restored = onnxl.TensorProto()
+                restored.ParseFromString(tensor.SerializeToString())
+                self.assertEqual(list(restored.string_data), expected)
+                self.assertEqual(list(restored.dims), list(dims))
+
     def test_tensor_dtype_to_field_cache(self):
         tensor_dtype_to_field.cache_clear()
         self.addCleanup(tensor_dtype_to_field.cache_clear)

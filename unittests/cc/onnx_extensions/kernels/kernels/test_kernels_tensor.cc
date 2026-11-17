@@ -940,6 +940,56 @@ TEST(KernelClass, CastClassInt64ToFloat) {
   EXPECT_FLOAT_EQ(py[3], 42.0f);
 }
 
+TEST(KernelClass, CastClassIntegerConversionsPreserveLowBits) {
+  using core::runtime::DataType;
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  const std::vector<int64_t> values = {9007199254740993LL,
+                                       -9007199254740993LL,
+                                       std::numeric_limits<int64_t>::max(),
+                                       std::numeric_limits<int64_t>::min(),
+                                       0,
+                                       -1,
+                                       1,
+                                       4294967295LL,
+                                       4294967296LL};
+  const int64_t n = 2 * core::runtime::kParallelForGrainSize + 1;
+  std::vector<int64_t> input_values(static_cast<size_t>(n));
+  for (int64_t i = 0; i < n; ++i)
+    input_values[static_cast<size_t>(i)] = values[static_cast<size_t>(i) % values.size()];
+  const Tensor input = Tensor::FromInt64("", {n}, input_values);
+  for (int64_t threshold : {std::numeric_limits<int64_t>::max(), int64_t{1}}) {
+    cast_kernel.Configure(
+        {cast_kernel.TuningKey(DataType::INT64), {{"parallel.minimum_elements", threshold}}});
+    const auto check = [&]<typename T>(int32_t to) {
+      const Tensor output = cast_kernel(input, to);
+      ASSERT_EQ(output.data_type, to);
+      ASSERT_EQ(output.shape, input.shape);
+      const Tensor widened = cast_kernel(output, DataType::INT64);
+      for (int64_t i = 0; i < n; ++i) {
+        const T expected = static_cast<T>(input_values[static_cast<size_t>(i)]);
+        ASSERT_EQ(output.As<T>()[i], expected) << "dtype=" << to << " index=" << i;
+        ASSERT_EQ(widened.AsInt64()[i], static_cast<int64_t>(expected))
+            << "dtype=" << to << " index=" << i;
+      }
+    };
+    check.operator()<int8_t>(DataType::INT8);
+    check.operator()<uint8_t>(DataType::UINT8);
+    check.operator()<int16_t>(DataType::INT16);
+    check.operator()<uint16_t>(DataType::UINT16);
+    check.operator()<int32_t>(DataType::INT32);
+    check.operator()<uint32_t>(DataType::UINT32);
+    check.operator()<int64_t>(DataType::INT64);
+    const Tensor boolean = cast_kernel(input, DataType::BOOL);
+    const Tensor widened = cast_kernel(boolean, DataType::INT64);
+    for (int64_t i = 0; i < n; ++i) {
+      const int64_t expected = input_values[static_cast<size_t>(i)] != 0 ? 1 : 0;
+      ASSERT_EQ(boolean.AsBool()[i], expected);
+      ASSERT_EQ(widened.AsInt64()[i], expected);
+    }
+  }
+}
+
 TEST(KernelClass, CastClassIdentityCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};

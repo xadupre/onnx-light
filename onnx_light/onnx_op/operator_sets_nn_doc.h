@@ -148,8 +148,8 @@ std::string MakeRotaryEmbeddingDoc(int since_version);
 
 /**
  * Returns the documentation string for the CausalConvWithState operator at
- * the given opset version (27). Mirrors the upstream
- * ``CausalConvWithState_ver27_doc`` string.
+ * the given opset version (27 or 29). Mirrors the corresponding upstream
+ * documentation string.
  */
 std::string MakeCausalConvWithStateDoc(int since_version);
 

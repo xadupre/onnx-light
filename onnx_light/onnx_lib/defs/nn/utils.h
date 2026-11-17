@@ -20,6 +20,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+OpSchema CausalConvWithStateSchema(bool dilated);
+
 extern const std::vector<int64_t> kMeanVarianceNormalizationDefaultAxes;
 
 void MeanVarianceNormalizationShapeInference(InferenceContext &ctx);

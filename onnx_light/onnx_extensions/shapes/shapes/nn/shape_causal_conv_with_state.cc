@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/shapes/shapes/nn/shape_nn.h"
 
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -16,6 +17,15 @@ void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, 
   CheckNodeOpAndOutput(node, "CausalConvWithState", "ComputeShapeCausalConvWithState");
   EXT_ENFORCE_INVALID(!(node.output_size() < 2),
                       "ComputeShapeCausalConvWithState: node must declare two outputs.");
+  int64_t dilation = 1;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "dilation") {
+      EXT_ENFORCE_INVALID(attr.type() == AttributeProto::INT,
+                          "ComputeShapeCausalConvWithState: dilation must be an integer.");
+      dilation = attr.i();
+    }
+  }
+  EXT_ENFORCE_INVALID(dilation >= 1, "ComputeShapeCausalConvWithState: dilation must be >= 1.");
 
   const SymTensor &in = ctx.Get(input);
   const SymTensor &w = ctx.Get(weight);
@@ -27,19 +37,47 @@ void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, 
   EXT_ENFORCE_INVALID(w_shape.Rank() == 3, "ComputeShapeCausalConvWithState: weight '", weight,
                       "' must have rank 3, got ", w_shape.Rank(), ".");
 
-  // Output 0 (``output``) has the same shape and dtype as ``input``.
-  ctx.Set(node.output(0), SymTensor(nullptr, in.Dtype(), in_shape));
-
-  // Output 1 (``present_state``) has shape (B, C, K - 1). When the kernel
-  // dimension is concrete we compute K-1; otherwise we leave the trailing
-  // dim symbolic.
-  SymDim km1;
+  SymDim history;
   if (w_shape[2].IsInt()) {
-    km1 = SymDim(w_shape[2].AsInt() - 1);
+    const int64_t k = w_shape[2].AsInt();
+    EXT_ENFORCE_INVALID(k >= 1, "ComputeShapeCausalConvWithState: kernel size K must be >= 1.");
+    EXT_ENFORCE_INVALID(k - 1 <= (std::numeric_limits<int64_t>::max() - 1) / dilation,
+                        "ComputeShapeCausalConvWithState: effective kernel size overflows int64.");
+    const int64_t h = (k - 1) * dilation;
+    history = SymDim(h);
   } else {
-    km1 = SymDim(w_shape[2].AsExpr() + "-1");
+    const std::string &kernel_expr = w_shape[2].AsExpr();
+    history =
+        SymDim(kernel_expr.empty() ? ""
+                                   : "((" + kernel_expr + ")-1)" +
+                                         (dilation == 1 ? "" : "*" + std::to_string(dilation)));
   }
-  SymShape present_shape{in_shape[0], in_shape[1], km1};
+  if (node.input_size() > 3 && !node.input(3).empty() && ctx.Has(node.input(3))) {
+    const SymShape &past = ctx.Get(node.input(3)).Shape();
+    EXT_ENFORCE_INVALID(past.Rank() == 3,
+                        "ComputeShapeCausalConvWithState: past_state must have rank 3.");
+    for (size_t axis = 0; axis < 2; ++axis) {
+      EXT_ENFORCE_INVALID(!past[axis].IsInt() || !in_shape[axis].IsInt() ||
+                              past[axis].AsInt() == in_shape[axis].AsInt(),
+                          "ComputeShapeCausalConvWithState: past_state batch/channel mismatch.");
+    }
+    if (past[2].IsInt()) {
+      const int64_t h = past[2].AsInt();
+      EXT_ENFORCE_INVALID(h >= 0 && h < std::numeric_limits<int64_t>::max() && h % dilation == 0,
+                          "ComputeShapeCausalConvWithState: invalid past_state history length.");
+      EXT_ENFORCE_INVALID(!history.IsInt() || history.AsInt() == h,
+                          "ComputeShapeCausalConvWithState: past_state history mismatch.");
+      history = SymDim(h);
+    }
+  }
+  if (history.IsInt() && in_shape[2].IsInt()) {
+    EXT_ENFORCE_INVALID(in_shape[2].AsInt() >= 0 &&
+                            in_shape[2].AsInt() <=
+                                std::numeric_limits<int64_t>::max() - history.AsInt(),
+                        "ComputeShapeCausalConvWithState: padded length overflows int64.");
+  }
+  ctx.Set(node.output(0), SymTensor(nullptr, in.Dtype(), in_shape));
+  SymShape present_shape{in_shape[0], in_shape[1], history};
   ctx.Set(node.output(1), SymTensor(nullptr, in.Dtype(), present_shape));
 }
 

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -47,9 +48,10 @@ NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
 // The node template carries the activation attribute when it is non-default.
 void RegisterCase(std::vector<TestCase> &registry, const std::string &name, const OpsetId &opset,
                   const Tensor &input, const Tensor &weight, const Tensor *bias,
-                  const Tensor *past_state, const std::string &activation) {
+                  const Tensor *past_state, const std::string &activation, int64_t dilation = 1) {
   onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
   attrs.activation = activation;
+  attrs.dilation = dilation;
   std::vector<std::string> input_names = {"input", "weight"};
   std::vector<Tensor> inputs = {input, weight};
   if (bias != nullptr) {
@@ -67,6 +69,9 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
   NodeProto node = MakeCausalConvNode(input_names, {"output", "present_state"});
   if (activation != "none") {
     AddAttribute<std::string>(node, "activation", activation);
+  }
+  if (dilation != 1) {
+    AddAttribute<int64_t>(node, "dilation", dilation);
   }
   const Tensor bias_value = bias != nullptr ? *bias : Tensor{};
   const Tensor past_state_value = past_state != nullptr ? *past_state : Tensor{};
@@ -108,6 +113,43 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
                            {std::move(output), std::move(present_state)}};
            });
     return;
+  }
+
+  for (const auto &[dilation, length, k, with_state, activation, half] :
+       std::vector<std::tuple<int64_t, int64_t, int64_t, bool, std::string, bool>>{
+           {2, 7, 3, false, "none", false},
+           {2, 7, 3, true, "none", false},
+           {3, 1, 4, true, "silu", false},
+           {2, 0, 3, true, "none", false},
+           {2, 0, 3, false, "none", false},
+           {2, 1, 3, false, "none", false},
+           {3, 2, 1, false, "swish", false},
+           {2, 3, 3, true, "none", true},
+           {2, 3, 3, false, "silu", true}}) {
+    const int64_t history = (k - 1) * dilation;
+    std::vector<float> x_values(static_cast<size_t>(2 * length));
+    std::vector<float> w_values(static_cast<size_t>(2 * k));
+    std::vector<float> p_values(static_cast<size_t>(2 * history));
+    for (size_t i = 0; i < x_values.size(); ++i)
+      x_values[i] = static_cast<float>(i);
+    for (size_t i = 0; i < w_values.size(); ++i)
+      w_values[i] = static_cast<float>(i) / 10.0f;
+    for (size_t i = 0; i < p_values.size(); ++i)
+      p_values[i] = static_cast<float>(i);
+    const auto tensor = [half](const char *name, const core::runtime::Shape &shape,
+                               const std::vector<float> &values) {
+      return half ? MakeFloat16Tensor(name, shape, values) : Tensor::FromFloat(name, shape, values);
+    };
+    const Tensor x = tensor("input", {1, 2, length}, x_values);
+    const Tensor w = tensor("weight", {2, 1, k}, w_values);
+    const Tensor bias = tensor("bias", {2}, {0.25f, -0.5f});
+    const Tensor past = tensor("past_state", {1, 2, history}, p_values);
+    const std::string name = "test_cc_causal_conv_with_state_dilated_d" + std::to_string(dilation) +
+                             "_l" + std::to_string(length) + "_k" + std::to_string(k) +
+                             (with_state ? "_past" : "_no_past") + "_" + activation +
+                             (half ? "_fp16" : "");
+    RegisterCase(registry, name, DefaultOpset(29), x, w, &bias, with_state ? &past : nullptr,
+                 activation, dilation);
   }
 
   // Shared "basic" tensors used by several cases: B=1, C=2, L=4, K=3.

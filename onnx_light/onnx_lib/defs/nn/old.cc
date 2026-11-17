@@ -13,6 +13,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+ONNX_OPERATOR_SET_SCHEMA(CausalConvWithState, 27, CausalConvWithStateSchema(false));
+
 // For GlobalPool operations.
 static void globalPoolTypeShapeInference_opset2(InferenceContext &ctx) {
   propagateElemTypeFromInputToOutput(ctx, 0, 0);

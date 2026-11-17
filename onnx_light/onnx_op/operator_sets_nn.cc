@@ -1391,7 +1391,7 @@ LightOpSchema MakeRotaryEmbeddingSchema(int since_version) {
 // --- CausalConvWithState -----------------------------------------------------
 
 // Input/output descriptions reproduced verbatim from the upstream ONNX
-// CausalConvWithState schema (v27 in onnx_lib/defs/nn/defs.cc) so the
+// CausalConvWithState schemas in onnx_lib/defs/nn/defs.cc so the
 // LightOpSchema parity test passes.
 
 const char *const kCausalConvWithStateInputDescription =
@@ -1423,21 +1423,38 @@ const char *const kCausalConvWithStatePresentStateDescription =
     "or zero-padding when the current input is shorter than k - 1.";
 
 LightOpSchema MakeCausalConvWithStateSchema(int since_version) {
+  const bool dilated = since_version >= 29;
   std::vector<FormalParameter> inputs = {
       {"input", kCausalConvWithStateInputDescription, "T"},
-      {"weight", kCausalConvWithStateWeightDescription, "T"},
+      {"weight",
+       dilated ? "Depthwise convolution kernel with shape (channels, 1, k), where k must be >= 1. "
+                 "Each channel is convolved independently with its corresponding kernel."
+               : kCausalConvWithStateWeightDescription,
+       "T"},
       {"bias", kCausalConvWithStateBiasDescription, "T"},
-      {"past_state", kCausalConvWithStatePastStateDescription, "T"},
+      {"past_state",
+       dilated ? "Raw chronological history with shape (batch_size, channels, (k - 1) * dilation). "
+                 "If not provided, history is zero."
+               : kCausalConvWithStatePastStateDescription,
+       "T"},
   };
   std::vector<FormalParameter> outputs = {
       {"output", kCausalConvWithStateOutputDescription, "T"},
-      {"present_state", kCausalConvWithStatePresentStateDescription, "T"},
+      {"present_state",
+       dilated ? "The last (k - 1) * dilation raw samples of the concatenated history and input, "
+                 "with shape (batch_size, channels, (k - 1) * dilation)."
+               : kCausalConvWithStatePresentStateDescription,
+       "T"},
   };
   std::vector<AttributeParam> attrs = {
       {"activation",
        "Fused activation function. One of: 'silu', 'swish', 'none'. Default is 'none'.",
        AttributeType::STRING, /*required=*/false, std::string("none")},
   };
+  if (dilated) {
+    attrs.push_back({"dilation", "Spacing between kernel samples. Must be >= 1.",
+                     AttributeType::INT, /*required=*/false, int64_t{1}});
+  }
   return LightOpSchema("CausalConvWithState", kOnnxDomain, since_version,
                        MakeCausalConvWithStateDoc(since_version), std::move(inputs),
                        std::move(outputs),
@@ -2388,6 +2405,7 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
       {"CausalConvWithState",
        [] {
          return std::vector<LightOpSchema>{
+             MakeCausalConvWithStateSchema(29),
              MakeCausalConvWithStateSchema(27),
          };
        }},

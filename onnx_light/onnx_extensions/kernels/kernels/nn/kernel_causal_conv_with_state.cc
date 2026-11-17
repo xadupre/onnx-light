@@ -9,11 +9,54 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
+
+namespace {
+
+size_t CausalConvBytes(const Shape &shape, int32_t dtype) {
+  int64_t count = 1;
+  for (const int64_t dim : shape) {
+    EXT_ENFORCE_INVALID(dim >= 0, "kernel::CausalConvWithState: negative dimension.");
+    EXT_ENFORCE_INVALID(dim == 0 || count <= std::numeric_limits<int64_t>::max() / dim,
+                        "kernel::CausalConvWithState: tensor element count overflows int64.");
+    count *= dim;
+  }
+  return core::runtime::PackedByteSize(dtype, count);
+}
+
+int64_t CausalConvHistory(const Tensor &input, const Tensor &weight,
+                          const CausalConvWithState::Attributes &attrs) {
+  EXT_ENFORCE_INVALID(attrs.dilation >= 1, "kernel::CausalConvWithState: dilation must be >= 1.");
+  EXT_ENFORCE_INVALID(input.shape.size() == 3 && weight.shape.size() == 3,
+                      "kernel::CausalConvWithState: input and weight must have rank 3.");
+  EXT_ENFORCE_INVALID(weight.shape[1] == 1 && weight.shape[0] == input.shape[1],
+                      "kernel::CausalConvWithState: weight must have shape (C, 1, K).");
+  const int64_t K = weight.shape[2];
+  EXT_ENFORCE_INVALID(K >= 1, "kernel::CausalConvWithState: kernel size K must be >= 1.");
+  EXT_ENFORCE_INVALID(K - 1 <= (std::numeric_limits<int64_t>::max() - 1) / attrs.dilation,
+                      "kernel::CausalConvWithState: effective kernel size overflows int64.");
+  const int64_t history = (K - 1) * attrs.dilation;
+  EXT_ENFORCE_INVALID(input.shape[2] >= 0 &&
+                          input.shape[2] <= std::numeric_limits<int64_t>::max() - history,
+                      "kernel::CausalConvWithState: padded length overflows int64.");
+  EXT_ENFORCE_INVALID(input.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          input.data_type == static_cast<int32_t>(DataType::FLOAT16),
+                      "kernel::CausalConvWithState: input must be FLOAT or FLOAT16.");
+  EXT_ENFORCE_INVALID(weight.data_type == input.data_type,
+                      "kernel::CausalConvWithState: weight must match input dtype.");
+  EXT_ENFORCE_INVALID(input.size_bytes() == CausalConvBytes(input.shape, input.data_type) &&
+                          weight.size_bytes() == CausalConvBytes(weight.shape, weight.data_type),
+                      "kernel::CausalConvWithState: input or weight has wrong byte size.");
+  CausalConvBytes({input.shape[0], input.shape[1], history}, input.data_type);
+  return history;
+}
+
+} // namespace
 
 // IEEE-754 binary16 ↔ binary32 conversions used by the FLOAT16 dispatch
 // path are provided by ``onnx_core/runtime/kernels/cast_helper.h``.
@@ -23,18 +66,13 @@ std::pair<Tensor, Tensor> CausalConvWithState::operator()(const Tensor &input, c
                                                           const Tensor &past_state,
                                                           const Attributes &attrs,
                                                           RuntimeContext *rt) const {
-  const size_t output_n_bytes = static_cast<size_t>(input.element_count()) * input.element_size();
+  const int64_t history = CausalConvHistory(input, weight, attrs);
+  const size_t output_n_bytes = CausalConvBytes(input.shape, input.data_type);
   Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, output_n_bytes)
                      : MakeOutputTensor(input.data_type, input.shape, output_n_bytes, nullptr);
 
-  // present_state shape = (B, C, K - 1).
-  const int64_t K = weight.shape.size() >= 3 ? weight.shape[2] : 0;
-  const int64_t Km1 = K > 0 ? K - 1 : 0;
-  const Shape present_shape{input.shape.empty() ? 0 : input.shape[0],
-                            input.shape.size() > 1 ? input.shape[1] : 0, Km1};
-  const size_t present_n_bytes = static_cast<size_t>(present_shape[0]) *
-                                 static_cast<size_t>(present_shape[1]) * static_cast<size_t>(Km1) *
-                                 input.element_size();
+  const Shape present_shape{input.shape[0], input.shape[1], history};
+  const size_t present_n_bytes = CausalConvBytes(present_shape, input.data_type);
   Tensor present_state =
       rt ? rt->MakeOutputTensor(1, input.data_type, present_shape, present_n_bytes)
          : MakeOutputTensor(input.data_type, present_shape, present_n_bytes, nullptr);
@@ -52,51 +90,44 @@ std::pair<Tensor, Tensor> CausalConvWithState::operator()(const Tensor &input, c
 void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, const Tensor *bias,
                                      const Tensor *past_state, const Attributes &attrs,
                                      Tensor &output, Tensor &present_state) const {
+  const int64_t history = CausalConvHistory(input, weight, attrs);
   const int32_t dtype = input.data_type;
   const bool is_float = dtype == static_cast<int32_t>(DataType::FLOAT);
   const bool is_float16 = dtype == static_cast<int32_t>(DataType::FLOAT16);
-  EXT_ENFORCE_INVALID(is_float || is_float16,
-                      "kernel::CausalConvWithState: input must be FLOAT or FLOAT16.");
-  EXT_ENFORCE_INVALID(weight.data_type == dtype,
-                      "kernel::CausalConvWithState: weight must match input dtype.");
-  EXT_ENFORCE_INVALID(input.shape.size() == 3,
-                      "kernel::CausalConvWithState: input must be rank-3 (B, C, L).");
-  EXT_ENFORCE_INVALID(weight.shape.size() == 3 && weight.shape[1] == 1,
-                      "kernel::CausalConvWithState: weight must be rank-3 (C, 1, K).");
-  EXT_ENFORCE_INVALID(weight.shape[0] == input.shape[1],
-                      "kernel::CausalConvWithState: weight C must equal input C.");
 
   const int64_t B = input.shape[0];
   const int64_t C = input.shape[1];
   const int64_t L = input.shape[2];
   const int64_t K = weight.shape[2];
-  EXT_ENFORCE_INVALID(K >= 1, "kernel::CausalConvWithState: kernel size K must be >= 1.");
-  const int64_t Km1 = K - 1;
 
   if (bias != nullptr) {
     EXT_ENFORCE_INVALID(bias->data_type == dtype,
                         "kernel::CausalConvWithState: bias must match input dtype.");
     EXT_ENFORCE_INVALID(bias->shape.size() == 1 && bias->shape[0] == C,
                         "kernel::CausalConvWithState: bias must have shape (C).");
+    EXT_ENFORCE_INVALID(bias->size_bytes() == CausalConvBytes(bias->shape, dtype),
+                        "kernel::CausalConvWithState: bias has wrong byte size.");
   }
   if (past_state != nullptr) {
     EXT_ENFORCE_INVALID(past_state->data_type == dtype,
                         "kernel::CausalConvWithState: past_state must match input dtype.");
-    EXT_ENFORCE_INVALID(past_state->shape.size() == 3 && past_state->shape[0] == B &&
-                            past_state->shape[1] == C && past_state->shape[2] == Km1,
-                        "kernel::CausalConvWithState: past_state must have shape (B, C, K-1).");
+    EXT_ENFORCE_INVALID(
+        past_state->shape.size() == 3 && past_state->shape[0] == B && past_state->shape[1] == C &&
+            past_state->shape[2] == history,
+        "kernel::CausalConvWithState: past_state must have shape (B, C, (K-1)*dilation).");
+    EXT_ENFORCE_INVALID(past_state->size_bytes() == CausalConvBytes(past_state->shape, dtype),
+                        "kernel::CausalConvWithState: past_state has wrong byte size.");
   }
 
   EXT_ENFORCE_INVALID(output.data_type == input.data_type && output.shape == input.shape,
                       "kernel::CausalConvWithState: output buffer has mismatched type or shape.");
-  const size_t elem_size = output.element_size();
-  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(B * C * L) * elem_size,
+  EXT_ENFORCE_INVALID(output.size_bytes() == CausalConvBytes(input.shape, dtype),
                       "kernel::CausalConvWithState: output buffer has wrong byte size.");
   EXT_ENFORCE_INVALID(present_state.data_type == input.data_type &&
                           present_state.shape.size() == 3 && present_state.shape[0] == B &&
-                          present_state.shape[1] == C && present_state.shape[2] == Km1,
+                          present_state.shape[1] == C && present_state.shape[2] == history,
                       "kernel::CausalConvWithState: present_state has mismatched type or shape.");
-  EXT_ENFORCE_INVALID(present_state.size_bytes() == static_cast<size_t>(B * C * Km1) * elem_size,
+  EXT_ENFORCE_INVALID(present_state.size_bytes() == CausalConvBytes(present_state.shape, dtype),
                       "kernel::CausalConvWithState: present_state buffer has wrong byte size.");
 
   const bool use_silu = attrs.activation == "silu" || attrs.activation == "swish";
@@ -109,7 +140,7 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
   const float *pb_f = (is_float && bias != nullptr) ? bias->AsFloat() : nullptr;
   const float *pp_f = (is_float && past_state != nullptr) ? past_state->AsFloat() : nullptr;
   float *py_f = is_float ? output.AsFloat() : nullptr;
-  float *ps_f = (is_float && Km1 > 0) ? present_state.AsFloat() : nullptr;
+  float *ps_f = (is_float && history > 0) ? present_state.AsFloat() : nullptr;
 
   const uint16_t *px_h = is_float16 ? reinterpret_cast<const uint16_t *>(input.bytes()) : nullptr;
   const uint16_t *pw_h = is_float16 ? reinterpret_cast<const uint16_t *>(weight.bytes()) : nullptr;
@@ -120,7 +151,7 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
                              : nullptr;
   uint16_t *py_h =
       is_float16 ? reinterpret_cast<uint16_t *>(const_cast<uint8_t *>(output.bytes())) : nullptr;
-  uint16_t *ps_h = (is_float16 && Km1 > 0)
+  uint16_t *ps_h = (is_float16 && history > 0)
                        ? reinterpret_cast<uint16_t *>(const_cast<uint8_t *>(present_state.bytes()))
                        : nullptr;
 
@@ -135,11 +166,8 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
     }
   };
 
-  // Build the padded view length: PadLen = L + (K - 1).
-  // For each output position l (0..L-1), the convolution reads positions
-  // [l, l+1, ..., l+K-1] from the padded sequence. The padded sequence is
-  // [past_state || input] (concat along axis 2). When past_state is absent
-  // the first K-1 positions are implicit zeros.
+  // The padded view is [past_state || input], with implicit zero history
+  // when past_state is absent. Only convolution taps are spaced by dilation.
   for (int64_t b = 0; b < B; ++b) {
     for (int64_t c = 0; c < C; ++c) {
       const float bias_val = bias != nullptr ? load(pb_f, pb_h, c) : 0.0f;
@@ -147,14 +175,14 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
         float acc = bias_val;
         for (int64_t k = 0; k < K; ++k) {
           // Index into the padded sequence.
-          const int64_t pidx = l + k;
+          const int64_t pidx = l + k * attrs.dilation;
           float v;
-          if (pidx < Km1) {
+          if (pidx < history) {
             // Inside the past_state (or implicit zero pad) region.
-            v = past_state != nullptr ? load(pp_f, pp_h, (b * C + c) * Km1 + pidx) : 0.0f;
+            v = past_state != nullptr ? load(pp_f, pp_h, (b * C + c) * history + pidx) : 0.0f;
           } else {
             // Inside the actual input region.
-            v = load(px_f, px_h, (b * C + c) * L + (pidx - Km1));
+            v = load(px_f, px_h, (b * C + c) * L + (pidx - history));
           }
           acc += v * load(pw_f, pw_h, c * K + k);
         }
@@ -164,19 +192,16 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
         }
         store(py_f, py_h, (b * C + c) * L + l, acc);
       }
-      // Compute present_state[b, c, :] = last (K - 1) values of the padded
-      // sequence. That is positions [L, L+1, ..., L+K-2] of the padded
-      // sequence — equivalently the last (K - 1) values of the concatenated
-      // [past_state || input] sequence.
-      for (int64_t j = 0; j < Km1; ++j) {
-        const int64_t pidx = L + j; // 0..K-2 mapped into padded indexing.
+      // Retains consecutive raw samples, including those skipped by taps.
+      for (int64_t j = 0; j < history; ++j) {
+        const int64_t pidx = L + j;
         float v;
-        if (pidx < Km1) {
-          v = past_state != nullptr ? load(pp_f, pp_h, (b * C + c) * Km1 + pidx) : 0.0f;
+        if (pidx < history) {
+          v = past_state != nullptr ? load(pp_f, pp_h, (b * C + c) * history + pidx) : 0.0f;
         } else {
-          v = load(px_f, px_h, (b * C + c) * L + (pidx - Km1));
+          v = load(px_f, px_h, (b * C + c) * L + (pidx - history));
         }
-        store(ps_f, ps_h, (b * C + c) * Km1 + j, v);
+        store(ps_f, ps_h, (b * C + c) * history + j, v);
       }
     }
   }
@@ -195,6 +220,7 @@ void CausalConvWithState::Run(RuntimeContext &rt) {
 
   onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
   attrs.activation = GetAttributeStringOrDefault(node, "activation", "none");
+  attrs.dilation = GetAttributeIntOrDefault(node, "dilation", 1);
 
   onnx_kernels::kernel::CausalConvWithState kernel(rt.kernel_ctx());
   auto [output, present_state] = kernel(input, weight, bias != nullptr ? *bias : Tensor{},

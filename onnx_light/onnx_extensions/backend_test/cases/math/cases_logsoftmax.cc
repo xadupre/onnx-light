@@ -82,10 +82,13 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
               return IoData{{Tensor::FromDouble("", shape, scores)},
                             {Tensor::FromDouble("", shape, expected)}};
             }
-            Tensor x =
-                Tensor::FromFloat("", shape, std::vector<float>(scores.begin(), scores.end()));
-            Tensor y =
-                Tensor::FromFloat("", shape, std::vector<float>(expected.begin(), expected.end()));
+            std::vector<float> float_scores(scores.size()), float_expected(expected.size());
+            for (size_t i = 0; i < scores.size(); ++i) {
+              float_scores[i] = static_cast<float>(scores[i]);
+              float_expected[i] = static_cast<float>(expected[i]);
+            }
+            Tensor x = Tensor::FromFloat("", shape, float_scores);
+            Tensor y = Tensor::FromFloat("", shape, float_expected);
             if (core::runtime::IsHalfPrecision(dtype)) {
               x = core::runtime::DemoteFromFloat32(x, dtype);
               y = core::runtime::DemoteFromFloat32(y, dtype);

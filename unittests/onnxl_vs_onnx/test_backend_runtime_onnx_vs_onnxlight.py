@@ -81,6 +81,21 @@ _CUSTOM_FLOAT_TOLERANCES: dict[str, tuple[float, float]] = {
     "test_dft_inverse_opset19": (1e-3, 1e-5),
 }
 
+# ONNX leaves float-to-integer casts outside the destination range undefined.
+# These upstream cases include such values, whose reference results depend on
+# the ml_dtypes version used to generate them.
+_SUBBYTE_FLOAT_CAST_BOUNDS = {
+    f"test_{op}_{source}_to_{target}": bounds
+    for op in ("cast", "castlike")
+    for source in ("FLOAT", "FLOAT16")
+    for target, bounds in {
+        "INT2": (-2, 1),
+        "UINT2": (0, 3),
+        "INT4": (-8, 7),
+        "UINT4": (0, 15),
+    }.items()
+}
+
 # ONNX changed these expected outputs to apply the specification's integer
 # resized length in the ``align_corners`` transform. Released ONNX packages may
 # still provide the older scale-derived values, while an ONNX source checkout
@@ -287,7 +302,11 @@ def _comparison_tolerances(name: str) -> tuple[float, float]:
 
 
 def _describe_mismatch(
-    actual: np.ndarray, expected: np.ndarray, rtol: float, atol: float
+    actual: np.ndarray,
+    expected: np.ndarray,
+    rtol: float,
+    atol: float,
+    compare_mask: np.ndarray | None = None,
 ) -> str | None:
     """Returns a description of why ``actual`` differs from ``expected``.
 
@@ -320,6 +339,9 @@ def _describe_mismatch(
         )
     else:
         equal = actual.astype(np.int64) == expected.astype(np.int64)
+
+    if compare_mask is not None:
+        equal = np.logical_or(equal, ~compare_mask)
 
     if np.all(equal):
         return None
@@ -363,6 +385,21 @@ def _describe_output_mismatch(actual, expected, rtol: float, atol: float) -> str
     return _describe_mismatch(actual, expected, rtol=rtol, atol=atol)
 
 
+def _describe_subbyte_cast_mismatch(actual, expected, source, bounds, rtol, atol) -> str | None:
+    """Compares the defined elements of an upstream float-to-sub-byte cast."""
+    actual = np.asarray(actual)
+    expected = np.asarray(expected)
+    source = np.asarray(source)
+    if source.shape != expected.shape:
+        return f"input shape {source.shape} differs from output shape {expected.shape}"
+    if actual.shape != expected.shape:
+        return f"shape mismatch: got {actual.shape}, expected {expected.shape}"
+    compare_mask = np.isfinite(source) & (source >= bounds[0]) & (source <= bounds[1])
+    if not np.any(compare_mask):
+        return "no input values have defined float-to-integer conversion results"
+    return _describe_mismatch(actual, expected, rtol, atol, compare_mask)
+
+
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
@@ -386,6 +423,26 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertEqual(_comparison_tolerances("test_abs"), (1e-3, 1e-7))
         self.assertEqual(_comparison_tolerances("test_dft_inverse"), (1e-3, 1e-5))
         self.assertEqual(_comparison_tolerances("test_dft_inverse_opset19"), (1e-3, 1e-5))
+
+    def test_subbyte_cast_comparison_checks_only_defined_values(self):
+        source = np.array([-3.0, -2.0, 0.0, 1.0, 2.0, np.nan])
+        expected = np.array([1, -2, 0, 1, -2, 0])
+        actual = np.array([0, -2, 0, 1, 0, 1])
+        self.assertIsNone(
+            _describe_subbyte_cast_mismatch(actual, expected, source, (-2, 1), 0, 0)
+        )
+        actual[2] = 1
+        self.assertIn(
+            "first at index 2",
+            _describe_subbyte_cast_mismatch(actual, expected, source, (-2, 1), 0, 0),
+        )
+        self.assertIn(
+            "no input values",
+            _describe_subbyte_cast_mismatch(actual[:1], expected[:1], source[:1], (-2, 1), 0, 0),
+        )
+        self.assertIn(
+            "shape", _describe_subbyte_cast_mismatch(actual[:-1], expected, source, (-2, 1), 0, 0)
+        )
 
     def test_model_op_types_walks_subgraphs(self):
         # Guards the recursive traversal in ``_model_op_types`` so operators
@@ -531,7 +588,13 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
                     f"output count mismatch: got {len(outputs)}, expected {len(expected)}"
                 )
             for i, (got, ref) in enumerate(zip(outputs, expected)):
-                detail = _describe_output_mismatch(got, ref, rtol=rtol, atol=atol)
+                bounds = _SUBBYTE_FLOAT_CAST_BOUNDS.get(test.name)
+                if i == 0 and bounds is not None:
+                    detail = _describe_subbyte_cast_mismatch(
+                        got, ref, inputs[0], bounds, rtol, atol
+                    )
+                else:
+                    detail = _describe_output_mismatch(got, ref, rtol=rtol, atol=atol)
                 if detail is not None:
                     return "fail", f"output {i} ({label}): {detail}"
         return "pass", None

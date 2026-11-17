@@ -575,7 +575,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(list(graph.initializer[1].int64_data), [3, 4])
 
         tensors[0].raw_data = b""
-        tensors[1].int64_data[0] = 9
+        tensors[1].int64_data.append(9)
         self.assertEqual(graph.initializer[0].raw_data, raw_data)
         self.assertEqual(list(graph.initializer[1].int64_data), [3, 4])
         graph.initializer[0].name = "copy"

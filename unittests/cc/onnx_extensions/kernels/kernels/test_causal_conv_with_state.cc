@@ -155,14 +155,64 @@ TEST(CausalConvWithStateDilation, RejectsOverflowBeforeAllocationOrAccess) {
 }
 
 TEST(CausalConvWithStateDilation, AcceptsInt64EffectiveKernelBoundaryForEmptyBatch) {
-  const Tensor x = Tensor::FromFloat("", {0, 1, 1}, {});
+  RegisterAllOnnxOperatorSchemas();
+  onnx_kernels::RegisterKernelFunctions();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "CausalConvWithState"}});
   const Tensor w = Tensor::FromFloat("", {1, 1, 2}, {1, 1});
   CausalConvWithState::Attributes attrs;
   attrs.dilation = std::numeric_limits<int64_t>::max() - 1;
-  const auto [output, state] = MakeKernel()(x, w, {}, {}, attrs);
-  ExpectBytes(output, x);
-  EXPECT_EQ(state.shape, (Shape{0, 1, attrs.dilation}));
-  EXPECT_EQ(state.size_bytes(), 0u);
+  for (const int64_t length : {0, 1}) {
+    for (const bool with_past : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "length=" << length << ", with_past=" << with_past);
+      const Tensor x = Tensor::FromFloat("X", {0, 1, length}, {});
+      const Tensor past = Tensor::FromFloat("P", {0, 1, attrs.dilation}, {});
+      const auto [output, state] = MakeKernel()(x, w, {}, with_past ? past : Tensor{}, attrs);
+      ExpectBytes(output, x);
+      EXPECT_EQ(state.shape, (Shape{0, 1, attrs.dilation}));
+      EXPECT_EQ(state.size_bytes(), 0u);
+
+      ModelProto model;
+      model.set_ir_version(IR_VERSION);
+      model.add_opset("", 29);
+      auto &graph = *model.mutable_graph();
+      graph.set_name("boundary_causal_conv");
+      const auto add_value = [](ValueInfoProto *value, const char *name, const Tensor &tensor) {
+        value->set_name(name);
+        auto *type = value->mutable_type()->mutable_tensor_type();
+        type->set_elem_type(tensor.data_type);
+        for (const auto dim : tensor.shape)
+          type->mutable_shape()->add_dim()->set_dim_value(dim);
+      };
+      add_value(graph.add_input(), "X", x);
+      add_value(graph.add_input(), "W", w);
+      if (with_past)
+        add_value(graph.add_input(), "P", past);
+      add_value(graph.add_output(), "Y", output);
+      add_value(graph.add_output(), "S", state);
+      auto *node = graph.add_node();
+      node->set_op_type("CausalConvWithState");
+      node->add_input("X");
+      node->add_input("W");
+      if (with_past) {
+        node->add_input("");
+        node->add_input("P");
+      }
+      node->add_output("Y");
+      node->add_output("S");
+      AddAttribute<int64_t>(*node, "dilation", attrs.dilation);
+      std::vector<Tensor> inputs{x, w};
+      inputs[1].name = "W";
+      if (with_past)
+        inputs.push_back(past);
+      inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+      ASSERT_GT(graph.node_size(), 1);
+      ASSERT_NO_THROW(checker::check_model(model, true));
+      const auto expanded = core::runtime::RunModel(model, inputs);
+      ASSERT_EQ(expanded.size(), 2u);
+      ExpectBytes(expanded[0], output);
+      ExpectBytes(expanded[1], state);
+    }
+  }
 }
 
 TEST(CausalConvWithStateDilation, RejectsMismatchedStateAndTruncatedBias) {
@@ -188,6 +238,8 @@ TEST(CausalConvWithStateDilation, RuntimeAndExpandedFunctionMatchExactResults) {
   for (const bool half : {false, true}) {
     for (const int64_t length : {0, 1, 7}) {
       for (const bool with_past : {false, true}) {
+        SCOPED_TRACE(::testing::Message()
+                     << "half=" << half << ", length=" << length << ", with_past=" << with_past);
         const Tensor x =
             Samples(half, {1, 1, length}, std::vector<float>(static_cast<size_t>(length), 2.0f));
         const Tensor w = Samples(half, {1, 1, 3}, {1, 2, 4});
@@ -210,6 +262,12 @@ TEST(CausalConvWithStateDilation, RuntimeAndExpandedFunctionMatchExactResults) {
             type->mutable_shape()->add_dim()->set_dim_value(dim);
         };
         input("X", x);
+        graph.mutable_input(0)
+            ->mutable_type()
+            ->mutable_tensor_type()
+            ->mutable_shape()
+            ->mutable_dim(2)
+            ->clear_dim_value();
         input("W", w);
         if (with_past)
           input("P", past);

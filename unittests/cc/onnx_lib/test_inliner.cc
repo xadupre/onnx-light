@@ -126,6 +126,40 @@ TEST(FunctionInliner, PreservesContextDependentCallsWithoutCompleteInputTypes) {
   }
 }
 
+TEST(FunctionInliner, ContextDependentCallsAllowOnlyOmittedOptionalInputs) {
+  RegisterAllOnnxOperatorSchemas();
+  const auto selected = inliner::FunctionIdSet::Create({{"", "CausalConvWithState"}});
+  for (const int scenario : {0, 1, 2}) {
+    SCOPED_TRACE(scenario);
+    ModelProto model;
+    model.add_opset("", 29);
+    auto &graph = *model.mutable_graph();
+    for (const std::string name : {"X", "W", "P"}) {
+      auto *input = graph.add_input();
+      input->set_name(name);
+      auto *tensor = input->mutable_type()->mutable_tensor_type();
+      tensor->set_elem_type(TensorProto::FLOAT);
+      for (const int64_t dim : {int64_t{1}, int64_t{1}, name == "P" ? int64_t{1} : int64_t{2}})
+        tensor->mutable_shape()->add_dim()->set_dim_value(dim);
+    }
+    auto *node = graph.add_node();
+    node->set_op_type("CausalConvWithState");
+    node->add_input(scenario == 1 ? "" : "X");
+    node->add_input("W");
+    node->add_input("");
+    node->add_input(scenario == 2 ? "untyped" : "P");
+    node->add_output("Y");
+    node->add_output("S");
+    const auto original = graph.SerializeAsString();
+    inliner::InlineSelectedFunctions(model, *selected, OpSchemaRegistry::Instance());
+    if (scenario == 0) {
+      EXPECT_GT(graph.node_size(), 1);
+    } else {
+      EXPECT_EQ(graph.SerializeAsString(), original);
+    }
+  }
+}
+
 TEST(FunctionInliner, PreservesUnresolvedMeanVarianceNormalizationAxes) {
   RegisterAllOnnxOperatorSchemas();
   const auto selected = inliner::FunctionIdSet::Create({{"", "MeanVarianceNormalization"}});

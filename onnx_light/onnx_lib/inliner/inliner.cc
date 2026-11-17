@@ -614,7 +614,16 @@ struct InlinerImpl {
         shape_inference::InferShapes(model); // TODO(ONNX): do shape inference incrementally
 #endif
         utils::RepeatedProtoField<TypeProto> input_types;
-        for (const auto &input : node.input()) {
+        for (int i = 0; i < node.input_size(); ++i) {
+          const auto &input = node.input(i);
+          if (input.empty()) {
+            if (static_cast<size_t>(i) >= op_schema->inputs().size() ||
+                op_schema->inputs()[i].GetOption() != OpSchema::Optional) {
+              return false;
+            }
+            input_types.push_back(TypeProto{});
+            continue;
+          }
           const TypeProto *t = scope.GetType(input);
           if (t == nullptr) {
             // Type information is not available for this input (e.g. it is the

@@ -3485,11 +3485,16 @@ OpSchema CausalConvWithStateSchema(bool dilated) {
                 )ONNX");
             }
 
-            // An empty chunk has only History samples, shorter than the kernel span.
-            // Append one sample for Conv, then discard the extra output.
+            // Only empty chunks need an extra sample to reach the kernel span.
+            // Adding one for nonempty chunks could overflow the padded length.
+            builder.Const1D("Zero1D", int64_t{0}).Add(R"ONNX(
+            InputLength = Shape <start = 2, end = 3> (input)
+            EmptyChunk = Equal (InputLength, Zero1D)
+            ExtraLength = Cast <to = 7> (EmptyChunk)
+          )ONNX");
             builder.Add(R"ONNX(
             BatchChannelsConv = Shape <start = 0, end = 2> (input)
-            ExtraShape = Concat <axis = 0> (BatchChannelsConv, One1D)
+            ExtraShape = Concat <axis = 0> (BatchChannelsConv, ExtraLength)
             ExtraZero = ConstantOfShape (ExtraShape)
             Extra = CastLike (ExtraZero, input)
             ConvInput = Concat <axis = 2> (PaddedInput, Extra)
@@ -3497,8 +3502,7 @@ OpSchema CausalConvWithStateSchema(bool dilated) {
             builder.Add(ctx.hasInput(2) ? "ConvAll = Conv (ConvInput, weight, bias)"
                                         : "ConvAll = Conv (ConvInput, weight)",
                         "dilations", std::vector<int64_t>{dilation}, "group", C);
-            builder.Const1D("Zero1D", int64_t{0}).Const1D("SliceAxes", int64_t{2}).Add(R"ONNX(
-            InputLength = Shape <start = 2, end = 3> (input)
+            builder.Const1D("SliceAxes", int64_t{2}).Add(R"ONNX(
             ConvOut = Slice (ConvAll, Zero1D, InputLength, SliceAxes)
           )ONNX");
 

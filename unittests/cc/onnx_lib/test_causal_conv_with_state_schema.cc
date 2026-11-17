@@ -114,13 +114,15 @@ protected:
 TEST_F(CausalConvWithStateSchemaTest, KeepsLegacySchemaAndMatchesLightMetadata) {
   const auto light = onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("CausalConvWithState");
   ASSERT_EQ(light.size(), 2u);
+  EXPECT_EQ(light[0].since_version(), 29);
+  EXPECT_EQ(light[1].since_version(), 27);
   for (const int version : {27, 28, 29}) {
     const auto *schema = OpSchemaRegistry::Schema("CausalConvWithState", version, ONNX_DOMAIN);
     ASSERT_NE(schema, nullptr);
     EXPECT_EQ(schema->SinceVersion(), version == 29 ? 29 : 27);
     EXPECT_EQ(schema->attributes().count("dilation"), version == 29 ? 1u : 0u);
     EXPECT_EQ(schema->attributes().at("activation").default_value.s(), "none");
-    const auto &matching = light[version == 29 ? 1 : 0];
+    const auto &matching = light[version == 29 ? 0 : 1];
     EXPECT_EQ(matching.since_version(), schema->SinceVersion());
     if (version == 29) {
       EXPECT_EQ(matching.doc(), schema->doc());

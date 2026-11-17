@@ -2405,8 +2405,8 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
       {"CausalConvWithState",
        [] {
          return std::vector<LightOpSchema>{
-             MakeCausalConvWithStateSchema(27),
              MakeCausalConvWithStateSchema(29),
+             MakeCausalConvWithStateSchema(27),
          };
        }},
   };

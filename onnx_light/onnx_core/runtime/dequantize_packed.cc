@@ -170,8 +170,30 @@ void DecodeIq(const uint8_t *p, int type, float *out) {
   }
 }
 
+void DecodeQ4_0Q8_0(const uint8_t *p, size_t blocks, int type, float *out) {
+  if (type == 2) {
+    for (size_t b = 0; b < blocks; ++b, p += 18, out += 32) {
+      const float d = Half(p);
+      for (size_t i = 0; i < 16; ++i) {
+        out[i] = Mul(d, static_cast<int>(p[2 + i] & 15) - 8);
+        out[16 + i] = Mul(d, static_cast<int>(p[2 + i] >> 4) - 8);
+      }
+    }
+  } else {
+    for (size_t b = 0; b < blocks; ++b, p += 34, out += 32) {
+      const float d = Half(p);
+      for (size_t i = 0; i < 32; ++i)
+        out[i] = Mul(d, SignedByte(p[2 + i]));
+    }
+  }
+}
+
 void Decode(const uint8_t *p, const PackedQuantizationProfile &profile, float *out) {
   const int type = profile.ggml_type;
+  if (type == 2 || type == 8) {
+    DecodeQ4_0Q8_0(p, 1, type, out);
+    return;
+  }
   if (type == 16 || type == 17 || type == 18 || type == 19 || type == 21 || type == 22 ||
       type == 29) {
     DecodeIq(p, type, out);
@@ -324,6 +346,12 @@ Tensor DequantizePackedTensor(const Tensor &input, std::string_view format, cons
                                                             : 2;
   Tensor output =
       MakeOutputTensor(static_cast<int32_t>(output_dtype), shape, count * width, allocator);
+  // Decode directly into FLOAT storage without a per-block copy or tensor-sized scratch.
+  if (count != 0 && output_dtype == TensorProto::FLOAT &&
+      (profile.ggml_type == 2 || profile.ggml_type == 8)) {
+    DecodeQ4_0Q8_0(input.bytes(), count / profile.block_size, profile.ggml_type, output.AsFloat());
+    return output;
+  }
   std::array<float, 256> block{};
   for (size_t b = 0; b < count / profile.block_size; ++b) {
     Decode(input.bytes() + b * profile.block_bytes, profile, block.data());

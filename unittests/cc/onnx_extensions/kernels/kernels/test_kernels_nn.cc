@@ -135,6 +135,33 @@ TEST(KernelClass, GlobalPoolsParallelSlicesMatchSerial) {
   EXPECT_THROW(maximum(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
 }
 
+TEST(KernelClass, LpNormalizationNonfiniteAndEmptySlices) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const Tensor x = Tensor::FromFloat("", {3, 2}, {inf, 1, -inf, 1, nan, 1});
+  for (const int64_t p : {1, 2}) {
+    SCOPED_TRACE(p);
+    const Tensor y = kernel(x, -1, p);
+    EXPECT_EQ(y.data_type, x.data_type);
+    EXPECT_EQ(y.shape, x.shape);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[0]));
+    EXPECT_EQ(y.AsFloat()[1], 0);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[2]));
+    EXPECT_EQ(y.AsFloat()[3], 0);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[4]));
+    EXPECT_TRUE(std::isnan(y.AsFloat()[5]));
+    for (const int64_t axis : {0, 1, -1}) {
+      const Tensor empty = Tensor::FromFloat("", {2, 0}, {});
+      const Tensor result = kernel(empty, axis, p);
+      EXPECT_EQ(result.shape, empty.shape);
+      EXPECT_EQ(result.data_type, empty.data_type);
+      EXPECT_EQ(result.element_count(), 0);
+    }
+  }
+}
+
 TEST(KernelClass, NormalizationsParallelSlicesMatchSerial) {
   core::runtime::CpuExecutionPolicy policy;
   policy.num_threads = 2;

@@ -560,6 +560,33 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(graph.doc_string, "")
         self.assertEqual(graph.value_info[0], value_info[0])
 
+    def test_graph_copies_initializers_individually(self) -> None:
+        raw_data = np.array([1.0, 2.0], dtype=np.float32).tobytes()
+        tensors = [
+            oh.make_tensor("raw", onnxl.TensorProto.FLOAT, [2], raw_data, raw=True),
+            oh.make_tensor("typed", onnxl.TensorProto.INT64, [2], [3, 4]),
+        ]
+        graph = oh.make_graph([], "test", [], [], initializer=tensors)
+
+        self.assertEqual(len(graph.initializer), 2)
+        for copied, original in zip(graph.initializer, tensors):
+            self.assertEqual(copied, original)
+        self.assertEqual(graph.initializer[0].raw_data, raw_data)
+        self.assertEqual(list(graph.initializer[1].int64_data), [3, 4])
+
+        tensors[0].raw_data = b""
+        tensors[1].int64_data.append(9)
+        self.assertEqual(graph.initializer[0].raw_data, raw_data)
+        self.assertEqual(list(graph.initializer[1].int64_data), [3, 4])
+        graph.initializer[0].name = "copy"
+        self.assertEqual(tensors[0].name, "raw")
+
+    def test_graph_empty_initializers(self) -> None:
+        for initializer in (None, [], ()):
+            with self.subTest(initializer=initializer):
+                graph = oh.make_graph([], "test", [], [], initializer=initializer)
+                self.assertEqual(len(graph.initializer), 0)
+
     def test_graph_docstring(self) -> None:
         graph = oh.make_graph([], "my graph", [], [], None, "my docs")
         self.assertEqual(graph.name, "my graph")

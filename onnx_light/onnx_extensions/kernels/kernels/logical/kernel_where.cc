@@ -23,13 +23,14 @@ namespace {
 constexpr const char *kWhereName = "kernel::Where";
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 12> kSupportedElementTypes = {
+constexpr std::array<int32_t, 13> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::BOOL),    static_cast<int32_t>(DataType::FLOAT),
     static_cast<int32_t>(DataType::DOUBLE),  static_cast<int32_t>(DataType::INT8),
     static_cast<int32_t>(DataType::INT16),   static_cast<int32_t>(DataType::INT32),
     static_cast<int32_t>(DataType::INT64),   static_cast<int32_t>(DataType::UINT8),
     static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::UINT16),
-    static_cast<int32_t>(DataType::UINT32),  static_cast<int32_t>(DataType::UINT64)};
+    static_cast<int32_t>(DataType::UINT32),  static_cast<int32_t>(DataType::UINT64),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 // ``uint8_t`` aliases both ``UINT8`` and ``BOOL`` storage, but ``Tensor::As``
 // validates the element type strictly. These helpers route ``BOOL`` tensors
@@ -311,6 +312,7 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
   case DataType::UINT8:
     return WhereAllocTyped<uint8_t>(condition, x, y, allocator, grain);
   case DataType::FLOAT16:
+  case DataType::BFLOAT16:
   case DataType::UINT16:
     return WhereAllocTyped<uint16_t>(condition, x, y, allocator, grain);
   case DataType::UINT32:
@@ -321,7 +323,7 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
     return WhereAllocString(condition, x, y);
   default:
     EXT_THROW_INVALID(kWhereName, ": unsupported data type ", x.data_type,
-                      ", only supports BOOL, FLOAT, FLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }
@@ -347,6 +349,7 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
   case DataType::UINT8:
     return WhereInPlaceTyped<uint8_t>(condition, x, y, output, grain);
   case DataType::FLOAT16:
+  case DataType::BFLOAT16:
   case DataType::UINT16:
     return WhereInPlaceTyped<uint16_t>(condition, x, y, output, grain);
   case DataType::UINT32:
@@ -357,7 +360,7 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
     return WhereInPlaceString(condition, x, y, output);
   default:
     EXT_THROW_INVALID(kWhereName, ": unsupported data type ", x.data_type,
-                      ", only supports BOOL, FLOAT, FLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }

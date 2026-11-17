@@ -71,6 +71,30 @@ TEST(KernelClass, NativeLessDoubleAndWhereHalfPreserveBits) {
   EXPECT_EQ(where(condition, half_x, half_y).data, output.data);
 }
 
+TEST(KernelClass, WhereBfloat16PreservesBits) {
+  const KernelContext ctx{DefaultOpset(20)};
+  Where where{ctx};
+  const auto key = where.TuningKey(static_cast<int32_t>(core::runtime::DataType::BFLOAT16));
+  EXPECT_EQ(key.device, core::symbolic::Device::kCPU);
+  EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(key), nullptr);
+
+  const Tensor condition = Tensor::FromBool("", {2, 1}, {1, 0});
+  Tensor x = Tensor::FromUint16("", {1, 4}, {0x8000, 0x7fc1, 0x0001, 0x7f80});
+  Tensor y = Tensor::FromUint16("", {1, 4}, {0x7f81, 0x0000, 0xff80, 0x8001});
+  Tensor expected = Tensor::FromUint16(
+      "", {2, 4}, {0x8000, 0x7fc1, 0x0001, 0x7f80, 0x7f81, 0x0000, 0xff80, 0x8001});
+  Tensor output = Tensor::FromUint16("", {2, 4}, std::vector<uint16_t>(8));
+  x.data_type = y.data_type = expected.data_type = output.data_type =
+      core::runtime::DataType::BFLOAT16;
+
+  const Tensor allocated = where(condition, x, y);
+  EXPECT_EQ(allocated.data_type, expected.data_type);
+  EXPECT_EQ(allocated.shape, expected.shape);
+  EXPECT_EQ(allocated.data, expected.data);
+  where(condition, x, y, output);
+  EXPECT_EQ(output.data, expected.data);
+}
+
 TEST(KernelClass, AndClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};

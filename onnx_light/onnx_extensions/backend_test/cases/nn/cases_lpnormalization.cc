@@ -55,7 +55,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
   // Upstream PR #8454: finite normalization must not overflow or underflow.
   for (const int64_t p : {1, 2}) {
     for (const float magnitude : {3e38f, 1e30f, 1e-30f, std::numeric_limits<float>::denorm_min()}) {
-      for (const int64_t axis : {-1, 0}) {
+      for (const int64_t axis : {-1, 0, 1}) {
         NodeProto node;
         node.set_op_type("LpNormalization");
         node.add_input("x");
@@ -67,13 +67,12 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
                                  std::to_string(axis);
         Expect(registry, std::move(node), name, {opset}, [p, magnitude, axis]() -> IoData {
           const float value = p == 1 ? 0.5f : static_cast<float>(std::sqrt(0.5));
-          Tensor x =
-              Tensor::FromFloat("", {2, 2},
-                                axis == -1 ? std::vector<float>{magnitude, -magnitude, 0, 0}
-                                           : std::vector<float>{magnitude, 0, -magnitude, 0});
+          Tensor x = Tensor::FromFloat("", {2, 2},
+                                       axis != 0 ? std::vector<float>{magnitude, -magnitude, 0, 0}
+                                                 : std::vector<float>{magnitude, 0, -magnitude, 0});
           Tensor y = Tensor::FromFloat("", {2, 2},
-                                       axis == -1 ? std::vector<float>{value, -value, 0, 0}
-                                                  : std::vector<float>{value, 0, -value, 0});
+                                       axis != 0 ? std::vector<float>{value, -value, 0, 0}
+                                                 : std::vector<float>{value, 0, -value, 0});
           return IoData{{std::move(x)}, {std::move(y)}};
         });
       }

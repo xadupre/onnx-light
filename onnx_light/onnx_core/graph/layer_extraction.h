@@ -10,7 +10,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 /// Configures the work budget of one repeated-region search.
 struct RepeatedLayerOptions {
-  /// Caps anchor comparisons and region-extension attempts; must be positive.
+  /// Caps residual-anchor inspections, compatibility comparisons and growth attempts; must be
+  /// positive.
   std::size_t max_growth_attempts = 4096;
 };
 
@@ -39,6 +40,10 @@ struct RepeatedLayerOptions {
  *   Does not change the conservative custom-operator constant-folding policy.
  *   Keeps nodes referencing enclosing-function attributes, including references
  *   inside graph attributes, outside extracted regions.
+ * - First tries direct Attention anchors bounded by two residual Add joins.
+ *   Groups complete candidate regions by compatible operators and topology, so
+ *   different attention or feed-forward implementations form separate families.
+ *   If no admissible residual family is found, falls back to seed growth below.
  * - Groups compatible anchors into repeated seed roles. Tries individual anchors,
  *   directed port-labelled one-hop neighborhoods, then bounded periodic strides
  *   to distinguish otherwise identical projections within a larger repeat.
@@ -54,9 +59,11 @@ struct RepeatedLayerOptions {
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
  *   contraction cycles and preserves the original execution order except for
- *   literal Constants and constant Cast/CastLike/Identity preparations, which may
- *   move before a call that needs their values without evaluating any weights.
- *   Retains order for other operators and device-annotated or overridden conversions.
+ *   literal Constants and whitelisted constant preparations, which may move before
+ *   a call without evaluating weights. In the residual search only, independent
+ *   whitelisted preparations of graph inputs may also move, subject to all
+ *   data and lexical-capture dependencies. Retains the order of other operators
+ *   and does not hoist device-annotated, overloaded or local-function preparations.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
  *   and original positions. Ranks seed families by total anchor coverage, total
@@ -85,8 +92,9 @@ struct RepeatedLayerOptions {
  *   remain live and scheduling cannot move preparations across that node.
  *   Reports capture_analysis_limited even when safe groups elsewhere are found,
  *   or kResourceLimit instead of kNoMatch when no safe proposal remains.
- * - Considers at most 32 seed groups and max_growth_attempts shared
- *   compatibility/growth attempts (4096 by default).
+ * - Considers at most 32 seed groups and max_growth_attempts shared residual
+ *   anchor inspections, compatibility comparisons and growth attempts (4096
+ *   by default). Residual ancestry and forward scans each visit at most 4096 nodes.
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.
  * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.

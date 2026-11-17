@@ -384,6 +384,7 @@ struct NodeData {
   bool usable = false;
   bool anchor = false;
   bool preparation = false;
+  bool input_preparation = false;
   bool captures_complete = true;
   // Value identifiers of inputs (kNoValue when omitted), outputs and dependencies.
   std::vector<uint32_t> input_ids, output_ids, dependency_ids;
@@ -480,14 +481,34 @@ bool ConstantPreparation(GraphGraph &graph, const NodeProto &node,
     return false;
   if (node.op_type() == "Constant")
     return node.input().empty();
-  static const std::set<std::string> kPreparations = {"Cast",    "CastLike",  "Concat",
-                                                      "Flatten", "Identity",  "Reshape",
-                                                      "Squeeze", "Transpose", "Unsqueeze"};
+  static const std::set<std::string> kPreparations = {
+      "Add",      "Cast", "CastLike", "Concat",  "Exp",       "Flatten",
+      "Identity", "Neg",  "Reshape",  "Squeeze", "Transpose", "Unsqueeze"};
   if (kPreparations.count(node.op_type().value()) == 0 || node.input().empty())
     return false;
   return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
     return !input.value().empty() &&
            (prepared.count(input.value()) != 0 || graph.IsConstant(input.value()));
+  });
+}
+
+bool InputPreparation(GraphGraph &graph, const NodeProto &node,
+                      const std::unordered_set<std::string> &inputs,
+                      const std::unordered_set<std::string> &prepared) {
+  if ((!node.domain().empty() && node.domain() != "ai.onnx") || !node.overload().empty() ||
+      !node.device_configurations().empty() ||
+      graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
+          node.domain(), node.op_type(), "")) != nullptr)
+    return false;
+  static const std::set<std::string> kInputPreparations = {
+      "And",     "Cast",  "CastLike", "Concat", "CumSum",  "Expand", "Gather",    "GreaterOrEqual",
+      "Reshape", "Shape", "Size",     "Slice",  "Squeeze", "Sub",    "Unsqueeze", "Where"};
+  if (kInputPreparations.count(node.op_type().value()) == 0 || node.input().empty())
+    return false;
+  return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
+    return !input.value().empty() &&
+           (inputs.count(input.value()) != 0 || prepared.count(input.value()) != 0 ||
+            graph.IsConstant(input.value()));
   });
 }
 
@@ -522,6 +543,7 @@ struct Index {
   // Per value identifier: name, consumers, graph-output flag and cached boundary analyses
   // (-1 when not computed yet).
   std::vector<std::string> names;
+  std::vector<std::size_t> value_producers;
   std::vector<std::vector<const NodeProto *>> consumers;
   std::vector<bool> graph_outputs;
   std::vector<int8_t> boundary_types;
@@ -563,6 +585,9 @@ struct Index {
     std::size_t function_work = 0, signature_work = 0, safety_work = 0;
     std::map<std::string, bool> safe_functions;
     std::unordered_set<std::string> prepared;
+    std::unordered_set<std::string> input_prepared;
+    for (const auto &input : graph.Builder().Inputs())
+      input_prepared.insert(input.name().value());
     for (const NodeProto &node : graph.Builder().Nodes()) {
       NodeData entry;
       entry.preparation = ConstantPreparation(graph, node, prepared);
@@ -570,6 +595,13 @@ struct Index {
         for (const auto &output : node.output()) {
           if (!output.value().empty())
             prepared.insert(output.value());
+        }
+      }
+      entry.input_preparation = InputPreparation(graph, node, input_prepared, prepared);
+      if (entry.input_preparation) {
+        for (const auto &output : node.output()) {
+          if (!output.value().empty())
+            input_prepared.insert(output.value());
         }
       }
       if (IsLayer(node)) {
@@ -671,6 +703,7 @@ struct Index {
       entries.push_back(&data.at(&nodes[position]));
     }
     consumers.resize(names.size());
+    value_producers.assign(names.size(), kNoPosition);
     graph_outputs.assign(names.size(), false);
     boundary_types.assign(names.size(), -1);
     value_bytes_known.assign(names.size(), -1);
@@ -683,8 +716,10 @@ struct Index {
       for (uint32_t id : entry->dependency_ids)
         consumers[id].push_back(&nodes[position]);
       for (uint32_t id : entry->output_ids) {
-        if (id != kNoValue)
+        if (id != kNoValue) {
+          value_producers[id] = position;
           graph_outputs[id] = graph.IsOutput(names[id]);
+        }
       }
       for (const NodeProto *producer : entry->producers) {
         const auto found = producer == nullptr ? positions.end() : positions.find(producer);
@@ -1023,7 +1058,7 @@ bool KnownBoundaryType(Index &index, const std::string &name) {
 
 // A unit is either a contracted region or one untouched interleaving node.
 // Sorting the contracted DAG rejects re-entry cycles, even through nested captures.
-bool Schedule(Index &index, Plan &plan) {
+bool Schedule(Index &index, Plan &plan, bool allow_input_preparations) {
   plan.first = std::numeric_limits<std::size_t>::max();
   plan.last = 0;
   std::vector<std::size_t> priority;
@@ -1065,11 +1100,12 @@ bool Schedule(Index &index, Plan &plan) {
         connect(owner[producer - plan.first], to);
     }
   }
-  // Shared weight conversions may precede calls without reading or folding weights.
-  // All other operations keep their execution order, including retained calls.
+  // Whitelisted preparations may precede calls; all other operations keep their order.
   std::size_t previous = kNoPosition;
   for (std::size_t position = plan.first; position <= plan.last; ++position) {
-    if (index.entries[position]->preparation)
+    const NodeData &entry = *index.entries[position];
+    if (entry.preparation || (allow_input_preparations && entry.input_preparation &&
+                              owner[position - plan.first] >= plan.regions.size()))
       continue;
     if (previous != kNoPosition)
       connect(owner[previous - plan.first], owner[position - plan.first]);
@@ -1130,7 +1166,8 @@ bool CachedValueBytes(Index &index, uint32_t id, uint64_t &bytes) {
   return known != 0;
 }
 
-bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
+bool MakePlan(Index &index, const Regions &regions, Plan &plan,
+              bool allow_input_preparations = false) {
   if (regions.size() < 2 || regions[0].size() < 2)
     return false;
   plan.regions = regions;
@@ -1161,7 +1198,211 @@ bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
   }
   std::sort(positions.begin(), positions.end());
   plan.score = {crossings, unknown, bytes, kMaxRegion - regions[0].size(), std::move(positions)};
-  return Schedule(index, plan);
+  return Schedule(index, plan, allow_input_preparations);
+}
+
+bool IsAttention(const NodeProto &node) {
+  return node.op_type().value().find("Attention") != std::string::npos;
+}
+
+bool IsResidualAdd(const NodeProto &node) {
+  return (node.domain().empty() || node.domain() == "ai.onnx") && node.op_type() == "Add" &&
+         node.overload().empty() && node.input_size() == 2 && node.output_size() == 1;
+}
+
+struct ValueMarks {
+  Index &index;
+  uint32_t generation;
+
+  explicit ValueMarks(Index &index) : index(index), generation(index.NextGeneration()) {}
+
+  int64_t &operator[](uint32_t id) {
+    if (index.scratch_generation[id] != generation) {
+      index.scratch_generation[id] = generation;
+      index.scratch[id] = 0;
+    }
+    return index.scratch[id];
+  }
+};
+
+constexpr int64_t kResidualAncestor = 1;
+constexpr int64_t kAttentionFlow = 2;
+constexpr int64_t kFirstResidualFlow = 4;
+constexpr int64_t kLayerInputFlow = 8;
+constexpr int64_t kResidualVisited = 16;
+
+bool CollectAncestors(Index &index, const NodeData &node, ValueMarks &marks) {
+  std::vector<uint32_t> pending(node.dependency_ids.begin(), node.dependency_ids.end());
+  std::size_t work = 0;
+  while (!pending.empty()) {
+    const uint32_t id = pending.back();
+    pending.pop_back();
+    if (marks[id] & kResidualAncestor)
+      continue;
+    marks[id] |= kResidualAncestor;
+    const std::size_t producer = index.value_producers[id];
+    if (producer == kNoPosition)
+      continue;
+    if (++work > kMaxInterval || !index.entries[producer]->captures_complete)
+      return false;
+    const auto &dependencies = index.entries[producer]->dependency_ids;
+    pending.insert(pending.end(), dependencies.begin(), dependencies.end());
+  }
+  return true;
+}
+
+// Discovers the attention and feed-forward residual joins without using exporter names.
+bool ResidualRegion(Index &index, const NodeProto &anchor, Region &region) {
+  const NodeData &seed = index.data.at(&anchor);
+  ValueMarks marks(index);
+  if (!CollectAncestors(index, seed, marks))
+    return false;
+  for (uint32_t id : seed.output_ids) {
+    if (id != kNoValue)
+      marks[id] |= kAttentionFlow;
+  }
+  uint32_t start = kNoValue, first = kNoValue, last = kNoValue;
+  std::size_t end = kNoPosition;
+  const auto &nodes = index.graph.Builder().Nodes();
+  for (std::size_t position = seed.position + 1;
+       position < nodes.size() && position - seed.position < kMaxInterval; ++position) {
+    const NodeProto &node = nodes[position];
+    const NodeData &entry = *index.entries[position];
+    const int64_t flow = first == kNoValue ? kAttentionFlow : kFirstResidualFlow;
+    bool dependent = false;
+    for (uint32_t id : entry.dependency_ids)
+      dependent |= (marks[id] & flow) != 0;
+    if (dependent && IsAttention(node))
+      return false;
+    if (entry.usable && IsResidualAdd(node) && entry.output_ids[0] != kNoValue) {
+      const uint32_t left = entry.input_ids[0], right = entry.input_ids[1];
+      if (left != kNoValue && right != kNoValue && left != right) {
+        if (first == kNoValue) {
+          for (const auto &[branch, skip] : {std::pair{left, right}, std::pair{right, left}}) {
+            if (!(marks[branch] & kAttentionFlow) || (marks[skip] & kAttentionFlow) ||
+                !(marks[skip] & kResidualAncestor) || index.graph.IsConstant(index.names[skip]))
+              continue;
+            const std::size_t producer = index.value_producers[skip];
+            if (producer != kNoPosition && index.entries[producer]->preparation)
+              continue;
+            start = skip;
+            first = entry.output_ids[0];
+            marks[first] |= kFirstResidualFlow;
+            break;
+          }
+        } else if ((left == first && (marks[right] & kFirstResidualFlow)) ||
+                   (right == first && (marks[left] & kFirstResidualFlow))) {
+          last = entry.output_ids[0];
+          end = position;
+          break;
+        }
+      }
+    }
+    if (dependent) {
+      for (uint32_t id : entry.output_ids) {
+        if (id != kNoValue)
+          marks[id] |= first == kNoValue ? kAttentionFlow : kFirstResidualFlow;
+      }
+    }
+  }
+  if (start == kNoValue || last == kNoValue)
+    return false;
+
+  const std::size_t producer = index.value_producers[start];
+  const std::size_t begin = producer == kNoPosition ? 0 : producer + 1;
+  if (begin > end || end - begin >= kMaxInterval)
+    return false;
+  marks[start] |= kLayerInputFlow;
+  for (std::size_t position = begin; position <= end; ++position) {
+    const NodeData &entry = *index.entries[position];
+    if (std::any_of(entry.dependency_ids.begin(), entry.dependency_ids.end(),
+                    [&](uint32_t id) { return (marks[id] & kLayerInputFlow) != 0; })) {
+      for (uint32_t id : entry.output_ids) {
+        if (id != kNoValue)
+          marks[id] |= kLayerInputFlow;
+      }
+    }
+  }
+  std::unordered_set<std::size_t> included;
+  std::vector<uint32_t> pending{last};
+  while (!pending.empty()) {
+    const uint32_t id = pending.back();
+    pending.pop_back();
+    if (id == start || (marks[id] & kResidualVisited) || !(marks[id] & kLayerInputFlow))
+      continue;
+    marks[id] |= kResidualVisited;
+    const std::size_t position = index.value_producers[id];
+    if (position == kNoPosition || position > end || !included.insert(position).second)
+      continue;
+    const NodeData &entry = *index.entries[position];
+    if (!entry.usable || (&nodes[position] != &anchor && IsAttention(nodes[position])) ||
+        region.size() == kMaxRegion)
+      return false;
+    region.push_back(&nodes[position]);
+    pending.insert(pending.end(), entry.dependency_ids.begin(), entry.dependency_ids.end());
+  }
+  if (included.count(seed.position) == 0 || region.size() < 2)
+    return false;
+  std::sort(region.begin(), region.end(), [&](const NodeProto *a, const NodeProto *b) {
+    return index.data.at(a).position < index.data.at(b).position;
+  });
+  return index.data.at(region.back()).position - index.data.at(region.front()).position <
+         kMaxInterval;
+}
+
+bool FindResidualPlan(Index &index, Plan &best, std::size_t &attempts) {
+  std::vector<Regions> families;
+  for (const NodeProto &node : index.graph.Builder().Nodes()) {
+    const NodeData &entry = index.data.at(&node);
+    if (!entry.usable || !entry.anchor || !IsAttention(node))
+      continue;
+    if (attempts >= index.options.max_growth_attempts)
+      break;
+    ++attempts;
+    Region region;
+    if (!ResidualRegion(index, node, region))
+      continue;
+    bool grouped = false;
+    for (Regions &family : families) {
+      if (family[0].size() != region.size())
+        continue;
+      if (attempts >= index.options.max_growth_attempts)
+        break;
+      ++attempts;
+      if (Correspond(index, Regions{family[0], region})) {
+        if (family.size() < kMaxOccurrences * kMaxAnchorStride)
+          family.push_back(std::move(region));
+        grouped = true;
+        break;
+      }
+    }
+    if (!grouped && families.size() < kMaxSeedGroups)
+      families.push_back(Regions{std::move(region)});
+  }
+  bool found = false;
+  std::size_t best_coverage = 0;
+  for (const Regions &family : families) {
+    if (family.size() < 2)
+      continue;
+    const std::size_t count =
+        family.size() <= kMaxOccurrences
+            ? family.size()
+            : (family.size() % kMaxOccurrences == 1 ? kMaxOccurrences - 1 : kMaxOccurrences);
+    const Regions selected(family.begin(), family.begin() + count);
+    if (!Correspond(index, selected))
+      continue;
+    Plan plan;
+    if (!MakePlan(index, selected, plan, true))
+      continue;
+    const std::size_t coverage = family.size() * family[0].size();
+    if (!found || coverage > best_coverage ||
+        (coverage == best_coverage && plan.score < best.score)) {
+      best = std::move(plan);
+      best_coverage = coverage;
+      found = true;
+    }
+  }
+  return found;
 }
 
 struct Extension {
@@ -1415,6 +1656,8 @@ bool FindPlan(Index &index, Plan &best) {
                    });
   std::map<std::string, Region> representatives;
   std::size_t groups = 0, attempts = 0;
+  if (FindResidualPlan(index, best, attempts))
+    return true;
   for (const NodeProto *candidate : candidates) {
     const NodeProto &node = *candidate;
     const auto &entry = index.data.at(&node);

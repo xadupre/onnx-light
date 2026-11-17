@@ -164,9 +164,10 @@ Anchors include every operator whose type contains the case-sensitive substring
 Layer calls remain excluded. Matching still requires compatible types, shapes,
 attributes and topology; the name alone does not bypass extraction safeguards.
 
-The shared search budget counts anchor comparisons and region-extension
-attempts, not model executions or complete graph partitions. It resets for each
-search and defaults to 4096. Increase it explicitly for larger graphs:
+The shared search budget counts residual-anchor inspections, compatibility
+comparisons and region-extension attempts, not model executions or complete
+graph partitions. It resets for each search and defaults to 4096. Increase it
+explicitly for larger graphs:
 
 .. code-block:: python
 
@@ -281,12 +282,11 @@ Body lifetimes include values captured only by nested graph attributes.
 Matching and cut policy
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Supported primitive anchors are ``MatMul`` and ``Attention`` in the standard
-ONNX domain (``""`` or ``ai.onnx``), ``com.microsoft::GroupQueryAttention`` and
-``ai.rt::PagedAttention``, without an overload. A model-local function is also an
-anchor when bounded recursive inspection of its exact domain/name/overload
-definition reaches one of those identities. A suggestive operator name alone
-does not qualify.
+Anchors include operators whose type contains the case-sensitive substring
+``Attention``, regardless of domain or overload, and standard ``MatMul``.
+A model-local function is also an anchor when bounded recursive inspection of
+its exact domain/name/overload definition reaches an anchor. Existing ``ai.rt``
+Layer calls are excluded.
 
 Matching preserves operator domain, type, overload, input/output arity, optional
 port presence, attributes, internal producer/output-port relationships and
@@ -301,17 +301,25 @@ Nested GRAPH attributes are compared with scope-aware structural signatures,
 ignoring graph, node and value names while retaining formal roles, captures and
 aliasing. Tensor-valued operator attributes constrain their literal contents.
 
-Corresponding regions grow together through predecessor/output and
-successor/input port roles. A seed must grow to at least two nodes and have at
-least two disjoint occurrences. Shared predecessors, ambiguous fan-out and
-overlapping occurrences are not guessed into a match. Side branches may remain
-outside a region provided their dependencies and outputs remain explicit.
-Already extracted ``Layer`` nodes, and graphs nested within their bodies, are
-not candidates.
-Stochastic operators, Dropout and opaque custom computation outside the supported
-attention identities are excluded;
-local-function and nested-graph safety inspection must also succeed. Scheduling
-preserves the relative order of remaining stochastic/opaque calls.
+The search first tries direct attention anchors between two residual ``Add``
+joins: the first joins the attention branch to an ancestor of the anchor, and
+the second joins the first result to a dependent branch. It collects the
+connected path between the residual input and output and groups compatible
+regions separately. Thus blocks with different attention or feed-forward
+operators can form distinct families. This is a heuristic; layers without
+that residual form are not necessarily recognized as whole blocks.
+
+If no admissible residual family is found, corresponding regions grow together
+through predecessor/output and successor/input port roles. A seed must grow to
+at least two nodes and have at least two disjoint occurrences. Shared
+predecessors, ambiguous fan-out and overlapping occurrences are not guessed
+into a match. Side branches may remain outside a region provided their
+dependencies and outputs remain explicit. Already extracted ``Layer`` nodes,
+and graphs nested within their bodies, are not candidates.
+Operators in any domain can participate when their shapes can be inferred or
+their outputs have sufficient annotations; local-function and nested-graph
+safety inspection must also succeed. Scheduling preserves the relative order
+of remaining stochastic and opaque calls.
 One-hop neighbor identities and connecting ports distinguish different roles
 of otherwise identical anchors. Seed-family selection and structural
 eligibility are separate from cut cost: a low-edge projection fragment must not
@@ -342,7 +350,12 @@ wrapper input or output.
 The contracted dependency graph includes untouched nodes interleaved with the
 regions and dependencies used only in nested graphs. A deterministic
 topological schedule preserves these nodes and rejects a contraction that would
-introduce a cycle, including paths that leave a region and re-enter it.
+introduce a cycle, including paths that leave a region and re-enter it. Pure
+whitelisted constant preparations may move before a layer call without folding
+weights. For residual families only, whitelisted preparations depending solely
+on graph inputs and constants may also move to satisfy the contracted
+dependencies. Device-annotated, overloaded and local-function operations are
+not treated as movable preparations; incomplete capture analysis is a barrier.
 
 This is a bounded, conservative heuristic, **not** a globally optimal cut or a
 guarantee to recover a model author's intended transformer block. Exploration
@@ -352,11 +365,12 @@ local-function definitions.
 
 Per detection scan, the implementation indexes operator signatures and value
 uses once, caches function-anchor classification by exact operator identity, and
-bounds exploration to 32 seed groups and a shared budget of 4096 compatibility
-comparisons and extension attempts, including representative and anchor-bucket
-comparisons. Region search
-uses at most 32 occurrences, 64 nodes per occurrence, 128 ports per operator,
-256 neighboring extension choices and anchor strides up to 8. A replacement
+bounds exploration to 32 seed groups and a shared budget of 4096 residual-anchor
+inspections, compatibility comparisons and extension attempts, including
+representative and anchor-bucket comparisons. Residual ancestry and forward
+scans each visit at most 4096 nodes. Region search uses at most 32 occurrences,
+256 nodes per occurrence, 128 ports per operator, 256 neighboring extension choices
+and anchor strides up to 8. A replacement
 interval contains at most 4096 original nodes. Recursive scope/function
 inspection is limited to depth 16 and 4096 visited operations; oversized
 attribute signatures are rejected at 64 KiB. These limits deliberately trade

@@ -226,8 +226,8 @@ TEST(BackendTestCaseShapeInference, RegisteredModelsWithUnknownInputTypes) {
       {"test_cc_regex_full_match_basic", 20, TensorProto::BOOL},
 #ifdef ONNX_ML
       {"test_cc_dict_vectorizer_string_int64", 1, TensorProto::UNDEFINED},
-      {"test_cc_label_encoder_string_int_opset_2", 1, TensorProto::UNDEFINED},
-      {"test_cc_label_encoder_string_int_opset_2", 2, TensorProto::INT64},
+      {"test_cc_label_encoder_string_int_shape_inference", 1, TensorProto::UNDEFINED},
+      {"test_cc_label_encoder_string_int_shape_inference", 2, TensorProto::INT64},
       {"test_ai_onnx_ml_label_encoder_string_int", 4, TensorProto::INT64},
       {"test_cc_treeensemble_single_tree_float", 5, TensorProto::FLOAT},
 #endif
@@ -250,14 +250,14 @@ TEST(BackendTestCaseShapeInference, RegisteredModelsWithUnknownInputTypes) {
         ASSERT_EQ(graph->output_size(), 1);
         graph->mutable_output(0)->clear_type();
         graph->clear_value_info();
-        if (graph->node(0).op_type() == "LabelEncoder" && profile.version == 1) {
-          // The legacy schema is tested only on a copy: the native backend
-          // requires the version-2+ mapping attributes in registered models.
-          for (auto &opset : *model.mutable_opset_import()) {
-            if (opset.domain() == "ai.onnx.ml") {
-              opset.set_version(1);
-            }
+        // Historical ML schemas are tested on copies so registered models
+        // remain compatible with the GraphBuilder's built-in schemas.
+        for (auto &opset : *model.mutable_opset_import()) {
+          if (opset.domain() == "ai.onnx.ml") {
+            opset.set_version(profile.version);
           }
+        }
+        if (graph->node(0).op_type() == "LabelEncoder" && profile.version == 1) {
           graph->mutable_node(0)->clear_attribute();
         }
         if (custom_producer) {
@@ -294,25 +294,34 @@ TEST(BackendTestCaseShapeInference, RegisteredModelsWithUnknownInputTypes) {
 }
 
 TEST(BackendTestCaseShapeInference, RegisteredModelsWithTypedShapelessInputs) {
-  const std::vector<std::string> names{
-      "test_cc_regex_full_match_basic",
+  struct Profile {
+    const char *name;
+    int64_t version;
+  };
+  const std::vector<Profile> profiles{
+      {"test_cc_regex_full_match_basic", 20},
 #ifdef ONNX_ML
-      "test_cc_label_encoder_string_int_opset_2",
-      "test_ai_onnx_ml_label_encoder_string_int",
+      {"test_cc_label_encoder_string_int_shape_inference", 2},
+      {"test_ai_onnx_ml_label_encoder_string_int", 4},
 #endif
   };
-  for (const auto &name : names) {
-    SCOPED_TRACE(name);
-    auto cases = CollectTestCasesByName(name);
+  for (const auto &profile : profiles) {
+    SCOPED_TRACE(std::string(profile.name) + "-" + std::to_string(profile.version));
+    auto cases = CollectTestCasesByName(profile.name);
     size_t checked = 0;
     for (auto &tc : cases) {
-      if (tc.name != name) {
+      if (tc.name != profile.name) {
         continue;
       }
       TestCaseUnloadGuard unload_guard(tc);
       for (const bool keep_shape : {false, true}) {
         SCOPED_TRACE(keep_shape);
         ModelProto model = tc.model();
+        for (auto &opset : *model.mutable_opset_import()) {
+          if (opset.domain() == "ai.onnx.ml") {
+            opset.set_version(profile.version);
+          }
+        }
         auto *graph = model.mutable_graph();
         const auto expected = graph->output(0).type().tensor_type();
         graph->mutable_output(0)->clear_type();

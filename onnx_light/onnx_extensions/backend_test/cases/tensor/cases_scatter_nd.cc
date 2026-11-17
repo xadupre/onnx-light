@@ -69,6 +69,27 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  Expect(registry, MakeScatterNDNode("mean"), "test_cc_scatternd_mean", {DefaultOpset(29)},
+         []() -> IoData {
+           return IoData{{Tensor::FromFloat("", {3, 2}, {-2, 8, 9, 10, 11, 12}),
+                          Tensor::FromInt64("", {3, 1}, {0, -3, 1}),
+                          Tensor::FromFloat("", {3, 2}, {-3, 5, -3, 5, 5, 8})},
+                         {Tensor::FromFloat("", {3, 2}, {-8.0f / 3, 6, 7, 9, 11, 12})}};
+         });
+  Expect(registry, MakeScatterNDNode("mean"), "test_cc_scatternd_mean_integer", {DefaultOpset(29)},
+         []() -> IoData {
+           return IoData{{Tensor::FromInt64("", {3}, {-2, 8, 9}),
+                          Tensor::FromInt32("", {3, 1}, {0, -3, 1}),
+                          Tensor::FromInt64("", {3}, {-3, -3, 5})},
+                         {Tensor::FromInt64("", {3}, {-3, 6, 9})}};
+         });
+  Expect(registry, MakeScatterNDNode("mean"), "test_cc_scatternd_mean_whole_tensor",
+         {DefaultOpset(29)}, []() -> IoData {
+           return IoData{{Tensor::FromFloat("", {2}, {1, 2}), Tensor::FromInt64("", {2, 0}, {}),
+                          Tensor::FromFloat("", {2, 2}, {3, 4, 5, 6})},
+                         {Tensor::FromFloat("", {2}, {3, 4})}};
+         });
+
   {
     Expect(registry, MakeScatterNDNode("add"), "test_cc_scatternd_batched_token_add_int32_indices",
            {DefaultOpset(29)}, []() -> IoData {

@@ -33,6 +33,14 @@ core::shapes::PeakMemoryEstimate
 ComputePeakMemoryGather(core::symbolic::Device device, const NodeProto &node,
                         const std::vector<core::symbolic::SymShape> &inputs);
 
+/// Bounds the portable scatter kernels' additional workspace, excluding declared outputs.
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryScatterElements(core::symbolic::Device device, const NodeProto &node,
+                                 const std::vector<core::symbolic::SymShape> &inputs);
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryScatterND(core::symbolic::Device device, const NodeProto &node,
+                           const std::vector<core::symbolic::SymShape> &inputs);
+
 /// Bounds the portable Slice kernel's additional workspace, excluding declared outputs.
 core::shapes::PeakMemoryEstimate
 ComputePeakMemorySlice(core::symbolic::Device device, const NodeProto &node,
@@ -742,7 +750,7 @@ public:
 
 /// Reference implementation of the ONNX ``ScatterElements`` operator (since
 /// opset 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset
-/// 16 (``add``/``mul``) and extended in opset 18 (``max``/``min``)). ``data``,
+/// 16 (``add``/``mul``), opset 18 (``max``/``min``), and opset 29 (``mean``)). ``data``,
 /// ``indices`` and ``updates`` must have the same rank ``r`` and the output
 /// has the same shape and dtype as ``data``. ``indices`` may be INT32 or
 /// INT64; negative values count from the back of the scattered axis.
@@ -751,6 +759,8 @@ public:
 /// behaviour (the order of iteration is not defined). When ``reduction`` is
 /// ``"add"``, ``"mul"``, ``"max"`` or ``"min"``, the corresponding element of
 /// ``data`` is updated with ``f(out_elem, updates_elem)``.
+/// ``mean`` averages all updates with the original element once; integer
+/// results round toward negative infinity. Untouched elements remain unchanged.
 class ScatterElements : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ScatterElements";
@@ -803,7 +813,7 @@ public:
 
 /// Reference implementation of the ONNX ``ScatterND`` operator (since opset
 /// 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset 16
-/// (``add``/``mul``) and extended in opset 18 (``max``/``min``)). The output
+/// (``add``/``mul``), opset 18 (``max``/``min``), and opset 29 (``mean``)). The output
 /// has the same shape and dtype as ``data``. ``indices`` must be INT64, or INT32
 /// from opset 29; negative values count from the back of the corresponding ``data`` axis.
 ///
@@ -811,6 +821,9 @@ public:
 /// behaviour. When ``reduction`` is ``"add"``, ``"mul"``, ``"max"`` or
 /// ``"min"``, the corresponding slice of ``data`` is updated with
 /// ``f(out_slice, updates_slice)``.
+/// ``mean`` averages all updates with the original slice once; integer
+/// results round toward negative infinity. Zero-length index tuples address
+/// the whole tensor.
 class ScatterND : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ScatterND";

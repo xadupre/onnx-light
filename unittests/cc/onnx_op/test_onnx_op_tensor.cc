@@ -25,6 +25,22 @@ FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int versi
   return nullptr;
 }
 
+TEST(OnnxOpTensorRegistrationTest, ScatterMeanSchemasPreserveHistory) {
+  for (const std::string op : {"ScatterElements", "ScatterND"}) {
+    const auto schemas = onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory(op);
+    for (int version : {18, 29}) {
+      const auto *schema = FindByVersion(schemas, version);
+      ASSERT_NE(schema, nullptr);
+      const auto &attrs = schema->attributes();
+      const auto reduction = std::find_if(
+          attrs.begin(), attrs.end(), [](const auto &attr) { return attr.name == "reduction"; });
+      ASSERT_NE(reduction, attrs.end());
+      EXPECT_EQ(reduction->description.find("'mean'") != std::string::npos, version == 29);
+      EXPECT_EQ(schema->doc().find("mean reduction") != std::string::npos, version == 29);
+    }
+  }
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsAffineGridSchemaWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
@@ -172,7 +188,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 147u);
+  EXPECT_EQ(schemas.size(), 148u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);

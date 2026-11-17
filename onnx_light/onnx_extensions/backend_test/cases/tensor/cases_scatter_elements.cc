@@ -61,6 +61,21 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
     return;
   }
 
+  Expect(registry, MakeScatterElementsNode(-1, "mean", true), "test_cc_scatter_elements_mean",
+         {DefaultOpset(29)}, []() -> IoData {
+           return IoData{{Tensor::FromFloat("", {1, 3}, {-2, 8, 9}),
+                          Tensor::FromInt64("", {1, 3}, {0, -3, 1}),
+                          Tensor::FromFloat("", {1, 3}, {-3, -3, 5})},
+                         {Tensor::FromFloat("", {1, 3}, {-8.0f / 3, 6.5f, 9})}};
+         });
+  Expect(registry, MakeScatterElementsNode(0, "mean", false),
+         "test_cc_scatter_elements_mean_integer", {DefaultOpset(29)}, []() -> IoData {
+           return IoData{{Tensor::FromInt64("", {3}, {-2, 8, 9}),
+                          Tensor::FromInt32("", {3}, {0, -3, 1}),
+                          Tensor::FromInt64("", {3}, {-3, -3, 5})},
+                         {Tensor::FromInt64("", {3}, {-3, 6, 9})}};
+         });
+
   // test_cc_scatter_elements_without_axis — mirrors upstream
   // ``test_scatter_elements_without_axis``.
   {

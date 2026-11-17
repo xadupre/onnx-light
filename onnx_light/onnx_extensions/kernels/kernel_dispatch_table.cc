@@ -56,6 +56,8 @@ const std::unordered_map<std::string, ComputePeakMemoryNodeFn> &BuiltinPeakMemor
   static const std::unordered_map<std::string, ComputePeakMemoryNodeFn> table = {
       {"ai.onnx:MatMul", kernel::ComputePeakMemoryMatMul},
       {"ai.onnx:Gather", kernel::ComputePeakMemoryGather},
+      {"ai.onnx:ScatterElements", kernel::ComputePeakMemoryScatterElements},
+      {"ai.onnx:ScatterND", kernel::ComputePeakMemoryScatterND},
       {"ai.onnx:Slice", kernel::ComputePeakMemorySlice},
       {"ai.onnx:RMSNormalization", kernel::ComputePeakMemoryRMSNormalization},
       {"ai.onnx:Attention",

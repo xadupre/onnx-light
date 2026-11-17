@@ -2071,6 +2071,25 @@ in the batch.
 }
 
 std::string MakeScatterElementsDoc(int since_version) {
+  if (since_version >= 29) {
+    return R"DOC(
+ScatterElements takes `data`, `indices`, and `updates` of the same rank.
+`indices` and `updates` have the same shape, and their dimensions other than
+`axis` must not exceed those of `data`. Each update targets the coordinate
+obtained by replacing its axis coordinate with the corresponding index.
+Indices must be in [-s, s-1], where s is the axis size.
+
+The output is a copy of `data`. With reduction "none", updates replace their
+targets and must not address the same element. Other reductions combine the
+original value once with all updates to the same element; untouched values are
+preserved. Supported reductions are "add", "mul", "max", "min", and "mean".
+
+Opset 29 adds the mean reduction for integer and floating-point tensors, not
+boolean, string, or complex tensors. Integer means round toward negative
+infinity. A NaN or infinities of both signs produce NaN; otherwise an infinity
+determines the result.
+)DOC";
+  }
   if (since_version <= 11) {
     return R"DOC(
 ScatterElements takes three inputs `data`, `updates`, and `indices` of the same
@@ -2355,8 +2374,24 @@ Example 2:
 
 std::string MakeScatterNDDoc(int since_version) {
   if (since_version >= 29) {
-    return MakeScatterNDDoc(18) +
-           "\nOpset 29 adds support for int32 indices; int64 indices remain supported.\n";
+    return R"DOC(
+ScatterND takes `data` of rank r >= 1, `indices` of rank q >= 1, and `updates`.
+Let k = indices.shape[-1], with 0 <= k <= r. Each k-tuple indexes the first k
+dimensions of `data` and addresses the remaining slice. An empty tuple addresses
+the whole tensor. `updates` has shape indices.shape[:-1] + data.shape[k:].
+Each index must be in [-s, s-1] for its dimension of size s.
+
+The output is a copy of `data`. With reduction "none", updates replace their
+targets and must not address the same location. Other reductions combine the
+original value once with all updates addressing the same element; untouched
+values are preserved. Supported reductions are "add", "mul", "max", "min",
+and "mean".
+
+Opset 29 adds support for int32 indices and the mean reduction. Mean supports
+integer and floating-point tensors, not boolean, string, or complex tensors.
+Integer means round toward negative infinity. A NaN or infinities of both signs
+produce NaN; otherwise an infinity determines the result.
+)DOC";
   }
   if (since_version <= 13) {
     return R"DOC(

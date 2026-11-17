@@ -3,6 +3,7 @@ from onnx_light.ext_test_case import ExtTestCase
 import onnx
 import onnx.defs as onnx_defs
 import onnx_light.onnx.defs
+from packaging.version import Version
 
 
 class TestSchemaSyncWithOnnxDefs(ExtTestCase):
@@ -76,10 +77,22 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 light_dict.pop(key, None)
 
     @staticmethod
-    def _remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict):
+    def _remove_grouped_matmul_if_onnx_is_outdated(light_dict, onnx_dict, onnx_version=None):
         key = ("", "GroupedMatMul", 29)
-        schema = onnx_dict.get(key)
-        if schema is not None and "transB" not in schema.attributes:
+        if onnx_version is None:
+            onnx_version = Version(onnx.__version__)
+        if key not in onnx_dict:
+            # GroupedMatMul is only expected from onnx 1.24.0.
+            if onnx_version < Version("1.24.0"):
+                if isinstance(light_dict, set):
+                    light_dict.discard(key)
+                else:
+                    light_dict.pop(key, None)
+            return
+        if isinstance(onnx_dict, set):
+            return
+        schema = onnx_dict[key]
+        if "transB" not in schema.attributes:
             light_dict.pop(key, None)
             onnx_dict.pop(key, None)
 
@@ -335,6 +348,18 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self.assertEqual(light, {})
         self.assertEqual(upstream, {})
 
+    def test_grouped_matmul_schema_is_skipped_only_before_onnx_1_24(self):
+        key = ("", "GroupedMatMul", 29)
+        for use_set in (False, True):
+            for version, expected in (("1.23.2", set()), ("1.24.0", {key})):
+                with self.subTest(use_set=use_set, version=version):
+                    light = {key} if use_set else {key: object()}
+                    upstream = set() if use_set else {}
+                    self._remove_grouped_matmul_if_onnx_is_outdated(
+                        light, upstream, Version(version)
+                    )
+                    self.assertEqual(set(light), expected)
+
     def test_normalize_nd_text(self):
         for name, version in (("GatherND", 13), ("ScatterND", 18)):
             key = ("", name, version)
@@ -387,6 +412,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         self._remove_recent_schemas_if_onnx_is_outdated(onnx_light_schema_keys, onnx_schema_keys)
         if self.ATTENTION_25_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
+        self._remove_grouped_matmul_if_onnx_is_outdated(onnx_light_schema_keys, onnx_schema_keys)
 
         self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 

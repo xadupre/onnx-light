@@ -230,7 +230,7 @@ public:
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
 // ``AveragePool`` mirrors the ONNX ``AveragePool`` operator restricted to
-// FLOAT tensors with a non-empty ``kernel_shape``. It supports an
+// FLOAT or FLOAT16 tensors with a non-empty ``kernel_shape``. It supports an
 // arbitrary number of spatial dimensions (N, C, D1, ..., Dk), the
 // ``strides`` attribute (default 1 along every spatial axis), explicit
 // ``pads`` (default 0 along every spatial begin/end), ``dilations``

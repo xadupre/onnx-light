@@ -602,7 +602,7 @@ void AddOnnxPyLib(nb::module_ &m) {
           Py_DECREF(error);
         }
       },
-      validation_error.ptr());
+      validation_error.inc_ref().ptr());
 
   checker_mod.def(
       "check_model",

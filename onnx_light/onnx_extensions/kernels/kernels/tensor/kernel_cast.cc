@@ -225,10 +225,47 @@ bool IsAnyFloat(int32_t dtype) {
   }
 }
 
-// Returns one numeric element of ``x`` (at flat index ``i``) widened to
-// ``double``. ``double`` is the canonical intermediate value because every
-// supported numeric dtype is exactly representable as ``double`` for the
-// value ranges exercised by the backend test cases.
+bool IsIntegerCastDtype(int32_t dtype) {
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::INT8:
+  case DataType::UINT8:
+  case DataType::INT16:
+  case DataType::UINT16:
+  case DataType::INT32:
+  case DataType::UINT32:
+  case DataType::INT64:
+  case DataType::BOOL:
+    return true;
+  default:
+    return false;
+  }
+}
+
+int64_t LoadAsInt64(const Tensor &x, int64_t i) {
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::INT8:
+    return x.AsInt8()[i];
+  case DataType::UINT8:
+    return x.AsUint8()[i];
+  case DataType::INT16:
+    return x.AsInt16()[i];
+  case DataType::UINT16:
+    return x.AsUint16()[i];
+  case DataType::INT32:
+    return x.AsInt32()[i];
+  case DataType::UINT32:
+    return x.AsUint32()[i];
+  case DataType::INT64:
+    return x.AsInt64()[i];
+  case DataType::BOOL:
+    return x.AsBool()[i] != 0 ? 1 : 0;
+  default:
+    EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for integer load.");
+  }
+}
+
+// Returns one numeric element of ``x`` (at flat index ``i``) converted to
+// ``double``. Integer-to-integer casts use ``LoadAsInt64`` to preserve low bits.
 double LoadAsDouble(const Tensor &x, int64_t i) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
@@ -276,8 +313,8 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
   }
 }
 
-// Writes the value ``v`` (already cast to the destination C++ type) into the
-// numeric output buffer at flat index ``i``. For ``BOOL``, follows ONNX
+// Writes the integer or floating-point value ``v`` into the numeric output
+// buffer at flat index ``i``. For ``BOOL``, follows ONNX
 // reference semantics: the value is true iff ``v`` is not zero (including
 // NaN, which compares unequal to 0.0 and therefore maps to true).
 //
@@ -288,7 +325,7 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
 // behaviour in C++ and gives different results across compilers (e.g.
 // gcc on Linux clamps to 0, while clang on macOS wraps), which previously
 // caused mismatches against the ONNX runtime reference behaviour.
-void StoreFromDouble(Tensor &output, int64_t i, double v) {
+template <typename T> void StoreFromValue(Tensor &output, int64_t i, T v) {
   switch (static_cast<DataType>(output.data_type)) {
   case DataType::FLOAT:
     output.AsFloat()[i] = static_cast<float>(v);
@@ -318,7 +355,7 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     output.AsUint32()[i] = static_cast<uint32_t>(static_cast<int64_t>(v));
     return;
   case DataType::BOOL:
-    output.AsBool()[i] = (v != 0.0) ? uint8_t{1} : uint8_t{0};
+    output.AsBool()[i] = (v != 0) ? uint8_t{1} : uint8_t{0};
     return;
   case DataType::FLOAT16: {
     const std::uint16_t bits = FloatToFloat16Bits(static_cast<float>(v));
@@ -339,7 +376,7 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     return;
   }
   case DataType::COMPLEX128: {
-    const double parts[2] = {v, 0.0};
+    const double parts[2] = {static_cast<double>(v), 0.0};
     std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(parts), parts,
                 sizeof(parts));
     return;
@@ -620,7 +657,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                   break;
                 case DataType::FLOAT16:
                 case DataType::BFLOAT16:
-                  StoreFromDouble(output, i, static_cast<double>(fv));
+                  StoreFromValue(output, i, static_cast<double>(fv));
                   break;
                 default:
                   EXT_THROW_INVALID("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
@@ -658,7 +695,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                 break;
               case DataType::FLOAT16:
               case DataType::BFLOAT16:
-                StoreFromDouble(output, i, static_cast<double>(value));
+                StoreFromValue(output, i, static_cast<double>(value));
                 break;
               case DataType::INT8:
                 output.AsInt8()[i] = static_cast<int8_t>(value);
@@ -716,7 +753,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
           [&](int64_t begin, int64_t end) {
             for (int64_t i = begin; i < end; ++i) {
               const float v = Float8BitsToFloat(src[i], x.data_type);
-              StoreFromDouble(output, i, static_cast<double>(v));
+              StoreFromValue(output, i, static_cast<double>(v));
             }
           },
           "Cast");
@@ -752,7 +789,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                         "kernel::Cast STRING input must have one entry per element.");
     if (n < tuning().parallel_minimum_elements || n == 1) {
       for (int64_t i = 0; i < n; ++i) {
-        StoreFromDouble(output, i, ParseAsDouble(x.string_data[static_cast<size_t>(i)]));
+        StoreFromValue(output, i, ParseAsDouble(x.string_data[static_cast<size_t>(i)]));
       }
     } else {
       std::atomic<int64_t> first_invalid{n};
@@ -762,7 +799,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             for (int64_t i = begin; i < end; ++i) {
               double value = 0.0;
               if (TryParseAsDouble(x.string_data[static_cast<size_t>(i)], value)) {
-                StoreFromDouble(output, i, value);
+                StoreFromValue(output, i, value);
               } else {
                 int64_t previous = first_invalid.load(std::memory_order_relaxed);
                 while (i < previous && !first_invalid.compare_exchange_weak(
@@ -826,11 +863,16 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     return;
   }
 
+  const bool integer_cast = IsIntegerCastDtype(x.data_type) && IsIntegerCastDtype(to);
   ParallelFor(
       n, tuning().parallel_minimum_elements,
       [&](int64_t begin, int64_t end) {
         for (int64_t i = begin; i < end; ++i) {
-          StoreFromDouble(output, i, LoadAsDouble(x, i));
+          if (integer_cast) {
+            StoreFromValue(output, i, LoadAsInt64(x, i));
+          } else {
+            StoreFromValue(output, i, LoadAsDouble(x, i));
+          }
         }
       },
       "Cast");

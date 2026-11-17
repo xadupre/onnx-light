@@ -7,7 +7,9 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -47,6 +49,38 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  // Upstream ONNX PR #8454: finite inputs must not lose their normalized
+  // values through overflow or underflow in the norm.
+  for (int64_t p : {1, 2}) {
+    for (bool small : {false, true}) {
+      const float magnitude = small ? 1e-30f : (p == 1 ? 3e38f : 1e30f);
+      const float expected = p == 1 ? 0.5f : static_cast<float>(std::sqrt(0.5));
+      for (int64_t axis : {-1, 0, 1}) {
+        NodeProto node;
+        node.set_op_type("LpNormalization");
+        node.add_input("x");
+        node.add_output("y");
+        AddAttribute<int64_t>(node, "axis", axis);
+        AddAttribute<int64_t>(node, "p", p);
+        Expect(registry, std::move(node),
+               "test_cc_lpnormalization_finite_" + std::string(small ? "small" : "large") + "_p" +
+                   std::to_string(p) + "_axis" + std::to_string(axis),
+               {opset}, [magnitude, expected, axis]() -> IoData {
+                 const bool first_axis = axis == 0;
+                 Tensor x = Tensor::FromFloat(
+                     "", {2, 2},
+                     first_axis ? std::vector<float>{magnitude, 0.0f, -magnitude, 0.0f}
+                                : std::vector<float>{magnitude, -magnitude, 0.0f, 0.0f});
+                 Tensor y = Tensor::FromFloat(
+                     "", {2, 2},
+                     first_axis ? std::vector<float>{expected, 0.0f, -expected, 0.0f}
+                                : std::vector<float>{expected, -expected, 0.0f, 0.0f});
+                 return IoData{{std::move(x)}, {std::move(y)}};
+               });
+      }
+    }
   }
 
   Tensor x = Tensor::FromFloat(

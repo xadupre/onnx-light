@@ -33,6 +33,14 @@ core::shapes::PeakMemoryEstimate
 ComputePeakMemoryGather(core::symbolic::Device device, const NodeProto &node,
                         const std::vector<core::symbolic::SymShape> &inputs);
 
+/// Bounds the portable scatter kernels' additional workspace, excluding declared outputs.
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryScatterElements(core::symbolic::Device device, const NodeProto &node,
+                                 const std::vector<core::symbolic::SymShape> &inputs);
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryScatterND(core::symbolic::Device device, const NodeProto &node,
+                           const std::vector<core::symbolic::SymShape> &inputs);
+
 /// Bounds the portable Slice kernel's additional workspace, excluding declared outputs.
 core::shapes::PeakMemoryEstimate
 ComputePeakMemorySlice(core::symbolic::Device device, const NodeProto &node,

@@ -1639,7 +1639,15 @@ LightOpSchema MakeScatterElementsSchema(int since_version, const std::vector<Ten
        AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
   if (since_version >= 16) {
     std::string reduction_desc;
-    if (since_version >= 18) {
+    if (since_version >= 29) {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min, mean. "
+                       "'none': no reduction applied. "
+                       "'add':  reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation. "
+                       "'max': reduction using the maximum operation. "
+                       "'min': reduction using the minimum operation. "
+                       "'mean': arithmetic mean of all contributions to each output element.";
+    } else if (since_version >= 18) {
       reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min. "
                        "'none': no reduction applied. "
                        "'add':  reduction using the addition operation. "
@@ -1681,7 +1689,15 @@ LightOpSchema MakeScatterNDSchema(int since_version, const std::vector<TensorTyp
   std::vector<AttributeParam> attributes;
   if (since_version >= 16) {
     std::string reduction_desc;
-    if (since_version >= 18) {
+    if (since_version >= 29) {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min, mean. "
+                       "'none': no reduction applied. "
+                       "'add': reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation. "
+                       "'max': reduction using the maximum operation. "
+                       "'min': reduction using the minimum operation. "
+                       "'mean': arithmetic mean of all contributions to each output element.";
+    } else if (since_version >= 18) {
       reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min. "
                        "'none': no reduction applied. "
                        "'add': reduction using the addition operation. "
@@ -2089,6 +2105,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"ScatterElements",
        [] {
          return std::vector<LightOpSchema>{
+             MakeScatterElementsSchema(29, ConcatTypesVer13()),
              MakeScatterElementsSchema(18, ConcatTypesVer13()),
              MakeScatterElementsSchema(16, ConcatTypesVer13()),
              MakeScatterElementsSchema(13, ConcatTypesVer13()),

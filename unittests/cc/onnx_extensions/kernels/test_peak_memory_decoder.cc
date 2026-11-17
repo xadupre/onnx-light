@@ -107,6 +107,46 @@ TEST(ComputePeakMemoryDecoder, IndexingAndNormalizationHaveNonzeroBounds) {
             8);
 }
 
+TEST(ComputePeakMemoryDecoder, ScatterAccountsForMeanWorkspace) {
+  onnx_kernels::RegisterPeakMemoryFunctions();
+  for (const std::string op : {"ScatterElements", "ScatterND"}) {
+    NodeProto node;
+    node.set_op_type(op);
+    auto *attr = node.add_attribute();
+    attr->set_name("reduction");
+    attr->set_type(AttributeProto::STRING);
+    attr->set_s("mean");
+    const std::vector<SymShape> shapes = op == "ScatterElements"
+                                             ? std::vector<SymShape>{{1000000}, {2}, {2}}
+                                             : std::vector<SymShape>{{1000000}, {2, 1}, {2}};
+    const auto mean = core::shapes::ComputePeakMemory(Device::kCPU, node, shapes);
+    const int64_t expected =
+        2 * (sizeof(int64_t) + sizeof(std::pair<size_t, size_t>) +
+             std::max(sizeof(std::pair<size_t, double>), sizeof(std::pair<size_t, uint64_t>))) +
+        (op == "ScatterElements" ? 2 * sizeof(int64_t) : 0);
+    EXPECT_EQ(mean.worst_case.AsInt(), expected);
+    EXPECT_FALSE(mean.average_case);
+    attr->set_s("none");
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, shapes).worst_case.AsInt(),
+              op == "ScatterElements" ? 2 * sizeof(int64_t) : 0);
+    attr->set_s("mean");
+    EXPECT_EQ(core::shapes::ComputePeakMemory(Device::kCPU, node, {}).worst_case,
+              core::shapes::UnknownPeakMemory("", op).worst_case);
+  }
+  NodeProto nd;
+  nd.set_op_type("ScatterND");
+  auto *attr = nd.add_attribute();
+  attr->set_name("reduction");
+  attr->set_s("mean");
+  attr->set_type(AttributeProto::STRING);
+  const auto symbolic = core::shapes::ComputePeakMemory(
+      Device::kCPU, nd, {{3}, {SymDim("N"), SymDim(int64_t{0})}, {SymDim("N"), 3}});
+  EXPECT_EQ(core::expressions::evaluate_expression(symbolic.worst_case.AsExpr(), {{"N", 4}}),
+            12 *
+                (sizeof(int64_t) + sizeof(std::pair<size_t, size_t>) +
+                 std::max(sizeof(std::pair<size_t, double>), sizeof(std::pair<size_t, uint64_t>))));
+}
+
 TEST(ComputePeakMemoryDecoder, CommonOperatorsDefaultToZeroPeakMemory) {
   for (const auto *op : {"Swish", "Shape", "Transpose", "Unsqueeze"})
     EXPECT_EQ(DecoderPeakMemory(op, {{2, 3}}), PeakMemoryEstimate::Exact(SymDim(int64_t{0})));

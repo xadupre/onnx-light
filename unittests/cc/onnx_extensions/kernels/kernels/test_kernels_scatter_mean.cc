@@ -149,6 +149,26 @@ TEST(ScatterMeanKernel, OverflowRepairRetainsSubnormalResiduals) {
   }
 }
 
+TEST(ScatterMeanKernel, FiniteCancellationRetainsSmallResidual) {
+  for (bool nd : {false, true}) {
+    const auto output = Mean(nd, Tensor::FromDouble("", {1}, {1e308}), Indices(nd, {0, 0, 0, 0}),
+                             Tensor::FromDouble("", {4}, {1e-300, 1, -1e308, -1}));
+    EXPECT_NEAR(output.As<double>()[0] / (1e-300 / 5), 1.0, 1e-14);
+  }
+}
+
+TEST(ScatterMeanKernel, SingleUpdateHandlesFiniteExtremes) {
+  const double max = std::numeric_limits<double>::max();
+  const double tiny = std::numeric_limits<double>::denorm_min();
+  for (bool nd : {false, true}) {
+    const auto output = Mean(nd, Tensor::FromDouble("", {3}, {max, -max, 3 * tiny}),
+                             Indices(nd, {0, 1, 2}), Tensor::FromDouble("", {3}, {max, max, 0}));
+    EXPECT_EQ(output.As<double>()[0], max);
+    EXPECT_EQ(output.As<double>()[1], 0);
+    EXPECT_EQ(output.As<double>()[2], 2 * tiny);
+  }
+}
+
 TEST(ScatterMeanKernel, HalfAndBfloat16) {
   for (bool nd : {false, true}) {
     for (bool half : {false, true}) {
@@ -194,6 +214,17 @@ TEST(ScatterMeanKernel, ScatterNDSlicesAndEmptyTuples) {
                                Tensor::FromInt64("", {1, 0}, {}),
                                Tensor::FromFloat("", {1, 0, INT64_MAX, INT64_MAX}, {}));
   EXPECT_EQ(huge_empty.element_count(), 0);
+  const auto no_tuples =
+      Mean(true, Tensor::FromFloat("", {0, INT64_MAX, INT64_MAX}, {}),
+           Tensor::FromInt64("", {0, 1}, {}), Tensor::FromFloat("", {0, INT64_MAX, INT64_MAX}, {}));
+  EXPECT_EQ(no_tuples.element_count(), 0);
+  EXPECT_THROW(Mean(true, Tensor::FromFloat("", {0, INT64_MAX, INT64_MAX}, {}),
+                    Tensor::FromInt64("", {0, 1}, {}),
+                    Tensor::FromInt64("", {0, INT64_MAX, INT64_MAX}, {})),
+               std::invalid_argument);
+  EXPECT_THROW(Mean(true, Tensor::FromFloat("", {0, INT64_MAX, INT64_MAX}, {}),
+                    Tensor::FromInt64("", {0, 1}, {}), Tensor::FromFloat("", {0, 1}, {})),
+               std::invalid_argument);
   EXPECT_THROW(Mean(true, Tensor::FromFloat("", {1, 0}, {}), Tensor::FromInt64("", {1, 1}, {7}),
                     Tensor::FromFloat("", {1, 0}, {})),
                std::invalid_argument);
@@ -277,6 +308,25 @@ TEST(ScatterMeanKernel, InPlaceIncludesOriginalOnlyOnce) {
     EXPECT_EQ(data.As<int64_t>()[0], -3);
     EXPECT_EQ(data.As<int64_t>()[1], 6);
     EXPECT_EQ(data.As<int64_t>()[2], 9);
+  }
+}
+
+TEST(ScatterMeanKernel, InPlaceUpdatesMayAliasData) {
+  const KernelContext context{DefaultOpset(29)};
+  for (bool nd : {false, true}) {
+    Tensor data = Tensor::FromDouble("", {2}, {10, 20});
+    const Tensor indices = Indices(nd, {1, 0});
+    if (nd) {
+      ScatterND::Attributes attrs;
+      attrs.reduction = "mean";
+      ScatterND{context}(data, indices, data, attrs, data);
+    } else {
+      ScatterElements::Attributes attrs;
+      attrs.reduction = "mean";
+      ScatterElements{context}(data, indices, data, attrs, data);
+    }
+    EXPECT_EQ(data.As<double>()[0], 15);
+    EXPECT_EQ(data.As<double>()[1], 15);
   }
 }
 

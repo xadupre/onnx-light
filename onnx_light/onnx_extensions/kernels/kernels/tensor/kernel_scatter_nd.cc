@@ -15,6 +15,17 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
+core::shapes::PeakMemoryEstimate ComputePeakMemoryScatterND(Device, const NodeProto &node,
+                                                            const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 3, 3)) {
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  }
+  if (GetAttributeStringOrDefault(node, "reduction", "none") != "mean") {
+    return core::shapes::PeakMemoryEstimate::Exact(SymDim(int64_t{0}));
+  }
+  return {detail::ScatterMeanWorkspace(inputs[2]), std::nullopt};
+}
+
 namespace {
 
 template <typename T>
@@ -125,6 +136,12 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   // Number of index tuples = prod(indices.shape[:-1]).
   const int64_t n_tuples =
       indices.shape.product(0, static_cast<size_t>(q - 1), "kernel::ScatterND index tuples");
+  if (n_tuples == 0) {
+    if (attrs.reduction == "mean") {
+      detail::ScatterMean(data, updates, output, {}, 0);
+    }
+    return;
+  }
 
   // Number of elements per slice = prod(data.shape[k:]).
   const int64_t slice_elems =
@@ -137,11 +154,6 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
     }
     return;
   }
-  if (attrs.reduction == "mean" && n_tuples == 0) {
-    detail::ScatterMean(data, updates, output, {}, 0);
-    return;
-  }
-
   // Row-major strides for data (in elements).
   onnx_kernels::Shape data_strides;
   data_strides.assign(static_cast<std::size_t>(r), 1);

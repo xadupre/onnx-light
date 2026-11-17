@@ -16,6 +16,21 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
+core::shapes::PeakMemoryEstimate
+ComputePeakMemoryScatterElements(Device, const NodeProto &node,
+                                 const std::vector<SymShape> &inputs) {
+  if (!peak_memory_detail::PeakMemoryShapesAvailable(inputs, 3, 3)) {
+    return core::shapes::UnknownPeakMemory(node.domain(), node.op_type());
+  }
+  const SymDim indices = peak_memory_detail::PeakMemoryMultiply(
+      SymDim(int64_t{sizeof(int64_t)}), peak_memory_detail::PeakMemoryElements(inputs[1]));
+  if (GetAttributeStringOrDefault(node, "reduction", "none") != "mean") {
+    return core::shapes::PeakMemoryEstimate::Exact(indices);
+  }
+  return {peak_memory_detail::PeakMemoryAdd(indices, detail::ScatterMeanWorkspace(inputs[2])),
+          std::nullopt};
+}
+
 namespace {
 
 // Reads the ``indices`` input into a contiguous INT64 scratch tensor. The

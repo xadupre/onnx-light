@@ -3,16 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_extensions/kernels/kernel_peak_memory_helpers.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
-#include <memory>
+#include <numeric>
 #include <type_traits>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel::detail {
+
+using ScatterDestination = std::pair<size_t, size_t>;
+
+inline SymDim ScatterMeanWorkspace(const SymShape &updates) {
+  const int64_t bytes_per_update = static_cast<int64_t>(
+      sizeof(int64_t) + sizeof(ScatterDestination) +
+      std::max(sizeof(std::pair<size_t, double>), sizeof(std::pair<size_t, uint64_t>)));
+  return peak_memory_detail::PeakMemoryMultiply(SymDim(bytes_per_update),
+                                                peak_memory_detail::PeakMemoryElements(updates));
+}
 
 // Two limbs retain exact integer sums on platforms without a native 128-bit integer.
 struct ScatterIntegerSum {
@@ -62,7 +74,7 @@ struct ScatterIntegerSum {
 };
 
 // Exact multiples of the smallest double subnormal, with enough headroom for
-// INT64_MAX contributions. Used only when the ordinary compensated sum overflows.
+// INT64_MAX contributions.
 struct ScatterFloatSum {
   std::array<uint64_t, 35> limbs{};
 
@@ -156,92 +168,72 @@ void ScatterMeanTyped(const Tensor &data, const Tensor &updates, Tensor &output,
   if (updates.element_count() == 0) {
     return;
   }
-  const size_t size = static_cast<size_t>(data.element_count());
-  std::vector<uint64_t> counts(size, 1);
-  const auto visit = [&](auto apply) {
-    for (size_t t = 0; t < offsets.size(); ++t) {
-      for (int64_t j = 0; j < slice_elements; ++j) {
-        apply(static_cast<size_t>(offsets[t] + j),
-              t * static_cast<size_t>(slice_elements) + static_cast<size_t>(j));
-      }
+  std::vector<ScatterDestination> destinations;
+  destinations.reserve(static_cast<size_t>(updates.element_count()));
+  for (size_t t = 0; t < offsets.size(); ++t) {
+    for (int64_t j = 0; j < slice_elements; ++j) {
+      destinations.emplace_back(static_cast<size_t>(offsets[t] + j),
+                                t * static_cast<size_t>(slice_elements) + static_cast<size_t>(j));
     }
-  };
-  visit([&](size_t dst, size_t) { ++counts[dst]; });
-  if constexpr (std::is_integral_v<T>) {
-    std::vector<ScatterIntegerSum> sums(size);
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] > 1) {
-        sums[i].Add(read(data, i));
-      }
+  }
+  std::sort(destinations.begin(), destinations.end());
+  // Defer writes until all inputs are read; updates may alias an in-place output.
+  std::vector<std::pair<size_t, T>> results;
+  results.reserve(std::min(destinations.size(), static_cast<size_t>(data.element_count())));
+  for (size_t begin = 0; begin < destinations.size();) {
+    size_t end = begin + 1;
+    const size_t dst = destinations[begin].first;
+    while (end < destinations.size() && destinations[end].first == dst) {
+      ++end;
     }
-    visit([&](size_t dst, size_t src) { sums[dst].Add(read(updates, src)); });
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] > 1) {
-        write(output, i, sums[i].template Mean<T>(counts[i]));
+    const uint64_t count = static_cast<uint64_t>(end - begin) + 1;
+    if constexpr (std::is_integral_v<T>) {
+      ScatterIntegerSum sum;
+      sum.Add(read(data, dst));
+      for (size_t i = begin; i < end; ++i) {
+        sum.Add(read(updates, destinations[i].second));
       }
-    }
-  } else {
-    std::vector<double> scales(size, 0), sums(size, 0), corrections(size, 0);
-    std::vector<uint8_t> special(size, 0);
-    const auto observe = [&](size_t i, T value) {
-      if (std::isnan(value)) {
-        special[i] |= 1;
-      } else if (std::isinf(value)) {
-        special[i] |= std::signbit(value) ? 2 : 4;
-      } else {
-        scales[i] = std::max(scales[i], std::abs(static_cast<double>(value)));
+      results.emplace_back(dst, sum.template Mean<T>(count));
+    } else {
+      if (end == begin + 1) {
+        const double original = read(data, dst);
+        const double update = read(updates, destinations[begin].second);
+        if (std::isfinite(original) && std::isfinite(update)) {
+          results.emplace_back(dst, static_cast<T>(std::midpoint(original, update)));
+          begin = end;
+          continue;
+        }
       }
-    };
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] > 1) {
-        observe(i, read(data, i));
-      }
-    }
-    visit([&](size_t dst, size_t src) { observe(dst, read(updates, src)); });
-    const auto add = [&](size_t i, double value) {
-      if (special[i] != 0) {
-        return;
-      }
-      const double next = sums[i] + value;
-      corrections[i] += std::abs(sums[i]) >= std::abs(value) ? (sums[i] - next) + value
-                                                             : (value - next) + sums[i];
-      sums[i] = next;
-    };
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] > 1) {
-        add(i, read(data, i));
-      }
-    }
-    visit([&](size_t dst, size_t src) { add(dst, read(updates, src)); });
-    std::vector<std::unique_ptr<ScatterFloatSum>> repairs(size);
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] > 1 && special[i] == 0 && !std::isfinite(sums[i] + corrections[i])) {
-        repairs[i] = std::make_unique<ScatterFloatSum>();
-        repairs[i]->Add(read(data, i));
-      }
-    }
-    visit([&](size_t dst, size_t src) {
-      if (repairs[dst]) {
-        repairs[dst]->Add(read(updates, src));
-      }
-    });
-    for (size_t i = 0; i < size; ++i) {
-      if (counts[i] == 1) {
-        continue; // Retains untouched NaN payloads and signed zeros bit-for-bit.
+      ScatterFloatSum sum;
+      uint8_t special = 0;
+      const auto add = [&](T value) {
+        if (std::isnan(value)) {
+          special |= 1;
+        } else if (std::isinf(value)) {
+          special |= std::signbit(value) ? 2 : 4;
+        } else {
+          sum.Add(static_cast<double>(value));
+        }
+      };
+      add(read(data, dst));
+      for (size_t i = begin; i < end; ++i) {
+        add(read(updates, destinations[i].second));
       }
       double value;
-      if ((special[i] & 1) || (special[i] & 6) == 6) {
+      if ((special & 1) || (special & 6) == 6) {
         value = std::numeric_limits<double>::quiet_NaN();
-      } else if (special[i] != 0) {
-        value = special[i] & 2 ? -std::numeric_limits<double>::infinity()
-                               : std::numeric_limits<double>::infinity();
+      } else if (special != 0) {
+        value = special & 2 ? -std::numeric_limits<double>::infinity()
+                            : std::numeric_limits<double>::infinity();
       } else {
-        value = repairs[i] ? repairs[i]->Mean(counts[i])
-                           : (sums[i] + corrections[i]) / static_cast<double>(counts[i]);
-        value = std::clamp(value, -scales[i], scales[i]);
+        value = sum.Mean(count);
       }
-      write(output, i, static_cast<T>(value));
+      results.emplace_back(dst, static_cast<T>(value));
     }
+    begin = end;
+  }
+  for (const auto &[dst, value] : results) {
+    write(output, dst, value);
   }
 }
 

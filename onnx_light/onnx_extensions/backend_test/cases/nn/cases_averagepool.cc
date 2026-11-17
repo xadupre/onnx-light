@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/random.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
@@ -112,6 +113,30 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (int64_t version : {11, 19, 29}) {
+    for (int variant = 0; variant < 3; ++variant) {
+      const bool include_pad = variant == 1;
+      const int64_t pad = variant == 2 ? 1 : 0;
+      NodeProto node;
+      node.set_op_type("AveragePool");
+      node.add_input("x");
+      node.add_output("y");
+      AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {7, 7});
+      AddAttribute<std::vector<int64_t>>(node, "pads", {pad, pad, pad, pad});
+      AddAttribute<int64_t>(node, "count_include_pad", include_pad);
+      Expect(registry, std::move(node),
+             "test_cc_averagepool_float16_large_window_sum_opset_" + std::to_string(version) +
+                 "_variant_" + std::to_string(variant),
+             {DefaultOpset(version)}, [pad]() -> IoData {
+               // The full window sum (68600) overflows FLOAT16, but its average does not.
+               const int64_t side = 1 + 2 * pad;
+               return IoData{{MakeFloat16Tensor("", {1, 1, 7, 7}, std::vector<float>(49, 1400.0f))},
+                             {MakeFloat16Tensor("", {1, 1, side, side},
+                                                std::vector<float>(side * side, 1400.0f))}};
+             });
+    }
   }
 
   // Default 2x2 kernel on a 1x1x4x4 input.

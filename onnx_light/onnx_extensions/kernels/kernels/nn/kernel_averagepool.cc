@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
@@ -87,8 +88,9 @@ void ResolveAutoPadAxis(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64_
 Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                                const Shape &pads, bool ceil_mode, bool count_include_pad,
                                const Shape &dilations, AutoPad auto_pad, RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::AveragePool: x must be FLOAT.");
+  const bool half = x.data_type == static_cast<int32_t>(DataType::FLOAT16);
+  EXT_ENFORCE_INVALID(half || x.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::AveragePool: x must be FLOAT or FLOAT16.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
                       "kernel::AveragePool: kernel_shape must be non-empty.");
   EXT_ENFORCE_INVALID(
@@ -165,10 +167,9 @@ Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const
   for (int64_t d : out_shape) {
     n_out *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(n_out) * sizeof(float);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  const size_t out_n_bytes = static_cast<size_t>(n_out) * (half ? sizeof(uint16_t) : sizeof(float));
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, out_shape, out_n_bytes, nullptr);
   // Forward to the in-place overload with auto_pad already resolved into
   // explicit pads (so the in-place overload need not duplicate the
   // resolution logic).
@@ -180,10 +181,11 @@ Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const
 void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                              const Shape &pads, bool ceil_mode, bool count_include_pad,
                              Tensor &output, const Shape &dilations, AutoPad auto_pad) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::AveragePool: x must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::AveragePool: output must be FLOAT.");
+  const bool half = x.data_type == static_cast<int32_t>(DataType::FLOAT16);
+  EXT_ENFORCE_INVALID(half || x.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::AveragePool: x must be FLOAT or FLOAT16.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                      "kernel::AveragePool: output type must match x.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty() && x.shape.size() == kernel_shape.size() + 2,
                       "kernel::AveragePool: x rank must equal kernel_shape.size() + 2.");
   const size_t k = kernel_shape.size();
@@ -245,11 +247,13 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
     n_out *= d;
   }
   EXT_ENFORCE_INVALID(
-      output.size_bytes() == static_cast<size_t>(n_out) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(n_out) * (half ? sizeof(uint16_t) : sizeof(float)),
       "kernel::AveragePool preallocated output buffer has unexpected size in bytes.");
 
-  const float *px = x.AsFloat();
+  const float *px = half ? nullptr : x.AsFloat();
+  const uint16_t *px_half = half ? reinterpret_cast<const uint16_t *>(x.bytes()) : nullptr;
   float *py = reinterpret_cast<float *>(output.mutable_bytes());
+  uint16_t *py_half = reinterpret_cast<uint16_t *>(output.mutable_bytes());
 
   const Shape in_strides = RowMajorStrides(x.shape);
   const Shape out_strides = RowMajorStrides(output.shape);
@@ -317,7 +321,8 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
             }
           }
           if (in_input) {
-            sum += static_cast<double>(px[in_offset]);
+            sum += static_cast<double>(half ? core::runtime::Float16BitsToFloat(px_half[in_offset])
+                                            : px[in_offset]);
             ++valid_count;
           }
         }
@@ -326,7 +331,13 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
         for (size_t i = 0; i < k; ++i) {
           out_offset += out_idx[i] * out_strides[i + 2];
         }
-        py[out_offset] = denom == 0 ? 0.0f : static_cast<float>(sum / static_cast<double>(denom));
+        const float average =
+            denom == 0 ? 0.0f : static_cast<float>(sum / static_cast<double>(denom));
+        if (half) {
+          py_half[out_offset] = core::runtime::FloatToFloat16Bits(average);
+        } else {
+          py[out_offset] = average;
+        }
       }
     }
   }

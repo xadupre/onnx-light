@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -29,6 +30,28 @@ class StructTypeCatalogue;
 }
 
 namespace ONNX_LIGHT_NAMESPACE::checker {
+/** Stable identifiers for checker rules; rules without a code report an empty string. */
+namespace error_code {
+inline constexpr std::string_view kIrVersionMissing = "ir-version-missing";
+inline constexpr std::string_view kIrVersionUnsupported = "ir-version-unsupported";
+inline constexpr std::string_view kMetadataPropsDuplicateKey = "metadata-props-duplicate-key";
+inline constexpr std::string_view kRequiredFieldMissing = "required-field-missing";
+inline constexpr std::string_view kRequiredFieldEmpty = "required-field-empty";
+inline constexpr std::string_view kDataTypeRequiresNewerIrVersion =
+    "data-type-requires-newer-ir-version";
+inline constexpr std::string_view kOpsetImportMissing = "opset-import-missing";
+inline constexpr std::string_view kOperatorNotRegistered = "operator-not-registered";
+inline constexpr std::string_view kOperatorDeprecated = "operator-deprecated";
+inline constexpr std::string_view kNodeSchemaMismatch = "node-schema-mismatch";
+inline constexpr std::string_view kInputNotDefined = "input-not-defined";
+inline constexpr std::string_view kNotSsa = "not-ssa";
+inline constexpr std::string_view kGraphOutputNotProduced = "graph-output-not-produced";
+inline constexpr std::string_view kExternalDataEntryInvalid = "external-data-entry-invalid";
+inline constexpr std::string_view kExternalDataLocationInvalid = "external-data-location-invalid";
+inline constexpr std::string_view kExternalDataFileMissing = "external-data-file-missing";
+inline constexpr std::string_view kExternalDataOutOfRange = "external-data-out-of-range";
+} // namespace error_code
+
 /**
  * Exception type thrown by checker routines when validation fails.
  *
@@ -41,7 +64,12 @@ namespace ONNX_LIGHT_NAMESPACE::checker {
 class ONNX_LIGHT_LIB_API ValidationError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
+  /** Constructs an error whose code must outlive the exception, such as an error_code constant. */
+  ValidationError(const std::string &message, std::string_view code)
+      : std::runtime_error(message), code_(code) {}
   ~ValidationError() override;
+  /** Returns the stable rule identifier, or an empty string for uncoded rules. */
+  std::string_view code() const noexcept { return code_; }
   /**
    * Returns the error message, including any appended context.
    *
@@ -66,6 +94,7 @@ public:
 
 private:
   std::string expanded_message_;
+  std::string_view code_;
 };
 
 /**
@@ -76,6 +105,10 @@ private:
 #define fail_check(...)                                                                            \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::checker::ValidationError(                                    \
       ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
+
+#define fail_check_with_code(code, ...)                                                            \
+  ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::checker::ValidationError(                                    \
+      ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__), code))
 
 /**
  * Stores checker configuration shared across recursive validation calls.

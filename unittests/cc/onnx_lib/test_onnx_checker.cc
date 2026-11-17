@@ -30,6 +30,151 @@ using ONNX_LIGHT_NAMESPACE::ScopedFd;
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Test {
 
+TEST(CHECKER, ValidationErrorCodeTest) {
+#ifndef ONNX_NO_EXCEPTIONS
+  auto expect_code = [](const auto &check, std::string_view code) {
+    try {
+      check();
+      ADD_FAILURE() << "expected a ValidationError";
+    } catch (const checker::ValidationError &error) {
+      EXPECT_EQ(error.code(), code);
+    }
+  };
+  ModelProto model;
+  expect_code([&]() { checker::check_model(model); }, checker::error_code::kIrVersionMissing);
+  model.set_ir_version(10);
+  expect_code([&]() { checker::check_model(model); }, checker::error_code::kOpsetImportMissing);
+  model.add_opset_import()->set_version(21);
+  expect_code([&]() { checker::check_model(model); }, checker::error_code::kRequiredFieldEmpty);
+
+  checker::ValidationError uncoded("message");
+  EXPECT_TRUE(uncoded.code().empty());
+  checker::ValidationError error("message", checker::error_code::kInputNotDefined);
+  error.AppendContext("node");
+  checker::ValidationError copy = error;
+  EXPECT_EQ(copy.code(), checker::error_code::kInputNotDefined);
+  EXPECT_EQ(std::string(copy.what()), "message\n\n==> Context: node");
+  expect_code([&]() { throw copy; }, checker::error_code::kInputNotDefined);
+
+  const auto *schema = OpSchemaRegistry::Schema("Add", 21);
+  ASSERT_NE(schema, nullptr);
+  NodeProto node;
+  node.set_op_type("Add");
+  node.add_input("x");
+  node.add_output("y");
+  expect_code([&]() { schema->Verify(node); }, checker::error_code::kNodeSchemaMismatch);
+  node.add_input("x");
+  node.ref_output().clear();
+  expect_code([&]() { schema->Verify(node); }, checker::error_code::kNodeSchemaMismatch);
+  node.add_output("y");
+  OpSchema constrained;
+  constrained.SetName("Constrained")
+      .Input(0, "x", "input", "T", OpSchema::Variadic)
+      .Output(0, "y", "output", "T", OpSchema::Variadic)
+      .TypeConstraint("T", {"tensor(float)"}, "float")
+      .NumInputs({1, 3})
+      .NumOutputs({1, 3});
+  constrained.Finalize();
+  expect_code([&]() { constrained.Verify(node); }, checker::error_code::kNodeSchemaMismatch);
+  node.ref_input().clear();
+  node.add_input("x");
+  node.add_output("z");
+  expect_code([&]() { constrained.Verify(node); }, checker::error_code::kNodeSchemaMismatch);
+  constrained.Deprecate();
+  expect_code([&]() { constrained.Verify(node); }, checker::error_code::kOperatorDeprecated);
+#endif
+}
+
+TEST(CHECKER, ExternalDataErrorCodes) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const fs::path dir = "onnx_light_external_error_codes";
+  ASSERT_TRUE(fs::create_directory(dir));
+  ScopeExit cleanup([&]() noexcept {
+    std::error_code cleanup_error;
+    fs::remove_all(dir, cleanup_error);
+  });
+  {
+    std::ofstream out(dir / "weights.bin", std::ios::binary);
+    out << "01234567";
+  }
+  fs::create_directory(dir / "directory");
+  checker::CheckerContext ctx;
+  ctx.set_model_dir(path_to_utf8(dir));
+  TensorProto tensor;
+  tensor.set_name("w");
+  tensor.set_data_type(TensorProto::FLOAT);
+  tensor.add_dims(2);
+  tensor.set_data_location(TensorProto::EXTERNAL);
+  auto *location = tensor.add_external_data();
+  location->set_key("location");
+  location->set_value("weights.bin");
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+
+  auto expect_code = [&](std::string_view code) {
+    try {
+      checker::check_tensor(tensor, ctx);
+      ADD_FAILURE() << "expected a ValidationError";
+    } catch (const checker::ValidationError &error) {
+      EXPECT_EQ(error.code(), code);
+    }
+  };
+  for (const auto &invalid : {"", "../weights.bin", "a/b/c.bin", "directory"}) {
+    SCOPED_TRACE(invalid);
+    location->set_value(invalid);
+    expect_code(checker::error_code::kExternalDataLocationInvalid);
+  }
+  location->set_value("missing.bin");
+  expect_code(checker::error_code::kExternalDataFileMissing);
+  location->set_value("weights.bin");
+  auto *offset = tensor.add_external_data();
+  offset->set_key("offset");
+  for (const auto &invalid : {"", "-1", "+2", " 2", "abc", "18446744073709551616"}) {
+    SCOPED_TRACE(invalid);
+    offset->set_value(invalid);
+    expect_code(checker::error_code::kExternalDataEntryInvalid);
+  }
+  offset->set_value("9");
+  expect_code(checker::error_code::kExternalDataOutOfRange);
+  offset->set_value("1");
+  expect_code(checker::error_code::kExternalDataOutOfRange);
+  offset->set_value("0");
+  auto *length = tensor.add_external_data();
+  length->set_key("length");
+  for (const auto &invalid : {"9", "7"}) {
+    length->set_value(invalid);
+    expect_code(checker::error_code::kExternalDataOutOfRange);
+  }
+  length->set_value("invalid");
+  expect_code(checker::error_code::kExternalDataEntryInvalid);
+  ctx.set_skip_external_data_location_check(true);
+  expect_code(checker::error_code::kExternalDataEntryInvalid);
+  length->set_value("8");
+  location->set_value("missing.bin");
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  ctx.set_skip_external_data_location_check(false);
+  for (const auto &synthetic : {"#memory", "./#memory", "#unused/../#memory"}) {
+    location->set_value(synthetic);
+    EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  }
+  tensor.set_raw_data("01234567");
+  expect_code(checker::error_code::kExternalDataEntryInvalid);
+  tensor.clear_raw_data();
+  location->set_value("weights.bin");
+
+  std::error_code ec;
+  fs::create_symlink("weights.bin", dir / "symbolic.bin", ec);
+  if (!ec) {
+    location->set_value("symbolic.bin");
+    expect_code(checker::error_code::kExternalDataLocationInvalid);
+  }
+  fs::create_hard_link(dir / "weights.bin", dir / "hard.bin", ec);
+  if (!ec) {
+    location->set_value("hard.bin");
+    expect_code(checker::error_code::kExternalDataLocationInvalid);
+  }
+#endif
+}
+
 TEST(CHECKER, RejectsUnknownTensorDataType) {
   checker::CheckerContext ctx;
   for (int dtype : {-1, 999}) {

@@ -4747,7 +4747,10 @@ TEST(RunModel, NestedLocalFunctionRestoresAllValueStoresAndSlots) {
   rt.PutShape("tmp", {42});
   rt.PutMap("map", core::runtime::Map("map", Tensor::FromInt64("", {1}, {5}),
                                       Tensor::FromFloat("", {1}, {8})));
-  rt.PutValue("value", core::runtime::RuntimeValue(Tensor::FromFloat("", {}, {9})));
+  core::runtime::RuntimeValue value;
+  value.fields.emplace("payload", core::runtime::RuntimeValue(Tensor::FromFloat("", {}, {9})));
+  rt.PutValue("value", std::move(value));
+  ASSERT_EQ(rt.values().count("value"), 1u);
   rt.Put("unrelated", Tensor::FromFloat("", {}, {10}));
   const uint32_t unrelated_slot = rt.ResolveValueSlot("unrelated");
   const uint64_t directory = rt.value_directory_identity();
@@ -4776,7 +4779,7 @@ TEST(RunModel, NestedLocalFunctionRestoresAllValueStoresAndSlots) {
     EXPECT_EQ(rt.GetShape("tmp"), (core::runtime::Shape{42}));
     EXPECT_FLOAT_EQ(rt.GetSequence("out").at(0).AsFloat()[0], 7);
     EXPECT_FLOAT_EQ(rt.GetMap("map").values.AsFloat()[0], 8);
-    EXPECT_FLOAT_EQ(rt.values().at("value").tensor.AsFloat()[0], 9);
+    EXPECT_FLOAT_EQ(rt.values().at("value").fields.at("payload").tensor.AsFloat()[0], 9);
     EXPECT_FALSE(rt.HasValue("scratch"));
     EXPECT_FALSE(rt.HasValue("scratch_shape"));
   }

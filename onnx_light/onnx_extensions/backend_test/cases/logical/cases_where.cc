@@ -73,6 +73,36 @@ void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  for (const int64_t version : {16, 20}) {
+    const OpsetId bf16_opset = DefaultOpset(version);
+    {
+      NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+      Expect(registry, std::move(node), "test_cc_where_bfloat16_opset_" + std::to_string(version),
+             {bf16_opset}, {2, 2, 2}, {2}, []() -> IoData {
+               Tensor condition = Tensor::FromBool("condition", {2}, {1, 0});
+               Tensor x = MakeBfloat16Tensor("x", {2}, {1.0f, 2.0f});
+               Tensor y = MakeBfloat16Tensor("y", {2}, {3.0f, 4.0f});
+               Tensor output = MakeBfloat16Tensor("output", {2}, {1.0f, 4.0f});
+               return IoData{{std::move(condition), std::move(x), std::move(y)},
+                             {std::move(output)}};
+             });
+    }
+    {
+      NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+      Expect(registry, std::move(node),
+             "test_cc_where_bfloat16_bcast_opset_" + std::to_string(version), {bf16_opset},
+             {2, 3, 1}, {6}, []() -> IoData {
+               Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
+               Tensor x = MakeBfloat16Tensor("x", {1, 3}, {1.0f, 2.0f, 3.0f});
+               Tensor y = MakeBfloat16Tensor("y", {}, {-4.0f});
+               Tensor output =
+                   MakeBfloat16Tensor("output", {2, 3}, {1.0f, 2.0f, 3.0f, -4.0f, -4.0f, -4.0f});
+               return IoData{{std::move(condition), std::move(x), std::move(y)},
+                             {std::move(output)}};
+             });
+    }
+  }
+
   {
     NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
     Expect(registry, std::move(node), "test_where_example", {opset}, {4, 4, 4}, {4},

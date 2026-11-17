@@ -5,6 +5,9 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/backend_test/test_case_registry.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 #include "test_case_utils.h"
@@ -13,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -139,6 +143,63 @@ TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
         ExpectTensorEqual(outputs[i], ds.outputs[i]);
       }
     }
+  }
+}
+
+TEST(BackendKernels, ScatterKernelsRunOnBackendTestCases) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (const std::string op : {"ScatterElements", "ScatterND"}) {
+    std::vector<TestCase> cases = CollectTestCases(op);
+    int mean_cases = 0;
+    for (TestCase &tc : cases) {
+      if (tc.name.find("mean") != std::string::npos) {
+        ++mean_cases;
+      }
+      TestCaseUnloadGuard unload_guard(tc);
+      SCOPED_TRACE(tc.name);
+      const KernelContext context{DefaultOpset(GetDefaultOpsetVersion(tc.model()))};
+      const NodeProto &node = tc.model().ref_graph().ref_node()[0];
+      for (const DataSet &ds : tc.data_sets()) {
+        ASSERT_EQ(ds.inputs.size(), 3u);
+        ASSERT_EQ(ds.outputs.size(), 1u);
+        Tensor output;
+        if (op == "ScatterElements") {
+          onnx_kernels::kernel::ScatterElements::Attributes attrs;
+          attrs.axis = GetAttributeOr<int64_t>(node, "axis", 0);
+          attrs.reduction = GetAttributeOr<std::string>(node, "reduction", "none");
+          output = onnx_kernels::kernel::ScatterElements(context)(ds.inputs[0], ds.inputs[1],
+                                                                  ds.inputs[2], attrs);
+        } else {
+          onnx_kernels::kernel::ScatterND::Attributes attrs;
+          attrs.reduction = GetAttributeOr<std::string>(node, "reduction", "none");
+          output = onnx_kernels::kernel::ScatterND(context)(ds.inputs[0], ds.inputs[1],
+                                                            ds.inputs[2], attrs);
+        }
+        EXPECT_EQ(output.data_type, ds.outputs[0].data_type);
+        EXPECT_EQ(output.shape, ds.outputs[0].shape);
+        if (output.data_type == core::runtime::DataType::FLOAT) {
+          for (int64_t i = 0; i < output.element_count(); ++i) {
+            EXPECT_FLOAT_EQ(output.As<float>()[i], ds.outputs[0].As<float>()[i]);
+          }
+        } else {
+          ExpectTensorEqual(output, ds.outputs[0]);
+        }
+        if (tc.name.find("mean") != std::string::npos) {
+          core::runtime::RuntimeContext runtime;
+          for (const Tensor &input : ds.inputs) {
+            runtime.tensors()[input.name] = input;
+          }
+          core::runtime::RuntimeSession session(tc.model());
+          session.Run(runtime);
+          const Tensor &actual = runtime.Get(ds.outputs[0].name);
+          EXPECT_EQ(actual.data_type, output.data_type);
+          EXPECT_EQ(actual.shape, output.shape);
+          ASSERT_EQ(actual.size_bytes(), output.size_bytes());
+          EXPECT_EQ(std::memcmp(actual.bytes(), output.bytes(), output.size_bytes()), 0);
+        }
+      }
+    }
+    EXPECT_GT(mean_cases, 0);
   }
 }
 

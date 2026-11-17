@@ -21,6 +21,7 @@ void ComputeShapeScatterND(ShapesContext &ctx, const NodeProto &node) {
       "ComputeShapeScatterND: ScatterND requires three inputs (data, indices, updates).");
 
   const SymTensor &data = ctx.Get(node.input(0));
+  ValidateScatterReduction(ctx, node, data);
 
   // Output has the same shape and dtype as data.
   ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), data.Shape()));

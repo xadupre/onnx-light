@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_extensions/kernels/kernels/tensor/scatter_mean.inc"
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
@@ -44,7 +46,10 @@ void ReduceSliceTyped(uint8_t *out_bytes, const uint8_t *upd_bytes, std::size_t 
 void ReduceSlice(int32_t data_type, uint8_t *out_bytes, const uint8_t *upd_bytes,
                  std::size_t n_elements, const std::string &reduction) {
   if (reduction == "none") {
-    std::memcpy(out_bytes, upd_bytes, n_elements * ElementSize(data_type));
+    const size_t bytes = n_elements * ElementSize(data_type);
+    if (bytes != 0) {
+      std::memcpy(out_bytes, upd_bytes, bytes);
+    }
     return;
   }
   if (data_type == static_cast<int32_t>(DataType::FLOAT)) {
@@ -71,7 +76,6 @@ Tensor ScatterND::operator()(const Tensor &data, const Tensor &indices, const Te
   const size_t out_n_bytes = data.size_bytes();
   Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, data.shape, out_n_bytes)
                    : MakeOutputTensor(data.data_type, data.shape, out_n_bytes, nullptr));
-  std::memcpy(out.mutable_bytes(), data.bytes(), out_n_bytes);
   (*this)(data, indices, updates, attrs, out);
   return out;
 }
@@ -94,8 +98,10 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   const int64_t q = static_cast<int64_t>(indices.shape.size());
   EXT_ENFORCE_INVALID(q >= 1, "kernel::ScatterND: 'indices' must have rank >= 1.");
   const int64_t k = indices.shape[static_cast<std::size_t>(q - 1)];
-  EXT_ENFORCE_INVALID(k >= 1 && k <= r,
-                      "kernel::ScatterND: last dim of 'indices' must be in [1, rank(data)].");
+  EXT_ENFORCE_INVALID(k >= 0 && k <= r,
+                      "kernel::ScatterND: last dim of 'indices' must be in [0, rank(data)].");
+  EXT_ENFORCE_INVALID(attrs.reduction != "mean" || ctx_.opset.version >= 29,
+                      "kernel::ScatterND: mean requires opset 29 or later.");
 
   // Expected updates shape = indices.shape[:-1] + data.shape[k:]
   onnx_kernels::Shape expected_updates_shape;
@@ -117,21 +123,29 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   }
 
   // Number of index tuples = prod(indices.shape[:-1]).
-  int64_t n_tuples = 1;
-  for (int64_t i = 0; i < q - 1; ++i) {
-    n_tuples *= indices.shape[static_cast<std::size_t>(i)];
-  }
+  const int64_t n_tuples =
+      indices.shape.product(0, static_cast<size_t>(q - 1), "kernel::ScatterND index tuples");
 
   // Number of elements per slice = prod(data.shape[k:]).
-  int64_t slice_elems = 1;
-  for (int64_t i = k; i < r; ++i) {
-    slice_elems *= data.shape[static_cast<std::size_t>(i)];
+  const int64_t slice_elems =
+      data.shape.product(static_cast<size_t>(k), data.shape.size(), "kernel::ScatterND slice");
+  if (k == 0 && slice_elems == 0) {
+    if (attrs.reduction == "mean") {
+      detail::ScatterMean(data, updates, output, {}, 0);
+    } else {
+      ReduceSlice(data.data_type, output.mutable_bytes(), updates.bytes(), 0, attrs.reduction);
+    }
+    return;
+  }
+  if (attrs.reduction == "mean" && n_tuples == 0) {
+    detail::ScatterMean(data, updates, output, {}, 0);
+    return;
   }
 
   // Row-major strides for data (in elements).
   onnx_kernels::Shape data_strides;
   data_strides.assign(static_cast<std::size_t>(r), 1);
-  for (int64_t i = r - 2; i >= 0; --i) {
+  for (int64_t i = (k == 0 || slice_elems == 0) ? -1 : r - 2; i >= 0; --i) {
     data_strides[static_cast<std::size_t>(i)] =
         data_strides[static_cast<std::size_t>(i + 1)] * data.shape[static_cast<std::size_t>(i + 1)];
   }
@@ -140,6 +154,10 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   const int64_t *idx_ptr = reinterpret_cast<const int64_t *>(indices.bytes());
   const int32_t *idx_ptr32 = reinterpret_cast<const int32_t *>(indices.bytes());
 
+  std::vector<int64_t> mean_offsets;
+  if (attrs.reduction == "mean" && slice_elems > 0) {
+    mean_offsets.reserve(static_cast<size_t>(n_tuples));
+  }
   for (int64_t t = 0; t < n_tuples; ++t) {
     int64_t data_offset = 0;
     for (int64_t j = 0; j < k; ++j) {
@@ -149,11 +167,22 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
         v += dim;
       }
       EXT_ENFORCE_INVALID(v >= 0 && v < dim, "kernel::ScatterND: index out of range.");
-      data_offset += v * data_strides[static_cast<std::size_t>(j)];
+      if (slice_elems > 0) {
+        data_offset += v * data_strides[static_cast<std::size_t>(j)];
+      }
+    }
+    if (attrs.reduction == "mean") {
+      if (slice_elems > 0) {
+        mean_offsets.push_back(data_offset);
+      }
+      continue;
     }
     uint8_t *dst = output.mutable_bytes() + static_cast<std::size_t>(data_offset) * elem_size;
     const uint8_t *src = updates.bytes() + static_cast<std::size_t>(t * slice_elems) * elem_size;
     ReduceSlice(data.data_type, dst, src, static_cast<std::size_t>(slice_elems), attrs.reduction);
+  }
+  if (attrs.reduction == "mean") {
+    detail::ScatterMean(data, updates, output, mean_offsets, slice_elems);
   }
 }
 

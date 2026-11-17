@@ -14,6 +14,11 @@ public:
       : Adapter(op_name, OpSetID(29), OpSetID(28)) {}
 
   Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
+    const Symbol reduction{"reduction"};
+    ONNX_ASSERTM(node->kind() != Symbol("ScatterND") || !node->hasAttribute(reduction) ||
+                     node->s(reduction) != "mean",
+                 "Scatter reduction 'mean' cannot be downgraded to opset 28. "
+                 "Keep opset 29 or decompose the mean into scatter sums and counts.");
     ONNX_ASSERTM(node->inputs().size() >= 2, "ND indexing requires at least two inputs.");
     Value *indices = node->inputs()[1];
     ONNX_ASSERTM(!indices->uniqueName().empty(), "ND indexing requires an indices input.");

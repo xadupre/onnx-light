@@ -86,31 +86,60 @@ OpSchema GatherNDSchema(bool allow_int32_indices) {
   return schema;
 }
 
-OpSchema ScatterNDSchema(bool allow_int32_indices) {
-  auto schema = OpSchema()
-                    .SetDoc(kDoc_ScatterND_ver18)
-                    .Attr("reduction",
-                          "Type of reduction to apply: none (default), add, mul, max, min. "
-                          "'none': no reduction applied. "
-                          "'add': reduction using the addition operation. "
-                          "'mul': reduction using the multiplication operation. "
-                          "'max': reduction using the maximum operation. "
-                          "'min': reduction using the minimum operation.",
-                          AttributeProto::STRING, std::string("none"))
-                    .Input(0, "data", "Tensor of rank r >= 1.", "T", OpSchema::Single, true, 1,
-                           OpSchema::Differentiable)
-                    .Input(1, "indices", "Tensor of rank q >= 1.",
-                           allow_int32_indices ? "Tind" : "tensor(int64)", OpSchema::Single, true,
-                           1, OpSchema::NonDifferentiable)
-                    .Input(2, "updates", "Tensor of rank q + r - indices_shape[-1] - 1.", "T",
-                           OpSchema::Single, true, 1, OpSchema::Differentiable)
-                    .Output(0, "output", "Tensor of rank r >= 1.", "T", OpSchema::Single, true, 1,
-                            OpSchema::Differentiable)
-                    .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
-                                    "Constrain input and output types to any tensor type.")
-                    .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput);
+void ScatterReductionShapeInference(InferenceContext &ctx) {
+  const auto *reduction_attr = ctx.getAttribute("reduction");
+  const std::string reduction = reduction_attr ? reduction_attr->s() : "none";
+  if (reduction != "none" && reduction != "add" && reduction != "mul" && reduction != "max" &&
+      reduction != "min" && reduction != "mean") {
+    fail_shape_inference("Invalid scatter reduction '", reduction,
+                         "'. Use one of: none, add, mul, max, min, mean.");
+  }
+  if (reduction == "mean" && ctx.getInputType(0) && ctx.getInputType(0)->has_tensor_type()) {
+    const auto elem_type = ctx.getInputType(0)->tensor_type().elem_type();
+    if (elem_type == TensorProto::BOOL || elem_type == TensorProto::STRING ||
+        elem_type == TensorProto::COMPLEX64 || elem_type == TensorProto::COMPLEX128) {
+      fail_type_inference("Scatter reduction 'mean' requires an integer or floating-point "
+                          "tensor. Cast the inputs to a supported type.");
+    }
+  }
+  propagateShapeAndTypeFromFirstInput(ctx);
+}
+
+OpSchema ScatterNDSchema(bool allow_int32_indices, bool allow_mean) {
+  auto schema =
+      OpSchema()
+          .SetDoc(allow_mean ? kDoc_ScatterND_ver29 : kDoc_ScatterND_ver18)
+          .Attr("reduction",
+                allow_mean
+                    ? "Type of reduction to apply: none (default), add, mul, max, min, mean. "
+                      "'none': no reduction applied. "
+                      "'add': reduction using the addition operation. "
+                      "'mul': reduction using the multiplication operation. "
+                      "'max': reduction using the maximum operation. "
+                      "'min': reduction using the minimum operation. "
+                      "'mean': arithmetic mean of all contributions to each output element."
+                    : "Type of reduction to apply: none (default), add, mul, max, min. "
+                      "'none': no reduction applied. "
+                      "'add': reduction using the addition operation. "
+                      "'mul': reduction using the multiplication operation. "
+                      "'max': reduction using the maximum operation. "
+                      "'min': reduction using the minimum operation.",
+                AttributeProto::STRING, std::string("none"))
+          .Input(0, "data", "Tensor of rank r >= 1.", "T", OpSchema::Single, true, 1,
+                 OpSchema::Differentiable)
+          .Input(1, "indices", "Tensor of rank q >= 1.",
+                 allow_int32_indices ? "Tind" : "tensor(int64)", OpSchema::Single, true, 1,
+                 OpSchema::NonDifferentiable)
+          .Input(2, "updates", "Tensor of rank q + r - indices_shape[-1] - 1.", "T",
+                 OpSchema::Single, true, 1, OpSchema::Differentiable)
+          .Output(0, "output", "Tensor of rank r >= 1.", "T", OpSchema::Single, true, 1,
+                  OpSchema::Differentiable)
+          .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
+                          "Constrain input and output types to any tensor type.")
+          .TypeAndShapeInferenceFunction(allow_mean ? ScatterReductionShapeInference
+                                                    : propagateShapeAndTypeFromFirstInput);
   if (allow_int32_indices) {
-    schema.SetDoc(std::string(kDoc_ScatterND_ver18) +
+    schema.SetDoc(std::string(allow_mean ? kDoc_ScatterND_ver29 : kDoc_ScatterND_ver18) +
                   "\nOpset 29 adds support for int32 indices; int64 indices remain supported.\n");
     schema.TypeConstraint("Tind", {"tensor(int32)", "tensor(int64)"},
                           "Constrain indices to int32 or int64 tensors.");

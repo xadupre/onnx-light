@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_extensions/kernels/kernels/tensor/scatter_mean.inc"
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
@@ -118,6 +120,12 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
     axis += r;
   }
   EXT_ENFORCE_INVALID(axis >= 0 && axis < r, "kernel::ScatterElements: axis out of range.");
+  EXT_ENFORCE_INVALID(attrs.reduction != "mean" || ctx_.opset.version >= 29,
+                      "kernel::ScatterElements: mean requires opset 29 or later.");
+  for (int64_t k = 0; k < r; ++k) {
+    EXT_ENFORCE_INVALID(k == axis || indices.shape[k] <= data.shape[k],
+                        "kernel::ScatterElements: non-axis indices dimension exceeds data.");
+  }
 
   // Initialize output as a copy of data (when caller passes a fresh tensor, it
   // may already share storage with data; only copy when the buffers differ).
@@ -132,6 +140,13 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
   const int64_t *idx_values = idx_tensor.As<int64_t>();
   const int64_t total_indices = idx_tensor.element_count();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(axis)];
+  if (attrs.reduction == "mean") {
+    if (total_indices == 0) {
+      detail::ScatterMean(data, updates, output, {}, 1);
+      return;
+    }
+    EXT_ENFORCE_INVALID(axis_dim > 0, "kernel::ScatterElements: index out of range.");
+  }
 
   onnx_kernels::Shape data_strides;
   data_strides.assign(static_cast<std::size_t>(r), 1);
@@ -147,6 +162,27 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
   }
 
   const int32_t dt = data.data_type;
+  if (attrs.reduction == "mean") {
+    std::vector<int64_t> offsets(static_cast<size_t>(total_indices));
+    for (int64_t i = 0; i < total_indices; ++i) {
+      int64_t index = idx_values[i];
+      if (index < 0) {
+        index += axis_dim;
+      }
+      EXT_ENFORCE_INVALID(index >= 0 && index < axis_dim,
+                          "kernel::ScatterElements: index out of range.");
+      int64_t remaining = i;
+      int64_t offset = 0;
+      for (int64_t k = 0; k < r; ++k) {
+        const int64_t coordinate = remaining / idx_strides[k];
+        remaining %= idx_strides[k];
+        offset += (k == axis ? index : coordinate) * data_strides[k];
+      }
+      offsets[static_cast<size_t>(i)] = offset;
+    }
+    detail::ScatterMean(data, updates, output, offsets, 1);
+    return;
+  }
   if (dt == static_cast<int32_t>(DataType::FLOAT)) {
     ApplyScatterElementsTyped<float>(updates, output.mutable_bytes(), idx_values, total_indices,
                                      axis, axis_dim, data_strides, idx_strides, attrs.reduction, r);
@@ -212,7 +248,7 @@ void ScatterElements::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::ScatterElements::Attributes attrs;
   attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
   attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
-  onnx_kernels::kernel::ScatterElements k(rt.kernel_ctx());
+  onnx_kernels::kernel::ScatterElements k(ctx_);
   SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
 }
 

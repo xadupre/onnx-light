@@ -1510,24 +1510,25 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
         }));
 
-ONNX_OPERATOR_SET_SCHEMA(ScatterND, 29, ScatterNDSchema(true));
+ONNX_OPERATOR_SET_SCHEMA(ScatterND, 29, ScatterNDSchema(true, true));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    ScatterElements, 18,
+    ScatterElements, 29,
     OpSchema()
-        .SetDoc(kDoc_ScatterElements_ver18)
+        .SetDoc(kDoc_ScatterElements_ver29)
         .Attr(
             "axis",
             "Which axis to scatter on. Negative value means "
             "counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(data).",
             AttributeProto::INT, static_cast<int64_t>(0))
         .Attr("reduction",
-              "Type of reduction to apply: none (default), add, mul, max, min. "
+              "Type of reduction to apply: none (default), add, mul, max, min, mean. "
               "'none': no reduction applied. "
               "'add':  reduction using the addition operation. "
-              "'mul': reduction using the multiplication operation."
-              "'max': reduction using the maximum operation."
-              "'min': reduction using the minimum operation.",
+              "'mul': reduction using the multiplication operation. "
+              "'max': reduction using the maximum operation. "
+              "'min': reduction using the minimum operation. "
+              "'mean': arithmetic mean of all contributions to each output element.",
               AttributeProto::STRING, std::string("none"))
         .Input(0, "data", "Tensor of rank r >= 1.", "T", OpSchema::Single, true, 1,
                OpSchema::Differentiable)
@@ -1545,12 +1546,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "Input and output types can be of any tensor type.")
         .TypeConstraint("Tind", {"tensor(int32)", "tensor(int64)"},
                         "Constrain indices to integer types")
-        .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
-          propagateElemTypeFromInputToOutput(ctx, 0, 0);
-          if (hasNInputShapes(ctx, 1)) {
-            propagateShapeFromInputToOutput(ctx, 0, 0);
-          }
-        }));
+        .TypeAndShapeInferenceFunction(ScatterReductionShapeInference));
 
 ONNX_OPERATOR_SET_SCHEMA(
     Gather, 13,

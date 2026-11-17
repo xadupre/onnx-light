@@ -748,6 +748,10 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node);
 
+/// Validates opset-29 scatter reduction names and mean element types.
+void ValidateScatterReduction(const ShapesContext &ctx, const NodeProto &node,
+                              const SymTensor &data);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of a deprecated ``Scatter``
  * node and stores it in ``ctx``.

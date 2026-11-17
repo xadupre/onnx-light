@@ -7,7 +7,7 @@ from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignor
 
 _checker = _C.checker  # type: ignore
 
-#: Raised when a model or proto fails validation.
+#: Raised when a model or proto fails validation; ``code`` is a stable rule identifier or None.
 ValidationError = _checker.ValidationError
 
 
@@ -30,7 +30,10 @@ def check_model(
     it disables safety checks that guard against unsafe external data paths.
 
     Raises:
-        ValidationError: If the model fails validation.
+        ValidationError: If the model fails validation. Its ``code`` attribute names
+            the failed rule, such as ``"input-not-defined"``, or is None for rules
+            without a code. Codes are stable across releases; messages are not.
+            See :doc:`/api/python/onnx/checker` for the error-code reference.
     """
     _checker.check_model(
         model,

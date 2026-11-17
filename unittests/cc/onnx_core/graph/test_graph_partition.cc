@@ -1,8 +1,11 @@
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/graph/graph_partition.h"
 #include <gtest/gtest.h>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <tuple>
+#include <unordered_set>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::graph;
@@ -36,7 +39,168 @@ GraphProto Chain(size_t count = 2) {
   return graph;
 }
 
+// Rescans each interval's complete boundary, independently of incremental costs.
+std::vector<OperatorGroup> ScanningProposal(const GraphProto &graph,
+                                            const OperatorGroupOptions &options,
+                                            const std::unordered_map<std::string, uint64_t> &sizes,
+                                            const std::set<size_t> &excluded) {
+  std::unordered_set<std::string> constants, graph_inputs;
+  for (const auto &value : graph.input())
+    graph_inputs.insert(value.name());
+  for (const auto &value : graph.initializer())
+    if (!graph_inputs.count(value.name()))
+      constants.insert(value.name());
+  std::vector<size_t> indices;
+  std::vector<std::vector<std::string>> inputs;
+  std::unordered_map<std::string, size_t> producer, last_use;
+  for (size_t i = 0; i < graph.node().size(); ++i) {
+    const auto &node = graph.node()[i];
+    if (node.op_type() == "Constant") {
+      for (const auto &name : node.output())
+        constants.insert(name);
+      continue;
+    }
+    inputs.push_back(CollectNodeInputs(node));
+    for (const auto &name : inputs.back())
+      last_use[name] = indices.size();
+    for (const auto &name : node.output())
+      if (!name.empty())
+        producer[name] = indices.size();
+    indices.push_back(i);
+  }
+  for (const auto &value : graph.output())
+    last_use[value.name()] = indices.size();
+  struct State {
+    uint64_t unknown = 0, bytes = 0;
+    size_t grouped = 0;
+    std::vector<OperatorGroup> groups;
+  };
+  std::vector<std::optional<State>> best(indices.size() + 1);
+  best[0] = State{};
+  auto update = [&](size_t position, const State &state) {
+    const auto &old = best[position];
+    if (!old || std::tie(state.unknown, state.bytes) < std::tie(old->unknown, old->bytes) ||
+        (std::tie(state.unknown, state.bytes) == std::tie(old->unknown, old->bytes) &&
+         state.grouped > old->grouped))
+      best[position] = state;
+  };
+  for (size_t start = 0; start < indices.size(); ++start) {
+    for (size_t end = start; end < indices.size() && end - start < options.max_group_nodes; ++end) {
+      OperatorGroup group;
+      std::unordered_set<std::string> seen;
+      size_t constant_inputs = 0;
+      bool blocked = false;
+      for (size_t i = start; i <= end; ++i) {
+        group.node_indices.push_back(indices[i]);
+        blocked = blocked || excluded.count(indices[i]);
+        for (const auto &name : inputs[i])
+          if ((!producer.count(name) || producer.at(name) < start) && seen.insert(name).second) {
+            group.inputs.push_back(name);
+            constant_inputs += constants.count(name);
+          }
+        for (const auto &name : graph.node()[indices[i]].output())
+          if (last_use.count(name) && last_use.at(name) > end)
+            group.outputs.push_back(name);
+      }
+      State state = *best[start];
+      uint64_t unknown = 0, bytes = 0;
+      for (const auto *names : {&group.inputs, &group.outputs})
+        for (const auto &name : *names) {
+          if (constants.count(name))
+            continue;
+          if (sizes.count(name))
+            bytes += sizes.at(name);
+          else
+            ++unknown;
+        }
+      state.unknown += unknown;
+      state.bytes += bytes;
+      if (end == start)
+        update(end + 1, state);
+      if (blocked ||
+          (options.max_constant_inputs && constant_inputs > *options.max_constant_inputs) ||
+          end - start + 1 < options.min_group_nodes || group.outputs.empty() ||
+          (options.max_boundary_bytes && (unknown || bytes > *options.max_boundary_bytes)))
+        continue;
+      state.grouped += end - start + 1;
+      if (!unknown)
+        group.transfer_bytes = bytes;
+      state.groups.push_back(std::move(group));
+      update(end + 1, state);
+    }
+  }
+  return best.back()->groups;
+}
+
 } // namespace
+
+TEST(GraphPartition, IncrementalCostsMatchScanningReference) {
+  std::mt19937 random(5922);
+  for (size_t trial = 0; trial < 80; ++trial) {
+    GraphProto graph;
+    std::unordered_map<std::string, uint64_t> sizes;
+    graph.add_input()->set_name("x");
+    graph.add_input()->set_name("overridable");
+    graph.add_initializer()->set_name("overridable");
+    std::vector<std::string> available{"x", "overridable"};
+    for (size_t i = 0; i < 9; ++i) {
+      const auto weight = "w" + std::to_string(i);
+      graph.add_initializer()->set_name(weight);
+      if (i == 3) {
+        auto *constant = graph.add_node();
+        constant->set_op_type("Constant");
+        constant->add_output("constant");
+        available.push_back("constant");
+      }
+      auto *node = graph.add_node();
+      node->set_op_type("Add");
+      node->add_input(available[random() % available.size()]);
+      node->add_input(available[random() % available.size()]);
+      node->add_input(weight);
+      node->add_input(weight);
+      node->add_input("");
+      for (size_t port = 0; port < 2; ++port) {
+        const auto output = "v" + std::to_string(i) + "_" + std::to_string(port);
+        node->add_output(output);
+        available.push_back(output);
+        if (random() % 3 == 0)
+          graph.add_output()->set_name(output);
+      }
+      if (i == 6) {
+        auto *body = node->add_attribute();
+        body->set_type(AttributeProto::GRAPH);
+        auto *capture = body->mutable_g()->add_node();
+        capture->add_input("v0_0");
+        capture->add_output("nested");
+        body->mutable_g()->add_output()->set_name("nested");
+      }
+    }
+    graph.add_output()->set_name(available.back());
+    for (const auto &name : available)
+      if (random() % 4)
+        sizes[name] = random() % 5 == 0 ? 0 : random() % 100;
+    for (const auto cap :
+         {std::optional<uint64_t>{}, std::optional<uint64_t>{0}, std::optional<uint64_t>{200}}) {
+      OperatorGroupOptions options;
+      options.max_boundary_bytes = cap;
+      options.min_group_nodes = 2 + trial % 2;
+      options.max_group_nodes = 3 + trial % 7;
+      if (trial % 3)
+        options.max_constant_inputs = trial % 5;
+      const std::set<size_t> excluded = trial % 2 ? std::set<size_t>{4, 7} : std::set<size_t>{};
+      SCOPED_TRACE(trial);
+      const auto expected = ScanningProposal(graph, options, sizes, excluded);
+      const auto actual = ProposeOperatorGroups(graph, options, sizes, excluded).groups;
+      ASSERT_EQ(actual.size(), expected.size());
+      for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(actual[i].node_indices, expected[i].node_indices);
+        EXPECT_EQ(actual[i].inputs, expected[i].inputs);
+        EXPECT_EQ(actual[i].outputs, expected[i].outputs);
+        EXPECT_EQ(actual[i].transfer_bytes, expected[i].transfer_bytes);
+      }
+    }
+  }
+}
 
 TEST(GraphPartition, ConstantInputLimitCountsDistinctWeightsBeforeInternalization) {
   auto graph = Chain(4);
@@ -295,6 +459,24 @@ TEST(GraphPartition, ExcludedNodesSplitIntervalsWithoutDiscardingEligibleNeighbo
   constant.set_op_type("Constant");
   constant.clear_input();
   EXPECT_TRUE(ProposeOperatorGroups(constants, {}, {}, {1}).groups.empty());
+}
+
+TEST(GraphPartition, ExpiringOutputsRestoreKnownRepresentableBoundaryCosts) {
+  auto graph = Chain(4);
+  graph.mutable_node(0)->add_output("side");
+  graph.mutable_node(2)->add_input("side");
+  const auto groups =
+      ProposeOperatorGroups(graph, {8, 2, 3},
+                            {{"v0", UINT64_MAX}, {"v1", UINT64_MAX}, {"side", UINT64_MAX}})
+          .groups;
+  ASSERT_EQ(groups.size(), 1u);
+  EXPECT_EQ(groups[0].node_indices, (std::vector<size_t>{0, 1, 2}));
+  EXPECT_EQ(groups[0].outputs, (std::vector<std::string>{"v2"}));
+  EXPECT_EQ(groups[0].transfer_bytes, 8u);
+  const auto unknown = ProposeOperatorGroups(graph, {8, 2, 3}).groups;
+  ASSERT_EQ(unknown.size(), 1u);
+  EXPECT_EQ(unknown[0].node_indices, groups[0].node_indices);
+  EXPECT_EQ(unknown[0].transfer_bytes, 8u);
 }
 
 TEST(GraphPartition, RepresentableByteSizesDoNotOverflowBitIntermediates) {

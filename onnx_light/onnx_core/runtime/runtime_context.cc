@@ -768,6 +768,21 @@ RuntimeContext RuntimeContext::MakeIsolatedContext() const {
   return isolated;
 }
 
+void RuntimeContext::SwapValues(RuntimeContext &other) noexcept {
+  tensors_.swap(other.tensors_);
+  tensor_slots_.swap(other.tensor_slots_);
+  std::swap(tensor_map_may_be_modified_, other.tensor_map_may_be_modified_);
+  values_.swap(other.values_);
+  sequences_.swap(other.sequences_);
+  maps_.swap(other.maps_);
+  shapes_.swap(other.shapes_);
+  value_slots_.swap(other.value_slots_);
+  value_slot_names_.swap(other.value_slot_names_);
+  std::swap(value_directory_identity_, other.value_directory_identity_);
+  std::swap(current_input_slots_, other.current_input_slots_);
+  std::swap(current_output_slots_, other.current_output_slots_);
+}
+
 void RuntimeContext::ResetInvocation() noexcept {
   tensors_.clear();
   std::fill(tensor_slots_.begin(), tensor_slots_.end(), nullptr);

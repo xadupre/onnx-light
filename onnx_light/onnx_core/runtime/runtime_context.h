@@ -857,8 +857,16 @@ public:
 
   /// Resolves ``name`` to its stable invocation-wide value slot, inserting it
   /// into the directory on first use. Slots are never recycled or renumbered
-  /// while this context is alive, including during nested graph execution.
+  /// within a value scope, including during nested graph execution.
   uint32_t ResolveValueSlot(const std::string &name);
+
+  /// Exchanges all value stores and their stable slot directory in constant time.
+  /// Active node-slot bindings follow their directory.
+  /// Execution allocators and diagnostics remain unchanged; allocator/resource
+  /// references in the value stores move with those stores. Both contexts must
+  /// keep any allocators/resources referenced by stored values alive until those
+  /// values are restored or destroyed.
+  void SwapValues(RuntimeContext &other) noexcept;
 
   /// Seeds the stable value directory from a reusable execution plan.
   void RegisterValueNames(const std::vector<std::string> &names);

@@ -115,6 +115,31 @@ private:
   RawBufferAllocator *execution_allocator_;
 };
 
+class ScopedRuntimeValues {
+public:
+  ScopedRuntimeValues(RuntimeContext &rt, RuntimeContext &local_values)
+      : rt_(rt), local_values_(local_values) {
+    rt_.SwapValues(local_values_);
+  }
+  ~ScopedRuntimeValues() { Restore(); }
+
+  ScopedRuntimeValues(const ScopedRuntimeValues &) = delete;
+  ScopedRuntimeValues &operator=(const ScopedRuntimeValues &) = delete;
+
+  void Restore() noexcept {
+    if (!active_)
+      return;
+    rt_.SwapValues(local_values_);
+    local_values_.ResetInvocation();
+    active_ = false;
+  }
+
+private:
+  RuntimeContext &rt_;
+  RuntimeContext &local_values_;
+  bool active_ = true;
+};
+
 class ScopedRuntimeBindings {
 public:
   explicit ScopedRuntimeBindings(RuntimeContext &rt) : rt_(rt) {}
@@ -1048,6 +1073,8 @@ namespace {
 // The bound function (with resolved attribute references) is computed once at
 // construction time, and the execution plan + per-node kernel instances are
 // resolved on the first ``Run`` and reused across all subsequent calls.
+// RuntimeSession requires callers to serialize runs on the same session; this
+// kernel's reusable local value context relies on that guarantee.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
@@ -1081,7 +1108,6 @@ public:
         " output(s), got ", node_->output_size(), ".");
 
     ScopedNestedSessionState nested_state(rt, std::nullopt);
-    ScopedRuntimeBindings bindings(rt);
     auto formal_info = [&](const std::string &name) -> const ValueInfoProto * {
       for (const ValueInfoProto &value : func_.value_info())
         if (value.name() == name)
@@ -1257,8 +1283,9 @@ public:
         map_bindings.emplace_back(param_name, std::move(view));
         continue;
       }
-      auto it = rt.tensors().find(caller_name);
-      EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
+      const auto &caller_tensors = std::as_const(rt).tensors();
+      auto it = caller_tensors.find(caller_name);
+      EXT_ENFORCE_INVALID(it != caller_tensors.end(), "RunNode: input '", caller_name,
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
       if (formal != nullptr)
@@ -1266,21 +1293,8 @@ public:
       tensor_bindings.emplace_back(param_name, it->second.BorrowView());
     }
 
-    std::vector<std::string> caller_names;
-    caller_names.reserve(rt.tensors().size() + rt.values().size() + rt.sequences().size() +
-                         rt.maps().size() + rt.shapes().size());
-    for (const auto &[name, value] : rt.tensors())
-      caller_names.push_back(name);
-    for (const auto &[name, value] : rt.values())
-      caller_names.push_back(name);
-    for (const auto &[name, value] : rt.sequences())
-      caller_names.push_back(name);
-    for (const auto &[name, value] : rt.maps())
-      caller_names.push_back(name);
-    for (const auto &[name, value] : rt.shapes())
-      caller_names.push_back(name);
-    for (const std::string &name : caller_names)
-      bindings.Shadow(name);
+    ScopedRuntimeValues value_scope(rt, local_values_);
+    ScopedRuntimeBindings bindings(rt);
     for (const auto &[name, tensor] : tensor_bindings)
       bindings.Bind(name, tensor);
     for (const auto &[name, value] : value_bindings)
@@ -1359,21 +1373,23 @@ public:
       result.name = caller_name;
       output_tensors.emplace_back(caller_name, std::move(result));
     }
+    bindings.Restore();
+    value_scope.Restore();
     for (auto &[name, result] : output_values) {
+      rt.Remove(name);
       rt.PutValue(name, std::move(result));
-      bindings.Keep(name);
     }
     for (auto &[name, result] : output_sequences) {
+      rt.Remove(name);
       rt.PutSequence(name, std::move(result));
-      bindings.Keep(name);
     }
     for (auto &[name, result] : output_maps) {
+      rt.Remove(name);
       rt.PutMap(name, std::move(result));
-      bindings.Keep(name);
     }
     for (auto &[name, result] : output_tensors) {
+      rt.Remove(name);
       rt.Put(name, std::move(result), RuntimeEventKind::kOutput);
-      bindings.Keep(name);
     }
   }
 
@@ -1385,6 +1401,8 @@ private:
   const FunctionMap *model_functions_;
   std::unordered_set<std::string> immutable_inputs_;
   std::unique_ptr<RuntimeSession> session_;
+  // Keeps the function's slot directory reusable, but never retains invocation values.
+  RuntimeContext local_values_;
 };
 
 // Control-flow kernels: each owns the subgraph session(s) built once during

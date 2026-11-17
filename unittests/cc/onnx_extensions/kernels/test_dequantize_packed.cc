@@ -189,6 +189,67 @@ TEST(DequantizePacked, RejectsInvalidLayoutsBeforeEmptyFastPaths) {
   }
 }
 
+TEST(DequantizePacked, Q4_0Q8_0BulkDecodingPreservesLayoutAndFloatIntermediates) {
+  constexpr uint16_t scales[] = {0,      0x8000, 1,      0x8001, 0x03ff, 0x0400, 0x3555,
+                                 0xbc00, 0x7bff, 0xfbff, 0x7c00, 0xfc00, 0x7e00, 0x7c01};
+  for (const std::string format : {"gguf:q4_0", "gguf:q8_0"}) {
+    SCOPED_TRACE(format);
+    const auto &profile = PackedQuantizationLayout(format);
+    for (const size_t blocks : {1, 4095, 4096, 4097, 8193}) {
+      SCOPED_TRACE(blocks);
+      // Borrow read-only, unaligned packed bytes; the runtime has no strided tensor storage.
+      std::vector<uint8_t> storage(1 + blocks * profile.block_bytes);
+      std::vector<float> expected(blocks * 32);
+      for (size_t b = 0; b < blocks; ++b) {
+        uint8_t *p = storage.data() + 1 + b * profile.block_bytes;
+        const uint16_t scale = scales[b % std::size(scales)];
+        Put16(p, scale);
+        for (size_t j = 2; j < profile.block_bytes; ++j)
+          p[j] = (b * 29 + j * 73) & 255;
+        const float d = Float16BitsToFloat(scale);
+        for (size_t j = 0; j < 32; ++j) {
+          const uint8_t q = p[2 + (profile.ggml_type == 2 ? j % 16 : j)];
+          const int value = profile.ggml_type == 2
+                                ? static_cast<int>((q >> (j < 16 ? 0 : 4)) & 15) - 8
+                                : (q < 128 ? q : static_cast<int>(q) - 256);
+          expected[b * 32 + j] = d * static_cast<float>(value);
+        }
+      }
+      const auto original = storage;
+      const Tensor input = Tensor::Borrow(
+          "", TensorProto::UINT8, {static_cast<int64_t>(blocks * profile.block_bytes)},
+          static_cast<const uint8_t *>(storage.data() + 1), storage.size() - 1);
+      const Shape shape{static_cast<int64_t>(blocks), 32};
+      for (const int dtype :
+           {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::DOUBLE}) {
+        SCOPED_TRACE(dtype);
+        const auto output = DequantizePackedTensor(input, format, shape, dtype);
+        EXPECT_EQ(output.shape, shape);
+        EXPECT_EQ(output.data_type, dtype);
+        EXPECT_NE(output.bytes(), input.bytes());
+        for (size_t i = 0; i < expected.size(); ++i) {
+          if (dtype == TensorProto::FLOAT || dtype == TensorProto::DOUBLE) {
+            const double actual =
+                dtype == TensorProto::FLOAT ? output.AsFloat()[i] : output.As<double>()[i];
+            if (std::isnan(expected[i]))
+              ASSERT_TRUE(std::isnan(actual));
+            else
+              ASSERT_EQ(std::bit_cast<uint64_t>(actual),
+                        std::bit_cast<uint64_t>(static_cast<double>(expected[i])));
+          } else {
+            uint16_t actual;
+            std::memcpy(&actual, output.bytes() + 2 * i, sizeof(actual));
+            const uint16_t bits = dtype == TensorProto::FLOAT16 ? FloatToFloat16Bits(expected[i])
+                                                                : FloatToBfloat16Bits(expected[i]);
+            ASSERT_EQ(actual, bits);
+          }
+        }
+      }
+      EXPECT_EQ(storage, original);
+    }
+  }
+}
+
 TEST(DequantizePacked, PreservesNonfiniteAndSignedZeroScales) {
   for (const uint16_t scale :
        {uint16_t{0x7c00}, uint16_t{0xfc00}, uint16_t{0x7e01}, uint16_t{0x8000}}) {

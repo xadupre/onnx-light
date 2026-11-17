@@ -253,7 +253,7 @@ TEST(KernelGeGLU, FunctionExpansionExecutesWithSingleLowPrecisionRounding) {
   ASSERT_NE(schema, nullptr);
   for (const DataType dtype :
        {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
-    for (const std::string mode : {"none", "tanh"}) {
+    for (const std::string mode : {"", "none", "tanh"}) {
       SCOPED_TRACE(static_cast<int32_t>(dtype));
       SCOPED_TRACE(mode);
       ModelProto model;
@@ -272,7 +272,9 @@ TEST(KernelGeGLU, FunctionExpansionExecutesWithSingleLowPrecisionRounding) {
       output->set_name("Y");
       output->mutable_type()->mutable_tensor_type()->set_elem_type(static_cast<int32_t>(dtype));
       NodeProto node = MakeNode("GeGLU", {"A", "B"}, {"Y"});
-      AddAttribute<std::string>(node, "approximate", mode);
+      if (!mode.empty()) {
+        AddAttribute<std::string>(node, "approximate", mode);
+      }
       const std::vector<TypeProto> types{graph->input(0).type(), graph->input(1).type()};
       FunctionBodyBuildContextImpl context(node, types);
       FunctionProto function;
@@ -283,7 +285,7 @@ TEST(KernelGeGLU, FunctionExpansionExecutesWithSingleLowPrecisionRounding) {
       a.name = "A";
       b.name = "B";
       const GeGLU kernel{KernelContext{DefaultOpset(29)}};
-      const Tensor native = kernel(a, b, mode);
+      const Tensor native = kernel(a, b, mode.empty() ? "none" : mode);
       const auto expanded = RunModel(model, {a, b});
       ASSERT_EQ(expanded.size(), 1u);
       EXPECT_EQ(expanded[0].data_type, native.data_type);

@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -160,6 +161,96 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
              return IoData{{std::move(scores), std::move(labels)}, {std::move(loss)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16, DataType::FLOAT}) {
+    const std::string suffix = dtype == DataType::FLOAT16    ? "float16"
+                               : dtype == DataType::BFLOAT16 ? "bfloat16"
+                                                             : "float32";
+    for (const std::string reduction : {"none", "sum", "mean"}) {
+      for (const bool with_log_prob : {false, true}) {
+        NodeProto node = BuildSCENode(true, with_log_prob, reduction, true, -1);
+        Expect(
+            registry, std::move(node),
+            "test_cc_reference_sce_small_loss_" + suffix + "_" + reduction +
+                (with_log_prob ? "_log_prob" : ""),
+            {opset},
+            [dtype, reduction, with_log_prob]() -> IoData {
+              const double margin = dtype == DataType::FLOAT16 ? 10.0 : 18.0;
+              const double normalizer = std::log1p(2 * std::exp(-margin));
+              std::vector<float> scores(18), log_prob(18);
+              for (int64_t n = 0; n < 3; ++n) {
+                for (int64_t c = 0; c < 3; ++c) {
+                  for (int64_t i = 0; i < 2; ++i) {
+                    const int64_t offset = (n * 3 + c) * 2 + i;
+                    scores[offset] = n == c ? 0.0f : -static_cast<float>(margin);
+                    log_prob[offset] = static_cast<float>(scores[offset] - normalizer);
+                  }
+                }
+              }
+              const auto make_tensor = [dtype](const std::vector<int64_t> &shape,
+                                               const std::vector<float> &values) {
+                Tensor tensor = Tensor::FromFloat("", shape, values);
+                return core::runtime::IsHalfPrecision(dtype)
+                           ? core::runtime::DemoteFromFloat32(tensor, dtype)
+                           : tensor;
+              };
+              std::vector<Tensor> inputs{make_tensor({3, 3, 1, 2}, scores),
+                                         Tensor::FromInt64("", {3, 1, 2}, {0, 0, 1, 1, -1, -1}),
+                                         make_tensor({3}, {1, 2, 3})};
+              const float loss = static_cast<float>(normalizer);
+              std::vector<Tensor> outputs{
+                  reduction == "none"
+                      ? make_tensor({3, 1, 2}, {loss, loss, 2 * loss, 2 * loss, 0, 0})
+                      : make_tensor({}, {reduction == "sum" ? 6 * loss : loss})};
+              if (with_log_prob) {
+                outputs.push_back(make_tensor({3, 3, 1, 2}, log_prob));
+              }
+              return IoData{std::move(inputs), std::move(outputs)};
+            },
+            "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+      }
+    }
+  }
+
+  {
+    NodeProto node = BuildSCENode(false, true, "none", false, 0);
+    Expect(
+        registry, std::move(node), "test_cc_reference_sce_tied_maxima", {opset},
+        []() -> IoData {
+          const float log_two = std::log(2.0f), log_three = std::log(3.0f);
+          return IoData{{Tensor::FromFloat("", {2, 3}, {0, 0, -200, 4, 4, 4}),
+                         Tensor::FromInt64("", {2}, {1, 2})},
+                        {Tensor::FromFloat("", {2}, {log_two, log_three}),
+                         Tensor::FromFloat("", {2, 3},
+                                           {-log_two, -log_two, -200 - log_two, -log_three,
+                                            -log_three, -log_three})}};
+        },
+        "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+  }
+
+  {
+    NodeProto node = BuildSCENode(false, true, "none", false, 0);
+    Expect(
+        registry, std::move(node), "test_cc_reference_sce_single_class", {opset},
+        []() -> IoData {
+          return IoData{
+              {Tensor::FromFloat("", {2, 1}, {10, -20}), Tensor::FromInt64("", {2}, {0, 0})},
+              {Tensor::FromFloat("", {2}, {0, 0}), Tensor::FromFloat("", {2, 1}, {0, 0})}};
+        },
+        "backend-test", TestCaseTag::NONE, {}, 1e-3, 0.0);
+  }
+
+  {
+    NodeProto node = BuildSCENode(false, true, "none", false, 0);
+    Expect(registry, std::move(node), "test_cc_reference_sce_nonfinite", {opset}, []() -> IoData {
+      const float inf = std::numeric_limits<float>::infinity();
+      const float nan = std::numeric_limits<float>::quiet_NaN();
+      return IoData{{Tensor::FromFloat("", {3, 2}, {inf, 0, -inf, -inf, nan, 0}),
+                     Tensor::FromInt64("", {3}, {0, 1, 1})},
+                    {Tensor::FromFloat("", {3}, std::vector<float>(3, nan)),
+                     Tensor::FromFloat("", {3, 2}, std::vector<float>(6, nan))}};
+    });
   }
 
   for (const auto dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {

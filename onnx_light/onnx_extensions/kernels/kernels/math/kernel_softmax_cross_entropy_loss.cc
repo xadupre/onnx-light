@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_extensions/kernels/kernels/math/softmax_utils.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -26,17 +27,9 @@ void ComputeLogSoftmaxOverClassAxis(const float *scores, float *log_prob, int64_
                                     int64_t n_classes, int64_t n_inner) {
   for (int64_t o = 0; o < n_outer; ++o) {
     for (int64_t i = 0; i < n_inner; ++i) {
-      float max_v = -std::numeric_limits<float>::infinity();
-      for (int64_t c = 0; c < n_classes; ++c) {
-        const int64_t offset = (o * n_classes + c) * n_inner + i;
-        max_v = std::max(max_v, scores[static_cast<size_t>(offset)]);
-      }
-      float sum = 0.0f;
-      for (int64_t c = 0; c < n_classes; ++c) {
-        const int64_t offset = (o * n_classes + c) * n_inner + i;
-        sum += std::exp(scores[static_cast<size_t>(offset)] - max_v);
-      }
-      const float log_sum = std::log(sum);
+      const float *row_scores = scores + (o * n_classes) * n_inner + i;
+      const auto [max_v, log_sum] =
+          softmax_detail::ComputeMaxAndLogSum(row_scores, n_classes, n_inner);
       for (int64_t c = 0; c < n_classes; ++c) {
         const int64_t offset = (o * n_classes + c) * n_inner + i;
         log_prob[static_cast<size_t>(offset)] =

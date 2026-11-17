@@ -320,6 +320,21 @@ TEST(BackendRunModel, SupportedDtypeComparisonRetainsExactReferences) {
                           "exceeds");
 }
 
+TEST(BackendRunModel, SoftmaxReferencesRejectCollapsedSmallResults) {
+  auto cases = core::backend_test::CollectTestCasesByName(
+      "^test_cc_reference_(logsoftmax_small_log_probability|sce_small_loss)_");
+  ASSERT_FALSE(cases.empty());
+  for (const TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    EXPECT_EQ(tc.atol, 0.0);
+    EXPECT_EQ(tc.rtol, 1e-3);
+    const Tensor expected = Tensor::FromDouble("", {1}, {3e-8});
+    ExpectBackendCaseTensorEqual(Tensor::FromDouble("", {1}, {3.001e-8}), expected, tc);
+    EXPECT_NONFATAL_FAILURE(
+        ExpectBackendCaseTensorEqual(Tensor::FromDouble("", {1}, {0.0}), expected, tc), "");
+  }
+}
+
 // One TEST per kernel currently registered in ``KernelDispatchTable``
 // (see ``onnx_kernels/run_nodes.cc``). When a new kernel is registered there
 // the corresponding TEST below should be added so its backend cases are

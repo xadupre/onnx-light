@@ -800,6 +800,22 @@ public:
   void operator()(const Tensor &a, const Tensor &b, float alpha, Tensor &output) const;
 };
 
+/// Computes ``Y = Gelu(A) * B`` without broadcasting (opset 29).
+/// Accepts identical floating-point input shapes and dtypes. ``approximate``
+/// selects ``"none"`` (default) or ``"tanh"``. Low-precision inputs are
+/// evaluated in float32 and rounded only after multiplication.
+class GeGLU : public tuning::ParallelTunableKernel {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GeGLU";
+  explicit GeGLU(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const Tensor &a, const Tensor &b, const std::string &approximate = "none",
+                    RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensor &a, const Tensor &b, const std::string &approximate,
+                  Tensor &output) const;
+};
+
 /// Element-wise thresholded rectified linear unit: y = x for x > alpha, y = 0
 /// otherwise. ``alpha`` defaults to 1.0 to match the ONNX schema.
 class ThresholdedRelu : public KernelBase {

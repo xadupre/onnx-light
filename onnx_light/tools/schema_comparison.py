@@ -105,6 +105,7 @@ ONNX_SHAPES_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Gather"),
         ("ai.onnx", "GatherElements"),
         ("ai.onnx", "GatherND"),
+        ("ai.onnx", "GeGLU"),
         ("ai.onnx", "Gelu"),
         ("ai.onnx", "Greater"),
         ("ai.onnx", "GreaterOrEqual"),

@@ -164,6 +164,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:GatherElements", MakeKernel<onnx_kernels::kernel::GatherElements>()},
       {"ai.onnx:GatherND", MakeKernel<onnx_kernels::kernel::GatherND>()},
       {"ai.onnx:Gelu", MakeKernel<onnx_kernels::kernel::Gelu>()},
+      {"ai.onnx:GeGLU", MakeKernel<onnx_kernels::kernel::GeGLU>()},
       {"ai.onnx:Gemm", MakeKernel<onnx_kernels::kernel::Gemm>()},
       {"ai.onnx:GlobalAveragePool", MakeKernel<onnx_kernels::kernel::GlobalAveragePool>()},
       {"ai.onnx:GlobalLpPool", MakeKernel<onnx_kernels::kernel::GlobalLpPool>()},
@@ -458,6 +459,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::STFT::RegisterTuningSchemas();
     onnx_kernels::kernel::Sub::RegisterTuningSchemas();
     onnx_kernels::kernel::SwiGLU::RegisterTuningSchemas();
+    onnx_kernels::kernel::GeGLU::RegisterTuningSchemas();
     onnx_kernels::kernel::StringConcat::RegisterTuningSchemas();
     onnx_kernels::kernel::Tan::RegisterTuningSchemas();
     onnx_kernels::kernel::Tanh::RegisterTuningSchemas();

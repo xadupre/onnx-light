@@ -1355,7 +1355,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Reference implementation of ``ai.onnx::CausalConvWithState`` (v27).
+/// Reference implementation of ``ai.onnx::CausalConvWithState`` (v27 and v29).
 ///
 /// Stateful causal 1D depthwise convolution used by Gated DeltaNet
 /// (Qwen3.5) and Mamba (Jamba, FalconMamba). Replaces the
@@ -1366,12 +1366,12 @@ public:
 /// - ``input``: ``(batch_size, channels, length)``
 /// - ``weight``: ``(channels, 1, k)`` (depthwise: ``group = channels``)
 /// - ``bias`` (optional): ``(channels)``
-/// - ``past_state`` (optional): ``(batch_size, channels, k - 1)``;
+/// - ``past_state`` (optional): ``(batch_size, channels, (k - 1) * dilation)``;
 ///   when absent the carry is implicitly zero-padding.
 /// - ``output``: same shape as ``input``
-/// - ``present_state``: ``(batch_size, channels, k - 1)`` containing the
-///   last ``k - 1`` values of the padded sequence (``[past_state, input]``)
-///   along the causal axis.
+/// - ``present_state``: ``(batch_size, channels, (k - 1) * dilation)`` containing
+///   the last ``(k - 1) * dilation`` consecutive raw values of the padded
+///   sequence (``[past_state, input]``) along the causal axis.
 class CausalConvWithState : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CausalConvWithState";
@@ -1381,6 +1381,8 @@ public:
     /// Fused activation. Allowed values: ``"none"`` (default), ``"silu"``,
     /// ``"swish"`` (alias for ``"silu"``).
     std::string activation = "none";
+    /// Spacing between kernel taps; state retains consecutive raw samples.
+    int64_t dilation = 1;
   };
 
   using KernelBase::KernelBase;

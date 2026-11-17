@@ -159,6 +159,7 @@ extern ONNX_LIGHT_LIB_API const char kDoc_Abs_ver6[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Mod_ver10[];
 extern ONNX_LIGHT_LIB_API const char kDoc_LinearAttention_ver27[];
 extern ONNX_LIGHT_LIB_API const char kDoc_CausalConvWithState_ver27[];
+extern ONNX_LIGHT_LIB_API const char kDoc_CausalConvWithState_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Attention_ver25[];
 extern ONNX_LIGHT_LIB_API const char kDoc_RotaryEmbedding_ver23[];
 extern ONNX_LIGHT_LIB_API const char kDoc_RMSNormalization_ver23[];

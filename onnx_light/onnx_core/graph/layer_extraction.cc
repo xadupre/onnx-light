@@ -11,6 +11,7 @@
 #include <memory>
 #include <queue>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -39,7 +40,6 @@ constexpr std::size_t kMaxSignatureBytes = 65536;
 constexpr std::size_t kMaxPorts = 128;
 constexpr std::size_t kMaxExtensions = 256;
 constexpr std::size_t kMaxAnchorStride = 8;
-constexpr std::size_t kMaxGrowthAttempts = 4096;
 constexpr std::size_t kMaxSeedGroups = 32;
 using Region = std::vector<const NodeProto *>;
 using Regions = std::vector<Region>;
@@ -510,6 +510,7 @@ struct NodePairHash {
 
 struct Index {
   GraphGraph &graph;
+  const RepeatedLayerOptions options;
   std::unordered_map<const NodeProto *, NodeData> data;
   // The graph does not change during a search, so value and node comparisons are cached.
   std::unordered_map<std::string, ValueKey> values;
@@ -553,7 +554,7 @@ struct Index {
   // Any earlier value may be captured by this last incompletely analyzed node.
   std::size_t last_incomplete_capture = kNoPosition;
 
-  explicit Index(GraphGraph &graph) : graph(graph) {
+  Index(GraphGraph &graph, const RepeatedLayerOptions &options) : graph(graph), options(options) {
     for (const auto &input : graph.Builder().Inputs())
       declarations[input.name().value()] = &input;
     for (const auto &output : graph.Builder().Outputs())
@@ -1271,7 +1272,7 @@ bool Grow(Index &index, Regions regions, std::size_t selected, Plan &best, std::
   while (regions[0].size() < kMaxRegion) {
     bool extended = false;
     for (const Extension &extension : Extensions(index, regions[0])) {
-      if (attempts >= kMaxGrowthAttempts)
+      if (attempts >= index.options.max_growth_attempts)
         return found;
       ++attempts;
       Regions grown;
@@ -1307,7 +1308,7 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
     return false;
   Region anchors;
   for (const NodeProto *node : bucket->second) {
-    if (attempts >= kMaxGrowthAttempts)
+    if (attempts >= index.options.max_growth_attempts)
       return false;
     ++attempts;
     if (CompatibleNode(index, candidate, *node)) {
@@ -1320,7 +1321,8 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   }
   bool found = false;
   auto consider = [&](Regions regions) {
-    if (regions.size() < 2 || groups >= kMaxSeedGroups || attempts >= kMaxGrowthAttempts)
+    if (regions.size() < 2 || groups >= kMaxSeedGroups ||
+        attempts >= index.options.max_growth_attempts)
       return;
     const std::size_t family_occurrences = regions.size();
     std::size_t selected = regions.size();
@@ -1363,12 +1365,12 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   std::size_t seed_count = 0;
   for (const Extension &extension : Extensions(index, Region{&candidate})) {
     if (seed_count++ == kMaxSeedGroups / 2 || groups >= kMaxSeedGroups ||
-        attempts >= kMaxGrowthAttempts)
+        attempts >= index.options.max_growth_attempts)
       break;
     Regions regions{{&candidate, extension.node}};
     std::unordered_set<const NodeProto *> occupied{&candidate, extension.node};
     for (std::size_t i = 1; i < anchors.size(); ++i) {
-      if (attempts >= kMaxGrowthAttempts)
+      if (attempts >= index.options.max_growth_attempts)
         break;
       ++attempts;
       Regions pair;
@@ -1385,8 +1387,8 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   }
   // A bounded periodic fallback also recognizes indistinguishable projections
   // whose one-hop neighborhoods are identical but whose larger roles differ.
-  for (std::size_t stride = 2;
-       stride <= kMaxAnchorStride && stride < anchors.size() && attempts < kMaxGrowthAttempts;
+  for (std::size_t stride = 2; stride <= kMaxAnchorStride && stride < anchors.size() &&
+                               attempts < index.options.max_growth_attempts;
        ++stride) {
     Regions regions;
     for (std::size_t i = 0; i < anchors.size(); i += stride)
@@ -1421,7 +1423,7 @@ bool FindPlan(Index &index, Plan &best) {
     Region &previous = representatives[entry.signature];
     bool represented = false;
     for (const NodeProto *other : previous) {
-      if (attempts >= kMaxGrowthAttempts)
+      if (attempts >= index.options.max_growth_attempts)
         return false;
       ++attempts;
       if (CompatibleNode(index, node, *other)) {
@@ -1431,7 +1433,7 @@ bool FindPlan(Index &index, Plan &best) {
     }
     if (represented)
       continue;
-    if (groups >= kMaxSeedGroups || attempts >= kMaxGrowthAttempts)
+    if (groups >= kMaxSeedGroups || attempts >= index.options.max_growth_attempts)
       return false;
     previous.push_back(&node);
     if (FindPlan(index, node, best, attempts, groups))
@@ -1926,6 +1928,14 @@ utils::RepeatedProtoField<NodeProto> MakeReplacements(Index &index,
 OperatorGroupProposal
 ProposeRepeatedLayers(GraphGraph &graph,
                       std::shared_ptr<const builder::PatternApplication> *application) {
+  return ProposeRepeatedLayers(graph, RepeatedLayerOptions{}, application);
+}
+
+OperatorGroupProposal
+ProposeRepeatedLayers(GraphGraph &graph, const RepeatedLayerOptions &options,
+                      std::shared_ptr<const builder::PatternApplication> *application) {
+  if (options.max_growth_attempts == 0)
+    throw std::invalid_argument("RepeatedLayer requires max_growth_attempts > 0.");
   if (application != nullptr)
     application->reset();
   if (graph.Builder().Nodes().empty())
@@ -1936,7 +1946,7 @@ ProposeRepeatedLayers(GraphGraph &graph,
     proposal.status = status;
     return proposal;
   }
-  auto index = std::make_shared<Index>(graph);
+  auto index = std::make_shared<Index>(graph, options);
   Plan plan;
   const bool found = FindPlan(*index, plan);
   plan.capture_analysis_limited = index->last_incomplete_capture != kNoPosition;
@@ -1957,12 +1967,20 @@ ProposeRepeatedLayers(GraphGraph &graph,
 
 utils::RepeatedProtoField<NodeProto>
 MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) {
+  return MakeRepeatedLayerReplacements(graph, nodes, RepeatedLayerOptions{});
+}
+
+utils::RepeatedProtoField<NodeProto>
+MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodeProto *> &nodes,
+                              const RepeatedLayerOptions &options) {
+  if (options.max_growth_attempts == 0)
+    throw std::invalid_argument("RepeatedLayer requires max_growth_attempts > 0.");
   if (nodes.empty() || nodes[0] == nullptr || graph.Builder().Nodes().empty())
     throw core::builder::BuilderError("RepeatedLayer::Apply expects a nonempty match.");
   graph.Position(*nodes[0]);
   if (Eligibility(graph) != OperatorGroupStatus::kFound)
     throw core::builder::BuilderError("RepeatedLayer::Apply could not reproduce its regions.");
-  Index index(graph);
+  Index index(graph, options);
   Plan plan;
   if (!FindPlan(index, plan))
     throw core::builder::BuilderError("RepeatedLayer::Apply could not reproduce its regions.");

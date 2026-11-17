@@ -8,9 +8,15 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
+/// Configures the work budget of one repeated-region search.
+struct RepeatedLayerOptions {
+  /// Caps anchor comparisons and region-extension attempts; must be positive.
+  std::size_t max_growth_attempts = 4096;
+};
+
 /**
- * Finds repeated, connected, structurally corresponding regions around exact
- * attention or matrix-multiplication identities, including local functions.
+ * Finds repeated, connected, structurally corresponding regions around
+ * operator types containing "Attention" or standard MatMul, including local functions.
  * Extracts every selected occurrence together, retaining weights as explicit
  * inputs except for shared materialized constants with fewer than 32 elements.
  * Preserves side outputs and lexical subgraph dependencies.
@@ -22,8 +28,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *
  * - Indexes producers, consumers, declared types and lexical subgraph captures.
  *   The pattern invokes detection only at the first graph node of each scan.
- * - Finds exact attention/MatMul anchors, including recursively inspected local
- *   functions. Excludes existing layer-function calls and their bodies.
+ * - Finds case-sensitive "Attention" substrings in operator types regardless of domain,
+ *   or exact standard MatMul anchors, including recursively inspected local functions.
+ *   Excludes existing layer-function calls and their bodies.
  *   Starts with rarer anchor families so hybrid blocks can form a complete motif
  *   before their common projections are extracted separately.
  *   Accepts operators independently of their domain or determinism when shape
@@ -78,7 +85,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *   remain live and scheduling cannot move preparations across that node.
  *   Reports capture_analysis_limited even when safe groups elsewhere are found,
  *   or kResourceLimit instead of kNoMatch when no safe proposal remains.
- * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
+ * - Considers at most 32 seed groups and max_growth_attempts shared
+ *   compatibility/growth attempts (4096 by default).
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.
  * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
@@ -105,6 +113,11 @@ OperatorGroupProposal
 ProposeRepeatedLayers(builder::GraphGraph &graph,
                       std::shared_ptr<const builder::PatternApplication> *application = nullptr);
 
+/// Uses an explicit per-search budget; throws std::invalid_argument for a zero budget.
+OperatorGroupProposal
+ProposeRepeatedLayers(builder::GraphGraph &graph, const RepeatedLayerOptions &options,
+                      std::shared_ptr<const builder::PatternApplication> *application = nullptr);
+
 /// Revalidates the proposed interval and builds its replacement nodes.
 /// Appends or reuses local functions and imports ai.rt opset 1, but does not
 /// replace graph nodes; the caller must install the result at proposal.first.
@@ -112,5 +125,11 @@ ProposeRepeatedLayers(builder::GraphGraph &graph,
 utils::RepeatedProtoField<NodeProto>
 MakeRepeatedLayerReplacements(builder::GraphGraph &graph,
                               const std::vector<const NodeProto *> &nodes);
+
+/// Revalidates with the same options used for the proposal.
+utils::RepeatedProtoField<NodeProto>
+MakeRepeatedLayerReplacements(builder::GraphGraph &graph,
+                              const std::vector<const NodeProto *> &nodes,
+                              const RepeatedLayerOptions &options);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

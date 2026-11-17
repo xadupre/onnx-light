@@ -159,6 +159,25 @@ explicitly:
 In C++, pass ``onnx_patterns::CreatePattern("RepeatedLayer")`` in the explicit
 pattern vector.
 
+Anchors include every operator whose type contains the case-sensitive substring
+``Attention``, regardless of domain, and standard ``MatMul``. Existing ``ai.rt``
+Layer calls remain excluded. Matching still requires compatible types, shapes,
+attributes and topology; the name alone does not bypass extraction safeguards.
+
+The shared search budget counts anchor comparisons and region-extension
+attempts, not model executions or complete graph partitions. It resets for each
+search and defaults to 4096. Increase it explicitly for larger graphs:
+
+.. code-block:: python
+
+    pattern = RepeatedLayerPattern(max_growth_attempts=32768)
+    GraphGraph(builder, patterns=[pattern]).optimize()
+
+The budget must be positive and belongs to the pattern instance; it does not
+change factory defaults or other patterns. C++ callers can pass the second
+constructor argument or use ``core::graph::RepeatedLayerOptions`` with the core
+proposal and replacement APIs. Revalidation uses the same budget.
+
 Lexical capture analysis visits at most 4096 nested nodes per owning graph node
 and requires scope depth below 16. Exhaustion excludes that owner from extraction,
 conservatively keeps earlier values live, and prevents reordering across it;

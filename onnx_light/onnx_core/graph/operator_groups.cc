@@ -168,13 +168,13 @@ bool IsAnchor(const NodeProto &node, const builder::GraphBuilder &builder, std::
   const std::string &op = node.op_type().value();
   if (domain == "ai.rt" && (op == "Layer" || op.rfind("Layer_", 0) == 0))
     return false;
+  if (op.find("Attention") != std::string::npos)
+    return true;
   const std::string key =
       core::shapes::ShapesContext::LocalFunctionKey(domain, op, node.overload().value());
   const FunctionProto *function = builder.Shapes().GetLocalFunction(key);
   if (function == nullptr && node.overload().value().empty() &&
-      (((domain.empty() || domain == "ai.onnx") && (op == "MatMul" || op == "Attention")) ||
-       (domain == "com.microsoft" && op == "GroupQueryAttention") ||
-       (domain == "ai.rt" && op == "PagedAttention")))
+      (domain.empty() || domain == "ai.onnx") && op == "MatMul")
     return true;
   if (depth >= kMaxAnchorDepth || work >= kMaxAnchorWork)
     return false;

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/builder/pattern_optimization.h"
+#include "onnx_core/graph/layer_extraction.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
@@ -15,6 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * function construction to core::graph::MakeRepeatedLayerReplacements.
  * Preserves the core algorithm's boundary, scheduling and reuse safeguards.
  * The pattern is opt-in and does not wrap existing ai.rt Layer bodies.
+ * max_growth_attempts limits anchor comparisons and region extensions per search.
  *
  * @code
  * Before:
@@ -32,9 +34,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  */
 class RepeatedLayerPattern final : public core::builder::PatternOptimization {
 public:
-  /// Creates the pattern with the given optimization priority.
-  explicit RepeatedLayerPattern(int priority = 0)
-      : PatternOptimization(priority, "RepeatedLayer") {}
+  /// Creates the pattern with an explicit positive search budget.
+  explicit RepeatedLayerPattern(
+      int priority = 0,
+      std::size_t max_growth_attempts = core::graph::RepeatedLayerOptions{}.max_growth_attempts);
 
   /// Returns an empty filter because local-function names are unrestricted.
   std::set<std::string> FastOpType() const override;
@@ -47,6 +50,9 @@ public:
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;
+
+private:
+  const core::graph::RepeatedLayerOptions options_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

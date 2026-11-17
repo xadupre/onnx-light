@@ -305,6 +305,21 @@ _expected_failure_cases = [
     "averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_True",
     # ORT rejects four spatial dimensions with "Unsupported pooling size".
     "maxunpool_export_4d",
+    # ORT returns -inf rather than NaN for part of this nonfinite input.
+    "reference_logsoftmax_nonfinite",
+    # ORT does not preserve tiny nonzero log-softmax probabilities and losses;
+    # BFLOAT16 variants also use unsupported ReduceMax / NegativeLogLikelihoodLoss kernels.
+    *[
+        f"reference_logsoftmax_small_log_probability_{dtype}_axis_{axis}"
+        for dtype in ("bfloat16", "float32", "float64")
+        for axis in ("-1", "0", "1")
+    ],
+    *[
+        f"reference_sce_small_loss_{dtype}_{reduction}{log_prob}"
+        for dtype in ("bfloat16", "float32")
+        for reduction in ("mean", "none", "sum")
+        for log_prob in ("", "_log_prob")
+    ],
     # These supported-dtype cases remain covered by the native runtime. ORT CPU
     # lacks the corresponding kernels, including primitives in schema functions.
     "logsoftmax_many_classes_bfloat16",

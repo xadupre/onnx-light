@@ -3013,6 +3013,34 @@ TEST(KernelClass, PowClassBroadcastsArrayExponent) {
   EXPECT_FLOAT_EQ(pz[5], 216.0f);
 }
 
+TEST(KernelClass, PowBroadcastsEmptyDimensions) {
+  const KernelContext ctx{DefaultOpset(20)};
+  Pow pow_kernel{ctx};
+  for (const Shape &shape : {Shape{}, Shape{1}, Shape{1, 1, 1, 1}, Shape{2, 1, 3, 1}}) {
+    const Tensor nonempty = Tensor::FromFloat("", shape, std::vector<float>(shape.product(), 2.0f));
+    const Shape expected_shape = shape == Shape{2, 1, 3, 1} ? Shape{2, 0, 3, 1} : Shape{1, 0, 1, 1};
+    const Tensor empty = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+    for (bool empty_base : {false, true}) {
+      SCOPED_TRACE(testing::PrintToString(shape));
+      SCOPED_TRACE(empty_base);
+      const Tensor &x = empty_base ? empty : nonempty;
+      const Tensor &y = empty_base ? nonempty : empty;
+      const Tensor result = pow_kernel(x, y);
+      EXPECT_EQ(result.shape, expected_shape);
+      EXPECT_EQ(result.data_type, DataType::FLOAT);
+      EXPECT_EQ(result.size_bytes(), 0u);
+      Tensor output = Tensor::FromFloat("", expected_shape, {});
+      EXPECT_NO_THROW(pow_kernel(x, y, output));
+      EXPECT_EQ(output.shape, expected_shape);
+      EXPECT_EQ(output.size_bytes(), 0u);
+    }
+  }
+  const Tensor empty = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+  const Tensor incompatible = Tensor::FromFloat("", {1, 2, 1, 1}, {2.0f, 2.0f});
+  EXPECT_THROW(pow_kernel(empty, incompatible), std::invalid_argument);
+  EXPECT_THROW(pow_kernel(incompatible, empty), std::invalid_argument);
+}
+
 TEST(KernelClass, PowUsesTypedParallelTuningForGeneralBroadcasting) {
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};

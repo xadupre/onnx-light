@@ -62,6 +62,23 @@ void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  {
+    Expect(registry, node, "test_cc_pow_scalar_base_empty_exponent", {DefaultOpset(20)},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {}, {2.0f});
+             Tensor y = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+             Tensor z = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
+    Expect(registry, node, "test_cc_pow_empty_base_scalar_exponent", {DefaultOpset(20)},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+             Tensor y = Tensor::FromFloat("", {}, {2.0f});
+             Tensor z = Tensor::FromFloat("", {1, 0, 1, 1}, {});
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
+  }
+
   // From Pow.export_types().
   {
     Expect(registry, node, "test_pow_types_float32_int64", {opset}, []() -> IoData {

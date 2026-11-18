@@ -1,6 +1,7 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
+#include <compare>
 #include <cstring>
 #include <optional>
 #include <ostream>
@@ -113,12 +114,20 @@ public:
 
 /**
  * Owning optional string type used for singular ONNX-light protobuf string fields, mirroring
- * proto2 ``optional string`` presence semantics. It is a thin std::optional<std::string>
- * subclass with protobuf-friendly read helpers so it behaves like a string when set.
+ * proto2 ``optional string`` presence semantics. It wraps std::optional<std::string>
+ * with protobuf-friendly read helpers so it behaves like a string when set.
+ * Composition keeps std::optional's heterogeneous comparison constraints out of comparisons
+ * between OptionalString values.
  */
-class ONNX_LIGHT_PROTO_API OptionalString : public std::optional<std::string> {
+class ONNX_LIGHT_PROTO_API OptionalString {
 public:
   using base = std::optional<std::string>;
+  using value_type = std::string;
+
+private:
+  base storage_;
+
+public:
   /** Initializes an unset (absent) value. */
   OptionalString() = default;
   OptionalString(const OptionalString &) = default;
@@ -126,20 +135,60 @@ public:
   OptionalString &operator=(const OptionalString &) = default;
   OptionalString &operator=(OptionalString &&) = default;
   /** Initializes from an absent marker. */
-  OptionalString(std::nullopt_t) : base(std::nullopt) {}
+  OptionalString(std::nullopt_t) : storage_(std::nullopt) {}
   /** Initializes from a standard optional. */
-  OptionalString(const base &o) : base(o) {}
-  OptionalString(base &&o) : base(std::move(o)) {}
+  OptionalString(const base &o) : storage_(o) {}
+  OptionalString(base &&o) : storage_(std::move(o)) {}
   /** Initializes to a present value from a null-terminated string (nullptr is absent). */
-  OptionalString(const char *s) : base(s == nullptr ? base(std::nullopt) : base(std::string(s))) {}
+  OptionalString(const char *s)
+      : storage_(s == nullptr ? base(std::nullopt) : base(std::string(s))) {}
   /** Initializes to a present value from a standard string. */
-  OptionalString(const std::string &s) : base(s) {}
-  OptionalString(std::string &&s) : base(std::move(s)) {}
+  OptionalString(const std::string &s) : storage_(s) {}
+  OptionalString(std::string &&s) : storage_(std::move(s)) {}
   /** Initializes to a present value from an owning repeated string. */
-  OptionalString(const String &s) : base(static_cast<const std::string &>(s)) {}
+  OptionalString(const String &s) : storage_(static_cast<const std::string &>(s)) {}
   /** Initializes to a present value from a non-owning string view. */
   OptionalString(const RefString &s)
-      : base(s.data() == nullptr ? base(std::nullopt) : base(std::string(s.data(), s.size()))) {}
+      : storage_(s.data() == nullptr ? base(std::nullopt) : base(std::string(s.data(), s.size()))) {
+  }
+
+  /** Exposes the stored optional for compatibility with optional-reference parameters. */
+  inline constexpr operator base &() & noexcept { return storage_; }
+  inline constexpr operator const base &() const & noexcept { return storage_; }
+  inline constexpr operator base &&() && noexcept { return std::move(storage_); }
+  inline constexpr operator const base &&() const && noexcept { return std::move(storage_); }
+  /** Indicates whether a value is present. */
+  inline constexpr bool has_value() const noexcept { return storage_.has_value(); }
+  inline constexpr explicit operator bool() const noexcept { return has_value(); }
+  /** Clears the stored value. */
+  inline constexpr void reset() noexcept { storage_.reset(); }
+  /** Constructs a present value in place. */
+  template <typename... Args> inline constexpr std::string &emplace(Args &&...args) {
+    return storage_.emplace(std::forward<Args>(args)...);
+  }
+  template <typename U, typename... Args>
+  inline constexpr std::string &emplace(std::initializer_list<U> values, Args &&...args) {
+    return storage_.emplace(values, std::forward<Args>(args)...);
+  }
+  /** Returns the stored value (requires a value). */
+  inline constexpr std::string &operator*() & noexcept { return *storage_; }
+  inline constexpr const std::string &operator*() const & noexcept { return *storage_; }
+  inline constexpr std::string &&operator*() && noexcept { return *std::move(storage_); }
+  inline constexpr const std::string &&operator*() const && noexcept {
+    return *std::move(storage_);
+  }
+  inline constexpr std::string *operator->() noexcept { return storage_.operator->(); }
+  inline constexpr const std::string *operator->() const noexcept { return storage_.operator->(); }
+  /** Returns the stored value or a fallback. */
+  template <typename U> inline constexpr std::string value_or(U &&fallback) const & {
+    return storage_.value_or(std::forward<U>(fallback));
+  }
+  template <typename U> inline constexpr std::string value_or(U &&fallback) && {
+    return std::move(storage_).value_or(std::forward<U>(fallback));
+  }
+  /** Exchanges stored values and presence. */
+  inline constexpr void swap(OptionalString &other) noexcept { storage_.swap(other.storage_); }
+  inline constexpr void swap(base &other) noexcept { storage_.swap(other); }
 
   /** Assigns a present value from a null-terminated string (nullptr clears the value). */
   OptionalString &operator=(const char *s) {
@@ -196,7 +245,7 @@ public:
     return kEmpty;
   }
   /** Returns the stored string, or a shared empty string when unset (never throws). */
-  inline const std::string &value() const { return has_value() ? base::value() : empty_value(); }
+  inline const std::string &value() const { return has_value() ? storage_.value() : empty_value(); }
   /** Returns the character at the specified index (requires a value). */
   inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */
@@ -216,7 +265,7 @@ public:
   inline std::string &mutable_ref() {
     if (!has_value())
       emplace();
-    return base::value();
+    return storage_.value();
   }
   /** Returns a mutable pointer to the underlying string, creating it if absent. */
   inline std::string *mutable_ptr() { return &mutable_ref(); }
@@ -242,27 +291,33 @@ public:
   inline std::string substr(size_t pos = 0, size_t len = std::string::npos) const {
     return has_value() ? value().substr(pos, len) : std::string();
   }
-  /** Compares two OptionalString values for equality (disambiguation for C++20 heterogeneous
-   * optional overloads). */
-  inline bool operator==(const OptionalString &other) const {
-    return static_cast<const base &>(*this) == static_cast<const base &>(other);
-  }
-  inline bool operator!=(const OptionalString &other) const { return !(*this == other); }
+  /** Compares presence and content of two OptionalString values. */
+  inline bool operator==(const OptionalString &other) const { return storage_ == other.storage_; }
+  inline auto operator<=>(const OptionalString &other) const { return storage_ <=> other.storage_; }
+  /** Compares presence and content with a standard optional or absent marker. */
+  inline bool operator==(const base &other) const { return storage_ == other; }
+  inline auto operator<=>(const base &other) const { return storage_ <=> other; }
+  inline bool operator==(std::nullopt_t) const noexcept { return !has_value(); }
+  inline auto operator<=>(std::nullopt_t) const noexcept { return storage_ <=> std::nullopt; }
   /** Compares against a null-terminated string (nullptr matches absent). */
   inline bool operator==(const char *other) const {
     if (other == nullptr)
       return !has_value();
     return has_value() && value() == other;
   }
-  inline bool operator!=(const char *other) const { return !(*this == other); }
   /** Compares against a standard string (unset never equals any std::string). */
   inline bool operator==(const std::string &other) const { return has_value() && value() == other; }
-  inline bool operator!=(const std::string &other) const { return !(*this == other); }
+  /** Supports reversed string comparisons through C++20 rewritten candidates. */
+  inline auto operator<=>(const std::string &other) const {
+    return has_value() ? value() <=> other : std::strong_ordering::less;
+  }
+  inline auto operator<=>(const char *other) const {
+    if (other == nullptr)
+      return has_value() ? std::strong_ordering::greater : std::strong_ordering::equal;
+    return has_value() ? value() <=> other : std::strong_ordering::less;
+  }
 
-  /** Three-way comparison of two OptionalString values (absent sorts before any present value).
-   *  Implemented as a named helper so the relational operators never invoke ``operator<`` between
-   *  two OptionalString values, which would drag std::optional's heterogeneous ``operator<=>``
-   *  templates into overload resolution and recurse for this optional-derived type. */
+  /** Three-way comparison of two OptionalString values (absent sorts before any present value). */
   static inline int compare_opt(const OptionalString &lhs, const OptionalString &rhs) {
     if (!lhs.has_value() && !rhs.has_value())
       return 0;
@@ -273,8 +328,7 @@ public:
     return lhs.value().compare(rhs.value());
   }
 
-  /** Orders two OptionalString values (absent sorts before any present value; disambiguation for
-   * C++20 heterogeneous optional overloads). */
+  /** Orders two OptionalString values (absent sorts before any present value). */
   inline bool operator<(const OptionalString &rhs) const { return compare_opt(*this, rhs) < 0; }
   inline bool operator<=(const OptionalString &rhs) const { return compare_opt(*this, rhs) <= 0; }
   inline bool operator>(const OptionalString &rhs) const { return compare_opt(*this, rhs) > 0; }
@@ -378,20 +432,3 @@ template <> struct std::hash<ONNX_LIGHT_NAMESPACE::utils::String> {
     return std::hash<std::string>{}(static_cast<const std::string &>(s));
   }
 };
-
-// OptionalString publicly derives from std::optional<std::string>, so it implicitly converts to
-// std::optional<std::string>&. C++20 gives std::optional a heterogeneous operator<=>
-// (const optional<T>&, const U&). Since C++23 (LWG 3746) that overload is constrained to reject
-// types *derived from* optional (libc++ and MSVC STL already implement this). libstdc++ instead
-// still guards with the narrower `!std::__is_optional_v<U>`, which does not exclude derived types.
-// As a result, once OptionalString defines its own relational operators, resolving
-// `OptionalString < OptionalString` drags the heterogeneous overload into overload resolution and
-// its `three_way_comparable_with<OptionalString, std::string>` constraint recurses on itself,
-// producing a hard "constraint depends on itself" error. Marking OptionalString as "optional-like"
-// for libstdc++ excludes it from that overload (matching the C++23 / libc++ / MSVC behaviour) and
-// breaks the cycle. Guarded to libstdc++ because the trait only exists there and the other
-// standard libraries already handle derived-from-optional types correctly.
-#ifdef __GLIBCXX__
-template <>
-inline constexpr bool std::__is_optional_v<ONNX_LIGHT_NAMESPACE::utils::OptionalString> = true;
-#endif

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include <nanobind/nanobind.h>
+
 #include "_onnxpy_node_list.h"
 #include "_onnxpy_numpy_api.h"
 #include "onnx_core/backend_test/test_case.h"
@@ -29,7 +31,6 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>

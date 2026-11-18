@@ -379,6 +379,7 @@ TEST(GptqModelGgufWeights, RejectsPaddingShapeDtypeMetadataAndLimitsBeforeCopies
   EXPECT_THROW(ImportGptqModelGgufWeights(invalid), std::invalid_argument);
   invalid_payload = payload;
   auto bad_bytes = std::string(payload.raw_data());
+  ASSERT_GT(bad_bytes.size(), 19u);
   bad_bytes[19] = 0x7c;
   invalid_payload.set_raw_data(bad_bytes);
   EXPECT_THROW(ExportGptqModelGgufWeights(invalid_payload), std::invalid_argument);

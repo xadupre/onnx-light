@@ -311,6 +311,10 @@ public:
   inline auto operator<=>(const std::string &other) const {
     return has_value() ? value() <=> other : std::strong_ordering::less;
   }
+  inline bool operator==(std::string_view other) const { return has_value() && sv() == other; }
+  inline auto operator<=>(std::string_view other) const {
+    return has_value() ? sv() <=> other : std::strong_ordering::less;
+  }
   inline auto operator<=>(const char *other) const {
     if (other == nullptr)
       return has_value() ? std::strong_ordering::greater : std::strong_ordering::equal;

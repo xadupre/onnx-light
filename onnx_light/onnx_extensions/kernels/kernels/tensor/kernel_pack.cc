@@ -49,6 +49,16 @@ int64_t Axis(const Tensor &x, int64_t axis) {
   return axis < 0 ? axis + rank : axis;
 }
 
+int64_t Count(const Tensor &count) {
+  EXT_ENFORCE_INVALID(count.data_type == TensorProto::INT64 && count.shape.empty() &&
+                          count.size_bytes() == sizeof(int64_t),
+                      "Unpack: count must be a nonnegative scalar INT64 tensor.");
+  int64_t n;
+  std::memcpy(&n, count.bytes(), sizeof(n));
+  EXT_ENFORCE_INVALID(n >= 0, "Unpack: count must be a nonnegative scalar INT64 tensor.");
+  return n;
+}
+
 size_t ByteSize(const onnx_kernels::Shape &shape, size_t item_size) {
   const uint64_t elements = shape.product(0, shape.size(), "Pack/Unpack");
   EXT_ENFORCE_INVALID(elements <= std::numeric_limits<size_t>::max() / item_size,
@@ -99,6 +109,106 @@ std::optional<int64_t> OptionalInt(const NodeProto &node, const char *name) {
   EXT_ENFORCE_INVALID(attribute->type() == AttributeProto::INT,
                       "Pack/Unpack: packing attributes must be INT.");
   return attribute->i();
+}
+
+int64_t Dimension(uint64_t dimension) {
+  EXT_ENFORCE_INVALID(dimension <= uint64_t(std::numeric_limits<int64_t>::max()),
+                      "Unpack: encoded dimension exceeds INT64.");
+  return static_cast<int64_t>(dimension);
+}
+
+Tensor EncodedStorage(const EncodedValueProto &x, const StructTypeCatalogue &catalogue,
+                      const PackingParameters &p, int64_t n, int64_t axis) {
+  const auto layout = catalogue.ValidateEncodedValue(x);
+  EXT_ENFORCE_INVALID(layout.root && !layout.external && !x.has_parameter_ref(),
+                      "Unpack: requires inline structured storage without shared parameters.");
+  onnx_kernels::Shape shape;
+  const StructTypeProto *type = layout.root;
+  int32_t dtype = TensorProto::UINT8;
+  std::optional<int64_t> packed_groups;
+  for (uint32_t depth = 0;; ++depth) {
+    EXT_ENFORCE_INVALID(depth < kMaxStructTypeDepth,
+                        "Unpack: encoded layout is too deeply nested.");
+    type = &catalogue.Resolve(*type);
+    EXT_ENFORCE_INVALID(!type->has_decoder() && !type->has_encoder(),
+                        "Unpack: encoded storage must not declare codecs.");
+    if (type->has_bit_packing()) {
+      const auto &packing = type->bit_packing();
+      EXT_ENFORCE_INVALID(packing.component_size() == 1 &&
+                              packing.component(0).bit_width() == p.width,
+                          "Unpack: requires one bit-packing component matching the group width.");
+      packed_groups = Dimension(packing.dimension());
+      EXT_ENFORCE_INVALID((packing.dimension() % 8) * (p.width % 8) % 8 == 0,
+                          "Unpack: each bit-packing row must be byte aligned.");
+      shape.push_back(Words(*packed_groups, p.width, 8));
+      break;
+    }
+    EXT_ENFORCE_INVALID(type->has_array(),
+                        "Unpack: supports only arrays and homogeneous bit packing.");
+    const auto &array = type->array();
+    shape.push_back(Dimension(array.dimension()));
+    const auto &element = array.element_type();
+    if (element.has_struct_type()) {
+      type = &element.struct_type();
+      continue;
+    }
+    EXT_ENFORCE_INVALID(element.has_tensor_type(),
+                        "Unpack: array elements must be storage tensors or nested layouts.");
+    const auto &tensor = element.tensor_type();
+    EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::UINT8 ||
+                            tensor.elem_type() == TensorProto::UINT32,
+                        "Unpack: encoded storage tensors must be UINT8 or UINT32.");
+    dtype = tensor.elem_type();
+    EXT_ENFORCE_INVALID(tensor.has_shape(), "Unpack: storage tensor shape must be concrete.");
+    for (const auto &dimension : tensor.shape().dim()) {
+      EXT_ENFORCE_INVALID(dimension.has_dim_value() && !dimension.has_dim_param() &&
+                              dimension.dim_value() >= 0,
+                          "Unpack: storage tensor dimensions must be concrete and nonnegative.");
+      shape.push_back(dimension.dim_value());
+    }
+    break;
+  }
+  // The declared root is one record. Extra payload records form an outer dimension.
+  if (layout.record_count != 1)
+    shape.insert(shape.begin(), Dimension(layout.record_count));
+  EXT_ENFORCE_INVALID(ByteSize(shape, dtype == TensorProto::UINT8 ? 1 : 4) == x.raw_data().size(),
+                      "Unpack: encoded storage shape does not match the payload.");
+  Tensor storage = Tensor::Borrow("", dtype, shape, x.raw_data().data(), x.raw_data().size());
+  axis = Axis(storage, axis);
+  if (packed_groups) {
+    EXT_ENFORCE_INVALID(axis == static_cast<int64_t>(shape.size()) - 1 &&
+                            *packed_groups == Groups(n, p.group_size),
+                        "Unpack: bit packing requires the last axis and the declared group count.");
+  }
+  if (x.has_logical_type()) {
+    const auto &logical = x.logical_type();
+    EXT_ENFORCE_INVALID(logical.has_tensor_type() &&
+                            logical.tensor_type().elem_type() == TensorProto::UINT8 &&
+                            logical.tensor_type().has_shape(),
+                        "Unpack: logical_type must describe the decoded UINT8 tensor shape.");
+    const auto &dimensions = logical.tensor_type().shape().dim();
+    EXT_ENFORCE_INVALID(dimensions.size() == shape.size(),
+                        "Unpack: logical_type rank does not match the decoded layout.");
+    for (size_t i = 0; i < shape.size(); ++i) {
+      EXT_ENFORCE_INVALID(dimensions[i].has_dim_value() && !dimensions[i].has_dim_param() &&
+                              dimensions[i].dim_value() ==
+                                  (static_cast<int64_t>(i) == axis ? n : shape[i]),
+                          "Unpack: logical_type shape does not match the decoded layout.");
+    }
+  }
+  // Encoded payloads are little endian; ordinary UINT32 tensors use native byte order.
+  if constexpr (std::endian::native != std::endian::little) {
+    if (dtype == TensorProto::UINT32) {
+      std::vector<uint32_t> words(x.raw_data().size() / 4);
+      for (size_t i = 0; i < words.size(); ++i) {
+        const auto *bytes = storage.bytes() + i * 4;
+        words[i] = uint32_t(bytes[0]) | (uint32_t(bytes[1]) << 8) | (uint32_t(bytes[2]) << 16) |
+                   (uint32_t(bytes[3]) << 24);
+      }
+      return Tensor::FromUint32("", shape, words);
+    }
+  }
+  return storage;
 }
 
 } // namespace
@@ -160,12 +270,7 @@ Tensor Unpack::operator()(const Tensor &x, const Tensor &count, std::optional<in
   EXT_ENFORCE_INVALID(x.data_type == TensorProto::UINT8 || x.data_type == TensorProto::UINT32,
                       "Unpack: X must be a UINT8 or UINT32 tensor.");
   axis = Axis(x, axis);
-  EXT_ENFORCE_INVALID(count.data_type == TensorProto::INT64 && count.shape.empty() &&
-                          count.size_bytes() == sizeof(int64_t),
-                      "Unpack: count must be a nonnegative scalar INT64 tensor.");
-  int64_t n;
-  std::memcpy(&n, count.bytes(), sizeof(n));
-  EXT_ENFORCE_INVALID(n >= 0, "Unpack: count must be a nonnegative scalar INT64 tensor.");
+  const int64_t n = Count(count);
   const int64_t word_bits = x.data_type == TensorProto::UINT8 ? 8 : 32;
   EXT_ENFORCE_INVALID(x.size_bytes() == ByteSize(x.shape, word_bits / 8),
                       "Unpack: invalid input buffer size.");
@@ -210,6 +315,15 @@ Tensor Unpack::operator()(const Tensor &x, const Tensor &count, std::optional<in
   return y;
 }
 
+Tensor Unpack::operator()(const EncodedValueProto &x, const Tensor &count,
+                          std::optional<int64_t> bits, std::optional<int64_t> radix,
+                          std::optional<int64_t> group_size, int64_t axis,
+                          const StructTypeCatalogue &catalogue, RuntimeContext *rt) const {
+  const auto p = Parameters(bits, radix, group_size);
+  const Tensor storage = EncodedStorage(x, catalogue, p, Count(count), axis);
+  return (*this)(storage, count, bits, radix, group_size, axis, rt);
+}
+
 void Pack::Run(RuntimeContext &rt) {
   const auto &node = *node_;
   RequireInputCount(node, 1);
@@ -225,6 +339,15 @@ void Unpack::Run(RuntimeContext &rt) {
   const auto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
+  const auto value = rt.values().find(node.input(0));
+  if (value != rt.values().end() && value->second.kind == RuntimeValue::Kind::kEncoded) {
+    SetOutput(node, 0,
+              (*this)(value->second.Encoded(), GetInput(node, 1, rt), OptionalInt(node, "bits"),
+                      OptionalInt(node, "radix"), OptionalInt(node, "group_size"),
+                      OptionalInt(node, "axis").value_or(-1), rt.struct_type_catalogue(), &rt),
+              rt);
+    return;
+  }
   SetOutput(node, 0,
             (*this)(GetInput(node, 0, rt), GetInput(node, 1, rt), OptionalInt(node, "bits"),
                     OptionalInt(node, "radix"), OptionalInt(node, "group_size"),

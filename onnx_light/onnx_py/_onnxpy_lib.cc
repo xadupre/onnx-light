@@ -1,3 +1,5 @@
+#include <nanobind/nanobind.h>
+
 #include "onnx.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_lib/checker.h"

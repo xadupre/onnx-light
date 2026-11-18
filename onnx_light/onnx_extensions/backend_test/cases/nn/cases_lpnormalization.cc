@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -51,36 +52,47 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     return;
   }
 
-  // Upstream ONNX PR #8454: finite inputs must not lose their normalized
-  // values through overflow or underflow in the norm.
-  for (int64_t p : {1, 2}) {
-    for (bool small : {false, true}) {
-      const float magnitude = small ? 1e-30f : (p == 1 ? 3e38f : 1e30f);
-      const float expected = p == 1 ? 0.5f : static_cast<float>(std::sqrt(0.5));
-      for (int64_t axis : {-1, 0, 1}) {
+  // Upstream PR #8454: finite normalization must not overflow or underflow.
+  for (const int64_t p : {1, 2}) {
+    for (const float magnitude : {3e38f, 1e30f, 1e-30f, std::numeric_limits<float>::denorm_min()}) {
+      for (const int64_t axis : {-1, 0, 1}) {
         NodeProto node;
         node.set_op_type("LpNormalization");
         node.add_input("x");
         node.add_output("y");
         AddAttribute<int64_t>(node, "axis", axis);
         AddAttribute<int64_t>(node, "p", p);
-        Expect(registry, std::move(node),
-               "test_cc_lpnormalization_finite_" + std::string(small ? "small" : "large") + "_p" +
-                   std::to_string(p) + "_axis" + std::to_string(axis),
-               {opset}, [magnitude, expected, axis]() -> IoData {
-                 const bool first_axis = axis == 0;
-                 Tensor x = Tensor::FromFloat(
-                     "", {2, 2},
-                     first_axis ? std::vector<float>{magnitude, 0.0f, -magnitude, 0.0f}
-                                : std::vector<float>{magnitude, -magnitude, 0.0f, 0.0f});
-                 Tensor y = Tensor::FromFloat(
-                     "", {2, 2},
-                     first_axis ? std::vector<float>{expected, 0.0f, -expected, 0.0f}
-                                : std::vector<float>{expected, -expected, 0.0f, 0.0f});
-                 return IoData{{std::move(x)}, {std::move(y)}};
-               });
+        const std::string name = "test_cc_lpnormalization_finite_extreme_p" + std::to_string(p) +
+                                 "_magnitude_" + std::to_string(std::ilogb(magnitude)) + "_axis_" +
+                                 std::to_string(axis);
+        Expect(registry, std::move(node), name, {opset}, [p, magnitude, axis]() -> IoData {
+          const float value = p == 1 ? 0.5f : static_cast<float>(std::sqrt(0.5));
+          Tensor x = Tensor::FromFloat("", {2, 2},
+                                       axis != 0 ? std::vector<float>{magnitude, -magnitude, 0, 0}
+                                                 : std::vector<float>{magnitude, 0, -magnitude, 0});
+          Tensor y = Tensor::FromFloat("", {2, 2},
+                                       axis != 0 ? std::vector<float>{value, -value, 0, 0}
+                                                 : std::vector<float>{value, 0, -value, 0});
+          return IoData{{std::move(x)}, {std::move(y)}};
+        });
       }
     }
+  }
+
+  for (const int64_t p : {1, 2}) {
+    NodeProto node;
+    node.set_op_type("LpNormalization");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "p", p);
+    Expect(registry, std::move(node), "test_cc_lpnormalization_long_slice_p" + std::to_string(p),
+           {opset}, [p]() -> IoData {
+             constexpr int64_t n = 65520;
+             const float value = static_cast<float>(p == 1 ? 1.0 / n : 1.0 / std::sqrt(n));
+             Tensor x = Tensor::FromFloat("", {1, n}, std::vector<float>(n, 1.0f));
+             Tensor y = Tensor::FromFloat("", {1, n}, std::vector<float>(n, value));
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   Tensor x = Tensor::FromFloat(

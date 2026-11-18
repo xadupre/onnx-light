@@ -1,3 +1,5 @@
+#include <nanobind/nanobind.h>
+
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
@@ -14,7 +16,6 @@
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
-#include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/map.h>

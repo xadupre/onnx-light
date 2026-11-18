@@ -1,3 +1,5 @@
+#include <nanobind/nanobind.h>
+
 #include "onnx.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_lib/checker.h"
@@ -568,11 +570,41 @@ void AddOnnxPyLib(nb::module_ &m) {
   auto checker_mod = m.def_submodule("checker");
   checker_mod.doc() = "Checker submodule";
 
-  // nb::exception registers a new Python exception class and maps C++ throws of that type to it.
-  // The RAII object is intentionally discarded after the registration side-effect completes.
-  nb::exception<checker::ValidationError>(
-      checker_mod,
-      "ValidationError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+  // Avoid nb::exception's message-only translator: this translator also preserves the code.
+  const std::string validation_error_name =
+      nb::cast<std::string>(checker_mod.attr("__name__")) + ".ValidationError";
+  nb::object validation_error =
+      nb::steal(PyErr_NewException(validation_error_name.c_str(), PyExc_Exception, nullptr));
+  if (!validation_error.is_valid()) {
+    throw nb::python_error();
+  }
+  validation_error.attr("code") = nb::none();
+  checker_mod.attr("ValidationError") = validation_error;
+  nb::register_exception_translator(
+      [](const std::exception_ptr &p, void *payload) {
+        try {
+          std::rethrow_exception(p);
+        } catch (const checker::ValidationError &e) {
+          auto *type = static_cast<PyObject *>(payload);
+          PyObject *error = PyObject_CallFunction(type, "s", e.what());
+          if (error == nullptr) {
+            return;
+          }
+          if (!e.code().empty()) {
+            PyObject *code = PyUnicode_FromStringAndSize(e.code().data(),
+                                                         static_cast<Py_ssize_t>(e.code().size()));
+            const bool set = code != nullptr && PyObject_SetAttrString(error, "code", code) == 0;
+            Py_XDECREF(code);
+            if (!set) {
+              Py_DECREF(error);
+              return;
+            }
+          }
+          PyErr_SetObject(type, error);
+          Py_DECREF(error);
+        }
+      },
+      validation_error.inc_ref().ptr());
 
   checker_mod.def(
       "check_model",

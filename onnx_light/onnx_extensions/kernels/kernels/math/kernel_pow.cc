@@ -119,7 +119,7 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
   }
   for (size_t d = 0; d < rank; ++d) {
     if (sx[d] == sy[d] || sx[d] == 1 || sy[d] == 1) {
-      out[d] = sx[d] >= sy[d] ? sx[d] : sy[d];
+      out[d] = sx[d] == 1 ? sy[d] : sx[d];
     } else {
       EXT_THROW_INVALID(kPowName, " input shapes are not multidirectional-broadcastable.");
     }

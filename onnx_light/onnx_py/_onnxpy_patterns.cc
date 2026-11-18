@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include <nanobind/nanobind.h>
+
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
@@ -48,7 +50,6 @@
 #include <optional>
 #include <string>
 
-#include <nanobind/nanobind.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>

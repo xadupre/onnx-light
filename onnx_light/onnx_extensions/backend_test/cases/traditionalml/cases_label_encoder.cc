@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_extensions/backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <cstring>
@@ -32,6 +33,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //     ``test_ai_onnx_ml_label_encoder_tensor_value_only_mapping`` tests.
 //   * int64 keys → string values, including an explicit string default.
 //   * string keys → string values through tensor-typed attributes.
+//   * string keys → int64 values for shape inference, including an unmatched key.
 // ---------------------------------------------------------------------------
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 4);
@@ -79,6 +81,22 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("LabelEncoder");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<std::string>>(node, "keys_strings", {"a", "b", "c"});
+    AddAttribute<std::vector<int64_t>>(node, "values_int64s", {10, 20, 30});
+    AddAttribute<int64_t>(node, "default_int64", -7);
+    Expect(registry, std::move(node), "test_cc_label_encoder_string_int_shape_inference",
+           {default_opset, opset}, []() -> IoData {
+             return IoData{{Tensor::FromStrings("", {2, 2}, {"c", "a", "missing", "b"})},
+                           {Tensor::FromInt64("", {2, 2}, {30, 10, -7, 20})}};
+           });
   }
 
   // int64 -> float variant.

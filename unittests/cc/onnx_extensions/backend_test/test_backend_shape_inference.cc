@@ -25,6 +25,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
+using core::backend_test::CollectTestCasesByName;
 using core::backend_test::DataSet;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
@@ -214,6 +215,134 @@ void CheckValueInfoMatchesExpected(const GraphProto &graph,
 }
 
 } // namespace
+
+TEST(BackendTestCaseShapeInference, RegisteredModelsWithUnknownInputTypes) {
+  struct Profile {
+    const char *name;
+    int64_t version;
+    int expected_type;
+  };
+  const std::vector<Profile> profiles{
+      {"test_cc_regex_full_match_basic", 20, TensorProto::BOOL},
+#ifdef ONNX_ML
+      {"test_cc_dict_vectorizer_string_int64", 1, TensorProto::UNDEFINED},
+      {"test_cc_label_encoder_string_int_shape_inference", 1, TensorProto::UNDEFINED},
+      {"test_cc_label_encoder_string_int_shape_inference", 2, TensorProto::INT64},
+      {"test_ai_onnx_ml_label_encoder_string_int", 4, TensorProto::INT64},
+      {"test_cc_treeensemble_single_tree_float", 5, TensorProto::FLOAT},
+#endif
+  };
+  for (const auto &profile : profiles) {
+    SCOPED_TRACE(std::string(profile.name) + "-" + std::to_string(profile.version));
+    auto cases = CollectTestCasesByName(profile.name);
+    size_t checked = 0;
+    for (auto &tc : cases) {
+      if (tc.name != profile.name) {
+        continue;
+      }
+      TestCaseUnloadGuard unload_guard(tc);
+      for (const bool custom_producer : {false, true}) {
+        SCOPED_TRACE(custom_producer);
+        ModelProto model = tc.model();
+        auto *graph = model.mutable_graph();
+        ASSERT_EQ(graph->node_size(), 1);
+        ASSERT_EQ(graph->input_size(), 1);
+        ASSERT_EQ(graph->output_size(), 1);
+        graph->mutable_output(0)->clear_type();
+        graph->clear_value_info();
+        // Historical ML schemas are tested on copies so registered models
+        // remain compatible with the GraphBuilder's built-in schemas.
+        for (auto &opset : *model.mutable_opset_import()) {
+          if (opset.domain() == "ai.onnx.ml") {
+            opset.set_version(profile.version);
+          }
+        }
+        if (graph->node(0).op_type() == "LabelEncoder" && profile.version == 1) {
+          graph->mutable_node(0)->clear_attribute();
+        }
+        if (custom_producer) {
+          auto *opset = model.add_opset_import();
+          opset->set_domain("backend.test");
+          opset->set_version(1);
+          NodeProto consumer = graph->node(0);
+          *consumer.mutable_input(0) = "unknown_type";
+          graph->clear_node();
+          auto &producer = AddNode(*graph, "UnknownType", {std::string(graph->input(0).name())},
+                                   {"unknown_type"});
+          producer.set_domain("backend.test");
+          *graph->add_node() = std::move(consumer);
+        } else {
+          graph->mutable_input(0)->clear_type();
+        }
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(true, 1, false)));
+        const auto &output = graph->output(0).type().tensor_type();
+        EXPECT_EQ(output.elem_type(), profile.expected_type);
+        if (graph->node(graph->node_size() - 1).op_type() == "TreeEnsemble") {
+          ASSERT_TRUE(output.has_shape());
+          ASSERT_EQ(output.shape().dim_size(), 2);
+          EXPECT_FALSE(output.shape().dim(0).has_dim_value());
+          EXPECT_EQ(output.shape().dim(1).dim_value(), 1);
+        } else {
+          EXPECT_FALSE(output.has_shape());
+        }
+      }
+      ++checked;
+    }
+    EXPECT_EQ(checked, 1u);
+  }
+}
+
+TEST(BackendTestCaseShapeInference, RegisteredModelsWithTypedShapelessInputs) {
+  struct Profile {
+    const char *name;
+    int64_t version;
+  };
+  const std::vector<Profile> profiles{
+      {"test_cc_regex_full_match_basic", 20},
+#ifdef ONNX_ML
+      {"test_cc_label_encoder_string_int_shape_inference", 2},
+      {"test_ai_onnx_ml_label_encoder_string_int", 4},
+#endif
+  };
+  for (const auto &profile : profiles) {
+    SCOPED_TRACE(std::string(profile.name) + "-" + std::to_string(profile.version));
+    auto cases = CollectTestCasesByName(profile.name);
+    size_t checked = 0;
+    for (auto &tc : cases) {
+      if (tc.name != profile.name) {
+        continue;
+      }
+      TestCaseUnloadGuard unload_guard(tc);
+      for (const bool keep_shape : {false, true}) {
+        SCOPED_TRACE(keep_shape);
+        ModelProto model = tc.model();
+        for (auto &opset : *model.mutable_opset_import()) {
+          if (opset.domain() == "ai.onnx.ml") {
+            opset.set_version(profile.version);
+          }
+        }
+        auto *graph = model.mutable_graph();
+        const auto expected = graph->output(0).type().tensor_type();
+        graph->mutable_output(0)->clear_type();
+        graph->clear_value_info();
+        if (!keep_shape) {
+          graph->mutable_input(0)->mutable_type()->mutable_tensor_type()->clear_shape();
+        }
+        ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                     ShapeInferenceOptions(true, 1, false)));
+        const auto &output = graph->output(0).type().tensor_type();
+        EXPECT_EQ(output.elem_type(), expected.elem_type());
+        EXPECT_EQ(output.has_shape(), keep_shape);
+        if (keep_shape) {
+          EXPECT_EQ(DimsOf(output), DimsOf(expected));
+        }
+      }
+      ++checked;
+    }
+    EXPECT_EQ(checked, 1u);
+  }
+}
 
 TEST(BackendTestCaseShapeInference, GatherNDRejectsNegativeDimensions) {
   auto cases = CollectTestCases("inference");

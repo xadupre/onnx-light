@@ -477,9 +477,12 @@ ValueInfoProto MakeTensorValueInfo(const std::string &name, TensorProto::DataTyp
 } // namespace
 
 TEST(OnnxOptimValueInfo, FromValueInfoTensorTypeAndShape) {
-  ValueInfoProto vi = MakeTensorValueInfo(
-      "x", TensorProto::DataType::FLOAT,
-      {core::symbolic::SymDim(2), core::symbolic::SymDim("N"), core::symbolic::SymDim(3)});
+  std::vector<core::symbolic::SymDim> dims;
+  dims.reserve(3);
+  dims.emplace_back(2);
+  dims.emplace_back("N");
+  dims.emplace_back(3);
+  ValueInfoProto vi = MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, dims);
   core::symbolic::SymTensor t;
   EXPECT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, t));
   EXPECT_EQ(t.Dtype(), core::symbolic::TensorType::kFloat);

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/backend_test/expect.h"
 #include "onnx_core/backend_test/test_case_registry.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
@@ -13,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -249,8 +251,28 @@ TEST(KernelPacking, BackendCasesExecuteNativeAndExpandedFunctionsInRuntimeSessio
   RegisterAllOnnxOperatorSchemas();
   onnx_kernels::RegisterKernelFunctions();
   for (const std::string op : {"Pack", "Unpack"}) {
-    const auto cases = core::backend_test::CollectTestCases(op);
+    auto cases = core::backend_test::CollectTestCases(op);
     ASSERT_EQ(cases.size(), 5u);
+    // Keep synthetic empty-row dimensions representable on 32-bit platforms.
+    const int64_t large_empty_row_dim =
+        std::min<int64_t>(int64_t{1} << 61, std::numeric_limits<std::ptrdiff_t>::max() - 1);
+    for (int64_t bits = 1; bits <= 8; ++bits)
+      for (int64_t n : {int64_t{0}, int64_t{9}, large_empty_row_dim, large_empty_row_dim + 1}) {
+        const Tensor digits = Tensor::FromUint8("", {0, n}, {});
+        const int64_t words = n / 8 * bits + ((n % 8) * bits + 7) / 8;
+        const Tensor packed = Tensor::FromUint8("", {0, words}, {});
+        NodeProto node = op == "Pack" ? MakeNode(op.c_str(), {"X"}, {"Y"})
+                                      : MakeNode(op.c_str(), {"X", "count"}, {"Y"});
+        AddAttribute<int64_t>(node, "bits", bits);
+        core::backend_test::Expect(
+            cases, std::move(node),
+            "test_" + op + "_empty_rows_" + std::to_string(bits) + "_" + std::to_string(n),
+            {DefaultOpset(29)}, [digits, packed, n, op]() -> core::backend_test::IoData {
+              if (op == "Unpack")
+                return {{packed, Tensor::FromInt64("", {}, {n})}, {digits}};
+              return {{digits}, {packed}};
+            });
+      }
     for (const auto &test_case : cases) {
       SCOPED_TRACE(test_case.name);
       ASSERT_EQ(test_case.model().opset_import(0).version(), 29);

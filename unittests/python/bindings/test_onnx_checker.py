@@ -4,10 +4,191 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.shape_inference as shape_inference
 
 
 class TestChecker(ExtTestCase):
+    def make_code_model(self, nodes=None):
+        """Builds a minimal valid model for error-code tests."""
+        return oh.make_model(
+            oh.make_graph(
+                nodes if nodes is not None else [oh.make_node("Identity", ["x"], ["y"])],
+                "codes",
+                [oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [2])],
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 21)],
+        )
+
+    def assert_model_code(self, model, code):
+        """Checks the stable code of a rejected model."""
+        with self.assertRaises(checker.ValidationError) as caught:
+            checker.check_model(model)
+        self.assertEqual(caught.exception.code, code)
+        return caught.exception
+
+    def test_validation_error_model_codes(self):
+        for version, code in (
+            (0, "ir-version-missing"),
+            (defs.IR_VERSION + 1, "ir-version-unsupported"),
+        ):
+            with self.subTest(code=code):
+                model = self.make_code_model()
+                model.ir_version = version
+                error = self.assert_model_code(model, code)
+                if version == 0:
+                    self.assertEqual(
+                        str(error), "The model does not have an ir_version set properly."
+                    )
+
+        model = self.make_code_model()
+        for value in ("a", "b"):
+            entry = model.metadata_props.add()
+            entry.key, entry.value = "key", value
+        self.assert_model_code(model, "metadata-props-duplicate-key")
+
+        model = self.make_code_model()
+        model.graph.name = ""
+        self.assert_model_code(model, "required-field-empty")
+        model = self.make_code_model()
+        value = onnxl.ValueInfoProto()
+        value.name = "x"
+        model.graph.input[0].CopyFrom(value)
+        self.assert_model_code(model, "required-field-missing")
+
+        model = self.make_code_model()
+        model.graph.input[0].type.tensor_type.elem_type = onnxl.TensorProto.FLOAT4E2M1
+        self.assert_model_code(model, "data-type-requires-newer-ir-version")
+        model = self.make_code_model()
+        del model.opset_import[:]
+        self.assert_model_code(model, "opset-import-missing")
+        model = self.make_code_model()
+        model.graph.output[0].name = "never_produced"
+        self.assert_model_code(model, "graph-output-not-produced")
+
+    def test_validation_error_node_codes(self):
+        cases = [
+            ([oh.make_node("Identity", ["typo"], ["y"])], "input-not-defined"),
+            (
+                [
+                    oh.make_node("Identity", ["later"], ["y"]),
+                    oh.make_node("Identity", ["x"], ["later"]),
+                ],
+                "input-not-defined",
+            ),
+            ([oh.make_node("Identity", ["x"], ["y"])] * 2, "not-ssa"),
+            ([oh.make_node("NoSuchOp", ["x"], ["y"])], "operator-not-registered"),
+            ([oh.make_node("Op", ["x"], ["y"], domain="custom")], "opset-import-missing"),
+            ([oh.make_node("Add", ["x"], ["y"])], "node-schema-mismatch"),
+            ([oh.make_node("Identity", [""], ["y"])], "node-schema-mismatch"),
+            ([oh.make_node("Identity", ["x"], [""])], "node-schema-mismatch"),
+            ([oh.make_node("Cast", ["x"], ["y"])], "node-schema-mismatch"),
+            ([oh.make_node("LeakyRelu", ["x"], ["y"], alpha=1)], "node-schema-mismatch"),
+            ([oh.make_node("Identity", ["x"], ["y"], unknown=1)], "node-schema-mismatch"),
+            ([oh.make_node("Upsample", ["x"], ["y"])], "operator-deprecated"),
+        ]
+        for nodes, code in cases:
+            with self.subTest(op=nodes[0].op_type, code=code):
+                model = self.make_code_model(nodes)
+                error = self.assert_model_code(model, code)
+                if code in {"node-schema-mismatch", "operator-not-registered"}:
+                    self.assertIn("==> Context:", str(error))
+
+        model = self.make_code_model()
+        for _ in range(2):
+            model.graph.node[0].attribute.append(oh.make_attribute("alpha", 1.0))
+        self.assert_model_code(model, "node-schema-mismatch")
+        model = self.make_code_model()
+        for _ in range(2):
+            model.graph.initializer.append(
+                oh.make_tensor("w", onnxl.TensorProto.FLOAT, [2], [0.0, 0.0])
+            )
+        self.assert_model_code(model, "not-ssa")
+
+    def test_validation_error_nested_context_and_function(self):
+        branch = oh.make_graph(
+            [oh.make_node("NoSuchOp", ["x"], ["z"])],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("z", onnxl.TensorProto.FLOAT, [2])],
+        )
+        model = self.make_code_model(
+            [oh.make_node("If", ["cond"], ["y"], then_branch=branch, else_branch=branch)]
+        )
+        model.graph.input.append(oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, []))
+        error = self.assert_model_code(model, "operator-not-registered")
+        self.assertIn("==> Context:", str(error))
+
+        for nodes, code in (
+            ([oh.make_node("Identity", ["undefined"], ["b"])], "input-not-defined"),
+            ([oh.make_node("Op", ["a"], ["b"], domain="custom")], "opset-import-missing"),
+            (
+                [oh.make_node("Identity", ["a"], ["b"]), oh.make_node("Identity", ["a"], ["b"])],
+                "not-ssa",
+            ),
+        ):
+            with self.subTest(code=code):
+                model = self.make_code_model()
+                model.functions.append(
+                    oh.make_function("local", "f", ["a"], ["b"], nodes, [oh.make_opsetid("", 21)])
+                )
+                self.assert_model_code(model, code)
+
+    def test_validation_error_external_codes(self):
+        for entries, inline, code in (
+            ({}, False, "external-data-entry-invalid"),
+            ({"location": ""}, False, "external-data-location-invalid"),
+            ({"location": "#memory", "offset": "-1"}, False, "external-data-entry-invalid"),
+            ({"location": "#memory"}, True, "external-data-entry-invalid"),
+        ):
+            with self.subTest(entries=entries, inline=inline):
+                model = self.make_code_model()
+                tensor = onnxl.TensorProto()
+                tensor.name = "w"
+                tensor.data_type = onnxl.TensorProto.FLOAT
+                tensor.dims.append(2)
+                tensor.data_location = onnxl.TensorProto.EXTERNAL
+                if inline:
+                    tensor.raw_data = b"\x00" * 8
+                for key, value in entries.items():
+                    entry = tensor.external_data.add()
+                    entry.key, entry.value = key, value
+                model.graph.initializer.append(tensor)
+                self.assert_model_code(model, code)
+        for location in ("#memory", "./#memory", "#unused/../#memory"):
+            with self.subTest(location=location):
+                tensor.ClearField("raw_data")
+                tensor.external_data[0].value = location
+                model.graph.initializer[0].CopyFrom(tensor)
+                checker.check_model(model)
+
+    def test_validation_error_no_code_compatibility(self):
+        self.assertIsNone(checker.ValidationError("message").code)
+        model = self.make_code_model()
+        model.ir_version = 2
+        self.assert_model_code(model, None)
+        with self.assertRaises(checker.ValidationError) as caught:
+            checker.check_attribute(onnxl.AttributeProto())
+        self.assertIsNone(caught.exception.code)
+
+    def test_validation_error_infer_node_outputs(self):
+        for node in (
+            oh.make_node("Add", ["x"], ["y"]),
+            oh.make_node("Add", ["x", "x"], []),
+            oh.make_node("Add", ["x", "x"], ["y"], unknown=1),
+        ):
+            with self.subTest(node=node):
+                with self.assertRaises(checker.ValidationError) as caught:
+                    shape_inference.infer_node_outputs(
+                        defs.get_schema("Add", 21),
+                        node,
+                        {"x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2])},
+                    )
+                self.assertEqual(caught.exception.code, "node-schema-mismatch")
+
     def test_operator_function_definitions_are_accepted(self):
         for domain in ("", "ai.onnx", "onnx.ai", "ai.onnx.ml"):
             for overload in ("", "custom"):

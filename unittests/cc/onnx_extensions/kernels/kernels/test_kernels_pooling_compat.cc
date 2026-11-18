@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
@@ -17,6 +18,40 @@ using onnx_kernels::kernel::AveragePool;
 using onnx_kernels::kernel::MaxUnpool;
 
 namespace Test {
+
+TEST(PoolingCompatibility, AveragePoolFloat16AccumulatesBeforeRounding) {
+  AveragePool pool{KernelContext{DefaultOpset(29)}};
+  for (int64_t kernel : {3, 7}) {
+    for (float value : {1400.0f, -1400.0f, 65504.0f}) {
+      SCOPED_TRACE(kernel);
+      SCOPED_TRACE(value);
+      Tensor x =
+          MakeFloat16Tensor("", {1, 1, kernel, kernel}, std::vector<float>(kernel * kernel, value));
+      Tensor y = pool(x, {kernel, kernel});
+      ASSERT_EQ(y.data_type, static_cast<int32_t>(DataType::FLOAT16));
+      ASSERT_EQ(y.shape, (Shape{1, 1, 1, 1}));
+      ASSERT_EQ(y.size_bytes(), sizeof(uint16_t));
+      EXPECT_EQ(reinterpret_cast<const uint16_t *>(y.bytes())[0], FloatToFloat16Bits(value));
+
+      Tensor output = MakeFloat16Tensor("", {1, 1, 1, 1}, {0});
+      pool(x, {kernel, kernel}, {1, 1}, {0, 0, 0, 0}, false, false, output);
+      EXPECT_EQ(reinterpret_cast<const uint16_t *>(output.bytes())[0], FloatToFloat16Bits(value));
+    }
+  }
+}
+
+TEST(PoolingCompatibility, AveragePoolFloat16ValidatesPreallocatedOutput) {
+  AveragePool pool{KernelContext{DefaultOpset(29)}};
+  Tensor x = MakeFloat16Tensor("", {1, 1, 7, 7}, std::vector<float>(49, 1400.0f));
+  Tensor wrong_type = Tensor::FromFloat("", {1, 1, 1, 1}, {0});
+  Tensor wrong_shape = MakeFloat16Tensor("", {1, 1, 1, 2}, {0, 0});
+  Tensor wrong_size =
+      Tensor::FromRawBytes("", static_cast<int32_t>(DataType::FLOAT16), {1, 1, 1, 1}, {});
+  for (Tensor *output : {&wrong_type, &wrong_shape, &wrong_size}) {
+    EXPECT_THROW(pool(x, {7, 7}, {1, 1}, {0, 0, 0, 0}, false, false, *output),
+                 std::invalid_argument);
+  }
+}
 
 TEST(PoolingCompatibility, AveragePoolCeilDivisorCountsSampledPadding) {
   for (int64_t opset : {18, 19, 22}) {

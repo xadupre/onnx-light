@@ -22,6 +22,74 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 
+ModelProto InputTypeInferenceModel(const std::string &op_type, int64_t version,
+                                   bool custom_producer) {
+  const bool ml = op_type != "RegexFullMatch";
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(ml ? 21 : version);
+  if (ml) {
+    auto *opset = model.add_opset_import();
+    opset->set_domain("ai.onnx.ml");
+    opset->set_version(version);
+  }
+  auto *graph = model.mutable_graph();
+  graph->set_name("input_type_inference");
+  auto *input = graph->add_input();
+  input->set_name(custom_producer ? "x" : "t");
+  if (custom_producer) {
+    auto *type = input->mutable_type()->mutable_tensor_type();
+    type->set_elem_type(TensorProto::FLOAT);
+    type->mutable_shape()->add_dim()->set_dim_value(2);
+    type->mutable_shape()->add_dim()->set_dim_value(3);
+    auto *opset = model.add_opset_import();
+    opset->set_domain("custom.domain");
+    opset->set_version(1);
+    auto *producer = graph->add_node();
+    producer->set_op_type("Custom");
+    producer->set_domain("custom.domain");
+    producer->add_input("x");
+    producer->add_output("t");
+  }
+  auto *node = graph->add_node();
+  node->set_op_type(op_type);
+  node->set_domain(ml ? "ai.onnx.ml" : "");
+  node->add_input("t");
+  node->add_output("y");
+  graph->add_output()->set_name("y");
+  if (op_type == "RegexFullMatch") {
+    AddAttribute<std::string>(*node, "pattern", "a.*");
+  } else if (op_type == "DictVectorizer") {
+    AddAttribute<std::vector<std::string>>(*node, "string_vocabulary", {"a"});
+  } else if (op_type == "LabelEncoder" && version >= 2) {
+    AddAttribute<std::vector<std::string>>(*node, "keys_strings", {"a"});
+    AddAttribute<std::vector<int64_t>>(*node, "values_int64s", {1});
+  } else if (op_type == "TreeEnsemble") {
+    for (const char *name : {"nodes_featureids", "nodes_truenodeids", "nodes_falsenodeids",
+                             "leaf_targetids", "tree_roots"}) {
+      AddAttribute<std::vector<int64_t>>(*node, name, {0});
+    }
+    AddAttribute<std::vector<int64_t>>(*node, "nodes_trueleafs", {1});
+    AddAttribute<std::vector<int64_t>>(*node, "nodes_falseleafs", {1});
+    AddAttribute<int64_t>(*node, "n_targets", 1);
+    for (const char *name : {"nodes_splits", "nodes_modes", "leaf_weights"}) {
+      auto *attr = node->add_attribute();
+      attr->set_name(name);
+      attr->set_type(AttributeProto::TENSOR);
+      auto *tensor = attr->mutable_t();
+      tensor->add_dims(1);
+      if (std::string(name) == "nodes_modes") {
+        tensor->set_data_type(TensorProto::UINT8);
+        tensor->add_int32_data(0);
+      } else {
+        tensor->set_data_type(TensorProto::FLOAT);
+        tensor->add_float_data(0.5f);
+      }
+    }
+  }
+  return model;
+}
+
 ModelProto DequantizePackedShapeModel(const std::string &format, const std::vector<int64_t> &shape,
                                       const std::vector<int64_t> &input_shape,
                                       int64_t dtype = TensorProto::FLOAT) {
@@ -55,6 +123,95 @@ ModelProto DequantizePackedShapeModel(const std::string &format, const std::vect
 }
 
 } // namespace
+
+TEST(onnx_shape_inference, InputOfUnknownType) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::tuple<std::string, int64_t, int>> cases{
+      {"RegexFullMatch", 20, TensorProto::BOOL},
+#ifdef ONNX_ML
+      {"DictVectorizer", 1, TensorProto::UNDEFINED}, {"LabelEncoder", 1, TensorProto::UNDEFINED},
+      {"LabelEncoder", 2, TensorProto::INT64},       {"LabelEncoder", 4, TensorProto::INT64},
+      {"TreeEnsemble", 5, TensorProto::FLOAT},
+#endif
+  };
+  for (const auto &[op_type, version, expected_type] : cases) {
+    SCOPED_TRACE(op_type + "-" + std::to_string(version));
+    for (bool custom_producer : {false, true}) {
+      SCOPED_TRACE(custom_producer);
+      auto model = InputTypeInferenceModel(op_type, version, custom_producer);
+      ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                   ShapeInferenceOptions(true, 1, false)));
+      const auto &output = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(output.elem_type(), expected_type);
+      if (op_type == "TreeEnsemble") {
+        ASSERT_EQ(output.shape().dim_size(), 2u);
+        EXPECT_FALSE(output.shape().dim(0).has_dim_value());
+        EXPECT_EQ(output.shape().dim(1).dim_value(), 1);
+      } else {
+        EXPECT_FALSE(output.has_shape());
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, TypedInputWithoutShape) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::tuple<std::string, int64_t, int>> cases{
+      {"RegexFullMatch", 20, TensorProto::BOOL},
+#ifdef ONNX_ML
+      {"LabelEncoder", 2, TensorProto::INT64},
+      {"LabelEncoder", 4, TensorProto::INT64},
+#endif
+  };
+  for (const auto &[op_type, version, expected_type] : cases) {
+    SCOPED_TRACE(op_type + "-" + std::to_string(version));
+    for (bool has_shape : {false, true}) {
+      auto model = InputTypeInferenceModel(op_type, version, false);
+      auto *input = model.mutable_graph()->mutable_input(0)->mutable_type()->mutable_tensor_type();
+      input->set_elem_type(TensorProto::STRING);
+      if (has_shape)
+        input->mutable_shape()->add_dim()->set_dim_value(3);
+      ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                   ShapeInferenceOptions(true, 1, false)));
+      const auto &output = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(output.elem_type(), expected_type);
+      EXPECT_EQ(output.has_shape(), has_shape);
+      if (has_shape) {
+        ASSERT_EQ(output.shape().dim_size(), 1u);
+        EXPECT_EQ(output.shape().dim(0).dim_value(), 3);
+      }
+    }
+  }
+}
+
+#ifdef ONNX_ML
+TEST(onnx_shape_inference, KnownInputTypeStillValidated) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const auto &[op_type, version] : std::vector<std::pair<std::string, int64_t>>{
+           {"LabelEncoder", 2}, {"LabelEncoder", 4}, {"TreeEnsemble", 5}}) {
+    SCOPED_TRACE(op_type + "-" + std::to_string(version));
+    auto model = InputTypeInferenceModel(op_type, version, false);
+    model.mutable_graph()->mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+        TensorProto::INT64);
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(true, 1, false)),
+                 InferenceError);
+  }
+}
+
+TEST(onnx_shape_inference, UnknownInputTypeStillValidatesAttributes) {
+  RegisterAllOnnxOperatorSchemas();
+  for (const auto &[op_type, version] : std::vector<std::pair<std::string, int64_t>>{
+           {"LabelEncoder", 2}, {"LabelEncoder", 4}, {"TreeEnsemble", 5}}) {
+    SCOPED_TRACE(op_type + "-" + std::to_string(version));
+    auto model = InputTypeInferenceModel(op_type, version, false);
+    model.mutable_graph()->mutable_node(0)->mutable_attribute()->RemoveLast();
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(true, 1, false)),
+                 InferenceError);
+  }
+}
+#endif
 
 TEST(onnx_shape_inference, DequantizePackedProfiles) {
   RegisterAllOnnxOperatorSchemas();

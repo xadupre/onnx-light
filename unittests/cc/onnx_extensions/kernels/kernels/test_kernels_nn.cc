@@ -69,6 +69,60 @@ uint64_t StorageTotal(const RuntimeEventLog &events, uint64_t RuntimeEvent::*fie
 
 } // namespace
 
+TEST(KernelClass, LpNormalizationPreservesNonfiniteBehavior) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const Tensor x = Tensor::FromFloat("", {3, 2}, {inf, 1.0f, nan, 1.0f, 0.0f, 0.0f});
+  for (int64_t p : {1, 2}) {
+    SCOPED_TRACE(p);
+    const Tensor y = kernel(x, -1, p);
+    const float *values = y.AsFloat();
+    EXPECT_TRUE(std::isnan(values[0]));
+    EXPECT_EQ(values[1], 0.0f);
+    EXPECT_TRUE(std::isnan(values[2]));
+    EXPECT_TRUE(std::isnan(values[3]));
+    EXPECT_EQ(values[4], 0.0f);
+    EXPECT_EQ(values[5], 0.0f);
+  }
+}
+
+TEST(KernelClass, LpNormalizationPreservesEmptyAxes) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  for (const Shape &shape : {Shape{2, 0}, Shape{0, 2}}) {
+    const Tensor x = Tensor::FromFloat("", shape, {});
+    for (int64_t axis : {0, 1, -1}) {
+      for (int64_t p : {1, 2}) {
+        SCOPED_TRACE(axis);
+        SCOPED_TRACE(p);
+        const Tensor y = kernel(x, axis, p);
+        EXPECT_EQ(y.shape, shape);
+        EXPECT_EQ(y.data_type, x.data_type);
+        EXPECT_EQ(y.element_count(), 0);
+      }
+    }
+  }
+}
+
+TEST(KernelClass, LpNormalizationAccumulatesLongSlices) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  constexpr int64_t n = 65520;
+  const Tensor x = Tensor::FromFloat("", {1, n}, std::vector<float>(n, 1.0f));
+  for (int64_t p : {1, 2}) {
+    SCOPED_TRACE(p);
+    const Tensor y = kernel(x, -1, p);
+    ASSERT_EQ(y.shape, x.shape);
+    ASSERT_EQ(y.data_type, x.data_type);
+    const float expected = static_cast<float>(p == 1 ? 1.0 / n : 1.0 / std::sqrt(n));
+    for (int64_t i = 0; i < n; ++i) {
+      ASSERT_FLOAT_EQ(y.AsFloat()[i], expected);
+    }
+  }
+}
+
 TEST(KernelClass, GlobalPoolsParallelSlicesMatchSerial) {
   core::runtime::CpuExecutionPolicy policy;
   policy.num_threads = 2;
@@ -133,6 +187,33 @@ TEST(KernelClass, GlobalPoolsParallelSlicesMatchSerial) {
   EXPECT_EQ(lp(empty).element_count(), 0);
   EXPECT_THROW(average(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
   EXPECT_THROW(maximum(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
+}
+
+TEST(KernelClass, LpNormalizationNonfiniteAndEmptySlices) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const Tensor x = Tensor::FromFloat("", {3, 2}, {inf, 1, -inf, 1, nan, 1});
+  for (const int64_t p : {1, 2}) {
+    SCOPED_TRACE(p);
+    const Tensor y = kernel(x, -1, p);
+    EXPECT_EQ(y.data_type, x.data_type);
+    EXPECT_EQ(y.shape, x.shape);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[0]));
+    EXPECT_EQ(y.AsFloat()[1], 0);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[2]));
+    EXPECT_EQ(y.AsFloat()[3], 0);
+    EXPECT_TRUE(std::isnan(y.AsFloat()[4]));
+    EXPECT_TRUE(std::isnan(y.AsFloat()[5]));
+    for (const int64_t axis : {0, 1, -1}) {
+      const Tensor empty = Tensor::FromFloat("", {2, 0}, {});
+      const Tensor result = kernel(empty, axis, p);
+      EXPECT_EQ(result.shape, empty.shape);
+      EXPECT_EQ(result.data_type, empty.data_type);
+      EXPECT_EQ(result.element_count(), 0);
+    }
+  }
 }
 
 TEST(KernelClass, NormalizationsParallelSlicesMatchSerial) {

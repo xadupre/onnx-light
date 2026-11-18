@@ -17,15 +17,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# When triggered by a release event, each matrix job attaches its archive to
-# the GitHub Release (requires contents: write).  For workflow_dispatch and
-# schedule runs, the artifacts are only uploaded to GitHub Actions storage.
+permissions:
+  contents: read
+
 jobs:
   build_cpp_artifacts:
     name: cpp (${{ matrix.artifact_suffix }})
     runs-on: ${{ matrix.runs-on }}
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -159,11 +157,23 @@ jobs:
           name: cpp-${{ matrix.artifact_suffix }}
           path: ${{ github.workspace }}/dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.${{ matrix.archive_ext }}
 
+  publish_cpp_release:
+    needs: build_cpp_artifacts
+    if: ${{ github.event_name == 'release' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download C++ artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: cpp-*
+          path: release-artifacts
+          merge-multiple: true
+
       - name: Attach to GitHub Release
-        if: github.event_name == 'release'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ github.ref_name }}" \
-            "${{ github.workspace }}/dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.${{ matrix.archive_ext }}"
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" release-artifacts/*

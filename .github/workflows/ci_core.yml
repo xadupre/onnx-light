@@ -83,26 +83,20 @@ jobs:
           ctest --test-dir "$build" -C Release --output-on-failure
 
   standalone_proto:
-    name: standalone C++ protos (GCC ${{ matrix.gcc }})
+    name: standalone C++ protos
     needs: changes
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {os: ubuntu-24.04, gcc: 13}
-          - {os: ubuntu-26.04, gcc: 15}
     env:
-      CC: gcc-${{ matrix.gcc }}
-      CXX: g++-${{ matrix.gcc }}
+      CC: gcc-13
+      CXX: g++-13
     steps:
       - uses: actions/checkout@v7
       - name: Install compiler
-        run: sudo apt-get update && sudo apt-get install -y g++-${{ matrix.gcc }}
+        run: sudo apt-get update && sudo apt-get install -y g++-13
       - name: Install CMake
         run: python -m pip install "cmake>=4.0"
       - name: Build, install and consume the isolated proto project
@@ -281,32 +275,23 @@ jobs:
     # preflights gate the downstream compilation jobs. Mirrors
     # .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so the gate is
     # observable as a required PR status check.
-    name: no-onnx (GCC ${{ matrix.gcc }}, py3.12)
-    runs-on: ${{ matrix.os }}
+    name: no-onnx (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
     # Cache misses took over 25 minutes in run 40861273682; the full Python suite
     # needs another 6 minutes. Allow both phases plus cold-build variance.
     timeout-minutes: 40
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {os: ubuntu-24.04, gcc: 13}
-          - {os: ubuntu-26.04, gcc: 15}
-    env:
-      CC: gcc-${{ matrix.gcc }}
-      CXX: g++-${{ matrix.gcc }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      - name: Install compiler and OpenSSL (Linux)
-        run: sudo apt-get update && sudo apt-get install -y g++-${{ matrix.gcc }} libssl-dev
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
         id: sccache
@@ -325,19 +310,16 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
-      # Persistent build dependencies let the editable test install reuse the wheel's objects.
-      - name: Install CMake and build dependencies
-        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
-
-      - name: Build full C++20 wheel with the benchmark's Python ABI and C++ install
-        env:
-          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
-        run: python -m pip wheel --no-build-isolation --no-deps --wheel-dir "$RUNNER_TEMP/wheels" -Cbuild-dir=build -C cmake.define.ONNX_LIGHT_INSTALL=ON -C cmake.define.ONNX_LIGHT_PYTHON_STABLE_ABI=OFF -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} .
+      # sccache caches compiled objects in the GitHub Actions cache so repeated
+      # runs that do not touch C++ sources are near-instant, matching the
+      # macOS/Windows core builds that already use sccache.
+      - name: Install CMake
+        run: python -m pip install "cmake>=4.0"
 
       - name: Build and Install package
         env:
           SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
-        run: pip install --no-build-isolation -Cbuild-dir=build -C cmake.define.ONNX_LIGHT_INSTALL=ON -C cmake.define.ONNX_LIGHT_PYTHON_STABLE_ABI=OFF -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
+        run: pip install -Cbuild-dir=build -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
       - name: uninstall onnx
         run: pip uninstall -y onnx

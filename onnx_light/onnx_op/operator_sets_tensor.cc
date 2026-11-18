@@ -726,32 +726,27 @@ LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-  const bool axes_is_input = since_version >= 13;
-  LightOpSchema schema(
-      "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),
-      axes_is_input ? std::vector<FormalParameter>{
-                          {"data", "Tensors with at least max(dims) dimensions.", "T"},
-                          {"axes",
-                           since_version >= 23
-                               ? "1D tensor of integers indicating the dimensions to squeeze. "
-                                 "Negative value means counting dimensions from the back. Accepted "
-                                 "range is [-r, r-1] where r = rank(data)."
-                               : "List of integers indicating the dimensions to squeeze. Negative "
-                                 "value means counting dimensions from the back. Accepted range is "
-                                 "[-r, r-1] where r = rank(data).",
-                           "tensor(int64)"},
-                      }
-                    : std::vector<FormalParameter>{
-                          {"data", "Tensors with at least max(dims) dimensions.", "T"},
-                      },
-      {
-          {"squeezed", "Reshaped tensor with same data as input.", "T"},
-      },
-      {
-          {"T", types, MakeSqueezeTypeConstraintDescription(since_version)},
-      });
-  if (axes_is_input) {
-    return schema;
+  if (since_version >= 13) {
+    return LightOpSchema(
+        "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),
+        {
+            {"data", "Tensors with at least max(dims) dimensions.", "T"},
+            {"axes",
+             since_version >= 23
+                 ? "1D tensor of integers indicating the dimensions to squeeze. "
+                   "Negative value means counting dimensions from the back. Accepted "
+                   "range is [-r, r-1] where r = rank(data)."
+                 : "List of integers indicating the dimensions to squeeze. Negative "
+                   "value means counting dimensions from the back. Accepted range is "
+                   "[-r, r-1] where r = rank(data).",
+             "tensor(int64)"},
+        },
+        {
+            {"squeezed", "Reshaped tensor with same data as input.", "T"},
+        },
+        {
+            {"T", types, MakeSqueezeTypeConstraintDescription(since_version)},
+        });
   }
   return LightOpSchema(
       "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),

@@ -26,9 +26,9 @@ BitblasWeights Fixture(bool symmetric = false) {
       "qweight", Tensor("qweight", TensorProto::INT8, {32, 8}, std::vector<uint8_t>(256, 0xe4)));
   result.tensors.emplace("scales",
                          MakeFloat16Tensor("scales", {32, 1}, std::vector<float>(32, 0.5f)));
-  result.tensors.emplace("qzeros",
-                         Tensor("qzeros", TensorProto::INT8, symmetric ? Shape{0} : Shape{1, 8},
-                                std::vector<uint8_t>(symmetric ? 0 : 8, 0x55)));
+  result.tensors.emplace("qzeros", Tensor::FromRawBytes("qzeros", TensorProto::INT8,
+                                                        symmetric ? Shape{0} : Shape{1, 8},
+                                                        RawByteBuffer(symmetric ? 0 : 8, 0x55)));
   return result;
 }
 

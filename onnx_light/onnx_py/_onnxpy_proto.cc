@@ -1,3 +1,5 @@
+#include <nanobind/nanobind.h>
+
 #include "_onnxpy_dlpack.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
@@ -14,7 +16,6 @@
 #include <limits>
 #include <memory>
 #include <nanobind/make_iterator.h>
-#include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/bind_map.h>
 #include <nanobind/stl/optional.h>

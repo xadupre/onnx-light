@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include <nanobind/nanobind.h>
+
 #include "_onnxpy_dlpack.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/random.h"

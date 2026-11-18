@@ -585,9 +585,12 @@ static bool BuildContextDependentFunctionBodyGeGLU(const FunctionBodyBuildContex
         .Add("GeluGate = Gelu <approximate: string = @approximate> (A32)")
         .Add("Y32 = Mul (GeluGate, B32)")
         .Add("Y = Cast (Y32)", "to", T);
-  } else {
+  } else if (T == TensorProto_DataType_FLOAT || T == TensorProto_DataType_DOUBLE) {
     builder.Add("GeluGate = Gelu <approximate: string = @approximate> (A)")
         .Add("Y = Mul (GeluGate, B)");
+  } else {
+    // Unset or UNDEFINED element types (e.g. partially annotated local functions).
+    return false;
   }
   schema.BuildFunction(functionProto);
   return true;

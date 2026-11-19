@@ -37,6 +37,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     LOG_CUM_SUM_EXP_29_KEY = ("", "LogCumSumExp", 29)
     LOG1P_29_KEY = ("", "Log1p", 29)
     MVN_29_KEY = ("", "MeanVarianceNormalization", 29)
+    CAUSAL_CONV_WITH_STATE_29_KEY = ("", "CausalConvWithState", 29)
+    SCATTER_ELEMENTS_29_KEY = ("", "ScatterElements", 29)
     ND_29_KEYS = {("", "GatherND", 29), ("", "ScatterND", 29)}
     PACKING_29_KEYS = {("", "Pack", 29), ("", "Unpack", 29)}
     STFT_KEY = ("", "STFT", 17)
@@ -67,6 +69,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 cls.LOG_CUM_SUM_EXP_29_KEY,
                 cls.LOG1P_29_KEY,
                 cls.MVN_29_KEY,
+                cls.CAUSAL_CONV_WITH_STATE_29_KEY,
+                cls.SCATTER_ELEMENTS_29_KEY,
             }
             | cls.ND_29_KEYS
             | cls.PACKING_29_KEYS
@@ -306,6 +310,23 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     light = set(keys) if use_set else dict.fromkeys(keys)
                     upstream = available | historical
                     self._remove_recent_schemas_if_onnx_is_outdated(light, upstream)
+                    self.assertEqual(set(light), available | historical | unrelated)
+
+    def test_recent_causal_conv_and_scatter_schemas_are_compared_when_available(self):
+        recent = {self.CAUSAL_CONV_WITH_STATE_29_KEY, self.SCATTER_ELEMENTS_29_KEY}
+        historical = {("", "CausalConvWithState", 27), ("", "ScatterElements", 18)}
+        unrelated = {("custom", "ScatterElements", 29), ("", "CausalConvWithState", 30)}
+        for use_set in (False, True):
+            for available in (
+                set(),
+                {self.CAUSAL_CONV_WITH_STATE_29_KEY},
+                {self.SCATTER_ELEMENTS_29_KEY},
+                recent,
+            ):
+                with self.subTest(use_set=use_set, available=available):
+                    keys = recent | historical | unrelated
+                    light = set(keys) if use_set else dict.fromkeys(keys)
+                    self._remove_recent_schemas_if_onnx_is_outdated(light, available | historical)
                     self.assertEqual(set(light), available | historical | unrelated)
 
     def test_recent_expm1_schema_is_compared_when_available(self):

@@ -182,18 +182,32 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         attributes = set(re.findall(r'\.Attr\(\s*"([^"]+)"', schema_body))
         body = schema_body.strip()
         helper_match = re.match(r"((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(", body)
-        helper_names = re.findall(
-            r"\.FillUsing\(\s*((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(", schema_body
-        )
+        helper_calls = [
+            (name, None)
+            for name in re.findall(
+                r"\.FillUsing\(\s*((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(", schema_body
+            )
+        ]
         if helper_match is not None:
-            close_paren = cls._find_matching_parenthesis(body, body.find("("))
+            open_paren = body.find("(")
+            close_paren = cls._find_matching_parenthesis(body, open_paren)
             if close_paren >= 0 and not body[close_paren + 1 :].strip(";\n\r\t "):
-                helper_names.append(helper_match.group(1))
-        for qualified_name in helper_names:
+                helper_calls.append((helper_match.group(1), body[open_paren + 1 : close_paren]))
+        for qualified_name, arguments in helper_calls:
             helper_name = qualified_name.rsplit("::", 1)[-1]
             for helper_source in (source, *helper_sources):
-                helper_body = cls._find_helper_body(helper_source, helper_name)
-                if helper_body is not None:
+                definition = cls._find_helper_definition(helper_source, helper_name)
+                if definition is not None:
+                    parameters, helper_body = definition
+                    parameter = re.fullmatch(r"\s*(?:const\s+)?bool\s+(\w+)\s*", parameters)
+                    if (
+                        parameter
+                        and arguments is not None
+                        and arguments.strip() in {"true", "false"}
+                    ):
+                        helper_body = cls._remove_inactive_boolean_branches(
+                            helper_body, parameter.group(1), arguments.strip() == "true"
+                        )
                     attributes.update(re.findall(r'\.Attr\(\s*"([^"]+)"', helper_body))
                     break
             else:
@@ -201,7 +215,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         return attributes
 
     @classmethod
-    def _find_helper_body(cls, source: str, helper_name: str) -> str | None:
+    def _find_helper_definition(cls, source: str, helper_name: str) -> tuple[str, str] | None:
         """Finds a helper definition, excluding declarations and call sites."""
         for candidate in re.finditer(rf"\b{re.escape(helper_name)}\s*\(", source):
             open_paren = source.find("(", candidate.start())
@@ -216,8 +230,54 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             close_brace = cls._find_matching_brace(source, open_brace)
             if close_brace < 0:
                 raise ValueError(f"Unterminated schema helper {helper_name!r}.")
-            return source[open_brace + 1 : close_brace]
+            return source[open_paren + 1 : close_paren], source[open_brace + 1 : close_brace]
         return None
+
+    @classmethod
+    def _remove_inactive_boolean_branches(cls, body: str, parameter: str, value: bool) -> str:
+        """Removes inactive top-level branches for a literal boolean helper argument."""
+        non_code = re.compile(
+            r"//[^\n]*|/\*.*?\*/|"
+            r'R"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\(.*?\)(?P=delimiter)"|'
+            r'"(?:\\.|[^"\\])*"|'
+            r"'(?:\\.|[^'\\])*'",
+            re.DOTALL,
+        )
+        code = non_code.sub(lambda match: " " * len(match.group()), body)
+        pattern = re.compile(rf"\bif\s*\(\s*(!?)\s*{re.escape(parameter)}\s*\)\s*\{{")
+        remaining_uses = pattern.sub("", code)
+        remaining_uses = re.sub(
+            rf"(?<![\w+&-]){re.escape(parameter)}\b(?=\s*\?)", "", remaining_uses
+        )
+        # Other uses may mutate or alias the parameter.
+        if re.search(rf"\b{re.escape(parameter)}\b", remaining_uses):
+            return body
+
+        filtered = list(body)
+        for match in pattern.finditer(code):
+            before = code[: match.start()]
+            if before.count("{") != before.count("}"):
+                continue
+            open_brace = match.end() - 1
+            close_brace = cls._find_matching_brace(code, open_brace)
+            if close_brace < 0:
+                raise ValueError(
+                    f"Unterminated conditional for schema helper parameter {parameter!r}."
+                )
+            active = value != bool(match.group(1))
+            if not active:
+                filtered[open_brace + 1 : close_brace] = " " * (close_brace - open_brace - 1)
+            else:
+                else_match = re.match(r"\s*else\s*\{", code[close_brace + 1 :])
+                if else_match:
+                    else_open = close_brace + else_match.end()
+                    else_close = cls._find_matching_brace(code, else_open)
+                    if else_close < 0:
+                        raise ValueError(
+                            f"Unterminated else branch for schema helper parameter {parameter!r}."
+                        )
+                    filtered[else_open + 1 : else_close] = " " * (else_close - else_open - 1)
+        return "".join(filtered)
 
     @classmethod
     def _find_matching_brace(cls, source: str, open_brace: int) -> int:
@@ -429,15 +489,65 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
     def test_extract_schema_attributes_from_parameterized_helper(self):
         source = """
         OpSchema MakeExampleSchema(bool recent) {
-            return OpSchema().Attr("axis", "axis", AttributeProto::INT);
+            OpSchema schema;
+            const char* doc = R"doc(
+                if (recent) { not code
+            )doc";
+            schema.Attr("axis", "axis", AttributeProto::INT);
+            if (recent) {
+                schema.Attr("dilation", "dilation", AttributeProto::INT);
+            } else {
+                schema.Attr("legacy", "legacy", AttributeProto::INT);
+            }
+            if (!recent) {
+                schema.Attr("old_only", "old", AttributeProto::INT);
+            }
+            return schema;
         }
         ONNX_OPERATOR_SET_SCHEMA(Example, 11, MakeExampleSchema(false));
         ONNX_OPERATOR_SET_SCHEMA(Example, 28, MakeExampleSchema(true));
+        ONNX_OPERATOR_SET_SCHEMA(Example, 29, MakeExampleSchema(dynamic_value));
         """
         self.assertEqual(
             self._extract_schema_blocks(source),
-            [("Example", 11, {"axis"}), ("Example", 28, {"axis"})],
+            [
+                ("Example", 11, {"axis", "legacy", "old_only"}),
+                ("Example", 28, {"axis", "dilation"}),
+                ("Example", 29, {"axis", "dilation", "legacy", "old_only"}),
+            ],
         )
+
+    def test_extract_schema_attributes_preserves_mutable_helper_parameter(self):
+        source = """
+        OpSchema MakeExampleSchema(bool recent) {
+            OpSchema schema;
+            recent = true;
+            if (recent) {
+                schema.Attr("mode", "mode", AttributeProto::INT);
+            }
+            return schema;
+        }
+        ONNX_OPERATOR_SET_SCHEMA(Example, 11, MakeExampleSchema(false));
+        """
+        self.assertEqual(self._extract_schema_blocks(source), [("Example", 11, {"mode"})])
+
+    def test_extract_causal_conv_helper_matches_registered_versions(self):
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "onnx_light"
+            / "onnx_lib"
+            / "defs"
+            / "nn"
+            / "defs.cc"
+        ).read_text(encoding="utf-8")
+        for version, argument in ((27, "false"), (29, "true")):
+            with self.subTest(version=version):
+                schema = onnx_light.onnx.defs.get_schema("CausalConvWithState", version)
+                self.assertEqual(schema.since_version, version)
+                actual = self._extract_attributes(
+                    source, f"CausalConvWithStateSchema({argument})"
+                )
+                self.assertEqual(actual, set(schema.attributes))
 
     def test_extract_schema_attributes_rejects_missing_filler(self):
         source = "ONNX_OPERATOR_SET_SCHEMA(Example, 28, OpSchema().FillUsing(Missing()));"

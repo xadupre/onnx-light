@@ -131,6 +131,7 @@ extern ONNX_LIGHT_LIB_API const char kDoc_Gemm_ver13[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Gemm_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Clip_ver13[];
 extern ONNX_LIGHT_LIB_API const char kDoc_SwiGLU_ver28[];
+extern ONNX_LIGHT_LIB_API const char kDoc_GeGLU_ver29[];
 extern ONNX_LIGHT_LIB_API const char kDoc_Swish_ver24[];
 extern ONNX_LIGHT_LIB_API const char kDoc_gelu_ver20[];
 extern ONNX_LIGHT_LIB_API const char kDoc_celu_ver28[];

@@ -412,6 +412,8 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         # Recently merged schemas may not yet be present in the installed onnx source package.
         if "SwiGLU" not in onnx_schemas:
             onnx_light_schemas.pop("SwiGLU", None)
+        if "GeGLU" not in onnx_schemas:
+            onnx_light_schemas.pop("GeGLU", None)
         if "BitShift" not in onnx_schemas:
             onnx_light_schemas.pop("BitShift", None)
         if "DynamicQuantizeLinear" not in onnx_schemas:

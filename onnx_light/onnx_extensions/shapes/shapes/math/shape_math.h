@@ -586,6 +586,9 @@ void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x)
 /// match the gate input A (no broadcasting).
 void ComputeShapeSwiGLU(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/// Preserves the gate shape and dtype and rejects incompatible GeGLU inputs.
+void ComputeShapeGeGLU(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 

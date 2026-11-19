@@ -167,6 +167,10 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSwishCases(std::vector<TestCase> &reg
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSwiGLUCases(std::vector<TestCase> &registry,
                                                        TestMode mode = TestMode::TEST);
 
+/// Registers independent ``GeGLU`` expected-output cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterGeGLUCases(std::vector<TestCase> &registry,
+                                                      TestMode mode = TestMode::TEST);
+
 /// Registers the ``Mish`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterMishCases(std::vector<TestCase> &registry,
                                                      TestMode mode = TestMode::TEST);

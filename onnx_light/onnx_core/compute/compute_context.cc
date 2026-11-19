@@ -450,7 +450,9 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   for (const NodeProto &inner : bound_nodes) {
     if (shapes::ShapeInputsAvailable(body_shapes, inner) &&
         !contains_unbound_attributes(contains_unbound_attributes, inner)) {
-      if (!shapes::TrySeedAnnotatedOutputsForUnknownCustomOp(body_shapes, inner, declared_outputs))
+      if (!shapes::TrySeedAnnotatedOutputsForUnknownCustomOp(body_shapes, inner,
+                                                             declared_outputs) &&
+          shapes::HasShapeInference(body_shapes, inner))
         body_shapes.ComputeShapeNode(inner);
     }
   }

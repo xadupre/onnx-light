@@ -11,6 +11,7 @@
 #include <memory>
 #include <queue>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -39,7 +40,6 @@ constexpr std::size_t kMaxSignatureBytes = 65536;
 constexpr std::size_t kMaxPorts = 128;
 constexpr std::size_t kMaxExtensions = 256;
 constexpr std::size_t kMaxAnchorStride = 8;
-constexpr std::size_t kMaxGrowthAttempts = 4096;
 constexpr std::size_t kMaxSeedGroups = 32;
 using Region = std::vector<const NodeProto *>;
 using Regions = std::vector<Region>;
@@ -383,7 +383,6 @@ struct NodeData {
   std::vector<std::string> dependencies;
   bool usable = false;
   bool anchor = false;
-  bool preparation = false;
   bool captures_complete = true;
   // Value identifiers of inputs (kNoValue when omitted), outputs and dependencies.
   std::vector<uint32_t> input_ids, output_ids, dependency_ids;
@@ -469,28 +468,6 @@ bool IsSafeNode(const NodeProto &node, const GraphBuilder &builder,
 struct Index;
 ValueInfoProto ValueInfo(Index &index, const std::string &name);
 
-// Weight preparation converts or relayouts constants without depending on graph inputs.
-// Like initializers, it stays outside layer bodies and may precede the calls.
-bool ConstantPreparation(GraphGraph &graph, const NodeProto &node,
-                         const std::unordered_set<std::string> &prepared) {
-  if ((!node.domain().empty() && node.domain() != "ai.onnx") || !node.overload().empty() ||
-      !node.device_configurations().empty() ||
-      graph.Builder().Shapes().GetLocalFunction(core::shapes::ShapesContext::LocalFunctionKey(
-          node.domain(), node.op_type(), "")) != nullptr)
-    return false;
-  if (node.op_type() == "Constant")
-    return node.input().empty();
-  static const std::set<std::string> kPreparations = {"Cast",    "CastLike",  "Concat",
-                                                      "Flatten", "Identity",  "Reshape",
-                                                      "Squeeze", "Transpose", "Unsqueeze"};
-  if (kPreparations.count(node.op_type().value()) == 0 || node.input().empty())
-    return false;
-  return std::all_of(node.input().begin(), node.input().end(), [&](const auto &input) {
-    return !input.value().empty() &&
-           (prepared.count(input.value()) != 0 || graph.IsConstant(input.value()));
-  });
-}
-
 // Type, shape and constness of a value, looked up once per search.
 struct ValueKey {
   const TypeProto *type = nullptr;
@@ -510,6 +487,7 @@ struct NodePairHash {
 
 struct Index {
   GraphGraph &graph;
+  const RepeatedLayerOptions options;
   std::unordered_map<const NodeProto *, NodeData> data;
   // The graph does not change during a search, so value and node comparisons are cached.
   std::unordered_map<std::string, ValueKey> values;
@@ -521,6 +499,7 @@ struct Index {
   // Per value identifier: name, consumers, graph-output flag and cached boundary analyses
   // (-1 when not computed yet).
   std::vector<std::string> names;
+  std::vector<bool> input_dependent;
   std::vector<std::vector<const NodeProto *>> consumers;
   std::vector<bool> graph_outputs;
   std::vector<int8_t> boundary_types;
@@ -548,12 +527,13 @@ struct Index {
     return it->second;
   }
   std::map<std::string, Region> anchors;
+  std::unordered_map<const NodeProto *, std::pair<std::size_t, std::size_t>> seed_windows;
   std::unordered_map<std::string, const ValueInfoProto *> declarations;
   bool valid = true;
   // Any earlier value may be captured by this last incompletely analyzed node.
   std::size_t last_incomplete_capture = kNoPosition;
 
-  explicit Index(GraphGraph &graph) : graph(graph) {
+  Index(GraphGraph &graph, const RepeatedLayerOptions &options) : graph(graph), options(options) {
     for (const auto &input : graph.Builder().Inputs())
       declarations[input.name().value()] = &input;
     for (const auto &output : graph.Builder().Outputs())
@@ -561,16 +541,8 @@ struct Index {
     std::map<std::tuple<std::string, std::string, std::string>, bool> anchor_cache;
     std::size_t function_work = 0, signature_work = 0, safety_work = 0;
     std::map<std::string, bool> safe_functions;
-    std::unordered_set<std::string> prepared;
     for (const NodeProto &node : graph.Builder().Nodes()) {
       NodeData entry;
-      entry.preparation = ConstantPreparation(graph, node, prepared);
-      if (entry.preparation) {
-        for (const auto &output : node.output()) {
-          if (!output.value().empty())
-            prepared.insert(output.value());
-        }
-      }
       if (IsLayer(node)) {
         entry.materialized = utils::CopyWithSharedTensorStorage(node);
       } else if (!Materialize(node, graph.Builder(), entry.materialized)) {
@@ -594,28 +566,13 @@ struct Index {
         entry.dependency_ids.push_back(ValueId(name));
         entry.producers.push_back(graph.NodeBefore(name));
       }
-      // Constants and weight preparation remain outside the body, just like initializers.
-      entry.usable = entry.captures_complete && !IsLayer(node) && !entry.preparation &&
-                     node.op_type().value() != "Constant" &&
+      entry.usable = entry.captures_complete && !IsLayer(node) &&
                      entry.dependencies.size() <= kMaxPorts && node.output().size() <= kMaxPorts &&
                      node.attribute().size() <= kMaxPorts;
       if (entry.usable) {
         std::set<std::string> visiting;
         entry.usable = IsSafeNode(entry.materialized, graph.Builder(), safe_functions, visiting, 0,
                                   safety_work);
-      }
-      if (entry.usable && !core::shapes::HasShapeInference(graph.Builder().Shapes(), node)) {
-        std::vector<ValueInfoProto> outputs;
-        outputs.reserve(node.output().size());
-        for (const auto &name : node.output()) {
-          if (!name.empty())
-            outputs.push_back(ValueInfo(*this, name));
-        }
-        std::unordered_map<std::string, const ValueInfoProto *> annotations;
-        for (const auto &output : outputs)
-          annotations.emplace(output.name(), &output);
-        entry.usable = core::shapes::CanSeedAnnotatedOutputsForUnknownCustomOp(
-            graph.Builder().Shapes(), node, annotations);
       }
       if (entry.usable) {
         std::vector<std::string> attributes;
@@ -670,6 +627,17 @@ struct Index {
       entries.push_back(&data.at(&nodes[position]));
     }
     consumers.resize(names.size());
+    input_dependent.assign(names.size(), false);
+    for (const auto &input : graph.Builder().Inputs()) {
+      const auto found = value_ids.find(input.name().value());
+      if (found != value_ids.end())
+        input_dependent[found->second] = true;
+    }
+    for (const NodeData *entry : entries)
+      for (std::size_t port = 0; port < entry->dependency_ids.size(); ++port)
+        if (entry->producers[port] == nullptr &&
+            !graph.IsConstant(names[entry->dependency_ids[port]]))
+          input_dependent[entry->dependency_ids[port]] = true;
     graph_outputs.assign(names.size(), false);
     boundary_types.assign(names.size(), -1);
     value_bytes_known.assign(names.size(), -1);
@@ -682,14 +650,74 @@ struct Index {
       for (uint32_t id : entry->dependency_ids)
         consumers[id].push_back(&nodes[position]);
       for (uint32_t id : entry->output_ids) {
-        if (id != kNoValue)
+        if (id != kNoValue) {
+          input_dependent[id] =
+              std::any_of(entry->dependency_ids.begin(), entry->dependency_ids.end(),
+                          [&](uint32_t dependency) { return input_dependent[dependency]; });
           graph_outputs[id] = graph.IsOutput(names[id]);
+        }
       }
       for (const NodeProto *producer : entry->producers) {
         const auto found = producer == nullptr ? positions.end() : positions.find(producer);
         entry->producer_positions.push_back(found == positions.end() ? kNoPosition : found->second);
       }
     }
+    std::vector<std::size_t> seeds, starts;
+    std::vector<bool> forks;
+    for (std::size_t position = 0; position < entries.size(); ++position) {
+      if (entries[position]->usable &&
+          nodes[position].op_type().value().find("Attention") != std::string::npos)
+        seeds.push_back(position);
+    }
+    for (const std::size_t seed : seeds) {
+      std::vector<bool> ancestors(entries.size(), false), descendants(entries.size(), false);
+      ancestors[seed] = descendants[seed] = true;
+      for (std::size_t position = seed + 1; position-- > 0;) {
+        if (ancestors[position])
+          for (std::size_t producer : entries[position]->producer_positions)
+            if (producer != kNoPosition)
+              ancestors[producer] = true;
+      }
+      for (std::size_t position = seed + 1; position < entries.size(); ++position)
+        descendants[position] =
+            std::any_of(entries[position]->producer_positions.begin(),
+                        entries[position]->producer_positions.end(), [&](std::size_t producer) {
+                          return producer != kNoPosition && descendants[producer];
+                        });
+      std::size_t previous = 0;
+      for (std::size_t other : seeds)
+        if (other < seed && ancestors[other])
+          previous = other + 1;
+      std::size_t start = previous;
+      bool found_fork = false;
+      for (std::size_t position = previous; position < seed && !found_fork; ++position) {
+        if (!ancestors[position])
+          continue;
+        for (const uint32_t output : entries[position]->output_ids) {
+          if (output == kNoValue || !input_dependent[output])
+            continue;
+          if (std::none_of(consumers[output].begin(), consumers[output].end(),
+                           [&](const NodeProto *user) {
+                             const std::size_t user_position = data.at(user).position;
+                             return user_position != seed && descendants[user_position];
+                           }))
+            continue;
+          const bool shared_value =
+              std::any_of(consumers[output].begin(), consumers[output].end(),
+                          [&](const NodeProto *user) { return ancestors[data.at(user).position]; });
+          start = position + (shared_value ? 1 : 0);
+          found_fork = true;
+          break;
+        }
+      }
+      starts.push_back(start);
+      forks.push_back(found_fork);
+    }
+    for (std::size_t i = 0; i < seeds.size(); ++i)
+      seed_windows.emplace(
+          &nodes[seeds[i]],
+          std::make_pair(forks[i] ? starts[i] : 0,
+                         i + 1 < seeds.size() && forks[i + 1] ? starts[i + 1] : entries.size()));
   }
 };
 
@@ -732,9 +760,9 @@ bool CompatibleValue(Index &index, const std::string &left, const std::string &r
   const ValueKey &r = GetValueKey(index, right);
   if (l.structured || r.structured)
     return l.structured && r.structured && core::shapes::SameDeclaredType(*l.type, *r.type);
-  if (l.dtype != r.dtype || (l.shape == nullptr) != (r.shape == nullptr))
+  if (l.dtype != TensorProto::UNDEFINED && r.dtype != TensorProto::UNDEFINED && l.dtype != r.dtype)
     return false;
-  if (l.shape == nullptr)
+  if (l.shape == nullptr || r.shape == nullptr)
     return true;
   const auto &a = l.shape->Shape();
   const auto &b = r.shape->Shape();
@@ -982,7 +1010,7 @@ struct Plan : OperatorGroupProposal {
   Regions regions;
   std::size_t anchor_roles = 0;
   std::size_t family_occurrences = 0;
-  std::tuple<uint64_t, uint64_t, uint64_t, std::size_t, std::vector<std::size_t>> score;
+  std::tuple<double, double, double, double, std::size_t, std::vector<std::size_t>> score;
 };
 
 bool KnownType(const TypeProto &type, std::size_t depth) {
@@ -1015,9 +1043,7 @@ bool SupportedBoundaryType(const TypeProto &type) {
 bool KnownBoundaryType(Index &index, const std::string &name) {
   if (const auto *type = DeclaredType(index, name))
     return SupportedBoundaryType(*type);
-  GraphGraph &graph = index.graph;
-  return graph.HasType(name) && core::symbolic::TensorTypeToDataType(graph.GetType(name)) !=
-                                    TensorProto::DataType::UNDEFINED;
+  return true;
 }
 
 // A unit is either a contracted region or one untouched interleaving node.
@@ -1063,16 +1089,6 @@ bool Schedule(Index &index, Plan &plan) {
       if (producer != kNoPosition && producer >= plan.first)
         connect(owner[producer - plan.first], to);
     }
-  }
-  // Shared weight conversions may precede calls without reading or folding weights.
-  // All other operations keep their execution order, including retained calls.
-  std::size_t previous = kNoPosition;
-  for (std::size_t position = plan.first; position <= plan.last; ++position) {
-    if (index.entries[position]->preparation)
-      continue;
-    if (previous != kNoPosition)
-      connect(owner[previous - plan.first], owner[position - plan.first]);
-    previous = position;
   }
   // Unknown captures prevent every unit, including preparations, from crossing their owner.
   if (index.last_incomplete_capture != kNoPosition) {
@@ -1135,19 +1151,23 @@ bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
   plan.regions = regions;
   for (const NodeProto *node : regions[0])
     plan.anchor_roles += index.data.at(node).anchor ? 1 : 0;
-  uint64_t crossings = 0, unknown = 0, bytes = 0;
+  uint64_t interfaces = 0, crossings = 0, unknown = 0, bytes = 0;
   std::vector<std::size_t> positions;
   for (const Region &region : regions) {
     Boundary boundary = GetBoundary(index, region);
     for (uint32_t id : boundary.input_ids) {
       if (!CachedKnownBoundaryType(index, id))
         return false;
+      interfaces += index.input_dependent[id] ? 1 : 0;
     }
     for (uint32_t id : boundary.output_ids) {
       if (!CachedKnownBoundaryType(index, id))
         return false;
+      interfaces += index.input_dependent[id] ? 1 : 0;
     }
     for (uint32_t id : boundary.edges) {
+      if (!index.input_dependent[id])
+        continue;
       ++crossings;
       uint64_t size = 0;
       if (CachedValueBytes(index, id, size))
@@ -1159,7 +1179,13 @@ bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
     plan.groups.push_back(std::move(static_cast<OperatorGroup &>(boundary)));
   }
   std::sort(positions.begin(), positions.end());
-  plan.score = {crossings, unknown, bytes, kMaxRegion - regions[0].size(), std::move(positions)};
+  const double count = static_cast<double>(regions.size());
+  plan.score = {interfaces / count,
+                crossings / count,
+                unknown / count,
+                bytes / count,
+                kMaxRegion - regions[0].size(),
+                std::move(positions)};
   return Schedule(index, plan);
 }
 
@@ -1207,9 +1233,10 @@ std::vector<Extension> Extensions(Index &index, const Region &region) {
     }
   }
   std::sort(extensions.begin(), extensions.end(), [&](const Extension &a, const Extension &b) {
-    return std::make_tuple(index.graph.Position(*a.node), a.role, a.predecessor, a.port,
-                           a.other_port) < std::make_tuple(index.graph.Position(*b.node), b.role,
-                                                           b.predecessor, b.port, b.other_port);
+    return std::make_tuple(a.predecessor, index.graph.Position(*a.node), a.role, a.port,
+                           a.other_port) < std::make_tuple(b.predecessor,
+                                                           index.graph.Position(*b.node), b.role,
+                                                           b.port, b.other_port);
   });
   extensions.erase(std::unique(extensions.begin(), extensions.end(),
                                [](const Extension &a, const Extension &b) {
@@ -1261,38 +1288,145 @@ bool Extend(Index &index, const Regions &regions, const Extension &extension, Re
   return Correspond(index, grown);
 }
 
-bool Grow(Index &index, Regions regions, std::size_t selected, Plan &best, std::size_t &attempts) {
-  auto make_plan = [&](Plan &plan) {
-    if (selected == regions.size())
-      return MakePlan(index, regions, plan);
-    return MakePlan(index, Regions(regions.begin(), regions.begin() + selected), plan);
-  };
-  bool found = make_plan(best);
-  while (regions[0].size() < kMaxRegion) {
+bool CloseRegions(Index &index, Regions &regions) {
+  std::size_t first = kNoPosition, last = 0;
+  for (const NodeProto *node : regions[0]) {
+    first = std::min(first, index.data.at(node).position);
+    last = std::max(last, index.data.at(node).position);
+  }
+  if (last - first >= kMaxInterval)
+    return false;
+  const std::size_t count = last - first + 1;
+  std::vector<bool> forward(count, false), backward(count, false), inside(count, false);
+  for (const NodeProto *node : regions[0]) {
+    const std::size_t offset = index.data.at(node).position - first;
+    forward[offset] = backward[offset] = inside[offset] = true;
+  }
+  for (std::size_t offset = 0; offset < count; ++offset) {
+    for (const std::size_t producer : index.entries[first + offset]->producer_positions) {
+      if (producer != kNoPosition && producer >= first && producer <= last)
+        forward[offset] = forward[offset] || forward[producer - first];
+    }
+  }
+  for (std::size_t offset = count; offset-- > 0;) {
+    if (!backward[offset])
+      continue;
+    for (const std::size_t producer : index.entries[first + offset]->producer_positions) {
+      if (producer != kNoPosition && producer >= first && producer <= last)
+        backward[producer - first] = true;
+    }
+  }
+  std::unordered_set<const NodeProto *> missing;
+  const auto &nodes = index.graph.Builder().Nodes();
+  for (std::size_t offset = 0; offset < count; ++offset) {
+    if (forward[offset] && backward[offset] && !inside[offset]) {
+      if (!index.entries[first + offset]->usable)
+        return false;
+      missing.insert(&nodes[first + offset]);
+    }
+  }
+  if (missing.size() + regions[0].size() > kMaxRegion)
+    return false;
+  while (!missing.empty()) {
     bool extended = false;
     for (const Extension &extension : Extensions(index, regions[0])) {
-      if (attempts >= kMaxGrowthAttempts)
-        return found;
-      ++attempts;
+      if (!missing.contains(extension.node))
+        continue;
       Regions grown;
       if (!Extend(index, regions, extension, grown))
-        continue;
+        return false;
+      missing.erase(extension.node);
       regions = std::move(grown);
       extended = true;
-      Plan plan;
-      // Adding another anchor establishes a larger seed skeleton. Boundary
-      // cuts compete within that skeleton rather than against projections
-      // omitting the rest of a jointly grown attention/MLP structure.
-      if (make_plan(plan) &&
-          (!found || plan.anchor_roles > best.anchor_roles ||
-           (plan.anchor_roles == best.anchor_roles && plan.score < best.score))) {
-        best = std::move(plan);
-        found = true;
-      }
       break;
     }
     if (!extended)
-      break;
+      return false;
+  }
+  return true;
+}
+
+bool Grow(Index &index, Regions regions, std::size_t selected, Plan &best, std::size_t &attempts) {
+  const bool attention_seed =
+      regions[0][0]->op_type().value().find("Attention") != std::string::npos;
+  const auto contains_other_seed = [&](const Region &region) {
+    return attention_seed &&
+           std::any_of(region.begin() + 1, region.end(), [](const NodeProto *node) {
+             return node->op_type().value().find("Attention") != std::string::npos;
+           });
+  };
+  const auto outside_window = [&](const Region &region, const NodeProto *seed) {
+    const auto window = index.seed_windows.find(seed);
+    if (window == index.seed_windows.end())
+      return false;
+    return std::any_of(region.begin(), region.end(), [&](const NodeProto *node) {
+      const auto &entry = index.data.at(node);
+      return (entry.position < window->second.first || entry.position >= window->second.second) &&
+             std::any_of(entry.output_ids.begin(), entry.output_ids.end(), [&](uint32_t output) {
+               return output != kNoValue && index.input_dependent[output];
+             });
+    });
+  };
+  if (contains_other_seed(regions[0]))
+    return false;
+  struct Family {
+    Regions regions;
+    std::size_t selected;
+  };
+  std::vector<Family> pending;
+  pending.push_back({std::move(regions), selected});
+  bool found = false;
+  while (!pending.empty()) {
+    Family family = std::move(pending.back());
+    pending.pop_back();
+    regions = std::move(family.regions);
+    selected = family.selected;
+    const auto consider = [&]() {
+      Plan plan;
+      const Regions emitted(regions.begin(), regions.begin() + selected);
+      if (MakePlan(index, emitted, plan) && (!found || plan.score < best.score)) {
+        plan.family_occurrences = regions.size();
+        best = std::move(plan);
+        found = true;
+      }
+    };
+    if (regions[0].size() >= 2)
+      consider();
+    while (regions[0].size() < kMaxRegion) {
+      bool extended = false;
+      for (const Extension &extension : Extensions(index, regions[0])) {
+        if (attempts >= index.options.max_growth_attempts)
+          return found;
+        ++attempts;
+        Regions grown, remaining;
+        for (std::size_t occurrence = 1; occurrence < regions.size(); ++occurrence) {
+          Regions pair;
+          if (!Extend(index, Regions{regions[0], regions[occurrence]}, extension, pair) ||
+              !CloseRegions(index, pair) || contains_other_seed(pair[0]) ||
+              outside_window(pair[0], regions[0][0]) ||
+              outside_window(pair[1], regions[occurrence][0])) {
+            remaining.push_back(regions[occurrence]);
+            continue;
+          }
+          if (grown.empty())
+            grown.push_back(std::move(pair[0]));
+          grown.push_back(std::move(pair[1]));
+        }
+        if (grown.size() < 2 || !Correspond(index, grown))
+          continue;
+        if (remaining.size() >= 2 && pending.size() < kMaxSeedGroups) {
+          const std::size_t remaining_selected = std::min(selected, remaining.size());
+          pending.push_back({std::move(remaining), remaining_selected});
+        }
+        selected = std::min(selected, grown.size());
+        regions = std::move(grown);
+        extended = true;
+        consider();
+        break;
+      }
+      if (!extended)
+        break;
+    }
   }
   return found;
 }
@@ -1307,7 +1441,7 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
     return false;
   Region anchors;
   for (const NodeProto *node : bucket->second) {
-    if (attempts >= kMaxGrowthAttempts)
+    if (attempts >= index.options.max_growth_attempts)
       return false;
     ++attempts;
     if (CompatibleNode(index, candidate, *node)) {
@@ -1320,7 +1454,8 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   }
   bool found = false;
   auto consider = [&](Regions regions) {
-    if (regions.size() < 2 || groups >= kMaxSeedGroups || attempts >= kMaxGrowthAttempts)
+    if (regions.size() < 2 || groups >= kMaxSeedGroups ||
+        attempts >= index.options.max_growth_attempts)
       return;
     const std::size_t family_occurrences = regions.size();
     std::size_t selected = regions.size();
@@ -1338,12 +1473,11 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
     Plan plan;
     if (!Grow(index, std::move(regions), selected, plan, attempts))
       return;
-    plan.family_occurrences = family_occurrences;
+    plan.family_occurrences = std::max(plan.family_occurrences, family_occurrences);
     const auto coverage = [](const Plan &value) {
-      return std::make_tuple(value.family_occurrences * value.anchor_roles,
-                             value.family_occurrences * value.regions[0].size(),
-                             value.family_occurrences, value.regions.size(),
-                             value.regions[0].size());
+      return std::make_tuple(value.regions.size() * value.regions[0].size(),
+                             value.regions.size() * value.anchor_roles, value.family_occurrences,
+                             value.regions.size(), value.regions[0].size());
     };
     // Equal coverage favors more occurrences (a smaller period) before larger
     // individual regions. Within each skeleton Grow uses boundary-cost ordering.
@@ -1363,12 +1497,12 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   std::size_t seed_count = 0;
   for (const Extension &extension : Extensions(index, Region{&candidate})) {
     if (seed_count++ == kMaxSeedGroups / 2 || groups >= kMaxSeedGroups ||
-        attempts >= kMaxGrowthAttempts)
+        attempts >= index.options.max_growth_attempts)
       break;
     Regions regions{{&candidate, extension.node}};
     std::unordered_set<const NodeProto *> occupied{&candidate, extension.node};
     for (std::size_t i = 1; i < anchors.size(); ++i) {
-      if (attempts >= kMaxGrowthAttempts)
+      if (attempts >= index.options.max_growth_attempts)
         break;
       ++attempts;
       Regions pair;
@@ -1385,8 +1519,8 @@ bool FindPlan(Index &index, const NodeProto &candidate, Plan &best, std::size_t 
   }
   // A bounded periodic fallback also recognizes indistinguishable projections
   // whose one-hop neighborhoods are identical but whose larger roles differ.
-  for (std::size_t stride = 2;
-       stride <= kMaxAnchorStride && stride < anchors.size() && attempts < kMaxGrowthAttempts;
+  for (std::size_t stride = 2; stride <= kMaxAnchorStride && stride < anchors.size() &&
+                               attempts < index.options.max_growth_attempts;
        ++stride) {
     Regions regions;
     for (std::size_t i = 0; i < anchors.size(); i += stride)
@@ -1405,12 +1539,15 @@ bool FindPlan(Index &index, Plan &best) {
     if (entry.usable && entry.anchor)
       candidates.push_back(&node);
   }
-  // Rare anchors distinguish a complete periodic motif from its common projections.
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [&](const NodeProto *left, const NodeProto *right) {
-                     return index.anchors.at(index.data.at(left).signature).size() <
-                            index.anchors.at(index.data.at(right).signature).size();
-                   });
+  // Explicit attention anchors take precedence over their projection fallbacks.
+  std::stable_sort(
+      candidates.begin(), candidates.end(), [&](const NodeProto *left, const NodeProto *right) {
+        const auto rank = [&](const NodeProto *node) {
+          return std::make_pair(node->op_type().value().find("Attention") == std::string::npos,
+                                index.anchors.at(index.data.at(node).signature).size());
+        };
+        return rank(left) < rank(right);
+      });
   std::map<std::string, Region> representatives;
   std::size_t groups = 0, attempts = 0;
   for (const NodeProto *candidate : candidates) {
@@ -1421,7 +1558,7 @@ bool FindPlan(Index &index, Plan &best) {
     Region &previous = representatives[entry.signature];
     bool represented = false;
     for (const NodeProto *other : previous) {
-      if (attempts >= kMaxGrowthAttempts)
+      if (attempts >= index.options.max_growth_attempts)
         return false;
       ++attempts;
       if (CompatibleNode(index, node, *other)) {
@@ -1431,7 +1568,7 @@ bool FindPlan(Index &index, Plan &best) {
     }
     if (represented)
       continue;
-    if (groups >= kMaxSeedGroups || attempts >= kMaxGrowthAttempts)
+    if (groups >= kMaxSeedGroups || attempts >= index.options.max_growth_attempts)
       return false;
     previous.push_back(&node);
     if (FindPlan(index, node, best, attempts, groups))
@@ -1926,6 +2063,14 @@ utils::RepeatedProtoField<NodeProto> MakeReplacements(Index &index,
 OperatorGroupProposal
 ProposeRepeatedLayers(GraphGraph &graph,
                       std::shared_ptr<const builder::PatternApplication> *application) {
+  return ProposeRepeatedLayers(graph, RepeatedLayerOptions{}, application);
+}
+
+OperatorGroupProposal
+ProposeRepeatedLayers(GraphGraph &graph, const RepeatedLayerOptions &options,
+                      std::shared_ptr<const builder::PatternApplication> *application) {
+  if (options.max_growth_attempts == 0)
+    throw std::invalid_argument("RepeatedLayer requires max_growth_attempts > 0.");
   if (application != nullptr)
     application->reset();
   if (graph.Builder().Nodes().empty())
@@ -1936,7 +2081,7 @@ ProposeRepeatedLayers(GraphGraph &graph,
     proposal.status = status;
     return proposal;
   }
-  auto index = std::make_shared<Index>(graph);
+  auto index = std::make_shared<Index>(graph, options);
   Plan plan;
   const bool found = FindPlan(*index, plan);
   plan.capture_analysis_limited = index->last_incomplete_capture != kNoPosition;
@@ -1957,12 +2102,20 @@ ProposeRepeatedLayers(GraphGraph &graph,
 
 utils::RepeatedProtoField<NodeProto>
 MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) {
+  return MakeRepeatedLayerReplacements(graph, nodes, RepeatedLayerOptions{});
+}
+
+utils::RepeatedProtoField<NodeProto>
+MakeRepeatedLayerReplacements(GraphGraph &graph, const std::vector<const NodeProto *> &nodes,
+                              const RepeatedLayerOptions &options) {
+  if (options.max_growth_attempts == 0)
+    throw std::invalid_argument("RepeatedLayer requires max_growth_attempts > 0.");
   if (nodes.empty() || nodes[0] == nullptr || graph.Builder().Nodes().empty())
     throw core::builder::BuilderError("RepeatedLayer::Apply expects a nonempty match.");
   graph.Position(*nodes[0]);
   if (Eligibility(graph) != OperatorGroupStatus::kFound)
     throw core::builder::BuilderError("RepeatedLayer::Apply could not reproduce its regions.");
-  Index index(graph);
+  Index index(graph, options);
   Plan plan;
   if (!FindPlan(index, plan))
     throw core::builder::BuilderError("RepeatedLayer::Apply could not reproduce its regions.");

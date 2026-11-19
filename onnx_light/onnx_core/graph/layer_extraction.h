@@ -8,9 +8,15 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
+/// Configures the work budget of one repeated-region search.
+struct RepeatedLayerOptions {
+  /// Caps anchor inspections, compatibility comparisons and growth attempts; must be positive.
+  std::size_t max_growth_attempts = 4096;
+};
+
 /**
- * Finds repeated, connected, structurally corresponding regions around exact
- * attention or matrix-multiplication identities, including local functions.
+ * Finds repeated, connected, structurally corresponding regions around
+ * operator types containing "Attention" or standard MatMul, including local functions.
  * Extracts every selected occurrence together, retaining weights as explicit
  * inputs except for shared materialized constants with fewer than 32 elements.
  * Preserves side outputs and lexical subgraph dependencies.
@@ -20,22 +26,25 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *
  * Algorithm, in execution order:
  *
- * - Indexes producers, consumers, declared types and lexical subgraph captures.
+ * - Indexes producers, consumers, declared types, anchor signatures and lexical subgraph captures
+ *   once for the detection scan.
  *   The pattern invokes detection only at the first graph node of each scan.
- * - Finds exact attention/MatMul anchors, including recursively inspected local
- *   functions. Excludes existing layer-function calls and their bodies.
- *   Starts with rarer anchor families so hybrid blocks can form a complete motif
- *   before their common projections are extracted separately.
+ * - Finds case-sensitive "Attention" substrings in operator types regardless of domain,
+ *   or exact standard MatMul anchors, including recursively inspected local functions.
+ *   Excludes existing layer-function calls and their bodies.
  *   Accepts operators independently of their domain or determinism when shape
  *   inference is available, including context-local shape callbacks. Otherwise
  *   requires complete output tensor annotations to preserve function inference.
  *   Does not change the conservative custom-operator constant-folding policy.
  *   Keeps nodes referencing enclosing-function attributes, including references
  *   inside graph attributes, outside extracted regions.
- * - Groups compatible anchors into repeated seed roles. Tries individual anchors,
- *   directed port-labelled one-hop neighborhoods, then bounded periodic strides
- *   to distinguish otherwise identical projections within a larger repeat.
- * - Grows all occurrences together through corresponding predecessors/successors.
+ * - Processes anchors by operator type. For each unmarked anchor, seeds a motif
+ *   with the anchor and up to its first two usable predecessors, then finds all
+ *   compatible occurrences while preserving signatures, connections and port roles.
+ *   Different weight values are allowed.
+ * - Grows the repeated motif through corresponding predecessors/successors, keeping
+ *   the last extension that still has at least two occurrences. Divergent occurrences
+ *   remain available as seeds; marked nodes cannot be reused or crossed.
  *   Requires matching attributes, port roles and topology, but not equal weights.
  *   Rejects incompatible known dtypes, ranks and feature dimensions; leading
  *   activation dimensions may vary. Each accepted region contains at least two nodes.
@@ -47,13 +56,13 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
  * - Contracts regions into scheduling units alongside untouched nodes. Rejects
  *   contraction cycles and preserves the original execution order except for
- *   literal Constants and constant Cast/CastLike/Identity preparations, which may
- *   move before a call that needs their values without evaluating any weights.
- *   Retains order for other operators and device-annotated or overridden conversions.
+ *   literal Constants and whitelisted constant preparations, which may move before
+ *   a call without evaluating weights. Independent whitelisted preparations of graph
+ *   inputs may also move when required by contracted dependencies. Retains the order of other
+ * operators and does not hoist device-annotated, overloaded or local-function preparations.
  * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
  *   unknown-size crossings, saturating known byte size, decreasing region size,
- *   and original positions. Ranks seed families by total anchor coverage, total
- *   node coverage, occurrence count (smaller period), then region size.
+ *   and original positions.
  * - Revalidates the selected match and replaces every selected occurrence with
  *   calls to shared model-local functions when their bodies and interfaces
  *   agree up to local names, exporter provenance and recomputed tensor shapes.
@@ -78,7 +87,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
  *   remain live and scheduling cannot move preparations across that node.
  *   Reports capture_analysis_limited even when safe groups elsewhere are found,
  *   or kResourceLimit instead of kNoMatch when no safe proposal remains.
- * - Considers at most 32 seed groups and 4096 shared compatibility/growth attempts.
+ * - Considers at most 32 seed groups and max_growth_attempts shared anchor
+ *   anchor inspections, compatibility comparisons and growth attempts (4096
+ *   by default). Residual ancestry and forward scans each visit at most 4096 nodes.
  * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
  *   Shortens batches when needed to leave at least two occurrences for the next batch.
  * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
@@ -105,6 +116,11 @@ OperatorGroupProposal
 ProposeRepeatedLayers(builder::GraphGraph &graph,
                       std::shared_ptr<const builder::PatternApplication> *application = nullptr);
 
+/// Uses an explicit per-search budget; throws std::invalid_argument for a zero budget.
+OperatorGroupProposal
+ProposeRepeatedLayers(builder::GraphGraph &graph, const RepeatedLayerOptions &options,
+                      std::shared_ptr<const builder::PatternApplication> *application = nullptr);
+
 /// Revalidates the proposed interval and builds its replacement nodes.
 /// Appends or reuses local functions and imports ai.rt opset 1, but does not
 /// replace graph nodes; the caller must install the result at proposal.first.
@@ -112,5 +128,11 @@ ProposeRepeatedLayers(builder::GraphGraph &graph,
 utils::RepeatedProtoField<NodeProto>
 MakeRepeatedLayerReplacements(builder::GraphGraph &graph,
                               const std::vector<const NodeProto *> &nodes);
+
+/// Revalidates with the same options used for the proposal.
+utils::RepeatedProtoField<NodeProto>
+MakeRepeatedLayerReplacements(builder::GraphGraph &graph,
+                              const std::vector<const NodeProto *> &nodes,
+                              const RepeatedLayerOptions &options);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::graph

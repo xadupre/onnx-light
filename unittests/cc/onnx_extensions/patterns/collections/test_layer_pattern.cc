@@ -4,9 +4,11 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_core/graph/operator_groups.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_extensions/patterns/collections/layer_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_lib/checker.h"
@@ -325,6 +327,82 @@ void AddMatMulLayer(core::builder::GraphBuilder &builder, const std::string &inp
   builder.MakeNode("Relu", {prefix + "_mm"}, {prefix}, "", prefix + "_relu");
 }
 
+void BuildResidualLayersWithInputMask(core::builder::GraphBuilder &builder) {
+  const auto shape = LayerShape({2, 4});
+  auto &attention = builder.MakeLocalFunction("LinearAttention", "local.test");
+  attention.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  attention.MakeInput("mask", core::symbolic::TensorType::kFloat, shape);
+  attention.MakeNode("Add", {"x", "mask"}, {"y"});
+  attention.MakeOutput("y");
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInput("mask", core::symbolic::TensorType::kInt32, shape);
+  std::string input = "x";
+  for (int layer = 0; layer < 3; ++layer) {
+    const std::string prefix = "layer" + std::to_string(layer);
+    for (int weight = 0; weight < 3; ++weight)
+      AddLayerWeight(builder, prefix + "_w" + std::to_string(weight), 4, 4,
+                     static_cast<float>(layer * 3 + weight + 1) / 32);
+    builder.MakeNode("MatMul", {input, prefix + "_w0"}, {prefix + "_q"}, "", prefix + "_q_node");
+    if (layer == 0)
+      builder.MakeNode("Cast", {"mask"}, {"float_mask"}, "", "prepare_mask",
+                       LayerIntAttribute("to", TensorProto::FLOAT));
+    builder.MakeNode("LinearAttention", {prefix + "_q", "float_mask"}, {prefix + "_attention"},
+                     "local.test", prefix + "_attention_node");
+    builder.MakeNode("MatMul", {prefix + "_attention", prefix + "_w1"}, {prefix + "_projection"},
+                     "", prefix + "_projection_node");
+    builder.MakeNode("Add", {input, prefix + "_projection"}, {prefix + "_residual"}, "",
+                     prefix + "_residual_node");
+    builder.MakeNode("MatMul", {prefix + "_residual", prefix + "_w2"}, {prefix + "_mlp"}, "",
+                     prefix + "_mlp_node");
+    builder.MakeNode("Add", {prefix + "_residual", prefix + "_mlp"}, {prefix}, "",
+                     prefix + "_output_node");
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+}
+
+bool SameModelForReplay(ModelProto left, ModelProto right) {
+  const auto nodes_use_layer_domain = [](const auto &self, const auto &nodes) -> bool {
+    for (const NodeProto &node : nodes) {
+      if (node.domain() == "ai.rt")
+        return true;
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g() && self(self, attribute.g().node()))
+          return true;
+        for (const auto &graph : attribute.graphs())
+          if (self(self, graph.node()))
+            return true;
+      }
+    }
+    return false;
+  };
+  const auto sort_opsets = [](auto &scope, bool drop_unused_layer_import) {
+    std::vector<std::pair<std::string, int64_t>> imports;
+    for (const auto &opset : scope.opset_import()) {
+      if (!drop_unused_layer_import || opset.domain() != "ai.rt")
+        imports.emplace_back(opset.domain(), opset.version());
+    }
+    std::sort(imports.begin(), imports.end());
+    scope.clear_opset_import();
+    for (const auto &[domain, version] : imports)
+      scope.add_opset(domain, version);
+  };
+  for (auto *model : {&left, &right}) {
+    sort_opsets(*model, false);
+    for (auto &function : model->ref_functions()) {
+      bool uses_layer = nodes_use_layer_domain(nodes_use_layer_domain, function.node());
+      for (const auto &attribute : function.attribute_proto()) {
+        if (attribute.has_g())
+          uses_layer |= nodes_use_layer_domain(nodes_use_layer_domain, attribute.g().node());
+        for (const auto &graph : attribute.graphs())
+          uses_layer |= nodes_use_layer_domain(nodes_use_layer_domain, graph.node());
+      }
+      sort_opsets(function, !uses_layer);
+    }
+  }
+  return left.Equals(right);
+}
+
 TEST(RepeatedLayerPattern, DynamicMatMulLayersKeepDistinctWeightsExternalAndAreIdempotent) {
   core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, DynamicLayerShape(4));
@@ -596,6 +674,154 @@ TEST(RepeatedLayerPattern, ExtractsWholeHybridMotifsAcrossSharedWeightConversion
   auto restored = builder.UndoRewritings(plan);
   EXPECT_TRUE(restored.ToModel().Equals(original));
   EXPECT_TRUE(restored.ApplyRewritings(plan).ToModel().Equals(extracted));
+}
+
+TEST(RepeatedLayerPattern, SeparatesHybridResidualLayersWithDifferentFeedForwardOperators) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
+  const auto shape = LayerShape({2, 4});
+  for (const std::string op : {"LinearAttention", "FullAttention"}) {
+    auto &function = builder.MakeLocalFunction(op, "local.test");
+    function.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+    function.MakeNode(op == "LinearAttention" ? "Relu" : "Sigmoid", {"x"}, {"y"});
+    function.MakeOutput("y");
+  }
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  std::string input = "x";
+  for (int layer = 0; layer < 24; ++layer) {
+    const std::string prefix = "layer" + std::to_string(layer);
+    for (int weight = 0; weight < 4; ++weight)
+      AddLayerWeight(builder, prefix + "_w" + std::to_string(weight), 4, 4,
+                     static_cast<float>(layer * 4 + weight + 1) / 512);
+    builder.MakeNode("MatMul", {input, prefix + "_w0"}, {prefix + "_q"}, "", prefix + "_q");
+    builder.MakeNode(layer % 4 == 3 ? "FullAttention" : "LinearAttention", {prefix + "_q"},
+                     {prefix + "_attention"}, "local.test", prefix + "_attention_node");
+    builder.MakeNode("MatMul", {prefix + "_attention", prefix + "_w1"}, {prefix + "_projection"},
+                     "", prefix + "_projection_node");
+    builder.MakeNode("Add", {input, prefix + "_projection"}, {prefix + "_residual"}, "",
+                     prefix + "_residual_node");
+    builder.MakeNode("MatMul", {prefix + "_residual", prefix + "_w2"}, {prefix + "_up"}, "",
+                     prefix + "_up_node");
+    builder.MakeNode(layer >= 4 && layer < 20 ? "Tanh" : "Relu", {prefix + "_up"},
+                     {prefix + "_activation"}, "", prefix + "_activation_node");
+    builder.MakeNode("MatMul", {prefix + "_activation", prefix + "_w3"}, {prefix + "_down"}, "",
+                     prefix + "_down_node");
+    builder.MakeNode("Add", {prefix + "_residual", prefix + "_down"}, {prefix}, "",
+                     prefix + "_output_node");
+    builder.MakeOutput(prefix + "_residual");
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+  const GraphProto before = builder.BuildGraph();
+  const ModelProto original = builder.ToModel();
+
+  const RewritingProto rewrites = OptimizeLayers(builder);
+  EXPECT_FALSE(rewrites.rewrites().empty());
+  const GraphProto after = builder.BuildGraph();
+  ASSERT_EQ(ExpectLayerContracts(after), 24u);
+  ExpectOriginalOperators(before, after);
+  std::map<std::string, std::size_t> calls;
+  for (const auto &node : after.node()) {
+    ASSERT_TRUE(IsLayer(node));
+    ++calls[node.op_type()];
+    EXPECT_EQ(node.output_size(), 2);
+    const GraphProto *body = LayerBody(node);
+    ASSERT_NE(body, nullptr);
+    EXPECT_EQ(std::count_if(body->node().begin(), body->node().end(),
+                            [](const NodeProto &inner) {
+                              return inner.op_type().value().find("Attention") != std::string::npos;
+                            }),
+              1);
+    EXPECT_EQ(std::count_if(body->node().begin(), body->node().end(),
+                            [](const NodeProto &inner) { return inner.op_type() == "MatMul"; }),
+              4);
+    EXPECT_EQ(std::count_if(body->node().begin(), body->node().end(),
+                            [](const NodeProto &inner) { return inner.op_type() == "Add"; }),
+              2);
+  }
+  ASSERT_EQ(calls.size(), 4u);
+  std::multiset<std::size_t> occurrences;
+  for (const auto &[name, count] : calls)
+    occurrences.insert(count);
+  EXPECT_EQ(occurrences, (std::multiset<std::size_t>{2, 4, 6, 12}));
+  ExpectCoherentLayerMetadata(builder);
+  const ModelProto extracted = builder.ToModel();
+  EXPECT_NO_THROW(VerifyModel(extracted));
+  auto restored = builder.UndoRewritings(rewrites);
+  EXPECT_TRUE(SameModelForReplay(restored.ToModel(), original));
+  EXPECT_TRUE(SameModelForReplay(restored.ApplyRewritings(rewrites).ToModel(), extracted));
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+}
+
+TEST(RepeatedLayerPattern, MovesIndependentInputPreparationAcrossFirstResidualLayer) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
+  BuildResidualLayersWithInputMask(builder);
+  const ModelProto original = builder.ToModel();
+  const RewritingProto rewrites = OptimizeLayers(builder);
+  ASSERT_FALSE(rewrites.rewrites().empty());
+  ASSERT_EQ(ExpectLayerContracts(builder.BuildGraph()), 3u);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].name(), "prepare_mask");
+  EXPECT_TRUE(IsLayer(builder.Nodes()[1]));
+  ExpectCoherentLayerMetadata(builder);
+  const ModelProto extracted = builder.ToModel();
+  EXPECT_NO_THROW(VerifyModel(extracted));
+  EXPECT_NO_THROW(checker::check_model(extracted));
+  auto restored = builder.UndoRewritings(rewrites);
+  EXPECT_TRUE(SameModelForReplay(restored.ToModel(), original));
+  EXPECT_TRUE(SameModelForReplay(restored.ApplyRewritings(rewrites).ToModel(), extracted));
+}
+
+TEST(RepeatedLayerPattern, KeepsDeviceAnnotatedInputPreparationInOrder) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {"local.test", 1}});
+  BuildResidualLayersWithInputMask(builder);
+  auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  const auto preparation = std::find_if(nodes.begin(), nodes.end(), [](const NodeProto &node) {
+    return node.name() == "prepare_mask";
+  });
+  ASSERT_NE(preparation, nodes.end());
+  preparation->add_device_configurations()->set_configuration_id("pinned");
+  const GraphProto original = builder.BuildGraph();
+
+  OptimizeLayers(builder);
+  ExpectOriginalOperators(original, builder.BuildGraph());
+  ExpectCoherentLayerMetadata(builder);
+}
+
+TEST(RepeatedLayerPattern, ResidualLayersDoNotReorderOpaqueInterleavedCalls) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(),
+                                      {{"", 28}, {"local.test", 1}, {"other", 1}});
+  const auto shape = LayerShape({2, 4});
+  auto &attention = builder.MakeLocalFunction("LinearAttention", "local.test");
+  attention.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  attention.MakeNode("Relu", {"x"}, {"y"});
+  attention.MakeOutput("y");
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  std::string input = "x";
+  for (int layer = 0; layer < 3; ++layer) {
+    const std::string prefix = "layer" + std::to_string(layer);
+    for (int weight = 0; weight < 3; ++weight)
+      AddLayerWeight(builder, prefix + "_w" + std::to_string(weight), 4, 4,
+                     static_cast<float>(layer * 3 + weight + 1) / 32);
+    builder.MakeNode("MatMul", {input, prefix + "_w0"}, {prefix + "_q"}, "", prefix + "_q_node");
+    builder.MakeNode("Opaque", {input}, {prefix + "_side"}, "other", prefix + "_side_node");
+    builder.MakeOutput(prefix + "_side", core::symbolic::TensorType::kFloat, shape);
+    builder.MakeNode("LinearAttention", {prefix + "_q"}, {prefix + "_attention"}, "local.test",
+                     prefix + "_attention_node");
+    builder.MakeNode("MatMul", {prefix + "_attention", prefix + "_w1"}, {prefix + "_projection"},
+                     "", prefix + "_projection_node");
+    builder.MakeNode("Add", {input, prefix + "_projection"}, {prefix + "_residual"}, "",
+                     prefix + "_residual_node");
+    builder.MakeNode("MatMul", {prefix + "_residual", prefix + "_w2"}, {prefix + "_mlp"}, "",
+                     prefix + "_mlp_node");
+    builder.MakeNode("Add", {prefix + "_residual", prefix + "_mlp"}, {prefix}, "",
+                     prefix + "_output_node");
+    input = prefix;
+  }
+  builder.MakeOutput(input);
+  const GraphProto original = builder.BuildGraph();
+  OptimizeLayers(builder);
+  ExpectOriginalOperators(original, builder.BuildGraph());
+  ExpectCoherentLayerMetadata(builder);
 }
 
 TEST(RepeatedLayerPattern, WeightPreparationChainsBeforeAllLayersStayOutsideBodies) {
@@ -1198,26 +1424,30 @@ TEST(ComputeContext, KeepsFunctionActivationsLiveThroughNestedBranches) {
 }
 
 TEST(RepeatedLayerPattern, BoundsSearchAcrossIncompatibleAnchorFamily) {
-  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
-  constexpr int count = 128;
-  std::string last;
-  for (int index = 1; index <= count; ++index) {
-    // The final compatible pair must remain unvisited after the shared budget is exhausted.
-    const int width = index == count ? count - 1 : index;
-    const std::string suffix = std::to_string(index);
-    const std::string input = "x" + suffix;
-    const std::string weight = "w" + suffix;
-    const std::string output = "h" + suffix;
-    builder.MakeInput(input, core::symbolic::TensorType::kFloat, LayerShape({1, width}));
-    AddLayerWeight(builder, weight, width, 0);
-    builder.MakeNode("MatMul", {input, weight}, {output + "_mm"}, "", output + "_matmul");
-    builder.MakeNode("Relu", {output + "_mm"}, {output}, "", output + "_relu");
-    last = output;
+  for (const std::size_t budget : {4096u, 32768u}) {
+    SCOPED_TRACE(budget);
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+    constexpr int count = 128;
+    for (int index = 1; index <= count; ++index) {
+      const int width = index == count ? count - 1 : index;
+      const std::string suffix = std::to_string(index);
+      const std::string input = "x" + suffix;
+      const std::string weight = "w" + suffix;
+      const std::string output = "h" + suffix;
+      builder.MakeInput(input, core::symbolic::TensorType::kFloat, LayerShape({1, width}));
+      AddLayerWeight(builder, weight, width, 0);
+      builder.MakeNode("MatMul", {input, weight}, {output + "_mm"}, "", output + "_matmul");
+      builder.MakeNode("Relu", {output + "_mm"}, {output}, "", output + "_relu");
+      builder.MakeOutput(output);
+    }
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::RepeatedLayerPattern>(0, budget));
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    const auto rewrites = graph.Optimize();
+    CacheLayerBodies(builder);
+    EXPECT_EQ(rewrites.rewrites().empty(), budget == 4096);
+    EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), budget == 4096 ? 0u : 2u);
   }
-  builder.MakeOutput(last);
-
-  OptimizeLayers(builder);
-  EXPECT_EQ(ExpectLayerContracts(builder.BuildGraph()), 0u);
 }
 
 TEST(RepeatedLayerPattern, PreservesResidualFanoutSharedWeightsAndIntermediateGraphOutputs) {
@@ -1751,6 +1981,86 @@ TEST(RepeatedLayerPattern, ExtractsArbitraryDomainsAndStochasticOperatorsWithout
     EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
     EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
   }
+}
+
+TEST(RepeatedLayerPattern, AttentionSubstringAnchorsSpanDomainsAndExcludeExistingLayers) {
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}});
+  for (const std::string domain : {"", "com.microsoft", "custom", "ai.rt"}) {
+    for (const std::string op : {"Attention", "LinearAttention", "FlashAttentionV2"}) {
+      SCOPED_TRACE(domain + "::" + op);
+      std::size_t work = 0;
+      EXPECT_TRUE(core::graph::IsOperatorGroupAnchor(
+          MakeNode(op.c_str(), {"x"}, {"y"}, domain.c_str()), builder, work));
+    }
+  }
+  for (const auto &[domain, op] :
+       std::vector<std::pair<std::string, std::string>>{{"Attention", "Relu"},
+                                                        {"custom", "attention"},
+                                                        {"custom", "MatMul"},
+                                                        {"ai.rt", "Layer_Attention_0"}}) {
+    SCOPED_TRACE(domain + "::" + op);
+    std::size_t work = 0;
+    EXPECT_FALSE(core::graph::IsOperatorGroupAnchor(
+        MakeNode(op.c_str(), {"x"}, {"y"}, domain.c_str()), builder, work));
+  }
+}
+
+TEST(RepeatedLayerPattern, ExtractsAttentionSubstringsWithLocalShapeInference) {
+  for (const auto &[domain, op] :
+       std::vector<std::pair<std::string, std::string>>{{"com.microsoft", "LinearAttention"},
+                                                        {"custom", "FlashAttentionV2"},
+                                                        {"custom", "AttentionHelper"}}) {
+    SCOPED_TRACE(domain + "::" + op);
+    core::builder::OperatorRegistry registry;
+    registry.RegisterShapeInference(domain, op,
+                                    [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+                                      ctx.CopyValueFrom(node.output(0), ctx, node.input(0));
+                                    });
+    core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {domain, 1}},
+                                        registry);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+    std::string input = "x";
+    for (int i = 0; i < 3; ++i) {
+      const std::string prefix = "h" + std::to_string(i);
+      builder.MakeNode(op, {input}, {prefix + "_attention"}, domain, prefix + "_attention_node");
+      builder.MakeNode("Relu", {prefix + "_attention"}, {prefix}, "", prefix + "_relu");
+      input = prefix;
+    }
+    builder.MakeOutput(input);
+    const GraphProto before = builder.BuildGraph();
+
+    ASSERT_FALSE(OptimizeLayers(builder).rewrites().empty());
+    const GraphProto after = builder.BuildGraph();
+    ASSERT_EQ(ExpectLayerContracts(after), 3u);
+    for (const auto &node : after.node()) {
+      const auto *body = LayerBody(node);
+      ASSERT_NE(body, nullptr);
+      ASSERT_EQ(body->node_size(), 2);
+      EXPECT_EQ(body->node(0).domain(), domain);
+      EXPECT_EQ(body->node(0).op_type(), op);
+      EXPECT_EQ(body->node(1).op_type(), "Relu");
+    }
+    EXPECT_EQ(after.output(0).name(), input);
+    ExpectOriginalOperators(before, after);
+    ExpectCoherentLayerMetadata(builder);
+    EXPECT_EQ(builder.ToModel().functions().size(), 1u);
+    EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  }
+}
+
+TEST(RepeatedLayerPattern, AttentionSubstringDoesNotBypassMissingOutputShapes) {
+  const std::string domain = "test.layer.attention";
+  core::builder::GraphBuilder builder("g", LayerSchemaLookup(), {{"", 28}, {domain, 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  for (int i = 0; i < 2; ++i) {
+    const std::string prefix = "h" + std::to_string(i);
+    builder.MakeNode("CustomAttention", {"x"}, {prefix + "_attention"}, domain);
+    builder.MakeNode("Relu", {prefix + "_attention"}, {prefix});
+    builder.MakeOutput(prefix, core::symbolic::TensorType::kFloat, LayerShape({2, 4}));
+  }
+  const GraphProto before = builder.BuildGraph();
+  EXPECT_TRUE(OptimizeLayers(builder).rewrites().empty());
+  EXPECT_TRUE(before.Equals(builder.BuildGraph()));
 }
 
 TEST(RepeatedLayerPattern, UsesBuilderLocalShapeInferenceRegardlessOfDomain) {

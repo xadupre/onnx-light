@@ -187,6 +187,33 @@ class TestPatternSelection(ExtTestCase):
             optim.standard_patterns(["RepeatedLayer"])[0], optim.RepeatedLayerPattern
         )
 
+    def test_repeated_layer_search_budget_is_per_pattern(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 28]>\n'
+            "g (float[2,2] x, float[2,2] w0, float[2,2] w1) => (float[2,2] y) {\n"
+            "  a = MatMul(x, w0)\n"
+            "  b = Relu(a)\n"
+            "  c = MatMul(b, w1)\n"
+            "  y = Relu(c)\n"
+            "}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "max_growth_attempts"):
+            optim.RepeatedLayerPattern(max_growth_attempts=0)
+        for budget in (1, 32768, 1, None):
+            with self.subTest(budget=budget):
+                builder = optim.GraphBuilder(model)
+                pattern = (
+                    optim.RepeatedLayerPattern()
+                    if budget is None
+                    else optim.RepeatedLayerPattern(max_growth_attempts=budget)
+                )
+                folding = optim.ConstantFoldingOptions()
+                folding.enabled = False
+                optim.GraphGraph(builder, patterns=[pattern]).optimize(folding_options=folding)
+                result = builder.to_model()
+                self.assertEqual(len(result.functions), 0 if budget == 1 else 1)
+                self.assertEqual(result.graph.output[0].name, "y")
+
     def setUp(self):
         super().setUp()
         original = optim.registered_patterns()

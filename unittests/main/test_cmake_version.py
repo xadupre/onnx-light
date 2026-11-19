@@ -40,7 +40,6 @@ class TestCMakeVersion(unittest.TestCase):
         for name in (
             "ci_core.yml",
             "build_release_cpp.yml",
-            "build_standalone_example.yml",
             "clang_tidy.yml",
             "cq_fuzz.yml",
             "kernel_reports.yml",

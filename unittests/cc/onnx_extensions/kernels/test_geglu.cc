@@ -96,19 +96,20 @@ TEST(KernelGeGLU, IndependentNegativeGateReferenceAndModes) {
 TEST(KernelGeGLU, HalfComputesActivationAndProductBeforeSingleRounding) {
   const GeGLU kernel{KernelContext{DefaultOpset(29)}};
   const onnx_kernels::kernel::Gelu gelu{KernelContext{DefaultOpset(29)}};
-  const std::vector<float> values{-4, -3.25f, -1.125f, -0.3f, 0.3f, 1.125f, 3.25f, 4};
+  const std::vector<float> values{-4, -3.25f, -2.25f, -1.125f, -1, -0.3f, 0.3f, 1.125f, 3.25f, 4};
   for (DataType dtype : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    SCOPED_TRACE(static_cast<int32_t>(dtype));
     const auto decode = dtype == DataType::FLOAT16 ? Float16BitsToFloat : Bfloat16BitsToFloat;
     const auto encode = dtype == DataType::FLOAT16 ? FloatToFloat16Bits : FloatToBfloat16Bits;
     bool differs_from_two_roundings = false;
     for (const std::string mode : {"none", "tanh"}) {
-      const Tensor a = TypedTensor(dtype, {8}, values);
-      const Tensor b = TypedTensor(dtype, {8}, std::vector<float>(8, 1.375f));
+      const Tensor a = TypedTensor(dtype, {10}, values);
+      const Tensor b = TypedTensor(dtype, {10}, std::vector<float>(10, 1.375f));
       const Tensor fa = PromoteToFloat32(a);
       const Tensor fb = PromoteToFloat32(b);
       const Tensor activation = gelu(fa, mode);
       const Tensor y = kernel(a, b, mode);
-      for (int i = 0; i < 8; ++i) {
+      for (int i = 0; i < 10; ++i) {
         const uint16_t expected = encode(activation.AsFloat()[i] * fb.AsFloat()[i]);
         EXPECT_EQ(reinterpret_cast<const uint16_t *>(y.bytes())[i], expected);
         const uint16_t twice = encode(decode(encode(activation.AsFloat()[i])) * fb.AsFloat()[i]);

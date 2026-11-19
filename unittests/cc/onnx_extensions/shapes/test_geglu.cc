@@ -58,17 +58,20 @@ TEST(ShapeGeGLU, RejectsShapeTypeAttributeAndNodeErrors) {
   ctx.Set("B", SymTensor(nullptr, TensorType::kInt32, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
   for (const SymShape &shape : {SymShape{}, SymShape{SymDim(int64_t{0})}, SymShape{SymDim("N")}}) {
-    ctx.Set("A", SymTensor(nullptr, TensorType::kFloat, shape));
-    ctx.Set("B", SymTensor(nullptr, TensorType::kFloat, shape));
+    core::shapes::ShapesContext attr_ctx;
+    attr_ctx.SetOpsetVersion("", 29);
+    attr_ctx.Set("A", SymTensor(nullptr, TensorType::kFloat, shape));
+    attr_ctx.Set("B", SymTensor(nullptr, TensorType::kFloat, shape));
     auto *attr = node.add_attribute();
     attr->set_name("approximate");
     attr->set_type(AttributeProto::STRING);
     attr->set_s("invalid");
-    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
-    attr->set_s("tanh");
-    EXPECT_NO_THROW(ctx.ComputeShapeNode(node));
+    EXPECT_THROW(attr_ctx.ComputeShapeNode(node), std::invalid_argument);
     attr->set_type(AttributeProto::INT);
-    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+    EXPECT_THROW(attr_ctx.ComputeShapeNode(node), std::invalid_argument);
+    attr->set_type(AttributeProto::STRING);
+    attr->set_s("tanh");
+    EXPECT_NO_THROW(attr_ctx.ComputeShapeNode(node));
     node.clear_attribute();
   }
   const NodeProto wrong_op = MakeNode("Gelu", {"A", "B"}, {"Y"});

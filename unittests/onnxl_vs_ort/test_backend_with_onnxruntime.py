@@ -291,7 +291,21 @@ TestOrtBackend = make_test_class(
 
 # Keep these known ORT limitations executable: an unexpected success must fail
 # so the marker is removed when ORT catches up with the ONNX reference.
+_lp_normalization_failures = [
+    f"lpnormalization_finite_extreme_p{p}_magnitude_{magnitude}_axis_{axis}"
+    for p, magnitude in ((1, 127), (2, 127), (2, 99), (2, -100), (2, -149))
+    for axis in (-1, 0, 1)
+]
+_where_bfloat16_failures = [
+    f"where_bfloat16{broadcast}_opset_{version}"
+    for broadcast in ("", "_bcast")
+    for version in (16, 20)
+]
 _expected_failure_cases = [
+    # ORT 1.32 overflows or underflows intermediate Lp norms for these finite inputs.
+    *_lp_normalization_failures,
+    # ORT CPU has no BFLOAT16 Where kernel; the native backend still covers these cases.
+    *_where_bfloat16_failures,
     # ORT 1.30 overflows intermediate sums despite finite ReduceMean outputs.
     # Keep the correct expectations executable and track separately from #5626
     # (xadupre/onnx-light#5636).
@@ -391,6 +405,23 @@ for _case_name in _expected_failure_cases:
 
 
 class TestOrtBackendErrorHandling(unittest.TestCase):
+    def test_known_limitation_failures_have_expected_cause(self):
+        for case_name in _lp_normalization_failures:
+            with self.subTest(case=case_name):
+                method = getattr(TestOrtBackend, f"test_test_cc_{case_name}")
+                with self.assertRaisesRegex(
+                    AssertionError, f"Output 0/0 mismatch for test 'test_cc_{case_name}'"
+                ):
+                    method(self)
+        for case_name in _where_bfloat16_failures:
+            with self.subTest(case=case_name):
+                method = getattr(TestOrtBackend, f"test_test_cc_{case_name}")
+                with self.assertRaisesRegex(
+                    _ort_errors.NotImplemented,
+                    r"Could not find an implementation for Where\(16\) node with name ",
+                ):
+                    method(self)
+
     def test_only_specific_missing_capabilities_are_skipped(self):
         failures = [
             (

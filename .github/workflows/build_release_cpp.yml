@@ -176,4 +176,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release upload "$TAG" release-artifacts/*
+        run: gh release upload "$TAG" release-artifacts/* --repo "$GITHUB_REPOSITORY"

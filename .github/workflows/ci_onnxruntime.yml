@@ -1,0 +1,84 @@
+name: ci-onnxruntime
+
+# Runs the tests comparing onnx-light with onnxruntime (onnxruntime and onnx,
+# used by some of these tests, are installed only here).
+# These tests only run on Linux. Every other test job installs
+# onnx-light[dev] and never installs onnx or onnxruntime.
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore: ["docs/**", "**/*.md", "**/*.rst"]
+  pull_request:
+    branches: ["main"]
+    paths-ignore: ["docs/**", "**/*.md", "**/*.rst"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+
+jobs:
+  onnxruntime_tests_ubuntu:
+    name: onnxruntime (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set up sccache
+        id: sccache
+        continue-on-error: true
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Warn if sccache is unavailable
+        if: steps.sccache.outcome != 'success'
+        shell: bash
+        run: echo "::warning::sccache setup failed; compiling without a compiler cache."
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Install CMake and build dependencies
+        run: python -m pip install "cmake>=4.0" "scikit-build-core>=0.8" "nanobind>=3.0.1" "numpy>=2.2"
+
+      - name: Build and Install package
+        env:
+          SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
+        run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
+
+      - name: Install onnxruntime and ONNX weekly
+        run: pip install --upgrade onnxruntime onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests
+        env:
+          UNITTEST_GOING: "1"
+          MPLBACKEND: Agg
+        run: |
+          pytest --durations=10 \
+            unittests/onnxl_vs_ort \
+            unittests/main/test_documentation_examples.py \
+            unittests/main/test_plot_qwen3_init_benchmark.py \
+            unittests/python/backend/test_generation.py \
+            unittests/python/backend/test_quantized_values.py \
+            unittests/python/backend/test_runtime_coverage.py \
+            unittests/python/bindings/test_tensor_proto_dlpack.py

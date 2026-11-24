@@ -96,8 +96,6 @@ jobs:
             -C cmake.define.ONNX_HARDENING=ON \
             -e .[dev] -v
 
-      - name: Install ONNX weekly
-        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze
@@ -106,4 +104,4 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Run Python unit tests
-        run: UNITTEST_GOING=1 pytest --durations=10 unittests
+        run: UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort

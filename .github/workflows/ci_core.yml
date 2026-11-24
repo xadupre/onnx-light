@@ -272,9 +272,9 @@ jobs:
   no_onnx_tests_ubuntu:
     # Fast preflight: must pass before the heavier compilation jobs start.
     # Runs in parallel with the reduced (no kernels/backend) build; both
-    # preflights gate the downstream compilation jobs. Mirrors
-    # .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so the gate is
-    # observable as a required PR status check.
+    # preflights gate the downstream compilation jobs. No job in this workflow
+    # installs onnx or onnxruntime: the tests depending on them run on Linux
+    # only, in .github/workflows/ci_onnx.yml and ci_onnxruntime.yml.
     name: no-onnx (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     # Cache misses took over 25 minutes in run 40861273682; the full Python suite
@@ -321,8 +321,6 @@ jobs:
           SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: pip install -Cbuild-dir=build -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
-      - name: uninstall onnx
-        run: pip uninstall -y onnx
 
       - name: pip freeze
         run: pip freeze
@@ -459,8 +457,6 @@ jobs:
             --allowed-dependency libc.so.6 \
             --allowed-dependency ld-linux-x86-64.so.2
 
-      - name: Install ONNX weekly
-        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze
@@ -470,7 +466,7 @@ jobs:
 
       - name: Run tests
         run: |
-          UNITTEST_GOING=1 pytest --durations=10 unittests
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -561,8 +557,6 @@ jobs:
           SCCACHE_GHA_ENABLED: ${{ steps.sccache.outcome == 'success' }}
         run: pip install --no-build-isolation -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=${{ steps.sccache.outcome == 'success' && 'sccache' || '' }} -e .[dev] -v
 
-      - name: Install ONNX weekly
-        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze
@@ -599,7 +593,7 @@ jobs:
           UNITTEST_GOING: "1"
           MPLBACKEND: Agg
         run: |
-          pytest --durations=10 unittests
+          pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
   windows_x86_build:
     name: core (windows-latest, x86 build)

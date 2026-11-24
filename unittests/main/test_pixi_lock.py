@@ -48,28 +48,22 @@ class TestPixiLock(ExtTestCase):
                 envs[current_env].append(stripped[2:])
         return envs
 
-    def test_dev_no_onnx_env_has_no_protobuf(self):
+    def test_dev_env_has_no_protobuf(self):
         envs = self._parse_envs()
         self.assertIn(
-            "dev-no-onnx",
-            envs,
-            f"'dev-no-onnx' env not found in pixi.lock; envs found: {sorted(envs)}",
+            "dev", envs, f"'dev' env not found in pixi.lock; envs found: {sorted(envs)}"
         )
-        offenders = [pkg for pkg in envs["dev-no-onnx"] if "protobuf" in pkg]
+        offenders = [pkg for pkg in envs["dev"] if "protobuf" in pkg]
         self.assertEqual(
-            offenders,
-            [],
-            f"'dev-no-onnx' env unexpectedly contains protobuf packages: {offenders}",
+            offenders, [], f"'dev' env unexpectedly contains protobuf packages: {offenders}"
         )
 
-    def test_dev_no_onnx_env_has_no_onnx(self):
+    def test_dev_env_has_no_onnx(self):
         envs = self._parse_envs()
-        self.assertIn("dev-no-onnx", envs)
-        offenders = [
-            pkg for pkg in envs["dev-no-onnx"] if "/onnx-" in pkg or "/onnxruntime-" in pkg
-        ]
+        self.assertIn("dev", envs)
+        offenders = [pkg for pkg in envs["dev"] if "/onnx-" in pkg or "/onnxruntime-" in pkg]
         self.assertEqual(
-            offenders, [], f"'dev-no-onnx' env unexpectedly contains onnx packages: {offenders}"
+            offenders, [], f"'dev' env unexpectedly contains onnx packages: {offenders}"
         )
 
     def test_default_env_has_no_protobuf(self):

@@ -44,8 +44,6 @@ jobs:
           LDFLAGS: -fsanitize=address,undefined
         run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
 
-      - name: Install ONNX weekly
-        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze
@@ -78,4 +76,4 @@ jobs:
           echo "ASAN_LIB=${ASAN_LIB}"
           echo "UBSAN_LIB=${UBSAN_LIB}"
           export LD_PRELOAD="${ASAN_LIB}:${UBSAN_LIB}"
-          UNITTEST_GOING=1 pytest --durations=10 unittests -v
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort -v

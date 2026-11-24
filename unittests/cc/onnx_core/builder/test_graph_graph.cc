@@ -180,6 +180,40 @@ public:
   }
 };
 
+class PreparedNegation : public core::builder::PatternOptimization {
+public:
+  PreparedNegation(std::map<std::string, int> &matches, std::vector<bool> &applied_after_mutation)
+      : PatternOptimization(1, "PreparedNegation"), matches(matches),
+        applied_after_mutation(applied_after_mutation) {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override {
+    if (candidate.op_type() != "Neg" || candidate.name() == "prepared")
+      return {};
+    ++matches[candidate.output(0).value()];
+    const bool after_mutation = graph.Builder().OpsetVersion("prepared.test") == 1;
+    core::builder::MatchResult result{this, {&candidate}, &candidate};
+    result.application = std::make_shared<core::builder::PatternApplication>(
+        [this, &graph, node = candidate, after_mutation]() mutable {
+          applied_after_mutation.push_back(after_mutation);
+          graph.Builder().SetOpsetVersion("prepared.test", 1);
+          node.set_name("prepared");
+          utils::RepeatedProtoField<NodeProto> nodes;
+          nodes.push_back(std::move(node));
+          return nodes;
+        });
+    return result;
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &) const override {
+    throw core::builder::BuilderError("PreparedNegation requires its prepared application.");
+  }
+
+  std::map<std::string, int> &matches;
+  std::vector<bool> &applied_after_mutation;
+};
+
 class MarkIf : public core::builder::PatternOptimization {
 public:
   MarkIf() : PatternOptimization(1, "MarkIf") {}
@@ -3276,6 +3310,29 @@ TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
   EXPECT_EQ(replayed.ToGraph().SerializeAsString(), source.ToGraph().SerializeAsString());
   EXPECT_EQ(source.UndoRewritings(cleanup).BuildGraph().SerializeAsString(),
             canonical.SerializeAsString());
+}
+
+TEST(GraphGraph, ReusesPreparedMatchOnlyBeforeTheFirstApplication) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Neg", {"X"}, {"first"});
+  builder.MakeNode("Neg", {"X"}, {"second"});
+  builder.MakeOutput("first");
+  builder.MakeOutput("second");
+  std::map<std::string, int> matches;
+  std::vector<bool> applied_after_mutation;
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<PreparedNegation>(matches, applied_after_mutation));
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+
+  EXPECT_EQ(optimizer.Optimize(1).rewrites().size(), 2u);
+  EXPECT_EQ(matches["first"], 1);
+  EXPECT_EQ(matches["second"], 2);
+  EXPECT_EQ(applied_after_mutation, (std::vector<bool>{false, true}));
+  for (const auto &node : builder.Nodes()) {
+    EXPECT_EQ(node.op_type(), "Neg");
+    EXPECT_EQ(node.name(), "prepared");
+  }
 }
 
 TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {

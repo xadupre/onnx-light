@@ -2048,14 +2048,15 @@ INSTANTIATE_TEST_SUITE_P(TopK, TopKShapeInferenceTest,
 namespace {
 
 // Ports the historical schema coverage from onnx/onnx#8711.
-std::vector<int> HistoricalShapeInferenceVersions(const char *op_type) {
+std::vector<int> HistoricalShapeInferenceVersions(const char *op_type, int min_opset = 6) {
   std::vector<int> versions;
-  if (std::string(op_type) == "Conv" || std::string(op_type) == "ConvTranspose") {
+  if (min_opset <= 10 &&
+      (std::string(op_type) == "Conv" || std::string(op_type) == "ConvTranspose")) {
     versions.push_back(10); // Exercises schema version 1.
   }
   // Parameter discovery must not initialize the global registry before test fixtures run.
   for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false)) {
-    if (schema.domain() == core::schema::kOnnxDomain && schema.since_version() > 5) {
+    if (schema.domain() == core::schema::kOnnxDomain && schema.since_version() >= min_opset) {
       versions.push_back(schema.since_version());
     }
   }
@@ -2129,8 +2130,10 @@ protected:
 
 class HistoricalConvShapeInferenceTest : public HistoricalShapeInferenceTest {};
 class HistoricalConvTransposeShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalConvTransposePaddingShapeInferenceTest : public HistoricalShapeInferenceTest {};
 class HistoricalFlattenShapeInferenceTest : public HistoricalShapeInferenceTest {};
 class HistoricalGemmShapeInferenceTest : public HistoricalShapeInferenceTest {};
+class HistoricalGemmOptionalBiasShapeInferenceTest : public HistoricalShapeInferenceTest {};
 
 TEST_P(HistoricalConvShapeInferenceTest, InfersShapes) {
   CheckShapes({
@@ -2223,11 +2226,7 @@ TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsInvalidInputs) {
   });
 }
 
-TEST_P(HistoricalConvTransposeShapeInferenceTest, RejectsPadsWithAutoPad) {
-  // Schema version 1 does not enforce this restriction.
-  if (GetParam() < 11) {
-    GTEST_SKIP();
-  }
+TEST_P(HistoricalConvTransposePaddingShapeInferenceTest, RejectsPadsWithAutoPad) {
   CheckErrors({
       {"pads_and_auto_pad",
        R"(g (float[1,1,2,2] X, float[1,1,3,3] W, float[1] B) => (float[] Y) {
@@ -2274,11 +2273,7 @@ TEST_P(HistoricalGemmShapeInferenceTest, InfersShapes) {
   });
 }
 
-TEST_P(HistoricalGemmShapeInferenceTest, InfersShapeWithoutBias) {
-  // The bias input becomes optional in Gemm-11.
-  if (GetParam() < 11) {
-    GTEST_SKIP();
-  }
+TEST_P(HistoricalGemmOptionalBiasShapeInferenceTest, InfersShapeWithoutBias) {
   CheckShapes({
       {"no_bias", R"(g (float[13,7] X, float[7,17] W) => (float[13,17] Y) { Y = Gemm (X, W) })"},
   });
@@ -2288,10 +2283,15 @@ INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvShapeInferenceTest,
                          ::testing::ValuesIn(HistoricalShapeInferenceVersions("Conv")));
 INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvTransposeShapeInferenceTest,
                          ::testing::ValuesIn(HistoricalShapeInferenceVersions("ConvTranspose")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalConvTransposePaddingShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("ConvTranspose",
+                                                                              11)));
 INSTANTIATE_TEST_SUITE_P(Historical, HistoricalFlattenShapeInferenceTest,
                          ::testing::ValuesIn(HistoricalShapeInferenceVersions("Flatten")));
 INSTANTIATE_TEST_SUITE_P(Historical, HistoricalGemmShapeInferenceTest,
                          ::testing::ValuesIn(HistoricalShapeInferenceVersions("Gemm")));
+INSTANTIATE_TEST_SUITE_P(Historical, HistoricalGemmOptionalBiasShapeInferenceTest,
+                         ::testing::ValuesIn(HistoricalShapeInferenceVersions("Gemm", 11)));
 
 } // namespace
 

@@ -10,7 +10,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 /// Configures the work budget of one repeated-region search.
 struct RepeatedLayerOptions {
-  /// Caps anchor inspections, compatibility comparisons and growth attempts; must be positive.
+  /// Caps seed-family visits and frontier-extension rounds; must be positive.
   std::size_t max_growth_attempts = 4096;
 };
 
@@ -21,7 +21,7 @@ struct RepeatedLayerOptions {
  * inputs except for shared materialized constants with fewer than 32 elements.
  * Preserves side outputs and lexical subgraph dependencies.
  * Returns OperatorGroupProposal, shared with transfer-aware partitioning.
- * Optionally retains the index for immediate use by optimizer revalidation.
+ * Optionally retains the index for immediate application on the unchanged graph.
  * Indices refer to the unchanged source graph; transfer estimates are not reported.
  *
  * Algorithm, in execution order:
@@ -38,32 +38,37 @@ struct RepeatedLayerOptions {
  *   Does not change the conservative custom-operator constant-folding policy.
  *   Keeps nodes referencing enclosing-function attributes, including references
  *   inside graph attributes, outside extracted regions.
- * - Processes anchors by operator type. For each unmarked anchor, seeds a motif
- *   with the anchor and up to its first two usable predecessors, then finds all
- *   compatible occurrences while preserving signatures, connections and port roles.
+ * - Indexes connected port-labelled seeds from compatible anchors and their neighbors;
+ *   the first frontier round extends these pairs to three-node motifs when possible.
+ *   Only the structure
+ *   of the dataflow graph matters, not the position of nodes in the node list.
  *   Different weight values are allowed.
- * - Grows the repeated motif through corresponding predecessors/successors, keeping
- *   the last extension that still has at least two occurrences. Divergent occurrences
- *   remain available as seeds; marked nodes cannot be reused or crossed.
+ * - Grows all occurrences together through incremental predecessor/successor frontiers.
+ *   Each newly included node contributes its incident edges once. Abstract value slots
+ *   check connections and aliasing without copying or comparing whole growing regions.
+ *   Splits repeated variants into independent families without searching the graph again.
+ *   Keeps singleton differences on the boundary. Constant and weight preparations are
+ *   ordinary nodes and join the motif when they correspond across occurrences.
+ *   Rejects nonconvex terminal regions during contraction scheduling.
+ *   Divergent occurrences remain available
+ *   as seeds; marked nodes cannot be reused or crossed.
  *   Requires matching attributes, port roles and topology, but not equal weights.
  *   Rejects incompatible known dtypes, ranks and feature dimensions; leading
  *   activation dimensions may vary. Each accepted region contains at least two nodes.
- * - Computes each candidate cut: entering values become formal inputs, including
+ * - Computes boundaries only after growth stops: entering values become formal inputs, including
  *   weights and captures; values used outside the region become formal outputs,
  *   including intermediate graph outputs. Rejects unsupported boundary types and
  *   nested outputs captured directly from an outer scope without a local Identity.
  *   Supports tensors, structured values, sequences of supported values and
  *   tensor-valued maps; keeps optional, sparse and opaque boundaries outside Layers.
- * - Contracts regions into scheduling units alongside untouched nodes. Rejects
- *   contraction cycles and preserves the original execution order except for
- *   literal Constants and whitelisted constant preparations, which may move before
- *   a call without evaluating weights. Independent whitelisted preparations of graph
- *   inputs may also move when required by contracted dependencies. Retains the order of other
- * operators and does not hoist device-annotated, overloaded or local-function preparations.
- * - Ranks cuts within a grown seed skeleton by crossing-edge multiplicity, then
- *   unknown-size crossings, saturating known byte size, decreasing region size,
- *   and original positions.
- * - Revalidates the selected match and replaces every selected occurrence with
+ * - Contracts regions into scheduling units alongside untouched nodes and
+ *   topologically sorts them using data dependencies only; the original node order
+ *   is just a deterministic tie-break. Rejects contraction cycles.
+ * - Tries rarer anchor families first, then seeds with more occurrences.
+ *   Does not enumerate or rank growing cuts. Interface size, transfer bytes and
+ *   operator kinds inside a region are not considered.
+ * - Reuses the prepared analysis while the graph is unchanged; otherwise revalidates.
+ *   Direct replacement API calls always revalidate. Replaces every selected occurrence with
  *   calls to shared model-local functions when their bodies and interfaces
  *   agree up to local names, exporter provenance and recomputed tensor shapes.
  *   Retains shape annotations needed by operators without shape inference.
@@ -84,14 +89,11 @@ struct RepeatedLayerOptions {
  *
  * - Visits at most 4096 nested nodes per graph node for lexical captures, with
  *   scope depth below 16. An incomplete node stays outside Layers; earlier values
- *   remain live and scheduling cannot move preparations across that node.
+ *   remain live and scheduling cannot move nodes across that node.
  *   Reports capture_analysis_limited even when safe groups elsewhere are found,
  *   or kResourceLimit instead of kNoMatch when no safe proposal remains.
- * - Considers at most 32 seed groups and max_growth_attempts shared anchor
- *   anchor inspections, compatibility comparisons and growth attempts (4096
- *   by default). Residual ancestry and forward scans each visit at most 4096 nodes.
- * - Emits at most 32 occurrences per batch, with one un-emitted tail probe.
- *   Shortens batches when needed to leave at least two occurrences for the next batch.
+ * - Shares max_growth_attempts seed-family visits and frontier-extension rounds
+ *   (4096 by default). All disjoint occurrences grow together without capped batches.
  * - Limits each occurrence to 256 nodes and the rewritten interval to 4096 nodes.
  * - Detects repeated computations, not necessarily entire transformer/model layers.
  *

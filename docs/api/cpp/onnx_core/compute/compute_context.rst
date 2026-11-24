@@ -12,9 +12,10 @@ Memory timeline boundaries
 ``GraphBuilder`` maintains shapes, tags, lifetimes and reuse decisions during
 construction, but does not compute memory or scratch profiles. Its
 ``Compute().Memory()`` and ``Compute().PeakMemory()`` vectors remain empty.
-``ToGraph``, ``ToModel`` and ``ToFunction`` compute profiles at export, including
-nested graphs and local functions. A subsequent mutation discards those optional
-profiles immediately, so callers never observe an outdated profile.
+``ToGraph``, ``ToModel`` and ``ToFunction`` compute only peak-memory estimates at
+export, including for nested graphs and local functions. To obtain the detailed
+memory timeline, run a separate ``ComputeContext`` analysis on the exported model.
+A subsequent mutation discards previously computed profiles immediately.
 
 Standalone ``ComputeContext`` keeps its incremental behavior by default.
 The explicit C++ ``MemoryProfiling::kExplicit`` constructor policy disables

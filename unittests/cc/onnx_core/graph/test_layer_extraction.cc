@@ -185,7 +185,7 @@ TEST(LayerExtraction, CaptureBudgetsDoNotAccumulateAcrossOwners) {
   EXPECT_FALSE(proposal.capture_analysis_limited);
 }
 
-TEST(LayerExtraction, IncompleteCapturesKeepPreparationsLocalToEachSide) {
+TEST(LayerExtraction, IncompleteCapturesKeepOpaqueNodesBetweenCalls) {
   core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
@@ -209,12 +209,10 @@ TEST(LayerExtraction, IncompleteCapturesKeepPreparationsLocalToEachSide) {
   EXPECT_TRUE(proposal.capture_analysis_limited);
   const auto replacement =
       core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
-  ASSERT_EQ(replacement.size(), 5u);
-  EXPECT_EQ(replacement[0].output(0), "bias0");
-  EXPECT_EQ(replacement[1].domain(), "ai.rt");
-  EXPECT_EQ(replacement[2].op_type(), "If");
-  EXPECT_EQ(replacement[3].output(0), "bias1");
-  EXPECT_EQ(replacement[4].domain(), "ai.rt");
+  ASSERT_EQ(replacement.size(), 3u);
+  EXPECT_EQ(replacement[0].domain(), "ai.rt");
+  EXPECT_EQ(replacement[1].op_type(), "If");
+  EXPECT_EQ(replacement[2].domain(), "ai.rt");
 }
 
 TEST(LayerExtraction, ReportsCaptureResourceLimitSeparatelyFromNoMatch) {

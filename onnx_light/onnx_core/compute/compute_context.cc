@@ -5,6 +5,7 @@
 #include "onnx_core/compute/compute_context.h"
 
 #include <algorithm>
+#include <cctype>
 #include <deque>
 #include <limits>
 #include <optional>
@@ -382,10 +383,58 @@ void BindFunctionAttributes(GraphProto &graph, const FunctionAttributeMap &attri
     BindFunctionAttributes(node, attributes);
 }
 
+using FunctionBodyMemoryCache = std::unordered_map<std::string, FunctionBodyMemoryEstimate>;
+
+std::string CanonicalizeDimension(const std::string &dimension,
+                                  std::unordered_map<std::string, std::size_t> &symbols) {
+  std::string canonical;
+  for (std::size_t index = 0; index < dimension.size();) {
+    const auto character = static_cast<unsigned char>(dimension[index]);
+    const bool starts_identifier =
+        dimension[index] == '_' || std::isalpha(character) != 0 || character >= 0x80;
+    if (!starts_identifier) {
+      canonical.push_back(dimension[index++]);
+      continue;
+    }
+    const std::size_t begin = index++;
+    while (index < dimension.size()) {
+      const auto next = static_cast<unsigned char>(dimension[index]);
+      if (dimension[index] != '_' && std::isalnum(next) == 0 && next < 0x80)
+        break;
+      ++index;
+    }
+    const std::string symbol = dimension.substr(begin, index - begin);
+    const auto [it, inserted] = symbols.emplace(symbol, symbols.size());
+    static_cast<void>(inserted);
+    canonical += "S" + std::to_string(it->second) + ";";
+  }
+  return canonical;
+}
+
+bool SameFunctionInputShape(const SymTensor &declared, const SymTensor &actual,
+                            std::unordered_map<std::string, std::size_t> &declared_symbols,
+                            std::unordered_map<std::string, std::size_t> &actual_symbols) {
+  if (declared.Dtype() != actual.Dtype() || declared.Shape().Rank() != actual.Shape().Rank())
+    return false;
+  for (std::size_t index = 0; index < declared.Shape().Rank(); ++index) {
+    if (CanonicalizeDimension(declared.Shape()[index].ToString(), declared_symbols) !=
+        CanonicalizeDimension(actual.Shape()[index].ToString(), actual_symbols))
+      return false;
+  }
+  return true;
+}
+
+bool RequiresPreinferredFunctionShapes(const FunctionProto &function) {
+  if (function.domain() != "ai.rt")
+    return false;
+  const std::string name = function.name();
+  return name.rfind("Layer_", 0) == 0 || name.rfind("RepeatedLayer_", 0) == 0;
+}
+
 FunctionBodyMemoryEstimate
 EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Device device,
                            std::unordered_set<std::string> &active_functions,
-                           bool validate_allocations = false) {
+                           bool validate_allocations, FunctionBodyMemoryCache *cache) {
   const std::string function_key =
       ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload());
   const FunctionProto *function = ctx.GetLocalFunction(function_key);
@@ -406,6 +455,37 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   body_shapes.set_events_enabled(false);
   for (const OperatorSetIdProto &opset : function->opset_import())
     body_shapes.SetOpsetVersion(opset.domain(), static_cast<int>(opset.version()));
+  std::unordered_map<std::string, SymTensor> declared;
+  for (const ValueInfoProto &value_info : function->value_info()) {
+    SymTensor descriptor;
+    if (value_info.has_type() && value_info.type().has_tensor_type() &&
+        value_info.type().tensor_type().has_shape() &&
+        SymTensorFromValueInfo(value_info, descriptor))
+      declared.emplace(value_info.name().value(), std::move(descriptor));
+  }
+  // A function declaring the shapes of all body values was built for those
+  // shapes, so memory analysis can use the retained annotations directly.
+  const bool has_declared_input_shapes =
+      !function->input().empty() &&
+      std::all_of(function->input().begin(), function->input().end(),
+                  [&](const auto &name) { return declared.count(std::string(name)) != 0; });
+  if (has_declared_input_shapes) {
+    std::unordered_map<std::string, std::size_t> declared_symbols;
+    std::unordered_map<std::string, std::size_t> actual_symbols;
+    for (std::size_t i = 0; i < std::min(function->input().size(), node.input().size()); ++i) {
+      const std::string &actual = node.input(i);
+      if (actual.empty() || !ctx.Has(actual))
+        continue;
+      const std::string formal = function->input(i);
+      const SymTensor &expected = declared.at(formal);
+      const SymTensor &passed = ctx.Get(actual);
+      EXT_ENFORCE_INVALID(
+          SameFunctionInputShape(expected, passed, declared_symbols, actual_symbols),
+          "Memory analysis: call '", node.name(), "' of local function '", function_key, "' uses ",
+          passed.ToString(), " for '", formal, "', but the function was built for ",
+          expected.ToString(), ".");
+    }
+  }
   FunctionAttributeMap attributes;
   for (const AttributeProto &attribute : function->attribute_proto())
     attributes[attribute.name()] = &attribute;
@@ -417,52 +497,86 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
     BindFunctionAttributes(bound, attributes);
     bound_nodes.push_back(std::move(bound));
   }
-  const std::size_t input_count = std::min(function->input().size(), node.input().size());
-  for (std::size_t i = 0; i < input_count; ++i) {
-    const std::string &actual = node.input(i);
-    if (actual.empty())
-      continue;
-    if (!(ctx.Has(actual) || ctx.HasType(actual) || ctx.HasSequence(actual) ||
-          ctx.HasEncodedValue(actual))) {
-      EXT_ENFORCE_INVALID(!validate_allocations,
-                          "Memory analysis: unresolved local-function input '", actual, "'.");
-      return {int64_t{0}, shapes::UnknownPeakMemory(node.domain(), node.op_type()), true};
-    }
-    body_shapes.CopyValueFrom(function->input(i), ctx, actual);
-  }
-  const auto contains_unbound_attributes = [](const auto &self, const NodeProto &candidate) {
-    for (const AttributeProto &attribute : candidate.attribute()) {
-      if (!attribute.ref_attr_name().empty())
-        return true;
-      const auto graph_contains_unbound = [&](const GraphProto &graph) {
-        return std::any_of(graph.node().begin(), graph.node().end(),
-                           [&](const NodeProto &nested) { return self(self, nested); });
-      };
-      if ((attribute.has_g() && graph_contains_unbound(attribute.g())) ||
-          std::any_of(attribute.graphs().begin(), attribute.graphs().end(), graph_contains_unbound))
-        return true;
-    }
-    return false;
+  const auto has_body_shape = [&](const std::string &name) {
+    return name.empty() || declared.count(name) != 0 || body_shapes.Has(name) ||
+           body_shapes.HasType(name) || body_shapes.HasSequence(name) ||
+           body_shapes.HasEncodedValue(name);
   };
-  std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
-  for (const ValueInfoProto &value_info : function->value_info())
-    declared_outputs[value_info.name()] = &value_info;
-  for (const NodeProto &inner : bound_nodes) {
-    if (shapes::ShapeInputsAvailable(body_shapes, inner) &&
-        !contains_unbound_attributes(contains_unbound_attributes, inner)) {
-      if (!shapes::TrySeedAnnotatedOutputsForUnknownCustomOp(body_shapes, inner,
-                                                             declared_outputs) &&
-          shapes::HasShapeInference(body_shapes, inner))
-        body_shapes.ComputeShapeNode(inner);
-    }
+  const bool shape_bound =
+      has_declared_input_shapes &&
+      std::all_of(bound_nodes.begin(), bound_nodes.end(), [&](const NodeProto &inner) {
+        return std::all_of(inner.input().begin(), inner.input().end(), has_body_shape) &&
+               std::all_of(inner.output().begin(), inner.output().end(), has_body_shape);
+      });
+  EXT_ENFORCE_INVALID(
+      !RequiresPreinferredFunctionShapes(*function) || shape_bound,
+      "Memory analysis: extracted layer function '", function_key,
+      "' is missing inferred shapes; run shape inference before extracting layers.");
+  const bool cacheable =
+      shape_bound && cache != nullptr && !validate_allocations && node.attribute().empty();
+  const std::string cache_key = function_key + symbolic::DeviceKeySuffix(device);
+  if (cacheable) {
+    const auto found = cache->find(cache_key);
+    if (found != cache->end())
+      return found->second;
   }
-  for (const ValueInfoProto &value_info : function->value_info()) {
-    if (!body_shapes.Has(value_info.name().value()) && value_info.has_type() &&
-        value_info.type().has_tensor_type() && value_info.type().tensor_type().has_shape()) {
-      SymTensor descriptor;
-      if (SymTensorFromValueInfo(value_info, descriptor))
-        body_shapes.Set(value_info.name().value(), std::move(descriptor));
+  if (shape_bound) {
+    for (const auto &[name, descriptor] : declared)
+      body_shapes.Set(name, SymTensor(descriptor));
+    const auto check_body_value = [&](const std::string &name) {
+      EXT_ENFORCE_INVALID(has_body_shape(name), "Memory analysis: local function '", function_key,
+                          "' declares no shape for '", name,
+                          "'; run shape inference before building the function.");
+    };
+    for (const NodeProto &inner : bound_nodes) {
+      for (const std::string &input : inner.input())
+        check_body_value(input);
+      for (const std::string &output : inner.output())
+        check_body_value(output);
     }
+  } else {
+    const std::size_t input_count = std::min(function->input().size(), node.input().size());
+    for (std::size_t i = 0; i < input_count; ++i) {
+      const std::string &actual = node.input(i);
+      if (actual.empty())
+        continue;
+      if (!(ctx.Has(actual) || ctx.HasType(actual) || ctx.HasSequence(actual) ||
+            ctx.HasEncodedValue(actual))) {
+        EXT_ENFORCE_INVALID(!validate_allocations,
+                            "Memory analysis: unresolved local-function input '", actual, "'.");
+        return {int64_t{0}, shapes::UnknownPeakMemory(node.domain(), node.op_type()), true};
+      }
+      body_shapes.CopyValueFrom(function->input(i), ctx, actual);
+    }
+    const auto contains_unbound_attributes = [](const auto &self, const NodeProto &candidate) {
+      for (const AttributeProto &attribute : candidate.attribute()) {
+        if (!attribute.ref_attr_name().empty())
+          return true;
+        const auto graph_contains_unbound = [&](const GraphProto &graph) {
+          return std::any_of(graph.node().begin(), graph.node().end(),
+                             [&](const NodeProto &nested) { return self(self, nested); });
+        };
+        if ((attribute.has_g() && graph_contains_unbound(attribute.g())) ||
+            std::any_of(attribute.graphs().begin(), attribute.graphs().end(),
+                        graph_contains_unbound))
+          return true;
+      }
+      return false;
+    };
+    std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+    for (const ValueInfoProto &value_info : function->value_info())
+      declared_outputs[value_info.name()] = &value_info;
+    for (const NodeProto &inner : bound_nodes) {
+      if (shapes::ShapeInputsAvailable(body_shapes, inner) &&
+          !contains_unbound_attributes(contains_unbound_attributes, inner)) {
+        if (!shapes::TrySeedAnnotatedOutputsForUnknownCustomOp(body_shapes, inner,
+                                                               declared_outputs))
+          body_shapes.ComputeShapeNode(inner);
+      }
+    }
+    for (const auto &[name, descriptor] : declared)
+      if (!body_shapes.Has(name))
+        body_shapes.Set(name, SymTensor(descriptor));
   }
   if (validate_allocations)
     ValidateScopeAllocations(*function, bound_nodes, body_shapes);
@@ -516,7 +630,7 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
   for (std::size_t index = 0; index < bound_nodes.size(); ++index) {
     const NodeProto &inner = bound_nodes[index];
     const FunctionBodyMemoryEstimate nested = EstimateFunctionBodyMemory(
-        inner, body_shapes, device, active_functions, validate_allocations);
+        inner, body_shapes, device, active_functions, validate_allocations, cache);
     const PeakMemoryEstimate workspace = NodeWorkspace(inner, body_shapes, device, nested);
     live = expressions::dim_add(live, allocations_starting[index].Build(&expression_cache),
                                 &expression_cache);
@@ -527,13 +641,16 @@ EstimateFunctionBodyMemory(const NodeProto &node, const ShapesContext &ctx, Devi
                                 &expression_cache);
     estimate.workspace_peak = MaxWorkspace(estimate.workspace_peak, workspace, &expression_cache);
   }
+  if (cacheable)
+    cache->emplace(cache_key, estimate);
   return estimate;
 }
 
 FunctionBodyMemoryEstimate EstimateFunctionBodyMemory(const NodeProto &node,
                                                       const ShapesContext &ctx, Device device,
                                                       const NodeMaterializerFn &materialize = {},
-                                                      bool validate_allocations = false) {
+                                                      bool validate_allocations = false,
+                                                      FunctionBodyMemoryCache *cache = nullptr) {
   std::unordered_set<std::string> active_functions;
   if (materialize &&
       std::any_of(node.attribute().begin(), node.attribute().end(),
@@ -547,10 +664,11 @@ FunctionBodyMemoryEstimate EstimateFunctionBodyMemory(const NodeProto &node,
                                                            node.overload())) != nullptr) {
     NodeProto resolved = utils::CopyWithSharedTensorStorage(node);
     materialize(resolved);
-    return EstimateFunctionBodyMemory(resolved, ctx, device, active_functions,
-                                      validate_allocations);
+    return EstimateFunctionBodyMemory(resolved, ctx, device, active_functions, validate_allocations,
+                                      cache);
   }
-  return EstimateFunctionBodyMemory(node, ctx, device, active_functions, validate_allocations);
+  return EstimateFunctionBodyMemory(node, ctx, device, active_functions, validate_allocations,
+                                    cache);
 }
 
 void AddFunctionBodyMemory(NodeMemoryProfile &profile, const FunctionBodyMemoryEstimate &estimate,
@@ -1615,6 +1733,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
     if (alive.erase(name) != 0)
       update_sum(name, false);
   };
+  FunctionBodyMemoryCache function_memory;
   for (std::size_t index = start; index < nodes.size(); ++index) {
     NodeMemoryProfile &profile = memory_[index];
     const NodeProto &node = nodes[index];
@@ -1673,8 +1792,10 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
-    AddFunctionBodyMemory(profile, EstimateFunctionBodyMemory(node, ctx, device, materialize),
-                          &expression_cache);
+    AddFunctionBodyMemory(
+        profile,
+        EstimateFunctionBodyMemory(node, ctx, device, materialize, false, &function_memory),
+        &expression_cache);
     if (index < peak_memory_.size())
       ValidateScratchTotal(profile, peak_memory_[index]);
     if (index < release_after_.size()) {
@@ -1735,6 +1856,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                                         MakeEmptyNodeMemoryProfile());
   auto &expression_cache = ctx.ExpressionCache();
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
+  FunctionBodyMemoryCache function_memory;
   incr_allocation_bytes_.clear();
 
   ResultLifetimeInfo lifetime = ComputeResultLifetimeInfo(graph, allow_input_overwrite);
@@ -1873,10 +1995,10 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                      intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
                      &expression_cache);
-    AddFunctionBodyMemory(
-        profile,
-        EstimateFunctionBodyMemory(node, ctx, Device::kUndefined, {}, validate_allocations),
-        &expression_cache);
+    AddFunctionBodyMemory(profile,
+                          EstimateFunctionBodyMemory(node, ctx, Device::kUndefined, {},
+                                                     validate_allocations, &function_memory),
+                          &expression_cache);
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
@@ -2121,10 +2243,12 @@ const std::vector<PeakMemoryEstimate> &
 ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                                        Device device) {
   peak_memory_.assign(static_cast<std::size_t>(nodes.size()), {});
+  FunctionBodyMemoryCache function_memory;
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &node = nodes[i];
-    peak_memory_[i] =
-        NodeWorkspace(node, shapes_, device, EstimateFunctionBodyMemory(node, shapes_, device));
+    peak_memory_[i] = NodeWorkspace(
+        node, shapes_, device,
+        EstimateFunctionBodyMemory(node, shapes_, device, {}, false, &function_memory));
     if (memory_matches_shapes_ && i < memory_.size()) {
       UpdateNodeMemoryBoundaries(memory_[i], peak_memory_[i].worst_case,
                                  &shapes_.ExpressionCache());

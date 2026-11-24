@@ -123,8 +123,8 @@ TEST(ExtractionPatterns, ReusesOnlyFreshSearchesOnSyntheticGraph) {
     RecordProperty(repeated ? "repeated_layer_us" : "partition_group_us",
                    std::to_string(elapsed.count()));
     ASSERT_FALSE(plan.rewrites().empty());
-    // One initial search and one fresh search; no searches hidden in Apply.
-    EXPECT_EQ(pattern->searches, 2u);
+    // The first application uses the initial search result without repeating it.
+    EXPECT_EQ(pattern->searches, 1u);
     EXPECT_EQ(pattern->direct_applies, 0u);
     for (const auto &application : pattern->applications)
       EXPECT_TRUE(application.expired());

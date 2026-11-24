@@ -171,11 +171,9 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     sub_ctx.set_current_node_index(static_cast<int64_t>(index));
     NodeProto bound_node = utils::CopyWithSharedTensorStorage(fn_node);
     BindNodeAttributes(bound_node, attr_map);
-    if (!ShapeInputsAvailable(sub_ctx, bound_node))
-      continue;
     if (TrySeedAnnotatedOutputsForUnknownCustomOp(sub_ctx, bound_node, declared_outputs))
       annotated_outputs.insert(bound_node.output().begin(), bound_node.output().end());
-    else if (HasShapeInference(sub_ctx, bound_node))
+    else
       sub_ctx.ComputeShapeNode(bound_node, &protected_symbols);
   }
   ScopeLocalFunctionOutputSymbols(sub_ctx, ctx, node, func, annotated_outputs, protected_symbols);

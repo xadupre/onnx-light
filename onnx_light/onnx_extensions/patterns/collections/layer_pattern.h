@@ -16,7 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * function construction to core::graph::MakeRepeatedLayerReplacements.
  * Preserves the core algorithm's boundary, scheduling and reuse safeguards.
  * The pattern is opt-in and does not wrap existing ai.rt Layer bodies.
- * max_growth_attempts limits anchor comparisons and region extensions per search.
+ * Grows indexed seed instances together through incremental, port-labelled frontiers.
+ * max_growth_attempts limits seed-family visits and frontier rounds per search.
  *
  * @code
  * Before:

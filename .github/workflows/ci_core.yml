@@ -629,3 +629,37 @@ jobs:
       - name: Run C++ unit tests (32-bit)
         run: |
           ctest --test-dir build-win32 --output-on-failure --timeout 240
+
+  onnx_tests:
+    name: ci-onnx
+    needs:
+      - changes
+      - no_onnx_tests_ubuntu
+      - reduced_tests_ubuntu
+      - standalone_threads
+      - standalone_proto
+      - free_threaded
+      - core_tests_ubuntu
+      - core_tests
+      - windows_x86_build
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci_onnx.yml
+
+  onnxruntime_tests:
+    name: ci-onnxruntime
+    needs:
+      - changes
+      - no_onnx_tests_ubuntu
+      - reduced_tests_ubuntu
+      - standalone_threads
+      - standalone_proto
+      - free_threaded
+      - core_tests_ubuntu
+      - core_tests
+      - windows_x86_build
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci_onnxruntime.yml

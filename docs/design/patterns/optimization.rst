@@ -159,6 +159,26 @@ explicitly:
 In C++, pass ``onnx_patterns::CreatePattern("RepeatedLayer")`` in the explicit
 pattern vector.
 
+Anchors include every operator whose type contains the case-sensitive substring
+``Attention``, regardless of domain, and standard ``MatMul``. Existing ``ai.rt``
+Layer calls remain excluded. Matching still requires compatible types, shapes,
+attributes and topology; the name alone does not bypass extraction safeguards.
+
+The shared search budget counts seed-family visits and frontier-extension
+rounds, not individual occurrences, model executions or complete
+graph partitions. It resets for each search and defaults to 4096. Increase it
+explicitly for larger graphs:
+
+.. code-block:: python
+
+    pattern = RepeatedLayerPattern(max_growth_attempts=32768)
+    GraphGraph(builder, patterns=[pattern]).optimize()
+
+The budget must be positive and belongs to the pattern instance; it does not
+change factory defaults or other patterns. C++ callers can pass the second
+constructor argument or use ``core::graph::RepeatedLayerOptions`` with the core
+proposal and replacement APIs. Revalidation uses the same budget.
+
 Lexical capture analysis visits at most 4096 nested nodes per owning graph node
 and requires scope depth below 16. Exhaustion excludes that owner from extraction,
 conservatively keeps earlier values live, and prevents reordering across it;
@@ -262,12 +282,11 @@ Body lifetimes include values captured only by nested graph attributes.
 Matching and cut policy
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Supported primitive anchors are ``MatMul`` and ``Attention`` in the standard
-ONNX domain (``""`` or ``ai.onnx``), ``com.microsoft::GroupQueryAttention`` and
-``ai.rt::PagedAttention``, without an overload. A model-local function is also an
-anchor when bounded recursive inspection of its exact domain/name/overload
-definition reaches one of those identities. A suggestive operator name alone
-does not qualify.
+Anchors include operators whose type contains the case-sensitive substring
+``Attention``, regardless of domain or overload, and standard ``MatMul``.
+A model-local function is also an anchor when bounded recursive inspection of
+its exact domain/name/overload definition reaches an anchor. Existing ``ai.rt``
+Layer calls are excluded.
 
 Matching preserves operator domain, type, overload, input/output arity, optional
 port presence, attributes, internal producer/output-port relationships and
@@ -282,48 +301,41 @@ Nested GRAPH attributes are compared with scope-aware structural signatures,
 ignoring graph, node and value names while retaining formal roles, captures and
 aliasing. Tensor-valued operator attributes constrain their literal contents.
 
-Corresponding regions grow together through predecessor/output and
-successor/input port roles. A seed must grow to at least two nodes and have at
-least two disjoint occurrences. Shared predecessors, ambiguous fan-out and
-overlapping occurrences are not guessed into a match. Side branches may remain
-outside a region provided their dependencies and outputs remain explicit.
-Already extracted ``Layer`` nodes, and graphs nested within their bodies, are
-not candidates.
-Stochastic operators, Dropout and opaque custom computation outside the supported
-attention identities are excluded;
-local-function and nested-graph safety inspection must also succeed. Scheduling
-preserves the relative order of remaining stochastic/opaque calls.
-One-hop neighbor identities and connecting ports distinguish different roles
-of otherwise identical anchors. Seed-family selection and structural
-eligibility are separate from cut cost: a low-edge projection fragment must not
-preempt a repeated region containing its matching attention/MatMul roles.
-Within a family, cuts retain the largest jointly matched anchor-role skeleton
-reached by expansion before comparing edge count and tensor size.
-Equal-coverage families prefer the smaller repetition period rather than
-combining adjacent repeated layers. The cut comparison below chooses boundaries
-within an eligible family. Bounded anchor strides provide a fallback for
-indistinguishable local neighborhoods.
+The search builds producer, consumer, port-labelled successor and shape/signature
+indices once per detection scan. It indexes connected pairs around compatible
+anchors; the first frontier round extends them to three-node seeds when possible.
+Only the structure of the dataflow graph matters: the position of a node in the
+node list never decides whether it belongs to a motif. Constant and weight
+preparations are ordinary nodes and join a motif when they correspond across
+occurrences, even when they appear far from the rest of the motif.
+Compatible occurrences must preserve operator signatures, connections and port
+roles, while weight values may differ. Repeated motifs grow through
+predecessor/output and successor/input port roles. Shared
+predecessors, ambiguous fan-out and overlapping occurrences are not guessed
+into a match. Nodes selected for extraction are marked; divergent occurrences
+remain available to seed another motif, and later growth cannot cross marked
+nodes. Side branches may remain outside a region provided their dependencies
+and outputs remain explicit. Already extracted ``Layer`` nodes, and graphs
+nested within their bodies, are not candidates.
+Operators in any domain can participate when their shapes can be inferred or
+their outputs have sufficient annotations; local-function and nested-graph
+safety inspection must also succeed.
 
-Every accepted growth cut is compared lexicographically by:
-
-1. Total **crossing dataflow edge count**, including repeated uses by different
-   input ports, lexical captures and graph-output uses.
-2. Number of crossing edges with unknown tensor size.
-3. Sum of known crossing tensor sizes in bytes, with saturating arithmetic.
-4. Larger corresponding regions, then original topological node positions.
-
-Thus one fewer edge wins even if it carries a larger tensor. At equal edge
-count, known sizes are preferred to unknown sizes; unknown rank, symbolic
-dimensions, unavailable element types and unsupported storage types do not
-count as zero-byte tensors. Known empty tensors can have zero size.
-Sizes are charged per crossing edge, **not** per distinct wrapper argument.
-Several cut edges using the same value still require just one positional
-wrapper input or output.
+All seed instances grow together. A queue receives only the edges of newly
+added nodes; shared abstract value slots check connections and aliases
+incrementally, without rescanning or copying the growing prefixes. Repeated
+variants split into independent families without restarting detection.
+Singleton differences stay on the boundary. Rarer anchor families are visited
+first, then seeds with more occurrences. No global cut search or ranking is
+performed; boundaries are computed only when growth stops. Interface counts,
+crossing edges, tensor sizes and operator kinds inside a region are not scored.
 
 The contracted dependency graph includes untouched nodes interleaved with the
 regions and dependencies used only in nested graphs. A deterministic
-topological schedule preserves these nodes and rejects a contraction that would
-introduce a cycle, including paths that leave a region and re-enter it.
+topological schedule constrained only by data dependencies places these nodes
+and rejects a contraction that would introduce a cycle, including paths that
+leave a region and re-enter it. The original node order is only a tie-break, so
+independent nodes may be reordered. Incomplete capture analysis is a barrier.
 
 This is a bounded, conservative heuristic, **not** a globally optimal cut or a
 guarantee to recover a model author's intended transformer block. Exploration
@@ -333,22 +345,21 @@ local-function definitions.
 
 Per detection scan, the implementation indexes operator signatures and value
 uses once, caches function-anchor classification by exact operator identity, and
-bounds exploration to 32 seed groups and a shared budget of 4096 compatibility
-comparisons and extension attempts, including representative and anchor-bucket
-comparisons. Region search
-uses at most 32 occurrences, 64 nodes per occurrence, 128 ports per operator,
-256 neighboring extension choices and anchor strides up to 8. A replacement
+bounds exploration with a shared budget of 4096 seed-family visits and
+frontier-extension rounds. All disjoint occurrences grow together without an
+occurrence cap or tail probe. Region search uses at most 256 nodes per occurrence,
+128 ports per operator and 256 neighboring extension choices. A replacement
 interval contains at most 4096 original nodes. Recursive scope/function
 inspection is limited to depth 16 and 4096 visited operations; oversized
 attribute signatures are rejected at 64 KiB. These limits deliberately trade
 recall for bounded work on large models.
-Occurrence batches leave at least two remaining matches instead of stranding
-a singleton at the 32-occurrence limit (for example, 33 matches use 31 then 2).
-
 Indexing costs scale with graph nodes, edges and inspected attribute payloads.
-Each bounded extension checks corresponding region topology and metadata; a
-candidate contraction also schedules its bounded interval. The index is local
-to a scan, not a cache of mutable graph state. Further successful optimization
+Each frontier extension checks only the newly added node's ports and metadata
+for every occurrence. The terminal contractions are scheduled together.
+The optimizer applies a fresh prepared proposal without repeating detection;
+after any preceding application in the batch, it revalidates instead.
+Direct replacement API calls always revalidate.
+The index is local to a scan, not a cache of mutable graph state. Further successful optimization
 iterations may perform additional scans, so this is not a claim that the entire
 optimization is a single linear-time pass.
 

@@ -63,6 +63,13 @@ void ComputeReferenceMemory(core::compute::ComputeContext &context, const GraphP
   context.ComputePeakMemory(graph, builder.device());
 }
 
+const core::compute::ComputeContext &ProfileBuilderMemory(core::builder::GraphBuilder &builder,
+                                                          const GraphProto &graph) {
+  auto &context = const_cast<core::compute::ComputeContext &>(builder.Compute());
+  context.RefreshIncrementalMemory(graph.node(), context.Shapes(), builder.device());
+  return context;
+}
+
 } // namespace
 
 TEST(GraphBuilder, StartsEmpty) {
@@ -147,7 +154,7 @@ TEST(GraphBuilder, LocalShapeSnapshotsReachNestedBuildersAndMemoryInference) {
   core::compute::ComputeContext expected;
   const auto tags = expected.ComputeValueAndNodeTags(graph);
   ComputeReferenceMemory(expected, graph, builder, tags.first);
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
   builder.SetOpsetVersion("local.registry", 2);
   EXPECT_EQ(builder.GetShape("y").Shape(), MakeShape({2, 3}));
 
@@ -546,6 +553,8 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
         expression,
         {{core::shapes::UnknownPeakMemory(domain, "Project").worst_case.AsExpr(), 128}});
   };
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  ProfileBuilderMemory(builder, model.graph());
   EXPECT_EQ(total_bytes(builder.Compute()), 8240);
   EXPECT_EQ(evaluate_workspace(builder.Compute().PeakMemory().at(0).worst_case.AsExpr()), 1234);
   EXPECT_EQ(std::get<int64_t>(
@@ -576,6 +585,24 @@ TEST(GraphBuilder, LocalFunctionMemoryIncludesBodyActivationsAndWorkspace) {
     EXPECT_EQ(scalar(core::compute::kNodeMemoryAfterBytesKey), 48);
     EXPECT_EQ(scalar(core::compute::kNodeMemoryReleasedBytesKey), 9426);
   }
+}
+
+TEST(GraphBuilder, ExtractedLayerMemoryRequiresInferredBodyShapes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}, {"ai.rt", 1}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &function = builder.MakeLocalFunction("Layer_missing_shape", "ai.rt");
+  function.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  ValueInfoProto weight;
+  weight.set_name("w");
+  weight.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  function.MakeInput(weight);
+  function.MakeNode("MatMul", {"x", "w"}, {"hidden"});
+  function.MakeOutput("hidden");
+  builder.MakeInput(weight);
+  builder.MakeNode("Layer_missing_shape", {"X", "w"}, {"Y"}, "ai.rt");
+  builder.MakeOutput("Y");
+
+  EXPECT_THROW(builder.ToModel(), std::invalid_argument);
 }
 
 TEST(GraphBuilder, LocalFunctionMemoryKeepsConstantsLiveUntilTheirLastUse) {
@@ -610,7 +637,7 @@ TEST(GraphBuilder, LocalFunctionMemoryKeepsConstantsLiveUntilTheirLastUse) {
     return std::get<int64_t>(std::get<core::expressions::DimType>(
         context.NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey)));
   };
-  EXPECT_EQ(total_bytes(builder.Compute()), 288);
+  EXPECT_EQ(total_bytes(ProfileBuilderMemory(builder, model.graph())), 288);
   EXPECT_EQ(std::get<int64_t>(
                 std::get<core::compute::TaggedMemory>(
                     builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey))
@@ -734,6 +761,7 @@ TEST(GraphBuilder, LocalFunctionMemoryMaterializesGraphArgumentsAfterMutations) 
   EXPECT_TRUE(builder.Compute().PeakMemory().empty());
   const ModelProto model = builder.ToModel();
   EXPECT_EQ(builder.Compute().PeakMemory().at(0).worst_case.AsInt(), 37);
+  ProfileBuilderMemory(builder, model.graph());
   const auto &intermediates = std::get<core::compute::TaggedMemory>(
       builder.Compute().NodeMemory(0).at(core::compute::kNodeMemoryIntermediatesKey));
   ASSERT_NE(intermediates.find(""), intermediates.end());
@@ -1233,7 +1261,7 @@ TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
   const auto tags = expected.ComputeValueAndNodeTags(graph);
   ComputeReferenceMemory(expected, graph, builder, tags.first);
   EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
 }
 
 TEST(GraphBuilder, SetOpsetVersionUpdatesExistingNestedBuildersWithoutChangingFunctions) {
@@ -1277,7 +1305,7 @@ TEST(GraphBuilder, SetOpsetVersionUpdatesExistingNestedBuildersWithoutChangingFu
     const auto tags = expected.ComputeValueAndNodeTags(graph);
     ComputeReferenceMemory(expected, graph, *scope, tags.first);
     EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
-    EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+    EXPECT_EQ(ProfileBuilderMemory(*scope, graph).Memory(), expected.Memory());
     const_cast<core::shapes::ShapesContext &>(scope->Shapes()).ClearEvents();
   }
 
@@ -1426,7 +1454,7 @@ TEST(GraphBuilder, SetOpsetVersionInvalidatesChangedAndCapturedByteSizes) {
         const auto tags = expected.ComputeValueAndNodeTags(graph);
         ComputeReferenceMemory(expected, graph, *scope, tags.first);
         EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
-        EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+        EXPECT_EQ(ProfileBuilderMemory(*scope, graph).Memory(), expected.Memory());
         if (symbolic && version != 1) {
           EXPECT_TRUE(scope->Compute().NodeReuse(1).empty());
         }
@@ -1485,7 +1513,7 @@ TEST(GraphBuilder, SetOpsetVersionRefreshesShapesWithoutComputingScratch) {
   EXPECT_EQ(*peak_calls, 0u);
   builder.ToGraph();
   EXPECT_EQ(*peak_calls, builder.Nodes().size());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
 }
 
 TEST(GraphBuilder, SetOpsetVersionReplacesOnlyAffectedShapeConstraints) {
@@ -1616,7 +1644,7 @@ TEST(GraphBuilder, UnusedShapeOutputReleaseMovesToConsumerAndRespectsGraphOutput
   const auto tags = expected.ComputeValueAndNodeTags(graph);
   ComputeReferenceMemory(expected, graph, builder, tags.first);
   EXPECT_EQ(builder.Compute().ReleaseAfterShapeTagged(), expected.ReleaseAfterShapeTagged());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
 }
 
 TEST(GraphBuilder, RemovingLastConsumerMovesReleaseBackToProducer) {
@@ -1717,7 +1745,8 @@ TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
   EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
   EXPECT_TRUE(builder.Compute().Memory().empty());
   builder.ToGraph();
-  ASSERT_EQ(builder.Compute().Memory().size(), 2u);
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  EXPECT_EQ(builder.Compute().PeakMemory().size(), 2u);
 }
 
 TEST(GraphBuilder, ConflictingTypedOutputAfterInferenceIsRejectedBeforeMutation) {
@@ -1874,7 +1903,7 @@ TEST(GraphBuilder, TypedOutputRefinesUndefinedDtypeAndOnlyAffectedConsumers) {
         const auto tags = expected.ComputeValueAndNodeTags(graph);
         ComputeReferenceMemory(expected, graph, builder, tags.first);
         EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-        EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+        EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
       }
     }
   }
@@ -1910,7 +1939,7 @@ TEST(GraphBuilder, InputOutputDtypeRefinementPrecedesRebuiltConsumers) {
       expected.ComputeInPlaceReuseGraph(graph, expected_shapes, false, tags.first);
       expected.ComputePeakMemory(graph, builder.device());
       EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-      EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+      EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
       EXPECT_EQ(builder.Compute().PeakMemory(), expected.PeakMemory());
     }
   }
@@ -2199,7 +2228,7 @@ TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
   EXPECT_EQ(builder.ToGraph().SerializeAsString(), extended.SerializeAsString());
 }
 
-TEST(GraphBuilder, ComputesMemoryProfilesOnlyAtExport) {
+TEST(GraphBuilder, ExportComputesPeaksWithoutRefreshingDetailedMemory) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"result"});
@@ -2214,9 +2243,11 @@ TEST(GraphBuilder, ComputesMemoryProfilesOnlyAtExport) {
     const auto tags = expected.ComputeValueAndNodeTags(graph);
     expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
     expected.ComputePeakMemory(graph, builder.device());
-    EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+    EXPECT_TRUE(builder.Compute().Memory().empty());
     EXPECT_EQ(builder.Compute().PeakMemory(), expected.PeakMemory());
+    EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
     EXPECT_EQ(builder.ToGraph().SerializeAsString(), graph.SerializeAsString());
+    EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
   };
   expect_exported_profiles();
   builder.MakeNode("Abs", {"result"}, {"extended"});
@@ -2232,14 +2263,15 @@ TEST(GraphBuilder, IncrementalMetadataRejectsGraphInputOverwrite) {
   EXPECT_THROW(compute.SeedReuseInput("x", true, false, true), std::invalid_argument);
 }
 
-TEST(GraphBuilder, MemoryProfileOverflowIsReportedAtExport) {
+TEST(GraphBuilder, MemoryProfileOverflowIsReportedDuringExplicitAnalysis) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   const int64_t extent = std::numeric_limits<int64_t>::max() / 4 + 1;
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({extent}));
   builder.MakeNode("Abs", {"x"}, {"result"});
   builder.MakeOutput("result");
   EXPECT_TRUE(builder.Compute().Memory().empty());
-  EXPECT_THROW(builder.ToGraph(), std::invalid_argument);
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_THROW(ProfileBuilderMemory(builder, graph), std::invalid_argument);
 }
 
 TEST(GraphBuilder, MaintainsLifetimesWithoutProfilingDuringMutations) {
@@ -2252,7 +2284,7 @@ TEST(GraphBuilder, MaintainsLifetimesWithoutProfilingDuringMutations) {
     const auto tags = expected.ComputeValueAndNodeTags(graph);
     ComputeReferenceMemory(expected, graph, builder, tags.first);
     EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-    EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+    EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
   };
 
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -2292,7 +2324,7 @@ TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
   const auto tags = expected.ComputeValueAndNodeTags(graph);
   ComputeReferenceMemory(expected, graph, builder, tags.first);
   EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
 
   GraphProto annotated = graph;
   builder.Compute().WriteToGraph(annotated);
@@ -2379,7 +2411,7 @@ TEST(GraphBuilder, DeferredExternalWeightsAndLateOutputsProfileOnlyAtExport) {
       builder.MakeOutput("logits");
       expect_reference();
       const ModelProto model = builder.ToModel();
-      const auto memory = builder.Compute().Memory();
+      const auto memory = ProfileBuilderMemory(builder, model.graph()).Memory();
       core::compute::ComputeContext expected;
       const auto tags = expected.ComputeValueAndNodeTags(model.graph());
       ComputeReferenceMemory(expected, model.graph(), builder, tags.first);
@@ -2387,7 +2419,7 @@ TEST(GraphBuilder, DeferredExternalWeightsAndLateOutputsProfileOnlyAtExport) {
       core::builder::GraphBuilder imported(model, SchemaLookup());
       EXPECT_TRUE(imported.Compute().Memory().empty());
       EXPECT_EQ(imported.ToModel().graph().SerializeAsString(), model.graph().SerializeAsString());
-      EXPECT_EQ(imported.Compute().Memory(), memory);
+      EXPECT_EQ(ProfileBuilderMemory(imported, model.graph()).Memory(), memory);
     }
   }
 }
@@ -2451,8 +2483,8 @@ TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   builder.MakeOutput("captured");
 
   const GraphProto before = builder.ToGraph();
-  EXPECT_EQ(builder.Compute().Memory().size(), builder.Nodes().size());
-  EXPECT_EQ(child.Compute().Memory().size(), child.Nodes().size());
+  EXPECT_EQ(ProfileBuilderMemory(builder, before).Memory().size(), builder.Nodes().size());
+  EXPECT_EQ(ProfileBuilderMemory(child, child.BuildGraph()).Memory().size(), child.Nodes().size());
   child.MakeNode("Identity", {"intermediate"}, {"child_intermediate"});
   child.MakeOutput("child_intermediate");
   EXPECT_TRUE(builder.Compute().Memory().empty());
@@ -2471,8 +2503,10 @@ TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
       [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
   EXPECT_EQ(released_after, after.node()[1].metadata_props().end());
   builder.ToGraph();
-  EXPECT_EQ(builder.Compute().Memory().size(), builder.Nodes().size());
-  EXPECT_EQ(child.Compute().Memory().size(), child.Nodes().size());
+  EXPECT_TRUE(builder.Compute().Memory().empty());
+  EXPECT_TRUE(child.Compute().Memory().empty());
+  EXPECT_EQ(builder.Compute().PeakMemory().size(), builder.Nodes().size());
+  EXPECT_EQ(child.Compute().PeakMemory().size(), child.Nodes().size());
 }
 
 TEST(GraphBuilder, ChildMutationUpdatesParentShapeMetadataImmediately) {
@@ -3509,7 +3543,7 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
   expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
   expected.ComputePeakMemory(graph, builder.device());
   EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(ProfileBuilderMemory(builder, graph).Memory(), expected.Memory());
   EXPECT_EQ(builder.Compute().PeakMemory(), expected.PeakMemory());
 }
 

@@ -14,6 +14,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -142,6 +143,35 @@ TEST(LayerExtraction, CaptureBudgetIsLocalAndRetainsUnseenCaptures) {
   }
 }
 
+TEST(LayerExtraction, SearchBudgetIsLocalAndUsedForRevalidation) {
+  core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
+  AddRepeatedLayers(builder);
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::unique_ptr<core::builder::PatternOptimization>>{});
+  const GraphProto before = builder.BuildGraph();
+  const core::graph::RepeatedLayerOptions low{1}, high{32768}, invalid{0};
+
+  EXPECT_THROW(core::graph::ProposeRepeatedLayers(graph, invalid), std::invalid_argument);
+  EXPECT_THROW((onnx_patterns::RepeatedLayerPattern(0, 0)), std::invalid_argument);
+  EXPECT_EQ(core::graph::ProposeRepeatedLayers(graph, low).status,
+            core::graph::OperatorGroupStatus::kNoMatch);
+  const auto proposal = core::graph::ProposeRepeatedLayers(graph, high);
+  ASSERT_EQ(proposal.status, core::graph::OperatorGroupStatus::kFound);
+  EXPECT_EQ(core::graph::ProposeRepeatedLayers(graph).status,
+            core::graph::OperatorGroupStatus::kFound);
+  const auto nodes = proposal.MatchedNodes(builder.Nodes());
+  EXPECT_THROW(core::graph::MakeRepeatedLayerReplacements(graph, nodes, invalid),
+               std::invalid_argument);
+  EXPECT_THROW(core::graph::MakeRepeatedLayerReplacements(graph, nodes, low),
+               core::builder::BuilderError);
+  const auto replacement = core::graph::MakeRepeatedLayerReplacements(graph, nodes, high);
+  ASSERT_EQ(replacement.size(), 2u);
+  EXPECT_EQ(replacement[0].domain(), "ai.rt");
+  EXPECT_EQ(replacement[1].domain(), "ai.rt");
+  EXPECT_EQ(replacement[1].output(0), "h1");
+  EXPECT_TRUE(before.Equals(builder.BuildGraph()));
+}
+
 TEST(LayerExtraction, CaptureBudgetsDoNotAccumulateAcrossOwners) {
   core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
   AddRepeatedLayers(builder);
@@ -155,7 +185,7 @@ TEST(LayerExtraction, CaptureBudgetsDoNotAccumulateAcrossOwners) {
   EXPECT_FALSE(proposal.capture_analysis_limited);
 }
 
-TEST(LayerExtraction, IncompleteCapturesKeepPreparationsLocalToEachSide) {
+TEST(LayerExtraction, IncompleteCapturesKeepOpaqueNodesBetweenCalls) {
   core::builder::GraphBuilder builder("g", ExtractionSchemaLookup(), {{"", 28}});
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
@@ -179,12 +209,10 @@ TEST(LayerExtraction, IncompleteCapturesKeepPreparationsLocalToEachSide) {
   EXPECT_TRUE(proposal.capture_analysis_limited);
   const auto replacement =
       core::graph::MakeRepeatedLayerReplacements(graph, proposal.MatchedNodes(builder.Nodes()));
-  ASSERT_EQ(replacement.size(), 5u);
-  EXPECT_EQ(replacement[0].output(0), "bias0");
-  EXPECT_EQ(replacement[1].domain(), "ai.rt");
-  EXPECT_EQ(replacement[2].op_type(), "If");
-  EXPECT_EQ(replacement[3].output(0), "bias1");
-  EXPECT_EQ(replacement[4].domain(), "ai.rt");
+  ASSERT_EQ(replacement.size(), 3u);
+  EXPECT_EQ(replacement[0].domain(), "ai.rt");
+  EXPECT_EQ(replacement[1].op_type(), "If");
+  EXPECT_EQ(replacement[2].domain(), "ai.rt");
 }
 
 TEST(LayerExtraction, ReportsCaptureResourceLimitSeparatelyFromNoMatch) {

@@ -2326,8 +2326,10 @@ RewritingProto GraphGraph::OptimizeImpl(
         if (report != nullptr) {
           ++report->patterns[pattern_index].matches;
         }
-        // Only a freshly revalidated match may supply replacement construction.
-        match.application.reset();
+        // External hooks can invalidate prepared analysis during candidate selection.
+        if (callback || do_not_remove_) {
+          match.application.reset();
+        }
         matches.push_back(AcceptedMatch{std::move(match), &candidate, pattern_index});
       };
 
@@ -2402,10 +2404,13 @@ RewritingProto GraphGraph::OptimizeImpl(
     std::vector<PendingReplacement> replacements;
     int64_t constant_folding_time_ns = 0;
     replacements.reserve(matches.size());
+    bool source_unchanged = true;
     for (const AcceptedMatch &accepted_match : matches) {
       GraphBuilder::AncestorRefreshGuard ancestor_refresh_guard(builder_);
       const MatchResult &match = accepted_match.match;
-      const MatchResult verified = match.pattern->Match(*this, *accepted_match.candidate);
+      const MatchResult verified = source_unchanged && match.application
+                                       ? match
+                                       : match.pattern->Match(*this, *accepted_match.candidate);
       if (verified.pattern != match.pattern || verified.nodes != match.nodes ||
           verified.insert_at != match.insert_at || unsafe_match(verified)) {
         if (report != nullptr && verified.no_match.has_value()) {
@@ -2427,6 +2432,7 @@ RewritingProto GraphGraph::OptimizeImpl(
       }
       const std::size_t initializers_before = builder_.initializers_.size();
       const auto apply_start = std::chrono::steady_clock::now();
+      source_unchanged = false;
       utils::RepeatedProtoField<NodeProto> replacement_nodes =
           verified.application ? verified.application->apply_()
                                : match.pattern->Apply(*this, match.nodes);

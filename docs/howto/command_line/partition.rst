@@ -50,8 +50,9 @@ other local functions already present in the model.
 Detection starts with rarer attention/projection anchors and grows complete
 repeated motifs of up to 256 nodes. For a hybrid model, one function can therefore
 contain several consecutive blocks, for example three linear-attention blocks
-followed by one standard-attention block. Shared constant weight conversions
-may move before those calls without loading or folding the weights.
+followed by one standard-attention block. Detection only looks for repeated
+dataflow motifs: the order of nodes in the model does not matter, and weight
+conversions are included in a function when every occurrence has them.
 
 Formal inputs use the longest prefix shared by a strict majority of the
 corresponding arguments in the matched calls: ``A1``, ``A2``, ``B0`` give ``A``.
@@ -161,6 +162,30 @@ weights. Missing or invalid tiny shape tensors raise an error during loading.
     python -m onnx_light partition layer model.onnx \
         --output model.layers.onnx \
         --tiny-tensor-threshold 256
+
+Operators from other libraries
+------------------------------
+
+Extraction needs shape inference for every operator of a repeated region.
+Operators such as ``com.microsoft::GroupQueryAttention`` or the experimental
+``SimplifiedLayerNormalization`` are supported only after another library,
+for example ``onnx-light-cpu``, registers them. ``--register MODULE[:FUNCTION]``
+imports ``MODULE`` and calls ``FUNCTION()`` without arguments before loading the
+model. ``FUNCTION`` defaults to ``register_kernels``; repeat the option to load
+several libraries in order. The same option is available for ``optimize``,
+``fillshape``, ``show`` and ``run``.
+
+.. code-block:: bash
+
+    # kernels, shapes and patterns
+    python -m onnx_light partition layer model.onnx -o model.layers.onnx \
+        --register onnx_light_cpu
+    # shapes and patterns only, without kernels
+    python -m onnx_light partition layer model.onnx -o model.layers.onnx \
+        --register onnx_light_cpu:register_operator_support
+
+The option imports and executes code from the given module: use only trusted
+modules.
 
 For the complete argument reference, see
 :doc:`../../api/command_lines/partition`.

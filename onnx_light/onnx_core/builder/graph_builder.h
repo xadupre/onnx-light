@@ -782,8 +782,8 @@ public:
   GraphBuilder ApplyRewritings(const std::string &name) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
-  /// Shapes, tags and lifetimes are current during construction. Memory and
-  /// peak-memory profiles are empty until export and are discarded on mutation.
+  /// Shapes, tags and lifetimes are current during construction. Export computes
+  /// peak-memory estimates, not the detailed memory timeline. Mutations discard profiles.
   const ComputeContext &Compute() const noexcept { return compute_; }
 
   /// Read-only access to the :cpp:class:`ShapesContext` holding the inferred

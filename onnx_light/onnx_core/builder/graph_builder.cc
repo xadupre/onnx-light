@@ -933,6 +933,7 @@ void GraphBuilder::RefreshLocalFunctionDefinition(GraphBuilder &function) {
   }
   const auto definition =
       std::make_shared<FunctionProto>(function.BuildFunction(function.function_domain_));
+  function.compute_.Shapes().ApplyInferredShapesToFunction(*definition);
   std::function<void(GraphBuilder &)> install = [&](GraphBuilder &builder) {
     builder.compute_.Shapes().SetLocalFunction(definition);
     for (const auto &subgraph : builder.subgraphs_) {
@@ -2194,6 +2195,8 @@ void GraphBuilder::RefreshLocalFunctions() {
           function->function_domain_, function->name_, function->function_template_.overload());
       const auto definition =
           std::make_shared<FunctionProto>(function->BuildFunction(function->function_domain_));
+      // Memory analysis relies on these shapes rather than re-inferring the body.
+      function->compute_.Shapes().ApplyInferredShapesToFunction(*definition);
       const auto [existing, inserted] = function_definitions.emplace(key, definition);
       if (!inserted) {
         if (!existing->second->Equals(*definition))
@@ -3966,6 +3969,8 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
   child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
+  for (const auto &[key, definition] : ModelBuilder().Shapes().LocalFunctions())
+    child->compute_.Shapes().SetLocalFunction(definition);
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
@@ -3987,6 +3992,8 @@ GraphBuilder &GraphBuilder::ImportLocalFunction(const FunctionProto &function) {
   child->function_domain_ = function.domain().value();
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
   child->compute_.Shapes().MergeOperatorSchemas(ModelBuilder().Shapes());
+  for (const auto &[key, definition] : ModelBuilder().Shapes().LocalFunctions())
+    child->compute_.Shapes().SetLocalFunction(definition);
   child->parent_ = this;
   GraphBuilder &local = *child;
   local_functions_.push_back(std::move(child));
@@ -4469,9 +4476,7 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   }
   EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
                       "GraphBuilder::Finalize: metadata is not aligned with the graph.");
-  compute_.ClearMemoryProfiles();
   compute_.ComputePeakMemory(graph, device_);
-  compute_.RefreshIncrementalMemory(graph.node(), compute_.Shapes(), device_);
   EXT_ENFORCE_INVALID(
       compute_.PeakMemory().size() == graph.node().size(),
       "GraphBuilder::Finalize: peak-memory metadata is not aligned with the graph.");

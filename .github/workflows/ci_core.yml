@@ -215,9 +215,9 @@ jobs:
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    # Partial cache misses can spend over 21 minutes building; reserve time for
-    # both native and Python tests, as in the no-onnx preflight below.
-    timeout-minutes: 30
+    # Cold builds (sccache cannot cache -fmodules-ts compilations) took 29 minutes
+    # in run 46059255576; reserve time for both native and Python tests.
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -277,9 +277,9 @@ jobs:
     # only, in .github/workflows/ci_onnx.yml and ci_onnxruntime.yml.
     name: no-onnx (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    # Cache misses took over 25 minutes in run 40861273682; the full Python suite
-    # needs another 6 minutes. Allow both phases plus cold-build variance.
-    timeout-minutes: 40
+    # Cold builds exceeded the previous 40-minute limit in run 46059255576; the
+    # full Python suite runs after the build. Allow both phases plus variance.
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:

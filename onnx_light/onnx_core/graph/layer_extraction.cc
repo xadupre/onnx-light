@@ -850,6 +850,8 @@ Boundary GetBoundary(Index &index, const Region &region) {
 
 struct Plan : OperatorGroupProposal {
   Regions regions;
+  // Per group, positions of input Shape nodes also copied before the call for outer consumers.
+  std::vector<std::vector<std::size_t>> duplicated;
   // Half-open ranges of groups grown together from one seed.
   std::vector<std::pair<std::size_t, std::size_t>> families;
 };
@@ -980,12 +982,58 @@ bool CachedKnownBoundaryType(Index &index, uint32_t id) {
   return known != 0;
 }
 
+// A Shape of a region input belongs to the shared function. Outer consumers read a
+// duplicate placed before the call instead of a function output.
+bool IsInputShape(Index &index, const Region &region, const NodeProto &node) {
+  if (NormaliseDomain(node.domain()) != "ai.onnx" || node.op_type() != "Shape" ||
+      !node.overload().empty() || !node.device_configurations().empty() ||
+      node.input().size() != 1 || node.output().size() != 1 ||
+      index.graph.Builder().Shapes().HasLocalFunction(
+          core::shapes::ShapesContext::LocalFunctionKey(node.domain().value(), "Shape", "")))
+    return false;
+  const NodeData &entry = index.data.at(&node);
+  return entry.producers.size() == 1 &&
+         std::find(region.begin(), region.end(), entry.producers[0]) == region.end();
+}
+
+std::vector<std::size_t> DuplicateInputShapes(Index &index, const Region &region,
+                                              Boundary &boundary) {
+  std::unordered_set<uint32_t> duplicated_ids;
+  std::vector<std::size_t> positions;
+  for (const NodeProto *node : region) {
+    const NodeData &entry = index.data.at(node);
+    if (!IsInputShape(index, region, *node))
+      continue;
+    const uint32_t id = entry.output_ids[0];
+    if (id == kNoValue || std::find(boundary.output_ids.begin(), boundary.output_ids.end(), id) ==
+                              boundary.output_ids.end())
+      continue;
+    duplicated_ids.insert(id);
+    positions.push_back(entry.position);
+  }
+  if (positions.empty())
+    return positions;
+  std::sort(positions.begin(), positions.end());
+  std::vector<uint32_t> output_ids;
+  std::vector<std::string> outputs;
+  for (std::size_t i = 0; i < boundary.output_ids.size(); ++i) {
+    if (duplicated_ids.contains(boundary.output_ids[i]))
+      continue;
+    output_ids.push_back(boundary.output_ids[i]);
+    outputs.push_back(std::move(boundary.outputs[i]));
+  }
+  boundary.output_ids = std::move(output_ids);
+  boundary.outputs = std::move(outputs);
+  return positions;
+}
+
 bool MakePlan(Index &index, const Regions &regions, Plan &plan) {
   if (regions.size() < 2 || regions[0].size() < 2)
     return false;
   plan.regions = regions;
   for (const Region &region : regions) {
     Boundary boundary = GetBoundary(index, region);
+    plan.duplicated.push_back(DuplicateInputShapes(index, region, boundary));
     for (uint32_t id : boundary.input_ids)
       if (!CachedKnownBoundaryType(index, id))
         return false;
@@ -1421,6 +1469,7 @@ void Grow(Index &index, Regions seeds, std::vector<bool> &claimed, Plan &plan,
         claimed[index.data.at(node).position] = true;
       plan.regions.push_back(std::move(regions[i]));
       plan.groups.push_back(std::move(family.groups[i]));
+      plan.duplicated.push_back(std::move(family.duplicated[i]));
     }
     plan.families.emplace_back(first, plan.groups.size());
   }
@@ -1457,6 +1506,7 @@ bool FindPlan(Index &index, Plan &plan) {
     for (std::size_t i = first; i < last; ++i) {
       safe.groups.push_back(std::move(plan.groups[i]));
       safe.regions.push_back(std::move(plan.regions[i]));
+      safe.duplicated.push_back(std::move(plan.duplicated[i]));
     }
     safe.families.emplace_back(begin, safe.groups.size());
   }
@@ -1945,11 +1995,23 @@ utils::RepeatedProtoField<NodeProto> MakeReplacements(Index &index, const Plan &
   }
   std::size_t suffix = 0;
   OperatorGroupFunctions functions(graph.Builder(), "Layer");
-  return MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
+  auto replacement = MakeOperatorGroupReplacements(graph, proposal, [&](std::size_t group) {
     const auto family = group_family[group];
     return MakeLayer(index, proposal.groups[group], families[family], group, producers[family],
                      suffix, functions);
   });
+  if (std::all_of(proposal.duplicated.begin(), proposal.duplicated.end(),
+                  [](const auto &positions) { return positions.empty(); }))
+    return replacement;
+  utils::RepeatedProtoField<NodeProto> expanded;
+  for (std::size_t step = 0; step < proposal.schedule.size(); ++step) {
+    const auto &[is_group, group] = proposal.schedule[step];
+    if (is_group)
+      for (std::size_t position : proposal.duplicated[group])
+        expanded.push_back(utils::CopyWithSharedTensorStorage(graph.Builder().Nodes()[position]));
+    expanded.push_back(std::move(replacement[step]));
+  }
+  return expanded;
 }
 
 } // namespace

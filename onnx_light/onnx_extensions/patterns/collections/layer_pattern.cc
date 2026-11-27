@@ -4,12 +4,19 @@
 
 #include "onnx_extensions/patterns/collections/layer_pattern.h"
 
+#include <stdexcept>
 #include <utility>
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/graph/layer_extraction.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
+
+RepeatedLayerPattern::RepeatedLayerPattern(int priority, std::size_t max_growth_attempts)
+    : PatternOptimization(priority, "RepeatedLayer"), options_{max_growth_attempts} {
+  if (max_growth_attempts == 0)
+    throw std::invalid_argument("RepeatedLayer requires max_growth_attempts > 0.");
+}
 
 std::set<std::string> RepeatedLayerPattern::FastOpType() const { return {}; }
 
@@ -18,7 +25,7 @@ core::builder::MatchResult RepeatedLayerPattern::Match(core::builder::GraphGraph
   if (&candidate != graph.FirstPatternCandidate())
     return NoMatch(candidate, "whole-graph detection runs only at the first eligible graph node");
   std::shared_ptr<const core::builder::PatternApplication> application;
-  auto proposal = core::graph::ProposeRepeatedLayers(graph, &application);
+  auto proposal = core::graph::ProposeRepeatedLayers(graph, options_, &application);
   if (proposal.status == core::graph::OperatorGroupStatus::kInsideFunction)
     return NoMatch(candidate, "existing Layer functions must not contain nested Layer helpers");
   if (proposal.status == core::graph::OperatorGroupStatus::kIncompatibleOpset)
@@ -38,7 +45,7 @@ utils::RepeatedProtoField<NodeProto>
 RepeatedLayerPattern::Apply(core::builder::GraphGraph &graph,
                             const std::vector<const NodeProto *> &nodes) const {
   // MakeRepeatedLayerReplacements repeats the search once and rejects inconsistent matches.
-  return core::graph::MakeRepeatedLayerReplacements(graph, nodes);
+  return core::graph::MakeRepeatedLayerReplacements(graph, nodes, options_);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

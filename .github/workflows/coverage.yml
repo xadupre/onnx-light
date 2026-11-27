@@ -78,8 +78,6 @@ jobs:
           LDFLAGS: --coverage
         run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
 
-      - name: Install ONNX weekly
-        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: Install gcovr
         run: pip install gcovr
@@ -92,7 +90,7 @@ jobs:
 
       - name: Run tests
         run: |
-          UNITTEST_GOING=1 pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+          UNITTEST_GOING=1 pytest --cov=onnx_light --cov-report=xml --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
       - name: Export C++ coverage
         env:

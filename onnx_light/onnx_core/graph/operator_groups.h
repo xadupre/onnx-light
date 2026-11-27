@@ -80,7 +80,8 @@ struct OperatorGroupProposal {
 OperatorGroupProposal MakeIntervalGroupProposal(std::vector<OperatorGroup> groups,
                                                 std::size_t node_count);
 
-/// Detects exact attention/MatMul anchors, including bounded local-function traversal.
+/// Detects operator types containing "Attention" in any domain and exact standard MatMul.
+/// Excludes existing Layer calls and otherwise traverses local functions with bounded work.
 /// Shares a cumulative work budget across calls; zero starts a fresh search.
 bool IsOperatorGroupAnchor(const NodeProto &node, const builder::GraphBuilder &builder,
                            std::size_t &work);

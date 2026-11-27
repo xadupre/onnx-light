@@ -30,11 +30,6 @@ typing = [
     "pyrefly==1.4.1",
 ]
 dev = [
-    "onnx>=1.21.0",
-    "onnxruntime",
-    "onnx-light[dev-no-onnx]",
-]
-dev-no-onnx = [
     "onnx-light[style]",
     "cmake>=4.0",
     "matplotlib",

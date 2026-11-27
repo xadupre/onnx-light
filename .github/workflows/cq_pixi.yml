@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"]
-        environment: ["dev-no-onnx", "dev"]
+        environment: ["dev"]
 
     steps:
       - uses: actions/checkout@v7

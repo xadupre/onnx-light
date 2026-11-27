@@ -23,7 +23,7 @@ pip = "*"
 [pypi-dependencies]
 nanobind = ">=3.0.1"
 
-[feature.dev-no-onnx.dependencies]
+[feature.dev.dependencies]
 black = "==26.5.1"
 clang-format = "==22.1.8"
 matplotlib-base = "*"
@@ -35,10 +35,6 @@ pytest = ">=7"
 pytest-cov = "*"
 pytest-subtests = "*"
 ruff = "==0.16.2"
-
-[feature.dev-onnx.dependencies]
-onnx = ">=1.17"
-onnxruntime = "*"
 
 [feature.docs.dependencies]
 black = "==26.5.1"
@@ -62,6 +58,5 @@ onnxscript = ">=0.7.2"
 
 [environments]
 default = { solve-group = "default" }
-dev-no-onnx = { features = ["dev-no-onnx"], solve-group = "default" }
-dev = { features = ["dev-no-onnx", "dev-onnx"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }

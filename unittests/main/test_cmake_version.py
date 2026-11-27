@@ -25,7 +25,7 @@ class TestCMakeVersion(unittest.TestCase):
     def test_packaging_requires_cmake_4(self):
         project = tomllib.loads((self.root / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(project["tool"]["scikit-build"]["cmake"]["version"], ">=4.0")
-        self.assertIn("cmake>=4.0", project["project"]["optional-dependencies"]["dev-no-onnx"])
+        self.assertIn("cmake>=4.0", project["project"]["optional-dependencies"]["dev"])
         pixi = tomllib.loads((self.root / "pixi.toml").read_text(encoding="utf-8"))
         self.assertEqual(pixi["dependencies"]["cmake"], ">=4.0")
 

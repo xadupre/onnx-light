@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <stdexcept>
 #include <vector>
 
@@ -21,8 +22,60 @@ inline void ExpectTensorBitEqual(const runtime::Tensor &actual, const runtime::T
   EXPECT_EQ(actual.shape, expected.shape);
   EXPECT_EQ(actual.string_data, expected.string_data);
   ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
-  EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
-            std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
+  size_t byte_index = 0;
+  while (byte_index < actual.size_bytes() &&
+         actual.bytes()[byte_index] == expected.bytes()[byte_index]) {
+    ++byte_index;
+  }
+  if (byte_index == actual.size_bytes()) {
+    return;
+  }
+
+  const auto actual_byte = static_cast<unsigned int>(actual.bytes()[byte_index]);
+  const auto expected_byte = static_cast<unsigned int>(expected.bytes()[byte_index]);
+  if (actual.data_type == expected.data_type && actual.shape == expected.shape) {
+    switch (actual.data_type) {
+    case runtime::DataType::FLOAT: {
+      const size_t float_index = byte_index / sizeof(float);
+      ADD_FAILURE() << "Tensor mismatch at byte " << byte_index << " (actual 0x" << std::hex
+                    << actual_byte << ", expected 0x" << expected_byte << std::dec << "); element "
+                    << float_index << " differs: actual " << std::setprecision(9)
+                    << actual.AsFloat()[float_index] << ", expected "
+                    << expected.AsFloat()[float_index];
+      return;
+    }
+    case runtime::DataType::DOUBLE: {
+      const size_t double_index = byte_index / sizeof(double);
+      ADD_FAILURE() << "Tensor mismatch at byte " << byte_index << " (actual 0x" << std::hex
+                    << actual_byte << ", expected 0x" << expected_byte << std::dec << "); element "
+                    << double_index << " differs: actual " << std::setprecision(17)
+                    << actual.AsDouble()[double_index] << ", expected "
+                    << expected.AsDouble()[double_index];
+      return;
+    }
+    case runtime::DataType::FLOAT16:
+    case runtime::DataType::BFLOAT16: {
+      const size_t half_index = byte_index / sizeof(uint16_t);
+      const auto *actual_bits = reinterpret_cast<const uint16_t *>(actual.bytes());
+      const auto *expected_bits = reinterpret_cast<const uint16_t *>(expected.bytes());
+      const float actual_value = actual.data_type == runtime::DataType::FLOAT16
+                                     ? runtime::Float16BitsToFloat(actual_bits[half_index])
+                                     : runtime::Bfloat16BitsToFloat(actual_bits[half_index]);
+      const float expected_value = expected.data_type == runtime::DataType::FLOAT16
+                                       ? runtime::Float16BitsToFloat(expected_bits[half_index])
+                                       : runtime::Bfloat16BitsToFloat(expected_bits[half_index]);
+      ADD_FAILURE() << "Tensor mismatch at byte " << byte_index << " (actual 0x" << std::hex
+                    << actual_byte << ", expected 0x" << expected_byte << std::dec << "); element "
+                    << half_index << " differs: actual " << std::setprecision(9) << actual_value
+                    << ", expected " << expected_value;
+      return;
+    }
+    default:
+      break;
+    }
+  }
+  ADD_FAILURE() << "Tensor mismatch at byte " << byte_index << ": actual 0x" << std::hex
+                << actual_byte << ", expected 0x" << expected_byte;
 }
 
 inline void ExpectBackendCaseTensorEqual(const runtime::Tensor &actual,

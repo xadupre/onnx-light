@@ -96,9 +96,13 @@ NB_MODULE(_onnxpypatterns, m) {
            nb::keep_alive<0, 1>(), nb::keep_alive<0, 2>(), nb::keep_alive<0, 3>())
       .def("apply", &onnx_patterns::FunctionPattern::Apply, nb::arg("graph"), nb::arg("nodes"));
 
-  BindPattern<onnx_patterns::RepeatedLayerPattern>(
+  nb::class_<onnx_patterns::RepeatedLayerPattern, core::builder::PatternOptimization>(
       m, "RepeatedLayerPattern",
-      "Encapsulates structurally repeated regions as model-local functions (opt-in).");
+      "Encapsulates repeated regions (opt-in). max_growth_attempts is a positive per-search "
+      "budget for anchor comparisons and region extensions (default 4096).")
+      .def(nb::init<int, std::size_t>(), nb::arg("priority") = 0,
+           nb::arg("max_growth_attempts") =
+               core::graph::RepeatedLayerOptions{}.max_growth_attempts);
   nb::class_<onnx_patterns::PartitionGroupPattern, core::builder::PatternOptimization>(
       m, "PartitionGroupPattern",
       "Extracts low-transfer groups selected by the core partition algorithm (opt-in).")

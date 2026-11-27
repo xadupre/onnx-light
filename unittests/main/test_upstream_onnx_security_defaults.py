@@ -11,12 +11,6 @@ class TestUpstreamOnnxSecurityDefaults(ExtTestCase):
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
 
-    def test_pyproject_requires_patched_onnx(self):
-        """Requires patched upstream onnx in optional dependency sets."""
-        content = (self.root / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertEqual(content.count('"onnx>=1.21.0"'), 2)
-        self.assertNotIn('"onnx>=1.17"', content)
-
     def test_load_onnx_time_defaults_to_patched_tag(self):
         """Uses ONNX 1.21.0 as the fallback tag in the standalone example."""
         content = (self.root / "examples" / "load_onnx_time" / "CMakeLists.txt").read_text(

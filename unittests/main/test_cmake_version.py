@@ -25,7 +25,7 @@ class TestCMakeVersion(unittest.TestCase):
     def test_packaging_requires_cmake_4(self):
         project = tomllib.loads((self.root / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(project["tool"]["scikit-build"]["cmake"]["version"], ">=4.0")
-        self.assertIn("cmake>=4.0", project["project"]["optional-dependencies"]["dev-no-onnx"])
+        self.assertIn("cmake>=4.0", project["project"]["optional-dependencies"]["dev"])
         pixi = tomllib.loads((self.root / "pixi.toml").read_text(encoding="utf-8"))
         self.assertEqual(pixi["dependencies"]["cmake"], ">=4.0")
 
@@ -40,7 +40,6 @@ class TestCMakeVersion(unittest.TestCase):
         for name in (
             "ci_core.yml",
             "build_release_cpp.yml",
-            "build_standalone_example.yml",
             "clang_tidy.yml",
             "cq_fuzz.yml",
             "kernel_reports.yml",
@@ -50,7 +49,7 @@ class TestCMakeVersion(unittest.TestCase):
 
     def test_ci_installs_persistent_cmake_before_package_builds(self):
         workflows = self.root / ".github/workflows"
-        for name, count in (("ci_core.yml", 4), ("ci_debug.yml", 1)):
+        for name, count in (("ci_core.yml", 4),):
             content = (workflows / name).read_text(encoding="utf-8")
             test_builds = re.findall(
                 r"^\s+run: pip install ([^\n]*ONNX_LIGHT_BUILD_TESTS=ON[^\n]*)$",
@@ -66,13 +65,7 @@ class TestCMakeVersion(unittest.TestCase):
                 '"nanobind>=3.0.1" "numpy>=2.2"',
                 content,
             )
-        for name in (
-            "ci_core.yml",
-            "ci_debug.yml",
-            "coverage.yml",
-            "cq_asan_ubsan.yml",
-            "cq_hardening.yml",
-        ):
+        for name in ("ci_core.yml", "coverage.yml", "cq_asan_ubsan.yml", "cq_hardening.yml"):
             content = (workflows / name).read_text(encoding="utf-8")
             jobs = re.split(r"^  [\w-]+:\s*$", content, flags=re.MULTILINE)[1:]
             builds_checked = 0

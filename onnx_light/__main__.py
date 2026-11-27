@@ -295,6 +295,55 @@ def _parse_non_negative_int(value: str) -> int:
     raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
 
 
+_DEFAULT_REGISTRATION_FUNCTION = "register_kernels"
+
+
+def _parse_registration(value: str) -> tuple[str, str]:
+    """Parses ``MODULE[:FUNCTION]`` into a module name and a function name."""
+    module_name, separator, function_name = value.partition(":")
+    if not separator:
+        function_name = _DEFAULT_REGISTRATION_FUNCTION
+    if not all(part.isidentifier() for part in module_name.split(".")) or not (
+        function_name.isidentifier()
+    ):
+        raise argparse.ArgumentTypeError(f"expected MODULE[:FUNCTION], got {value!r}")
+    return module_name, function_name
+
+
+def _add_registration_argument(parser: argparse.ArgumentParser) -> None:
+    """Adds the repeatable ``--register`` option to a model command."""
+    parser.add_argument(
+        "--register",
+        action="append",
+        default=[],
+        type=_parse_registration,
+        metavar="MODULE[:FUNCTION]",
+        help=(
+            "Import MODULE and call FUNCTION() without arguments before running the command, "
+            "to register kernels, shapes or patterns from another library "
+            f"(default FUNCTION: {_DEFAULT_REGISTRATION_FUNCTION}). Repeat to load several "
+            "libraries in order. This executes code from the imported module; use only "
+            "trusted modules (e.g. onnx_light_cpu or onnx_light_cpu:register_operator_support)."
+        ),
+    )
+
+
+def _run_registrations(registrations: Iterable[tuple[str, str]]) -> None:
+    """Imports each registration module and calls its registration function."""
+    import importlib
+
+    for module_name, function_name in registrations:
+        module = importlib.import_module(module_name)
+        if not hasattr(module, function_name):
+            raise AttributeError(
+                f"Module {module_name!r} has no registration function {function_name!r}."
+            )
+        function = getattr(module, function_name)
+        if not callable(function):
+            raise TypeError(f"{module_name}:{function_name} is not callable.")
+        function()
+
+
 def _parse_nonnegative_int(value: str) -> int:
     """Parses a non-negative integer."""
     if value.isdigit():
@@ -1859,7 +1908,8 @@ def _cmd_partition(args: argparse.Namespace) -> None:
         pattern = RepeatedLayerPattern()
         selection = (
             "repeated topology and attributes around attention/MatMul "
-            "anchors; ranks matching cuts by crossing edges, unknown sizes and known bytes; "
+            "anchors; indexed instances grow together through incremental frontiers, "
+            "without global cut search or interface-cost scoring; "
             "equivalent bodies share a function"
         )
     else:
@@ -2299,6 +2349,7 @@ def _build_parser() -> argparse.ArgumentParser:
     optimize_parser.add_argument(
         "--verbose", "-v", nargs="?", const=1, default=0, type=int, help="Print progress."
     )
+    _add_registration_argument(optimize_parser)
     optimize_parser.set_defaults(func=_cmd_optimize)
 
     partition_parser = subparsers.add_parser(
@@ -2349,6 +2400,7 @@ def _build_parser() -> argparse.ArgumentParser:
             default=0,
             help="Print loading and extraction progress.",
         )
+        _add_registration_argument(method_parser)
         method_parser.set_defaults(func=_cmd_partition)
         if method == "mincut":
             method_parser.add_argument(
@@ -2487,6 +2539,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "is present. Level 2 also prints per-event details."
         ),
     )
+    _add_registration_argument(fillshape_parser)
     fillshape_parser.set_defaults(func=_cmd_fillshape)
 
     # --- show ----------------------------------------------------------------
@@ -2615,6 +2668,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Requires Graphviz to be installed and 'dot' to be on PATH."
         ),
     )
+    _add_registration_argument(show_parser)
     show_parser.set_defaults(func=_cmd_show)
 
     # --- run -----------------------------------------------------------------
@@ -2671,6 +2725,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Non-array outputs (e.g. sequences) are skipped."
         ),
     )
+    _add_registration_argument(run_parser)
     run_parser.set_defaults(func=_cmd_run)
 
     # --- backend --------------------------------------------------------------
@@ -2907,6 +2962,7 @@ def main(argv: list[str] | None = None) -> None:
     """Parses *argv* and dispatches to the appropriate subcommand."""
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _run_registrations(getattr(args, "register", []))
     args.func(args)
 
 

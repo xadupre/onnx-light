@@ -36,6 +36,8 @@ Repeated layers
 
 ``partition layer`` retains the former ``layers`` arguments:
 ``model``, ``--output``/``-o``, ``--tiny-tensor-threshold`` and ``--verbose``/``-v``.
+Both methods also accept ``--register MODULE[:FUNCTION]``, described in
+:ref:`l-cli-partition`.
 
 .. runpython::
 

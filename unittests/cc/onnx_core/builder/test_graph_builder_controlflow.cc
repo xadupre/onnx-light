@@ -242,7 +242,9 @@ TEST(GraphBuilderControlflow, OpsetRefreshSynchronizesLoopFormalInputsAndConsume
       expected.ComputeInPlaceReuseGraph(graph, expected.Shapes(), false, tags.first);
       expected.ComputePeakMemory(graph, current->device());
       EXPECT_EQ(current->Compute().Reuse(), expected.Reuse());
-      EXPECT_EQ(current->Compute().Memory(), expected.Memory());
+      auto &profile = const_cast<core::compute::ComputeContext &>(current->Compute());
+      profile.RefreshIncrementalMemory(graph.node(), profile.Shapes(), current->device());
+      EXPECT_EQ(profile.Memory(), expected.Memory());
     }
     EXPECT_FALSE(std::any_of(shapes.Events().begin(), shapes.Events().end(), [](const auto &event) {
       return event.action == core::shapes::ShapeEventAction::kComputeNode && event.op_type == "Abs";

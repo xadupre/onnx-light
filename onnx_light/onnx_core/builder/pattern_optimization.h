@@ -123,7 +123,8 @@ struct PatternNoMatch {
 /**
  * Owns replacement construction prepared by Match.
  *
- * Only the optimizer may invoke it, immediately after revalidating the match.
+ * Only the optimizer may invoke it, while the source graph is unchanged since
+ * matching or immediately after revalidating the match.
  * Direct Apply calls must still validate their inputs against the current graph.
  * Captured analysis belongs to this match, never to the shared pattern object.
  */
@@ -153,7 +154,7 @@ struct MatchResult {
   const NodeProto *insert_at = nullptr;
   /// Diagnostic attached to an empty result, when the pattern supplied one.
   std::optional<PatternNoMatch> no_match = std::nullopt;
-  /// Optional replacement construction, used only from a freshly revalidated match.
+  /// Optional replacement construction, valid only while its matched source is unchanged.
   std::shared_ptr<const PatternApplication> application = nullptr;
 
   /// Returns a concise summary of this match.
@@ -193,7 +194,8 @@ public:
    */
   virtual bool CanMatchInParallel() const noexcept { return false; }
 
-  /// Returns the match rooted at ``candidate``. A null pattern means no match.
+  /// Returns the match rooted at ``candidate`` without mutating the graph.
+  /// A null pattern means no match.
   virtual MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const = 0;
 
   /// Builds the replacement nodes for one match.

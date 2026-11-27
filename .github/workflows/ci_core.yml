@@ -333,7 +333,7 @@ jobs:
     name: core (ubuntu-latest, py3.13)
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:

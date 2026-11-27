@@ -419,6 +419,13 @@ TEST(onnx_defs, TensorProto_DataType_IsValid_RejectsOutOfRangeValues) {
   EXPECT_FALSE(TensorProto::DataType_IsValid(9999));
 }
 
+TEST(onnx_defs, DataTypeUtils_StructType_RoundTrip) {
+  DataType dt = Utils::DataTypeUtils::ToType("struct");
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "struct");
+  EXPECT_TRUE(Utils::DataTypeUtils::ToTypeProto(dt).has_struct_type());
+}
+
 // ---------------------------------------------------------------------------
 // DataTypeUtils opaque-type support: ToString/FromString must round-trip the
 // "opaque(domain,name)" format used by real ONNX for TypeProto.opaque_type,

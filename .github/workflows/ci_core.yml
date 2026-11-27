@@ -441,13 +441,17 @@ jobs:
         # helper). CI run 41431328019 measures 925 symbols; retain the size caps.
         # Deferred source comparison adds HaveSameDeferredWeightSource (one public
         # helper). Account for that ABI addition without changing the size caps.
+        # GCC 15.2.0 on Ubuntu latest changes the Release-build size baseline.
+        # CI run 46039949254 measures 2,215,080 installed bytes, 1,704,236 text bytes,
+        # and 889 symbols. Update the size references while retaining the 5% margin,
+        # symbol cap, and dependency allowlist.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1903824 \
-            --max-text-size 1373642 \
+            --max-installed-size 2215080 \
+            --max-text-size 1704236 \
             --size-budget-margin-percent 5 \
             --max-dynamic-symbols 926 \
             --allowed-dependency liblib_onnx_threads.so \

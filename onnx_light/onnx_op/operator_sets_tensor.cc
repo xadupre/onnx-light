@@ -39,7 +39,15 @@ LightOpSchema MakePackingSchema(bool unpack) {
   if (unpack) {
     inputs = {
         {"X",
-         "UINT8 or UINT32 tensor of rank at least 1, with the exact packed word count along axis.",
+         "UINT8 or UINT32 tensor of rank at least 1, or inline EncodedValueProto storage. "
+         "Encoded layouts support arrays of UINT8/UINT32 tensors with concrete physical shapes, "
+         "or one named bit-packing component whose width equals the requested group width, "
+         "optionally nested in arrays. Bit-packing dimension is the exact number of groups "
+         "per byte-aligned row and requires the last axis. Catalogue references are resolved "
+         "at every level. The root declares one record; a payload containing other than one "
+         "record adds a leading record-count dimension. logical_type, if present, must match "
+         "the decoded UINT8 shape, not the physical storage shape. Encoded UINT32 words are "
+         "little endian. Affine layouts, shared parameters, structures and codecs are rejected.",
          "TStorage"},
         {"count",
          "Scalar INT64 tensor giving the logical output length along axis. Must be nonnegative.",
@@ -65,7 +73,12 @@ LightOpSchema MakePackingSchema(bool unpack) {
       std::move(inputs), std::move(outputs),
       {
           {"T", {TensorType::kUint8}, "Unsigned byte tensors."},
-          {"TStorage", {TensorType::kUint8, TensorType::kUint32}, "Unsigned storage word tensors."},
+          {"TStorage",
+           unpack ? std::vector<TensorType>{TensorType::kUint8, TensorType::kUint32,
+                                            TensorType::kStruct}
+                  : std::vector<TensorType>{TensorType::kUint8, TensorType::kUint32},
+           unpack ? "Unsigned storage word tensors or structured encoded storage."
+                  : "Unsigned storage word tensors."},
       },
       std::move(attributes), /*has_function_implementation=*/true);
 }

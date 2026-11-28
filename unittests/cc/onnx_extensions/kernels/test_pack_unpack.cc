@@ -33,6 +33,27 @@ namespace {
 const onnx_kernels::kernel::Pack pack{KernelContext{DefaultOpset(29)}};
 const onnx_kernels::kernel::Unpack unpack{KernelContext{DefaultOpset(29)}};
 
+EncodedValueProto BitPacked(uint32_t width = 3, uint64_t groups = 8,
+                            std::vector<uint8_t> bytes = {0x88, 0xC6, 0xFA}) {
+  EncodedValueProto result;
+  auto *packing = result.mutable_struct_type()->mutable_bit_packing();
+  packing->set_dimension(groups);
+  auto *component = packing->add_component();
+  component->set_name("code");
+  component->set_bit_width(width);
+  result.set_raw_data(bytes.data(), bytes.size());
+  return result;
+}
+
+void LogicalShape(EncodedValueProto &value, const Shape &shape,
+                  int32_t dtype = TensorProto::UINT8) {
+  auto *tensor = value.mutable_logical_type()->mutable_tensor_type();
+  tensor->set_elem_type(dtype);
+  tensor->mutable_shape()->clear_dim();
+  for (int64_t dimension : shape)
+    tensor->mutable_shape()->add_dim()->set_dim_value(dimension);
+}
+
 void EqualTensor(const Tensor &actual, const Tensor &expected) {
   ASSERT_EQ(actual.data_type, expected.data_type);
   ASSERT_EQ(actual.shape, expected.shape);
@@ -245,6 +266,190 @@ TEST(KernelPacking, RuntimeRejectsNonIntegerAttributesWithoutNarrowing) {
         EXPECT_THROW(kernel.Run(context), std::invalid_argument);
       }
     }
+}
+
+TEST(KernelPacking, EncodedBitPackingAndRadixGroupsRespectDeclaredRows) {
+  const auto count = Tensor::FromInt64("", {}, {8});
+  auto encoded = BitPacked();
+  const auto digits = Tensor::FromUint8("", {8}, {0, 1, 2, 3, 4, 5, 6, 7});
+  EqualTensor(unpack(encoded, count, 3), digits);
+  LogicalShape(encoded, {8});
+  EqualTensor(unpack(encoded, count, 3), digits);
+  EXPECT_THROW(unpack(encoded, count, 2), std::invalid_argument);
+  EXPECT_THROW(unpack(encoded, Tensor::FromInt64("", {}, {7}), 3), std::invalid_argument);
+  LogicalShape(encoded, {3});
+  EXPECT_THROW(unpack(encoded, count, 3), std::invalid_argument);
+  LogicalShape(encoded, {8}, TensorProto::UINT32);
+  EXPECT_THROW(unpack(encoded, count, 3), std::invalid_argument);
+
+  auto ternary = BitPacked(8, 2, {102, 242});
+  EqualTensor(unpack(ternary, Tensor::FromInt64("", {}, {7}), {}, 3, 5),
+              Tensor::FromUint8("", {7}, {0, 1, 2, 0, 1, 2, 2}));
+  EXPECT_THROW(unpack(ternary, Tensor::FromInt64("", {}, {5}), {}, 3, 5), std::invalid_argument);
+  EXPECT_THROW(unpack(ternary, Tensor::FromInt64("", {}, {7}), {}, 3, 4), std::invalid_argument);
+  ternary.set_raw_data("\xF3\x00", 2);
+  EXPECT_THROW(unpack(ternary, Tensor::FromInt64("", {}, {10}), {}, 3, 5), std::invalid_argument);
+
+  auto rows = BitPacked();
+  rows.set_raw_data("\x88\xC6\xFA\x88\xC6\xFA", 6);
+  LogicalShape(rows, {2, 8});
+  EqualTensor(unpack(rows, count, 3),
+              Tensor::FromUint8("", {2, 8}, {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7}));
+  EXPECT_THROW(unpack(rows, count, 3, {}, {}, 0), std::invalid_argument);
+  EXPECT_THROW(unpack(rows, Tensor::FromInt64("", {}, {16}), 3), std::invalid_argument);
+}
+
+TEST(KernelPacking, OnlyUnpackLightweightSchemaAcceptsStructuredStorage) {
+  using namespace core::schema;
+  ValueInfoProto encoded;
+  encoded.set_name("X");
+  *encoded.mutable_type()->mutable_struct_type() = BitPacked().struct_type();
+  std::vector<std::optional<SchemaInputValue>> inputs{encoded};
+  for (const std::string op : {"Pack", "Unpack"}) {
+    const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory(op);
+    auto schema = std::find_if(schemas.begin(), schemas.end(),
+                               [](const auto &value) { return value.since_version() == 29; });
+    ASSERT_NE(schema, schemas.end());
+    auto node =
+        op == "Unpack" ? MakeNode("Unpack", {"X", "count"}, {"Y"}) : MakeNode("Pack", {"X"}, {"Y"});
+    AddAttribute<int64_t>(node, "bits", 3);
+    if (op == "Unpack") {
+      EXPECT_NO_THROW(schema->Verify(node, &inputs));
+    } else {
+      EXPECT_THROW(schema->Verify(node, &inputs), core::schema::SchemaError);
+    }
+  }
+}
+
+TEST(KernelPacking, EncodedLayoutsRejectMalformedAndUnsupportedMetadataEvenWhenEmpty) {
+  const auto count = Tensor::FromInt64("", {}, {8});
+  std::vector<EncodedValueProto> invalid;
+  auto add = [&](auto mutate) {
+    auto encoded = BitPacked(3, 8, {});
+    mutate(encoded);
+    invalid.push_back(std::move(encoded));
+  };
+  add([](auto &v) { v.mutable_struct_type()->mutable_bit_packing()->set_dimension(0); });
+  add([](auto &v) {
+    v.mutable_struct_type()->mutable_bit_packing()->mutable_component(0)->set_name("");
+  });
+  add([](auto &v) {
+    v.mutable_struct_type()->mutable_bit_packing()->mutable_component(0)->set_bit_width(0);
+  });
+  add([](auto &v) {
+    auto *component = v.mutable_struct_type()->mutable_bit_packing()->add_component();
+    component->set_name("other");
+    component->set_bit_width(5);
+  });
+  add([](auto &v) { v.mutable_struct_type()->mutable_decoder()->set_name("decode"); });
+  add([](auto &v) { v.mutable_struct_type()->mutable_encoder()->set_name("encode"); });
+  add([](auto &v) { v.mutable_struct_type()->set_type_ref(42); });
+  add([](auto &v) { v.mutable_struct_type()->mutable_structure(); });
+  add([](auto &v) { v.mutable_affine(); });
+  add([](auto &v) {
+    v.set_parameter_ref("shared");
+    LogicalShape(v, {0, 8});
+  });
+  add([](auto &v) {
+    v.set_data_location(TensorProto::EXTERNAL);
+    v.clear_raw_data();
+    auto *location = v.add_external_data();
+    location->set_key("location");
+    location->set_value("unopened.bin");
+    auto *length = v.add_external_data();
+    length->set_key("length");
+    length->set_value("0");
+  });
+  add([](auto &v) { LogicalShape(v, {0, 7}); });
+  add([](auto &v) {
+    LogicalShape(v, {0, 8});
+    v.mutable_logical_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(1)->set_dim_param(
+        "N");
+  });
+  add([](auto &v) {
+    LogicalShape(v, {0, 8});
+    auto *dimension =
+        v.mutable_logical_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(1);
+    dimension->clear_dim_value();
+    dimension->set_dim_param("N");
+  });
+  add([](auto &v) {
+    v.mutable_struct_type()->mutable_bit_packing()->set_dimension(
+        std::numeric_limits<uint64_t>::max());
+  });
+  add([](auto &v) {
+    auto *packing = v.mutable_struct_type()->mutable_bit_packing();
+    packing->set_dimension(uint64_t{1} << 63);
+    packing->mutable_component(0)->set_bit_width(1);
+  });
+  add([](auto &v) { v.set_raw_data("\x00", 1); });
+  for (size_t i = 0; i < invalid.size(); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_THROW(unpack(invalid[i], count, 3), std::invalid_argument);
+  }
+  auto empty = BitPacked(3, 8, {});
+  LogicalShape(empty, {0, 8});
+  EqualTensor(unpack(empty, count, 3), Tensor::FromUint8("", {0, 8}, {}));
+  EXPECT_THROW(unpack(empty, count, 0), std::invalid_argument);
+  EXPECT_THROW(unpack(empty, count, 3, 3, 5), std::invalid_argument);
+  EXPECT_THROW(unpack(empty, count, 3, {}, {}, 2), std::invalid_argument);
+  EXPECT_THROW(unpack(empty, Tensor::FromInt64("", {}, {-1}), 3), std::invalid_argument);
+  EXPECT_THROW(unpack(empty, Tensor::FromInt32("", {}, {8}), 3), std::invalid_argument);
+  EXPECT_THROW(unpack(empty, Tensor::FromInt64("", {}, {std::numeric_limits<int64_t>::max()}), 3),
+               std::invalid_argument);
+}
+
+TEST(KernelPacking, EncodedArraysValidateNestedReferencesCodecsAlignmentAndPhysicalDtypes) {
+  const auto count = Tensor::FromInt64("", {}, {8});
+  ModelProto model;
+  auto *leaf = model.add_struct_types();
+  *leaf = BitPacked().struct_type();
+  leaf->set_type_id(1);
+  auto *root = model.add_struct_types();
+  root->set_type_id(2);
+  root->mutable_array()->set_dimension(2);
+  root->mutable_array()->mutable_element_type()->mutable_struct_type()->set_type_ref(1);
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  EncodedValueProto encoded;
+  encoded.mutable_struct_type()->set_type_ref(2);
+  encoded.set_raw_data("\x88\xC6\xFA\x88\xC6\xFA", 6);
+  EqualTensor(unpack(encoded, count, 3, {}, {}, -1, catalogue),
+              Tensor::FromUint8("", {2, 8}, {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7}));
+  EXPECT_THROW(unpack(encoded, count, 3), std::invalid_argument);
+
+  model.mutable_struct_types(0)->mutable_decoder()->set_name("nested_codec");
+  catalogue.Build(model);
+  EXPECT_THROW(unpack(encoded, count, 3, {}, {}, -1, catalogue), std::invalid_argument);
+  model.mutable_struct_types(0)->clear_decoder();
+  model.mutable_struct_types(0)->mutable_bit_packing()->set_dimension(4);
+  catalogue.Build(model);
+  encoded.set_raw_data("\0\0\0", 3);
+  EXPECT_THROW(unpack(encoded, Tensor::FromInt64("", {}, {4}), 3, {}, {}, -1, catalogue),
+               std::invalid_argument);
+
+  for (int32_t dtype :
+       {TensorProto::UINT8, TensorProto::UINT32, TensorProto::INT8, TensorProto::FLOAT}) {
+    EncodedValueProto storage;
+    auto *array = storage.mutable_struct_type()->mutable_array();
+    array->set_dimension(1);
+    auto *tensor = array->mutable_element_type()->mutable_tensor_type();
+    tensor->set_elem_type(dtype);
+    tensor->mutable_shape();
+    storage.set_raw_data(dtype == TensorProto::UINT8 || dtype == TensorProto::INT8
+                             ? std::string("\xE4", 1)
+                             : std::string("\xE4\x00\x00\x00", 4));
+    if (dtype == TensorProto::UINT8 || dtype == TensorProto::UINT32) {
+      EqualTensor(unpack(storage, Tensor::FromInt64("", {}, {4}), 2),
+                  Tensor::FromUint8("", {4}, {0, 1, 2, 3}));
+    } else {
+      EXPECT_THROW(unpack(storage, Tensor::FromInt64("", {}, {4}), 2), std::invalid_argument);
+    }
+    tensor->mutable_shape()->add_dim()->set_dim_param("physical");
+    EXPECT_THROW(unpack(storage, Tensor::FromInt64("", {}, {4}), 2), std::invalid_argument);
+    tensor->mutable_shape()->mutable_dim(0)->set_dim_value(1);
+    EXPECT_THROW(unpack(storage, Tensor::FromInt64("", {}, {4}), 2), std::invalid_argument);
+  }
 }
 
 TEST(KernelPacking, BackendCasesExecuteNativeAndExpandedFunctionsInRuntimeSession) {

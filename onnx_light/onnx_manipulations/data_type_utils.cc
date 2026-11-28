@@ -130,6 +130,9 @@ std::string DataTypeUtils::ToString(const TypeProto &type_proto, const std::stri
     result += ")" + right;
     return result;
   }
+  if (type_proto.has_struct_type()) {
+    return left + "struct" + right;
+  }
   ONNX_THROW_EX(std::invalid_argument("Unsupported type proto: no type set"));
 }
 
@@ -173,6 +176,10 @@ void DataTypeUtils::FromString(std::string_view type_str, TypeProto &type_proto)
     TypeProto val_type;
     FromString(s, val_type);
     type_proto.ref_map_type().ref_value_type() = std::move(val_type);
+    return;
+  }
+  if (s == "struct") {
+    type_proto.ref_struct_type();
     return;
   }
   if (s.substr(0, 6) == "opaque") {

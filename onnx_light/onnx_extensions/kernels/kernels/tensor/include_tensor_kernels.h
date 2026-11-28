@@ -160,6 +160,11 @@ public:
                     std::optional<int64_t> radix = std::nullopt,
                     std::optional<int64_t> group_size = std::nullopt, int64_t axis = -1,
                     RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const EncodedValueProto &x, const Tensor &count,
+                    std::optional<int64_t> bits = std::nullopt,
+                    std::optional<int64_t> radix = std::nullopt,
+                    std::optional<int64_t> group_size = std::nullopt, int64_t axis = -1,
+                    const StructTypeCatalogue &catalogue = {}, RuntimeContext *rt = nullptr) const;
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

@@ -333,7 +333,8 @@ jobs:
     name: core (ubuntu-latest, py3.13)
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Cold builds exceeded 40 minutes in run 46072104900, before tests started.
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:

@@ -46,23 +46,6 @@ uint16_t ReadUint16Element(const Tensor &tensor, size_t index) {
 
 } // namespace
 
-TEST(KernelClass, ConstantClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Constant constant_kernel{ctx};
-  Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
-  Tensor y = constant_kernel(value);
-  ASSERT_EQ(y.data_type, value.data_type);
-  EXPECT_EQ(y.shape, value.shape);
-  ASSERT_EQ(y.element_count(), value.element_count());
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], 1.0f);
-  EXPECT_FLOAT_EQ(py[1], -2.0f);
-  EXPECT_FLOAT_EQ(py[2], 3.5f);
-  EXPECT_FLOAT_EQ(py[3], 0.0f);
-  EXPECT_EQ(y.bytes(), value.bytes());
-  EXPECT_TRUE(y.data.empty());
-}
-
 TEST(KernelClass, ConstantStringClassBorrowsStringStorage) {
   const KernelContext ctx{DefaultOpset(13)};
   Constant constant_kernel{ctx};

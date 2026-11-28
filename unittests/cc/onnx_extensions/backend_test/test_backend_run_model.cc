@@ -300,7 +300,7 @@ TEST(BackendRunModel, SupportedDtypeComparisonRetainsExactReferences) {
     tc.rtol = 1.0;
     tc.atol = 1.0;
     EXPECT_NONFATAL_FAILURE(ExpectBackendCaseTensorEqual(positive_zero, negative_zero, tc),
-                            "std::vector<uint8_t>");
+                            "Tensor mismatch at byte");
   }
   TestCase integer_case("test_cc_supported_dtype_MatMul_INT64");
   integer_case.rtol = 1.0;
@@ -308,7 +308,7 @@ TEST(BackendRunModel, SupportedDtypeComparisonRetainsExactReferences) {
   const Tensor one = Tensor::FromInt64("", {1}, {1});
   const Tensor two = Tensor::FromInt64("", {1}, {2});
   EXPECT_NONFATAL_FAILURE(ExpectBackendCaseTensorEqual(one, two, integer_case),
-                          "std::vector<uint8_t>");
+                          "Tensor mismatch at byte");
   TestCase float_case("test_cc_supported_dtype_MeanVarianceNormalization_DOUBLE");
   float_case.rtol = 1e-12;
   float_case.atol = 1e-14;

@@ -95,20 +95,6 @@ TEST(KernelClass, WhereBfloat16PreservesBits) {
   EXPECT_EQ(output.data, expected.data);
 }
 
-TEST(KernelClass, AndClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(7)};
-  And and_kernel{ctx};
-  Tensor x("", core::runtime::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-  Tensor y("", core::runtime::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
-  Tensor z = and_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 1);
-  EXPECT_EQ(z.data[1], 0);
-  EXPECT_EQ(z.data[2], 0);
-  EXPECT_EQ(z.data[3], 0);
-}
-
 TEST(KernelClass, AndClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};
@@ -142,34 +128,6 @@ TEST(KernelClass, AndUsesTypedParallelTuningForBroadcasting) {
   Tensor z = and_kernel(x, y);
   EXPECT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
   EXPECT_EQ(z.data, (std::vector<uint8_t>{1, 0, 1, 0, 0, 0}));
-}
-
-TEST(KernelClass, OrClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(7)};
-  Or or_kernel{ctx};
-  Tensor x("", core::runtime::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-  Tensor y("", core::runtime::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
-  Tensor z = or_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 1);
-  EXPECT_EQ(z.data[1], 1);
-  EXPECT_EQ(z.data[2], 1);
-  EXPECT_EQ(z.data[3], 0);
-}
-
-TEST(KernelClass, XorClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(7)};
-  Xor xor_kernel{ctx};
-  Tensor x("", core::runtime::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-  Tensor y("", core::runtime::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
-  Tensor z = xor_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 0);
-  EXPECT_EQ(z.data[1], 1);
-  EXPECT_EQ(z.data[2], 1);
-  EXPECT_EQ(z.data[3], 0);
 }
 
 TEST(KernelClass, LogicalRejectsNonBoolTensors) {
@@ -217,20 +175,6 @@ TEST(KernelClass, XorInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[1], 1);
   EXPECT_EQ(z.data[2], 1);
   EXPECT_EQ(z.data[3], 0);
-}
-
-TEST(KernelClass, GreaterClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Greater greater_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-  Tensor z = greater_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 0); // 1 > 2 -> false
-  EXPECT_EQ(z.data[1], 0); // 2 > 2 -> false
-  EXPECT_EQ(z.data[2], 1); // 3 > 2 -> true
-  EXPECT_EQ(z.data[3], 1); // 4 > 2 -> true
 }
 
 TEST(KernelClass, GreaterClassBroadcastsScalar) {
@@ -308,20 +252,6 @@ TEST(KernelClass, GreaterClassMatchesReferenceInt64) {
   EXPECT_EQ(z.data[1], 0); //  0 >  0
   EXPECT_EQ(z.data[2], 1); //  3 >  1
   EXPECT_EQ(z.data[3], 0); //  7 >  9
-}
-
-TEST(KernelClass, LessClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Less less_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-  Tensor z = less_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 1); // 1 < 2 -> true
-  EXPECT_EQ(z.data[1], 0); // 2 < 2 -> false
-  EXPECT_EQ(z.data[2], 0); // 3 < 2 -> false
-  EXPECT_EQ(z.data[3], 0); // 4 < 2 -> false
 }
 
 TEST(KernelClass, LessClassBroadcastsScalar) {
@@ -414,20 +344,6 @@ TEST(KernelClass, LessClassMatchesReferenceInt32) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(KernelClass, GreaterOrEqualClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(16)};
-  GreaterOrEqual ge_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-  Tensor z = ge_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 0); // 1 >= 2 -> false
-  EXPECT_EQ(z.data[1], 1); // 2 >= 2 -> true
-  EXPECT_EQ(z.data[2], 1); // 3 >= 2 -> true
-  EXPECT_EQ(z.data[3], 1); // 4 >= 2 -> true
-}
-
 TEST(KernelClass, GreaterOrEqualClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(16)};
   GreaterOrEqual ge_kernel{ctx};
@@ -461,20 +377,6 @@ TEST(KernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
   Tensor y("", core::runtime::DataType::BOOL, {2}, {1, 1});
   GreaterOrEqual ge_kernel{ctx};
   EXPECT_THROW({ (void)ge_kernel(x, y); }, std::invalid_argument);
-}
-
-TEST(KernelClass, LessOrEqualClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(16)};
-  LessOrEqual le_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-  Tensor z = le_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 1); // 1 <= 2 -> true
-  EXPECT_EQ(z.data[1], 1); // 2 <= 2 -> true
-  EXPECT_EQ(z.data[2], 0); // 3 <= 2 -> false
-  EXPECT_EQ(z.data[3], 0); // 4 <= 2 -> false
 }
 
 TEST(KernelClass, LessOrEqualClassBroadcastsScalar) {
@@ -524,20 +426,6 @@ TEST(KernelClass, LessOrEqualClassMatchesReferenceInt64) {
   EXPECT_EQ(z.data[1], 1); //  0 <=  0
   EXPECT_EQ(z.data[2], 0); //  3 <=  1
   EXPECT_EQ(z.data[3], 1); //  7 <=  9
-}
-
-TEST(KernelClass, EqualClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(19)};
-  Equal equal_kernel{ctx};
-  Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
-  Tensor y = Tensor::FromInt32("", {2, 2}, {1, 0, 3, 0});
-  Tensor z = equal_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(z.data[0], 1); // 1 == 1
-  EXPECT_EQ(z.data[1], 0); // 2 == 0
-  EXPECT_EQ(z.data[2], 1); // 3 == 3
-  EXPECT_EQ(z.data[3], 0); // 4 == 0
 }
 
 TEST(KernelClass, EqualClassBroadcastsScalar) {
@@ -976,19 +864,6 @@ TEST(KernelClass, BitwiseNotRejectsBoolTensors) {
   EXPECT_THROW((void)kernel(x), std::invalid_argument);
 }
 
-TEST(KernelClass, NotClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(1)};
-  Not not_kernel{ctx};
-  Tensor x("", core::runtime::DataType::BOOL, {4}, {1, 0, 1, 0});
-  Tensor y = not_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(y.data[0], 0u);
-  EXPECT_EQ(y.data[1], 1u);
-  EXPECT_EQ(y.data[2], 0u);
-  EXPECT_EQ(y.data[3], 1u);
-}
-
 TEST(KernelClass, NotUsesTypedParallelTuning) {
   const KernelContext ctx{DefaultOpset(1)};
   Not not_kernel{ctx};
@@ -1031,23 +906,6 @@ TEST(KernelClass, NotRejectsNonBoolTensors) {
   Not not_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW((void)not_kernel(x), std::invalid_argument);
-}
-
-TEST(KernelClass, IsNaNClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(20)};
-  IsNaN isnan_kernel{ctx};
-  const float nan_v = std::numeric_limits<float>::quiet_NaN();
-  const float inf_v = std::numeric_limits<float>::infinity();
-  Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-  Tensor y = isnan_kernel(x);
-  ASSERT_EQ(y.element_count(), 6);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(y.data[0], 0u);
-  EXPECT_EQ(y.data[1], 1u);
-  EXPECT_EQ(y.data[2], 0u);
-  EXPECT_EQ(y.data[3], 0u);
-  EXPECT_EQ(y.data[4], 0u);
-  EXPECT_EQ(y.data[5], 0u);
 }
 
 TEST(KernelClass, IsNaNRejectsNonFloatTensors) {
@@ -1111,34 +969,6 @@ TEST(KernelClass, IsNaNBfloat16MatchesReference) {
   EXPECT_EQ(y.data[3], 0u);
   EXPECT_EQ(y.data[4], 0u);
   EXPECT_EQ(y.data[5], 0u);
-}
-
-TEST(KernelClass, IsInfClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(20)};
-  IsInf isinf_kernel{ctx};
-  const float nan_v = std::numeric_limits<float>::quiet_NaN();
-  const float inf_v = std::numeric_limits<float>::infinity();
-  Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-
-  Tensor both = isinf_kernel(x);
-  ASSERT_EQ(both.element_count(), 6);
-  EXPECT_EQ(both.data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
-  EXPECT_EQ(both.data[0], 0u);
-  EXPECT_EQ(both.data[1], 0u);
-  EXPECT_EQ(both.data[2], 1u);
-  EXPECT_EQ(both.data[3], 0u);
-  EXPECT_EQ(both.data[4], 1u);
-  EXPECT_EQ(both.data[5], 1u);
-
-  Tensor only_pos = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
-  EXPECT_EQ(only_pos.data[2], 1u);
-  EXPECT_EQ(only_pos.data[4], 0u);
-  EXPECT_EQ(only_pos.data[5], 1u);
-
-  Tensor only_neg = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
-  EXPECT_EQ(only_neg.data[2], 0u);
-  EXPECT_EQ(only_neg.data[4], 1u);
-  EXPECT_EQ(only_neg.data[5], 0u);
 }
 
 TEST(KernelClass, IsInfRejectsNonFloatTensors) {

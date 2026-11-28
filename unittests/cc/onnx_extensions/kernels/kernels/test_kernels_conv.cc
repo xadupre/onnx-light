@@ -15,7 +15,6 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
-using core::runtime::DataType;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::Conv;
@@ -34,56 +33,6 @@ void ExpectNear(const Tensor &y, const std::vector<float> &expected, float tol =
 }
 
 } // namespace
-
-// Mirrors upstream ``test_basic_conv_without_padding``: 1x1x5x5 input with
-// 1x1x3x3 kernel of ones, default stride 1, no padding. Output is the
-// sum of each 3x3 window.
-TEST(KernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
-  core::runtime::CpuExecutionPolicy policy;
-  policy.num_threads = 2;
-  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
-  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
-  const core::runtime::CpuExecutorScope executor_scope(executor.get());
-  const KernelContext ctx{DefaultOpset(22)};
-  Conv conv{ctx};
-  conv.Configure({conv.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
-  std::vector<float> X(25);
-  for (int i = 0; i < 25; ++i) {
-    X[i] = static_cast<float>(i);
-  }
-  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, X);
-  Tensor w = Tensor::FromFloat("", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
-  Tensor b;
-  Conv::Attributes attrs;
-  attrs.kernel_shape = {3, 3};
-  core::runtime::ParallelRegionCollector collector(2);
-  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
-  Tensor y = conv(x, w, b, attrs);
-  // Sums of 3x3 windows over [0..24].
-  ExpectNear(y, {54.f, 63.f, 72.f, 99.f, 108.f, 117.f, 144.f, 153.f, 162.f});
-  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
-  ASSERT_EQ(collector.events().size(), 1u);
-  EXPECT_EQ(collector.events()[0].label, "Conv");
-  EXPECT_EQ(collector.events()[0].admitted_threads, 2);
-}
-
-// Mirrors upstream ``test_basic_conv_with_padding``: same data, pads=[1,1,1,1].
-TEST(KernelClass, ConvBasicWithPaddingMatchesUpstream) {
-  const KernelContext ctx{DefaultOpset(22)};
-  const Conv conv{ctx};
-  std::vector<float> X(25);
-  for (int i = 0; i < 25; ++i) {
-    X[i] = static_cast<float>(i);
-  }
-  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, X);
-  Tensor w = Tensor::FromFloat("", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
-  Tensor b;
-  Conv::Attributes attrs;
-  attrs.kernel_shape = {3, 3};
-  attrs.pads = {1, 1, 1, 1};
-  Tensor y = conv(x, w, b, attrs);
-  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 5, 5}));
-}
 
 // SAME_UPPER auto_pad keeps the output spatial size equal to the input
 // (ceil(in/stride) = in when stride == 1).

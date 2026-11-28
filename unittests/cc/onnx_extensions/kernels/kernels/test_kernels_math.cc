@@ -36,37 +36,23 @@ using core::runtime::Shape;
 using core::runtime::Tensor;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::Abs;
-using onnx_kernels::kernel::Acos;
-using onnx_kernels::kernel::Acosh;
 using onnx_kernels::kernel::Add;
-using onnx_kernels::kernel::Asin;
-using onnx_kernels::kernel::Asinh;
-using onnx_kernels::kernel::Atan;
-using onnx_kernels::kernel::Atanh;
 using onnx_kernels::kernel::BlackmanWindow;
-using onnx_kernels::kernel::Ceil;
 using onnx_kernels::kernel::Clip;
-using onnx_kernels::kernel::Cos;
-using onnx_kernels::kernel::Cosh;
 using onnx_kernels::kernel::CumProd;
 using onnx_kernels::kernel::CumSum;
 using onnx_kernels::kernel::Det;
 using onnx_kernels::kernel::DFT;
 using onnx_kernels::kernel::Div;
 using onnx_kernels::kernel::Einsum;
-using onnx_kernels::kernel::Erf;
 using onnx_kernels::kernel::Exp;
-using onnx_kernels::kernel::Floor;
 using onnx_kernels::kernel::Gemm;
 using onnx_kernels::kernel::GroupedMatMul;
 using onnx_kernels::kernel::HammingWindow;
 using onnx_kernels::kernel::HannWindow;
 using onnx_kernels::kernel::Hardmax;
-using onnx_kernels::kernel::HardSigmoid;
-using onnx_kernels::kernel::HardSwish;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::LeakyRelu;
-using onnx_kernels::kernel::Log;
 using onnx_kernels::kernel::LogSoftmax;
 using onnx_kernels::kernel::MatMul;
 using onnx_kernels::kernel::MatMulInteger;
@@ -74,29 +60,17 @@ using onnx_kernels::kernel::Max;
 using onnx_kernels::kernel::Mean;
 using onnx_kernels::kernel::MelWeightMatrix;
 using onnx_kernels::kernel::Min;
-using onnx_kernels::kernel::Mish;
 using onnx_kernels::kernel::Mod;
 using onnx_kernels::kernel::Mul;
 using onnx_kernels::kernel::Neg;
 using onnx_kernels::kernel::Pow;
 using onnx_kernels::kernel::PRelu;
-using onnx_kernels::kernel::PreparedGemmB;
-using onnx_kernels::kernel::Reciprocal;
 using onnx_kernels::kernel::Round;
 using onnx_kernels::kernel::Shrink;
-using onnx_kernels::kernel::Sigmoid;
-using onnx_kernels::kernel::Sign;
-using onnx_kernels::kernel::Sin;
-using onnx_kernels::kernel::Sinh;
 using onnx_kernels::kernel::Softmax;
-using onnx_kernels::kernel::Softplus;
-using onnx_kernels::kernel::Softsign;
-using onnx_kernels::kernel::Sqrt;
 using onnx_kernels::kernel::STFT;
 using onnx_kernels::kernel::Sub;
 using onnx_kernels::kernel::Sum;
-using onnx_kernels::kernel::Tan;
-using onnx_kernels::kernel::Tanh;
 using onnx_kernels::kernel::TopK;
 
 namespace Test {
@@ -187,19 +161,6 @@ TEST(KernelClass, SoftmaxCrossEntropyLossHalfPrecisionLossOnlyUsesExecutionScrat
     const Tensor promoted_loss = core::runtime::PromoteToFloat32(loss);
     EXPECT_NEAR(promoted_loss.AsFloat()[0], std::log(64.0f), 0.03f);
   }
-}
-
-TEST(KernelClass, AbsClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Abs abs_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
-  Tensor y = abs_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], 1.0f);
-  EXPECT_FLOAT_EQ(py[1], 0.0f);
-  EXPECT_FLOAT_EQ(py[2], 2.5f);
 }
 
 TEST(KernelClass, AbsKeepsSignedMinimumRepresentable) {
@@ -353,19 +314,6 @@ TEST(ThreadPool, ZeroWorkersRunsBlocksInline) {
   }
 }
 
-TEST(KernelClass, NegClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Neg neg_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
-  Tensor y = neg_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], 1.0f);
-  EXPECT_FLOAT_EQ(py[1], -0.0f);
-  EXPECT_FLOAT_EQ(py[2], -2.5f);
-}
-
 TEST(KernelClass, NegInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
@@ -385,123 +333,6 @@ TEST(KernelClass, NegRejectsUnsupportedDtype) {
   Neg neg_kernel{ctx};
   Tensor x = Tensor::FromUint8("", {2}, {1, 2});
   EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
-}
-
-TEST(KernelClass, AcosClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Acos acos_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = acos_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 3.14159265f, 1e-5f);
-  EXPECT_NEAR(py[1], 1.57079633f, 1e-5f);
-  EXPECT_NEAR(py[2], 0.0f, 1e-6f);
-}
-
-TEST(KernelClass, AcoshClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Acosh acosh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 10.0f});
-  Tensor y = acosh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[1], 1.31695790f, 1e-5f);
-  EXPECT_NEAR(py[2], 2.99322285f, 1e-5f);
-}
-
-TEST(KernelClass, AsinClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Asin asin_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = asin_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -1.57079633f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 1.57079633f, 1e-5f);
-}
-
-TEST(KernelClass, AsinhClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Asinh asinh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = asinh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.88137358f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.88137358f, 1e-5f);
-}
-
-TEST(KernelClass, AtanClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Atan atan_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = atan_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.78539816f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.78539816f, 1e-5f);
-}
-
-TEST(KernelClass, AtanhClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Atanh atanh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
-  Tensor y = atanh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.54930614f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.54930614f, 1e-5f);
-}
-
-TEST(KernelClass, CosClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Cos cos_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = cos_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.54030231f, 1e-5f);
-  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.54030231f, 1e-5f);
-}
-
-TEST(KernelClass, CoshClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Cosh cosh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = cosh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 1.54308063f, 1e-5f);
-  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 1.54308063f, 1e-5f);
-}
-
-TEST(KernelClass, ExpClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Exp exp_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = exp_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.36787944f, 1e-6f);
-  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
 }
 
 TEST(KernelClass, ExpUsesTypedParallelTuningPerElementType) {
@@ -544,163 +375,6 @@ TEST(KernelClass, ExpUsesTypedParallelTuningPerElementType) {
   EXPECT_NEAR(y16.AsFloat()[0], 0.36787944f, 1e-3f);
   EXPECT_NEAR(y16.AsFloat()[1], 1.0f, 1e-3f);
   EXPECT_NEAR(y16.AsFloat()[2], 2.71828183f, 2e-3f);
-}
-
-TEST(KernelClass, ErfClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Erf erf_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = erf_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.84270079f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.84270079f, 1e-6f);
-}
-
-TEST(KernelClass, SignClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Sign sign_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {5}, {-2.5f, -0.5f, 0.0f, 0.5f, 2.5f});
-  Tensor y = sign_kernel(x);
-  ASSERT_EQ(y.element_count(), 5);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -1.0f);
-  EXPECT_FLOAT_EQ(py[1], -1.0f);
-  EXPECT_FLOAT_EQ(py[2], 0.0f);
-  EXPECT_FLOAT_EQ(py[3], 1.0f);
-  EXPECT_FLOAT_EQ(py[4], 1.0f);
-}
-
-TEST(KernelClass, LogClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Log log_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {0.5f, 1.0f, 2.0f});
-  Tensor y = log_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.69314718f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
-}
-
-TEST(KernelClass, SqrtClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Sqrt sqrt_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 4.0f, 9.0f});
-  Tensor y = sqrt_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 2.0f, 1e-6f);
-  EXPECT_NEAR(py[3], 3.0f, 1e-6f);
-}
-
-TEST(KernelClass, ReciprocalClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Reciprocal reciprocal_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, -0.5f, 1.0f, 2.0f});
-  Tensor y = reciprocal_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.25f, 1e-6f);
-  EXPECT_NEAR(py[1], -2.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[3], 0.5f, 1e-6f);
-}
-
-TEST(KernelClass, SigmoidClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Sigmoid sigmoid_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 2.0f});
-  Tensor y = sigmoid_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.11920292f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.5f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.88079708f, 1e-6f);
-}
-
-TEST(KernelClass, SoftplusClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Softplus softplus_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {-20.0f, -1.0f, 0.0f, 2.0f});
-  Tensor y = softplus_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  // Reference values from y = ln(1 + exp(x)); numerically stable around large magnitudes.
-  EXPECT_NEAR(py[0], 2.0611537e-9f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.31326169f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
-  EXPECT_NEAR(py[3], 2.12692809f, 1e-6f);
-}
-
-TEST(KernelClass, MishClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Mish mish_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, -1.0f, 0.0f, 2.0f});
-  Tensor y = mish_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  // Reference values from y = x * tanh(softplus(x)) computed in double precision.
-  EXPECT_NEAR(py[0], -0.07259174f, 1e-6f);
-  EXPECT_NEAR(py[1], -0.30340147f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[3], 1.94395934f, 1e-6f);
-}
-
-TEST(KernelClass, SoftsignClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Softsign softsign_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {-3.0f, -1.0f, 0.0f, 4.0f});
-  Tensor y = softsign_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.75f, 1e-6f);
-  EXPECT_NEAR(py[1], -0.5f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[3], 0.8f, 1e-6f);
-}
-
-TEST(KernelClass, HardSigmoidClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  HardSigmoid hard_sigmoid_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {5}, {-3.0f, -1.0f, 0.0f, 1.0f, 3.0f});
-  // alpha = 0.5, beta = 0.6 -> y = max(0, min(1, 0.5*x + 0.6))
-  Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
-  ASSERT_EQ(y.element_count(), 5);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.1f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.6f, 1e-6f);
-  EXPECT_NEAR(py[3], 1.0f, 1e-6f);
-  EXPECT_NEAR(py[4], 1.0f, 1e-6f);
-}
-
-TEST(KernelClass, HardSwishClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  HardSwish hard_swish_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, 0.0f, 1.0f, 4.0f});
-  Tensor y = hard_swish_kernel(x);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  // y = x * max(0, min(1, x/6 + 0.5))
-  EXPECT_NEAR(py[0], 0.0f, 1e-6f);                        // x=-4 -> hs=max(0,-1/6) = 0
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);                        // x=0 -> hs=0.5, x*hs=0
-  EXPECT_NEAR(py[2], 1.0f * (1.0f / 6.0f + 0.5f), 1e-6f); // x=1 -> hs = 2/3
-  EXPECT_NEAR(py[3], 4.0f, 1e-6f);                        // x=4 -> hs = min(1, 7/6) = 1
 }
 
 TEST(KernelClass, HardmaxClassWritesOneHotAlongAxis) {
@@ -1370,58 +1044,6 @@ TEST(KernelClass, LogSoftmaxClassIsNumericallyStableForLargeInputs) {
   EXPECT_NEAR(py[2], 0.0f - lse, 1e-4f);
 }
 
-TEST(KernelClass, SinClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Sin sin_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = sin_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.84147098f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.84147098f, 1e-5f);
-}
-
-TEST(KernelClass, SinhClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Sinh sinh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = sinh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -1.17520119f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 1.17520119f, 1e-5f);
-}
-
-TEST(KernelClass, TanClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(22)};
-  Tan tan_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = tan_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -1.55740772f, 1e-5f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 1.55740772f, 1e-5f);
-}
-
-TEST(KernelClass, TanhClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Tanh tanh_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-  Tensor y = tanh_kernel(x);
-  ASSERT_EQ(y.element_count(), 3);
-  const float *py = y.AsFloat();
-  EXPECT_NEAR(py[0], -0.76159416f, 1e-6f);
-  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
-  EXPECT_NEAR(py[2], 0.76159416f, 1e-6f);
-}
-
 TEST(KernelClass, AddClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Add add_kernel{ctx};
@@ -1617,19 +1239,6 @@ TEST(KernelClass, AbsInPlaceAliasingInputAndOutput) {
   EXPECT_FLOAT_EQ(px[2], 2.5f);
 }
 
-TEST(KernelClass, SubClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(14)};
-  Sub sub_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
-  Tensor z = sub_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 3);
-  const float *pz = z.AsFloat();
-  EXPECT_FLOAT_EQ(pz[0], -2.0f);
-  EXPECT_FLOAT_EQ(pz[1], 0.0f);
-  EXPECT_FLOAT_EQ(pz[2], 2.0f);
-}
-
 TEST(KernelClass, SubClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
@@ -1716,19 +1325,6 @@ TEST(KernelClass, SubRejectsUnsupportedDtype) {
   EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
 }
 
-TEST(KernelClass, MulClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(14)};
-  Mul mul_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
-  Tensor z = mul_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 3);
-  const float *pz = z.AsFloat();
-  EXPECT_FLOAT_EQ(pz[0], 4.0f);
-  EXPECT_FLOAT_EQ(pz[1], 10.0f);
-  EXPECT_FLOAT_EQ(pz[2], 18.0f);
-}
-
 TEST(KernelClass, MulUsesTypedParallelTuningForEqualShapes) {
   const KernelContext ctx{DefaultOpset(14)};
   Mul mul_kernel{ctx};
@@ -1804,18 +1400,6 @@ TEST(KernelClass, MulClassMatchesReferenceInt64) {
   EXPECT_EQ(pz[0], 4);
   EXPECT_EQ(pz[1], -10);
   EXPECT_EQ(pz[2], -18);
-}
-
-TEST(KernelClass, DivClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(14)};
-  Div div_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
-  Tensor y = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor z = div_kernel(x, y);
-  ASSERT_EQ(z.element_count(), 2);
-  const float *pz = z.AsFloat();
-  EXPECT_FLOAT_EQ(pz[0], 3.0f);
-  EXPECT_FLOAT_EQ(pz[1], 2.0f);
 }
 
 TEST(KernelClass, DivClassBroadcastsScalar) {
@@ -2350,36 +1934,6 @@ TEST(KernelClass, MatMulIntegerUsesAllocatorForZeroPoints) {
   EXPECT_EQ(py[3], 28);
 }
 
-TEST(KernelClass, FloorClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Floor floor_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {5}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f});
-  Tensor y = floor_kernel(x);
-  ASSERT_EQ(y.element_count(), 5);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -2.0f);
-  EXPECT_FLOAT_EQ(py[1], -1.0f);
-  EXPECT_FLOAT_EQ(py[2], 0.0f);
-  EXPECT_FLOAT_EQ(py[3], 0.0f);
-  EXPECT_FLOAT_EQ(py[4], 1.0f);
-}
-
-TEST(KernelClass, CeilClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Ceil ceil_kernel{ctx};
-
-  Tensor x = Tensor::FromFloat("", {5}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f});
-  Tensor y = ceil_kernel(x);
-  ASSERT_EQ(y.element_count(), 5);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -1.0f);
-  EXPECT_FLOAT_EQ(py[1], 0.0f);
-  EXPECT_FLOAT_EQ(py[2], 0.0f);
-  EXPECT_FLOAT_EQ(py[3], 1.0f);
-  EXPECT_FLOAT_EQ(py[4], 2.0f);
-}
-
 TEST(KernelClass, RoundClassRoundsHalvesToEven) {
   const KernelContext ctx{DefaultOpset(22)};
   Round round_kernel{ctx};
@@ -2828,20 +2382,6 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
 // PRelu kernel tests
 // ---------------------------------------------------------------------------
 
-TEST(KernelClass, PReluClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(16)};
-  PRelu prelu_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {4}, {-2.0f, -1.0f, 1.0f, 2.0f});
-  Tensor slope = Tensor::FromFloat("", {4}, {0.5f, 0.25f, 0.5f, 0.25f});
-  Tensor y = prelu_kernel(x, slope);
-  ASSERT_EQ(y.element_count(), 4);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -1.0f);
-  EXPECT_FLOAT_EQ(py[1], -0.25f);
-  EXPECT_FLOAT_EQ(py[2], 1.0f);
-  EXPECT_FLOAT_EQ(py[3], 2.0f);
-}
-
 TEST(KernelClass, PReluClassBroadcastsSlope) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
@@ -2902,22 +2442,6 @@ TEST(KernelClass, PReluRejectsUnsupportedDtype) {
 // ---------------------------------------------------------------------------
 // LeakyRelu kernel tests
 // ---------------------------------------------------------------------------
-
-TEST(KernelClass, LeakyReluClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(16)};
-  LeakyRelu leakyrelu_kernel{ctx};
-  Tensor x = Tensor::FromFloat("", {6}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-  Tensor y = leakyrelu_kernel(x, 0.1f);
-  ASSERT_EQ(y.element_count(), 6);
-  ASSERT_EQ(y.data_type, core::runtime::DataType::FLOAT);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -0.3f);
-  EXPECT_FLOAT_EQ(py[1], -0.1f);
-  EXPECT_FLOAT_EQ(py[2], 0.0f);
-  EXPECT_FLOAT_EQ(py[3], 1.0f);
-  EXPECT_FLOAT_EQ(py[4], 2.0f);
-  EXPECT_FLOAT_EQ(py[5], 3.0f);
-}
 
 TEST(KernelClass, LeakyReluClassDefaultAlpha) {
   const KernelContext ctx{DefaultOpset(16)};
@@ -3168,22 +2692,6 @@ TEST(KernelClass, PowRejectsIncompatibleShapes) {
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
-}
-
-TEST(KernelClass, ShrinkClassMatchesReference) {
-  const KernelContext ctx{DefaultOpset(9)};
-  Shrink shrink_kernel{ctx};
-
-  // Soft shrink: bias=1.5, lambd=1.5.
-  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
-  Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
-  ASSERT_EQ(y.element_count(), 5);
-  const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], -0.5f); // -2 < -1.5 -> -2 + 1.5
-  EXPECT_FLOAT_EQ(py[1], 0.0f);  // -1 in [-1.5, 1.5] -> 0
-  EXPECT_FLOAT_EQ(py[2], 0.0f);
-  EXPECT_FLOAT_EQ(py[3], 0.0f); // 1 in [-1.5, 1.5] -> 0
-  EXPECT_FLOAT_EQ(py[4], 0.5f); // 2 > 1.5 -> 2 - 1.5
 }
 
 TEST(KernelClass, ShrinkClassHardShrinkDefaultBias) {

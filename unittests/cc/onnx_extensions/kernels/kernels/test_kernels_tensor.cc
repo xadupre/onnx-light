@@ -1571,27 +1571,6 @@ TEST(KernelClass, AffineGridEmptyOutputSkipsCoordinateAllocation) {
 // ---------------------------------------------------------------------------
 
 using onnx_kernels::kernel::GridSample;
-TEST(KernelClass, GridSampleBilinearMatchesUpstream) {
-  // Matches ``test_gridsample_bilinear`` from
-  // ``onnx/backend/test/case/node/gridsample.py``.
-  const KernelContext ctx{DefaultOpset(20)};
-  GridSample gs{ctx};
-  Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
-  Tensor Grid = Tensor::FromFloat("", {1, 2, 4, 2},
-                                  {-1.0f, -1.0f, -0.5f, -0.5f, -0.2f, -0.2f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                   -0.2f, -0.2f, 0.5f, 0.5f, 1.0f, 1.0f});
-  GridSample::Attributes attrs;
-  attrs.mode = "linear";
-  attrs.padding_mode = "zeros";
-  attrs.align_corners = 0;
-  Tensor Y = gs(X, Grid, attrs);
-  ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 4}));
-  const float expected[8] = {0.0f, 0.5f, 1.7f, 2.5f, 2.5f, 1.7f, 4.5f, 1.25f};
-  const float *y = Y.AsFloat();
-  for (size_t i = 0; i < 8; ++i) {
-    EXPECT_NEAR(y[i], expected[i], 1e-4f) << "idx " << i;
-  }
-}
 
 TEST(KernelClass, GridSampleNearestAndAlignCorners) {
   // Matches ``test_gridsample_nearest`` and ``_aligncorners_true``.

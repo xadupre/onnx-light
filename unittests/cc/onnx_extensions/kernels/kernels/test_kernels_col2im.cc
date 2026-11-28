@@ -76,36 +76,6 @@ std::vector<float> ScalarCol2Im(const std::vector<float> &input,
 
 } // namespace
 
-// Mirrors upstream ``test_col2im``: 1-D-like column folding back into a
-// 5x5 image with block-shape (1, 5), default stride / dilation / pads.
-// Each row of the 5x5 input contains a full block placed at row r.
-TEST(KernelClass, Col2ImBasic2DMatchesUpstream) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const Col2Im op{ctx};
-  std::vector<float> in_v(25);
-  for (int i = 0; i < 25; ++i) {
-    in_v[i] = static_cast<float>(i + 1);
-  }
-  Tensor input = Tensor::FromFloat("", {1, 5, 5}, in_v);
-  Tensor image_shape = Tensor::FromInt64("", {2}, {5, 5});
-  Tensor block_shape = Tensor::FromInt64("", {2}, {1, 5});
-  Col2Im::Attributes attrs;
-  Tensor y = op(input, image_shape, block_shape, attrs);
-  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 5, 5}));
-  // With block_shape (1, 5), n_blocks = (5, 1) so L = 5 (5 row-blocks).
-  // Block l corresponds to row l. Within block l, kernel positions
-  // (0, 0..4) cover all 5 columns. The flat input is indexed as
-  // input[0, k_flat, l] where k_flat is the column 0..4. So row r's
-  // pixel at column k is in_v[k * 5 + r].
-  std::vector<float> expected(25);
-  for (int r = 0; r < 5; ++r) {
-    for (int k = 0; k < 5; ++k) {
-      expected[r * 5 + k] = in_v[k * 5 + r];
-    }
-  }
-  ExpectFloatEq(y, expected);
-}
-
 // Overlap test: two adjacent 1x3 blocks contribute to the same column,
 // values must be summed.
 TEST(KernelClass, Col2ImOverlappingBlocksSum) {

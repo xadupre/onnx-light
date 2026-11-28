@@ -141,6 +141,22 @@ TEST(onnx_ort_serialization, Log1pInputSchemaStartsAtOpset29) {
   EXPECT_THROW(InputCounts(model), std::invalid_argument);
 }
 
+TEST(onnx_ort_serialization, GeGLUInputSchemaStartsAtOpset29) {
+  auto model = OrtModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  node->set_op_type("GeGLU");
+  node->add_input("X");
+  model.mutable_opset_import(0)->set_version(28);
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+  model.mutable_opset_import(0)->set_version(29);
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 1}));
+  node->add_input("X");
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+  node->clr_input();
+  node->add_input("X");
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+}
+
 TEST(onnx_ort_serialization, WritesFixedAndVariadicInputCounts) {
   auto model = OrtModel();
   auto *node = model.mutable_graph()->mutable_node(0);

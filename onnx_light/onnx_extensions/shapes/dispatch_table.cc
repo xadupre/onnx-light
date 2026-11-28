@@ -396,6 +396,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
          RequireInputs(node, 2);
          math::ComputeShapeSwiGLU(ctx, node, node.input(0).c_str(), node.input(1).c_str());
        }},
+      {"ai.onnx:GeGLU",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 2);
+        math::ComputeShapeGeGLU(ctx, node, node.input(0).c_str(), node.input(1).c_str());
+       }},
       {"ai.onnx:Tan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

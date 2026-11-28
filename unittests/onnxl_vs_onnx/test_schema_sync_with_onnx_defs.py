@@ -62,6 +62,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             | cls.REDUCE_LOG_28_KEYS
             | cls.DATA_LAYOUT_28_KEYS
             | {
+                ("", "GeGLU", 29),
                 cls.GEMM_29_KEY,
                 cls.DEQUANTIZE_PACKED_29_KEY,
                 cls.EXPM1_29_KEY,
